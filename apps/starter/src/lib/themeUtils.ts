@@ -1,4 +1,4 @@
-import { useMode, modeOklch, modeRgb, parse, formatCss, converter } from 'culori/fn'
+import { useMode, modeOklch, modeRgb, parse, formatCss } from 'culori/fn'
 
 // Register only needed color spaces for minimal bundle
 const toOklch = useMode(modeOklch)

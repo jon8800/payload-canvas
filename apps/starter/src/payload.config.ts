@@ -23,6 +23,7 @@ import { Categories } from '@/collections/Categories'
 import { Tags } from '@/collections/Tags'
 import { TemplateParts } from '@/collections/TemplateParts'
 import { SiteSettings } from '@/globals/SiteSettings'
+import { ThemeSettings } from '@/globals/ThemeSettings'
 import { handleFormEmails } from '@/collections/forms/handleFormEmails'
 
 const filename = fileURLToPath(import.meta.url)
@@ -80,7 +81,7 @@ export default buildConfig({
     Tags,
     TemplateParts,
   ],
-  globals: [SiteSettings],
+  globals: [SiteSettings, ThemeSettings],
   jobs: {
     autoRun: [{ cron: '*/5 * * * *', queue: 'default' }],
   },
