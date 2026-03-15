@@ -142,9 +142,9 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 **Goal:** Restructure payload-starter and create-payload-starter into a single Turborepo monorepo (payload-toolkit) with pnpm workspaces, shared utility package, and CLI updated to extract templates via GitHub codeload tarball
 **Requirements**: N/A (inserted phase -- monorepo restructure)
 **Depends on:** Phase 6
-**Plans:** 3 plans
+**Plans:** 3/3 plans complete
 
 Plans:
-- [ ] 06.1-01-PLAN.md — Create monorepo root scaffold (Turborepo, pnpm workspaces), shared package, copy starter into apps/starter/
-- [ ] 06.1-02-PLAN.md — Migrate CLI into packages/create-payload-starter/, wire to @jon8800/shared, rewrite scaffold.ts for tarball extraction
-- [ ] 06.1-03-PLAN.md — Full build verification, GitHub repo creation, old repo archival
+- [x] 06.1-01-PLAN.md — Create monorepo root scaffold (Turborepo, pnpm workspaces), shared package, copy starter into apps/starter/
+- [x] 06.1-02-PLAN.md — Migrate CLI into packages/create-payload-starter/, wire to @jon8800/shared, rewrite scaffold.ts for tarball extraction
+- [x] 06.1-03-PLAN.md — Full build verification, GitHub repo creation, old repo archival

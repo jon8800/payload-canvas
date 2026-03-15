@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Phase 6.1 context gathered
-last_updated: "2026-03-15T04:42:02.998Z"
-last_activity: 2026-03-15 -- Completed 06-05 Starter Repo Cleanup
+status: executing
+stopped_at: Completed 06.1-03-PLAN.md
+last_updated: "2026-03-15T05:26:00Z"
+last_activity: 2026-03-15 -- Completed 06.1-03 Build Verification & GitHub Publish
 progress:
   total_phases: 7
-  completed_phases: 6
-  total_plans: 19
-  completed_plans: 19
+  completed_phases: 7
+  total_plans: 22
+  completed_plans: 22
   percent: 100
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-14)
 
 **Core value:** Any website project can be scaffolded instantly with a composable block-based layout system that works for both static pages and dynamic collection templates
-**Current focus:** Phase 6 - Developer Experience (Docker deployment)
+**Current focus:** All phases complete
 
 ## Current Position
 
-Phase: 6 of 6 (Developer Experience)
-Plan: 5 of 5 in current phase (06-05 complete)
+Phase: 6.1 of 7 (Restructure into Monorepo)
+Plan: 3 of 3 in current phase (06.1-03 complete)
 Status: Complete
-Last activity: 2026-03-15 -- Completed 06-05 Starter Repo Cleanup
+Last activity: 2026-03-15 -- Completed 06.1-03 Build Verification & GitHub Publish
 
-Progress: [██████████] 100% (19/19 plans overall)
+Progress: [██████████] 100% (22/22 plans overall)
 
 ## Performance Metrics
 
@@ -67,6 +67,9 @@ Progress: [██████████] 100% (19/19 plans overall)
 | Phase 06 P03 | 3min | 2 tasks | 4 files |
 | Phase 06 P04 | 3min | 2 tasks | 14 files |
 | Phase 06 P05 | 3min | 1 tasks | 3 files |
+| Phase 06.1 P01 | 7min | 2 tasks | 308 files |
+| Phase 06.1 P02 | 2min | 2 tasks | 10 files |
+| Phase 06.1 P03 | 3min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -124,6 +127,12 @@ Recent decisions affecting current work:
 - [Phase 06]: Separate CLI package at create-payload-starter/ with EJS templates for clean conditional output
 - [Phase 06]: Posts/Categories/Tags as single prompt option with auto-included dependencies
 - [Phase 06]: Kept setup script as redirect message rather than deleting entirely
+- [Phase 06.1]: Used pnpm@10.31.0 (user's actual version) in packageManager field
+- [Phase 06.1]: Adapted generate-env.ts with targetDir parameter for shared package reusability
+- [Phase 06.1]: Added pnpm.onlyBuiltDependencies for sharp/esbuild/unrs-resolver to root package.json
+- [Phase 06.1]: Replaced git clone + degit with GitHub codeload tarball extraction for template download
+- [Phase 06.1]: CLI imports createDatabase and generateEnv from @jon8800/shared instead of local lib/
+- [Phase 06.1]: User verified GitHub repo structure and archived old repos manually
 
 ### Roadmap Evolution
 
@@ -140,6 +149,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-15T04:42:02.996Z
-Stopped at: Phase 6.1 context gathered
-Resume file: .planning/phases/06.1-restructure-into-payload-toolkit-turborepo-monorepo/06.1-CONTEXT.md
+Last session: 2026-03-15T05:26:00Z
+Stopped at: Completed 06.1-03-PLAN.md
+Resume file: None
