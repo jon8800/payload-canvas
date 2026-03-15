@@ -25,7 +25,7 @@
 
 - [x] **Phase 8: Frontend Styling Fix** - Fix Tailwind v4 Preflight, block style rendering, and shadcn/ui on frontend pages
 - [ ] **Phase 9: Styles Panel** - Replace per-field style properties with single JSON field and Webflow-style bounding box UI
-- [ ] **Phase 10: Theme Settings** - Global design token system with admin editor and CSS variable injection
+- [x] **Phase 10: Theme Settings** - Global design token system with admin editor and CSS variable injection (completed 2026-03-15)
 
 ## Phase Details
 
@@ -86,4 +86,4 @@ Plans:
 | 7. Gap Closure & Cleanup | v1.0 | 2/2 | Complete | 2026-03-15 |
 | 8. Frontend Styling Fix | v1.1 | 1/1 | Complete | 2026-03-15 |
 | 9. Styles Panel | v1.1 | 0/3 | Not started | - |
-| 10. Theme Settings | 2/3 | In Progress|  | - |
+| 10. Theme Settings | 3/3 | Complete   | 2026-03-15 | - |

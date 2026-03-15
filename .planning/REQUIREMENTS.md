@@ -23,8 +23,8 @@
 
 - [x] **THEME-01**: Theme Settings global with JSON field storing site-wide design tokens (colors, fonts, spacing, border radius)
 - [x] **THEME-02**: Custom admin view for editing theme values visually
-- [ ] **THEME-03**: Theme values injected as CSS variables on frontend pages via layout.tsx
-- [ ] **THEME-04**: shadcn/ui components respect theme CSS variables
+- [x] **THEME-03**: Theme values injected as CSS variables on frontend pages via layout.tsx
+- [x] **THEME-04**: shadcn/ui components respect theme CSS variables
 
 ## Future Requirements
 
@@ -60,8 +60,8 @@
 | PANEL-05 | Phase 9 | Complete |
 | THEME-01 | Phase 10 | Complete |
 | THEME-02 | Phase 10 | Complete |
-| THEME-03 | Phase 10 | Pending |
-| THEME-04 | Phase 10 | Pending |
+| THEME-03 | Phase 10 | Complete |
+| THEME-04 | Phase 10 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 12 total
