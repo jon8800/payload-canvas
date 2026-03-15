@@ -62,7 +62,11 @@ Plans:
   2. Admin users can edit theme values through a dedicated visual admin view (not raw JSON editing)
   3. Theme values appear as CSS custom properties (e.g., --color-primary, --font-body) on frontend pages via layout.tsx
   4. shadcn/ui components on the frontend respond to theme CSS variable changes (e.g., changing primary color updates buttons)
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 10-01-PLAN.md — ThemeSettings global, color derivation utilities, and revalidation hook
+- [ ] 10-02-PLAN.md — Custom admin field components (ColorPicker, FontSelector, SliderField)
+- [ ] 10-03-PLAN.md — Frontend CSS variable injection in layout.tsx
 
 ## Progress
 
@@ -78,4 +82,4 @@ Plans:
 | 7. Gap Closure & Cleanup | v1.0 | 2/2 | Complete | 2026-03-15 |
 | 8. Frontend Styling Fix | v1.1 | 1/1 | Complete | 2026-03-15 |
 | 9. Styles Panel | v1.1 | 0/? | Not started | - |
-| 10. Theme Settings | v1.1 | 0/? | Not started | - |
+| 10. Theme Settings | v1.1 | 0/3 | Not started | - |
