@@ -36,7 +36,7 @@ Site-wide design tokens (colors, fonts, spacing, border radius) managed through 
 ### CSS variable injection
 - Fetch theme global in layout.tsx, output CSS variables as inline style on `<html>` element
 - Override :root variables only — globals.css @theme inline block already maps --color-primary to var(--primary), so Tailwind utilities automatically pick up changes
-- Google Fonts loaded via next/font/google for self-hosting and optimization
+- Google Fonts loaded via CSS link tags with preconnect hints (next/font/google cannot load dynamic CMS-selected fonts — requires build-time static calls). Geist stays as static fallback.
 - Fetch + revalidate caching: theme fetched once, revalidated when admin saves via Payload afterChange hook
 
 ### Token naming & storage
