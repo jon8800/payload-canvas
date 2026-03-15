@@ -137,7 +137,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 5. Plugins & Integrations | 3/3 | Complete    | 2026-03-14 |
 | 6. Developer Experience | 3/5 | Gap Closure | 2026-03-15 |
 | 6.1 Monorepo Restructure | 3/3 | Complete | 2026-03-15 |
-| 7. Gap Closure & Cleanup | 0/? | Not started | - |
+| 7. Gap Closure & Cleanup | 0/2 | Planned | - |
 
 ### Phase 06.1: Restructure into payload-toolkit Turborepo monorepo (INSERTED)
 
@@ -156,7 +156,8 @@ Plans:
 **Requirements:** PLUG-03 (partial), DX-02 (partial), DX-04 (partial)
 **Gap Closure:** Closes gaps from v1.0 milestone audit
 **Depends on:** Phase 6.1
-**Plans:** 0 plans (not yet planned)
+**Plans:** 2 plans
 
 Plans:
-(none yet)
+- [ ] 07-01-PLAN.md — Functional FormEmbed frontend (RSC + client component for form rendering and submission)
+- [ ] 07-02-PLAN.md — ADMIN_EMAIL env docs, wire unused seed presets, dead code cleanup
