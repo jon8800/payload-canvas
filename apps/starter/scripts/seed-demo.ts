@@ -1,5 +1,9 @@
-import { getPayload } from 'payload'
+import { getPayload, type Payload } from 'payload'
 import config from '@payload-config'
+
+// Seed data uses loose types since block slugs differ at nesting levels
+// (e.g., 'container' at top level, 'container_1' at depth 1)
+type SeedData = Record<string, any>
 import {
   heroPreset,
   contentPreset,
@@ -24,7 +28,7 @@ async function seed() {
 
   const categories: Record<string, number> = {}
   for (const cat of categoryData) {
-    const created = await payload.create({
+    const created = await (payload as any).create({
       collection: 'categories',
       data: { title: cat.title, slug: cat.slug },
     })
@@ -41,7 +45,7 @@ async function seed() {
 
   const tags: Record<string, number> = {}
   for (const tag of tagData) {
-    const created = await payload.create({
+    const created = await (payload as any).create({
       collection: 'tags',
       data: { title: tag.title, slug: tag.slug },
     })
@@ -50,7 +54,7 @@ async function seed() {
   console.log(`Created ${tagData.length} tags.`)
 
   // --- Template Parts ---
-  await payload.create({
+  await (payload as any).create({
     collection: 'template-parts',
     data: {
       title: 'Header',
@@ -94,7 +98,7 @@ async function seed() {
     },
   })
 
-  await payload.create({
+  await (payload as any).create({
     collection: 'template-parts',
     data: {
       title: 'Footer',
@@ -152,13 +156,13 @@ async function seed() {
     paragraph: 'Join thousands of developers building modern websites with our composable block-based approach.',
   })
 
-  await payload.create({
+  await (payload as any).create({
     collection: 'pages',
     data: {
       title: 'Home',
       slug: 'home',
       _status: 'published',
-      layout: [...homeHero, ...homeFeatures, ...homeCta],
+      layout: [...homeHero, ...homeFeatures, ...homeCta] as any,
     },
   })
 
@@ -170,13 +174,13 @@ async function seed() {
     paragraph: 'This platform changed the way we build websites. The composable blocks make it incredibly easy to create consistent, beautiful pages.',
   })
 
-  await payload.create({
+  await (payload as any).create({
     collection: 'pages',
     data: {
       title: 'About',
       slug: 'about',
       _status: 'published',
-      layout: [...aboutContent, ...aboutTestimonials],
+      layout: [...aboutContent, ...aboutTestimonials] as any,
     },
   })
 
@@ -186,7 +190,7 @@ async function seed() {
   })
   // Override heading text in cloned hero
   if (servicesHero[0]?.children) {
-    const children = servicesHero[0].children as Record<string, unknown>[]
+    const children = servicesHero[0].children as any[]
     const heading = children.find((c) => c.blockType === 'heading')
     if (heading) heading.text = 'Our Services'
   }
@@ -197,13 +201,13 @@ async function seed() {
     paragraph: 'Get in touch with our team to find the right solution for your project needs.',
   })
 
-  await payload.create({
+  await (payload as any).create({
     collection: 'pages',
     data: {
       title: 'Services',
       slug: 'services',
       _status: 'published',
-      layout: [...servicesHero, ...servicesFeatures, ...servicesCta],
+      layout: [...servicesHero, ...servicesFeatures, ...servicesCta] as any,
     },
   })
 
@@ -213,18 +217,18 @@ async function seed() {
   })
   // Override heading
   if (contactContent[0]?.children) {
-    const children = contactContent[0].children as Record<string, unknown>[]
+    const children = contactContent[0].children as any[]
     const heading = children.find((c) => c.blockType === 'heading')
     if (heading) heading.text = 'Contact Us'
   }
 
-  await payload.create({
+  await (payload as any).create({
     collection: 'pages',
     data: {
       title: 'Contact',
       slug: 'contact',
       _status: 'published',
-      layout: [...contactContent],
+      layout: [...contactContent] as any,
     },
   })
 
@@ -279,7 +283,7 @@ async function seed() {
   ]
 
   for (const post of posts) {
-    await payload.create({
+    await (payload as any).create({
       collection: 'posts',
       data: {
         title: post.title,
@@ -288,7 +292,7 @@ async function seed() {
         categories: post.categories,
         tags: post.tags,
         _status: 'published',
-        layout: post.content,
+        layout: post.content as any,
       },
     })
   }
