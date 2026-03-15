@@ -1,6 +1,7 @@
 'use client'
 
-import { useField } from '@payloadcms/ui'
+import { useCallback, useRef, useState } from 'react'
+import { CodeEditor, useField } from '@payloadcms/ui'
 import type { TextFieldClientProps } from 'payload'
 import './StylesPanel.scss'
 
@@ -405,6 +406,86 @@ function ColorGroup({ label, basePath, styles, onUpdate }: ColorGroupProps) {
   )
 }
 
+// ── Class Token Input ──
+
+type ClassTokenInputProps = {
+  value: string
+  onChange: (value: string | undefined) => void
+}
+
+function ClassTokenInput({ value, onChange }: ClassTokenInputProps) {
+  const [inputValue, setInputValue] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const chips = value ? value.split(/\s+/).filter(Boolean) : []
+
+  const addChip = useCallback(
+    (text: string) => {
+      const trimmed = text.trim()
+      if (!trimmed || chips.includes(trimmed)) return
+      const updated = [...chips, trimmed].join(' ')
+      onChange(updated)
+      setInputValue('')
+    },
+    [chips, onChange],
+  )
+
+  const removeChip = useCallback(
+    (index: number) => {
+      const updated = chips.filter((_, i) => i !== index).join(' ')
+      onChange(updated || undefined)
+    },
+    [chips, onChange],
+  )
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if ((e.key === 'Enter' || e.key === ' ') && inputValue.trim()) {
+      e.preventDefault()
+      addChip(inputValue)
+      return
+    }
+    if (e.key === 'Backspace' && !inputValue && chips.length > 0) {
+      removeChip(chips.length - 1)
+    }
+  }
+
+  return (
+    <div
+      className="chip-input-wrapper"
+      onClick={() => inputRef.current?.focus()}
+    >
+      {chips.map((chip, i) => (
+        <span key={`${chip}-${i}`} className="chip">
+          {chip}
+          <button
+            type="button"
+            className="chip-remove"
+            onClick={(e) => {
+              e.stopPropagation()
+              removeChip(i)
+            }}
+            aria-label={`Remove ${chip}`}
+          >
+            x
+          </button>
+        </span>
+      ))}
+      <input
+        ref={inputRef}
+        type="text"
+        className="chip-text-input"
+        value={inputValue}
+        onChange={(e) => setInputValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={() => {
+          if (inputValue.trim()) addChip(inputValue)
+        }}
+        placeholder={chips.length === 0 ? 'Type class and press Enter' : ''}
+      />
+    </div>
+  )
+}
+
 // ── Main component ──
 
 export function StylesPanel({ path }: TextFieldClientProps) {
@@ -492,26 +573,28 @@ export function StylesPanel({ path }: TextFieldClientProps) {
       <details className="styles-group">
         <summary>Custom CSS</summary>
         <div className="group-content">
-          <div className="field-row">
-            <label>Extra Classes</label>
-            <input
-              type="text"
-              placeholder="e.g. shadow-lg rounded-xl"
-              value={styles.customCSS?.classes ?? ''}
-              onChange={(e) =>
-                handleUpdate(['customCSS', 'classes'], e.target.value || undefined)
-              }
-            />
+          <div className="custom-css-field">
+            <label>Custom CSS</label>
+            <div className="code-editor-wrapper">
+              <CodeEditor
+                language="css"
+                minHeight={80}
+                maxHeight={200}
+                value={styles.customCSS?.inlineCSS ?? ''}
+                onChange={(value: string | undefined) =>
+                  handleUpdate(['customCSS', 'inlineCSS'], value || undefined)
+                }
+              />
+            </div>
+            <span className="code-editor-description">
+              Add custom CSS properties (e.g. max-width: 600px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);)
+            </span>
           </div>
-          <div className="field-row">
-            <label>Inline CSS</label>
-            <input
-              type="text"
-              placeholder="e.g. max-width: 600px"
-              value={styles.customCSS?.inlineCSS ?? ''}
-              onChange={(e) =>
-                handleUpdate(['customCSS', 'inlineCSS'], e.target.value || undefined)
-              }
+          <div className="custom-css-field">
+            <label>Tailwind Classes</label>
+            <ClassTokenInput
+              value={styles.customCSS?.classes ?? ''}
+              onChange={(val) => handleUpdate(['customCSS', 'classes'], val)}
             />
           </div>
         </div>
