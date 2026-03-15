@@ -37,7 +37,9 @@
   1. Frontend pages show proper heading sizes, font stacks, and Tailwind Preflight reset styles
   2. Block components with configured padding, margin, or color values display those styles on the rendered frontend page
   3. shadcn/ui Button, Card, and Form components render with correct styling on frontend pages (not just admin)
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 08-01-PLAN.md — Fix Tailwind v4 content scanning with @source directives
 
 ### Phase 9: Styles Panel
 **Goal**: Block styles are stored as a single JSON field and edited through a Webflow-inspired visual panel in the admin
@@ -74,6 +76,6 @@
 | 6. Developer Experience | v1.0 | 5/5 | Complete | 2026-03-15 |
 | 6.1 Monorepo Restructure | v1.0 | 3/3 | Complete | 2026-03-15 |
 | 7. Gap Closure & Cleanup | v1.0 | 2/2 | Complete | 2026-03-15 |
-| 8. Frontend Styling Fix | v1.1 | 0/? | Not started | - |
+| 8. Frontend Styling Fix | v1.1 | 0/1 | In progress | - |
 | 9. Styles Panel | v1.1 | 0/? | Not started | - |
 | 10. Theme Settings | v1.1 | 0/? | Not started | - |
