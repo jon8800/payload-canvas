@@ -14,6 +14,7 @@ import {
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/views/customiser/components/Tabs'
 import { CUSTOMISER_BLOCKS_FIELD } from '@/utilities/customiserConfig'
+import { findBlocksField, getNonLayoutFields } from './utils/findFields'
 import { useSelectedSection } from './context/SelectedSectionContext'
 import './DocumentFields.scss'
 
@@ -257,10 +258,8 @@ export function DocumentFields({
 
   const readOnly = Boolean(readOnlyProp || formInitializing || formProcessing)
 
-  const layoutField = fields.find(
-    (field): field is BlocksFieldClient => 'name' in field && field.name === CUSTOMISER_BLOCKS_FIELD && field.type === 'blocks',
-  )
-  const otherFields = fields.filter((field) => 'name' in field && field.name !== CUSTOMISER_BLOCKS_FIELD)
+  const layoutField = findBlocksField(fields, CUSTOMISER_BLOCKS_FIELD)
+  const otherFields = getNonLayoutFields(fields, CUSTOMISER_BLOCKS_FIELD)
 
   return (
     <div className={[baseClass, `${baseClass}__sidebar-wrap`].filter(Boolean).join(' ')}>
@@ -272,12 +271,12 @@ export function DocumentFields({
         )}
         {BeforeFields}
         <div className={`${baseClass}__sidebar-fields`}>
-          <Tabs defaultValue="layout" className={`${baseClass}__tabs-wrapper`}>
+          <Tabs defaultValue="block" className={`${baseClass}__tabs-wrapper`}>
             <TabsList>
-              <TabsTrigger value="layout">Layout</TabsTrigger>
+              <TabsTrigger value="block">Block</TabsTrigger>
               <TabsTrigger value="page">Page</TabsTrigger>
             </TabsList>
-            <TabsContent value="layout">
+            <TabsContent value="block">
               {selectedSection && layoutField ? (
                 <SelectedSectionFields
                   key={selectedSection}

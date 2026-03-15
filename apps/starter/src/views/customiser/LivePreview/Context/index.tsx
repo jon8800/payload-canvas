@@ -9,13 +9,27 @@ function fieldSchemaToJSON(fieldSchema: ClientField[] | undefined) {
   return JSON.parse(JSON.stringify(fieldSchema))
 }
 
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
 import type { usePopupWindow } from '../usePopupWindow'
 
 import { customCollisionDetection } from './collisionDetection'
 import { LivePreviewContext } from './context'
 import { sizeReducer } from './sizeReducer'
+
+/**
+ * Ensures the URL is absolute. Relative URLs (e.g., `/next/preview?...`) need to be
+ * converted to absolute so that origin checks against postMessage events work correctly.
+ */
+function formatAbsoluteURL(incomingURL: string | undefined): string | undefined {
+  if (!incomingURL) return undefined
+  if (incomingURL.startsWith('http://') || incomingURL.startsWith('https://')) return incomingURL
+  try {
+    return new URL(incomingURL, window.location.origin).href
+  } catch {
+    return incomingURL
+  }
+}
 
 export type LivePreviewProviderProps = {
   appIsReady?: boolean
@@ -39,8 +53,11 @@ export const LivePreviewProvider: React.FC<LivePreviewProviderProps> = ({
   isPopupOpen,
   openPopupWindow,
   popupRef,
-  url,
+  url: urlFromProps,
 }) => {
+  // Convert relative URLs to absolute so origin checks work with postMessage
+  const url = useMemo(() => formatAbsoluteURL(urlFromProps), [urlFromProps])
+
   const [previewWindowType, setPreviewWindowType] = useState<'iframe' | 'popup'>('iframe')
 
   const [appIsReady, setAppIsReady] = useState(false)

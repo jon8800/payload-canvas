@@ -38,6 +38,7 @@ import { useRouter } from 'next/navigation'
 import React, { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 
 import { CUSTOMISER_BLOCKS_FIELD } from '@/utilities/customiserConfig'
+import { findBlocksField } from './utils/findFields'
 import { DocumentFields } from './DocumentFields'
 import { useLivePreviewContext } from './LivePreview/Context/context'
 import { LivePreviewProvider } from './LivePreview/Context/index'
@@ -388,7 +389,7 @@ const CustomiserView: React.FC<Props> = ({
     !documentLockStateRef.current?.hasShownLockedModal &&
     !isLockExpired
 
-  const layoutField = fields.find((field) => 'name' in field && field.name === CUSTOMISER_BLOCKS_FIELD)
+  const layoutField = findBlocksField(fields, CUSTOMISER_BLOCKS_FIELD)
   const hasLayoutFields = !!layoutField
 
   return (
