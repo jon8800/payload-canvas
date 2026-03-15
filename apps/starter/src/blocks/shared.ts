@@ -26,7 +26,7 @@ export const htmlTagOptions = [
   'blockquote',
 ]
 
-// Shared settings fields present on every block (htmlTag + customClasses + inlineCSS)
+// Shared settings fields present on every block (htmlTag + extras)
 export function settingsTab(
   defaultTag: string,
   extraFields: Field[] = [],
@@ -40,18 +40,6 @@ export function settingsTab(
         label: 'HTML Tag',
         defaultValue: defaultTag,
         options: htmlTagOptions,
-      },
-      {
-        name: 'customClasses',
-        type: 'text',
-        label: 'Custom Classes',
-        admin: { description: 'Additional Tailwind classes' },
-      },
-      {
-        name: 'inlineCSS',
-        type: 'text',
-        label: 'Inline CSS',
-        admin: { description: 'Raw inline CSS (e.g. max-width: 600px)' },
       },
       ...extraFields,
     ],

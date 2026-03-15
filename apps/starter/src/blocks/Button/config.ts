@@ -1,5 +1,5 @@
 import type { Block, Field } from 'payload'
-import { styleFields } from '@/fields/styleOptions'
+import { stylesField } from '@/fields/stylesField'
 import { linkFields } from '@/fields/link'
 import { settingsTab } from '@/blocks/shared'
 import type { RecursiveBlock } from '@/blocks/generateBlocks'
@@ -53,7 +53,7 @@ export const ButtonBlock: RecursiveBlock = (children?: Field): Block => ({
         },
         {
           label: 'Styles',
-          fields: styleFields,
+          fields: [stylesField()],
         },
         settingsTab('div'),
       ],

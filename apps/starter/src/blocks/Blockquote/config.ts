@@ -1,5 +1,5 @@
 import type { Block, Field } from 'payload'
-import { styleFields } from '@/fields/styleOptions'
+import { stylesField } from '@/fields/stylesField'
 import { settingsTab } from '@/blocks/shared'
 import type { RecursiveBlock } from '@/blocks/generateBlocks'
 
@@ -34,7 +34,7 @@ export const BlockquoteBlock: RecursiveBlock = (children?: Field): Block => ({
         },
         {
           label: 'Styles',
-          fields: styleFields,
+          fields: [stylesField()],
         },
         settingsTab('blockquote'),
       ],
