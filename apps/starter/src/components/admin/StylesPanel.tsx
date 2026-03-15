@@ -423,15 +423,7 @@ export function StylesPanel({ path }: TextFieldClientProps) {
 
   return (
     <div className="styles-panel">
-      <label
-        style={{
-          display: 'block',
-          marginBottom: 8,
-          fontWeight: 600,
-          fontSize: 13,
-          fontFamily: 'var(--font-body, sans-serif)',
-        }}
-      >
+      <label className="styles-panel-title">
         Styles
       </label>
 
