@@ -25,10 +25,14 @@ Any website project can be scaffolded instantly with a composable block-based la
 
 ### Active
 
+- [ ] Frontend Tailwind v4 CSS fix (Preflight, utilities, shadcn components not loading on frontend pages)
+- [ ] Webflow-style styles panel (single JSON field with custom bounding box UI replacing per-field CSS properties)
+- [ ] Theme Settings global (admin view for managing theme variables — colors, fonts, spacing, radius — stored as JSON, feeding CSS variables)
+
+### Future
+
 - [ ] Templates collection for dynamic page layouts (Elementor-style)
 - [ ] Type-safe dynamic data binding (block properties reference compatible collection fields)
-- [ ] Theme Settings plugin (manage shadcn theme variables from admin panel)
-- [ ] Webflow-style styles panel (JSON field with custom bounding box UI)
 - [ ] Frontend search UI for Search plugin
 
 ### Out of Scope
@@ -72,5 +76,9 @@ Any website project can be scaffolded instantly with a composable block-based la
 | No special hero fields | Hero is just another section composed of nested blocks, consistent with the system | — Pending |
 | VPS/Docker deployment target | No vendor lock-in, self-hosted flexibility | — Pending |
 
+## Current Milestone: v1.1 Styling & Theming
+
+**Goal:** Fix frontend CSS, replace per-field styles with Webflow-inspired JSON panel, add Theme Settings global for site-wide design control.
+
 ---
-*Last updated: 2026-03-15 after v1.0 milestone*
+*Last updated: 2026-03-15 after v1.1 milestone start*
