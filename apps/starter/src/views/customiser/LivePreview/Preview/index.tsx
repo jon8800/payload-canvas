@@ -46,8 +46,15 @@ export const LivePreview: React.FC<EditViewProps> = (props) => {
                     backgroundColor: 'var(--theme-elevation-50)',
                     height: '100%',
                     width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--theme-elevation-500)',
+                    fontSize: 'var(--font-body-size-m)',
                   }}
-                ></div>
+                >
+                  Save the document with a title to enable preview
+                </div>
               )}
             </DeviceContainer>
           </div>

@@ -11,7 +11,7 @@ type Props = {
 }
 
 export function generatePreviewPath({ collection, slug }: Props): string {
-  if (slug === undefined || slug === null) return ''
+  if (!slug) return ''
 
   const encodedSlug = encodeURIComponent(slug)
   const prefix = collectionPrefixMap[collection] || ''

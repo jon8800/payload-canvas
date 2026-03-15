@@ -14,6 +14,7 @@ import {
   useFormProcessing,
   useFormSubmitted,
   useTranslation,
+  useConfig,
   BlocksDrawer,
   DrawerToggler,
   useForm,
@@ -542,6 +543,7 @@ const NestedBlocks: React.FC<{
   parentErrorPaths?: string[]
   hasSubmitted?: boolean
 }> = ({ nestedField, nestedPath, level, onRowsChange, readOnly, schemaPath, parentErrorPaths = [], hasSubmitted }) => {
+  const { config } = useConfig()
   const { rows = [], errorPaths = [] } = useField<number>({
     hasRows: true,
     path: nestedPath,
@@ -555,19 +557,26 @@ const NestedBlocks: React.FC<{
   const { maxRows } = nestedField
   const hasMaxRows = maxRows !== undefined && rows.length >= maxRows
 
+  const nestedBlocks: ClientBlock[] = useMemo(() => {
+    const raw = (nestedField as BlocksFieldClient & { blockReferences?: ClientBlock[] | string[] }).blockReferences ?? nestedField.blocks ?? []
+    return raw.map((block) =>
+      typeof block === 'string' ? config.blocksMap[block] : block
+    ).filter(Boolean) as ClientBlock[]
+  }, [nestedField, config.blocksMap])
+
   return (
     <div className={`${baseClass}__nested-container`}>
       {rows.map((nestedRow, nestedIndex) => (
         <React.Fragment key={nestedRow.id}>
           <InlineBlockAdder
-            blocks={nestedField.blocks}
+            blocks={nestedBlocks}
             path={nestedPath}
             insertIndex={nestedIndex}
             schemaPath={schemaPath}
             disabled={hasMaxRows || readOnly}
           />
           <SortableBlock
-            blocks={nestedField.blocks}
+            blocks={nestedBlocks}
             path={nestedPath}
             row={nestedRow}
             rowIndex={nestedIndex}
@@ -580,7 +589,7 @@ const NestedBlocks: React.FC<{
         </React.Fragment>
       ))}
       <NestedBlockAdder
-        blocks={nestedField.blocks}
+        blocks={nestedBlocks}
         path={nestedPath}
         schemaPath={schemaPath}
         level={level}
@@ -666,7 +675,14 @@ function SectionFieldsContent({
     parentSchemaPath: schemaPathSegments.join('.'),
   })
 
-  const { label, blocks, maxRows } = field as BlocksFieldClient
+  const { config } = useConfig()
+  const { label, blocks: fieldBlocks, blockReferences, maxRows } = field as BlocksFieldClient & { blockReferences?: ClientBlock[] | string[] }
+  const blocks: ClientBlock[] = useMemo(() => {
+    const raw = fieldBlocks ?? blockReferences ?? []
+    return raw.map((block) =>
+      typeof block === 'string' ? config.blocksMap[block] : block
+    ).filter(Boolean) as ClientBlock[]
+  }, [fieldBlocks, blockReferences, config.blocksMap])
 
   const { rows = [], errorPaths = [] } = useField<number>({
     hasRows: true,

@@ -3,6 +3,7 @@ import type { BlocksFieldClient, ClientBlock, ClientField, SanitizedDocumentPerm
 
 import {
   RenderFields,
+  useConfig,
   useDocumentInfo,
   useField,
   useForm,
@@ -10,7 +11,7 @@ import {
   useFormProcessing,
   useServerFunctions,
 } from '@payloadcms/ui'
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/views/customiser/components/Tabs'
 import { CUSTOMISER_BLOCKS_FIELD } from '@/utilities/customiserConfig'
 import { useSelectedSection } from './context/SelectedSectionContext'
@@ -49,7 +50,7 @@ function parseSelectedPath(selectedSection: string): PathSegment[] {
 }
 
 function NestedBlockFields({
-  blocks,
+  blocks: rawBlocks,
   currentPath,
   docPermissions,
   parentSchemaPath,
@@ -57,7 +58,7 @@ function NestedBlockFields({
   segments,
   segmentIndex,
 }: {
-  blocks: ClientBlock[]
+  blocks: (ClientBlock | string)[]
   currentPath: string
   docPermissions: SanitizedDocumentPermissions
   parentSchemaPath: string
@@ -65,6 +66,14 @@ function NestedBlockFields({
   segments: PathSegment[]
   segmentIndex: number
 }) {
+  const { config } = useConfig()
+  const blocks = useMemo(() =>
+    rawBlocks.map((block) =>
+      typeof block === 'string' ? config.blocksMap[block] : block
+    ).filter(Boolean) as ClientBlock[],
+    [rawBlocks, config.blocksMap],
+  )
+
   const segment = segments[segmentIndex]
   const isLastSegment = segmentIndex === segments.length - 1
 
@@ -119,7 +128,7 @@ function NestedBlockFields({
 
   return (
     <NestedBlockFields
-      blocks={nestedBlocksField.blocks}
+      blocks={(nestedBlocksField as BlocksFieldClient & { blockReferences?: (ClientBlock | string)[] }).blockReferences ?? nestedBlocksField.blocks ?? []}
       currentPath={`${rowPath}.${nestedBlocksField.name}`}
       docPermissions={docPermissions}
       parentSchemaPath={`${schemaPath}.${nestedBlocksField.name}`}
@@ -222,7 +231,7 @@ function SelectedSectionFields({
 
   return (
     <NestedBlockFields
-      blocks={layoutField.blocks}
+      blocks={(layoutField as BlocksFieldClient & { blockReferences?: ClientBlock[] | string[] }).blockReferences ?? layoutField.blocks ?? []}
       currentPath={layoutField.name}
       docPermissions={docPermissions}
       parentSchemaPath={baseSchemaPath}
