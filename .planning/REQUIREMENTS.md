@@ -22,7 +22,7 @@
 ### Theme Settings
 
 - [x] **THEME-01**: Theme Settings global with JSON field storing site-wide design tokens (colors, fonts, spacing, border radius)
-- [ ] **THEME-02**: Custom admin view for editing theme values visually
+- [x] **THEME-02**: Custom admin view for editing theme values visually
 - [ ] **THEME-03**: Theme values injected as CSS variables on frontend pages via layout.tsx
 - [ ] **THEME-04**: shadcn/ui components respect theme CSS variables
 
@@ -59,7 +59,7 @@
 | PANEL-04 | Phase 9 | Pending |
 | PANEL-05 | Phase 9 | Pending |
 | THEME-01 | Phase 10 | Complete |
-| THEME-02 | Phase 10 | Pending |
+| THEME-02 | Phase 10 | Complete |
 | THEME-03 | Phase 10 | Pending |
 | THEME-04 | Phase 10 | Pending |
 
