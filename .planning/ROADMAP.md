@@ -51,7 +51,11 @@ Plans:
   3. Admin users can expand collapsible groups for border, typography, colors, and custom CSS to configure additional style properties
   4. Style changes made in the admin panel persist on save and render correctly on the frontend page
   5. Existing blocks with old per-field style data continue to render correctly after migration to the new JSON format
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 09-01-PLAN.md — Styles JSON field factory and Webflow-style bounding box admin component
+- [ ] 09-02-PLAN.md — Wire stylesField into all 14 block configs and update frontend components
+- [ ] 09-03-PLAN.md — Migration script for existing block style data to JSON format
 
 ### Phase 10: Theme Settings
 **Goal**: Site-wide design tokens (colors, fonts, spacing, border radius) are managed through a Theme Settings global and applied via CSS variables
@@ -81,5 +85,5 @@ Plans:
 | 6.1 Monorepo Restructure | v1.0 | 3/3 | Complete | 2026-03-15 |
 | 7. Gap Closure & Cleanup | v1.0 | 2/2 | Complete | 2026-03-15 |
 | 8. Frontend Styling Fix | v1.1 | 1/1 | Complete | 2026-03-15 |
-| 9. Styles Panel | v1.1 | 0/? | Not started | - |
-| 10. Theme Settings | 1/3 | In Progress|  | - |
+| 9. Styles Panel | v1.1 | 0/3 | Not started | - |
+| 10. Theme Settings | v1.1 | 0/3 | Not started | - |
