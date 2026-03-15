@@ -83,7 +83,10 @@ Plans:
   3. Tailwind classes input uses tag-based tokens (add/remove chips, not plain text)
   4. Theme field components (ColorPicker, SliderField, FontSelector) look native to Payload admin with CSS variables
   5. Customizer right sidebar has no excess horizontal padding
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 11-01-PLAN.md — Redesign StylesPanel: Webflow bounding box, Monaco CSS editor, tag-based class input
+- [ ] 11-02-PLAN.md — Redesign theme field components with Payload CSS variables + fix sidebar padding
 
 ## Progress
 
@@ -100,4 +103,4 @@ Plans:
 | 8. Frontend Styling Fix | v1.1 | 1/1 | Complete | 2026-03-15 |
 | 9. Styles Panel | v1.1 | 3/3 | Complete | 2026-03-15 |
 | 10. Theme Settings | v1.1 | 3/3 | Complete | 2026-03-15 |
-| 11. Admin Component Redesign | v1.1 | 0/? | Not started | - |
+| 11. Admin Component Redesign | v1.1 | 0/2 | Not started | - |
