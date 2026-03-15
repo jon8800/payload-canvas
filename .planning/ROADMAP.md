@@ -3,6 +3,7 @@
 ## Milestones
 
 - **v1.0 MVP** — Phases 1-7 (shipped 2026-03-15) — [Full details](milestones/v1.0-ROADMAP.md)
+- **v1.1 Styling & Theming** — Phases 8-10 (in progress)
 
 ## Phases
 
@@ -20,6 +21,47 @@
 
 </details>
 
+### v1.1 Styling & Theming
+
+- [ ] **Phase 8: Frontend Styling Fix** - Fix Tailwind v4 Preflight, block style rendering, and shadcn/ui on frontend pages
+- [ ] **Phase 9: Styles Panel** - Replace per-field style properties with single JSON field and Webflow-style bounding box UI
+- [ ] **Phase 10: Theme Settings** - Global design token system with admin editor and CSS variable injection
+
+## Phase Details
+
+### Phase 8: Frontend Styling Fix
+**Goal**: Frontend pages render with correct base styles, block styles apply visually, and shadcn/ui components work
+**Depends on**: Phase 7 (v1.0 complete)
+**Requirements**: STYLE-01, STYLE-02, STYLE-03
+**Success Criteria** (what must be TRUE):
+  1. Frontend pages show proper heading sizes, font stacks, and Tailwind Preflight reset styles
+  2. Block components with configured padding, margin, or color values display those styles on the rendered frontend page
+  3. shadcn/ui Button, Card, and Form components render with correct styling on frontend pages (not just admin)
+**Plans**: TBD
+
+### Phase 9: Styles Panel
+**Goal**: Block styles are stored as a single JSON field and edited through a Webflow-inspired visual panel in the admin
+**Depends on**: Phase 8 (frontend styles must render correctly before refactoring the style system)
+**Requirements**: PANEL-01, PANEL-02, PANEL-03, PANEL-04, PANEL-05
+**Success Criteria** (what must be TRUE):
+  1. Each block stores its style configuration in a single JSON field instead of individual Payload fields for each CSS property
+  2. Admin users can edit margin and padding via a visual bounding box UI with per-side controls (top, right, bottom, left)
+  3. Admin users can expand collapsible groups for border, typography, colors, and custom CSS to configure additional style properties
+  4. Style changes made in the admin panel persist on save and render correctly on the frontend page
+  5. Existing blocks with old per-field style data continue to render correctly after migration to the new JSON format
+**Plans**: TBD
+
+### Phase 10: Theme Settings
+**Goal**: Site-wide design tokens (colors, fonts, spacing, border radius) are managed through a Theme Settings global and applied via CSS variables
+**Depends on**: Phase 8 (CSS variable injection requires working frontend styles); Phase 9 recommended but not blocking
+**Requirements**: THEME-01, THEME-02, THEME-03, THEME-04
+**Success Criteria** (what must be TRUE):
+  1. A Theme Settings global exists in the admin with a JSON field storing design tokens for colors, fonts, spacing, and border radius
+  2. Admin users can edit theme values through a dedicated visual admin view (not raw JSON editing)
+  3. Theme values appear as CSS custom properties (e.g., --color-primary, --font-body) on frontend pages via layout.tsx
+  4. shadcn/ui components on the frontend respond to theme CSS variable changes (e.g., changing primary color updates buttons)
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -32,3 +74,6 @@
 | 6. Developer Experience | v1.0 | 5/5 | Complete | 2026-03-15 |
 | 6.1 Monorepo Restructure | v1.0 | 3/3 | Complete | 2026-03-15 |
 | 7. Gap Closure & Cleanup | v1.0 | 2/2 | Complete | 2026-03-15 |
+| 8. Frontend Styling Fix | v1.1 | 0/? | Not started | - |
+| 9. Styles Panel | v1.1 | 0/? | Not started | - |
+| 10. Theme Settings | v1.1 | 0/? | Not started | - |

@@ -50,24 +50,24 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| STYLE-01 | — | Pending |
-| STYLE-02 | — | Pending |
-| STYLE-03 | — | Pending |
-| PANEL-01 | — | Pending |
-| PANEL-02 | — | Pending |
-| PANEL-03 | — | Pending |
-| PANEL-04 | — | Pending |
-| PANEL-05 | — | Pending |
-| THEME-01 | — | Pending |
-| THEME-02 | — | Pending |
-| THEME-03 | — | Pending |
-| THEME-04 | — | Pending |
+| STYLE-01 | Phase 8 | Pending |
+| STYLE-02 | Phase 8 | Pending |
+| STYLE-03 | Phase 8 | Pending |
+| PANEL-01 | Phase 9 | Pending |
+| PANEL-02 | Phase 9 | Pending |
+| PANEL-03 | Phase 9 | Pending |
+| PANEL-04 | Phase 9 | Pending |
+| PANEL-05 | Phase 9 | Pending |
+| THEME-01 | Phase 10 | Pending |
+| THEME-02 | Phase 10 | Pending |
+| THEME-03 | Phase 10 | Pending |
+| THEME-04 | Phase 10 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 12 total
-- Mapped to phases: 0
-- Unmapped: 12
+- Mapped to phases: 12
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-15*
-*Last updated: 2026-03-15 after milestone v1.1 start*
+*Last updated: 2026-03-15 after v1.1 roadmap creation*
