@@ -24,8 +24,9 @@
 ### v1.1 Styling & Theming
 
 - [x] **Phase 8: Frontend Styling Fix** - Fix Tailwind v4 Preflight, block style rendering, and shadcn/ui on frontend pages
-- [ ] **Phase 9: Styles Panel** - Replace per-field style properties with single JSON field and Webflow-style bounding box UI
+- [x] **Phase 9: Styles Panel** - Replace per-field style properties with single JSON field and Webflow-style bounding box UI (completed 2026-03-15)
 - [x] **Phase 10: Theme Settings** - Global design token system with admin editor and CSS variable injection (completed 2026-03-15)
+- [ ] **Phase 11: Admin Component Redesign** - Webflow-inspired redesign of styles panel and theme field components with Payload-native aesthetic
 
 ## Phase Details
 
@@ -72,6 +73,18 @@ Plans:
 - [ ] 10-02-PLAN.md — Custom admin field components (ColorPicker, FontSelector, SliderField)
 - [ ] 10-03-PLAN.md — Frontend CSS variable injection in layout.tsx
 
+### Phase 11: Admin Component Redesign
+**Goal**: All custom admin field components (styles panel + theme settings) redesigned to be professional, Webflow-inspired, and native to Payload admin UI
+**Depends on**: Phase 9, Phase 10
+**Requirements**: UI-01, UI-02, UI-03, UI-04, UI-05
+**Success Criteria** (what must be TRUE):
+  1. StylesPanel bounding box is Webflow-inspired — centered, clean, no multi-color margin/padding distinction
+  2. CSS custom input uses a code editor with syntax highlighting (Payload's code field component or equivalent)
+  3. Tailwind classes input uses tag-based tokens (add/remove chips, not plain text)
+  4. Theme field components (ColorPicker, SliderField, FontSelector) look native to Payload admin with CSS variables
+  5. Customizer right sidebar has no excess horizontal padding
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -85,5 +98,6 @@ Plans:
 | 6.1 Monorepo Restructure | v1.0 | 3/3 | Complete | 2026-03-15 |
 | 7. Gap Closure & Cleanup | v1.0 | 2/2 | Complete | 2026-03-15 |
 | 8. Frontend Styling Fix | v1.1 | 1/1 | Complete | 2026-03-15 |
-| 9. Styles Panel | v1.1 | 0/3 | Not started | - |
-| 10. Theme Settings | 3/3 | Complete    | 2026-03-15 | - |
+| 9. Styles Panel | v1.1 | 3/3 | Complete | 2026-03-15 |
+| 10. Theme Settings | v1.1 | 3/3 | Complete | 2026-03-15 |
+| 11. Admin Component Redesign | v1.1 | 0/? | Not started | - |

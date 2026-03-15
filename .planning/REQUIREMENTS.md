@@ -37,6 +37,14 @@
 
 - **SRCH-01**: Frontend search UI consuming the Search plugin
 
+### Admin Component UX
+
+- [ ] **UI-01**: StylesPanel bounding box redesigned Webflow-style — centered, clean, unified colors, professional property controls
+- [ ] **UI-02**: Custom CSS input uses a code editor with syntax highlighting (not a text input)
+- [ ] **UI-03**: Tailwind classes input uses tag-based chip tokens (add/remove, not plain text)
+- [ ] **UI-04**: Theme field components (ColorPicker, SliderField, FontSelector) redesigned with Payload-native CSS variables aesthetic
+- [ ] **UI-05**: Customizer right sidebar excess horizontal padding removed
+
 ## Out of Scope
 
 | Feature | Reason |
@@ -63,9 +71,15 @@
 | THEME-03 | Phase 10 | Complete |
 | THEME-04 | Phase 10 | Complete |
 
+| UI-01 | Phase 11 | Pending |
+| UI-02 | Phase 11 | Pending |
+| UI-03 | Phase 11 | Pending |
+| UI-04 | Phase 11 | Pending |
+| UI-05 | Phase 11 | Pending |
+
 **Coverage:**
-- v1.1 requirements: 12 total
-- Mapped to phases: 12
+- v1.1 requirements: 17 total
+- Mapped to phases: 17
 - Unmapped: 0
 
 ---
