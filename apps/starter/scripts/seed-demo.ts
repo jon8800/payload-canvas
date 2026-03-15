@@ -8,6 +8,7 @@ import {
   heroPreset,
   contentPreset,
   ctaBannerPreset,
+  collectionGridPreset,
   featuresPreset,
   testimonialsPreset,
   faqPreset,
@@ -152,6 +153,9 @@ async function seed() {
   const homeFeatures = populatePresetContent(featuresPreset.blocks, {
     paragraph: 'Our platform delivers exceptional speed with optimised builds and edge caching for near-instant page loads.',
   })
+  const homeGrid = populatePresetContent(collectionGridPreset.blocks, {
+    paragraph: 'Explore our latest articles and resources to help you get the most out of the platform.',
+  })
   const homeCta = populatePresetContent(ctaBannerPreset.blocks, {
     paragraph: 'Join thousands of developers building modern websites with our composable block-based approach.',
   })
@@ -162,7 +166,7 @@ async function seed() {
       title: 'Home',
       slug: 'home',
       _status: 'published',
-      layout: [...homeHero, ...homeFeatures, ...homeCta] as any,
+      layout: [...homeHero, ...homeFeatures, ...homeGrid, ...homeCta] as any,
     },
   })
 
@@ -174,13 +178,17 @@ async function seed() {
     paragraph: 'This platform changed the way we build websites. The composable blocks make it incredibly easy to create consistent, beautiful pages.',
   })
 
+  const aboutCta = populatePresetContent(footerCtaPreset.blocks, {
+    paragraph: 'Ready to build your next project? Get started with our composable block system today.',
+  })
+
   await (payload as any).create({
     collection: 'pages',
     data: {
       title: 'About',
       slug: 'about',
       _status: 'published',
-      layout: [...aboutContent, ...aboutTestimonials] as any,
+      layout: [...aboutContent, ...aboutTestimonials, ...aboutCta] as any,
     },
   })
 
@@ -222,13 +230,17 @@ async function seed() {
     if (heading) heading.text = 'Contact Us'
   }
 
+  const contactFaq = populatePresetContent(faqPreset.blocks, {
+    paragraph: 'Check our FAQ below for quick answers to common questions about our platform and services.',
+  })
+
   await (payload as any).create({
     collection: 'pages',
     data: {
       title: 'Contact',
       slug: 'contact',
       _status: 'published',
-      layout: [...contactContent] as any,
+      layout: [...contactContent, ...contactFaq] as any,
     },
   })
 

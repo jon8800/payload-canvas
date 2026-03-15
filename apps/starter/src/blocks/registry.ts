@@ -1,10 +1,6 @@
 import type { Block, BlockSlug, Field } from 'payload'
 import { hiddenField } from './shared'
-import { generateBlocks, type RecursiveBlock } from './generateBlocks'
-
-// Re-export slugs from the single source of truth
-export { atomicBlockSlugs } from './slugs'
-export type { AtomicBlockSlug } from './slugs'
+import type { RecursiveBlock } from './generateBlocks'
 
 // Text blocks
 import { HeadingBlock } from './Heading/config'
@@ -69,14 +65,10 @@ const generatedLayoutBlocks = generateLayoutBlocks(layoutBlockFactories, leafSlu
 // Combine: leaf blocks (12) + layout blocks at all depths (8) = 20 total
 export const allBlocks: Block[] = [...leafBlocks, ...generatedLayoutBlocks].map(withHiddenField)
 
-// Section blocks (Phase 4)
-export const sectionBlockSlugs: string[] = []
-
 // Top-level slugs (depth 0) for collection-level blockReferences
 export const allBlockSlugs: string[] = [
   ...leafSlugs,
   ...layoutBlockFactories.map((f) => f().slug), // container, grid (unsuffixed)
-  ...sectionBlockSlugs,
 ]
 
 /**
