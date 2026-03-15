@@ -12,14 +12,32 @@ export const ColorPickerField: TextFieldClientComponent = function ColorPickerFi
     typeof field.admin?.description === 'string' ? field.admin.description : undefined
 
   return (
-    <div className="mb-6">
-      <label className="mb-2 block text-sm font-medium">{label}</label>
-      <div className="flex items-center gap-2">
+    <div style={{ marginBottom: 'calc(var(--base) * 1.5)' }}>
+      <label
+        style={{
+          display: 'block',
+          marginBottom: 'calc(var(--base) * 0.5)',
+          fontSize: 'var(--font-body-size-s)',
+          fontWeight: 500,
+          color: 'var(--theme-text)',
+        }}
+      >
+        {label}
+      </label>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'calc(var(--base) * 0.5)' }}>
         <input
           type="color"
           value={value || '#000000'}
           onChange={(e) => setValue(e.target.value)}
-          className="size-10 cursor-pointer rounded border border-zinc-300 p-0.5"
+          style={{
+            width: 40,
+            height: 40,
+            cursor: 'pointer',
+            borderRadius: 'var(--border-radius-m)',
+            border: '1px solid var(--theme-elevation-200)',
+            padding: 2,
+            background: 'var(--theme-input-bg)',
+          }}
         />
         <input
           type="text"
@@ -27,14 +45,36 @@ export const ColorPickerField: TextFieldClientComponent = function ColorPickerFi
           onChange={(e) => setValue(e.target.value)}
           placeholder="#000000"
           pattern="^#[0-9a-fA-F]{6}$"
-          className="rounded border border-zinc-300 px-3 py-2 text-sm"
+          style={{
+            borderRadius: 'var(--border-radius-m)',
+            border: '1px solid var(--theme-elevation-200)',
+            padding: 'calc(var(--base) * 0.25) calc(var(--base) * 0.5)',
+            fontSize: 'var(--font-body-size-s)',
+            background: 'var(--theme-input-bg)',
+            color: 'var(--theme-text)',
+          }}
         />
         <div
-          className="size-8 rounded border border-zinc-300"
-          style={{ backgroundColor: value || '#000000' }}
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 'var(--border-radius-m)',
+            border: '1px solid var(--theme-elevation-200)',
+            backgroundColor: value || '#000000',
+          }}
         />
       </div>
-      {description && <p className="mt-1 text-xs text-zinc-500">{description}</p>}
+      {description && (
+        <p
+          style={{
+            marginTop: 'calc(var(--base) * 0.25)',
+            fontSize: 'var(--font-body-size-s)',
+            color: 'var(--theme-elevation-500)',
+          }}
+        >
+          {description}
+        </p>
+      )}
     </div>
   )
 }

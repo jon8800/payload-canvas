@@ -24,9 +24,25 @@ export const SliderField: TextFieldClientComponent = function SliderField({ path
   }
 
   return (
-    <div className="mb-6">
-      <label className="mb-2 block text-sm font-medium">{label}</label>
-      <div className="flex items-center gap-3">
+    <div style={{ marginBottom: 'calc(var(--base) * 1.5)' }}>
+      <label
+        style={{
+          display: 'block',
+          marginBottom: 'calc(var(--base) * 0.5)',
+          fontSize: 'var(--font-body-size-s)',
+          fontWeight: 500,
+          color: 'var(--theme-text)',
+        }}
+      >
+        {label}
+      </label>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 'calc(var(--base) * 0.5)',
+        }}
+      >
         <input
           type="range"
           min={min}
@@ -34,7 +50,7 @@ export const SliderField: TextFieldClientComponent = function SliderField({ path
           step={step}
           value={numericValue}
           onChange={(e) => handleChange(parseFloat(e.target.value))}
-          className="flex-1"
+          style={{ flex: 1, accentColor: 'var(--theme-success-500)' }}
         />
         <input
           type="number"
@@ -43,11 +59,38 @@ export const SliderField: TextFieldClientComponent = function SliderField({ path
           step={step}
           value={numericValue}
           onChange={(e) => handleChange(parseFloat(e.target.value))}
-          className="w-20 rounded border border-zinc-300 px-2 py-1 text-sm"
+          style={{
+            width: 64,
+            borderRadius: 'var(--border-radius-m)',
+            border: '1px solid var(--theme-elevation-200)',
+            padding: 'calc(var(--base) * 0.25) calc(var(--base) * 0.5)',
+            fontSize: 'var(--font-body-size-s)',
+            background: 'var(--theme-input-bg)',
+            color: 'var(--theme-text)',
+          }}
         />
-        {unit && <span className="text-sm text-zinc-500">{unit}</span>}
+        {unit && (
+          <span
+            style={{
+              fontSize: 'var(--font-body-size-s)',
+              color: 'var(--theme-elevation-500)',
+            }}
+          >
+            {unit}
+          </span>
+        )}
       </div>
-      {description && <p className="mt-1 text-xs text-zinc-500">{description}</p>}
+      {description && (
+        <p
+          style={{
+            marginTop: 'calc(var(--base) * 0.25)',
+            fontSize: 'var(--font-body-size-s)',
+            color: 'var(--theme-elevation-500)',
+          }}
+        >
+          {description}
+        </p>
+      )}
     </div>
   )
 }

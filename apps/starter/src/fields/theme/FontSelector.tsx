@@ -73,6 +73,7 @@ export const FontSelectorField: TextFieldClientComponent = function FontSelector
 
   const [searchQuery, setSearchQuery] = useState('')
   const [isOpen, setIsOpen] = useState(false)
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
   const filteredFonts = useMemo(() => {
@@ -107,23 +108,65 @@ export const FontSelectorField: TextFieldClientComponent = function FontSelector
   }
 
   return (
-    <div className="mb-6" ref={containerRef}>
-      <label className="mb-2 block text-sm font-medium">{label}</label>
+    <div style={{ marginBottom: 'calc(var(--base) * 1.5)' }} ref={containerRef}>
+      <label
+        style={{
+          display: 'block',
+          marginBottom: 'calc(var(--base) * 0.5)',
+          fontSize: 'var(--font-body-size-s)',
+          fontWeight: 500,
+          color: 'var(--theme-text)',
+        }}
+      >
+        {label}
+      </label>
 
       {value && (
-        <div className="mb-2 flex items-center gap-2">
-          <span className="text-sm font-medium">{value}</span>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'calc(var(--base) * 0.5)',
+            marginBottom: 'calc(var(--base) * 0.5)',
+          }}
+        >
+          <span
+            style={{
+              fontSize: 'var(--font-body-size-s)',
+              fontWeight: 500,
+              color: 'var(--theme-text)',
+            }}
+          >
+            {value}
+          </span>
           <button
             type="button"
             onClick={handleClear}
-            className="rounded px-1.5 py-0.5 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'var(--theme-elevation-500)',
+              fontSize: 'var(--font-body-size-s)',
+              padding: '2px 6px',
+              borderRadius: 'var(--border-radius-m)',
+              opacity: 0.8,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.opacity = '1'
+              e.currentTarget.style.color = 'var(--theme-text)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.opacity = '0.8'
+              e.currentTarget.style.color = 'var(--theme-elevation-500)'
+            }}
           >
             Clear
           </button>
         </div>
       )}
 
-      <div className="relative">
+      <div style={{ position: 'relative' }}>
         <input
           type="text"
           value={searchQuery}
@@ -133,30 +176,85 @@ export const FontSelectorField: TextFieldClientComponent = function FontSelector
           }}
           onFocus={() => setIsOpen(true)}
           placeholder="Search Google Fonts..."
-          className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+          style={{
+            width: '100%',
+            borderRadius: 'var(--border-radius-m)',
+            border: '1px solid var(--theme-elevation-200)',
+            padding: 'calc(var(--base) * 0.25) calc(var(--base) * 0.5)',
+            fontSize: 'var(--font-body-size-s)',
+            background: 'var(--theme-input-bg)',
+            color: 'var(--theme-text)',
+            boxSizing: 'border-box',
+          }}
         />
 
         {isOpen && (
-          <div className="absolute top-full left-0 z-50 mt-1 max-h-60 w-full overflow-y-auto rounded border border-zinc-200 bg-white shadow-lg">
+          <div
+            style={{
+              position: 'absolute',
+              top: '100%',
+              left: 0,
+              zIndex: 50,
+              marginTop: 4,
+              maxHeight: 240,
+              width: '100%',
+              overflowY: 'auto',
+              borderRadius: 'var(--border-radius-m)',
+              border: '1px solid var(--theme-elevation-200)',
+              background: 'var(--theme-elevation-0)',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            }}
+          >
             {filteredFonts.length > 0 ? (
-              filteredFonts.map((font) => (
+              filteredFonts.map((font, index) => (
                 <button
                   key={font}
                   type="button"
                   onClick={() => handleSelect(font)}
-                  className="block w-full cursor-pointer px-3 py-2 text-left text-sm hover:bg-zinc-100"
+                  onMouseEnter={() => setHoveredIndex(index)}
+                  onMouseLeave={() => setHoveredIndex(null)}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    cursor: 'pointer',
+                    padding: 'calc(var(--base) * 0.25) calc(var(--base) * 0.5)',
+                    textAlign: 'left',
+                    fontSize: 'var(--font-body-size-s)',
+                    color: 'var(--theme-text)',
+                    background:
+                      hoveredIndex === index ? 'var(--theme-elevation-50)' : 'transparent',
+                    border: 'none',
+                  }}
                 >
                   {font}
                 </button>
               ))
             ) : (
-              <div className="px-3 py-2 text-sm text-zinc-400">No fonts found</div>
+              <div
+                style={{
+                  padding: 'calc(var(--base) * 0.25) calc(var(--base) * 0.5)',
+                  fontSize: 'var(--font-body-size-s)',
+                  color: 'var(--theme-elevation-400)',
+                }}
+              >
+                No fonts found
+              </div>
             )}
           </div>
         )}
       </div>
 
-      {description && <p className="mt-1 text-xs text-zinc-500">{description}</p>}
+      {description && (
+        <p
+          style={{
+            marginTop: 'calc(var(--base) * 0.25)',
+            fontSize: 'var(--font-body-size-s)',
+            color: 'var(--theme-elevation-500)',
+          }}
+        >
+          {description}
+        </p>
+      )}
     </div>
   )
 }
