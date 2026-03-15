@@ -39,9 +39,9 @@
 
 ### Admin Component UX
 
-- [ ] **UI-01**: StylesPanel bounding box redesigned Webflow-style — centered, clean, unified colors, professional property controls
-- [ ] **UI-02**: Custom CSS input uses a code editor with syntax highlighting (not a text input)
-- [ ] **UI-03**: Tailwind classes input uses tag-based chip tokens (add/remove, not plain text)
+- [x] **UI-01**: StylesPanel bounding box redesigned Webflow-style — centered, clean, unified colors, professional property controls
+- [x] **UI-02**: Custom CSS input uses a code editor with syntax highlighting (not a text input)
+- [x] **UI-03**: Tailwind classes input uses tag-based chip tokens (add/remove, not plain text)
 - [x] **UI-04**: Theme field components (ColorPicker, SliderField, FontSelector) redesigned with Payload-native CSS variables aesthetic
 - [x] **UI-05**: Customizer right sidebar excess horizontal padding removed
 
@@ -71,9 +71,9 @@
 | THEME-03 | Phase 10 | Complete |
 | THEME-04 | Phase 10 | Complete |
 
-| UI-01 | Phase 11 | Pending |
-| UI-02 | Phase 11 | Pending |
-| UI-03 | Phase 11 | Pending |
+| UI-01 | Phase 11 | Complete |
+| UI-02 | Phase 11 | Complete |
+| UI-03 | Phase 11 | Complete |
 | UI-04 | Phase 11 | Complete |
 | UI-05 | Phase 11 | Complete |
 
