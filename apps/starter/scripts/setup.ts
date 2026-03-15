@@ -1,0 +1,7 @@
+console.log('')
+console.log('The setup script has moved to a separate CLI package.')
+console.log('Use: npx @yourscope/create-payload-starter')
+console.log('')
+console.log('See: https://github.com/yourscope/create-payload-starter')
+console.log('')
+process.exit(0)

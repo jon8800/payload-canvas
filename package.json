@@ -10,5 +10,8 @@
   "devDependencies": {
     "turbo": "^2.0.0"
   },
-  "packageManager": "pnpm@10.31.0"
+  "packageManager": "pnpm@10.31.0",
+  "pnpm": {
+    "onlyBuiltDependencies": ["sharp", "esbuild", "unrs-resolver"]
+  }
 }

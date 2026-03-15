@@ -1,0 +1,123 @@
+import type { BlockSlug, CollectionConfig } from 'payload'
+
+import { allBlockSlugs } from '../blocks/registry'
+import { authenticated } from '../access/authenticated'
+import { authenticatedOrPublished } from '../access/authenticatedOrPublished'
+import { revalidateTemplatePart } from '../hooks/revalidateTemplatePart'
+import { generatePreviewPath } from '../utilities/generatePreviewPath'
+
+export const TemplateParts: CollectionConfig = {
+  slug: 'template-parts',
+  access: {
+    create: authenticated,
+    delete: authenticated,
+    read: authenticatedOrPublished,
+    update: authenticated,
+  },
+  admin: {
+    defaultColumns: ['title', 'type', 'updatedAt'],
+    useAsTitle: 'title',
+    livePreview: {
+      url: ({ data, req }) =>
+        generatePreviewPath({
+          slug: typeof data?.slug === 'string' ? data.slug : '',
+          collection: 'template-parts',
+          req,
+        }),
+    },
+    preview: (data, { req }) =>
+      generatePreviewPath({
+        slug: typeof data?.slug === 'string' ? data.slug : '',
+        collection: 'template-parts',
+        req,
+      }),
+    components: {
+      views: {
+        edit: {
+          customiser: {
+            Component: '@/views/customiser/index#CustomiserView',
+            path: '/customiser',
+            tab: {
+              href: '/customiser',
+              label: 'Customiser',
+            },
+          },
+        },
+      },
+    },
+  },
+  versions: {
+    maxPerDoc: 50,
+    drafts: {
+      autosave: { interval: 300 },
+    },
+  },
+  trash: true,
+  enableQueryPresets: true,
+  hooks: {
+    afterChange: [revalidateTemplatePart],
+  },
+  fields: [
+    {
+      name: 'title',
+      type: 'text',
+      required: true,
+    },
+    {
+      name: 'type',
+      type: 'select',
+      required: true,
+      admin: { position: 'sidebar' },
+      options: [
+        { label: 'Header', value: 'header' },
+        { label: 'Footer', value: 'footer' },
+        { label: 'Custom', value: 'custom' },
+      ],
+    },
+    {
+      name: 'displayCondition',
+      type: 'group',
+      fields: [
+        {
+          name: 'mode',
+          type: 'select',
+          defaultValue: 'entireSite',
+          options: [
+            { label: 'Entire Site', value: 'entireSite' },
+            { label: 'Specific Pages', value: 'specificPages' },
+            { label: 'Collection Type', value: 'collectionType' },
+            { label: 'Exclude Pages', value: 'excludePages' },
+          ],
+        },
+        {
+          name: 'pages',
+          type: 'relationship',
+          relationTo: 'pages',
+          hasMany: true,
+          admin: {
+            condition: (_, siblingData) =>
+              siblingData?.mode === 'specificPages' || siblingData?.mode === 'excludePages',
+          },
+        },
+        {
+          name: 'collectionType',
+          type: 'select',
+          dbName: 'tp_disp_cond_col_type',
+          options: [
+            { label: 'All Pages', value: 'pages' },
+            { label: 'All Blog Posts', value: 'posts' },
+          ],
+          admin: {
+            condition: (_, siblingData) => siblingData?.mode === 'collectionType',
+          },
+        },
+      ],
+    },
+    {
+      name: 'layout',
+      type: 'blocks',
+      blockReferences: [...allBlockSlugs] as BlockSlug[],
+      blocks: [],
+    },
+  ],
+}

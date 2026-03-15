@@ -1,0 +1,28 @@
+@import '~@payloadcms/ui/scss';
+
+@layer payload-default {
+  .document-fields {
+    &__sidebar-wrap {
+      max-width: 400px;
+      border-left: 1px solid var(--theme-elevation-100);
+    }
+
+    &__sidebar {
+      padding: base(1);
+    }
+
+    &__sidebar-fields {
+      width: 100%;
+    }
+
+    &__tabs-wrapper {
+      margin-bottom: base(1);
+    }
+
+    &__empty-state {
+      color: var(--theme-elevation-500);
+      font-size: var(--font-body-size-s);
+      padding: base(1) 0;
+    }
+  }
+}

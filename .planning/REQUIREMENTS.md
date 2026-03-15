@@ -1,0 +1,141 @@
+# Requirements: Payload CMS Starter
+
+**Defined:** 2026-03-14
+**Core Value:** Any website project can be scaffolded instantly with a composable block-based layout system that works for both static pages and dynamic collection templates
+
+## v1 Requirements
+
+### Block System
+
+- [x] **BLCK-01**: Composable nested block system with atomic blocks composed into sections (Shopify-style architecture)
+- [x] **BLCK-02**: Text blocks — Heading, Paragraph, List, Blockquote
+- [x] **BLCK-03**: Media blocks — Image, Video, Icon
+- [x] **BLCK-04**: Action blocks — Button, Link, Form embed
+- [x] **BLCK-05**: Layout blocks — Container, Grid/Columns, Spacer, Divider
+- [x] **BLCK-06**: Per-block style options (padding, margin, border-radius, border-width, text-size, background-color, text-color, custom CSS)
+- [x] **BLCK-07**: Per-block settings tab (heading tag h1-h6, block-type-specific settings)
+- [x] **BLCK-08**: 5-8 pre-composed section presets (Hero, Content, CTA, Collection Grid, Features, Testimonials, FAQ, Footer)
+- [x] **BLCK-09**: Global block references (`blockReferences`) for clean TypeScript schema
+- [x] **BLCK-10**: Postgres JSON storage for blocks (`blocksAsJSON`)
+- [x] **BLCK-11**: Rich block row labels with icons, media thumbnails, and text content snippets
+
+### Collections & Globals
+
+- [x] **COLL-01**: Pages collection with block-based layouts
+- [x] **COLL-02**: Posts/Blog collection with categories and tags
+- [x] **COLL-03**: Media collection with image sizes, focal point, and folders
+- [x] **COLL-04**: Navigation globals (header/footer menus)
+- [x] **COLL-05**: Versions with max 50 versions on Pages and Posts
+- [x] **COLL-06**: Auto-save at 300-350ms interval for live preview support
+- [x] **COLL-07**: Trash (soft delete) on all main collections except Media
+- [x] **COLL-08**: Query presets for all main collections
+
+### CMS & Publishing
+
+- [x] **CMS-01**: Draft mode with Next.js preview
+- [x] **CMS-02**: Live Preview in admin panel
+- [x] **CMS-03**: On-demand revalidation when content changes
+- [x] **CMS-04**: Sitemap and robots.txt
+- [x] **CMS-05**: Rich text editor with Lexical
+
+### Plugins
+
+- [x] **PLUG-01**: SEO plugin (`@payloadcms/plugin-seo`)
+- [x] **PLUG-02**: Redirects plugin (`@payloadcms/plugin-redirects`)
+- [x] **PLUG-03**: Form Builder plugin (`@payloadcms/plugin-form-builder`)
+- [x] **PLUG-04**: Nested Docs plugin (`@payloadcms/plugin-nested-docs`)
+- [x] **PLUG-05**: Import/Export plugin (`@payloadcms/plugin-import-export`)
+- [x] **PLUG-06**: MCP plugin (`@payloadcms/plugin-mcp`)
+- [x] **PLUG-07**: Search plugin (`@payloadcms/plugin-search`)
+
+### Integration Points
+
+- [x] **INTG-01**: Integration architecture for Layout Customizer view plugin
+- [x] **INTG-02**: Integration architecture for future Theme Settings plugin
+
+### Developer Experience
+
+- [x] **DX-01**: Cross-platform setup script (Postgres DB creation, .env generation, deps + migration)
+- [x] **DX-02**: Optional demo content via `--demo` flag in setup script
+- [x] **DX-03**: Docker deployment support
+- [x] **DX-04**: AWS SES SMTP email configuration in payload config
+- [x] **DX-05**: Next.js App Router with RSC, client components only at leaf nodes
+- [x] **DX-06**: Tailwind v4 + shadcn/ui components
+
+## v2 Requirements
+
+### Templates & Dynamic Content
+
+- **TMPL-01**: Templates collection for dynamic page layouts (Elementor-style)
+- **TMPL-02**: Type-safe dynamic data binding (block properties reference compatible collection field types only — text->text, image->upload, richtext->richtext)
+
+### Theme
+
+- **THME-01**: Theme Settings plugin (manage shadcn theme variables from admin panel)
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Frontend authentication (login/register) | Admin panel only for content management |
+| Dark mode toggle | Not including from Payload website template |
+| Full CSS property abstraction (Webflow-level) | Simplified subset only — exponential complexity |
+| Real-time collaborative editing | Massive complexity, Payload doesn't support natively |
+| E-commerce / payment processing | Separate project scope entirely |
+| Multi-language / i18n content | Adds complexity to every collection; add project-specifically |
+| Vendor-specific deployment (Vercel-only) | Must work on VPS/Docker, no vendor lock-in |
+| Seed data by default | Available as optional `--demo` flag only |
+| AI content generation | Rapidly changing landscape, orthogonal to block system |
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| BLCK-01 | Phase 2 | Complete |
+| BLCK-02 | Phase 2 | Complete |
+| BLCK-03 | Phase 2 | Complete |
+| BLCK-04 | Phase 2 | Complete |
+| BLCK-05 | Phase 2 | Complete |
+| BLCK-06 | Phase 2 | Complete |
+| BLCK-07 | Phase 2 | Complete |
+| BLCK-08 | Phase 4 | Complete |
+| BLCK-09 | Phase 1 | Complete |
+| BLCK-10 | Phase 1 | Complete |
+| BLCK-11 | Phase 2 | Complete |
+| COLL-01 | Phase 3 | Complete |
+| COLL-02 | Phase 3 | Complete |
+| COLL-03 | Phase 3 | Complete |
+| COLL-04 | Phase 3 | Complete |
+| COLL-05 | Phase 3 | Complete |
+| COLL-06 | Phase 3 | Complete |
+| COLL-07 | Phase 3 | Complete |
+| COLL-08 | Phase 3 | Complete |
+| CMS-01 | Phase 4 | Complete |
+| CMS-02 | Phase 4 | Complete |
+| CMS-03 | Phase 4 | Complete |
+| CMS-04 | Phase 4 | Complete |
+| CMS-05 | Phase 1 | Complete |
+| PLUG-01 | Phase 5 | Complete |
+| PLUG-02 | Phase 5 | Complete |
+| PLUG-03 | Phase 5 | Complete |
+| PLUG-04 | Phase 5 | Complete |
+| PLUG-05 | Phase 5 | Complete |
+| PLUG-06 | Phase 5 | Complete |
+| PLUG-07 | Phase 5 | Complete |
+| INTG-01 | Phase 5 | Complete |
+| INTG-02 | Phase 5 | Complete |
+| DX-01 | Phase 6 | Complete |
+| DX-02 | Phase 6 | Complete |
+| DX-03 | Phase 6 | Complete |
+| DX-04 | Phase 6 | Complete |
+| DX-05 | Phase 1 | Complete |
+| DX-06 | Phase 1 | Complete |
+
+**Coverage:**
+- v1 requirements: 38 total
+- Mapped to phases: 38
+- Unmapped: 0
+
+---
+*Requirements defined: 2026-03-14*
+*Last updated: 2026-03-14 after roadmap creation*

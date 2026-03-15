@@ -1,0 +1,56 @@
+@import '~@payloadcms/ui/scss';
+
+@layer payload-default {
+  .customiser {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    height: calc(100vh - var(--doc-controls-height));
+
+    .document-fields {
+      --base: 1rem;
+      --gutter-h: 1.5rem;
+
+      &.document-fields__sections {
+        flex: 0 0 auto;
+        width: 100%;
+        max-width: 300px;
+        border-right: 1px solid var(--theme-elevation-100);
+        overflow-y: auto;
+
+        .document-fields__sidebar-fields {
+          width: 100%;
+        }
+      }
+
+      &.document-fields__sidebar-wrap {
+        flex: 0 0 auto;
+        width: 100%;
+        max-width: 400px;
+        border-left: 1px solid var(--theme-elevation-100);
+        overflow-y: auto;
+      }
+    }
+
+    .section-fields {
+      flex: 0 0 auto;
+      width: 100%;
+      max-width: 300px;
+      border-right: 1px solid var(--theme-elevation-100);
+      overflow-y: auto;
+    }
+
+    .live-preview-window {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: block;
+      width: auto;
+      position: relative;
+      top: auto;
+    }
+
+    .tabs-field {
+      margin-top: var(--gutter-h);
+    }
+  }
+}

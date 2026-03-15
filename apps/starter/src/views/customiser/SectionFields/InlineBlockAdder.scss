@@ -1,0 +1,54 @@
+@import '~@payloadcms/ui/scss';
+
+@layer payload-default {
+  .inline-block-adder {
+    position: relative;
+    height: 12px;
+    margin: base(-0.25) 0;
+    z-index: 1;
+
+    &__trigger {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+
+      &--visible {
+        opacity: 1;
+      }
+    }
+
+    &__line {
+      flex: 1;
+      height: 2px;
+      background-color: var(--theme-elevation-400);
+    }
+
+    &__button {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background-color: var(--theme-elevation-400);
+      color: var(--theme-bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      flex-shrink: 0;
+      transition: background-color 0.15s ease;
+
+      &:hover {
+        background-color: var(--theme-elevation-500);
+      }
+
+      svg {
+        width: 12px;
+        height: 12px;
+      }
+    }
+  }
+}
