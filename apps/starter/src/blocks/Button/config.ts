@@ -1,9 +1,10 @@
-import type { Block } from 'payload'
+import type { Block, Field } from 'payload'
 import { styleFields } from '@/fields/styleOptions'
 import { linkFields } from '@/fields/link'
-import { childrenField, settingsTab } from '@/blocks/shared'
+import { settingsTab } from '@/blocks/shared'
+import type { RecursiveBlock } from '@/blocks/generateBlocks'
 
-export const ButtonBlock: Block = {
+export const ButtonBlock: RecursiveBlock = (children?: Field): Block => ({
   slug: 'button',
   interfaceName: 'ButtonBlock',
   labels: { singular: 'Button', plural: 'Buttons' },
@@ -47,7 +48,7 @@ export const ButtonBlock: Block = {
                 { label: 'Icon', value: 'icon' },
               ],
             },
-            childrenField,
+            ...(children ? [children] : []),
           ],
         },
         {
@@ -58,4 +59,4 @@ export const ButtonBlock: Block = {
       ],
     },
   ],
-}
+})

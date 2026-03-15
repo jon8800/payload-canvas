@@ -1,8 +1,9 @@
-import type { Block } from 'payload'
+import type { Block, Field } from 'payload'
 import { styleFields } from '@/fields/styleOptions'
-import { childrenField, settingsTab } from '@/blocks/shared'
+import { settingsTab } from '@/blocks/shared'
+import type { RecursiveBlock } from '@/blocks/generateBlocks'
 
-export const VideoBlock: Block = {
+export const VideoBlock: RecursiveBlock = (children?: Field): Block => ({
   slug: 'video',
   interfaceName: 'VideoBlock',
   labels: { singular: 'Video', plural: 'Videos' },
@@ -52,7 +53,7 @@ export const VideoBlock: Block = {
               relationTo: 'media',
               label: 'Poster Image',
             },
-            childrenField,
+            ...(children ? [children] : []),
           ],
         },
         {
@@ -87,4 +88,4 @@ export const VideoBlock: Block = {
       ],
     },
   ],
-}
+})

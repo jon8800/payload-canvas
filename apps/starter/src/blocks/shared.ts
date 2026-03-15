@@ -1,5 +1,4 @@
-import type { BlockSlug, Field } from 'payload'
-import { atomicBlockSlugs } from '@/blocks/slugs'
+import type { Field } from 'payload'
 
 // Hidden field — allows blocks to be toggled invisible from the customiser
 export const hiddenField: Field = {
@@ -8,22 +7,9 @@ export const hiddenField: Field = {
   admin: { hidden: true },
 }
 
-// Shared children blocks field — present on every atomic block
-export const childrenField: Field = {
-  name: 'children',
-  type: 'blocks',
-  blockReferences: [...atomicBlockSlugs] as BlockSlug[],
-  blocks: [],
-  maxRows: 20,
-  admin: { description: 'Nested child blocks' },
-  validate: (value, { path }) => {
-    const depth = (path || []).filter((segment) => segment === 'children').length
-    if (depth > 8) {
-      return 'Maximum nesting depth of 8 levels exceeded.'
-    }
-    return true
-  },
-}
+// Note: The `childrenField` is no longer defined here. Children blocks are
+// generated per-depth by generateBlocks.ts to avoid infinite recursive schema
+// expansion. Each block config receives its children field as a parameter.
 
 // Common HTML tag options for the Settings tab
 export const htmlTagOptions = [

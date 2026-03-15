@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { getBaseBlockSlug } from './generateBlocks'
 import { HeadingBlock } from './Heading/component'
 import { ParagraphBlock } from './Paragraph/component'
 import { ListBlock } from './List/component'
@@ -44,7 +45,7 @@ export function RenderBlocks({ blocks, basePath = 'layout' }: Props): ReactNode 
   return (
     <>
       {visibleBlocks.map((block, i) => {
-        const Component = blockComponents[block.blockType]
+        const Component = blockComponents[getBaseBlockSlug(block.blockType)]
         if (!Component) return null
         const blockPath = `${basePath}.${i}`
         return (

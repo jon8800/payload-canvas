@@ -1,8 +1,9 @@
-import type { Block } from 'payload'
+import type { Block, Field } from 'payload'
 import { styleFields } from '@/fields/styleOptions'
-import { childrenField, settingsTab } from '@/blocks/shared'
+import { settingsTab } from '@/blocks/shared'
+import type { RecursiveBlock } from '@/blocks/generateBlocks'
 
-export const FormEmbedBlock: Block = {
+export const FormEmbedBlock: RecursiveBlock = (children?: Field): Block => ({
   slug: 'formEmbed',
   interfaceName: 'FormEmbedBlock',
   labels: { singular: 'Form Embed', plural: 'Form Embeds' },
@@ -27,7 +28,7 @@ export const FormEmbedBlock: Block = {
               required: true,
               label: 'Select Form',
             },
-            childrenField,
+            ...(children ? [children] : []),
           ],
         },
         {
@@ -38,4 +39,4 @@ export const FormEmbedBlock: Block = {
       ],
     },
   ],
-}
+})

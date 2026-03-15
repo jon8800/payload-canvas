@@ -1,8 +1,9 @@
-import type { Block } from 'payload'
+import type { Block, Field } from 'payload'
 import { styleFields } from '@/fields/styleOptions'
-import { childrenField, settingsTab } from '@/blocks/shared'
+import { settingsTab } from '@/blocks/shared'
+import type { RecursiveBlock } from '@/blocks/generateBlocks'
 
-export const GridBlock: Block = {
+export const GridBlock: RecursiveBlock = (children?: Field): Block => ({
   slug: 'grid',
   interfaceName: 'GridBlock',
   labels: { singular: 'Grid', plural: 'Grids' },
@@ -18,7 +19,7 @@ export const GridBlock: Block = {
       tabs: [
         {
           label: 'Content',
-          fields: [childrenField],
+          fields: [...(children ? [children] : [])],
         },
         {
           label: 'Styles',
@@ -51,4 +52,4 @@ export const GridBlock: Block = {
       ],
     },
   ],
-}
+})
