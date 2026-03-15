@@ -1,14 +1,13 @@
-@import '~@payloadcms/ui/scss';
 
 @layer payload-default {
   .customiser-tabs {
     display: flex;
     flex-direction: column;
-    gap: base(0.5);
+    gap: calc(var(--base) * 0.5);
 
     &__list {
       display: inline-flex;
-      height: calc(base(2) + 2px);
+      height: calc(calc(var(--base) * 2) + 2px);
       width: fit-content;
       align-items: center;
       justify-content: center;
@@ -22,10 +21,10 @@
       flex: 1;
       align-items: center;
       justify-content: center;
-      gap: base(0.375);
+      gap: calc(var(--base) * 0.375);
       white-space: nowrap;
       border-radius: calc(var(--style-radius-s) - 2px);
-      padding: base(0.25) base(0.5);
+      padding: calc(var(--base) * 0.25) calc(var(--base) * 0.5);
       font-size: var(--font-body-size-s);
       font-weight: 500;
       color: var(--theme-elevation-600);

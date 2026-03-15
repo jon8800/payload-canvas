@@ -1,4 +1,3 @@
-@import '~@payloadcms/ui/scss';
 
 @layer payload-default {
   .document-fields {
@@ -8,7 +7,7 @@
     }
 
     &__sidebar {
-      padding: base(1);
+      padding: calc(var(--base) * 1);
     }
 
     &__sidebar-fields {
@@ -16,13 +15,13 @@
     }
 
     &__tabs-wrapper {
-      margin-bottom: base(1);
+      margin-bottom: calc(var(--base) * 1);
     }
 
     &__empty-state {
       color: var(--theme-elevation-500);
       font-size: var(--font-body-size-s);
-      padding: base(1) 0;
+      padding: calc(var(--base) * 1) 0;
     }
   }
 }

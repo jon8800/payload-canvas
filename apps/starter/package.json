@@ -32,6 +32,7 @@
     "@payloadcms/plugin-search": "^3.79.0",
     "@payloadcms/plugin-seo": "^3.79.0",
     "@payloadcms/richtext-lexical": "^3.79.0",
+    "@payloadcms/translations": "^3.79.0",
     "@payloadcms/ui": "^3.79.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",

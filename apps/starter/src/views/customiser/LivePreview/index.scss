@@ -1,4 +1,3 @@
-@import '~@payloadcms/ui/scss';
 
 @layer payload-default {
   .live-preview {
@@ -42,7 +41,7 @@
       }
     }
 
-    @include mid-break {
+    @media (max-width: 768px) {
       flex-direction: column;
 
       &__main {
