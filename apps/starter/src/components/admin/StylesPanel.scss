@@ -1,0 +1,154 @@
+.styles-panel {
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+  font-size: 12px;
+
+  .bounding-box {
+    position: relative;
+    max-width: 380px;
+    margin: 0 auto 1rem;
+  }
+
+  .margin-box {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: rgba(251, 191, 36, 0.12);
+    border: 1px solid rgba(251, 191, 36, 0.4);
+    padding: 28px 32px;
+
+    .box-label {
+      position: absolute;
+      top: 4px;
+      left: 6px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: rgba(180, 120, 20, 0.7);
+      pointer-events: none;
+    }
+  }
+
+  .padding-box {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: rgba(74, 222, 128, 0.12);
+    border: 1px solid rgba(74, 222, 128, 0.4);
+    padding: 28px 32px;
+    width: 100%;
+
+    .box-label {
+      position: absolute;
+      top: 4px;
+      left: 6px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: rgba(22, 120, 60, 0.7);
+      pointer-events: none;
+    }
+  }
+
+  .content-box {
+    background: rgba(96, 165, 250, 0.15);
+    border: 1px dashed rgba(96, 165, 250, 0.5);
+    padding: 12px 16px;
+    text-align: center;
+    color: rgba(37, 99, 235, 0.6);
+    font-size: 11px;
+    width: 100%;
+  }
+
+  // Spacing input rows
+  .spacing-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: 100%;
+
+    &.horizontal {
+      justify-content: space-between;
+    }
+  }
+
+  .spacing-select {
+    width: 56px;
+    padding: 2px 3px;
+    font-size: 10px;
+    font-family: inherit;
+    border: 1px solid var(--theme-elevation-200, #ddd);
+    border-radius: 3px;
+    background: var(--theme-input-bg, #fff);
+    color: var(--theme-elevation-800, #333);
+    text-align: center;
+    cursor: pointer;
+
+    &:focus {
+      outline: 2px solid var(--theme-success-500, #4ade80);
+      outline-offset: -1px;
+    }
+  }
+
+  // Collapsible groups
+  .styles-group {
+    border: 1px solid var(--theme-elevation-150, #eee);
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+
+    summary {
+      padding: 8px 10px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      font-family: var(--font-body, sans-serif);
+      user-select: none;
+
+      &:hover {
+        background: var(--theme-elevation-50, #fafafa);
+      }
+    }
+  }
+
+  .group-content {
+    padding: 8px 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .field-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    label {
+      font-size: 12px;
+      font-family: var(--font-body, sans-serif);
+      min-width: 100px;
+      color: var(--theme-elevation-600, #666);
+    }
+
+    select,
+    input {
+      flex: 1;
+      padding: 4px 6px;
+      font-size: 12px;
+      font-family: inherit;
+      border: 1px solid var(--theme-elevation-200, #ddd);
+      border-radius: 3px;
+      background: var(--theme-input-bg, #fff);
+      color: var(--theme-elevation-800, #333);
+    }
+
+    input[type='color'] {
+      width: 32px;
+      height: 28px;
+      padding: 2px;
+      flex: 0 0 32px;
+      cursor: pointer;
+    }
+  }
+}
