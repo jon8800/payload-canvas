@@ -14,8 +14,8 @@
 ### Styles Panel
 
 - [ ] **PANEL-01**: Per-block styles stored as single JSON field instead of individual Payload fields
-- [ ] **PANEL-02**: Custom admin component with Webflow-style bounding box UI for margin and padding (4-side editing)
-- [ ] **PANEL-03**: Collapsible property groups for border, typography, colors, and custom CSS
+- [x] **PANEL-02**: Custom admin component with Webflow-style bounding box UI for margin and padding (4-side editing)
+- [x] **PANEL-03**: Collapsible property groups for border, typography, colors, and custom CSS
 - [ ] **PANEL-04**: Style changes persist and render correctly on frontend
 - [ ] **PANEL-05**: Existing block style data migrated to new JSON format
 
@@ -54,8 +54,8 @@
 | STYLE-02 | Phase 8 | Complete |
 | STYLE-03 | Phase 8 | Complete |
 | PANEL-01 | Phase 9 | Pending |
-| PANEL-02 | Phase 9 | Pending |
-| PANEL-03 | Phase 9 | Pending |
+| PANEL-02 | Phase 9 | Complete |
+| PANEL-03 | Phase 9 | Complete |
 | PANEL-04 | Phase 9 | Pending |
 | PANEL-05 | Phase 9 | Pending |
 | THEME-01 | Phase 10 | Complete |
