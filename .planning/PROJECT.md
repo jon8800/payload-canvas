@@ -12,36 +12,24 @@ Any website project can be scaffolded instantly with a composable block-based la
 
 ### Validated
 
-(None yet — ship to validate)
+- ✓ Composable nested block system (14 atomic blocks, nested composition) — v1.0
+- ✓ Per-block style options and settings tabs — v1.0
+- ✓ 8 pre-composed section presets (Hero, Content, CTA, Collection Grid, Features, Testimonials, FAQ, Footer) — v1.0
+- ✓ Pages, Posts, Media, Template Parts collections with versions, drafts, trash — v1.0
+- ✓ Payload global block references + Postgres JSON storage — v1.0
+- ✓ 7 official plugins (SEO, Form Builder, Redirects, Nested Docs, Import/Export, MCP, Search) — v1.0
+- ✓ Layout Customizer 3-pane visual editor — v1.0
+- ✓ Cross-platform setup script, demo content, Docker deployment — v1.0
+- ✓ Next.js App Router with RSC, Tailwind v4 + shadcn/ui — v1.0
+- ✓ Turborepo monorepo with create-payload-starter CLI — v1.0
 
 ### Active
 
-- [ ] Composable nested block system (atomic blocks composed into sections, Shopify-style)
-- [ ] Atomic text blocks: Heading, Paragraph, List, Blockquote
-- [ ] Atomic media blocks: Image, Video, Icon
-- [ ] Atomic action blocks: Button, Link, Form embed
-- [ ] Atomic layout blocks: Container, Grid/Columns, Spacer, Divider
-- [ ] Per-block style options (padding, margin, border-radius, border-width, text-size, background-color, text-color, custom CSS)
-- [ ] Per-block settings tab (heading tag h1-h6, block-type-specific settings)
-- [ ] 5-8 pre-composed sections (Hero, Content, CTA, Collection Grid, Features, Testimonials, FAQ, Footer)
-- [ ] Sections are composed from nested blocks (no special hero fields or hardcoded section structures)
-- [ ] Payload global block references to keep TypeScript schema clean
-- [ ] Postgres JSON storage for blocks (Payload Postgres adapter feature)
-- [ ] Templates collection for dynamic page layouts (single post, single product, etc.)
-- [ ] Type-safe dynamic data binding — block properties reference compatible collection fields only (text→text, image→upload, richtext→richtext)
-- [ ] Pages collection with block-based layouts
-- [ ] Posts/Blog collection with categories and tags
-- [ ] Media collection with alt text and captions
-- [ ] Navigation globals (header/footer menus)
-- [ ] Official plugins: SEO, Form Builder, Redirects, Nested Docs
-- [ ] Integration point for custom Layout Customizer view plugin (from payload-customiser project)
-- [ ] Integration point for future Theme Settings plugin (shadcn theme variables)
-- [ ] Cross-platform setup script: Postgres DB creation, .env generation, dependency install + migration
-- [ ] Optional demo content flag in setup script
-- [ ] VPS / Docker deployment support
-- [ ] Next.js App Router with RSC, client components only at leaf nodes
-- [ ] Tailwind v4 + shadcn/ui components
-- [ ] Public site only — no frontend auth (admin panel only)
+- [ ] Templates collection for dynamic page layouts (Elementor-style)
+- [ ] Type-safe dynamic data binding (block properties reference compatible collection fields)
+- [ ] Theme Settings plugin (manage shadcn theme variables from admin panel)
+- [ ] Webflow-style styles panel (JSON field with custom bounding box UI)
+- [ ] Frontend search UI for Search plugin
 
 ### Out of Scope
 
@@ -85,4 +73,4 @@ Any website project can be scaffolded instantly with a composable block-based la
 | VPS/Docker deployment target | No vendor lock-in, self-hosted flexibility | — Pending |
 
 ---
-*Last updated: 2026-03-14 after initialization*
+*Last updated: 2026-03-15 after v1.0 milestone*
