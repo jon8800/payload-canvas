@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import NextLink from 'next/link'
-import { cn } from '@/lib/utils'
-import { getBlockStyles, parseInlineCSS } from '@/lib/blockStyles'
+import { getBlockStyles } from '@/lib/blockStyles'
 import { resolveHref, type LinkReference } from '@/lib/resolveHref'
 import { RenderBlocks } from '@/blocks/RenderBlocks'
 
@@ -13,8 +12,6 @@ type Props = {
   newTab?: boolean
   children?: Array<{ blockType: string; id?: string; [key: string]: unknown }>
   htmlTag?: string
-  customClasses?: string
-  inlineCSS?: string
   styles?: Record<string, any>
   blockType?: string
   id?: string
@@ -28,8 +25,6 @@ export function LinkBlock({
   newTab = false,
   children,
   htmlTag = 'span',
-  customClasses,
-  inlineCSS,
   styles,
 }: Props): ReactNode {
   const { className, style } = getBlockStyles(styles)
@@ -43,11 +38,8 @@ export function LinkBlock({
 
   return (
     <Tag
-      className={cn(className, customClasses) || undefined}
-      style={{
-        ...style,
-        ...(inlineCSS ? parseInlineCSS(inlineCSS) : undefined),
-      }}
+      className={className || undefined}
+      style={style}
     >
       {isExternal ? (
         <a href={href} {...targetProps}>

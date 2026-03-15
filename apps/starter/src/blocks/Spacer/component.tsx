@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
-import { getBlockStyles, parseInlineCSS } from '@/lib/blockStyles'
+import { getBlockStyles } from '@/lib/blockStyles'
 import { RenderBlocks } from '@/blocks/RenderBlocks'
 
 const heightMap: Record<string, string> = {
@@ -16,8 +16,6 @@ type Props = {
   height?: string
   children?: Array<{ blockType: string; id?: string; [key: string]: unknown }>
   htmlTag?: string
-  customClasses?: string
-  inlineCSS?: string
   styles?: Record<string, any>
   blockType?: string
   id?: string
@@ -27,8 +25,6 @@ export function SpacerBlock({
   height = 'md',
   children,
   htmlTag = 'div',
-  customClasses,
-  inlineCSS,
   styles,
 }: Props): ReactNode {
   const { className, style } = getBlockStyles(styles)
@@ -38,11 +34,8 @@ export function SpacerBlock({
 
   return (
     <Tag
-      className={cn(className, heightClass, customClasses) || undefined}
-      style={{
-        ...style,
-        ...(inlineCSS ? parseInlineCSS(inlineCSS) : undefined),
-      }}
+      className={cn(className, heightClass) || undefined}
+      style={style}
     >
       {children?.length ? <RenderBlocks blocks={children} /> : null}
     </Tag>

@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
-import { cn } from '@/lib/utils'
-import { getBlockStyles, parseInlineCSS } from '@/lib/blockStyles'
+import { getBlockStyles } from '@/lib/blockStyles'
 import { RenderBlocks } from '@/blocks/RenderBlocks'
 
 type MediaUpload = {
@@ -14,8 +13,6 @@ type Props = {
   poster?: MediaUpload | string
   children?: Array<{ blockType: string; id?: string; [key: string]: unknown }>
   htmlTag?: string
-  customClasses?: string
-  inlineCSS?: string
   autoplay?: boolean
   loop?: boolean
   muted?: boolean
@@ -32,8 +29,6 @@ export function VideoBlock({
   poster,
   children,
   htmlTag = 'figure',
-  customClasses,
-  inlineCSS,
   autoplay = false,
   loop = false,
   muted = true,
@@ -56,11 +51,8 @@ export function VideoBlock({
 
   return (
     <Tag
-      className={cn(className, customClasses) || undefined}
-      style={{
-        ...style,
-        ...(inlineCSS ? parseInlineCSS(inlineCSS) : undefined),
-      }}
+      className={className || undefined}
+      style={style}
     >
       <video
         src={videoUrl}

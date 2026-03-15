@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import NextImage from 'next/image'
-import { cn } from '@/lib/utils'
-import { getBlockStyles, parseInlineCSS } from '@/lib/blockStyles'
+import { getBlockStyles } from '@/lib/blockStyles'
 import { RenderBlocks } from '@/blocks/RenderBlocks'
 
 const sizeMap = {
@@ -21,8 +20,6 @@ type Props = {
   name?: string
   children?: Array<{ blockType: string; id?: string; [key: string]: unknown }>
   htmlTag?: string
-  customClasses?: string
-  inlineCSS?: string
   size?: keyof typeof sizeMap
   styles?: Record<string, any>
   blockType?: string
@@ -34,8 +31,6 @@ export function IconBlock({
   name,
   children,
   htmlTag = 'span',
-  customClasses,
-  inlineCSS,
   size = 'md',
   styles,
 }: Props): ReactNode {
@@ -49,11 +44,8 @@ export function IconBlock({
 
   return (
     <Tag
-      className={cn(className, customClasses) || undefined}
-      style={{
-        ...style,
-        ...(inlineCSS ? parseInlineCSS(inlineCSS) : undefined),
-      }}
+      className={className || undefined}
+      style={style}
     >
       <NextImage
         src={img.url}

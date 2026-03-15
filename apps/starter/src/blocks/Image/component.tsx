@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import NextImage from 'next/image'
-import { cn } from '@/lib/utils'
-import { getBlockStyles, parseInlineCSS } from '@/lib/blockStyles'
+import { getBlockStyles } from '@/lib/blockStyles'
 import { RenderBlocks } from '@/blocks/RenderBlocks'
 
 type MediaUpload = {
@@ -17,8 +16,6 @@ type Props = {
   caption?: string
   children?: Array<{ blockType: string; id?: string; [key: string]: unknown }>
   htmlTag?: string
-  customClasses?: string
-  inlineCSS?: string
   objectFit?: 'cover' | 'contain' | 'fill' | 'none'
   aspectRatio?: string
   styles?: Record<string, any>
@@ -32,8 +29,6 @@ export function ImageBlock({
   caption,
   children,
   htmlTag = 'figure',
-  customClasses,
-  inlineCSS,
   objectFit = 'cover',
   aspectRatio,
   styles,
@@ -46,11 +41,8 @@ export function ImageBlock({
 
   return (
     <Tag
-      className={cn(className, customClasses) || undefined}
-      style={{
-        ...style,
-        ...(inlineCSS ? parseInlineCSS(inlineCSS) : undefined),
-      }}
+      className={className || undefined}
+      style={style}
     >
       <NextImage
         src={img.url}

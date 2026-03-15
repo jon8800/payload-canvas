@@ -1,13 +1,11 @@
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
-import { getBlockStyles, parseInlineCSS } from '@/lib/blockStyles'
+import { getBlockStyles } from '@/lib/blockStyles'
 import { RenderBlocks } from '@/blocks/RenderBlocks'
 
 type Props = {
   children?: Array<{ blockType: string; id?: string; [key: string]: unknown }>
   htmlTag?: string
-  customClasses?: string
-  inlineCSS?: string
   maxWidth?: 'none' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full'
   display?: 'block' | 'flex' | 'grid'
   flexDirection?: 'row' | 'col'
@@ -22,8 +20,6 @@ type Props = {
 export function ContainerBlock({
   children,
   htmlTag = 'div',
-  customClasses,
-  inlineCSS,
   maxWidth = 'none',
   display = 'block',
   flexDirection,
@@ -54,11 +50,8 @@ export function ContainerBlock({
 
   return (
     <Tag
-      className={cn(className, ...layoutClasses, customClasses) || undefined}
-      style={{
-        ...style,
-        ...(inlineCSS ? parseInlineCSS(inlineCSS) : undefined),
-      }}
+      className={cn(className, ...layoutClasses) || undefined}
+      style={style}
     >
       {children?.length ? (
         <RenderBlocks blocks={children} basePath={blockPath ? `${blockPath}.children` : 'layout'} />

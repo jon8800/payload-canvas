@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
-import { getBlockStyles, parseInlineCSS } from '@/lib/blockStyles'
+import { getBlockStyles } from '@/lib/blockStyles'
 import { RenderBlocks } from '@/blocks/RenderBlocks'
 
 const thicknessMap: Record<string, string> = {
@@ -15,8 +15,6 @@ type Props = {
   color?: string
   children?: Array<{ blockType: string; id?: string; [key: string]: unknown }>
   htmlTag?: string
-  customClasses?: string
-  inlineCSS?: string
   styles?: Record<string, any>
   blockType?: string
   id?: string
@@ -28,8 +26,6 @@ export function DividerBlock({
   color,
   children,
   htmlTag = 'div',
-  customClasses,
-  inlineCSS,
   styles,
 }: Props): ReactNode {
   const { className, style } = getBlockStyles(styles)
@@ -41,11 +37,8 @@ export function DividerBlock({
 
   return (
     <Tag
-      className={cn(className, customClasses) || undefined}
-      style={{
-        ...style,
-        ...(inlineCSS ? parseInlineCSS(inlineCSS) : undefined),
-      }}
+      className={className || undefined}
+      style={style}
     >
       <hr
         className={cn(thicknessClass, borderStyleClass, colorClass) || undefined}

@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
-import { cn } from '@/lib/utils'
-import { getBlockStyles, parseInlineCSS } from '@/lib/blockStyles'
+import { getBlockStyles } from '@/lib/blockStyles'
 import { RenderBlocks } from '@/blocks/RenderBlocks'
 import { RichText } from '@payloadcms/richtext-lexical/react'
 
@@ -9,8 +8,6 @@ type Props = {
   citation?: string
   children?: Array<{ blockType: string; id?: string; [key: string]: unknown }>
   htmlTag?: string
-  customClasses?: string
-  inlineCSS?: string
   styles?: Record<string, any>
   blockType?: string
   id?: string
@@ -21,8 +18,6 @@ export function BlockquoteBlock({
   citation,
   children,
   htmlTag = 'blockquote',
-  customClasses,
-  inlineCSS,
   styles,
 }: Props): ReactNode {
   const { className, style } = getBlockStyles(styles)
@@ -30,11 +25,8 @@ export function BlockquoteBlock({
 
   return (
     <Tag
-      className={cn(className, customClasses) || undefined}
-      style={{
-        ...style,
-        ...(inlineCSS ? parseInlineCSS(inlineCSS) : undefined),
-      }}
+      className={className || undefined}
+      style={style}
     >
       <blockquote>
         {content ? <RichText data={content} /> : null}

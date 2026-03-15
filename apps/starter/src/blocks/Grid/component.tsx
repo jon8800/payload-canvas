@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
-import { getBlockStyles, parseInlineCSS } from '@/lib/blockStyles'
+import { getBlockStyles } from '@/lib/blockStyles'
 import { RenderBlocks } from '@/blocks/RenderBlocks'
 
 const gapMap: Record<string, string> = {
@@ -17,8 +17,6 @@ type Props = {
   gap?: string
   children?: Array<{ blockType: string; id?: string; [key: string]: unknown }>
   htmlTag?: string
-  customClasses?: string
-  inlineCSS?: string
   styles?: Record<string, any>
   blockType?: string
   blockPath?: string
@@ -30,8 +28,6 @@ export function GridBlock({
   gap = 'md',
   children,
   htmlTag = 'div',
-  customClasses,
-  inlineCSS,
   styles,
   blockPath,
 }: Props): ReactNode {
@@ -48,13 +44,9 @@ export function GridBlock({
           'grid',
           `grid-cols-${columns}`,
           `gap-${gapValue}`,
-          customClasses,
         ) || undefined
       }
-      style={{
-        ...style,
-        ...(inlineCSS ? parseInlineCSS(inlineCSS) : undefined),
-      }}
+      style={style}
     >
       {children?.length ? (
         <RenderBlocks blocks={children} basePath={blockPath ? `${blockPath}.children` : 'layout'} />

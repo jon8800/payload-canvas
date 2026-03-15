@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react'
 import { getPayload } from 'payload'
 import configPromise from '@payload-config'
-import { cn } from '@/lib/utils'
-import { getBlockStyles, parseInlineCSS } from '@/lib/blockStyles'
+import { getBlockStyles } from '@/lib/blockStyles'
 import { RenderBlocks } from '@/blocks/RenderBlocks'
 import { FormClient } from './FormClient'
 
@@ -10,8 +9,6 @@ type Props = {
   form?: string | { id: string; [key: string]: unknown }
   children?: Array<{ blockType: string; id?: string; [key: string]: unknown }>
   htmlTag?: string
-  customClasses?: string
-  inlineCSS?: string
   styles?: Record<string, any>
   blockType?: string
   id?: string
@@ -21,8 +18,6 @@ export async function FormEmbedBlock({
   form,
   children,
   htmlTag = 'div',
-  customClasses,
-  inlineCSS,
   styles,
 }: Props): Promise<ReactNode> {
   const { className, style } = getBlockStyles(styles)
@@ -32,11 +27,8 @@ export async function FormEmbedBlock({
   if (!formId) {
     return (
       <Tag
-        className={cn(className, customClasses) || undefined}
-        style={{
-          ...style,
-          ...(inlineCSS ? parseInlineCSS(inlineCSS) : undefined),
-        }}
+        className={className || undefined}
+        style={style}
       >
         {children?.length ? <RenderBlocks blocks={children} /> : null}
       </Tag>
@@ -80,11 +72,8 @@ export async function FormEmbedBlock({
 
   return (
     <Tag
-      className={cn(className, customClasses) || undefined}
-      style={{
-        ...style,
-        ...(inlineCSS ? parseInlineCSS(inlineCSS) : undefined),
-      }}
+      className={className || undefined}
+      style={style}
     >
       {fields.length > 0 && (
         <FormClient
