@@ -117,7 +117,7 @@
 | CMS-05 | Phase 1 | Complete |
 | PLUG-01 | Phase 5 | Complete |
 | PLUG-02 | Phase 5 | Complete |
-| PLUG-03 | Phase 7 (gap closure) | Pending |
+| PLUG-03 | Phase 7 (gap closure) | Complete |
 | PLUG-04 | Phase 5 | Complete |
 | PLUG-05 | Phase 5 | Complete |
 | PLUG-06 | Phase 5 | Complete |
