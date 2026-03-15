@@ -117,7 +117,7 @@
 | CMS-05 | Phase 1 | Complete |
 | PLUG-01 | Phase 5 | Complete |
 | PLUG-02 | Phase 5 | Complete |
-| PLUG-03 | Phase 5 | Complete |
+| PLUG-03 | Phase 7 (gap closure) | Pending |
 | PLUG-04 | Phase 5 | Complete |
 | PLUG-05 | Phase 5 | Complete |
 | PLUG-06 | Phase 5 | Complete |
@@ -125,9 +125,9 @@
 | INTG-01 | Phase 5 | Complete |
 | INTG-02 | Phase 5 | Complete |
 | DX-01 | Phase 6 | Complete |
-| DX-02 | Phase 6 | Complete |
+| DX-02 | Phase 7 (gap closure) | Pending |
 | DX-03 | Phase 6 | Complete |
-| DX-04 | Phase 6 | Complete |
+| DX-04 | Phase 7 (gap closure) | Pending |
 | DX-05 | Phase 1 | Complete |
 | DX-06 | Phase 1 | Complete |
 

@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-14)
 
 **Core value:** Any website project can be scaffolded instantly with a composable block-based layout system that works for both static pages and dynamic collection templates
-**Current focus:** All phases complete
+**Current focus:** Phase 7 gap closure
 
 ## Current Position
 

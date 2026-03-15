@@ -136,6 +136,8 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 4. Sections & Publishing | 1/2 | Complete    | 2026-03-14 |
 | 5. Plugins & Integrations | 3/3 | Complete    | 2026-03-14 |
 | 6. Developer Experience | 3/5 | Gap Closure | 2026-03-15 |
+| 6.1 Monorepo Restructure | 3/3 | Complete | 2026-03-15 |
+| 7. Gap Closure & Cleanup | 0/? | Not started | - |
 
 ### Phase 06.1: Restructure into payload-toolkit Turborepo monorepo (INSERTED)
 
@@ -148,3 +150,13 @@ Plans:
 - [x] 06.1-01-PLAN.md — Create monorepo root scaffold (Turborepo, pnpm workspaces), shared package, copy starter into apps/starter/
 - [x] 06.1-02-PLAN.md — Migrate CLI into packages/create-payload-starter/, wire to @jon8800/shared, rewrite scaffold.ts for tarball extraction
 - [x] 06.1-03-PLAN.md — Full build verification, GitHub repo creation, old repo archival
+
+### Phase 7: v1.0 Gap Closure & Cleanup
+**Goal:** Close audit gaps — functional FormEmbed frontend, missing env documentation, unused seed presets, dead code removal
+**Requirements:** PLUG-03 (partial), DX-02 (partial), DX-04 (partial)
+**Gap Closure:** Closes gaps from v1.0 milestone audit
+**Depends on:** Phase 6.1
+**Plans:** 0 plans (not yet planned)
+
+Plans:
+(none yet)
