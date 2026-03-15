@@ -125,9 +125,9 @@
 | INTG-01 | Phase 5 | Complete |
 | INTG-02 | Phase 5 | Complete |
 | DX-01 | Phase 6 | Complete |
-| DX-02 | Phase 7 (gap closure) | Pending |
+| DX-02 | Phase 7 (gap closure) | Complete |
 | DX-03 | Phase 6 | Complete |
-| DX-04 | Phase 7 (gap closure) | Pending |
+| DX-04 | Phase 7 (gap closure) | Complete |
 | DX-05 | Phase 1 | Complete |
 | DX-06 | Phase 1 | Complete |
 
