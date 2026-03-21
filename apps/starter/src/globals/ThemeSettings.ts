@@ -12,6 +12,17 @@ export const ThemeSettings: GlobalConfig = {
   },
   admin: {
     group: 'Settings',
+    livePreview: {
+      url: ({ req }) => {
+        const params = new URLSearchParams({
+          slug: 'style-guide',
+          collection: '',
+          path: '/style-guide',
+          previewSecret: process.env.PREVIEW_SECRET || '',
+        })
+        return `/next/preview?${params.toString()}`
+      },
+    },
   },
   hooks: {
     afterChange: [revalidateTheme],
