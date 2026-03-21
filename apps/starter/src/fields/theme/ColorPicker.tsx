@@ -3,78 +3,90 @@
 import type { TextFieldClientComponent } from 'payload'
 
 import { useField } from '@payloadcms/ui'
+import { Popover } from '@base-ui/react/popover'
+import { useState } from 'react'
+import './ColorPicker.scss'
+
+const PRESET_COLORS = [
+  '#000000', '#374151', '#6b7280', '#9ca3af', '#d1d5db', '#ffffff',
+  '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6',
+  '#ec4899', '#14b8a6', '#06b6d4', '#6366f1', '#a855f7', '#f43f5e',
+]
 
 export const ColorPickerField: TextFieldClientComponent = function ColorPickerField({ path, field }) {
   const { value, setValue } = useField<string>({ path })
+  const [hexInput, setHexInput] = useState(value || '')
 
   const label = typeof field.label === 'string' ? field.label : path
   const description =
     typeof field.admin?.description === 'string' ? field.admin.description : undefined
 
+  function handleHexBlur() {
+    const trimmed = hexInput.trim()
+    if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) {
+      setValue(trimmed)
+    } else if (/^[0-9a-fA-F]{6}$/.test(trimmed)) {
+      setValue(`#${trimmed}`)
+      setHexInput(`#${trimmed}`)
+    } else {
+      setHexInput(value || '')
+    }
+  }
+
+  function handlePresetClick(color: string) {
+    setValue(color)
+    setHexInput(color)
+  }
+
+  function handleClear() {
+    setValue('')
+    setHexInput('')
+  }
+
+  // Sync local hex input when value changes externally
+  const displayHex = hexInput !== value ? hexInput : (value || '')
+
   return (
-    <div style={{ marginBottom: 'calc(var(--base) * 1.5)' }}>
-      <label
-        style={{
-          display: 'block',
-          marginBottom: 'calc(var(--base) * 0.5)',
-          fontSize: 'var(--font-body-size-s)',
-          fontWeight: 500,
-          color: 'var(--theme-text)',
-        }}
-      >
-        {label}
-      </label>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'calc(var(--base) * 0.5)' }}>
-        <input
-          type="color"
-          value={value || '#000000'}
-          onChange={(e) => setValue(e.target.value)}
-          style={{
-            width: 40,
-            height: 40,
-            cursor: 'pointer',
-            borderRadius: 'var(--border-radius-m)',
-            border: '1px solid var(--theme-elevation-200)',
-            padding: 2,
-            background: 'var(--theme-input-bg)',
-          }}
-        />
+    <div className="color-picker-field">
+      <label className="color-picker-field__label">{label}</label>
+      <div className="color-picker-field__controls">
+        <Popover.Root>
+          <Popover.Trigger className="color-picker-field__swatch" style={{ backgroundColor: value || '#000000' }} />
+          <Popover.Portal>
+            <Popover.Positioner sideOffset={4}>
+              <Popover.Popup className="color-picker-field__popover">
+                <div className="color-picker-field__presets">
+                  {PRESET_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      className="color-picker-field__preset-swatch"
+                      style={{ backgroundColor: color }}
+                      onClick={() => handlePresetClick(color)}
+                      aria-label={`Select color ${color}`}
+                    />
+                  ))}
+                </div>
+                <button type="button" className="color-picker-field__clear-btn" onClick={handleClear}>
+                  Clear
+                </button>
+              </Popover.Popup>
+            </Popover.Positioner>
+          </Popover.Portal>
+        </Popover.Root>
         <input
           type="text"
-          value={value || ''}
-          onChange={(e) => setValue(e.target.value)}
+          className="color-picker-field__hex-input"
+          value={displayHex}
+          onChange={(e) => setHexInput(e.target.value)}
+          onBlur={handleHexBlur}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleHexBlur()
+          }}
           placeholder="#000000"
-          pattern="^#[0-9a-fA-F]{6}$"
-          style={{
-            borderRadius: 'var(--border-radius-m)',
-            border: '1px solid var(--theme-elevation-200)',
-            padding: 'calc(var(--base) * 0.25) calc(var(--base) * 0.5)',
-            fontSize: 'var(--font-body-size-s)',
-            background: 'var(--theme-input-bg)',
-            color: 'var(--theme-text)',
-          }}
-        />
-        <div
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 'var(--border-radius-m)',
-            border: '1px solid var(--theme-elevation-200)',
-            backgroundColor: value || '#000000',
-          }}
         />
       </div>
-      {description && (
-        <p
-          style={{
-            marginTop: 'calc(var(--base) * 0.25)',
-            fontSize: 'var(--font-body-size-s)',
-            color: 'var(--theme-elevation-500)',
-          }}
-        >
-          {description}
-        </p>
-      )}
+      {description && <p className="color-picker-field__description">{description}</p>}
     </div>
   )
 }
