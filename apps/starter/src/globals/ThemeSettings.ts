@@ -21,6 +21,7 @@ export const ThemeSettings: GlobalConfig = {
     {
       name: 'colors',
       type: 'group',
+      label: 'Colors',
       fields: [
         {
           name: 'primary',
@@ -98,6 +99,7 @@ export const ThemeSettings: GlobalConfig = {
     {
       name: 'fonts',
       type: 'group',
+      label: 'Fonts',
       fields: [
         {
           name: 'sans',
@@ -125,6 +127,7 @@ export const ThemeSettings: GlobalConfig = {
     {
       name: 'spacing',
       type: 'group',
+      label: 'Spacing & Border Radius',
       fields: [
         {
           name: 'baseMultiplier',
@@ -140,7 +143,7 @@ export const ThemeSettings: GlobalConfig = {
         },
       ],
     },
-    // Border radius (top-level)
+    // Border radius (kept at top-level to preserve data path compatibility)
     {
       name: 'borderRadius',
       type: 'text',

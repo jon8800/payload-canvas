@@ -53,4 +53,36 @@
       margin-top: var(--gutter-h);
     }
   }
+
+  // Theme settings compact layout
+  // Targets the global edit view for theme-settings
+  .global-edit--theme-settings,
+  [id*="global-theme-settings"],
+  [class*="theme-settings"] {
+    .render-fields {
+      max-width: 480px;
+    }
+  }
+
+  // Compact field widths for theme field components
+  .color-picker-field,
+  .slider-field,
+  .font-selector {
+    max-width: 400px;
+  }
+
+  // Group fields in theme settings: subtle section headers
+  .group-field {
+    .group-field__wrap > .field-label,
+    .group-field__wrap > legend {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--theme-text);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding-bottom: calc(var(--base) * 0.25);
+      border-bottom: 1px solid var(--theme-elevation-100);
+      margin-bottom: calc(var(--base) * 0.5);
+    }
+  }
 }
