@@ -54,14 +54,16 @@ Rebuild all custom admin field components (StylesPanel, ColorPicker, SliderField
 - **D-26:** Base UI Combobox for searchable font dropdown
 - **D-27:** Font preview in the dropdown — each option rendered in its actual font face
 - **D-28:** Load font previews from Google Fonts API (CSS link injection for visible options)
-- **D-29:** Expand from 50 curated fonts to full Google Fonts catalog (or at least 200+ popular ones)
-- **D-30:** Research if there's a package that provides the Google Fonts metadata list without runtime API calls
+- **D-29:** Full Google Fonts catalog (1,700+ fonts), not just 50 curated
+- **D-30:** Use `google-font-metadata` package (v6.0.8, Fontsource team) to generate static JSON font list at build time — no runtime API calls or API keys needed
+- **D-31:** Lazy-load font CSS previews via Google Fonts CSS API (`fonts.googleapis.com/css2?family=X`) as items scroll into dropdown view
+- **D-32:** Build picker from scratch with Base UI Combobox — `font-picker-react` is stale (2020, incompatible with React 19)
 
 ### Theme Settings Layout
-- **D-31:** Theme settings fields should NOT be full-width — use a max-width container or two-column layout
-- **D-32:** Color fields should be compact: swatch + hex input inline, not full-width rows
-- **D-33:** Slider fields should be compact: label + slider + value on one row (Framer-style)
-- **D-34:** Group fields visually with subtle section headers (Colors, Fonts, Spacing, Border Radius)
+- **D-33:** Theme settings fields should NOT be full-width — use a max-width container or two-column layout
+- **D-34:** Color fields should be compact: swatch + hex input inline, not full-width rows
+- **D-35:** Slider fields should be compact: label + slider + value on one row (Framer-style)
+- **D-36:** Group fields visually with subtle section headers (Colors, Fonts, Spacing, Border Radius)
 
 ### Quality Bar
 - **D-35:** Primary reference: Framer visual builder property panels (screenshots provided)
@@ -135,7 +137,7 @@ No external specs — requirements are fully captured in decisions above.
 <deferred>
 ## Deferred Ideas
 
-- Full Google Fonts API integration with dynamic loading — may be too complex for this phase, evaluate during research
+- Full Google Fonts API integration — INCLUDED in this phase via google-font-metadata + lazy CSS loading
 - HSL/OKLCH color space picker with visual gradient — could be a future enhancement
 - Responsive style overrides in the UI (sm/md/lg breakpoint controls) — noted in Phase 9, deferred again
 
