@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from 'react'
 import { CodeEditor, useField } from '@payloadcms/ui'
+import { Collapsible } from '@base-ui/react/collapsible'
 import type { TextFieldClientProps } from 'payload'
 import './StylesPanel.scss'
 
@@ -148,43 +149,52 @@ function updateNestedValue(
   return root
 }
 
-// ── Sub-components ──
+// ── Icons ──
 
-type SpacingSelectProps = {
-  value: string
-  onChange: (val: string) => void
-}
-
-function SpacingSelect({ value, onChange }: SpacingSelectProps) {
+function UniformIcon() {
   return (
-    <select
-      className="spacing-select"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-    >
-      {spacingOptions.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-    </select>
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
   )
 }
 
-type BoundingBoxProps = {
+function PerSideIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3 2" />
+    </svg>
+  )
+}
+
+function ChevronIcon() {
+  return (
+    <svg className="section-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M3.5 2L6.5 5L3.5 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+// ── Sub-components ──
+
+type SpacingControlProps = {
+  label: string
+  group: 'padding' | 'margin'
   styles: StylesData
   onUpdate: (path: string[], value: unknown) => void
 }
 
-function BoundingBox({ styles, onUpdate }: BoundingBoxProps) {
-  const getSpacing = (group: 'padding' | 'margin', dir: string): string => {
+function SpacingControl({ label, group, styles, onUpdate }: SpacingControlProps) {
+  const [uniform, setUniform] = useState(true)
+
+  const getSpacing = (dir: string): string => {
     const g = styles[group] as SpacingGroup | undefined
     if (!g) return ''
     const d = g[dir as keyof SpacingGroup]
     return d?.base ?? ''
   }
 
-  const handleChange = (group: 'padding' | 'margin', dir: string, val: string) => {
+  const handleChange = (dir: string, val: string) => {
     if (val === '' || val === 'none') {
       onUpdate([group, dir], undefined)
       return
@@ -192,67 +202,63 @@ function BoundingBox({ styles, onUpdate }: BoundingBoxProps) {
     onUpdate([group, dir, 'base'], val)
   }
 
+  const handleUniformChange = (val: string) => {
+    const directions = ['top', 'right', 'bottom', 'left'] as const
+    for (const dir of directions) {
+      if (val === '' || val === 'none') {
+        onUpdate([group, dir], undefined)
+      } else {
+        onUpdate([group, dir, 'base'], val)
+      }
+    }
+  }
+
+  // For uniform mode, show the value of the first non-empty side, or top
+  const uniformValue = getSpacing('top')
+
   return (
-    <div className="bounding-box">
-      <div className="margin-box">
-        <span className="box-label">Margin</span>
-
-        <div className="spacing-row">
-          <SpacingSelect
-            value={getSpacing('margin', 'top')}
-            onChange={(v) => handleChange('margin', 'top', v)}
-          />
-        </div>
-
-        <div className="spacing-row horizontal">
-          <SpacingSelect
-            value={getSpacing('margin', 'left')}
-            onChange={(v) => handleChange('margin', 'left', v)}
-          />
-
-          <div className="padding-box">
-            <span className="box-label">Padding</span>
-
-            <div className="spacing-row">
-              <SpacingSelect
-                value={getSpacing('padding', 'top')}
-                onChange={(v) => handleChange('padding', 'top', v)}
-              />
-            </div>
-
-            <div className="spacing-row horizontal">
-              <SpacingSelect
-                value={getSpacing('padding', 'left')}
-                onChange={(v) => handleChange('padding', 'left', v)}
-              />
-              <div className="content-box">Content</div>
-              <SpacingSelect
-                value={getSpacing('padding', 'right')}
-                onChange={(v) => handleChange('padding', 'right', v)}
-              />
-            </div>
-
-            <div className="spacing-row">
-              <SpacingSelect
-                value={getSpacing('padding', 'bottom')}
-                onChange={(v) => handleChange('padding', 'bottom', v)}
-              />
-            </div>
-          </div>
-
-          <SpacingSelect
-            value={getSpacing('margin', 'right')}
-            onChange={(v) => handleChange('margin', 'right', v)}
-          />
-        </div>
-
-        <div className="spacing-row">
-          <SpacingSelect
-            value={getSpacing('margin', 'bottom')}
-            onChange={(v) => handleChange('margin', 'bottom', v)}
-          />
-        </div>
+    <div className="spacing-control">
+      <div className="spacing-control-header">
+        <span className="spacing-control-label">{label}</span>
+        <button
+          type="button"
+          className="spacing-mode-toggle"
+          onClick={() => setUniform(!uniform)}
+          title={uniform ? 'Switch to per-side' : 'Switch to uniform'}
+        >
+          {uniform ? <UniformIcon /> : <PerSideIcon />}
+        </button>
       </div>
+      {uniform ? (
+        <div className="spacing-control-uniform">
+          <select
+            className="spacing-select"
+            value={uniformValue}
+            onChange={(e) => handleUniformChange(e.target.value)}
+          >
+            {spacingOptions.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+      ) : (
+        <div className="spacing-control-perside">
+          {(['top', 'right', 'bottom', 'left'] as const).map((dir) => (
+            <div key={dir} className="spacing-side">
+              <span className="spacing-side-label">{dir[0].toUpperCase()}</span>
+              <select
+                className="spacing-select"
+                value={getSpacing(dir)}
+                onChange={(e) => handleChange(dir, e.target.value)}
+              >
+                {spacingOptions.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -302,36 +308,38 @@ function PresetGroup({
   return (
     <div className="field-row">
       <label>{label}</label>
-      <select
-        value={baseVal}
-        onChange={(e) => {
-          const v = e.target.value
-          if (v === '' || v === 'none') {
-            onUpdate(basePath, undefined)
-          } else {
-            onUpdate([...basePath, baseKey], v)
-          }
-        }}
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      {baseVal === 'custom' && (
-        <input
-          type={customType}
-          placeholder="Custom"
-          value={getCustom()}
+      <div className="field-row-controls">
+        <select
+          value={baseVal}
           onChange={(e) => {
-            const raw = e.target.value
-            const val = customType === 'number' ? (raw === '' ? undefined : Number(raw)) : raw
-            onUpdate([...basePath, 'custom'], val)
+            const v = e.target.value
+            if (v === '' || v === 'none') {
+              onUpdate(basePath, undefined)
+            } else {
+              onUpdate([...basePath, baseKey], v)
+            }
           }}
-          style={{ maxWidth: 80 }}
-        />
-      )}
+        >
+          {options.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        {baseVal === 'custom' && (
+          <input
+            type={customType}
+            placeholder="Custom"
+            value={getCustom()}
+            onChange={(e) => {
+              const raw = e.target.value
+              const val = customType === 'number' ? (raw === '' ? undefined : Number(raw)) : raw
+              onUpdate([...basePath, 'custom'], val)
+            }}
+            className="custom-value-input"
+          />
+        )}
+      </div>
     </div>
   )
 }
@@ -369,39 +377,40 @@ function ColorGroup({ label, basePath, styles, onUpdate }: ColorGroupProps) {
   return (
     <div className="field-row">
       <label>{label}</label>
-      <select
-        value={preset}
-        onChange={(e) => {
-          const v = e.target.value
-          if (v === '' || v === 'none') {
-            onUpdate(basePath, undefined)
-          } else {
-            onUpdate([...basePath, 'preset'], v)
-          }
-        }}
-      >
-        {colorOptions.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      {preset === 'custom' && (
-        <>
-          <input
-            type="text"
-            placeholder="#000000"
-            value={getCustom()}
-            onChange={(e) => onUpdate([...basePath, 'custom'], e.target.value)}
-            style={{ maxWidth: 90 }}
-          />
-          <input
-            type="color"
-            value={getCustom() || '#000000'}
-            onChange={(e) => onUpdate([...basePath, 'custom'], e.target.value)}
-          />
-        </>
-      )}
+      <div className="field-row-controls">
+        <select
+          value={preset}
+          onChange={(e) => {
+            const v = e.target.value
+            if (v === '' || v === 'none') {
+              onUpdate(basePath, undefined)
+            } else {
+              onUpdate([...basePath, 'preset'], v)
+            }
+          }}
+        >
+          {colorOptions.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        {preset === 'custom' && (
+          <>
+            <input
+              type="text"
+              placeholder="#000000"
+              value={getCustom()}
+              onChange={(e) => onUpdate([...basePath, 'custom'], e.target.value)}
+              className="custom-value-input"
+            />
+            <span
+              className="color-swatch"
+              style={{ backgroundColor: getCustom() || '#000000' }}
+            />
+          </>
+        )}
+      </div>
     </div>
   )
 }
@@ -486,6 +495,30 @@ function ClassTokenInput({ value, onChange }: ClassTokenInputProps) {
   )
 }
 
+// ── Collapsible Section ──
+
+type SectionProps = {
+  title: string
+  defaultOpen?: boolean
+  children: React.ReactNode
+}
+
+function Section({ title, defaultOpen = false, children }: SectionProps) {
+  return (
+    <Collapsible.Root defaultOpen={defaultOpen} className="section">
+      <Collapsible.Trigger className="section-trigger">
+        <ChevronIcon />
+        <span>{title}</span>
+      </Collapsible.Trigger>
+      <Collapsible.Panel className="section-panel">
+        <div className="section-content">
+          {children}
+        </div>
+      </Collapsible.Panel>
+    </Collapsible.Root>
+  )
+}
+
 // ── Main component ──
 
 export function StylesPanel({ path }: TextFieldClientProps) {
@@ -508,97 +541,98 @@ export function StylesPanel({ path }: TextFieldClientProps) {
         Styles
       </label>
 
-      {/* Bounding Box -- always visible */}
-      <BoundingBox styles={styles} onUpdate={handleUpdate} />
+      {/* Spacing -- always visible, not collapsible */}
+      <div className="spacing-section">
+        <SpacingControl
+          label="Padding"
+          group="padding"
+          styles={styles}
+          onUpdate={handleUpdate}
+        />
+        <SpacingControl
+          label="Margin"
+          group="margin"
+          styles={styles}
+          onUpdate={handleUpdate}
+        />
+      </div>
 
       {/* Border */}
-      <details className="styles-group">
-        <summary>Border</summary>
-        <div className="group-content">
-          <PresetGroup
-            label="Border Radius"
-            options={borderRadiusOptions}
-            basePath={['borderRadius']}
-            baseKey="base"
-            styles={styles}
-            onUpdate={handleUpdate}
-          />
-          <PresetGroup
-            label="Border Width"
-            options={borderWidthOptions}
-            basePath={['borderWidth']}
-            baseKey="base"
-            styles={styles}
-            onUpdate={handleUpdate}
-          />
-        </div>
-      </details>
+      <Section title="Border">
+        <PresetGroup
+          label="Radius"
+          options={borderRadiusOptions}
+          basePath={['borderRadius']}
+          baseKey="base"
+          styles={styles}
+          onUpdate={handleUpdate}
+        />
+        <PresetGroup
+          label="Width"
+          options={borderWidthOptions}
+          basePath={['borderWidth']}
+          baseKey="base"
+          styles={styles}
+          onUpdate={handleUpdate}
+        />
+      </Section>
 
       {/* Typography */}
-      <details className="styles-group">
-        <summary>Typography</summary>
-        <div className="group-content">
-          <PresetGroup
-            label="Text Size"
-            options={textSizeOptions}
-            basePath={['textSize']}
-            baseKey="base"
-            styles={styles}
-            onUpdate={handleUpdate}
-            customType="text"
-          />
-        </div>
-      </details>
+      <Section title="Typography">
+        <PresetGroup
+          label="Text Size"
+          options={textSizeOptions}
+          basePath={['textSize']}
+          baseKey="base"
+          styles={styles}
+          onUpdate={handleUpdate}
+          customType="text"
+        />
+      </Section>
 
       {/* Colors */}
-      <details className="styles-group">
-        <summary>Colors</summary>
-        <div className="group-content">
-          <ColorGroup
-            label="Background"
-            basePath={['backgroundColor']}
-            styles={styles}
-            onUpdate={handleUpdate}
-          />
-          <ColorGroup
-            label="Text Color"
-            basePath={['textColor']}
-            styles={styles}
-            onUpdate={handleUpdate}
-          />
-        </div>
-      </details>
+      <Section title="Colors">
+        <ColorGroup
+          label="Background"
+          basePath={['backgroundColor']}
+          styles={styles}
+          onUpdate={handleUpdate}
+        />
+        <ColorGroup
+          label="Text Color"
+          basePath={['textColor']}
+          styles={styles}
+          onUpdate={handleUpdate}
+        />
+      </Section>
 
       {/* Custom CSS */}
-      <details className="styles-group">
-        <summary>Custom CSS</summary>
-        <div className="group-content">
-          <div className="custom-css-field">
-            <label>Custom CSS</label>
-            <div className="code-editor-wrapper">
-              <CodeEditor
-                language="css"
-                minHeight={80}
-                maxHeight={200}
-                value={styles.customCSS?.inlineCSS ?? ''}
-                onChange={(value: string | undefined) =>
-                  handleUpdate(['customCSS', 'inlineCSS'], value || undefined)
-                }
-              />
-            </div>
-            <span className="code-editor-description">
-              Add custom CSS properties (e.g. max-width: 600px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);)
-            </span>
-          </div>
-          <div className="custom-css-field">
-            <label>Tailwind Classes</label>
-            <ClassTokenInput
-              value={styles.customCSS?.classes ?? ''}
-              onChange={(val) => handleUpdate(['customCSS', 'classes'], val)}
+      <Section title="Custom CSS">
+        <div className="custom-css-field">
+          <label>Inline CSS</label>
+          <div className="code-editor-wrapper">
+            <CodeEditor
+              language="css"
+              minHeight={80}
+              maxHeight={200}
+              value={styles.customCSS?.inlineCSS ?? ''}
+              onChange={(value: string | undefined) =>
+                handleUpdate(['customCSS', 'inlineCSS'], value || undefined)
+              }
             />
           </div>
+          <span className="code-editor-description">
+            Add custom CSS properties (e.g. max-width: 600px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);)
+          </span>
         </div>
-      </details>
+        <div className="custom-css-field">
+          <label>Tailwind Classes</label>
+          <ClassTokenInput
+            value={styles.customCSS?.classes ?? ''}
+            onChange={(val) => handleUpdate(['customCSS', 'classes'], val)}
+          />
+        </div>
+      </Section>
     </div>
   )
 }
