@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Styling & Theming
 status: executing
-stopped_at: Completed 12.1-01-PLAN.md
-last_updated: "2026-03-21T04:54:24.887Z"
+stopped_at: Completed 12.1-02-PLAN.md
+last_updated: "2026-03-21T04:54:57.331Z"
 last_activity: 2026-03-21
 progress:
   total_phases: 6
@@ -63,6 +63,7 @@ Progress: [█████████░] 92%
 | Phase 12 P03 | 2min | 2 tasks | 5 files |
 | Phase 12 P04 | 2min | 2 tasks | 2 files |
 | Phase 12.1 P01 | 3min | 2 tasks | 4 files |
+| Phase 12.1 P02 | 2min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -94,6 +95,7 @@ Recent decisions affecting current work:
 - [Phase 12]: Spacing section always visible (not collapsible) as primary control; color swatch as styled span not native input
 - [Phase 12]: Kept borderRadius at root level to preserve data path compatibility
 - [Phase 12.1]: StyledSelect wrapper component inside StylesPanel.tsx for DRY Base UI Select usage
+- [Phase 12.1]: react-colorful HexColorPicker for color wheel; theme color defaults from shadcn oklch-to-hex values
 
 ### Pending Todos
 
@@ -105,6 +107,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-21T04:54:24.884Z
-Stopped at: Completed 12.1-01-PLAN.md
+Last session: 2026-03-21T04:54:57.329Z
+Stopped at: Completed 12.1-02-PLAN.md
 Resume file: None
