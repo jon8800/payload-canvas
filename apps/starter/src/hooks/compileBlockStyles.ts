@@ -13,7 +13,7 @@ type BlockLike = {
     }
   }
   children?: BlockLike[]
-  columns?: Array<{ blocks?: BlockLike[] }>
+  [key: string]: unknown
 }
 
 /** Recursively walk a block tree and collect Tailwind classes + scoped CSS */
@@ -39,14 +39,9 @@ function walkBlocks(
       scopedCSS.push(`#block-${block.id} { ${css.inlineCSS} }`)
     }
 
-    // Recurse into child blocks (Container, etc.)
-    walkBlocks(block.children, allClasses, scopedCSS)
-
-    // Recurse into Grid columns
-    if (block.columns) {
-      for (const col of block.columns) {
-        walkBlocks(col.blocks, allClasses, scopedCSS)
-      }
+    // Recurse into child blocks (Container, Grid, etc.)
+    if (Array.isArray(block.children)) {
+      walkBlocks(block.children, allClasses, scopedCSS)
     }
   }
 }
