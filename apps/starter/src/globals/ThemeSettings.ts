@@ -26,8 +26,9 @@ export const ThemeSettings: GlobalConfig = {
         {
           name: 'primary',
           type: 'text',
+          defaultValue: '#0a0a0a',
           admin: {
-            description: 'Default: #000000 (oklch(0.205 0 0))',
+            description: 'Default: #0a0a0a (oklch(0.205 0 0))',
             components: {
               Field: '@/fields/theme/ColorPicker#ColorPickerField',
             },
@@ -36,6 +37,7 @@ export const ThemeSettings: GlobalConfig = {
         {
           name: 'secondary',
           type: 'text',
+          defaultValue: '#f5f5f5',
           admin: {
             description: 'Default: #f5f5f5 (oklch(0.97 0 0))',
             components: {
@@ -46,6 +48,7 @@ export const ThemeSettings: GlobalConfig = {
         {
           name: 'accent',
           type: 'text',
+          defaultValue: '#f5f5f5',
           admin: {
             description: 'Default: #f5f5f5 (oklch(0.97 0 0))',
             components: {
@@ -56,6 +59,7 @@ export const ThemeSettings: GlobalConfig = {
         {
           name: 'muted',
           type: 'text',
+          defaultValue: '#f5f5f5',
           admin: {
             description: 'Default: #f5f5f5 (oklch(0.97 0 0))',
             components: {
@@ -66,6 +70,7 @@ export const ThemeSettings: GlobalConfig = {
         {
           name: 'destructive',
           type: 'text',
+          defaultValue: '#ef4444',
           admin: {
             description: 'Default: #ef4444 (oklch(0.577 0.245 27.325))',
             components: {
@@ -76,6 +81,7 @@ export const ThemeSettings: GlobalConfig = {
         {
           name: 'background',
           type: 'text',
+          defaultValue: '#ffffff',
           admin: {
             description: 'Default: #ffffff (oklch(1 0 0))',
             components: {
@@ -86,6 +92,7 @@ export const ThemeSettings: GlobalConfig = {
         {
           name: 'foreground',
           type: 'text',
+          defaultValue: '#171717',
           admin: {
             description: 'Default: #171717 (oklch(0.145 0 0))',
             components: {
