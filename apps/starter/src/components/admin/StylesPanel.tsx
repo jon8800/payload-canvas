@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { CodeEditor, useField } from '@payloadcms/ui'
 import { Collapsible } from '@base-ui/react/collapsible'
+import { Select } from '@base-ui/react/select'
 import type { TextFieldClientProps } from 'payload'
 import './StylesPanel.scss'
 
@@ -175,6 +176,46 @@ function ChevronIcon() {
   )
 }
 
+// ── Styled Select ──
+
+function SelectChevron() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M2.5 3.5L5 6.5L7.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+type StyledSelectProps = {
+  value: string
+  onChange: (value: string) => void
+  options: { label: string; value: string }[]
+}
+
+function StyledSelect({ value, onChange, options }: StyledSelectProps) {
+  return (
+    <Select.Root value={value} onValueChange={(val) => onChange(val ?? '')}>
+      <Select.Trigger className="styled-select-trigger">
+        <Select.Value placeholder="-" />
+        <Select.Icon className="styled-select-icon">
+          <SelectChevron />
+        </Select.Icon>
+      </Select.Trigger>
+      <Select.Portal>
+        <Select.Positioner className="styled-select-positioner" sideOffset={4}>
+          <Select.Popup className="styled-select-popup">
+            {options.map((o) => (
+              <Select.Item key={o.value} value={o.value} className="styled-select-item">
+                <Select.ItemText>{o.label}</Select.ItemText>
+              </Select.Item>
+            ))}
+          </Select.Popup>
+        </Select.Positioner>
+      </Select.Portal>
+    </Select.Root>
+  )
+}
+
 // ── Sub-components ──
 
 type SpacingControlProps = {
@@ -231,30 +272,22 @@ function SpacingControl({ label, group, styles, onUpdate }: SpacingControlProps)
       </div>
       {uniform ? (
         <div className="spacing-control-uniform">
-          <select
-            className="spacing-select"
+          <StyledSelect
             value={uniformValue}
-            onChange={(e) => handleUniformChange(e.target.value)}
-          >
-            {spacingOptions.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
+            onChange={handleUniformChange}
+            options={spacingOptions}
+          />
         </div>
       ) : (
         <div className="spacing-control-perside">
           {(['top', 'right', 'bottom', 'left'] as const).map((dir) => (
             <div key={dir} className="spacing-side">
               <span className="spacing-side-label">{dir[0].toUpperCase()}</span>
-              <select
-                className="spacing-select"
+              <StyledSelect
                 value={getSpacing(dir)}
-                onChange={(e) => handleChange(dir, e.target.value)}
-              >
-                {spacingOptions.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
+                onChange={(val) => handleChange(dir, val)}
+                options={spacingOptions}
+              />
             </div>
           ))}
         </div>
@@ -309,23 +342,17 @@ function PresetGroup({
     <div className="field-row">
       <label>{label}</label>
       <div className="field-row-controls">
-        <select
+        <StyledSelect
           value={baseVal}
-          onChange={(e) => {
-            const v = e.target.value
+          onChange={(v) => {
             if (v === '' || v === 'none') {
               onUpdate(basePath, undefined)
             } else {
               onUpdate([...basePath, baseKey], v)
             }
           }}
-        >
-          {options.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+          options={options}
+        />
         {baseVal === 'custom' && (
           <input
             type={customType}
@@ -378,23 +405,17 @@ function ColorGroup({ label, basePath, styles, onUpdate }: ColorGroupProps) {
     <div className="field-row">
       <label>{label}</label>
       <div className="field-row-controls">
-        <select
+        <StyledSelect
           value={preset}
-          onChange={(e) => {
-            const v = e.target.value
+          onChange={(v) => {
             if (v === '' || v === 'none') {
               onUpdate(basePath, undefined)
             } else {
               onUpdate([...basePath, 'preset'], v)
             }
           }}
-        >
-          {colorOptions.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+          options={colorOptions}
+        />
         {preset === 'custom' && (
           <>
             <input
