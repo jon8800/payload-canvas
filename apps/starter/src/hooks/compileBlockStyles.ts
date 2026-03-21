@@ -51,9 +51,15 @@ let cachedCompiler: Awaited<ReturnType<typeof compile>> | null = null
 async function getCompiler(): Promise<Awaited<ReturnType<typeof compile>>> {
   if (cachedCompiler) return cachedCompiler
 
-  cachedCompiler = await compile('@import "tailwindcss";', {
+  // Resolve tailwindcss/index.css from node_modules
+  const twPath = path.join(process.cwd(), 'node_modules', 'tailwindcss', 'index.css')
+  const twCSS = fs.readFileSync(twPath, 'utf-8')
+  const twBase = path.dirname(twPath)
+
+  cachedCompiler = await compile(twCSS, {
+    base: twBase,
     loadStylesheet: async (id: string, base: string) => {
-      const resolved = require.resolve(id.endsWith('.css') ? id : id + '/index.css')
+      const resolved = path.resolve(base, id)
       return {
         content: fs.readFileSync(resolved, 'utf-8'),
         base: path.dirname(resolved),
