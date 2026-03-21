@@ -216,43 +216,8 @@
       flex-shrink: 0;
     }
 
-    .styled-select-positioner {
-      z-index: 10000;
-    }
-
-    .styled-select-popup {
-      background: var(--theme-elevation-0);
-      border: 1px solid var(--theme-elevation-200);
-      border-radius: var(--border-radius-m, 4px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-      padding: 4px;
-      max-height: 200px;
-      overflow-y: auto;
-    }
-
-    .styled-select-item {
-      display: block;
-      width: 100%;
-      padding: 4px 8px;
-      border-radius: 3px;
-      font-size: 12px;
-      color: var(--theme-text);
-      cursor: pointer;
-      background: transparent;
-      border: none;
-      text-align: left;
-      transition: background 0.1s ease;
-
-      &:hover,
-      &[data-highlighted] {
-        background: var(--theme-elevation-50);
-      }
-
-      &[data-selected] {
-        font-weight: 600;
-        background: var(--theme-elevation-100);
-      }
-    }
+    // Select trigger stays nested (it's inside .styles-panel)
+    // Popup/positioner/items moved outside .styles-panel (rendered as portal)
 
     .custom-value-input {
       width: 72px;
@@ -372,6 +337,46 @@
       color: var(--theme-text);
       min-width: 60px;
       flex: 1;
+    }
+  }
+
+  // ── Portal-rendered Select popup (outside .styles-panel DOM) ──
+
+  .styled-select-positioner {
+    z-index: 10000;
+  }
+
+  .styled-select-popup {
+    background: var(--theme-elevation-0);
+    border: 1px solid var(--theme-elevation-200);
+    border-radius: var(--border-radius-m, 4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    padding: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .styled-select-item {
+    display: block;
+    width: 100%;
+    padding: 6px 8px;
+    border-radius: 3px;
+    font-size: 12px;
+    color: var(--theme-text);
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    text-align: left;
+    transition: background 0.1s ease;
+
+    &:hover,
+    &[data-highlighted] {
+      background: var(--theme-elevation-50);
+    }
+
+    &[data-selected] {
+      font-weight: 600;
+      background: var(--theme-elevation-100);
     }
   }
 }
