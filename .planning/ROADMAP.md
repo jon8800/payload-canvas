@@ -27,6 +27,7 @@
 - [x] **Phase 9: Styles Panel** - Replace per-field style properties with single JSON field and Webflow-style bounding box UI (completed 2026-03-15)
 - [x] **Phase 10: Theme Settings** - Global design token system with admin editor and CSS variable injection (completed 2026-03-15)
 - [x] **Phase 11: Admin Component Redesign** - Webflow-inspired redesign of styles panel and theme field components with Payload-native aesthetic (completed 2026-03-15)
+- [ ] **Phase 12: UI Component Primitives** - Rebuild admin components with headless primitives (Base UI / Radix) and Payload-compatible styling
 
 ## Phase Details
 
@@ -88,6 +89,13 @@ Plans:
 - [x] 11-01-PLAN.md — Redesign StylesPanel: Webflow bounding box, Monaco CSS editor, tag-based class input
 - [x] 11-02-PLAN.md — Redesign theme field components with Payload CSS variables + fix sidebar padding
 
+### Phase 12: UI Component Primitives
+**Goal**: Rebuild admin UI components using headless primitives (Base UI / Radix) with Payload-compatible styling — no Tailwind Preflight conflicts
+**Depends on**: Phase 11
+**Requirements**: TBD (discuss-phase first)
+**Success Criteria**: TBD
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -103,4 +111,5 @@ Plans:
 | 8. Frontend Styling Fix | v1.1 | 1/1 | Complete | 2026-03-15 |
 | 9. Styles Panel | v1.1 | 3/3 | Complete | 2026-03-15 |
 | 10. Theme Settings | v1.1 | 3/3 | Complete | 2026-03-15 |
-| 11. Admin Component Redesign | v1.1 | Complete    | 2026-03-15 | 2026-03-15 |
+| 11. Admin Component Redesign | v1.1 | Complete | 2026-03-15 | 2026-03-15 |
+| 12. UI Component Primitives | v1.1 | 0/? | Not started | - |
