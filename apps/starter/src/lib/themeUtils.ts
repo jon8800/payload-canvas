@@ -86,3 +86,14 @@ export function buildCSSVariables(theme: ThemeData): Record<string, string> {
 
   return vars
 }
+
+/**
+ * Convert a CSS variables record to a `:root { ... }` style string.
+ * Returns empty string if no variables are set.
+ */
+export function cssVarsToString(vars: Record<string, string>): string {
+  const entries = Object.entries(vars)
+  if (entries.length === 0) return ''
+  const declarations = entries.map(([k, v]) => `${k}: ${v};`).join(' ')
+  return `:root { ${declarations} }`
+}

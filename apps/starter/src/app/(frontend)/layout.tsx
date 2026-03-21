@@ -14,7 +14,7 @@ import { getServerSideURL } from '@/utilities/getURL'
 import { resolveTemplateParts } from '@/utilities/resolveTemplateParts'
 import { RenderBlocks } from '@/blocks/RenderBlocks'
 import { BlockSelectionHandler } from '@/components/BlockSelectionHandler'
-import { buildCSSVariables } from '@/lib/themeUtils'
+import { buildCSSVariables, cssVarsToString } from '@/lib/themeUtils'
 
 import './globals.css'
 
@@ -39,14 +39,17 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   const theme = await getTheme()
   const cssVars = buildCSSVariables(theme as any)
+  const themeCSS = cssVarsToString(cssVars)
 
   return (
     <html
       className={cn(GeistSans.variable, GeistMono.variable)}
       lang="en"
-      style={Object.keys(cssVars).length > 0 ? cssVars : undefined}
     >
       <head>
+        {themeCSS && (
+          <style dangerouslySetInnerHTML={{ __html: themeCSS }} />
+        )}
         {theme?.fonts?.sans && (
           <>
             <link rel="preconnect" href="https://fonts.googleapis.com" />
