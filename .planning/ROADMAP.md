@@ -28,7 +28,7 @@
 - [x] **Phase 10: Theme Settings** - Global design token system with admin editor and CSS variable injection (completed 2026-03-15)
 - [x] **Phase 11: Admin Component Redesign** - Webflow-inspired redesign of styles panel and theme field components with Payload-native aesthetic (completed 2026-03-15)
 - [x] **Phase 12: UI Component Primitives** - Rebuild admin components with headless primitives (Base UI) and Payload-compatible styling (completed 2026-03-21)
-- [ ] **Phase 12.1: UI Iteration Fixes** - Base UI selects, color wheel, font dropdown width, default colors, live preview (INSERTED)
+- [x] **Phase 12.1: UI Iteration Fixes** - Base UI selects, color wheel, font dropdown width, default colors, live preview (INSERTED) (completed 2026-03-21)
 
 ## Phase Details
 
@@ -121,7 +121,7 @@ Plans:
 Plans:
 - [x] 12.1-01-PLAN.md — Replace native selects with Base UI Select + fix FontSelector dropdown width
 - [x] 12.1-02-PLAN.md — Add color wheel to ColorPicker + set default theme colors from globals.css
-- [ ] 12.1-03-PLAN.md — Live preview for ThemeSettings + style guide preview page
+- [x] 12.1-03-PLAN.md — Live preview for ThemeSettings + style guide preview page
 
 ## Progress
 
@@ -140,4 +140,4 @@ Plans:
 | 10. Theme Settings | v1.1 | 3/3 | Complete | 2026-03-15 |
 | 11. Admin Component Redesign | v1.1 | Complete | 2026-03-15 | 2026-03-15 |
 | 12. UI Component Primitives | v1.1 | 4/4 | Complete | 2026-03-21 |
-| 12.1 UI Iteration Fixes | v1.1 | 2/3 | In Progress|  |
+| 12.1 UI Iteration Fixes | v1.1 | 3/3 | Complete   | 2026-03-21 |

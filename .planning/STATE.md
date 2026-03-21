@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Styling & Theming
 status: executing
-stopped_at: Completed 12.1-02-PLAN.md
-last_updated: "2026-03-21T04:54:57.331Z"
+stopped_at: Completed 12.1-03-PLAN.md
+last_updated: "2026-03-21T04:57:42.134Z"
 last_activity: 2026-03-21
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 16
-  completed_plans: 15
+  completed_plans: 16
   percent: 92
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-15)
 ## Current Position
 
 Phase: 12.1 (UI Iteration Fixes)
-Plan: 12.1-02 complete
-Status: Executing phase 12.1
+Plan: 12.1-03 complete
+Status: Phase 12.1 complete
 Last activity: 2026-03-21
 
-Progress: [█████████░] 92%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -64,6 +64,7 @@ Progress: [█████████░] 92%
 | Phase 12 P04 | 2min | 2 tasks | 2 files |
 | Phase 12.1 P01 | 3min | 2 tasks | 4 files |
 | Phase 12.1 P02 | 2min | 2 tasks | 4 files |
+| Phase 12.1 P03 | 2min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -96,6 +97,7 @@ Recent decisions affecting current work:
 - [Phase 12]: Kept borderRadius at root level to preserve data path compatibility
 - [Phase 12.1]: StyledSelect wrapper component inside StylesPanel.tsx for DRY Base UI Select usage
 - [Phase 12.1]: react-colorful HexColorPicker for color wheel; theme color defaults from shadcn oklch-to-hex values
+- [Phase 12.1]: Inline livePreview URL for global config instead of generatePreviewPath utility (globals have no slug/collection)
 
 ### Pending Todos
 
@@ -107,6 +109,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-21T04:54:57.329Z
-Stopped at: Completed 12.1-02-PLAN.md
+Last session: 2026-03-21T04:57:42.131Z
+Stopped at: Completed 12.1-03-PLAN.md
 Resume file: None
