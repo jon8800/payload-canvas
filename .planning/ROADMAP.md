@@ -117,7 +117,11 @@ Plans:
   3. ColorPicker has a color wheel with preset swatches (not swatches-only)
   4. Default theme colors match shadcn variables from frontend globals.css
   5. Theme Settings global has live preview pointing to a style guide preview page
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 12.1-01-PLAN.md — Replace native selects with Base UI Select + fix FontSelector dropdown width
+- [ ] 12.1-02-PLAN.md — Add color wheel to ColorPicker + set default theme colors from globals.css
+- [ ] 12.1-03-PLAN.md — Live preview for ThemeSettings + style guide preview page
 
 ## Progress
 
@@ -136,4 +140,4 @@ Plans:
 | 10. Theme Settings | v1.1 | 3/3 | Complete | 2026-03-15 |
 | 11. Admin Component Redesign | v1.1 | Complete | 2026-03-15 | 2026-03-15 |
 | 12. UI Component Primitives | v1.1 | 4/4 | Complete | 2026-03-21 |
-| 12.1 UI Iteration Fixes | v1.1 | 0/? | Not started | - |
+| 12.1 UI Iteration Fixes | v1.1 | 0/3 | Not started | - |
