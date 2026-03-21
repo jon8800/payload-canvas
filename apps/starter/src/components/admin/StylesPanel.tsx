@@ -152,22 +152,6 @@ function updateNestedValue(
 
 // ── Icons ──
 
-function UniformIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  )
-}
-
-function PerSideIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3 2" />
-    </svg>
-  )
-}
-
 function PlusIcon() {
   return (
     <svg className="section-icon" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -218,24 +202,15 @@ function StyledSelect({ value, onChange, options }: StyledSelectProps) {
 
 // ── Sub-components ──
 
-type SpacingControlProps = {
-  label: string
-  group: 'padding' | 'margin'
-  styles: StylesData
-  onUpdate: (path: string[], value: unknown) => void
-}
-
-function SpacingControl({ label, group, styles, onUpdate }: SpacingControlProps) {
-  const [uniform, setUniform] = useState(true)
-
-  const getSpacing = (dir: string): string => {
+function SpacingBoxControl({ styles, onUpdate }: { styles: StylesData; onUpdate: (path: string[], value: unknown) => void }) {
+  const getVal = (group: 'margin' | 'padding', dir: string): string => {
     const g = styles[group] as SpacingGroup | undefined
     if (!g) return ''
     const d = g[dir as keyof SpacingGroup]
     return d?.base ?? ''
   }
 
-  const handleChange = (dir: string, val: string) => {
+  const handleChange = (group: 'margin' | 'padding', dir: string, val: string) => {
     if (val === '' || val === 'none') {
       onUpdate([group, dir], undefined)
       return
@@ -243,55 +218,23 @@ function SpacingControl({ label, group, styles, onUpdate }: SpacingControlProps)
     onUpdate([group, dir, 'base'], val)
   }
 
-  const handleUniformChange = (val: string) => {
-    const directions = ['top', 'right', 'bottom', 'left'] as const
-    for (const dir of directions) {
-      if (val === '' || val === 'none') {
-        onUpdate([group, dir], undefined)
-      } else {
-        onUpdate([group, dir, 'base'], val)
-      }
-    }
-  }
-
-  // For uniform mode, show the value of the first non-empty side, or top
-  const uniformValue = getSpacing('top')
-
   return (
-    <div className="spacing-control">
-      <div className="spacing-control-header">
-        <span className="spacing-control-label">{label}</span>
-        <button
-          type="button"
-          className="spacing-mode-toggle"
-          onClick={() => setUniform(!uniform)}
-          title={uniform ? 'Switch to per-side' : 'Switch to uniform'}
-        >
-          {uniform ? <UniformIcon /> : <PerSideIcon />}
-        </button>
+    <div className="spacing-box">
+      <div className="spacing-box-margin">
+        <span className="spacing-box-label">MARGIN</span>
+        <input className="spacing-box-input spacing-box-input--top" type="text" value={getVal('margin', 'top')} onChange={(e) => handleChange('margin', 'top', e.target.value)} placeholder="0" />
+        <input className="spacing-box-input spacing-box-input--right" type="text" value={getVal('margin', 'right')} onChange={(e) => handleChange('margin', 'right', e.target.value)} placeholder="0" />
+        <input className="spacing-box-input spacing-box-input--bottom" type="text" value={getVal('margin', 'bottom')} onChange={(e) => handleChange('margin', 'bottom', e.target.value)} placeholder="0" />
+        <input className="spacing-box-input spacing-box-input--left" type="text" value={getVal('margin', 'left')} onChange={(e) => handleChange('margin', 'left', e.target.value)} placeholder="0" />
+
+        <div className="spacing-box-padding">
+          <span className="spacing-box-label">PADDING</span>
+          <input className="spacing-box-input spacing-box-input--top" type="text" value={getVal('padding', 'top')} onChange={(e) => handleChange('padding', 'top', e.target.value)} placeholder="0" />
+          <input className="spacing-box-input spacing-box-input--right" type="text" value={getVal('padding', 'right')} onChange={(e) => handleChange('padding', 'right', e.target.value)} placeholder="0" />
+          <input className="spacing-box-input spacing-box-input--bottom" type="text" value={getVal('padding', 'bottom')} onChange={(e) => handleChange('padding', 'bottom', e.target.value)} placeholder="0" />
+          <input className="spacing-box-input spacing-box-input--left" type="text" value={getVal('padding', 'left')} onChange={(e) => handleChange('padding', 'left', e.target.value)} placeholder="0" />
+        </div>
       </div>
-      {uniform ? (
-        <div className="spacing-control-uniform">
-          <StyledSelect
-            value={uniformValue}
-            onChange={handleUniformChange}
-            options={spacingOptions}
-          />
-        </div>
-      ) : (
-        <div className="spacing-control-perside">
-          {(['top', 'right', 'bottom', 'left'] as const).map((dir) => (
-            <div key={dir} className="spacing-side">
-              <span className="spacing-side-label">{dir[0].toUpperCase()}</span>
-              <StyledSelect
-                value={getSpacing(dir)}
-                onChange={(val) => handleChange(dir, val)}
-                options={spacingOptions}
-              />
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   )
 }
@@ -564,18 +507,7 @@ export function StylesPanel({ path }: TextFieldClientProps) {
 
       {/* Spacing -- always visible, not collapsible */}
       <div className="spacing-section">
-        <SpacingControl
-          label="Padding"
-          group="padding"
-          styles={styles}
-          onUpdate={handleUpdate}
-        />
-        <SpacingControl
-          label="Margin"
-          group="margin"
-          styles={styles}
-          onUpdate={handleUpdate}
-        />
+        <SpacingBoxControl styles={styles} onUpdate={handleUpdate} />
       </div>
 
       {/* Border */}

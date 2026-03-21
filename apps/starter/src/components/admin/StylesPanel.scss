@@ -10,83 +10,101 @@
     // ── Spacing section (always visible) ──
 
     .spacing-section {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      padding: 8px 10px;
       border-bottom: 1px solid var(--theme-elevation-150);
     }
 
-    .spacing-control {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
+    .spacing-box {
+      padding: 8px 10px;
     }
 
-    .spacing-control-header {
-      display: flex;
+    .spacing-box-margin {
+      position: relative;
+      display: grid;
+      grid-template-columns: 40px 1fr 40px;
+      grid-template-rows: 28px 1fr 28px;
       align-items: center;
-      justify-content: space-between;
-      height: 28px;
+      justify-items: center;
+      background: var(--theme-elevation-100);
+      border: 1px dashed var(--theme-elevation-300);
+      border-radius: 4px;
+      min-height: 120px;
+      padding: 4px;
     }
 
-    .spacing-control-label {
-      font-size: 12px;
-      color: var(--theme-elevation-600);
-      min-width: 80px;
-    }
-
-    .spacing-mode-toggle {
-      display: inline-flex;
+    .spacing-box-padding {
+      position: relative;
+      display: grid;
+      grid-template-columns: 40px 1fr 40px;
+      grid-template-rows: 28px 1fr 28px;
       align-items: center;
-      justify-content: center;
-      width: 24px;
-      height: 24px;
-      border: 1px solid var(--theme-elevation-200);
-      border-radius: var(--border-radius-m, 4px);
-      background: var(--theme-elevation-0);
+      justify-items: center;
+      grid-column: 1 / -1;
+      grid-row: 2;
+      width: 100%;
+      background: var(--theme-elevation-50);
+      border: 1px dashed var(--theme-elevation-250, var(--theme-elevation-200));
+      border-radius: 3px;
+      min-height: 60px;
+      padding: 4px;
+    }
+
+    .spacing-box-label {
+      position: absolute;
+      top: 4px;
+      left: 8px;
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
       color: var(--theme-elevation-500);
-      cursor: pointer;
-      padding: 0;
-      transition: background 0.15s ease, color 0.15s ease;
+      pointer-events: none;
+    }
+
+    .spacing-box-input {
+      width: 36px;
+      height: 22px;
+      text-align: center;
+      font-size: 11px;
+      font-family: inherit;
+      border: 1px solid transparent;
+      border-radius: 3px;
+      background: transparent;
+      color: var(--theme-text);
+      padding: 0 2px;
+      outline: none;
+
+      &::placeholder {
+        color: var(--theme-elevation-400);
+      }
 
       &:hover {
-        background: var(--theme-elevation-50);
-        color: var(--theme-text);
+        border-color: var(--theme-elevation-300);
       }
 
-      &:focus-visible {
-        outline: 2px solid var(--theme-elevation-400);
-        outline-offset: -1px;
+      &:focus {
+        border-color: var(--theme-elevation-400);
+        background: var(--theme-elevation-0);
       }
-    }
 
-    .spacing-control-uniform {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
+      &--top {
+        grid-column: 2;
+        grid-row: 1;
+      }
 
-    .spacing-control-perside {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
+      &--right {
+        grid-column: 3;
+        grid-row: 2;
+      }
 
-    .spacing-side {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 2px;
-      flex: 1;
-    }
+      &--bottom {
+        grid-column: 2;
+        grid-row: 3;
+      }
 
-    .spacing-side-label {
-      font-size: 10px;
-      font-weight: 500;
-      color: var(--theme-elevation-500);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
+      &--left {
+        grid-column: 1;
+        grid-row: 2;
+      }
     }
 
     // ── Collapsible sections ──
