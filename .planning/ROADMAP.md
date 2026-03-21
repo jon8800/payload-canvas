@@ -27,7 +27,7 @@
 - [x] **Phase 9: Styles Panel** - Replace per-field style properties with single JSON field and Webflow-style bounding box UI (completed 2026-03-15)
 - [x] **Phase 10: Theme Settings** - Global design token system with admin editor and CSS variable injection (completed 2026-03-15)
 - [x] **Phase 11: Admin Component Redesign** - Webflow-inspired redesign of styles panel and theme field components with Payload-native aesthetic (completed 2026-03-15)
-- [ ] **Phase 12: UI Component Primitives** - Rebuild admin components with headless primitives (Base UI / Radix) and Payload-compatible styling
+- [ ] **Phase 12: UI Component Primitives** - Rebuild admin components with headless primitives (Base UI) and Payload-compatible styling
 
 ## Phase Details
 
@@ -90,11 +90,21 @@ Plans:
 - [x] 11-02-PLAN.md — Redesign theme field components with Payload CSS variables + fix sidebar padding
 
 ### Phase 12: UI Component Primitives
-**Goal**: Rebuild admin UI components using headless primitives (Base UI / Radix) with Payload-compatible styling — no Tailwind Preflight conflicts
+**Goal**: Rebuild admin UI components using headless primitives (Base UI) with Payload-compatible SCSS styling — no Tailwind Preflight conflicts
 **Depends on**: Phase 11
-**Requirements**: TBD (discuss-phase first)
-**Success Criteria**: TBD
-**Plans**: TBD
+**Requirements**: UI-01, UI-02, UI-03, UI-04, UI-05
+**Success Criteria** (what must be TRUE):
+  1. StylesPanel uses Base UI Collapsible for property groups and Framer-style compact spacing controls with uniform/per-side toggle
+  2. ColorPicker uses Base UI Popover with preset color swatches — no native browser color picker
+  3. SliderField uses Base UI Slider with styled track/thumb — no native browser range input
+  4. FontSelector uses Base UI searchable dropdown with full 1700+ Google Fonts catalog and lazy font preview
+  5. Theme settings fields are compact and visually grouped, not full-width sprawl
+**Plans**: 4 plans
+Plans:
+- [ ] 12-01-PLAN.md — Rebuild StylesPanel with Framer-style compact controls and Base UI Collapsible
+- [ ] 12-02-PLAN.md — Rebuild ColorPicker with Base UI Popover and SliderField with Base UI Slider
+- [ ] 12-03-PLAN.md — Rebuild FontSelector with Base UI Combobox and full Google Fonts catalog
+- [ ] 12-04-PLAN.md — Theme settings layout + visual verification checkpoint
 
 ## Progress
 
@@ -112,4 +122,4 @@ Plans:
 | 9. Styles Panel | v1.1 | 3/3 | Complete | 2026-03-15 |
 | 10. Theme Settings | v1.1 | 3/3 | Complete | 2026-03-15 |
 | 11. Admin Component Redesign | v1.1 | Complete | 2026-03-15 | 2026-03-15 |
-| 12. UI Component Primitives | v1.1 | 0/? | Not started | - |
+| 12. UI Component Primitives | v1.1 | 0/4 | In progress | - |
