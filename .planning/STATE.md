@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Styling & Theming
-status: completed
-stopped_at: Completed 12-04-PLAN.md
-last_updated: "2026-03-21T03:55:44.885Z"
+status: executing
+stopped_at: Completed 12.1-01-PLAN.md
+last_updated: "2026-03-21T04:54:24.887Z"
 last_activity: 2026-03-21
 progress:
-  total_phases: 5
+  total_phases: 6
   completed_phases: 5
-  total_plans: 13
-  completed_plans: 13
+  total_plans: 16
+  completed_plans: 15
   percent: 92
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-15)
 
 **Core value:** Any website project can be scaffolded instantly with a composable block-based layout system
-**Current focus:** Phase 12 UI Component Primitives
+**Current focus:** Phase 12.1 UI Iteration Fixes
 
 ## Current Position
 
-Phase: 12 of 12 (UI Component Primitives)
-Plan: Not started
-Status: Plan 12-01 complete
+Phase: 12.1 (UI Iteration Fixes)
+Plan: 12.1-02 complete
+Status: Executing phase 12.1
 Last activity: 2026-03-21
 
 Progress: [█████████░] 92%
@@ -62,6 +62,7 @@ Progress: [█████████░] 92%
 | Phase 12 P01 | 3min | 1 tasks | 2 files |
 | Phase 12 P03 | 2min | 2 tasks | 5 files |
 | Phase 12 P04 | 2min | 2 tasks | 2 files |
+| Phase 12.1 P01 | 3min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -92,6 +93,7 @@ Recent decisions affecting current work:
 - [Phase 12]: Reusable Section component wrapping Base UI Collapsible for DRY collapsible sections in StylesPanel
 - [Phase 12]: Spacing section always visible (not collapsible) as primary control; color swatch as styled span not native input
 - [Phase 12]: Kept borderRadius at root level to preserve data path compatibility
+- [Phase 12.1]: StyledSelect wrapper component inside StylesPanel.tsx for DRY Base UI Select usage
 
 ### Pending Todos
 
@@ -103,6 +105,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-21T03:55:10.418Z
-Stopped at: Completed 12-04-PLAN.md
+Last session: 2026-03-21T04:54:24.884Z
+Stopped at: Completed 12.1-01-PLAN.md
 Resume file: None
