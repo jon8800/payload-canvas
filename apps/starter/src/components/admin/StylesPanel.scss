@@ -4,11 +4,7 @@
     font-size: 13px;
 
     .styles-panel-title {
-      display: block;
-      margin-bottom: 8px;
-      font-weight: 600;
-      font-size: 13px;
-      color: var(--theme-text);
+      display: none;
     }
 
     // ── Spacing section (always visible) ──
@@ -17,7 +13,8 @@
       display: flex;
       flex-direction: column;
       gap: 6px;
-      margin-bottom: 8px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--theme-elevation-150);
     }
 
     .spacing-control {
@@ -95,18 +92,20 @@
     // ── Collapsible sections ──
 
     .section {
-      border: 1px solid var(--theme-elevation-150);
-      border-radius: var(--border-radius-m, 4px);
-      margin-bottom: 6px;
+      border-bottom: 1px solid var(--theme-elevation-150);
       overflow: hidden;
+
+      &:last-child {
+        border-bottom: none;
+      }
     }
 
     .section-trigger {
       display: flex;
       align-items: center;
-      gap: 6px;
+      justify-content: space-between;
       width: 100%;
-      padding: 6px 10px;
+      padding: 8px 10px;
       border: none;
       background: none;
       cursor: pointer;
@@ -117,7 +116,7 @@
       user-select: none;
       transition: background 0.1s ease;
       text-align: left;
-      height: 32px;
+      height: 36px;
 
       &:hover {
         background: var(--theme-elevation-50);
@@ -128,14 +127,14 @@
         outline-offset: -2px;
       }
 
-      .section-chevron {
+      .section-icon {
         flex-shrink: 0;
         color: var(--theme-elevation-500);
         transition: transform 0.2s ease;
       }
 
-      &[data-collapsible="open"] .section-chevron {
-        transform: rotate(90deg);
+      &[data-collapsible="open"] .section-icon {
+        transform: rotate(45deg);
       }
     }
 
@@ -192,7 +191,7 @@
       padding: 0 6px;
       border-radius: var(--border-radius-m, 4px);
       border: 1px solid var(--theme-elevation-200);
-      background: var(--theme-input-bg);
+      background: var(--theme-input-bg, var(--theme-elevation-50));
       color: var(--theme-text);
       font-size: 12px;
       font-family: inherit;
@@ -263,7 +262,7 @@
       font-family: inherit;
       border: 1px solid var(--theme-elevation-200);
       border-radius: var(--border-radius-m, 4px);
-      background: var(--theme-input-bg);
+      background: var(--theme-input-bg, var(--theme-elevation-50));
       color: var(--theme-text);
       height: 28px;
 

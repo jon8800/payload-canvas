@@ -168,10 +168,10 @@ function PerSideIcon() {
   )
 }
 
-function ChevronIcon() {
+function PlusIcon() {
   return (
-    <svg className="section-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M3.5 2L6.5 5L3.5 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <svg className="section-icon" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M6 2V10M2 6H10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   )
 }
@@ -528,8 +528,8 @@ function Section({ title, defaultOpen = false, children }: SectionProps) {
   return (
     <Collapsible.Root defaultOpen={defaultOpen} className="section">
       <Collapsible.Trigger className="section-trigger">
-        <ChevronIcon />
         <span>{title}</span>
+        <PlusIcon />
       </Collapsible.Trigger>
       <Collapsible.Panel className="section-panel">
         <div className="section-content">
