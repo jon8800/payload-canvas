@@ -4,6 +4,7 @@ import { allBlockSlugs } from '../blocks/registry'
 import { authenticated } from '../access/authenticated'
 import { authenticatedOrPublished } from '../access/authenticatedOrPublished'
 import { revalidateTemplatePart } from '../hooks/revalidateTemplatePart'
+import { compileBlockStyles } from '../hooks/compileBlockStyles'
 import { generatePreviewPath } from '../utilities/generatePreviewPath'
 
 export const TemplateParts: CollectionConfig = {
@@ -55,7 +56,7 @@ export const TemplateParts: CollectionConfig = {
   trash: true,
   enableQueryPresets: true,
   hooks: {
-    afterChange: [revalidateTemplatePart],
+    afterChange: [revalidateTemplatePart, compileBlockStyles],
   },
   fields: [
     {
@@ -118,6 +119,11 @@ export const TemplateParts: CollectionConfig = {
       type: 'blocks',
       blockReferences: [...allBlockSlugs] as BlockSlug[],
       blocks: [],
+    },
+    {
+      name: '_compiledBlockCSS',
+      type: 'textarea',
+      admin: { hidden: true },
     },
   ],
 }

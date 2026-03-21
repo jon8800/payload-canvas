@@ -5,6 +5,7 @@ import { authenticated } from '../access/authenticated'
 import { authenticatedOrPublished } from '../access/authenticatedOrPublished'
 import { populatePublishedAt } from '../hooks/populatePublishedAt'
 import { revalidatePost } from '../hooks/revalidatePost'
+import { compileBlockStyles } from '../hooks/compileBlockStyles'
 import { generatePreviewPath } from '../utilities/generatePreviewPath'
 
 export const Posts: CollectionConfig = {
@@ -57,7 +58,7 @@ export const Posts: CollectionConfig = {
   trash: true,
   enableQueryPresets: true,
   hooks: {
-    afterChange: [revalidatePost],
+    afterChange: [revalidatePost, compileBlockStyles],
     beforeChange: [populatePublishedAt],
   },
   fields: [
@@ -112,6 +113,11 @@ export const Posts: CollectionConfig = {
       type: 'blocks',
       blockReferences: [...allBlockSlugs] as BlockSlug[],
       blocks: [],
+    },
+    {
+      name: '_compiledBlockCSS',
+      type: 'textarea',
+      admin: { hidden: true },
     },
   ],
 }

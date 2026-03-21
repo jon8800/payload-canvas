@@ -5,6 +5,7 @@ import { authenticated } from '../access/authenticated'
 import { authenticatedOrPublished } from '../access/authenticatedOrPublished'
 import { populatePublishedAt } from '../hooks/populatePublishedAt'
 import { revalidatePage } from '../hooks/revalidatePage'
+import { compileBlockStyles } from '../hooks/compileBlockStyles'
 import { generatePreviewPath } from '../utilities/generatePreviewPath'
 
 export const Pages: CollectionConfig = {
@@ -57,7 +58,7 @@ export const Pages: CollectionConfig = {
   trash: true,
   enableQueryPresets: true,
   hooks: {
-    afterChange: [revalidatePage],
+    afterChange: [revalidatePage, compileBlockStyles],
     beforeChange: [populatePublishedAt],
   },
   fields: [
@@ -83,6 +84,11 @@ export const Pages: CollectionConfig = {
       name: 'publishedAt',
       type: 'date',
       admin: { position: 'sidebar' },
+    },
+    {
+      name: '_compiledBlockCSS',
+      type: 'textarea',
+      admin: { hidden: true },
     },
   ],
 }
