@@ -112,9 +112,10 @@ None yet.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260321-rgz | Fix 4 UAT issues: select values, scroll lock, sidebar padding, bounding box | 2026-03-21 | 50d9c28 | [260321-rgz](./quick/260321-rgz-fix-4-uat-issues-select-values-scroll-lo/) |
+| 260321-s4o | Tailwind class compilation on save + scoped CSS style tags | 2026-03-21 | 847b681 | [260321-s4o](./quick/260321-s4o-tailwind-class-compilation-on-save-scope/) |
 
 ## Session Continuity
 
-Last session: 2026-03-21T09:46:47Z
-Stopped at: Completed quick task 260321-rgz: Fix 4 UAT issues
+Last session: 2026-03-21T10:21:54Z
+Stopped at: Completed quick task 260321-s4o: Tailwind class compilation on save scope
 Resume file: None
