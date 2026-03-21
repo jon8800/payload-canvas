@@ -60,6 +60,8 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     overflow: hidden;
     z-index: 50;
+    width: var(--anchor-width, 100%);
+    min-width: 200px;
   }
 
   .font-selector__list {
