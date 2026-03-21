@@ -566,8 +566,8 @@ export function StylesPanel({ path }: TextFieldClientProps) {
           <div className="code-editor-wrapper">
             <CodeEditor
               language="css"
-              minHeight={80}
-              maxHeight={200}
+              minHeight={160}
+              maxHeight={300}
               value={styles.customCSS?.inlineCSS ?? ''}
               onChange={(value: string | undefined) =>
                 handleUpdate(['customCSS', 'inlineCSS'], value || undefined)
@@ -575,7 +575,7 @@ export function StylesPanel({ path }: TextFieldClientProps) {
             />
           </div>
           <span className="code-editor-description">
-            Add custom CSS properties (e.g. max-width: 600px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);)
+            Add custom CSS rules for this block (scoped via #block-id selector).
           </span>
         </div>
         <div className="custom-css-field">

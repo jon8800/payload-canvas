@@ -248,16 +248,10 @@ export function getBlockStyles(styles: Record<string, any> | undefined): {
     classes.push(styles.customCSS.classes)
   }
 
-  // Inline CSS
+  // Inline styles (only color custom values -- custom CSS is now scoped via style tags)
   let style: CSSProperties | undefined
-  if (inlineStyles.length > 0 || styles.customCSS?.inlineCSS) {
-    style = Object.assign(
-      {},
-      ...inlineStyles,
-      styles.customCSS?.inlineCSS
-        ? parseInlineCSS(styles.customCSS.inlineCSS)
-        : {},
-    )
+  if (inlineStyles.length > 0) {
+    style = Object.assign({}, ...inlineStyles)
   }
 
   return {

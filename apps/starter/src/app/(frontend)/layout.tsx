@@ -70,13 +70,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {draft && <BlockSelectionHandler />}
         {headerPart?.layout && (
           <header>
-            <RenderBlocks blocks={headerPart.layout as any[]} />
+            <RenderBlocks blocks={headerPart.layout as any[]} compiledBlockCSS={(headerPart as any)._compiledBlockCSS} />
           </header>
         )}
         {children}
         {footerPart?.layout && (
           <footer>
-            <RenderBlocks blocks={footerPart.layout as any[]} />
+            <RenderBlocks blocks={footerPart.layout as any[]} compiledBlockCSS={(footerPart as any)._compiledBlockCSS} />
           </footer>
         )}
       </body>

@@ -48,7 +48,7 @@ export default async function HomePage() {
     <>
       {draft && <LivePreviewListener />}
       <main>
-        <RenderBlocks blocks={(page.layout as any[]) || []} />
+        <RenderBlocks blocks={(page.layout as any[]) || []} compiledBlockCSS={(page as any)._compiledBlockCSS} />
       </main>
     </>
   )

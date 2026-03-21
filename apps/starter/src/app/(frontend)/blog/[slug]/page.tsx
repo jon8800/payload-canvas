@@ -75,7 +75,7 @@ export default async function BlogPost({ params }: Props) {
       {post.excerpt && <p className="mt-6 text-lg text-muted-foreground">{post.excerpt}</p>}
 
       <div className="mt-8">
-        <RenderBlocks blocks={(post.layout as any[]) || []} />
+        <RenderBlocks blocks={(post.layout as any[]) || []} compiledBlockCSS={(post as any)._compiledBlockCSS} />
       </div>
     </article>
     </>

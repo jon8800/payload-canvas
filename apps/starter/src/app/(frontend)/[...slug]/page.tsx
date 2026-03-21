@@ -32,7 +32,7 @@ export default async function Page({ params }: Props) {
     <>
       {draft && <LivePreviewListener />}
       <main>
-        <RenderBlocks blocks={(page.layout as any[]) || []} />
+        <RenderBlocks blocks={(page.layout as any[]) || []} compiledBlockCSS={(page as any)._compiledBlockCSS} />
       </main>
     </>
   )

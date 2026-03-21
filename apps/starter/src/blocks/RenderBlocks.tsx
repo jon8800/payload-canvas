@@ -35,21 +35,25 @@ const blockComponents: Record<string, React.ComponentType<any>> = {
 type Props = {
   blocks: Array<{ blockType: string; id?: string; _hidden?: boolean; [key: string]: unknown }>
   basePath?: string
+  compiledBlockCSS?: string
 }
 
-export function RenderBlocks({ blocks, basePath = 'layout' }: Props): ReactNode {
+export function RenderBlocks({ blocks, basePath = 'layout', compiledBlockCSS }: Props): ReactNode {
   if (!blocks?.length) return null
 
   const visibleBlocks = blocks.filter((block) => !block._hidden)
 
   return (
     <>
+      {compiledBlockCSS && (
+        <style dangerouslySetInnerHTML={{ __html: compiledBlockCSS }} />
+      )}
       {visibleBlocks.map((block, i) => {
         const Component = blockComponents[getBaseBlockSlug(block.blockType)]
         if (!Component) return null
         const blockPath = `${basePath}.${i}`
         return (
-          <div key={block.id ?? i} data-block-path={blockPath} style={{ display: 'contents' }}>
+          <div key={block.id ?? i} id={`block-${block.id}`} data-block-path={blockPath} style={{ display: 'contents' }}>
             <Component {...block} blockPath={blockPath} />
           </div>
         )
