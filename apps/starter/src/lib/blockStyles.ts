@@ -40,7 +40,12 @@ function resolveSpacing(
         if (num != null) classes.push(`${prefix}-[${num}px]`)
       } else {
         const tw = spacingMap[baseVal]
-        if (tw) classes.push(`${prefix}-${tw}`)
+        if (tw) {
+          classes.push(`${prefix}-${tw}`)
+        } else if (/^\d+(\.\d+)?$/.test(baseVal)) {
+          // Raw numeric value from bounding box input — use as Tailwind spacing scale
+          classes.push(`${prefix}-${baseVal}`)
+        }
       }
     }
 
@@ -53,7 +58,11 @@ function resolveSpacing(
           continue
         }
         const tw = spacingMap[bpVal]
-        if (tw) classes.push(`${bp}:${prefix}-${tw}`)
+        if (tw) {
+          classes.push(`${bp}:${prefix}-${tw}`)
+        } else if (/^\d+(\.\d+)?$/.test(bpVal)) {
+          classes.push(`${bp}:${prefix}-${bpVal}`)
+        }
       }
     }
   }
