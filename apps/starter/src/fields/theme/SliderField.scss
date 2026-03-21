@@ -1,0 +1,107 @@
+@layer payload-default {
+  .slider-field {
+    margin-bottom: calc(var(--base) * 1.5);
+
+    &__label {
+      display: block;
+      margin-bottom: calc(var(--base) * 0.5);
+      font-size: var(--font-body-size-s);
+      font-weight: 500;
+      color: var(--theme-text);
+    }
+
+    &__controls {
+      display: flex;
+      align-items: center;
+      gap: calc(var(--base) * 0.5);
+    }
+
+    &__slider {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      height: 28px;
+    }
+
+    &__control {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      cursor: pointer;
+    }
+
+    &__track {
+      position: relative;
+      width: 100%;
+      height: 4px;
+      background: var(--theme-elevation-200);
+      border-radius: 2px;
+    }
+
+    &__indicator {
+      position: absolute;
+      height: 100%;
+      background: var(--theme-success-500);
+      border-radius: 2px;
+    }
+
+    &__thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--theme-elevation-0);
+      border: 2px solid var(--theme-success-500);
+      cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      outline: none;
+      transition: box-shadow 0.15s ease;
+
+      &:hover {
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--theme-elevation-400);
+        outline-offset: 2px;
+      }
+    }
+
+    &__number {
+      width: 56px;
+      border-radius: var(--border-radius-m);
+      border: 1px solid var(--theme-elevation-200);
+      padding: calc(var(--base) * 0.25) calc(var(--base) * 0.5);
+      font-size: var(--font-body-size-s);
+      font-family: inherit;
+      background: var(--theme-input-bg);
+      color: var(--theme-text);
+      outline: none;
+      text-align: center;
+
+      &:focus {
+        border-color: var(--theme-elevation-400);
+      }
+
+      /* Hide spin buttons for cleaner look */
+      &::-webkit-outer-spin-button,
+      &::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+
+      -moz-appearance: textfield;
+    }
+
+    &__unit {
+      font-size: var(--font-body-size-s);
+      color: var(--theme-elevation-500);
+      user-select: none;
+    }
+
+    &__description {
+      margin: calc(var(--base) * 0.25) 0 0;
+      font-size: var(--font-body-size-s);
+      color: var(--theme-elevation-500);
+    }
+  }
+}

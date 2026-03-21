@@ -3,6 +3,8 @@
 import type { TextFieldClientComponent } from 'payload'
 
 import { useField } from '@payloadcms/ui'
+import { Slider } from '@base-ui/react/slider'
+import './SliderField.scss'
 
 export const SliderField: TextFieldClientComponent = function SliderField({ path, field }) {
   const { value, setValue } = useField<string>({ path })
@@ -19,78 +21,49 @@ export const SliderField: TextFieldClientComponent = function SliderField({ path
 
   const numericValue = parseFloat(String(value)) || min
 
-  function handleChange(newValue: number) {
+  function handleSliderChange(newValue: number) {
     setValue(String(newValue))
   }
 
+  function handleNumberChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const parsed = parseFloat(e.target.value)
+    if (!isNaN(parsed)) {
+      const clamped = Math.min(max, Math.max(min, parsed))
+      setValue(String(clamped))
+    }
+  }
+
   return (
-    <div style={{ marginBottom: 'calc(var(--base) * 1.5)' }}>
-      <label
-        style={{
-          display: 'block',
-          marginBottom: 'calc(var(--base) * 0.5)',
-          fontSize: 'var(--font-body-size-s)',
-          fontWeight: 500,
-          color: 'var(--theme-text)',
-        }}
-      >
-        {label}
-      </label>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'calc(var(--base) * 0.5)',
-        }}
-      >
-        <input
-          type="range"
+    <div className="slider-field">
+      <label className="slider-field__label">{label}</label>
+      <div className="slider-field__controls">
+        <Slider.Root
+          value={numericValue}
+          onValueChange={handleSliderChange}
           min={min}
           max={max}
           step={step}
-          value={numericValue}
-          onChange={(e) => handleChange(parseFloat(e.target.value))}
-          style={{ flex: 1, accentColor: 'var(--theme-success-500)' }}
-        />
+          className="slider-field__slider"
+        >
+          <Slider.Control className="slider-field__control">
+            <Slider.Track className="slider-field__track">
+              <Slider.Indicator className="slider-field__indicator" />
+              <Slider.Thumb className="slider-field__thumb" />
+            </Slider.Track>
+          </Slider.Control>
+        </Slider.Root>
         <input
           type="number"
+          className="slider-field__number"
           min={min}
           max={max}
           step={step}
           value={numericValue}
-          onChange={(e) => handleChange(parseFloat(e.target.value))}
-          style={{
-            width: 64,
-            borderRadius: 'var(--border-radius-m)',
-            border: '1px solid var(--theme-elevation-200)',
-            padding: 'calc(var(--base) * 0.25) calc(var(--base) * 0.5)',
-            fontSize: 'var(--font-body-size-s)',
-            background: 'var(--theme-input-bg)',
-            color: 'var(--theme-text)',
-          }}
+          onChange={handleNumberChange}
         />
-        {unit && (
-          <span
-            style={{
-              fontSize: 'var(--font-body-size-s)',
-              color: 'var(--theme-elevation-500)',
-            }}
-          >
-            {unit}
-          </span>
-        )}
+        {unit && <span className="slider-field__unit">{unit}</span>}
       </div>
-      {description && (
-        <p
-          style={{
-            marginTop: 'calc(var(--base) * 0.25)',
-            fontSize: 'var(--font-body-size-s)',
-            color: 'var(--theme-elevation-500)',
-          }}
-        >
-          {description}
-        </p>
-      )}
+      {description && <p className="slider-field__description">{description}</p>}
     </div>
   )
 }
