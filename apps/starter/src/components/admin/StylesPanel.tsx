@@ -194,7 +194,7 @@ type StyledSelectProps = {
 
 function StyledSelect({ value, onChange, options }: StyledSelectProps) {
   return (
-    <Select.Root value={value} onValueChange={(val) => onChange(val ?? '')}>
+    <Select.Root value={value} onValueChange={(val) => onChange(val ?? '')} items={options} modal={false}>
       <Select.Trigger className="styled-select-trigger">
         <Select.Value placeholder="-" />
         <Select.Icon className="styled-select-icon">
