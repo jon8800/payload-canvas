@@ -58,8 +58,8 @@ export const Posts: CollectionConfig = {
   trash: true,
   enableQueryPresets: true,
   hooks: {
-    afterChange: [revalidatePost, compileBlockStyles],
-    beforeChange: [populatePublishedAt],
+    afterChange: [revalidatePost],
+    beforeChange: [populatePublishedAt, compileBlockStyles],
   },
   fields: [
     {

@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { compile } from 'tailwindcss'
-import type { CollectionAfterChangeHook } from 'payload'
+import type { CollectionBeforeChangeHook } from 'payload'
 
 type BlockLike = {
   id?: string
@@ -69,36 +69,22 @@ async function getCompiler(): Promise<Awaited<ReturnType<typeof compile>>> {
   return cachedCompiler
 }
 
-export const compileBlockStyles: CollectionAfterChangeHook = async ({
-  collection,
-  doc,
+export const compileBlockStyles: CollectionBeforeChangeHook = async ({
+  data,
   req,
 }) => {
-  // Prevent infinite loops
-  if (req.context?.disableCompileStyles) return doc
-
-  const layout = doc.layout as BlockLike[] | undefined
-  if (!layout?.length) return doc
-
-  const collectionSlug = collection.slug
+  const layout = data.layout as BlockLike[] | undefined
+  if (!layout?.length) return data
 
   const allClasses = new Set<string>()
   const scopedCSS: string[] = []
 
   walkBlocks(layout, allClasses, scopedCSS)
 
-  // Nothing to compile
+  // Nothing to compile — clear field
   if (allClasses.size === 0 && scopedCSS.length === 0) {
-    // Clear field if previously set
-    if (doc._compiledBlockCSS) {
-      await req.payload.update({
-        collection: collectionSlug as any,
-        id: doc.id,
-        data: { _compiledBlockCSS: '' },
-        context: { disableRevalidate: true, disableCompileStyles: true },
-      })
-    }
-    return doc
+    data._compiledBlockCSS = ''
+    return data
   }
 
   const compiledParts: string[] = []
@@ -123,17 +109,6 @@ export const compileBlockStyles: CollectionAfterChangeHook = async ({
     compiledParts.push(scopedCSS.join('\n'))
   }
 
-  const compiledBlockCSS = compiledParts.join('\n')
-
-  // Only update if changed
-  if (compiledBlockCSS !== (doc._compiledBlockCSS ?? '')) {
-    await req.payload.update({
-      collection: collectionSlug as any,
-      id: doc.id,
-      data: { _compiledBlockCSS: compiledBlockCSS },
-      context: { disableRevalidate: true, disableCompileStyles: true },
-    })
-  }
-
-  return doc
+  data._compiledBlockCSS = compiledParts.join('\n')
+  return data
 }

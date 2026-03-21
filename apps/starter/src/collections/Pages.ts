@@ -58,8 +58,8 @@ export const Pages: CollectionConfig = {
   trash: true,
   enableQueryPresets: true,
   hooks: {
-    afterChange: [revalidatePage, compileBlockStyles],
-    beforeChange: [populatePublishedAt],
+    afterChange: [revalidatePage],
+    beforeChange: [populatePublishedAt, compileBlockStyles],
   },
   fields: [
     {

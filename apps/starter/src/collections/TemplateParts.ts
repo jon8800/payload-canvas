@@ -56,7 +56,8 @@ export const TemplateParts: CollectionConfig = {
   trash: true,
   enableQueryPresets: true,
   hooks: {
-    afterChange: [revalidateTemplatePart, compileBlockStyles],
+    afterChange: [revalidateTemplatePart],
+    beforeChange: [compileBlockStyles],
   },
   fields: [
     {
