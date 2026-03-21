@@ -4,6 +4,7 @@ import type { TextFieldClientComponent } from 'payload'
 
 import { useField } from '@payloadcms/ui'
 import { Popover } from '@base-ui/react/popover'
+import { HexColorPicker } from 'react-colorful'
 import { useState } from 'react'
 import './ColorPicker.scss'
 
@@ -55,6 +56,15 @@ export const ColorPickerField: TextFieldClientComponent = function ColorPickerFi
           <Popover.Portal>
             <Popover.Positioner sideOffset={4}>
               <Popover.Popup className="color-picker-field__popover">
+                <div className="color-picker-field__wheel">
+                  <HexColorPicker
+                    color={value || '#000000'}
+                    onChange={(newColor) => {
+                      setValue(newColor)
+                      setHexInput(newColor)
+                    }}
+                  />
+                </div>
                 <div className="color-picker-field__presets">
                   {PRESET_COLORS.map((color) => (
                     <button

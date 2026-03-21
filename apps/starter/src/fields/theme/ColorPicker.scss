@@ -57,9 +57,32 @@
       border: 1px solid var(--theme-elevation-200);
       border-radius: var(--border-radius-m);
       padding: 8px;
-      width: 172px;
+      width: 220px;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
       z-index: 10000;
+    }
+
+    &__wheel {
+      margin-bottom: 8px;
+
+      .react-colorful {
+        width: 100% !important;
+        height: 150px !important;
+      }
+
+      .react-colorful__saturation {
+        border-radius: 4px 4px 0 0;
+      }
+
+      .react-colorful__hue {
+        height: 12px;
+        border-radius: 0 0 4px 4px;
+      }
+
+      .react-colorful__pointer {
+        width: 16px;
+        height: 16px;
+      }
     }
 
     &__presets {
