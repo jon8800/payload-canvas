@@ -72,7 +72,13 @@ async function getCompiler(): Promise<Awaited<ReturnType<typeof compile>>> {
 export const compileBlockStyles: CollectionBeforeChangeHook = async ({
   data,
   req,
+  operation,
 }) => {
+  // Skip on autosave drafts — only compile on publish or explicit save
+  // Autosave sends ?autosave=true in the URL
+  const isAutosave = req.url?.includes('autosave=true') || false
+  if (isAutosave) return data
+
   const layout = data.layout as BlockLike[] | undefined
   if (!layout?.length) return data
 
