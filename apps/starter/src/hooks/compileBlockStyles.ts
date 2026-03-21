@@ -51,24 +51,15 @@ let cachedCompiler: Awaited<ReturnType<typeof compile>> | null = null
 async function getCompiler(): Promise<Awaited<ReturnType<typeof compile>>> {
   if (cachedCompiler) return cachedCompiler
 
-  // Read the project's globals.css to get the full Tailwind theme
-  const globalsPath = path.join(process.cwd(), 'src/app/(frontend)/globals.css')
-  let cssInput = '@import "tailwindcss";'
-
-  try {
-    const content = fs.readFileSync(globalsPath, 'utf-8')
-    // Strip @source directives and @plugin directives that need filesystem resolution
-    // Keep @theme, @custom-variant, CSS variables, and @layer definitions
-    cssInput = content
-      .replace(/^@import\s+"tw-animate-css";\s*$/gm, '')
-      .replace(/^@import\s+"shadcn\/tailwind\.css";\s*$/gm, '')
-      .replace(/^@source\s+.*$/gm, '')
-      .replace(/^@plugin\s+.*$/gm, '')
-  } catch {
-    // Fall back to basic Tailwind import
-  }
-
-  cachedCompiler = await compile(cssInput)
+  cachedCompiler = await compile('@import "tailwindcss";', {
+    loadStylesheet: async (id: string, base: string) => {
+      const resolved = require.resolve(id.endsWith('.css') ? id : id + '/index.css')
+      return {
+        content: fs.readFileSync(resolved, 'utf-8'),
+        base: path.dirname(resolved),
+      }
+    },
+  })
   return cachedCompiler
 }
 
@@ -116,7 +107,8 @@ export const compileBlockStyles: CollectionAfterChangeHook = async ({
       }
     } catch (err) {
       // Non-fatal — scoped CSS still works without compiled Tailwind
-      req.payload.logger.warn('Tailwind class compilation skipped:', String(err))
+      const errMsg = err instanceof Error ? err.message : String(err)
+      req.payload.logger.warn('Tailwind class compilation skipped: ' + errMsg)
     }
   }
 
