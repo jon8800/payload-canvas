@@ -73,14 +73,17 @@ async function getCompiler(): Promise<Awaited<ReturnType<typeof compile>>> {
 }
 
 export const compileBlockStyles: CollectionAfterChangeHook = async ({
+  collection,
   doc,
   req,
 }) => {
   // Prevent infinite loops
-  if (req.context.disableCompileStyles) return doc
+  if (req.context?.disableCompileStyles) return doc
 
   const layout = doc.layout as BlockLike[] | undefined
   if (!layout?.length) return doc
+
+  const collectionSlug = collection.slug
 
   const allClasses = new Set<string>()
   const scopedCSS: string[] = []
@@ -92,7 +95,7 @@ export const compileBlockStyles: CollectionAfterChangeHook = async ({
     // Clear field if previously set
     if (doc._compiledBlockCSS) {
       await req.payload.update({
-        collection: req.collection!.slug as any,
+        collection: collectionSlug as any,
         id: doc.id,
         data: { _compiledBlockCSS: '' },
         context: { disableRevalidate: true, disableCompileStyles: true },
@@ -101,7 +104,7 @@ export const compileBlockStyles: CollectionAfterChangeHook = async ({
     return doc
   }
 
-  let compiledParts: string[] = []
+  const compiledParts: string[] = []
 
   // Compile Tailwind classes
   if (allClasses.size > 0) {
@@ -112,7 +115,8 @@ export const compileBlockStyles: CollectionAfterChangeHook = async ({
         compiledParts.push(tailwindCSS)
       }
     } catch (err) {
-      req.payload.logger.error('Failed to compile Tailwind classes:', err)
+      // Non-fatal — scoped CSS still works without compiled Tailwind
+      req.payload.logger.warn('Tailwind class compilation skipped:', String(err))
     }
   }
 
@@ -126,7 +130,7 @@ export const compileBlockStyles: CollectionAfterChangeHook = async ({
   // Only update if changed
   if (compiledBlockCSS !== (doc._compiledBlockCSS ?? '')) {
     await req.payload.update({
-      collection: req.collection!.slug as any,
+      collection: collectionSlug as any,
       id: doc.id,
       data: { _compiledBlockCSS: compiledBlockCSS },
       context: { disableRevalidate: true, disableCompileStyles: true },
