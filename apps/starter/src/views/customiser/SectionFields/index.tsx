@@ -27,6 +27,7 @@ import { getFieldPaths } from 'payload/shared'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getTranslation } from '@payloadcms/translations'
 import { useSelectedSection } from '../context/SelectedSectionContext'
+import { findBlocksFieldsDeep } from '../utils/findFields'
 import { DragProvider, useDragContext, type BlockItem } from './DragContext'
 import { InlineBlockAdder } from './InlineBlockAdder'
 import './index.scss'
@@ -215,7 +216,7 @@ const SortableBlock: React.FC<{
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const isSelected = selectedSection === rowPath
-  const nestedBlocksFields = blockConfig?.fields?.filter((field) => field.type === 'blocks') || []
+  const nestedBlocksFields = blockConfig?.fields ? findBlocksFieldsDeep(blockConfig.fields) : []
 
   useEffect(() => {
     const item: BlockItem = {

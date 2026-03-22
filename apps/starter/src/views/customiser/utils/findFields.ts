@@ -56,6 +56,32 @@ export function stripBlocksFields(fields: ClientField[]): ClientField[] {
 }
 
 /**
+ * Recursively find all blocks-type fields within a field array.
+ * Searches inside tabs, groups, rows, and collapsibles to find blocks fields
+ * that may be nested (e.g., `children` blocks inside a Content tab).
+ * Used by the tree view to discover nested block containers.
+ */
+export function findBlocksFieldsDeep(fields: ClientField[]): BlocksFieldClient[] {
+  const result: BlocksFieldClient[] = []
+  for (const field of fields) {
+    if (field.type === 'blocks') {
+      result.push(field as BlocksFieldClient)
+    } else if (field.type === 'tabs' && 'tabs' in field) {
+      for (const tab of (field as TabsFieldClient).tabs) {
+        result.push(...findBlocksFieldsDeep(tab.fields))
+      }
+    } else if (field.type === 'group' && 'fields' in field) {
+      result.push(...findBlocksFieldsDeep(field.fields))
+    } else if (field.type === 'row' && 'fields' in field) {
+      result.push(...findBlocksFieldsDeep(field.fields))
+    } else if (field.type === 'collapsible' && 'fields' in field) {
+      result.push(...findBlocksFieldsDeep(field.fields))
+    }
+  }
+  return result
+}
+
+/**
  * Collect non-layout fields from the same tab that contains the layout field.
  * Only extracts from the content tab — plugin tabs (e.g. SEO) have custom components
  * that rely on server-side Payload instances and break in the customizer context.
