@@ -14,7 +14,7 @@ import {
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/views/customiser/components/Tabs'
 import { CUSTOMISER_BLOCKS_FIELD } from '@/utilities/customiserConfig'
-import { findBlocksField, getNonLayoutFields, stripBlocksFields } from './utils/findFields'
+import { findBlocksField, findBlocksFieldsDeep, getNonLayoutFields, stripBlocksFields } from './utils/findFields'
 import { useSelectedSection } from './context/SelectedSectionContext'
 import './DocumentFields.scss'
 
@@ -116,10 +116,8 @@ function NestedBlockFields({
   }
 
   const nextSegment = segments[segmentIndex + 1]
-  const nestedBlocksField = blockConfig.fields.find(
-    (field): field is BlocksFieldClient =>
-      field.type === 'blocks' && 'name' in field && field.name === nextSegment.fieldName,
-  )
+  const nestedBlocksField = findBlocksFieldsDeep(blockConfig.fields)
+    .find((field) => field.name === nextSegment.fieldName)
 
   if (!nestedBlocksField) {
     return <div className={`${baseClass}__empty-state`}>Nested blocks field not found</div>
