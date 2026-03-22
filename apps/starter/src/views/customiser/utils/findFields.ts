@@ -1,4 +1,4 @@
-import type { BlocksFieldClient, ClientField } from 'payload'
+import type { BlocksFieldClient, ClientField, TabsFieldClient } from 'payload'
 
 /**
  * Find a blocks field by name, searching inside unnamed tabs.
@@ -17,6 +17,42 @@ export function findBlocksField(fields: ClientField[], fieldName: string): Block
     }
   }
   return undefined
+}
+
+/**
+ * Recursively strip blocks-type fields from a field array.
+ * Handles blocks fields at the top level AND nested inside tabs/groups/rows/collapsibles.
+ * Used by the right sidebar to show only the selected block's own settings/styles,
+ * not its nested child blocks (which belong in the left tree view).
+ */
+export function stripBlocksFields(fields: ClientField[]): ClientField[] {
+  return fields
+    .filter((field) => field.type !== 'blocks')
+    .map((field) => {
+      if (field.type === 'tabs' && 'tabs' in field) {
+        const filteredTabs = (field as TabsFieldClient).tabs
+          .map((tab) => {
+            const filtered = stripBlocksFields(tab.fields)
+            return { ...tab, fields: filtered }
+          })
+          .filter((tab) => tab.fields.length > 0)
+
+        if (filteredTabs.length === 0) return null
+
+        return { ...field, tabs: filteredTabs } as ClientField
+      }
+      if (field.type === 'group' && 'fields' in field) {
+        return { ...field, fields: stripBlocksFields(field.fields) } as ClientField
+      }
+      if (field.type === 'row' && 'fields' in field) {
+        return { ...field, fields: stripBlocksFields(field.fields) } as ClientField
+      }
+      if (field.type === 'collapsible' && 'fields' in field) {
+        return { ...field, fields: stripBlocksFields(field.fields) } as ClientField
+      }
+      return field
+    })
+    .filter(Boolean) as ClientField[]
 }
 
 /**

@@ -14,7 +14,7 @@ import {
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/views/customiser/components/Tabs'
 import { CUSTOMISER_BLOCKS_FIELD } from '@/utilities/customiserConfig'
-import { findBlocksField, getNonLayoutFields } from './utils/findFields'
+import { findBlocksField, getNonLayoutFields, stripBlocksFields } from './utils/findFields'
 import { useSelectedSection } from './context/SelectedSectionContext'
 import './DocumentFields.scss'
 
@@ -97,9 +97,7 @@ function NestedBlockFields({
   const schemaPath = `${parentSchemaPath}.${blockConfig.slug}`
 
   if (isLastSegment) {
-    const fieldsWithoutNestedBlocks = blockConfig.fields.filter(
-      (field) => field.type !== 'blocks',
-    )
+    const fieldsWithoutNestedBlocks = stripBlocksFields(blockConfig.fields)
 
     const parentIndexPath = segments.map((s) => s.rowIndex).join('.')
 
