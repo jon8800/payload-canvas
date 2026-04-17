@@ -54,6 +54,10 @@ import { QueryPresetsColumnsCell as QueryPresetsColumnsCell_2b8867833a34864a02dd
 import { QueryPresetsColumnField as QueryPresetsColumnField_2b8867833a34864a02ddf429b0728a40 } from '@payloadcms/next/client'
 import { QueryPresetsGroupByCell as QueryPresetsGroupByCell_2b8867833a34864a02ddf429b0728a40 } from '@payloadcms/next/client'
 import { QueryPresetsGroupByField as QueryPresetsGroupByField_2b8867833a34864a02ddf429b0728a40 } from '@payloadcms/next/client'
+import { ColorPickerField as ColorPickerField_3a697eb9807b1dac9844b7f142d48771 } from '@/fields/theme/ColorPicker'
+import { FontSelectorField as FontSelectorField_3bc9b2a65b274027b3f1b24833bce35c } from '@/fields/theme/FontSelector'
+import { SliderField as SliderField_a7952546f2fa2bc5534ce2947e7c718b } from '@/fields/theme/SliderField'
+import { StylesPanel as StylesPanel_81ab55717f340af33de91f79a8fcf003 } from '../../../components/admin/StylesPanel.tsx'
 import { BlockRowLabel as BlockRowLabel_3d8fc88ffbbff09a7781f863e999fd9e } from '../../../components/admin/BlockRowLabel.tsx'
 import { ImportExportProvider as ImportExportProvider_cdf7e044479f899a31f804427d568b36 } from '@payloadcms/plugin-import-export/rsc'
 import { CollectionCards as CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1 } from '@payloadcms/next/rsc'
@@ -115,6 +119,10 @@ export const importMap = {
   "@payloadcms/next/client#QueryPresetsColumnField": QueryPresetsColumnField_2b8867833a34864a02ddf429b0728a40,
   "@payloadcms/next/client#QueryPresetsGroupByCell": QueryPresetsGroupByCell_2b8867833a34864a02ddf429b0728a40,
   "@payloadcms/next/client#QueryPresetsGroupByField": QueryPresetsGroupByField_2b8867833a34864a02ddf429b0728a40,
+  "@/fields/theme/ColorPicker#ColorPickerField": ColorPickerField_3a697eb9807b1dac9844b7f142d48771,
+  "@/fields/theme/FontSelector#FontSelectorField": FontSelectorField_3bc9b2a65b274027b3f1b24833bce35c,
+  "@/fields/theme/SliderField#SliderField": SliderField_a7952546f2fa2bc5534ce2947e7c718b,
+  "/components/admin/StylesPanel.tsx#StylesPanel": StylesPanel_81ab55717f340af33de91f79a8fcf003,
   "/components/admin/BlockRowLabel.tsx#BlockRowLabel": BlockRowLabel_3d8fc88ffbbff09a7781f863e999fd9e,
   "@payloadcms/plugin-import-export/rsc#ImportExportProvider": ImportExportProvider_cdf7e044479f899a31f804427d568b36,
   "@payloadcms/next/rsc#CollectionCards": CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1
