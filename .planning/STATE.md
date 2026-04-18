@@ -1,13 +1,13 @@
 ---
 gsd_state_version: 1.0
-milestone: between-milestones
-milestone_name: "v1.1 shipped; v1.2 not yet scoped"
-status: between-milestones
-stopped_at: "v1.1 milestone archived"
+milestone: v1.2
+milestone_name: "Templates & Dynamic Content"
+status: planning
+stopped_at: "v1.2 roadmap created; ready for /gsd-discuss-phase 13"
 last_updated: "2026-04-18T00:00:00Z"
 last_activity: 2026-04-18
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-18)
 
 **Core value:** Any website project can be scaffolded instantly with a composable block-based layout system that works for both static pages and dynamic collection templates
-**Current focus:** Between milestones — ready to scope v1.2
+**Current focus:** Phase 13 — Templates Collection & Frontend Route
 
 ## Current Position
 
-Phase: n/a (between milestones)
-Plan: n/a
-Status: v1.1 Styling & Theming shipped 2026-04-18
+Phase: 13 (not started — requirements defined, roadmap approved)
+Plan: —
+Status: Ready for /gsd-discuss-phase 13 or /gsd-plan-phase 13
 Last activity: 2026-04-18
 
 Progress: v1.1 complete — run `/gsd-new-milestone` to start v1.2
