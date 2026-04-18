@@ -8,19 +8,21 @@
 
 ### Templates Collection
 
-- [ ] **TMPL-01**: A `Templates` collection exists in the admin with a `layout` block field (same block system as Pages), plus fields for name, description, and target collection slug
-- [ ] **TMPL-02**: Each collection (Posts, plus any future custom collections) can reference a default Template, selectable from admin
-- [ ] **TMPL-03**: Posts frontend route at `/posts/[slug]` renders the assigned Template's block layout for the current post
-- [ ] **TMPL-04**: Templates support an admin preview mode using a sample document so designers can see the layout filled with real data
-- [ ] **TMPL-05**: Frontend fallback when no template is assigned — renders a default block stack (title + content) rather than 404
+- [ ] **TMPL-01**: A `Templates` collection exists in the admin with these fields: name, description, `targetCollection` (dropdown populated from opt-in collections — not a free-form slug), `isDefault` (boolean), and a `layout` block field using the same 14 atomic blocks as Pages
+- [ ] **TMPL-02**: Collections opt into the templates system via a Payload config flag (e.g., `templates: { enabled: true }` in the collection config). Opt-in collections automatically gain a filtered `template` relationship field on each document — filtered so users only see templates where `targetCollection` matches that collection's slug. Pages do NOT opt in (Pages keep their existing direct `layout` block field).
+- [ ] **TMPL-03**: Posts frontend route at `/posts/[slug]` renders with a three-tier template resolution: (1) use `doc.template` if set on the post, else (2) use the `isDefault` template for `posts` collection, else (3) hardcoded fallback stack (TMPL-05)
+- [ ] **TMPL-04**: Templates admin view has a Preview panel that renders the layout against a user-selected sample document from the target collection (Phase 15)
+- [ ] **TMPL-05**: Hardcoded fallback stack when no template resolves — renders post title as Heading + post content as Paragraph/RichText block — so `/posts/[slug]` never 404s on missing template
+- [ ] **TMPL-06**: The Templates collection has a custom list view in admin that groups templates by their `targetCollection` — each opt-in collection appears as a section header with its templates listed beneath and an "Add new template for [Collection]" button per section (Shopify/Elementor-style breakdown). Pages are excluded from this view since Pages don't opt in.
+- [ ] **TMPL-07**: The starter scaffold (demo content / create-payload-starter seeding) ships with one default Post template seeded on first setup — a simple Hero + Content layout so Posts render meaningfully out of the box without any manual template configuration
 
 ### Dynamic Data Binding
 
-- [ ] **BIND-01**: Any block property (Heading text, Image src, Link href, etc.) can be bound to a field on the current document via a token/dropdown picker in the admin — not just a literal value
-- [ ] **BIND-02**: The binding picker only shows fields whose types are compatible with the target property (Heading text ← text/richText/string; Image src ← upload/media; Link href ← text/URL or relationship→doc slug)
-- [ ] **BIND-03**: At render time, bound properties resolve against the current document's data; missing/null fields fall back to the literal default configured in the block
-- [ ] **BIND-04**: Type-safety works across one hop of nested collection relationships (e.g., `post.author.name` → Heading text)
-- [ ] **BIND-05**: Existing non-bound blocks continue rendering from their literal values (backward compatible with v1.0/v1.1 block data)
+- [ ] **BIND-01**: Any block property (Heading text, Image src, Link href, etc.) can be bound to a field on the current document via a small inline "bind" icon next to each input that opens a field picker — not just a literal value. Binding data is stored in a sibling `_bindings` object on the block JSON (e.g., `{ text: "Default", _bindings: { text: { field: "title" } } }`)
+- [ ] **BIND-02**: The field picker only shows fields whose types are compatible with the target property: text/string props ← `text`/`textarea`/`email`/`richText` (extracted plain text)/`number` (coerced); Image src ← `upload`/media fields; Link href ← `text`/`URL` or `relationship`-to-doc-with-slug (auto-resolves to `/collection/slug`)
+- [ ] **BIND-03**: At render time within a template context, bound properties resolve against the current document's data; when the bound field is missing or null, the block's literal default is used. Resolution happens server-side during RSC render, not client-side.
+- [ ] **BIND-04**: Picker supports one hop of relationship traversal (e.g., `post.author` → User collection fields: name, email, avatar) in addition to unlimited traversal through group/array fields on the same document (groups don't count as hops because no extra fetch needed). Payload `depth: 1` on the template-rendering fetch ensures one-hop relationships are populated without runtime extra fetches.
+- [ ] **BIND-05**: Existing non-bound blocks (no `_bindings` key) render identically to v1.0/v1.1 — no migration needed for literal-only blocks. Blocks outside a template context (e.g., on Pages rendering with the same block types) ignore any `_bindings` data and use literals.
 
 ## Future Requirements
 
@@ -31,6 +33,11 @@
 ### Loop / Repeater Blocks
 
 - **LOOP-01**: A block type that renders a list of related documents (e.g., "latest posts," "related products") using a nested template — needs TMPL + BIND to exist first
+
+### Advanced Template Conditions (Elementor-style)
+
+- **TMPL-COND-01**: Templates can declare conditions beyond `isDefault` — e.g., "apply to posts in Category X," "apply to posts tagged Y" — similar to Elementor's display conditions. v1.2 ships only `isDefault` + per-doc override.
+- **TMPL-MULTI-01**: A single template targets multiple collections (not just one `targetCollection`) — deferred; v1.2 is one collection per template.
 
 ### Admin Collection Builder
 
@@ -48,8 +55,11 @@
 | Frontend search UI (SRCH-01) | Deferred to v1.3; templates are higher priority |
 | Loop / repeater blocks | Depends on TMPL + BIND; natural follow-up milestone |
 | Admin-side collection builder | Collections remain code-defined for now |
-| Multiple templates per collection (doc-level override) | v1.2 ships one default Template per collection; per-doc overrides deferred |
-| Visual binding drag-drop UI | Token/dropdown picker only; visual binding is a future enhancement |
+| Multiple templates per doc (doc-level advanced overrides beyond "pick one") | Per-doc `template` field can only hold one template; more complex overrides deferred |
+| Visual drag-drop binding UI | Inline bind icon + dropdown picker only |
+| Templates for Pages | Pages keep their existing direct `layout` block field; templating Pages is a silly indirection |
+| Elementor-style conditional template application (category, tag, etc.) | `isDefault` + per-doc override sufficient for v1.2; conditions are a v1.3+ scope |
+| Archive templates (list views like `/posts`, `/categories/[slug]`) | v1.2 covers single-document templates only |
 
 ## Traceability
 
@@ -59,6 +69,8 @@
 | TMPL-02 | Phase 13 | Not started |
 | TMPL-03 | Phase 13 | Not started |
 | TMPL-05 | Phase 13 | Not started |
+| TMPL-06 | Phase 13 | Not started |
+| TMPL-07 | Phase 13 | Not started |
 | BIND-01 | Phase 14 | Not started |
 | BIND-02 | Phase 14 | Not started |
 | BIND-03 | Phase 14 | Not started |
@@ -67,10 +79,10 @@
 | TMPL-04 | Phase 15 | Not started |
 
 **Coverage:**
-- v1.2 requirements: 10 total
-- Mapped to phases: 10
+- v1.2 requirements: 12 total
+- Mapped to phases: 12
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-18*
-*Last updated: 2026-04-18 after v1.2 roadmap creation*
+*Last updated: 2026-04-18 after v1.2 discussion (TMPL-06, TMPL-07 added; TMPL-01/02 revised for Template-owns direction and config-driven opt-in)*
