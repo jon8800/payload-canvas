@@ -37,12 +37,16 @@ Running `payload-toolkit` monorepo (Turborepo + pnpm workspaces). `apps/starter`
 - ✓ react-colorful color wheel + shadcn default values in ColorPicker — v1.1
 - ✓ `/style-guide` preview page with ThemeSettings livePreview wiring — v1.1
 
-### Active (v1.2 candidates)
+### Active (v1.2 scope)
 
-- [ ] Templates collection for dynamic page layouts (Elementor-style)
-- [ ] Type-safe dynamic data binding (block properties reference compatible collection field types only)
-- [ ] Frontend search UI consuming the Search plugin
-- [ ] Per-phase VERIFICATION.md discipline — tech debt from v1.1 (phases 8, 12, 12.1 unverified)
+- [ ] Templates collection for dynamic page layouts (TMPL-01..05)
+- [ ] Type-safe dynamic data binding (BIND-01..05)
+
+### Deferred (v1.3+)
+
+- [ ] Frontend search UI consuming the Search plugin (SRCH-01)
+- [ ] Loop / repeater blocks — depends on Templates + Binding shipping first
+- [ ] Per-phase VERIFICATION.md retrofit for v1.1 phases 8, 12, 12.1 (process debt)
 - [ ] Decide Nyquist validation posture — either set up validation contracts or disable `workflow.nyquist_validation`
 
 ### Out of Scope
@@ -101,14 +105,20 @@ Running `payload-toolkit` monorepo (Turborepo + pnpm workspaces). `apps/starter`
 | Templates collection for dynamic pages | Reusable layouts for collection item pages (Elementor-style) | — Pending (deferred to v1.2+) |
 | Type-safe dynamic data binding | Block properties can only reference compatible field types | — Pending (deferred to v1.2+) |
 
-## Next Milestone Goals
+## Current Milestone: v1.2 Templates & Dynamic Content
 
-**v1.2 (not yet scoped)** — likely candidates:
-- Templates collection + type-safe dynamic data binding (TMPL-01, TMPL-02)
-- Frontend search UI (SRCH-01)
-- Close v1.1 tech debt: retrofit VERIFICATION.md for phases 8/12/12.1 or rule it unnecessary; decide Nyquist posture
+**Goal:** Any collection item (Post, plus future custom collections) renders its frontend page through a block-based Template, with block properties optionally bound to fields on the current document — type-checked so only compatible field types can be bound.
 
-Run `/gsd-new-milestone` to formally scope.
+**Target features:**
+- Templates collection with block layout field + per-collection default assignment (TMPL-01, TMPL-02)
+- Posts frontend route `/posts/[slug]` rendering assigned Template (TMPL-03)
+- Admin Template preview with sample document (TMPL-04)
+- Default fallback render when no template assigned (TMPL-05)
+- Admin binding picker with type-compatibility enforcement (BIND-01, BIND-02)
+- Render-time field resolution with literal fallbacks (BIND-03, BIND-05)
+- One-hop nested relationship binding — e.g., `post.author.name` (BIND-04)
+
+**Key context:** Posts currently have a Payload collection but no frontend route. v1.2 is where Posts (and any future collections) get a real frontend via the template system, not just a stub. Frontend search (SRCH-01) is deferred to v1.3.
 
 ---
-*Last updated: 2026-04-18 after v1.1 milestone close*
+*Last updated: 2026-04-18 at v1.2 milestone start*
