@@ -1,111 +1,64 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Styling & Theming
-status: completed
-stopped_at: Completed 12.1-03-PLAN.md
-last_updated: "2026-03-21T04:58:25.108Z"
-last_activity: 2026-03-21
+milestone: between-milestones
+milestone_name: "v1.1 shipped; v1.2 not yet scoped"
+status: between-milestones
+stopped_at: "v1.1 milestone archived"
+last_updated: "2026-04-18T00:00:00Z"
+last_activity: 2026-04-18
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 16
-  completed_plans: 16
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-15)
+See: .planning/PROJECT.md (updated 2026-04-18)
 
-**Core value:** Any website project can be scaffolded instantly with a composable block-based layout system
-**Current focus:** Phase 12.1 UI Iteration Fixes
+**Core value:** Any website project can be scaffolded instantly with a composable block-based layout system that works for both static pages and dynamic collection templates
+**Current focus:** Between milestones — ready to scope v1.2
 
 ## Current Position
 
-Phase: 12.1
-Plan: Not started
-Status: Phase 12.1 complete
-Last activity: 2026-03-21
+Phase: n/a (between milestones)
+Plan: n/a
+Status: v1.1 Styling & Theming shipped 2026-04-18
+Last activity: 2026-04-18
 
-Progress: [██████████] 100%
+Progress: v1.1 complete — run `/gsd-new-milestone` to start v1.2
 
-## Performance Metrics
+## Completed Milestones
 
-**Velocity:**
+| Milestone | Phases | Plans | Shipped |
+|-----------|--------|-------|---------|
+| v1.0 MVP | 8 | 24 | 2026-03-15 |
+| v1.1 Styling & Theming | 6 | 16 | 2026-04-18 |
 
-- Total plans completed: 24 (v1.0)
-- Average duration: ~4min
-- Total execution time: ~1.6 hours
-
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| v1.0 (all) | 24 | ~96min | ~4min |
-| 08 Frontend Styling | 1 | 1min | 1min |
-| 09 Styles Panel | 3 | 10min | 3.3min |
-| 10 Theme Settings | 3 | 8min | 2.7min |
-
-**Recent Trend:**
-
-- Last 5 plans: 10-P03 (3min), 10-P01 (3min), 10-P02 (2min), 09-P01 (3min), 09-P03 (2min)
-- Trend: Stable
-
-*Updated after each plan completion*
-| Phase 10 P03 | 3min | 2 tasks | 1 files |
-| Phase 11 P02 | 1min | 2 tasks | 5 files |
-| Phase 11 P01 | 4min | 2 tasks | 2 files |
-| Phase 12 P02 | 2min | 2 tasks | 4 files |
-| Phase 12 P01 | 3min | 1 tasks | 2 files |
-| Phase 12 P03 | 2min | 2 tasks | 5 files |
-| Phase 12 P04 | 2min | 2 tasks | 2 files |
-| Phase 12.1 P01 | 3min | 2 tasks | 4 files |
-| Phase 12.1 P02 | 2min | 2 tasks | 4 files |
-| Phase 12.1 P03 | 2min | 2 tasks | 2 files |
+See `.planning/MILESTONES.md` for full history.
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- [v1.1]: Auto-compute foreground colors based on oklch lightness; chart colors via primary hue rotation
-- [v1.1]: Fixed Tailwind v4 CSS with @source directives — CSS output went from ~91 to 6839 lines
-- [v1.1]: Frontend Tailwind v4 CSS broken on frontend pages — fix before style system refactoring
-- [v1.1]: Styles panel replaces per-field CSS properties with single JSON field + custom bounding box UI
-- [v1.1]: Theme Settings stores design tokens as JSON, injects as CSS variables via layout.tsx
-- [v1.0]: Removed tailwind.config.mjs entirely for Tailwind v4 CSS-first approach
-- [v1.0]: Custom color values produce inline styles (not Tailwind arbitrary) for hex/rgb support
-- [Phase 10]: Used static curated list of 50 Google Fonts instead of google-font-metadata runtime import
-- [Phase 09]: Used JSONField type for stylesField factory; bounding box UI edits base values only, responsive deferred
-- [Phase 09]: Used Payload API (find/update) for data migration instead of raw SQL for cross-adapter compatibility
-- [Phase 09]: Kept cn import only in 4 components (Container, Grid, Spacer, Divider) that merge layout classes with styles output
-- [Phase 10]: CSS variables applied as inline style on html element only when theme values exist (zero-config safe)
-- [Phase 11]: Admin field components use inline styles with Payload CSS variables, no Tailwind in admin context
-- [Phase 11]: FontSelector hover effects via useState since inline styles cannot use :hover pseudo-class
-- [Phase 11]: CodeEditor imported via named export from @payloadcms/ui root (dist path not TS-resolvable)
-- [Phase 11]: ClassTokenInput stores chips as space-separated string for backward compatibility
-- [Phase 12]: Used Base UI Popover for ColorPicker and Base UI Slider for SliderField, replacing native browser widgets
-- [Phase 12]: Read google-fonts-v2.json directly from google-font-metadata data dir for static font catalog generation
-- [Phase 12]: Used Base UI Combobox with IntersectionObserver lazy font preview for 1908 Google Fonts
-- [Phase 12]: Reusable Section component wrapping Base UI Collapsible for DRY collapsible sections in StylesPanel
-- [Phase 12]: Spacing section always visible (not collapsible) as primary control; color swatch as styled span not native input
-- [Phase 12]: Kept borderRadius at root level to preserve data path compatibility
-- [Phase 12.1]: StyledSelect wrapper component inside StylesPanel.tsx for DRY Base UI Select usage
-- [Phase 12.1]: react-colorful HexColorPicker for color wheel; theme color defaults from shadcn oklch-to-hex values
-- [Phase 12.1]: Inline livePreview URL for global config instead of generatePreviewPath utility (globals have no slug/collection)
+Full decision log in PROJECT.md Key Decisions table. Recent decisions from v1.1 summarized in `.planning/milestones/v1.1-ROADMAP.md`.
 
 ### Pending Todos
 
-None yet.
+None.
 
 ### Blockers/Concerns
 
-None yet.
+None open. Known tech debt from v1.1 (see v1.1-MILESTONE-AUDIT.md):
+- VERIFICATION.md missing for phases 8, 12, 12.1 (process debt, not functional)
+- Nyquist validation setup absent (5/6 v1.1 phases)
+- Phase 10 human verification tests listed but never run
+
+These are carried forward as v1.2 candidates, not blockers.
 
 ### Quick Tasks Completed
 
@@ -116,6 +69,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-21T10:21:54Z
-Stopped at: Completed quick task 260321-s4o: Tailwind class compilation on save scope
+Last session: 2026-04-18T00:00:00Z
+Stopped at: v1.1 milestone archived and tagged
 Resume file: None
