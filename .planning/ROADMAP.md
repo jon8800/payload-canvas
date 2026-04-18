@@ -36,22 +36,23 @@
 
 ### 🚧 v1.2 Templates & Dynamic Content
 
-- [ ] **Phase 13: Templates Collection & Frontend Route** — Templates collection with block layout field + `/posts/[slug]` rendering assigned template
+- [ ] **Phase 13: Templates Collection, Opt-in & Admin UX** — Templates collection + per-collection config opt-in + `/posts/[slug]` rendering + custom grouped list view + seeded default template
 - [ ] **Phase 14: Dynamic Data Binding** — Admin binding picker + render-time field resolution + type compatibility matrix
 - [ ] **Phase 15: Nested Binding & Admin Preview** — One-hop relationship resolution + Template admin preview with sample document
 
 ## Phase Details
 
-### Phase 13: Templates Collection & Frontend Route
-**Goal**: Designers create Template documents with block layouts in admin, assign a default Template per collection, and Posts render their assigned Template at `/posts/[slug]` on the frontend
+### Phase 13: Templates Collection, Opt-in & Admin UX
+**Goal**: Templates are a first-class Payload collection with a dynamic `targetCollection` dropdown, collections opt into the templating system via config flag, and Posts render through a three-tier template resolution at `/posts/[slug]` — with a custom admin list view grouping templates by collection (Shopify/Elementor-style) and a seeded default Post template on first setup
 **Depends on**: v1.1 (block system + styles + theme all shipped)
-**Requirements**: TMPL-01, TMPL-02, TMPL-03, TMPL-05
+**Requirements**: TMPL-01, TMPL-02, TMPL-03, TMPL-05, TMPL-06, TMPL-07
 **Success Criteria** (what must be TRUE):
-  1. A `Templates` collection appears in admin with a block layout field using the same 14 atomic blocks available to Pages, plus name/description/target-collection-slug fields
-  2. The Posts collection config references a "default template" (via a Payload relationship field to Templates) that can be selected or cleared in the admin
-  3. Visiting `/posts/[slug]` on the frontend renders the blocks from the assigned Template (post's content fields are not yet bound — that's Phase 14)
-  4. When a Post has no template assigned, `/posts/[slug]` renders a default block stack (title + content) rather than 404
-  5. Post drafts render via the existing draft/live-preview pipeline when their Template changes
+  1. Templates collection exists with name, description, `targetCollection` (dropdown populated from opt-in collections, not free-form), `isDefault` boolean, and a `layout` block field using the same 14 atomic blocks as Pages
+  2. Collections opt into templating via a Payload config flag (`templates: { enabled: true }`); opt-in collections automatically gain a filtered `template` relationship field on each doc (filtered by matching `targetCollection`); Pages do not opt in
+  3. `/posts/[slug]` renders via three-tier resolution: `doc.template` → `isDefault` template for collection → hardcoded fallback stack; draft mode and existing live-preview pipeline work end-to-end
+  4. Fallback stack renders when no template resolves — post title as Heading + post content as RichText block — so the route never 404s on a missing template
+  5. Templates admin list view is a custom grouped view — each opt-in collection appears as a section header with its templates and an "Add new template for [Collection]" button per section; Pages are not shown
+  6. First-run setup seeds one default Post template (simple Hero + Content layout) so Posts render meaningfully out of the box without manual template configuration
 
 ### Phase 14: Dynamic Data Binding
 **Goal**: Block property values can be either literal (as today) OR bound to a field on the current document via an admin picker that enforces type compatibility; at render time, bound values resolve from the document
@@ -81,6 +82,6 @@
 |-------|-----------|----------------|--------|-----------|
 | 1-7 (v1.0) | v1.0 | 24/24 | Complete | 2026-03-15 |
 | 8-12.1 (v1.1) | v1.1 | 16/16 | Complete | 2026-04-18 |
-| 13. Templates Collection & Frontend Route | v1.2 | 0/0 | Not started | — |
+| 13. Templates Collection, Opt-in & Admin UX | v1.2 | 0/0 | Not started | — |
 | 14. Dynamic Data Binding | v1.2 | 0/0 | Not started | — |
 | 15. Nested Binding & Admin Preview | v1.2 | 0/0 | Not started | — |
