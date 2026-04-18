@@ -1,4 +1,4 @@
-import type { CollectionSlug, PayloadRequest } from 'payload'
+import type { PayloadRequest } from 'payload'
 import { getPayload } from 'payload'
 import { draftMode } from 'next/headers'
 import { redirect } from 'next/navigation'
@@ -9,7 +9,6 @@ export async function GET(req: Request): Promise<Response> {
   const { searchParams } = new URL(req.url)
 
   const path = searchParams.get('path')
-  const collection = searchParams.get('collection') as CollectionSlug
   const slug = searchParams.get('slug')
   const previewSecret = searchParams.get('previewSecret')
 
@@ -17,7 +16,7 @@ export async function GET(req: Request): Promise<Response> {
     return new Response('You are not allowed to preview this page', { status: 403 })
   }
 
-  if (!path || !collection || !slug) {
+  if (!path || !slug) {
     return new Response('Insufficient search params', { status: 404 })
   }
 
