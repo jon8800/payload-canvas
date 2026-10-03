@@ -2,24 +2,13 @@
 
 import type { Payload } from 'payload'
 import type { Block, BlockDefinition, Layout } from '@payload-toolkit/builder/core'
+import { isRecord, mapFieldValues, type FieldLike, type VisitField } from './fields'
 import type { FetchDocs } from './types'
 
 type Id = string | number
-type FieldLike = {
-  type?: string
-  name?: string
-  relationTo?: string | string[]
-  hasMany?: boolean
-  fields?: FieldLike[]
-  tabs?: Array<{ name?: string; fields?: FieldLike[] }>
-  blocks?: Array<{ slug?: string; fields?: FieldLike[] } | string>
-}
 type Resolve = (collection: string, id: Id) => unknown
-type PropsRecord = Record<string, unknown>
 
 const isId = (value: unknown): value is Id => typeof value === 'string' || typeof value === 'number'
-const isRecord = (value: unknown): value is PropsRecord =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
 
 /** Maps one relationship/upload value (single or hasMany, plain or polymorphic). */
 function mapReference(value: unknown, field: FieldLike, resolve: Resolve): unknown {
@@ -68,56 +57,13 @@ function mapRichText(value: unknown, resolve: Resolve): unknown {
   return root === value.root ? value : { ...value, root }
 }
 
-/** Maps every row of an array or blocks field. */
-function mapRows(value: unknown, fieldsOf: (row: PropsRecord) => FieldLike[] | undefined, resolve: Resolve): unknown {
-  if (!Array.isArray(value)) return value
-  const rows = value.map((row) => {
-    if (!isRecord(row)) return row
-    const fields = fieldsOf(row)
-    return fields ? mapProps(row, fields, resolve) : row
-  })
-  return rows.some((row, i) => row !== value[i]) ? rows : value
-}
-
-/** Maps the reference fields in one props object. Fields without a name share the parent object. */
-function mapProps(props: PropsRecord, fields: FieldLike[], resolve: Resolve): PropsRecord {
-  let result = props
-  const set = (key: string, value: unknown) => {
-    if (value === result[key]) return
-    if (result === props) result = { ...props }
-    result[key] = value
+/** Replaces the IDs in upload, relationship and rich text values. */
+function referenceVisitor(resolve: Resolve): VisitField {
+  return (field, value) => {
+    if (field.type === 'upload' || field.type === 'relationship') return mapReference(value, field, resolve)
+    if (field.type === 'richText') return mapRichText(value, resolve)
+    return value
   }
-  for (const field of fields) {
-    const name = field.name
-    if (field.type === 'upload' || field.type === 'relationship') {
-      if (name && name in props) set(name, mapReference(props[name], field, resolve))
-    } else if (field.type === 'richText') {
-      if (name && name in props) set(name, mapRichText(props[name], resolve))
-    } else if (field.type === 'array' && name) {
-      if (name in props) set(name, mapRows(props[name], () => field.fields ?? [], resolve))
-    } else if (field.type === 'blocks' && name) {
-      const variants = (field.blocks ?? []).filter((b) => typeof b === 'object')
-      if (name in props) {
-        set(name, mapRows(props[name], (row) => variants.find((b) => b.slug === row.blockType)?.fields, resolve))
-      }
-    } else if (field.type === 'group' && name) {
-      const nested = props[name]
-      if (isRecord(nested)) set(name, mapProps(nested, field.fields ?? [], resolve))
-    } else if (field.type === 'tabs') {
-      for (const tab of field.tabs ?? []) {
-        if (!tab.name) {
-          result = mapProps(result, tab.fields ?? [], resolve)
-          continue
-        }
-        const nested = props[tab.name]
-        if (isRecord(nested)) set(tab.name, mapProps(nested, tab.fields ?? [], resolve))
-      }
-    } else if (!name && field.fields) {
-      // Unnamed layout containers such as `row` and `collapsible`.
-      result = mapProps(result, field.fields, resolve)
-    }
-  }
-  return result
 }
 
 function mapBlocks(
@@ -125,10 +71,11 @@ function mapBlocks(
   definitions: Map<string, BlockDefinition>,
   resolve: Resolve,
 ): Block[] {
+  const visit = referenceVisitor(resolve)
   return blocks.map((block) => {
     const fields = definitions.get(block.type)?.fields as FieldLike[] | undefined
     const next: Block = { ...block }
-    if (block.props && fields) next.props = mapProps(block.props, fields, resolve)
+    if (block.props && fields) next.props = mapFieldValues(block.props, fields, visit)
     if (block.slots) {
       next.slots = Object.fromEntries(
         Object.entries(block.slots).map(([slot, children]) => [

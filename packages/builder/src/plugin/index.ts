@@ -4,6 +4,7 @@ import { defaultBlocks } from '../blocks'
 import { richTextFieldName } from '../core/blocks'
 import { EMPTY_LAYOUT, type BlockDefinition, type BuilderClientConfig, type SectionDefinition } from '../core/types'
 import { getCanvasCssInput, getStyleTokens, type CssOptions, type TailwindPlugins } from '../css'
+import { createLiveRuntime, LIVE_PATH, LIVE_RUNTIME_KEY, liveEndpoints, type LiveBus } from '../live'
 import { layoutBeforeChange } from './hook'
 import { toJsonSafe } from './jsonSafe'
 
@@ -29,6 +30,12 @@ export type WebsiteBuilderOptions = {
   canvasPath?: string
   /** Ready-made sections shown in the editor's library and offered to AI tools. */
   sections?: SectionDefinition[]
+  /**
+   * Live editing: open editors receive changes made by AI agents (MCP) and the operations
+   * endpoint. The default bus is in-process (one app server). With several servers, pass a bus
+   * built on Postgres LISTEN/NOTIFY (see `live/bus.ts`).
+   */
+  live?: { bus?: LiveBus; heartbeatMs?: number }
 }
 
 const LAYOUT_FIELD_COMPONENT = '@payload-toolkit/builder/client#LayoutField'
@@ -57,6 +64,10 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
     const apiRoute = config.routes?.api ?? '/api'
     const canvasPath = options.canvasPath ?? '/builder-canvas'
     const collections = config.collections ?? []
+    const live = createLiveRuntime(options.live?.bus)
+    const liveCollections = Object.fromEntries(
+      Object.entries(options.collections).map(([slug, o]) => [slug, { field: o.field ?? 'layout' }]),
+    )
 
     for (const slug of Object.keys(options.collections)) {
       if (!collections.some((c) => c.slug === slug)) {
@@ -83,12 +94,15 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           cssEndpoint: `${apiRoute}${CANVAS_CSS_PATH}`,
           tokensEndpoint: `${apiRoute}${STYLE_TOKENS_PATH}`,
           sections: options.sections ?? [],
-          liveEndpoint: `${apiRoute}/builder/live`,
+          liveEndpoint: `${apiRoute}${LIVE_PATH}`,
         }
         return addBuilder(collection, { field, clientConfig, blocks, css })
       }),
+      // Server-only: the MCP tools read the live runtime from here, so they share the bus and lock.
+      custom: { ...config.custom, [LIVE_RUNTIME_KEY]: live },
       endpoints: [
         ...(config.endpoints ?? []),
+        ...liveEndpoints({ collections: liveCollections, blocks, runtime: live, heartbeatMs: options.live?.heartbeatMs }),
         {
           path: CANVAS_CSS_PATH,
           method: 'get',

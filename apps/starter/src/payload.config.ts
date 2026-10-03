@@ -8,9 +8,10 @@ import { seoPlugin } from '@payloadcms/plugin-seo'
 import { redirectsPlugin } from '@payloadcms/plugin-redirects'
 import { formBuilderPlugin } from '@payloadcms/plugin-form-builder'
 import { importExportPlugin } from '@payloadcms/plugin-import-export'
-import { mcpPlugin } from '@payloadcms/plugin-mcp'
+import { mcpToolkitPlugin } from 'payload-mcp-toolkit'
 import { searchPlugin } from '@payloadcms/plugin-search'
-import { websiteBuilder } from '@payload-toolkit/builder'
+import { websiteBuilder, type WebsiteBuilderOptions } from '@payload-toolkit/builder'
+import { builderMcpTools } from '@payload-toolkit/builder/mcp'
 import typography from '@tailwindcss/typography'
 import { createTransport } from 'nodemailer'
 import sharp from 'sharp'
@@ -28,6 +29,13 @@ import { Tags } from '@/collections/Tags'
 import { TemplateParts } from '@/collections/TemplateParts'
 import { SiteSettings } from '@/globals/SiteSettings'
 import { ThemeSettings } from '@/globals/ThemeSettings'
+
+/** Collections with the page builder. Shared by the builder plugin and its MCP tools. */
+const builderCollections: WebsiteBuilderOptions['collections'] = {
+  pages: { field: 'builder', url: (doc) => documentPath('pages', doc.slug) ?? '/' },
+  posts: { field: 'builder', url: (doc) => documentPath('posts', doc.slug) ?? '/blog' },
+  'template-parts': { field: 'builder' },
+}
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -164,16 +172,14 @@ export default buildConfig({
       ],
     }),
 
-    mcpPlugin({
-      collections: {
-        pages: { enabled: true },
-        posts: { enabled: true },
-        categories: { enabled: true },
-        media: { enabled: { find: true } },
+    // AI agents over MCP (POST /api/mcp, keys in MCP → API Keys). The builder tools edit page
+    // layouts through the live channel, so an open editor shows each change as it happens.
+    mcpToolkitPlugin({
+      exclude: {
+        collections: ['users', 'form-submissions', 'exports', 'imports', 'search'],
+        globals: ['theme-settings'],
       },
-      globals: {
-        'site-settings': { enabled: { find: true, update: true } },
-      },
+      customTools: builderMcpTools({ blocks: builderBlocks, sections: sectionLibrary, collections: builderCollections }),
     }),
 
     searchPlugin({
@@ -195,11 +201,7 @@ export default buildConfig({
 
     // Must stay last: it adds top-level fields after other plugins (SEO tabbedUI) move fields into tabs.
     websiteBuilder({
-      collections: {
-        pages: { field: 'builder', url: (doc) => documentPath('pages', doc.slug) ?? '/' },
-        posts: { field: 'builder', url: (doc) => documentPath('posts', doc.slug) ?? '/blog' },
-        'template-parts': { field: 'builder' },
-      },
+      collections: builderCollections,
       blocks: builderBlocks,
       sections: sectionLibrary,
       css: {

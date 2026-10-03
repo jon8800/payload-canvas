@@ -17,7 +17,7 @@ export const contact: Section<ContactInput> = {
         stack('div', 'flex flex-col gap-4', [
           heading(title, '2', styles.sectionTitle),
           text(body, styles.lead),
-          ...(details && details.length > 0 ? [list(details, false, 'flex flex-col gap-2 text-muted-foreground')] : []),
+          ...(details && details.length > 0 ? [list(details, false, 'flex list-none flex-col gap-2 text-muted-foreground')] : []),
         ]),
         form(formId, 'rounded-lg border border-border bg-background p-8'),
       ]),

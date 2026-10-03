@@ -3,6 +3,8 @@
 // renders in server components and inside the client canvas.
 
 import { LinkJSXConverter, RichText as LexicalRichText } from '@payloadcms/richtext-lexical/react'
+import type { ComponentType } from 'react'
+import { defaultResolveLink } from '../render/link'
 import type { BlockComponentProps, ResolveLink } from '../render/types'
 import { PlaceholderText } from './placeholder'
 
@@ -43,26 +45,44 @@ function converters(resolveLink: ResolveLink) {
   })
 }
 
-/** Lexical rich text. Wraps the content in a `<div>` that takes the block's `className` (e.g. "prose"). */
-export function RichText({ props, className, attributes, mode, resolveLink }: BlockComponentProps) {
-  const content = props.content
-  if (isEmptyRichText(content)) {
-    if (mode !== 'canvas') return null
+/**
+ * Makes the built-in rich text component for one link resolver. RenderLayout calls it with its
+ * `resolveLink`, so the resolver stays in a closure and never becomes a component prop.
+ * Lexical rich text, wrapped in a `<div>` that takes the block's `className` (e.g. "prose").
+ */
+function createRichText(resolveLink: ResolveLink): ComponentType<BlockComponentProps> {
+  const rendererConverters = converters(resolveLink)
+  return function RichText({ props, className, attributes, mode }: BlockComponentProps) {
+    const content = props.content
+    if (isEmptyRichText(content)) {
+      if (mode !== 'canvas') return null
+      return (
+        <div {...attributes} className={className}>
+          <p>
+            <PlaceholderText>Rich text</PlaceholderText>
+          </p>
+        </div>
+      )
+    }
     return (
       <div {...attributes} className={className}>
-        <p>
-          <PlaceholderText>Rich text</PlaceholderText>
-        </p>
+        <LexicalRichText data={content as never} disableContainer converters={rendererConverters as never} />
       </div>
     )
   }
-  return (
-    <div {...attributes} className={className}>
-      <LexicalRichText
-        data={content as never}
-        disableContainer
-        converters={converters(resolveLink) as never}
-      />
-    </div>
-  )
 }
+
+const byResolver = new WeakMap<ResolveLink, ComponentType<BlockComponentProps>>()
+
+/** One component per resolver, so React keeps the same component type between renders. */
+export function richTextFor(resolveLink: ResolveLink): ComponentType<BlockComponentProps> {
+  let component = byResolver.get(resolveLink)
+  if (!component) {
+    component = createRichText(resolveLink)
+    byResolver.set(resolveLink, component)
+  }
+  return component
+}
+
+/** The rich text component with the default link resolver. */
+export const RichText = richTextFor(defaultResolveLink)

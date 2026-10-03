@@ -3,7 +3,7 @@
 // Runs inside the canvas iframe. It renders the layout it gets from the admin editor and reports
 // block and slot rectangles, the pointer and editor shortcuts back. It holds no selection or drop logic.
 
-import { collectClasses, type Layout } from '@payload-toolkit/builder/core'
+import { collectClasses, type BlockDefinition, type Layout } from '@payload-toolkit/builder/core'
 import type { CanvasCssInput, TailwindPlugins } from '@payload-toolkit/builder/css'
 import { createCanvasCompiler, type CanvasCompiler } from '@payload-toolkit/builder/css-browser'
 import {
@@ -22,6 +22,12 @@ import { createRestFetchDocs } from './fetchDocs'
 import { measure } from './measure'
 
 export type BuilderCanvasProps = {
+  /**
+   * The block definitions: the same list as the plugin config and the site's `RenderLayout`
+   * (import it from a client-safe module, e.g. one that uses `@payload-toolkit/builder/blocks`).
+   * Default: the JSON-safe copy the admin sends. Read once, on the first render.
+   */
+  blocks?: BlockDefinition[]
   /** Block components that override or add to the defaults. Must match the site's components. */
   components?: BlockComponents
   /** Tailwind plugins by id, the same map the plugin config uses on the server. */
@@ -55,7 +61,7 @@ function send(message: CanvasToAdmin) {
 
 type Compiler = { status: 'loading' } | { status: 'ready'; compiler: CanvasCompiler } | { status: 'failed' }
 
-export function BuilderCanvas({ components, plugins, resolveLink }: BuilderCanvasProps) {
+export function BuilderCanvas({ blocks, components, plugins, resolveLink }: BuilderCanvasProps) {
   const [init, setInit] = useState<CanvasInit | null>(null)
   const [layout, setLayout] = useState<Layout | null>(null)
   const [resolved, setResolved] = useState<Layout | null>(null)
@@ -64,6 +70,8 @@ export function BuilderCanvas({ components, plugins, resolveLink }: BuilderCanva
   const frameRequest = useRef(0)
   const observer = useRef<ResizeObserver | null>(null)
   const pluginsRef = useRef(plugins)
+  // Read once, so a new array on every parent render does not reload the layout data.
+  const [ownBlocks] = useState(blocks)
   const selectedRef = useRef<string | null>(null)
 
   // Coalesce every trigger (render, resize, scroll) into one measurement per frame.
@@ -200,10 +208,11 @@ export function BuilderCanvas({ components, plugins, resolveLink }: BuilderCanva
 
   // Replace upload and relationship IDs with documents. The newest layout wins.
   const resolveRun = useRef(0)
+  const definitions = ownBlocks ?? init?.blocks
   useEffect(() => {
-    if (!layout || !init) return
+    if (!layout || !init || !definitions) return
     const run = ++resolveRun.current
-    resolveLayoutData(layout, init.blocks, createRestFetchDocs(init.api))
+    resolveLayoutData(layout, definitions, createRestFetchDocs(init.api))
       .then((next) => {
         if (run === resolveRun.current) setResolved(next)
       })
@@ -212,10 +221,14 @@ export function BuilderCanvas({ components, plugins, resolveLink }: BuilderCanva
         setResolved(layout)
         send({ type: 'error', message: `Canvas data failed to load: ${String(error)}` })
       })
-  }, [layout, init])
+  }, [layout, init, definitions])
 
   // One compile per distinct class set (about 4 ms). `null` until a layout is resolved.
-  const classKey = useMemo(() => (resolved ? collectClasses(resolved).join(' ') : null), [resolved])
+  // Block definitions add the classes their components use (`BlockDefinition.classes`).
+  const classKey = useMemo(
+    () => (resolved ? collectClasses(resolved, definitions).join(' ') : null),
+    [resolved, definitions],
+  )
   const css = useMemo(() => {
     if (compiler.status !== 'ready' || classKey === null) return ''
     return compiler.compiler.build(classKey ? classKey.split(' ') : [])
@@ -244,7 +257,7 @@ export function BuilderCanvas({ components, plugins, resolveLink }: BuilderCanva
         {visible && (
           <RenderLayout
             layout={resolved}
-            blocks={init?.blocks}
+            blocks={definitions}
             components={components}
             css={css}
             mode="canvas"

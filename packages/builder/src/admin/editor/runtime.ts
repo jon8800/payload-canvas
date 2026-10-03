@@ -15,22 +15,35 @@ import type {
   Rect,
 } from '../../core/types'
 import { post, rectContains, type AdminToCanvas, type CanvasInit, type KeyAction } from '../../protocol'
+import { removeBlock } from './actions'
 import { createEditorStore, type EditorStore } from './store'
 import { createValueStore, type ValueStore } from './valueStore'
+import type { LiveState } from './live'
 
-export const OUTLINE_INDENT = 14
+export const OUTLINE_INDENT = 16
 
-/** `data` attached to every dnd-kit draggable (canvas handle, outline row, library item). */
-export type DragData = { source: DragSource; label: string }
+/** `data` attached to every dnd-kit draggable (canvas handle, outline row, library item, section card). */
+export type DragData = {
+  source: DragSource
+  label: string
+  /** Icon name shown in the drag ghost. */
+  icon?: string
+  /** A ready-made section: these blocks are inserted (with new ids) instead of one new block. */
+  blocks?: Block[]
+}
 
 export type DragState = {
   source: DragSource
   label: string
+  icon?: string
   zone: 'canvas' | 'outline' | null
   target: DropTarget | null
   /** Pointer in admin client coordinates. */
   pointer: Point | null
 }
+
+/** The canvas frame: its width in CSS pixels and the zoom that fits it into the stage. */
+export type FrameSize = { width: number; zoom: number }
 
 export type Runtime = {
   config: BuilderClientConfig
@@ -43,11 +56,25 @@ export type Runtime = {
   pointerLock: ValueStore<boolean>
   /** Last problem the canvas reported. */
   canvasError: ValueStore<string | null>
+  /** Containers collapsed in the outline. Kept in local storage. */
+  collapsed: ValueStore<ReadonlySet<string>>
+  /** The canvas frame size, set by the canvas. */
+  frame: ValueStore<FrameSize>
+  /** Short feedback ("Copied Heading"), shown for a moment. */
+  notice: ValueStore<{ text: string; at: number } | null>
+  /** True while the shortcut help is open. */
+  help: ValueStore<boolean>
+  /** Live editing state (remote changes, presence). Null until the live stream starts. */
+  live: ValueStore<LiveState | null>
   iframeRef: RefObject<HTMLIFrameElement | null>
   outlineRef: RefObject<HTMLDivElement | null>
+  inspectorRef: RefObject<HTMLDivElement | null>
   postToCanvas: (message: AdminToCanvas) => void
   runKey: (key: KeyAction) => void
+  notify: (text: string) => void
   blockLabel: (type: string) => string
+  /** Icon name of a block type: the definition's `icon`, else the type itself. */
+  blockIcon: (type: string) => string
   createBlock: (type: string) => Block | null
 }
 
@@ -62,13 +89,34 @@ function defaultProps(def: BlockDefinition): Record<string, unknown> {
   return props
 }
 
+const COLLAPSED_KEY = 'payload-builder:collapsed'
+
+function loadCollapsed(): ReadonlySet<string> {
+  try {
+    const list: unknown = JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? '[]')
+    return new Set(Array.isArray(list) ? list.filter((id): id is string => typeof id === 'string') : [])
+  } catch {
+    return new Set()
+  }
+}
+
 /** `api` is Payload's REST route (`config.routes.api`), used by the iframe to load documents. */
 export function createRuntime(config: BuilderClientConfig, api: string): Runtime {
   const store = createEditorStore(EMPTY_LAYOUT)
   const iframeRef = createRef<HTMLIFrameElement>()
   const blockLabel = (type: string) => getBlockDefinition(config.blocks, type)?.label ?? type
+  const collapsed = createValueStore<ReadonlySet<string>>(typeof window === 'undefined' ? new Set() : loadCollapsed())
+  collapsed.subscribe(() => {
+    try {
+      // Block ids are random, so one list serves every document. Keep it short.
+      localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed.get()].slice(-500)))
+    } catch {
+      // Storage blocked: the state lasts for this session only.
+    }
+  })
+  const notice = createValueStore<{ text: string; at: number } | null>(null)
 
-  return {
+  const runtime: Runtime = {
     config,
     canvasInit: { blocks: config.blocks, cssEndpoint: config.cssEndpoint, api },
     store,
@@ -76,17 +124,28 @@ export function createRuntime(config: BuilderClientConfig, api: string): Runtime
     drag: createValueStore<DragState | null>(null),
     pointerLock: createValueStore(false),
     canvasError: createValueStore<string | null>(null),
+    collapsed,
+    frame: createValueStore<FrameSize>({ width: 0, zoom: 1 }),
+    notice,
+    help: createValueStore(false),
+    live: createValueStore<LiveState | null>(null),
     iframeRef,
     outlineRef: createRef<HTMLDivElement>(),
+    inspectorRef: createRef<HTMLDivElement>(),
     postToCanvas: (message) => post(iframeRef.current?.contentWindow, message),
     runKey(key) {
       const { selectedId } = store.getState()
       if (key === 'undo') store.undo()
       if (key === 'redo') store.redo()
-      if (key === 'escape') store.select(null)
-      if (key === 'delete' && selectedId) store.apply({ type: 'remove', id: selectedId }, { select: null })
+      if (key === 'escape') {
+        if (runtime.help.get()) runtime.help.set(false)
+        else store.select(null)
+      }
+      if (key === 'delete' && selectedId) removeBlock(runtime, selectedId)
     },
+    notify: (text) => notice.set({ text, at: Date.now() }),
     blockLabel,
+    blockIcon: (type) => getBlockDefinition(config.blocks, type)?.icon ?? type,
     createBlock(type) {
       const def = getBlockDefinition(config.blocks, type)
       if (!def) return null
@@ -98,6 +157,7 @@ export function createRuntime(config: BuilderClientConfig, api: string): Runtime
       return block
     },
   }
+  return runtime
 }
 
 export const RuntimeContext = createContext<Runtime | null>(null)
@@ -114,7 +174,7 @@ export function toRect(r: DOMRect): Rect {
 
 /**
  * Maps an admin client point into the iframe's viewport coordinates.
- * The overlay sits exactly on the iframe box, so the same mapping places overlay elements.
+ * The overlay sits exactly on the iframe box (and zooms with it), so the same mapping places overlay elements.
  */
 export function toCanvasPoint(iframe: HTMLIFrameElement, p: Point): Point | null {
   const box = iframe.getBoundingClientRect()

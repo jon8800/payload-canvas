@@ -1,5 +1,6 @@
 'use client'
 
+import { BlockIcon } from './icons'
 import { useRuntime } from './runtime'
 import { useValue } from './valueStore'
 
@@ -20,7 +21,9 @@ export function DragLayer() {
         className={`builder-editor__ghost${refused ? ' builder-editor__ghost--refused' : ''}`}
         style={{ left: drag.pointer.x + 14, top: drag.pointer.y + 14 }}
       >
+        <BlockIcon name={drag.icon} size={14} />
         {drag.label}
+        {refused && <span className="builder-editor__ghost-note">Can’t drop here</span>}
       </div>
       {indicator && (
         <div

@@ -1,10 +1,11 @@
+'use client'
+
 // The "form" block: renders a form-builder form. The renderer loads the form document (the
 // block's `form` relationship) before this runs, on the site and in the canvas.
-// No 'use client' here: RenderLayout passes functions (resolveLink) to block components, and a
-// server component cannot pass functions to a client component. The client part is FormView.
+// A client component: RenderLayout passes plain data only, so the server can render it directly.
 import type { BlockComponentProps } from '@payload-toolkit/builder-react'
+import { formClasses } from './formClasses'
 import { FormView, type FormDoc } from './FormView'
-import styles from './Form.module.css'
 
 function isFormDoc(value: unknown): value is FormDoc {
   return typeof value === 'object' && value !== null && 'id' in value
@@ -17,7 +18,7 @@ export function FormBlock({ props, className, attributes, mode }: BlockComponent
     if (mode !== 'canvas') return null
     return (
       <div className={className} {...attributes}>
-        <p className={styles.placeholder}>Form: choose a form in the block settings.</p>
+        <p className={formClasses.placeholder}>Form: choose a form in the block settings.</p>
       </div>
     )
   }

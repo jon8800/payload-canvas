@@ -80,8 +80,8 @@ export interface Config {
     'form-submissions': FormSubmission;
     exports: Export;
     imports: Import;
-    search: Search;
     'payload-mcp-api-keys': PayloadMcpApiKey;
+    search: Search;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-folders': FolderInterface;
@@ -108,8 +108,8 @@ export interface Config {
     'form-submissions': FormSubmissionsSelect<false> | FormSubmissionsSelect<true>;
     exports: ExportsSelect<false> | ExportsSelect<true>;
     imports: ImportsSelect<false> | ImportsSelect<true>;
-    search: SearchSelect<false> | SearchSelect<true>;
     'payload-mcp-api-keys': PayloadMcpApiKeysSelect<false> | PayloadMcpApiKeysSelect<true>;
+    search: SearchSelect<false> | SearchSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-folders': PayloadFoldersSelect<false> | PayloadFoldersSelect<true>;
@@ -817,6 +817,132 @@ export interface Import {
   focalY?: number | null;
 }
 /**
+ * API keys for MCP clients. Scopes control which collections and tools each key can access.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payload-mcp-api-keys".
+ */
+export interface PayloadMcpApiKey {
+  id: number;
+  /**
+   * Human label for this key (e.g. "Editorial team — Claude Desktop").
+   */
+  name: string;
+  /**
+   * Optional notes about the purpose of this key.
+   */
+  description?: string | null;
+  /**
+   * Role preset. "Custom" unlocks the per-collection matrix and the tool overrides below. Switching away from Custom CLEARS every override on save (collectionScopes, globalScopes, toolAllow, toolDeny); switching back to Custom starts from a fresh deny-all baseline, so reconfigure the matrices and tool lists before saving.
+   */
+  preset: 'read-only' | 'editor' | 'admin' | 'custom';
+  collectionScopes?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  globalScopes?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  /**
+   * If set, only these tools are callable with this key. Leave empty to allow any tool the collection or global scopes permit. Under the Custom preset, an empty list is treated as deny-all ONLY when no collection or global scopes are set (the fresh- Custom-key sentinel); when collection or global scopes are populated, an empty list collapses to "no tool restriction" so the resource scopes alone determine what is callable — to deny every tool while keeping resource scopes, enumerate them in toolDeny instead. Preset-mode keys created via the REST API with an empty list are coerced to "no restriction".
+   */
+  toolAllow?:
+    | (
+        | 'createDocument'
+        | 'deleteDocument'
+        | 'findDocument'
+        | 'patchLayout'
+        | 'publishDraft'
+        | 'resolveReference'
+        | 'safeDelete'
+        | 'searchContent'
+        | 'updateDocument'
+        | 'uploadMedia'
+        | 'listVersions'
+        | 'restoreVersion'
+        | 'schedulePublish'
+        | 'findGlobal'
+        | 'updateGlobal'
+        | 'listBlocks'
+        | 'getBlockSchema'
+        | 'listSections'
+        | 'insertSection'
+        | 'getLayout'
+        | 'applyOperations'
+        | 'validateLayout'
+        | 'getPreviewUrl'
+      )[]
+    | null;
+  /**
+   * These tools are blocked regardless of any other scope.
+   */
+  toolDeny?:
+    | (
+        | 'createDocument'
+        | 'deleteDocument'
+        | 'findDocument'
+        | 'patchLayout'
+        | 'publishDraft'
+        | 'resolveReference'
+        | 'safeDelete'
+        | 'searchContent'
+        | 'updateDocument'
+        | 'uploadMedia'
+        | 'listVersions'
+        | 'restoreVersion'
+        | 'schedulePublish'
+        | 'findGlobal'
+        | 'updateGlobal'
+        | 'listBlocks'
+        | 'getBlockSchema'
+        | 'listSections'
+        | 'insertSection'
+        | 'getLayout'
+        | 'applyOperations'
+        | 'validateLayout'
+        | 'getPreviewUrl'
+      )[]
+    | null;
+  /**
+   * The user this key authenticates as. Tool calls use this user for access checks on target collections.
+   */
+  user: number | User;
+  /**
+   * First 8 characters of the API key — used in audit logs to identify the key without exposing the full secret.
+   */
+  keyPrefix?: string | null;
+  /**
+   * Optional expiry. Requests authenticated with an expired key are rejected.
+   */
+  expiresAt?: string | null;
+  /**
+   * Set to revoke a key. Revoked keys are rejected at auth time.
+   */
+  revokedAt?: string | null;
+  /**
+   * Updated on each successful authentication. Fire-and-forget; not on the request hot path.
+   */
+  lastUsedAt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+  enableAPIKey?: boolean | null;
+  apiKey?: string | null;
+  apiKeyIndex?: string | null;
+  hasAPIKey?: boolean | null;
+  collection: 'payload-mcp-api-keys';
+}
+/**
  * This is a collection of automatically created search results. These results are used by the global site search and will be updated automatically as documents in the CMS are created or updated.
  *
  * This interface was referenced by `Config`'s JSON-Schema
@@ -843,104 +969,6 @@ export interface Search {
   slug?: string | null;
   updatedAt: string;
   createdAt: string;
-}
-/**
- * API keys control which collections, resources, tools, and prompts MCP clients can access
- *
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "payload-mcp-api-keys".
- */
-export interface PayloadMcpApiKey {
-  id: number;
-  /**
-   * The user that the API key is associated with.
-   */
-  user: number | User;
-  /**
-   * A useful label for the API key.
-   */
-  label?: string | null;
-  /**
-   * The purpose of the API key.
-   */
-  description?: string | null;
-  pages?: {
-    /**
-     * Allow clients to find pages.
-     */
-    find?: boolean | null;
-    /**
-     * Allow clients to create pages.
-     */
-    create?: boolean | null;
-    /**
-     * Allow clients to update pages.
-     */
-    update?: boolean | null;
-    /**
-     * Allow clients to delete pages.
-     */
-    delete?: boolean | null;
-  };
-  posts?: {
-    /**
-     * Allow clients to find posts.
-     */
-    find?: boolean | null;
-    /**
-     * Allow clients to create posts.
-     */
-    create?: boolean | null;
-    /**
-     * Allow clients to update posts.
-     */
-    update?: boolean | null;
-    /**
-     * Allow clients to delete posts.
-     */
-    delete?: boolean | null;
-  };
-  categories?: {
-    /**
-     * Allow clients to find categories.
-     */
-    find?: boolean | null;
-    /**
-     * Allow clients to create categories.
-     */
-    create?: boolean | null;
-    /**
-     * Allow clients to update categories.
-     */
-    update?: boolean | null;
-    /**
-     * Allow clients to delete categories.
-     */
-    delete?: boolean | null;
-  };
-  media?: {
-    /**
-     * Allow clients to find media.
-     */
-    find?: boolean | null;
-  };
-  siteSettings?: {
-    /**
-     * Allow clients to find site-settings global.
-     */
-    find?: boolean | null;
-    /**
-     * Allow clients to update site-settings global.
-     */
-    update?: boolean | null;
-  };
-  updatedAt: string;
-  createdAt: string;
-  enableAPIKey?: boolean | null;
-  apiKey?: string | null;
-  apiKeyIndex?: string | null;
-  hasAPIKey?: boolean | null;
-  collection: 'payload-mcp-api-keys';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1099,12 +1127,12 @@ export interface PayloadLockedDocument {
         value: number | FormSubmission;
       } | null)
     | ({
-        relationTo: 'search';
-        value: number | Search;
-      } | null)
-    | ({
         relationTo: 'payload-mcp-api-keys';
         value: number | PayloadMcpApiKey;
+      } | null)
+    | ({
+        relationTo: 'search';
+        value: number | Search;
       } | null)
     | ({
         relationTo: 'payload-folders';
@@ -1660,6 +1688,30 @@ export interface ImportsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payload-mcp-api-keys_select".
+ */
+export interface PayloadMcpApiKeysSelect<T extends boolean = true> {
+  name?: T;
+  description?: T;
+  preset?: T;
+  collectionScopes?: T;
+  globalScopes?: T;
+  toolAllow?: T;
+  toolDeny?: T;
+  user?: T;
+  keyPrefix?: T;
+  expiresAt?: T;
+  revokedAt?: T;
+  lastUsedAt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  enableAPIKey?: T;
+  apiKey?: T;
+  apiKeyIndex?: T;
+  hasAPIKey?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "search_select".
  */
 export interface SearchSelect<T extends boolean = true> {
@@ -1670,56 +1722,6 @@ export interface SearchSelect<T extends boolean = true> {
   slug?: T;
   updatedAt?: T;
   createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "payload-mcp-api-keys_select".
- */
-export interface PayloadMcpApiKeysSelect<T extends boolean = true> {
-  user?: T;
-  label?: T;
-  description?: T;
-  pages?:
-    | T
-    | {
-        find?: T;
-        create?: T;
-        update?: T;
-        delete?: T;
-      };
-  posts?:
-    | T
-    | {
-        find?: T;
-        create?: T;
-        update?: T;
-        delete?: T;
-      };
-  categories?:
-    | T
-    | {
-        find?: T;
-        create?: T;
-        update?: T;
-        delete?: T;
-      };
-  media?:
-    | T
-    | {
-        find?: T;
-      };
-  siteSettings?:
-    | T
-    | {
-        find?: T;
-        update?: T;
-      };
-  updatedAt?: T;
-  createdAt?: T;
-  enableAPIKey?: T;
-  apiKey?: T;
-  apiKeyIndex?: T;
-  hasAPIKey?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

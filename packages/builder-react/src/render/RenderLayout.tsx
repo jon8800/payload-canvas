@@ -1,14 +1,17 @@
 import type { ReactNode } from 'react'
 import type { Block, BlockDefinition } from '@payload-toolkit/builder/core'
+import { defaultBlocks, isLinkField } from '@payload-toolkit/builder/blocks'
 import { defaultComponents } from '../components'
-import { defaultResolveLink } from './link'
+import { richTextFor } from '../components/RichText'
+import { mapFieldValues, type FieldLike, type VisitField } from './fields'
+import { defaultResolveLink, resolveLinkValue } from './link'
 import type { BlockComponents, BlockComponentProps, RenderLayoutProps, RenderMode, ResolveLink } from './types'
 
 type Context = {
   mode: RenderMode
   components: BlockComponents
   definitions: Map<string, BlockDefinition>
-  resolveLink: ResolveLink
+  resolveLinks: VisitField
 }
 
 const PLACEHOLDER_STYLE = { minHeight: 48, minWidth: 48 }
@@ -18,6 +21,9 @@ const UNKNOWN_STYLE = {
   fontSize: 12,
   opacity: 0.6,
 }
+
+/** Used when RenderLayout gets no `blocks`. Link fields have the same shape for every option. */
+const DEFAULT_DEFINITIONS = defaultBlocks()
 
 function slotNamesOf(block: Block, ctx: Context): string[] {
   const names = new Set(Object.keys(block.slots ?? {}))
@@ -46,6 +52,13 @@ function renderSlot(block: Block, slot: string, ctx: Context): ReactNode {
   )
 }
 
+/** The block's props with every link group resolved to plain data (`ResolvedLink`). */
+function componentPropsOf(block: Block, ctx: Context): Record<string, unknown> {
+  const props = block.props ?? {}
+  const fields = ctx.definitions.get(block.type)?.fields as FieldLike[] | undefined
+  return fields ? mapFieldValues(props, fields, ctx.resolveLinks) : props
+}
+
 function renderBlock(block: Block, ctx: Context): ReactNode {
   const canvas = ctx.mode === 'canvas'
   if (block.hidden && !canvas) return null
@@ -72,33 +85,41 @@ function renderBlock(block: Block, ctx: Context): ReactNode {
     slotAttributes[slot] = canvas ? { 'data-slot-owner': block.id, 'data-slot': slot } : {}
   }
 
+  // Plain data only: a component may be a client component rendered from the server.
   const componentProps: BlockComponentProps = {
     block,
-    props: block.props ?? {},
+    props: componentPropsOf(block, ctx),
     className: block.className,
     slots,
     attributes,
     slotAttributes,
     mode: ctx.mode,
-    resolveLink: ctx.resolveLink,
   }
   return <Component key={block.id} {...componentProps} />
 }
 
-/** Renders a layout. No hooks, so it works as a server component and inside the client canvas. */
+function linkVisitor(resolveLink: ResolveLink): VisitField {
+  return (field, value) => (isLinkField(field) ? resolveLinkValue(value, resolveLink) : value)
+}
+
+/**
+ * Renders a layout. No hooks, so it works as a server component and inside the client canvas.
+ * Block components get plain data only (see `BlockComponentProps`): links are resolved here.
+ */
 export function RenderLayout({
   layout,
   components,
   css,
   mode = 'site',
   blocks,
-  resolveLink,
+  resolveLink = defaultResolveLink,
 }: RenderLayoutProps): ReactNode {
   const ctx: Context = {
     mode,
-    components: { ...defaultComponents, ...components },
-    definitions: new Map((blocks ?? []).map((definition) => [definition.type, definition])),
-    resolveLink: resolveLink ?? defaultResolveLink,
+    // The built-in rich text gets the resolver through a closure, never through props.
+    components: { ...defaultComponents, richText: richTextFor(resolveLink), ...components },
+    definitions: new Map((blocks ?? DEFAULT_DEFINITIONS).map((definition) => [definition.type, definition])),
+    resolveLinks: linkVisitor(resolveLink),
   }
   return (
     <>

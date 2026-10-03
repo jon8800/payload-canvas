@@ -4,7 +4,8 @@ import { describe, it } from 'node:test'
 import { layoutJsonSchema } from '../core/schema'
 import { validateLayout } from '../core/validate'
 import type { BlockDefinition } from '../core/types'
-import { defaultBlocks } from './index'
+import { defaultBlocks } from './defaults'
+import { isLinkField, linkField } from './link'
 
 const TYPES = [
   'stack',
@@ -101,5 +102,44 @@ describe('defaultBlocks', () => {
   it('produces a serializable layout schema', () => {
     const schema = layoutJsonSchema(defaultBlocks())
     assert.deepEqual(Object.keys(schema.$defs as object), TYPES)
+  })
+
+  it('has an icon (the type name) and a library category for every block', () => {
+    const categories = Object.fromEntries(defaultBlocks().map((b) => [b.type, [b.icon, b.category]]))
+    assert.deepEqual(categories, {
+      stack: ['stack', 'Layout'],
+      grid: ['grid', 'Layout'],
+      heading: ['heading', 'Content'],
+      text: ['text', 'Content'],
+      richText: ['richText', 'Content'],
+      image: ['image', 'Media'],
+      button: ['button', 'Interactive'],
+      link: ['link', 'Interactive'],
+      list: ['list', 'Content'],
+      quote: ['quote', 'Content'],
+      divider: ['divider', 'Layout'],
+      spacer: ['spacer', 'Layout'],
+      video: ['video', 'Media'],
+    })
+  })
+
+  it('the list block starts without a list-style class', () => {
+    const list = defaultBlocks().find((b) => b.type === 'list')
+    assert.equal(list?.defaultClassName, 'pl-6 space-y-1')
+  })
+})
+
+describe('linkField', () => {
+  it('is a marked group, found by isLinkField', () => {
+    const field = linkField({ name: 'cta', label: 'CTA', collections: ['pages'] })
+    assert.equal(field.name, 'cta')
+    assert.equal(field.label, 'CTA')
+    assert.ok(isLinkField(field))
+    assert.ok(isLinkField(JSON.parse(JSON.stringify(field))))
+    assert.ok(!isLinkField({ type: 'group', name: 'link', fields: [] }))
+    assert.ok(!isLinkField(null))
+    for (const type of ['button', 'link']) {
+      assert.ok(isLinkField(fieldsOf(defaultBlocks(), type).find((f) => f.name === 'link')), type)
+    }
   })
 })

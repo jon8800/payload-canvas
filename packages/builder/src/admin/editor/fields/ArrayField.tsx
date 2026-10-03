@@ -5,7 +5,7 @@ import { useState } from 'react'
 import type { Field } from 'payload'
 
 import { createId } from '../../../core/ids'
-import { ArrowDownIcon, ArrowUpIcon, CopyIcon, TrashIcon } from '../icons'
+import { Icon } from '../icons'
 import { RenderBlockFields } from '../renderField'
 import { isRecord, rowLabel, type FieldShape } from './values'
 
@@ -80,7 +80,7 @@ export function ArrayField({ fields, label, description, maxRows, path, value, o
                   </button>
                   <div className="builder-field-array__actions">
                     <button type="button" aria-label="Move up" title="Move up" disabled={index === 0} onClick={() => move(index, index - 1)}>
-                      <ArrowUpIcon size={14} />
+                      <Icon name="up" size={14} />
                     </button>
                     <button
                       type="button"
@@ -89,7 +89,7 @@ export function ArrayField({ fields, label, description, maxRows, path, value, o
                       disabled={index === rows.length - 1}
                       onClick={() => move(index, index + 1)}
                     >
-                      <ArrowDownIcon size={14} />
+                      <Icon name="down" size={14} />
                     </button>
                     <button
                       type="button"
@@ -98,10 +98,10 @@ export function ArrayField({ fields, label, description, maxRows, path, value, o
                       disabled={full}
                       onClick={() => commit([...rows.slice(0, index + 1), { ...structuredClone(row), id: createId() }, ...rows.slice(index + 1)])}
                     >
-                      <CopyIcon size={14} />
+                      <Icon name="duplicate" size={14} />
                     </button>
                     <button type="button" aria-label="Remove" title="Remove" onClick={() => commit(rows.filter((r) => r.id !== id))}>
-                      <TrashIcon size={14} />
+                      <Icon name="delete" size={14} />
                     </button>
                   </div>
                 </div>
