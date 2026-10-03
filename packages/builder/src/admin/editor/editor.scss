@@ -1,0 +1,452 @@
+@layer payload-default {
+  // In the builder tab: hide every default field except the editor, and hide the sidebar.
+  .builder-tab-view {
+    .document-fields__fields > :not(.builder-layout-field) {
+      display: none;
+    }
+
+    .document-fields__sidebar-wrap {
+      display: none;
+    }
+
+    .document-fields__main {
+      display: block;
+    }
+
+    .document-fields__edit {
+      padding: 0;
+      border: 0;
+    }
+
+    .document-fields__edit > * {
+      max-width: none;
+    }
+  }
+
+  .builder-layout-field {
+    width: 100%;
+  }
+
+  .builder-editor {
+    --be-accent: var(--color-blue-500, #2f6fec);
+    --be-hover: var(--color-blue-300, #8fb2f5);
+    --be-drop: var(--color-success-500, #2e9a5b);
+    --be-border: var(--theme-elevation-150);
+
+    display: flex;
+    flex-direction: column;
+    // The editor sets its exact height from its top offset.
+    height: 720px;
+    min-height: 520px;
+    color: var(--theme-text);
+    background: var(--theme-elevation-50);
+    border-top: 1px solid var(--be-border);
+  }
+
+  .builder-editor__toolbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--be-border);
+    background: var(--theme-bg);
+  }
+
+  .builder-editor__group {
+    display: flex;
+    gap: 4px;
+  }
+
+  .builder-editor__tool {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid var(--be-border);
+    border-radius: var(--style-radius-s, 4px);
+    background: var(--theme-elevation-0);
+    color: var(--theme-text);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    &[aria-pressed='true'] {
+      border-color: var(--be-accent);
+      color: var(--be-accent);
+    }
+  }
+
+  .builder-editor__error,
+  .builder-editor__canvas-error {
+    color: var(--theme-error-500);
+    font-size: 13px;
+
+    button {
+      padding: 0;
+      border: 0;
+      background: none;
+      color: inherit;
+      font: inherit;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+  }
+
+  .builder-editor__canvas-error {
+    position: absolute;
+    z-index: 2;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 6px 12px;
+    border-radius: var(--style-radius-s, 4px);
+    background: var(--theme-error-50);
+  }
+
+  .builder-editor__body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .builder-editor__left,
+  .builder-editor__right {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+    min-height: 0;
+    background: var(--theme-bg);
+  }
+
+  .builder-editor__left {
+    width: 280px;
+    border-right: 1px solid var(--be-border);
+  }
+
+  .builder-editor__right {
+    width: 380px;
+    padding: 12px;
+    border-left: 1px solid var(--be-border);
+    // Payload keeps hidden tooltips in the DOM past the right edge. Clip the x axis.
+    overflow: hidden auto;
+  }
+
+  .builder-editor__panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 12px;
+    border-bottom: 1px solid var(--be-border);
+  }
+
+  .builder-editor__panel--grow {
+    flex: 1;
+    border-bottom: 0;
+  }
+
+  .builder-editor__panel-title {
+    margin: 0 0 8px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--theme-elevation-500);
+  }
+
+  .builder-editor__hint {
+    margin: 0;
+    color: var(--theme-elevation-500);
+    font-size: 13px;
+  }
+
+  .builder-editor__library {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .builder-editor__library-item {
+    padding: 8px;
+    border: 1px solid var(--be-border);
+    border-radius: var(--style-radius-s, 4px);
+    background: var(--theme-elevation-0);
+    color: var(--theme-text);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: grab;
+    touch-action: none;
+
+    &:hover {
+      border-color: var(--theme-elevation-300);
+    }
+  }
+
+  .builder-editor__outline {
+    overflow: auto;
+    flex: 1;
+  }
+
+  .builder-editor__row {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    width: 100%;
+    margin: 0;
+    padding: 4px 8px;
+    border: 0;
+    border-radius: var(--style-radius-s, 4px);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    font-size: 13px;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    touch-action: none;
+  }
+
+  .builder-editor__row--hovered {
+    background: var(--theme-elevation-100);
+  }
+
+  .builder-editor__row--selected {
+    background: var(--theme-elevation-150);
+    box-shadow: inset 2px 0 0 var(--be-accent);
+  }
+
+  .builder-editor__row--dragging {
+    opacity: 0.4;
+  }
+
+  .builder-editor__row--hidden .builder-editor__row-type {
+    text-decoration: line-through;
+  }
+
+  .builder-editor__row-type {
+    font-weight: 600;
+  }
+
+  .builder-editor__row-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--theme-elevation-500);
+  }
+
+  .builder-editor__tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--be-border);
+  }
+
+  .builder-editor__tab {
+    margin-bottom: -1px;
+    padding: 6px 10px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: none;
+    color: var(--theme-elevation-500);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+
+    &[aria-selected='true'] {
+      border-bottom-color: var(--be-accent);
+      color: var(--theme-text);
+    }
+  }
+
+  .builder-editor__block-title {
+    margin: 0 0 8px;
+    font-weight: 600;
+
+    span {
+      margin-left: 6px;
+      color: var(--theme-elevation-400);
+      font-weight: 400;
+      font-size: 12px;
+    }
+  }
+
+  .builder-editor__fields {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--base) * 0.75);
+  }
+
+  .builder-editor__stage {
+    position: relative;
+    display: flex;
+    flex: 1;
+    justify-content: center;
+    min-width: 0;
+    padding: 16px;
+    overflow: auto;
+  }
+
+  .builder-editor__frame {
+    position: relative;
+    flex: none;
+    max-width: 100%;
+    height: 100%;
+    background: #fff;
+    box-shadow: 0 0 0 1px var(--be-border);
+  }
+
+  .builder-editor__iframe {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+  }
+
+  // The overlay sits exactly on the iframe box, so iframe viewport coordinates map 1:1.
+  .builder-editor__overlay {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .builder-editor__hover,
+  .builder-editor__selection,
+  .builder-editor__source,
+  .builder-editor__drop {
+    position: absolute;
+    box-sizing: border-box;
+  }
+
+  .builder-editor__hover {
+    outline: 1px dashed var(--be-hover);
+    outline-offset: -1px;
+  }
+
+  .builder-editor__selection {
+    outline: 2px solid var(--be-accent);
+    outline-offset: -1px;
+  }
+
+  .builder-editor__source {
+    background: repeating-linear-gradient(45deg, rgb(0 0 0 / 0.06) 0 6px, transparent 6px 12px);
+  }
+
+  .builder-editor__tag {
+    position: absolute;
+    top: -20px;
+    left: -1px;
+    padding: 2px 6px;
+    border-radius: 3px 3px 0 0;
+    background: var(--be-accent);
+    color: #fff;
+    font-size: 11px;
+    line-height: 16px;
+    white-space: nowrap;
+  }
+
+  .builder-editor__tag--hover {
+    background: var(--be-hover);
+  }
+
+  .builder-editor__actions {
+    position: absolute;
+    display: flex;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 4px;
+    background: var(--be-accent);
+    transform: translateX(-100%);
+    pointer-events: auto;
+  }
+
+  .builder-editor__action {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      background: rgb(255 255 255 / 0.2);
+    }
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+  }
+
+  .builder-editor__handle {
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .builder-editor__drop--line {
+    border-radius: 2px;
+    background: var(--be-drop);
+  }
+
+  .builder-editor__drop--box {
+    outline: 2px dashed var(--be-drop);
+    outline-offset: -2px;
+    background: color-mix(in srgb, var(--be-drop) 12%, transparent);
+  }
+
+  .builder-editor__drop--fixed {
+    position: fixed;
+    z-index: 1000;
+    pointer-events: none;
+  }
+
+  .builder-editor__ghost {
+    position: fixed;
+    z-index: 1001;
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: var(--be-accent);
+    color: #fff;
+    font-size: 12px;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgb(0 0 0 / 0.2);
+  }
+
+  .builder-editor__ghost--refused {
+    background: var(--theme-elevation-500);
+  }
+
+  // Compact summary in the normal Edit tab.
+  .builder-summary__box {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--base);
+    padding: calc(var(--base) * 0.75);
+    border: 1px solid var(--theme-elevation-150);
+    border-radius: var(--style-radius-s);
+    background: var(--theme-elevation-50);
+
+    .btn {
+      margin: 0;
+    }
+  }
+
+  .builder-summary__text {
+    margin: 0;
+    color: var(--theme-elevation-600);
+  }
+
+  .builder-summary__error {
+    color: var(--theme-error-500);
+  }
+}

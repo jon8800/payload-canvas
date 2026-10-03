@@ -9,3 +9,6 @@ dist
 
 # Agent worktrees
 .claude/worktrees/
+
+# Local test screenshots
+docs/screenshots/

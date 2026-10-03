@@ -1,3 +1,3 @@
 'use client'
 // Canvas iframe runtime. Owner: editor agent.
-export {}
+export { BuilderCanvas, type BuilderCanvasProps } from './BuilderCanvas'

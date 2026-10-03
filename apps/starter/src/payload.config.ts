@@ -9,12 +9,15 @@ import { formBuilderPlugin } from '@payloadcms/plugin-form-builder'
 import { importExportPlugin } from '@payloadcms/plugin-import-export'
 import { mcpPlugin } from '@payloadcms/plugin-mcp'
 import { searchPlugin } from '@payloadcms/plugin-search'
+import { websiteBuilder } from '@payload-toolkit/builder'
+import typography from '@tailwindcss/typography'
 import { createTransport } from 'nodemailer'
 import sharp from 'sharp'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
 import { allBlocks } from '@/blocks/registry'
+import { builderBlocks } from '@/builder'
 import { Users } from '@/collections/Users'
 import { Media } from '@/collections/Media'
 import { Pages } from '@/collections/Pages'
@@ -188,6 +191,18 @@ export default buildConfig({
         excerpt: originalDoc?.excerpt || '',
         slug: originalDoc?.slug || '',
       }),
+    }),
+
+    // Must stay last: it adds top-level fields after other plugins (SEO tabbedUI) move fields into tabs.
+    websiteBuilder({
+      collections: {
+        pages: { field: 'builder', url: (doc) => `/${doc.slug}` },
+      },
+      blocks: builderBlocks,
+      css: {
+        entry: 'src/app/(frontend)/globals.css',
+        plugins: { '@tailwindcss/typography': typography },
+      },
     }),
   ],
   queryPresets: {
