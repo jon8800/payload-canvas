@@ -86,6 +86,67 @@ const PATHS = {
     </>
   ),
   layers: <path d="m8 2 6 3-6 3-6-3 6-3ZM2 8l6 3 6-3M2 11l6 3 6-3" />,
+  // Dynamic blocks (templates and binding)
+  field: (
+    <>
+      <path d="M5.5 2.5H5A1.5 1.5 0 0 0 3.5 4v2.25L2.25 8 3.5 9.75V12A1.5 1.5 0 0 0 5 13.5h.5" />
+      <path d="M10.5 2.5h.5A1.5 1.5 0 0 1 12.5 4v2.25L13.75 8 12.5 9.75V12a1.5 1.5 0 0 1-1.5 1.5h-.5" />
+      <path d="M6.5 8h3" />
+    </>
+  ),
+  collectionList: (
+    <>
+      <rect x="2" y="2" width="12" height="5" rx="1" />
+      <rect x="2" y="9" width="12" height="5" rx="1" opacity={0.45} />
+      <path d="M4.5 4.5h4" />
+      <path d="M4.5 11.5h4" opacity={0.45} />
+    </>
+  ),
+  bind: (
+    <>
+      <ellipse cx="8" cy="3.75" rx="5" ry="1.75" />
+      <path d="M3 3.75v8.5c0 .97 2.24 1.75 5 1.75s5-.78 5-1.75v-8.5M3 8c0 .97 2.24 1.75 5 1.75S13 8.97 13 8" />
+    </>
+  ),
+  template: (
+    <>
+      <rect x="2" y="2" width="12" height="12" rx="1.5" strokeDasharray="2 1.6" />
+      <path d="M5 5.5h6M5 8h3.5" />
+    </>
+  ),
+  calendar: (
+    <>
+      <rect x="2" y="3" width="12" height="11" rx="1.5" />
+      <path d="M2 6.5h12M5.25 1.75v2.5M10.75 1.75v2.5" />
+    </>
+  ),
+  mail: (
+    <>
+      <rect x="1.5" y="3" width="13" height="10" rx="1.5" />
+      <path d="m2 4 6 4.75L14 4" />
+    </>
+  ),
+  relation: (
+    <>
+      <rect x="2" y="5.5" width="8.5" height="8.5" rx="1.5" />
+      <path d="M8 2h6v6M14 2 8.5 7.5" />
+    </>
+  ),
+  folder: <path d="M1.75 4.25A1.25 1.25 0 0 1 3 3h3l1.5 1.75H13a1.25 1.25 0 0 1 1.25 1.25v6A1.25 1.25 0 0 1 13 13.25H3A1.25 1.25 0 0 1 1.75 12V4.25Z" />,
+  select: (
+    <>
+      <rect x="1.5" y="3.5" width="13" height="9" rx="1.5" />
+      <path d="m9.5 7 1.5 1.5L12.5 7" />
+    </>
+  ),
+  warning: (
+    <>
+      <path d="M8 2 14.5 13.5h-13L8 2Z" />
+      <path d="M8 6.5v3" />
+      {dot(8, 11.5, 0.8)}
+    </>
+  ),
+  unlink: <path d="m5.5 2.5.5 1.5M2.5 5.5l1.5.5M7.25 4.25l1-1a2.83 2.83 0 0 1 4 4l-1 1M8.75 11.75l-1 1a2.83 2.83 0 0 1-4-4l1-1M10.5 13.5 10 12M13.5 10.5 12 10" />,
 
   // Actions
   drag: (

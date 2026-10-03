@@ -1,0 +1,624 @@
+// Templates and data binding in the editor: bind buttons, bound chips, the field picker and the
+// toolbar's template control. Payload CSS variables only, inside Payload's own layer.
+
+@layer payload-default {
+  // ---------------------------------------------------------------------------
+  // Inspector fields
+  // ---------------------------------------------------------------------------
+
+  .builder-bind {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .builder-bind__stack {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--base) * 0.5);
+  }
+
+  // The bind button sits on the label row of the input it binds. (`[data-tooltip]` sets relative.)
+  .builder-editor .builder-bind > .builder-bind__button {
+    position: absolute;
+  }
+
+  // Bind and unbind buttons sit at the inspector's right edge: their tooltips open to the left.
+  .builder-editor .builder-bind__button,
+  .builder-editor .builder-bind__chip-x {
+    &:hover::after {
+      left: auto;
+      right: 0;
+      transform: none;
+    }
+  }
+
+  .builder-bind__button {
+    top: -3px;
+    right: 0;
+    z-index: 1;
+    display: inline-grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--style-radius-s, 4px);
+    background: transparent;
+    color: var(--theme-elevation-400);
+    cursor: pointer;
+    transition:
+      color 120ms ease,
+      background-color 120ms ease,
+      border-color 120ms ease;
+
+    &:hover,
+    &[aria-expanded='true'] {
+      border-color: color-mix(in srgb, var(--theme-success-500) 40%, transparent);
+      background: color-mix(in srgb, var(--theme-success-500) 12%, transparent);
+      color: var(--theme-success-600);
+    }
+  }
+
+  .builder-bind:hover > .builder-bind__button {
+    color: var(--theme-elevation-700);
+  }
+
+  .builder-bind--bound {
+    margin-bottom: 0;
+  }
+
+  .builder-bind__chip,
+  .builder-bind__select {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    min-height: 34px;
+    border: 1px solid color-mix(in srgb, var(--theme-success-500) 45%, transparent);
+    border-radius: var(--style-radius-s, 4px);
+    background: color-mix(in srgb, var(--theme-success-500) 10%, var(--theme-input-bg, var(--theme-elevation-0)));
+    color: var(--theme-text);
+  }
+
+  .builder-bind__chip--missing,
+  .builder-bind__select--missing {
+    border-color: color-mix(in srgb, var(--theme-warning-500, var(--theme-error-500)) 55%, transparent);
+    background: color-mix(in srgb, var(--theme-warning-500, var(--theme-error-500)) 10%, transparent);
+
+    svg:first-child {
+      color: var(--theme-warning-600, var(--theme-error-500));
+    }
+  }
+
+  .builder-bind__chip-main,
+  .builder-bind__select {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    padding: 6px 8px 6px 10px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+
+    > svg:first-child {
+      flex: none;
+      color: var(--theme-success-600);
+    }
+
+    &:disabled {
+      cursor: default;
+    }
+  }
+
+  .builder-bind__select {
+    flex: none;
+    width: 100%;
+    border-color: var(--theme-elevation-150);
+    background: var(--theme-input-bg, var(--theme-elevation-0));
+
+    &:hover,
+    &[aria-expanded='true'] {
+      border-color: var(--theme-elevation-250);
+    }
+  }
+
+  .builder-bind__chip-main:hover:not(:disabled) .builder-bind__chip-label {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .builder-bind__chip-label {
+    min-width: 0;
+    overflow: hidden;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .builder-bind__chip-path {
+    flex: none;
+    max-width: 45%;
+    margin-left: auto;
+    overflow: hidden;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: var(--theme-elevation-100);
+    color: var(--theme-elevation-600);
+    font-family: var(--font-mono, monospace);
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .builder-bind__placeholder {
+    flex: 1;
+    color: var(--theme-elevation-400);
+  }
+
+  .builder-bind__select-caret {
+    flex: none;
+    margin-left: 4px;
+    color: var(--theme-elevation-500);
+  }
+
+  .builder-bind__chip-x {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    margin-right: 4px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--style-radius-s, 4px);
+    background: none;
+    color: var(--theme-elevation-500);
+    cursor: pointer;
+
+    &:hover {
+      background: var(--theme-elevation-100);
+      color: var(--theme-error-500);
+    }
+  }
+
+  .builder-bind__note {
+    margin: 0;
+    color: var(--theme-elevation-500);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .builder-bind__note--warn {
+    color: var(--theme-warning-600, var(--theme-error-500));
+  }
+
+  .builder-bind__preview {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding: 6px 8px;
+    border-left: 2px solid color-mix(in srgb, var(--theme-success-500) 45%, transparent);
+    background: var(--theme-elevation-50);
+    border-radius: 0 var(--style-radius-s, 4px) var(--style-radius-s, 4px) 0;
+  }
+
+  .builder-bind__preview-from {
+    overflow: hidden;
+    color: var(--theme-elevation-500);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .builder-bind__preview-text {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--theme-text);
+    font-size: 12.5px;
+    line-height: 1.45;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow-wrap: anywhere;
+  }
+
+  .builder-bind__preview-image {
+    display: block;
+    width: 100%;
+    max-height: 120px;
+    border-radius: var(--style-radius-s, 4px);
+    object-fit: cover;
+    background: var(--theme-elevation-100);
+  }
+
+  .builder-bind__preview-empty {
+    color: var(--theme-elevation-500);
+    font-size: 12px;
+    font-style: italic;
+  }
+
+  .builder-bind__fallback-toggle {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    gap: 4px;
+    padding: 2px 0;
+    border: 0;
+    background: none;
+    color: var(--theme-elevation-500);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+
+    &:hover {
+      color: var(--theme-text);
+    }
+  }
+
+  .builder-bind__fallback {
+    padding: 8px 0 0 10px;
+    border-left: 2px solid var(--theme-elevation-100);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Scope banner (top of the Content tab)
+  // ---------------------------------------------------------------------------
+
+  .builder-bind__banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: var(--style-radius-m, 6px);
+    background: var(--theme-elevation-50);
+    color: var(--theme-elevation-700);
+    font-size: 12px;
+    line-height: 1.45;
+
+    > svg {
+      flex: none;
+      margin-top: 1px;
+      color: var(--theme-success-600);
+    }
+
+    p {
+      margin: 0;
+    }
+  }
+
+  .builder-bind__banner--warn {
+    background: color-mix(in srgb, var(--theme-warning-500, var(--theme-error-500)) 12%, transparent);
+    color: var(--theme-text);
+
+    > svg {
+      color: var(--theme-warning-600, var(--theme-error-500));
+    }
+  }
+
+  .builder-bind__inline-icon {
+    display: inline;
+    vertical-align: -2px;
+  }
+
+  .builder-bind__link {
+    margin-top: 4px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--theme-text);
+    font: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Field picker and sample list (popovers)
+  // ---------------------------------------------------------------------------
+
+  .builder-bind__popover.builder-styles__popover,
+  .builder-template__popover.builder-styles__popover {
+    width: 340px;
+    max-height: min(460px, calc(100vh - 16px));
+    overflow: hidden;
+    border-color: var(--theme-elevation-150);
+  }
+
+  .builder-bind__picker {
+    display: flex;
+    flex-direction: column;
+    max-height: inherit;
+  }
+
+  .builder-bind__picker-head {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px 6px;
+  }
+
+  .builder-bind__picker-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--theme-elevation-600);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+
+    svg {
+      color: var(--theme-success-600);
+    }
+  }
+
+  .builder-bind__picker-search {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    margin: 0 10px 6px;
+    padding: 0 8px;
+    border: 1px solid var(--theme-elevation-150);
+    border-radius: var(--style-radius-m, 6px);
+    background: var(--theme-input-bg, var(--theme-elevation-0));
+    color: var(--theme-elevation-400);
+
+    &:focus-within {
+      border-color: var(--theme-success-500);
+      color: var(--theme-text);
+    }
+
+    input {
+      flex: 1;
+      min-width: 0;
+      padding: 0;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--theme-text);
+      font: inherit;
+      font-size: 12.5px;
+    }
+  }
+
+  .builder-bind__picker-empty {
+    margin: 0;
+    padding: 16px 14px 18px;
+    color: var(--theme-elevation-500);
+    font-size: 12px;
+    text-align: center;
+  }
+
+  .builder-bind__picker-foot {
+    margin: 0;
+    padding: 8px 12px;
+    border-top: 1px solid var(--theme-elevation-100);
+    color: var(--theme-elevation-500);
+    font-size: 11px;
+  }
+
+  .builder-bind__rows {
+    flex: 1;
+    min-height: 0;
+    margin: 0;
+    padding: 2px 4px 6px;
+    overflow: hidden auto;
+    list-style: none;
+    scrollbar-width: thin;
+  }
+
+  .builder-bind__row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 34px;
+    padding: 4px 8px;
+    border-radius: var(--style-radius-s, 4px);
+    color: var(--theme-text);
+    cursor: pointer;
+
+    &[aria-selected='true'] {
+      background: var(--theme-elevation-100);
+    }
+
+    &[data-current] .builder-bind__row-label {
+      font-weight: 600;
+    }
+  }
+
+  .builder-bind__row--group {
+    min-height: 26px;
+    margin-top: 2px;
+    color: var(--theme-elevation-500);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: default;
+
+    .builder-bind__row-label {
+      font-weight: 600;
+    }
+  }
+
+  .builder-bind__row-hop {
+    padding: 0 5px;
+    border-radius: 8px;
+    background: var(--theme-elevation-100);
+    font-size: 10px;
+    font-weight: 500;
+  }
+
+  .builder-bind__row-icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: var(--style-radius-s, 4px);
+    background: var(--theme-elevation-100);
+    color: var(--theme-elevation-700);
+  }
+
+  .builder-bind__row-text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.25;
+  }
+
+  .builder-bind__row-label {
+    overflow: hidden;
+    font-size: 12.5px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .builder-bind__row-path {
+    overflow: hidden;
+    color: var(--theme-elevation-500);
+    font-family: var(--font-mono, monospace);
+    font-size: 10.5px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .builder-bind__row-hint {
+    flex: none;
+    max-width: 40%;
+    overflow: hidden;
+    color: var(--theme-elevation-500);
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .builder-bind__row-check {
+    flex: none;
+    color: var(--theme-success-600);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Toolbar: template mode and the sample document
+  // ---------------------------------------------------------------------------
+
+  .builder-template__control {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    max-width: 100%;
+    height: 28px;
+    margin-left: 8px;
+    padding: 0 10px 0 8px;
+    border: 1px solid var(--theme-elevation-150);
+    border-radius: 14px;
+    background: var(--theme-elevation-50);
+    color: var(--theme-elevation-800);
+    font-size: 12px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color 120ms ease,
+      border-color 120ms ease;
+
+    > svg:first-child {
+      flex: none;
+      color: var(--theme-success-600);
+    }
+
+    > svg:last-child {
+      flex: none;
+      color: var(--theme-elevation-500);
+    }
+
+    &:hover,
+    &[aria-expanded='true'] {
+      border-color: var(--theme-elevation-250);
+      background: var(--theme-elevation-100);
+    }
+  }
+
+  .builder-template__control--warn {
+    border-color: color-mix(in srgb, var(--theme-warning-500, var(--theme-error-500)) 55%, transparent);
+    background: color-mix(in srgb, var(--theme-warning-500, var(--theme-error-500)) 12%, transparent);
+
+    > svg:first-child {
+      color: var(--theme-warning-600, var(--theme-error-500));
+    }
+  }
+
+  .builder-template__mode {
+    flex: none;
+    font-weight: 600;
+  }
+
+  .builder-template__sep {
+    flex: none;
+    color: var(--theme-elevation-400);
+  }
+
+  .builder-template__text {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--theme-elevation-600);
+    text-overflow: ellipsis;
+
+    strong {
+      color: var(--theme-text);
+      font-weight: 500;
+    }
+  }
+
+  .builder-template__status {
+    flex: none;
+    padding: 0 6px;
+    border-radius: 8px;
+    background: var(--theme-elevation-100);
+    color: var(--theme-elevation-600);
+    font-size: 10.5px;
+    line-height: 16px;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Outline and canvas hints
+  // ---------------------------------------------------------------------------
+
+  .builder-editor__row-bound {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    margin-left: auto;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--theme-success-500) 14%, transparent);
+    color: var(--theme-success-600);
+  }
+
+  .builder-editor__row:hover .builder-editor__row-bound {
+    display: none;
+  }
+
+  .builder-editor__tag-bound {
+    display: inline-grid;
+    place-items: center;
+    width: 15px;
+    height: 15px;
+    margin-left: 2px;
+    border-radius: 3px;
+    background: rgb(255 255 255 / 0.22);
+  }
+}

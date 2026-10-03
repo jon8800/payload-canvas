@@ -3,7 +3,7 @@
 // renders in server components and inside the client canvas.
 
 import { LinkJSXConverter, RichText as LexicalRichText } from '@payloadcms/richtext-lexical/react'
-import type { ComponentType } from 'react'
+import type { ComponentType, ReactNode } from 'react'
 import { defaultResolveLink } from '../render/link'
 import type { BlockComponentProps, ResolveLink } from '../render/types'
 import { PlaceholderText } from './placeholder'
@@ -45,13 +45,24 @@ function converters(resolveLink: ResolveLink) {
   })
 }
 
+const convertersByResolver = new WeakMap<ResolveLink, ReturnType<typeof converters>>()
+
+/** Lexical rich text as React elements, with internal links resolved by `resolveLink`. No wrapper. */
+export function renderRichText(content: unknown, resolveLink: ResolveLink): ReactNode {
+  let rendererConverters = convertersByResolver.get(resolveLink)
+  if (!rendererConverters) {
+    rendererConverters = converters(resolveLink)
+    convertersByResolver.set(resolveLink, rendererConverters)
+  }
+  return <LexicalRichText data={content as never} disableContainer converters={rendererConverters as never} />
+}
+
 /**
  * Makes the built-in rich text component for one link resolver. RenderLayout calls it with its
  * `resolveLink`, so the resolver stays in a closure and never becomes a component prop.
  * Lexical rich text, wrapped in a `<div>` that takes the block's `className` (e.g. "prose").
  */
 function createRichText(resolveLink: ResolveLink): ComponentType<BlockComponentProps> {
-  const rendererConverters = converters(resolveLink)
   return function RichText({ props, className, attributes, mode }: BlockComponentProps) {
     const content = props.content
     if (isEmptyRichText(content)) {
@@ -66,7 +77,7 @@ function createRichText(resolveLink: ResolveLink): ComponentType<BlockComponentP
     }
     return (
       <div {...attributes} className={className}>
-        <LexicalRichText data={content as never} disableContainer converters={rendererConverters as never} />
+        {renderRichText(content, resolveLink)}
       </div>
     )
   }

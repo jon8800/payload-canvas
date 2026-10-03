@@ -65,3 +65,21 @@ export const quote = (value: string, cite: string, className?: string) => block(
 export const divider = (className?: string) => block('divider', undefined, className)
 export const spacer = (className?: string) => block('spacer', undefined, className)
 export const form = (id: number | string, className?: string) => block('form', { form: id }, className)
+
+/** Binds props to document fields (templates and collection list items), e.g. { text: 'title' }. */
+export const bind = (target: Block, bindings: Record<string, string>): Block => ({ ...target, bindings: { ...target.bindings, ...bindings } })
+/** Shows one field of the current document (templates). */
+export const field = (path: string, className?: string, fallback?: string) =>
+  block('field', fallback ? { path, fallback } : { path }, className)
+/** Lists documents of a collection. `item` is the design of one item; its blocks bind to the item. */
+export const collectionList = (
+  collection: 'posts' | 'pages',
+  options: { limit?: number; sort?: string; excludeCurrent?: boolean },
+  className: string,
+  item: Block[],
+): Block => {
+  const result = block('collectionList', { collection, ...options }, className)
+  return { ...result, slots: { item } }
+}
+/** A block with no props yet, e.g. an image whose value comes from a binding. */
+export const bare = (type: string, className?: string) => block(type, undefined, className)

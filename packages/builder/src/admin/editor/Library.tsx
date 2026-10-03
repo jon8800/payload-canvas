@@ -8,7 +8,7 @@ import { insertBlocks, insertPosition, sectionPosition } from './actions'
 import { BlockIcon, Icon } from './icons'
 import { useRuntime, type DragData } from './runtime'
 
-const BLOCK_CATEGORIES = ['Layout', 'Content', 'Media', 'Interactive']
+const BLOCK_CATEGORIES = ['Layout', 'Content', 'Media', 'Interactive', 'Dynamic']
 const SECTION_CATEGORIES = ['Heroes', 'Features', 'Content', 'Social proof', 'Calls to action', 'Contact', 'Navigation']
 const OTHER = 'Other'
 

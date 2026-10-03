@@ -1,10 +1,10 @@
-// Seeds the demo site: theme, media, a contact form, 4 pages, 3 posts, a header and a footer.
+// Seeds the demo site: theme, media, a contact form, 5 pages, 3 posts, the post template, a header and a footer.
 // Idempotent: it deletes the documents it owns (matched by slug, title or filename) first.
 // Run with `pnpm seed:demo`.
 import { getPayload, type Payload } from 'payload'
 import config from '@payload-config'
 import sharp from 'sharp'
-import { validateLayout, type Block, type Layout } from '@payload-toolkit/builder/core'
+import { validateLayout, withoutBoundRequired, type Block, type Layout } from '@payload-toolkit/builder/core'
 
 import { builderBlocks } from '@/builder'
 import { HOME_SLUG } from '@/lib/links'
@@ -18,21 +18,20 @@ import {
   footer,
   header,
   hero,
-  image,
   imageText,
   lexical,
   pageLink,
-  quote,
-  richText,
-  stack,
+  postList,
+  postTemplate,
   testimonials,
   url,
 } from '@/data/sections'
 
 const SITE_NAME = 'Northwind Studio'
-const PAGE_SLUGS = [HOME_SLUG, 'about', 'services', 'contact']
+const PAGE_SLUGS = [HOME_SLUG, 'about', 'services', 'contact', 'blog']
 const POST_SLUGS = ['designing-with-blocks', 'a-faster-launch', 'theme-tokens-explained']
 const PART_TITLES = ['Header', 'Footer']
+const TEMPLATE_NAME = 'Post template'
 const FORM_TITLE = 'Contact form'
 const CATEGORIES = [
   { title: 'Design', slug: 'design' },
@@ -51,7 +50,8 @@ type Id = number
 
 function layoutOf(blocks: Block[], where: string): Layout {
   const layout: Layout = { version: 1, blocks }
-  const errors = validateLayout(layout, builderBlocks)
+  // Bound props may stay empty: the document fills them at render time.
+  const errors = withoutBoundRequired(validateLayout(layout, builderBlocks), layout)
   if (errors.length > 0) {
     const lines = errors.map((e) => `  ${e.code} ${e.path}: ${e.message}`).join('\n')
     throw new Error(`Invalid layout for ${where}:\n${lines}`)
@@ -66,6 +66,7 @@ async function clear(payload: Payload) {
     await payload.delete({ collection: 'form-submissions', where: { form: { in: formIds } } })
     await payload.delete({ collection: 'forms', where: { id: { in: formIds } } })
   }
+  await payload.delete({ collection: 'builder-templates', where: { name: { equals: TEMPLATE_NAME } }, context })
   await payload.delete({ collection: 'template-parts', where: { title: { in: PART_TITLES } }, trash: true, context })
   await payload.delete({ collection: 'posts', where: { slug: { in: POST_SLUGS } }, trash: true, context })
   await payload.delete({ collection: 'pages', where: { slug: { in: PAGE_SLUGS } }, trash: true, context })
@@ -173,7 +174,7 @@ async function seed() {
         'A page made of small blocks is easy to change. A heading, a text, a button: each block does one job.',
         'Editors move blocks around in the page builder. Developers add new blocks when the site needs them.',
       ],
-      quote: { quote: 'The best design system is the one your editors actually use.', cite: 'Ada, design lead' },
+      more: 'The best design system is the one your editors actually use.',
     },
     {
       title: 'A faster launch',
@@ -183,7 +184,7 @@ async function seed() {
         'Most sites need the same sections: a hero, features, a call to action and a contact form.',
         'We start from ready-made sections and change the words, the images and the colors.',
       ],
-      quote: { quote: 'We launched in two weeks instead of two months.', cite: 'Sam, product owner' },
+      more: 'We launched in two weeks instead of two months.',
     },
     {
       title: 'Theme tokens explained',
@@ -193,18 +194,18 @@ async function seed() {
         'The theme settings store a few colors, the fonts and the corner radius.',
         'Every block uses these values through classes like bg-primary, so one change updates every page.',
       ],
-      quote: { quote: 'Change the primary color once, and every button follows.', cite: 'Lee, developer' },
+      more: 'Change the primary color once, and every button follows.',
     },
   ]
   const posts: Id[] = []
   for (const [i, post] of postBodies.entries()) {
     const slug = POST_SLUGS[i]
-    const bodyImage = [studio, workshop, launch][(i + 1) % 3]
-    const body = stack('div', 'flex flex-col gap-8', [
-      richText(lexical([...post.paragraphs, { h2: 'What we learned' }, { ul: ['Keep blocks small', 'Reuse sections', 'Let the theme do the styling'] }]), 'prose max-w-none'),
-      quote(post.quote.quote, post.quote.cite, 'border-l-4 border-primary pl-6 text-xl italic'),
-      // A different image than the featured one, which the post route shows above the body.
-      image(bodyImage.id, bodyImage.alt, 'w-full rounded-lg'),
+    // The post template shows the body with a Field block bound to `content`.
+    const body = lexical([
+      ...post.paragraphs,
+      { h2: 'What we learned' },
+      { ul: ['Keep blocks small', 'Reuse sections', 'Let the theme do the styling'] },
+      post.more,
     ])
     const doc = await payload.create({
       collection: 'posts',
@@ -216,7 +217,7 @@ async function seed() {
         categories: [categoryIds[i % categoryIds.length]],
         publishedAt: new Date(Date.UTC(2026, 8, 10 + i * 7)).toISOString(),
         _status: 'published',
-        builder: layoutOf([body], `post "${slug}"`),
+        content: body,
       },
       context,
     })
@@ -307,6 +308,10 @@ async function seed() {
       }),
       cta.create({ title: 'Have a project in mind?', text: 'Send us a short message.', primary: toContact }),
     ],
+    blog: [
+      hero.create({ title: 'Blog', text: 'Notes on design, process and building websites with blocks.' }),
+      postList.create({ limit: 12 }),
+    ],
     contact: [
       hero.create({ title: 'Contact', text: 'Tell us about your project and we will get back to you.' }),
       contact.create({
@@ -325,6 +330,20 @@ async function seed() {
       context,
     })
   }
+
+  // The post template: every post renders through it (posts.template overrides it per post).
+  await payload.create({
+    collection: 'builder-templates',
+    data: {
+      name: TEMPLATE_NAME,
+      targetCollection: 'posts',
+      isDefault: true,
+      previewDocument: { relationTo: 'posts', value: posts[0] },
+      _status: 'published',
+      layout: layoutOf(postTemplate(), 'post template'),
+    },
+    context,
+  })
 
   // Template parts.
   const nav = [
@@ -369,7 +388,7 @@ async function seed() {
   await payload.updateGlobal({ slug: 'site-settings', data: { homePage: pages[HOME_SLUG] }, context })
 
   payload.logger.info(
-    `Seeded: theme, ${IMAGES.length} images, 1 form, ${CATEGORIES.length} categories, ${PAGE_SLUGS.length} pages, ${posts.length} posts, header and footer.`,
+    `Seeded: theme, ${IMAGES.length} images, 1 form, ${CATEGORIES.length} categories, ${PAGE_SLUGS.length} pages, ${posts.length} posts, the post template, header and footer.`,
   )
 }
 

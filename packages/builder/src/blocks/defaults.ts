@@ -1,5 +1,6 @@
 import type { CollectionSlug } from 'payload'
 import { defineBlock } from '../core/blocks'
+import { COLLECTION_LIST_BLOCK, FIELD_BLOCK, LIST_ITEM_SLOT } from '../core/bindings'
 import type { BlockDefinition } from '../core/types'
 import { linkField, when } from './link'
 
@@ -11,11 +12,16 @@ export type DefaultBlocksOptions = {
    * `{ relationTo, value }`. Empty (the default) leaves only URL links.
    */
   linkCollections?: string[]
+  /**
+   * Collections the collection list block can show (they need a `url` in the plugin config).
+   * Default: a text field. The plugin turns it into a select of its collections that have a `url`.
+   */
+  listCollections?: string[]
 }
 
 /**
  * The built-in blocks: stack, grid, heading, text, richText, image, button, link, list, quote,
- * divider, spacer, video.
+ * divider, spacer, video, and the dynamic blocks field and collectionList.
  */
 export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[] {
   const mediaCollection = (options?.mediaCollection ?? 'media') as CollectionSlug
@@ -350,5 +356,93 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     },
   })
 
-  return [stack, grid, heading, text, richText, image, button, link, list, quote, divider, spacer, video]
+  const field = defineBlock({
+    type: FIELD_BLOCK,
+    label: 'Field',
+    icon: 'field',
+    category: 'Dynamic',
+    fields: [
+      {
+        name: 'path',
+        type: 'text',
+        label: 'Field',
+        required: true,
+        admin: { description: 'Dot path of a field of the document, e.g. "content", "featuredImage" or "author.name".' },
+      },
+      {
+        name: 'fallback',
+        type: 'text',
+        label: 'Fallback',
+        admin: { description: 'Shown when the document has no value.' },
+      },
+    ],
+    ai: {
+      description:
+        'Shows one field of the current document in a template, rendered by its value: rich text as formatted ' +
+        'text, an upload as an image, a date as a formatted date, a relationship as its title, text as text. ' +
+        '"path" is a dot path from getBindingSources (e.g. "content", "author.name"). Only works in templates ' +
+        'and inside a collection list item.',
+      example: { type: FIELD_BLOCK, props: { path: 'content' }, className: 'prose max-w-none' },
+    },
+  })
+
+  const listCollections = options?.listCollections
+  const collectionList = defineBlock({
+    type: COLLECTION_LIST_BLOCK,
+    label: 'Collection list',
+    icon: 'collectionList',
+    category: 'Dynamic',
+    fields: [
+      listCollections && listCollections.length > 0
+        ? { name: 'collection', type: 'select', label: 'Collection', options: listCollections, required: true }
+        : { name: 'collection', type: 'text', label: 'Collection', required: true },
+      { name: 'limit', type: 'number', label: 'Number of items', defaultValue: 3, min: 1, max: 100 },
+      {
+        name: 'sort',
+        type: 'text',
+        label: 'Sort',
+        defaultValue: '-createdAt',
+        admin: { description: 'A field name. A leading "-" sorts newest or largest first, e.g. "-publishedAt".' },
+      },
+      {
+        name: 'excludeCurrent',
+        type: 'checkbox',
+        label: 'Leave out the current document',
+        defaultValue: true,
+        admin: { description: 'In a template of the same collection, the page\'s own document is not listed.' },
+      },
+    ],
+    slots: { [LIST_ITEM_SLOT]: { label: 'Item' } },
+    defaultClassName: 'grid grid-cols-1 gap-6 md:grid-cols-3',
+    ai: {
+      description:
+        'Lists the latest documents of a collection (e.g. "latest posts"). The "item" slot is the design of ONE ' +
+        'item: it repeats for every document. Blocks in it bind to the ITEM\'s fields with "bindings", e.g. a ' +
+        'heading with bindings { "text": "title" } and a link with bindings { "link": "$url" } (the item\'s URL). ' +
+        'Only published documents show on the site.',
+      example: {
+        type: COLLECTION_LIST_BLOCK,
+        props: { collection: 'posts', limit: 3, sort: '-createdAt' },
+        className: 'grid grid-cols-1 gap-6 md:grid-cols-3',
+        slots: {
+          [LIST_ITEM_SLOT]: [
+            {
+              id: 'b_example_1',
+              type: 'link',
+              className: 'flex flex-col gap-2 rounded-lg border p-4',
+              bindings: { link: '$url' },
+              slots: {
+                children: [
+                  { id: 'b_example_2', type: 'heading', props: { level: '3' }, bindings: { text: 'title' } },
+                  { id: 'b_example_3', type: 'text', bindings: { text: 'excerpt' } },
+                ],
+              },
+            },
+          ],
+        },
+      },
+    },
+  })
+
+  return [stack, grid, heading, text, richText, image, button, link, list, quote, divider, spacer, video, field, collectionList]
 }

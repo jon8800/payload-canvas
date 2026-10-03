@@ -1,7 +1,9 @@
 import type { BlockComponents } from '../render/types'
 import { Button } from './Button'
+import { CollectionList } from './CollectionList'
 import { Container } from './Container'
 import { Divider } from './Divider'
+import { Field } from './Field'
 import { Heading } from './Heading'
 import { Image } from './Image'
 import { Link } from './Link'
@@ -26,4 +28,6 @@ export const defaultComponents: BlockComponents = {
   divider: Divider,
   spacer: Spacer,
   video: Video,
+  field: Field,
+  collectionList: CollectionList,
 }

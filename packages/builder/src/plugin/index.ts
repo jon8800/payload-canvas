@@ -2,19 +2,51 @@ import path from 'node:path'
 import type { CollectionConfig, Config, Field, JSONField, Plugin, RichTextField } from 'payload'
 import { defaultBlocks } from '../blocks'
 import { richTextFieldName } from '../core/blocks'
-import { EMPTY_LAYOUT, type BlockDefinition, type BuilderClientConfig, type SectionDefinition } from '../core/types'
+import { DEFAULT_TEMPLATES_SLUG, DOCUMENT_TEMPLATE_FIELD, TEMPLATE_TARGET_FIELD } from '../core/bindings'
+import {
+  EMPTY_LAYOUT,
+  type BlockDefinition,
+  type BuilderClientConfig,
+  type SectionDefinition,
+  type TemplatesClientConfig,
+} from '../core/types'
 import { getCanvasCssInput, getStyleTokens, type CssOptions, type TailwindPlugins } from '../css'
 import { createLiveRuntime, LIVE_PATH, LIVE_RUNTIME_KEY, liveEndpoints, type LiveBus } from '../live'
 import { layoutBeforeChange } from './hook'
 import { toJsonSafe } from './jsonSafe'
+import { listCollectionsOf } from './listCollections'
+import {
+  bindingSources,
+  documentTemplateField,
+  hasFieldNamed,
+  TEMPLATE_LAYOUT_FIELD,
+  TEMPLATES_CONFIG_KEY,
+  templatesCollection,
+} from './templates'
 
 export type { GeneratedCss } from './hook'
 
 export type BuilderCollectionOptions = {
   /** Name of the layout JSON field. Default "layout". */
   field?: string
-  /** Frontend path of a document. Used for preview. */
+  /**
+   * Frontend path of a document. Used for preview. Collections with a `url` can be shown by the
+   * collection list block.
+   */
   url?: (doc: Record<string, unknown>) => string
+  /**
+   * Documents render through templates: the plugin adds the templates collection and a `template`
+   * relationship (sidebar) to this collection. The site loads the template with `loadTemplate`
+   * from `@payload-toolkit/builder-react/server`.
+   */
+  templates?: boolean
+}
+
+export type TemplatesOptions = {
+  /** Slug of the templates collection. Default "builder-templates". */
+  slug?: string
+  /** Hooks for the templates collection, e.g. `afterChange` to revalidate the pages that use templates. */
+  hooks?: CollectionConfig['hooks']
 }
 
 export type WebsiteBuilderOptions = {
@@ -36,6 +68,8 @@ export type WebsiteBuilderOptions = {
    * built on Postgres LISTEN/NOTIFY (see `live/bus.ts`).
    */
   live?: { bus?: LiveBus; heartbeatMs?: number }
+  /** Options for the templates collection. It exists when a collection sets `templates: true`. */
+  templates?: TemplatesOptions
 }
 
 const LAYOUT_FIELD_COMPONENT = '@payload-toolkit/builder/client#LayoutField'
@@ -55,34 +89,86 @@ export function cssFieldName(field: string): string {
  */
 export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
   return (config: Config): Config => {
-    const blocks = options.blocks ?? defaultBlocks()
+    const apiRoute = config.routes?.api ?? '/api'
+    const canvasPath = options.canvasPath ?? '/builder-canvas'
+    const sourceCollections = config.collections ?? []
+    const live = createLiveRuntime(options.live?.bus)
+
+    for (const slug of Object.keys(options.collections)) {
+      if (!sourceCollections.some((c) => c.slug === slug)) {
+        throw new Error(
+          `[websiteBuilder] Collection "${slug}" does not exist. Known collections: ${sourceCollections.map((c) => c.slug).join(', ')}.`,
+        )
+      }
+    }
+
+    // Templates: a collection of layouts for the template-enabled collections.
+    const targets = Object.entries(options.collections).filter(([, o]) => o.templates).map(([slug]) => slug)
+    const templatesSlug = options.templates?.slug ?? DEFAULT_TEMPLATES_SLUG
+    const withUrl = new Set(Object.entries(options.collections).filter(([, o]) => o.url).map(([slug]) => slug))
+    const builderOptions: Record<string, BuilderCollectionOptions> = { ...options.collections }
+    let collections = sourceCollections
+    if (targets.length > 0) {
+      if (sourceCollections.some((c) => c.slug === templatesSlug)) {
+        throw new Error(
+          `[websiteBuilder] A collection named "${templatesSlug}" already exists. Set \`templates.slug\` to another name.`,
+        )
+      }
+      for (const slug of targets) {
+        const target = sourceCollections.find((c) => c.slug === slug)
+        if (target && hasFieldNamed(target.fields, DOCUMENT_TEMPLATE_FIELD)) {
+          throw new Error(
+            `[websiteBuilder] Collection "${slug}" already has a field named "${DOCUMENT_TEMPLATE_FIELD}". The plugin needs this name for the document's template.`,
+          )
+        }
+      }
+      collections = [
+        ...sourceCollections.map((c) =>
+          targets.includes(c.slug) ? { ...c, fields: [...c.fields, documentTemplateField(c.slug, templatesSlug)] } : c,
+        ),
+        templatesCollection({ slug: templatesSlug, targets, hooks: options.templates?.hooks }),
+      ]
+      builderOptions[templatesSlug] = { field: TEMPLATE_LAYOUT_FIELD }
+    }
+
+    const blocks = listCollectionsOf(options.blocks ?? defaultBlocks(), [...withUrl])
     const clientBlocks = toJsonSafe(blocks)
     const css: CssOptions = {
       entry: path.resolve(process.cwd(), options.css.entry),
       plugins: options.css.plugins,
     }
-    const apiRoute = config.routes?.api ?? '/api'
-    const canvasPath = options.canvasPath ?? '/builder-canvas'
-    const collections = config.collections ?? []
-    const live = createLiveRuntime(options.live?.bus)
     const liveCollections = Object.fromEntries(
-      Object.entries(options.collections).map(([slug, o]) => [slug, { field: o.field ?? 'layout' }]),
+      Object.entries(builderOptions).map(([slug, o]) => [slug, { field: o.field ?? 'layout' }]),
     )
 
-    for (const slug of Object.keys(options.collections)) {
-      if (!collections.some((c) => c.slug === slug)) {
-        throw new Error(
-          `[websiteBuilder] Collection "${slug}" does not exist. Known collections: ${collections.map((c) => c.slug).join(', ')}.`,
-        )
-      }
-    }
+    // Bindable fields of every template target and every collection the list block can show.
+    // The plugin's own fields are left out.
+    const templates: TemplatesClientConfig | null =
+      targets.length > 0
+        ? {
+            collection: templatesSlug,
+            targetField: TEMPLATE_TARGET_FIELD,
+            sources: bindingSources({
+              collections: collections.filter((c) => c.slug !== templatesSlug),
+              slugs: [...new Set([...targets, ...withUrl])],
+              skip: Object.fromEntries(
+                Object.entries(builderOptions).map(([slug, o]) => {
+                  const field = o.field ?? 'layout'
+                  return [slug, new Set([field, cssFieldName(field), richTextFieldName(field), DOCUMENT_TEMPLATE_FIELD])]
+                }),
+              ),
+              withUrl,
+            }),
+          }
+        : null
+    const clientTemplates = templates ? toJsonSafe(templates) : null
 
     const fieldNames: Record<string, string> = {}
 
     return {
       ...config,
       collections: collections.map((collection) => {
-        const collectionOptions = options.collections[collection.slug]
+        const collectionOptions = builderOptions[collection.slug]
         if (!collectionOptions) return collection
         const field = collectionOptions.field ?? 'layout'
         fieldNames[collection.slug] = field
@@ -95,12 +181,12 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           tokensEndpoint: `${apiRoute}${STYLE_TOKENS_PATH}`,
           sections: options.sections ?? [],
           liveEndpoint: `${apiRoute}${LIVE_PATH}`,
-          templates: null,
+          templates: clientTemplates,
         }
         return addBuilder(collection, { field, clientConfig, blocks, css })
       }),
       // Server-only: the MCP tools read the live runtime from here, so they share the bus and lock.
-      custom: { ...config.custom, [LIVE_RUNTIME_KEY]: live },
+      custom: { ...config.custom, [LIVE_RUNTIME_KEY]: live, ...(templates ? { [TEMPLATES_CONFIG_KEY]: templates } : {}) },
       endpoints: [
         ...(config.endpoints ?? []),
         ...liveEndpoints({ collections: liveCollections, blocks, runtime: live, heartbeatMs: options.live?.heartbeatMs }),

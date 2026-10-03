@@ -1,9 +1,10 @@
 // Replaces upload/relationship IDs in block props with documents.
 
-import type { Payload } from 'payload'
-import type { Block, BlockDefinition, Layout } from '@payload-toolkit/builder/core'
+import type { Payload, Where } from 'payload'
+import { resolveBindings, type Block, type BlockDefinition, type Layout, type TemplateContext } from '@payload-toolkit/builder/core'
 import { isRecord, mapFieldValues, type FieldLike, type VisitField } from './fields'
-import type { FetchDocs } from './types'
+import { attachListItems, listQueries, type ListQuery } from './lists'
+import type { FetchDocs, ResolveLink } from './types'
 
 type Id = string | number
 type Resolve = (collection: string, id: Id) => unknown
@@ -128,15 +129,52 @@ export async function resolveLayoutData(
   }
 }
 
-/** Server helper: resolveLayoutData with Payload's Local API (batched `find` per collection). */
+/** The URL of a context document from a link resolver (for the `$url` binding path). */
+export function urlResolver(resolveLink: ResolveLink): (context: TemplateContext) => string | null {
+  return (context) => resolveLink({ type: 'reference', reference: { relationTo: context.collection, value: context.doc } })
+}
+
+export type LoadLayoutOptions = {
+  /** Load drafts (draft mode). Otherwise collection lists show published documents only. */
+  draft?: boolean
+  /**
+   * The document a template renders. Its bindings and Field blocks are resolved here. Load the
+   * document with `depth: 1` (or more), so bound uploads and relationships are documents, not IDs.
+   * Pass the same context to `RenderLayout`.
+   */
+  context?: TemplateContext | null
+  /** The site's link resolver, for the `$url` binding path. `RenderLayout` resolves it otherwise. */
+  resolveLink?: ResolveLink
+}
+
+/**
+ * Server helper: prepares a layout for `RenderLayout` with Payload's Local API.
+ * 1. Resolves bindings and Field blocks against `options.context` (when given).
+ * 2. Loads every collection list's documents (`depth: 1`; published only unless `draft`).
+ * 3. Replaces upload/relationship IDs in block props with documents (one batched `find` per collection).
+ */
 export async function loadLayoutData(
   layout: Layout,
   blocks: BlockDefinition[],
   payload: Payload,
-  options?: { draft?: boolean },
+  options?: LoadLayoutOptions,
 ): Promise<Layout> {
   const draft = options?.draft ?? false
-  return resolveLayoutData(layout, blocks, async (collection, ids) => {
+  const context = options?.context ?? null
+  const bound = context
+    ? resolveBindings(layout, context, blocks, options?.resolveLink ? { url: urlResolver(options.resolveLink) } : undefined)
+    : layout
+
+  const queries = listQueries(bound, context)
+  const items = new Map<string, Array<Record<string, unknown>>>()
+  await Promise.all(
+    queries.map(async (query) => {
+      items.set(query.blockId, await findListItems(payload, query, draft))
+    }),
+  )
+  const withItems = attachListItems(bound, items)
+
+  return resolveLayoutData(withItems, blocks, async (collection, ids) => {
     const result = await payload.find({
       // The collection slug is dynamic, so it cannot match the generated slug union.
       collection: collection as never,
@@ -150,4 +188,27 @@ export async function loadLayoutData(
       (result.docs as Array<Record<string, unknown>>).map((doc) => [doc.id as Id, doc]),
     )
   })
+}
+
+/** One collection list's documents. An unknown collection or a failed query gives an empty list. */
+async function findListItems(payload: Payload, query: ListQuery, draft: boolean): Promise<Array<Record<string, unknown>>> {
+  const config = (payload.collections as Record<string, { config: { versions?: { drafts?: unknown } } } | undefined>)[query.collection]?.config
+  if (!config) return []
+  const where: Where[] = []
+  if (query.exclude !== undefined) where.push({ id: { not_equals: query.exclude } })
+  if (!draft && config.versions?.drafts) where.push({ _status: { equals: 'published' } })
+  try {
+    const result = await payload.find({
+      collection: query.collection as never,
+      where: where.length > 0 ? { and: where } : {},
+      sort: query.sort,
+      limit: query.limit,
+      depth: 1,
+      draft,
+    })
+    return result.docs as Array<Record<string, unknown>>
+  } catch (error) {
+    payload.logger.error({ err: error, msg: `[builder] Collection list "${query.collection}" failed to load.` })
+    return []
+  }
 }

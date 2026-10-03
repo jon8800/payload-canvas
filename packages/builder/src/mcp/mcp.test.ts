@@ -261,3 +261,59 @@ describe('sectionInsertOps', () => {
     assert.deepEqual(ops[0].type === 'insert' && ops[0].to, { parentId: null, slot: 'children', index: 0 })
   })
 })
+
+describe('template tools', () => {
+  const withTemplates = builderMcpTools({
+    blocks,
+    collections: { posts: { templates: true, url: (doc) => `/blog/${String(doc.slug)}` }, pages: {} },
+  })
+  const named = (name: string) => withTemplates.find((t) => t.name === name)
+
+  it('adds listTemplates and getBindingSources only when a collection uses templates', () => {
+    assert.ok(named('listTemplates'))
+    assert.ok(named('getBindingSources'))
+    assert.ok(!tools.some((t) => t.name === 'listTemplates'))
+  })
+
+  it('accepts the templates collection in the layout tools', () => {
+    const parsed = z.object(named('applyOperations')!.parameters).safeParse({
+      collection: 'builder-templates',
+      id: '1',
+      operations: [{ type: 'update', id: 'h', bindings: { text: 'title' } }],
+    })
+    assert.ok(parsed.success)
+  })
+
+  it('getBindingSources reads the fields the plugin stored on the config', async () => {
+    const fields = [{ path: 'title', label: 'Title', type: 'text' }]
+    const req = {
+      payload: { config: { custom: { websiteBuilderTemplates: { collection: 'builder-templates', targetField: 'targetCollection', sources: { posts: fields } } } } },
+    } as unknown as PayloadRequest
+    const result = await named('getBindingSources')!.handler({ collection: 'posts' }, req, {})
+    assert.deepEqual(JSON.parse(result.content[0].text).fields, fields)
+  })
+
+  it('listTemplates lists templates with their target and default flag', async () => {
+    const req = {
+      user: { id: 1 },
+      payload: {
+        config: { routes: { admin: '/admin' } },
+        async find(a: Record<string, unknown>) {
+          assert.equal(a.collection, 'builder-templates')
+          return { docs: [{ id: 5, name: 'Post template', targetCollection: 'posts', isDefault: true, _status: 'published', layout: { version: 1, blocks: [{ id: 'a', type: 'stack' }] } }] }
+        },
+      },
+    } as unknown as PayloadRequest
+    const result = await named('listTemplates')!.handler({ collection: 'builder-templates' }, req, {})
+    const body = JSON.parse(result.content[0].text)
+    assert.deepEqual(body.templates[0], {
+      id: 5,
+      name: 'Post template',
+      target: 'posts',
+      isDefault: true,
+      status: 'published',
+      blocks: 1,
+      editorPath: '/admin/collections/builder-templates/5/builder',
+    })
+  })
+})

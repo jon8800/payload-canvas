@@ -2,7 +2,7 @@
 // Both sides check `event.origin` and `event.source` before they trust a message.
 // Pure TypeScript: no React, no Payload runtime imports.
 
-import type { BlockDefinition, CanvasMeasurement, Layout, Rect } from '../core/types'
+import type { BlockDefinition, CanvasMeasurement, Layout, Rect, TemplateContext } from '../core/types'
 
 export const CHANNEL = 'payload-builder' as const
 
@@ -36,6 +36,12 @@ export type AdminToCanvas =
   | { type: 'selection'; selectedId: string | null; hoveredId: string | null }
   | { type: 'scrollBy'; dx: number; dy: number }
   | { type: 'scrollIntoView'; id: string }
+  /**
+   * The document a template renders (the sample document in the template editor), loaded over REST
+   * with `depth: 1`. The canvas resolves bindings, Field blocks and collection lists against it.
+   * `null` clears it. May arrive before or after the layout.
+   */
+  | { type: 'context'; context: TemplateContext | null }
 
 type Envelope<T> = { channel: typeof CHANNEL; payload: T }
 

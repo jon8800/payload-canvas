@@ -9,6 +9,7 @@ import { ancestors, duplicateBlock, removeBlock, toggleHidden } from './actions'
 import { BlockIcon, Icon, type IconName } from './icons'
 import { OUTLINE_INDENT, useRuntime, type DragData, type Runtime } from './runtime'
 import { useEditor } from './store'
+import { FIELD_BLOCK, LIST_BLOCK } from './templates/binding'
 import { useValue } from './valueStore'
 
 type Row = { block: Block; depth: number; container: boolean; open: boolean; childCount: number }
@@ -54,11 +55,23 @@ function linkText(value: unknown): string {
   return typeof url === 'string' ? url : ''
 }
 
+/** Bound blocks show the field they read: `{title}`. */
+function boundPreview(block: Block): string {
+  const first = Object.values(block.bindings ?? {})[0]
+  return first ? `{${first}}` : ''
+}
+
 /** A short text from the block's content, so rows are easy to tell apart. */
 export function blockPreview(block: Block): string {
   const props = block.props ?? {}
   const str = (key: string) => (typeof props[key] === 'string' ? (props[key] as string).trim() : '')
+  const bound = boundPreview(block)
+  if (bound) return bound
   switch (block.type) {
+    case FIELD_BLOCK:
+      return str('path') ? `{${str('path')}}` : ''
+    case LIST_BLOCK:
+      return str('collection')
     case 'richText':
       return lexicalText(props.content)
     case 'list': {
@@ -240,6 +253,7 @@ function OutlineRow({ row }: { row: Row }) {
   const { setNodeRef, listeners, attributes } = useDraggable({ id: `outline:${block.id}`, data })
   const dragging = drag?.source.kind === 'block' && drag.source.id === block.id
   const text = blockPreview(block)
+  const bindingCount = Object.keys(block.bindings ?? {}).length
 
   const className = [
     'builder-editor__row',
@@ -302,6 +316,17 @@ function OutlineRow({ row }: { row: Row }) {
       </span>
       <span className="builder-editor__row-type">{label}</span>
       {text && <span className="builder-editor__row-text">{text}</span>}
+      {bindingCount > 0 && (
+        <span
+          className="builder-editor__row-bound"
+          aria-label={`${bindingCount} bound ${bindingCount === 1 ? 'field' : 'fields'}`}
+          title={`Shows data: ${Object.entries(block.bindings ?? {})
+            .map(([prop, field]) => `${prop} ← ${field}`)
+            .join(', ')}`}
+        >
+          <Icon name="bind" size={12} />
+        </span>
+      )}
       {!open && childCount > 0 && <span className="builder-editor__row-count">{childCount}</span>}
       <span className="builder-editor__row-actions">
         {actions.map((action) => (
