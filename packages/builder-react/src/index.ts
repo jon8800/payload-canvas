@@ -9,9 +9,16 @@ export type {
   LinkValue,
   RenderLayoutProps,
   RenderMode,
+  ResolvedLink,
   ResolveLink,
 } from './render/types'
-export { defaultResolveLink, linkAttributes, toLinkValue } from './render/link'
+export {
+  defaultResolveLink,
+  linkAttributes,
+  resolveLinkValue,
+  toLinkValue,
+  type LinkAttributes,
+} from './render/link'
 export { parseVideoUrl, type VideoEmbed } from './components/videoUrl'
 export { defaultComponents } from './components'
 export { RenderLayout } from './render/RenderLayout'

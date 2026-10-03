@@ -99,7 +99,8 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
     }
     data[field] = layout
 
-    const classes = collectClasses(layout)
+    // Block definitions add the classes their components use, so those reach the CSS too.
+    const classes = collectClasses(layout, blocks)
     const hash = await hashInput(classes, css.entry)
     if (isGeneratedCss(previous) && previous.hash === hash) {
       data[cssField] = previous

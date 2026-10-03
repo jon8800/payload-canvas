@@ -1,7 +1,5 @@
-import type { LinkValue, ResolveLink } from './types'
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
+import { isRecord } from './fields'
+import type { LinkValue, ResolvedLink, ResolveLink } from './types'
 
 /** Reads a stored link group. Anything that is not an object becomes an empty link. */
 export function toLinkValue(value: unknown): LinkValue {
@@ -32,12 +30,21 @@ export const defaultResolveLink: ResolveLink = (link) => {
   return `/${doc.slug.replace(/^\/+/, '')}`
 }
 
+/** Resolves a stored link group into plain data. RenderLayout calls it for every link group. */
+export function resolveLinkValue(value: unknown, resolveLink: ResolveLink): ResolvedLink {
+  const link = toLinkValue(value)
+  const href = resolveLink(link) || null
+  if (!href) return { ...link, href: null }
+  return link.newTab ? { ...link, href, target: '_blank', rel: 'noopener noreferrer' } : { ...link, href }
+}
+
 export type LinkAttributes = { href: string; target?: '_blank'; rel?: string }
 
-/** `<a>` attributes for a link group, or `null` when it has no href. */
-export function linkAttributes(value: unknown, resolveLink: ResolveLink): LinkAttributes | null {
-  const link = toLinkValue(value)
-  const href = resolveLink(link)
-  if (!href) return null
-  return link.newTab ? { href, target: '_blank', rel: 'noopener noreferrer' } : { href }
+/** `<a>` attributes of a resolved link group (a block component's link prop), or `null` without an href. */
+export function linkAttributes(value: unknown): LinkAttributes | null {
+  if (!isRecord(value) || typeof value.href !== 'string' || !value.href) return null
+  const attributes: LinkAttributes = { href: value.href }
+  if (value.target === '_blank') attributes.target = '_blank'
+  if (typeof value.rel === 'string' && value.rel) attributes.rel = value.rel
+  return attributes
 }

@@ -7,7 +7,7 @@ import type { Block, BlockDefinition, Layout } from '@payload-toolkit/builder/co
 export type RenderMode = 'site' | 'canvas'
 
 /**
- * The value of a link group (the `link` prop of the button and link blocks).
+ * The stored value of a link group (`linkField()` from `@payload-toolkit/builder/blocks`).
  * `reference.value` is the loaded document after `resolveLayoutData`, or still an ID.
  */
 export type LinkValue = {
@@ -17,12 +17,37 @@ export type LinkValue = {
   newTab?: boolean | null
 }
 
+/**
+ * What a block component receives for a link group: the stored value plus the resolved `<a>`
+ * attributes. `href` is `null` when the link goes nowhere (render without an `<a>`).
+ */
+export type ResolvedLink = LinkValue & {
+  href: string | null
+  target?: '_blank'
+  rel?: string
+}
+
 /** Turns a link into an href. `null` means "no link": the block renders without an `<a>`. */
 export type ResolveLink = (link: LinkValue) => string | null
 
+/**
+ * What every block component receives. **Props are plain data; custom components may be client
+ * components** (`'use client'`). RenderLayout passes no functions, so a server-rendered layout can
+ * hand these props to a client component.
+ *
+ * - Link groups (`linkField()`) arrive resolved as `ResolvedLink`: read `href`, `target` and `rel`,
+ *   or use `linkAttributes(props.link)`. The resolver itself never reaches components.
+ * - Upload and relationship props hold loaded documents when the page loaded them
+ *   (`loadLayoutData`), otherwise IDs.
+ * - Rich text props are Lexical JSON. The built-in `richText` component resolves internal links
+ *   with RenderLayout's `resolveLink`. A custom component that renders rich text imports its own
+ *   resolver. In the editor, rich text props use the editor config of the first `richText` field
+ *   in the block definitions, or the app's default editor.
+ */
 export type BlockComponentProps = {
+  /** The stored block (raw props, className, slots data). Prefer `props` and `slots` below. */
   block: Block
-  /** Props after data loading (upload/relationship IDs replaced by documents when loaded). */
+  /** Props after data loading and link resolution. */
   props: Record<string, unknown>
   className?: string
   /** Rendered children per slot name. */
@@ -32,8 +57,6 @@ export type BlockComponentProps = {
   /** Spread on the element that directly contains each slot's children. */
   slotAttributes: Record<string, Record<string, string>>
   mode: RenderMode
-  /** The renderer's link resolver (RenderLayout's `resolveLink`, or the default one). */
-  resolveLink: ResolveLink
 }
 
 export type BlockComponents = Record<string, ComponentType<BlockComponentProps>>
@@ -46,13 +69,14 @@ export type RenderLayoutProps = {
   css?: string | null
   mode?: RenderMode
   /**
-   * Optional block definitions. In canvas mode they tell the renderer which slots each block type
-   * has, so an empty slot gets a drop placeholder even when the data has no entry for it.
-   * Without them, canvas mode assumes every block has a "children" slot.
+   * The block definitions, the same list as the plugin config. They tell the renderer which props
+   * are link groups and, in canvas mode, which slots each block type has (so an empty slot gets a
+   * drop placeholder). Default: `defaultBlocks()`. A block type with no definition gets a
+   * "children" slot in canvas mode and no link resolution.
    */
   blocks?: BlockDefinition[]
   /**
-   * Maps links (button, link block, internal rich text links) to an href. Default: the URL for
+   * Maps links (link groups and internal rich text links) to an href. Default: the URL for
    * URL links, `/${slug}` for a loaded document with a `slug`, otherwise no link.
    */
   resolveLink?: ResolveLink

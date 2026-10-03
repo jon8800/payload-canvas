@@ -6,22 +6,25 @@ import {
   useSensor,
   useSensors,
   type CollisionDetection,
+  type DragEndEvent,
   type DragMoveEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
-import { ShimmerEffect, useConfig } from '@payloadcms/ui'
+import { ShimmerEffect, useConfig, useDocumentInfo } from '@payloadcms/ui'
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 
 import type { BuilderClientConfig } from '../../core/types'
-import { keyAction } from '../../protocol'
+import { insertBlocks } from './actions'
 import { Canvas } from './Canvas'
 import { DragLayer } from './DragLayer'
 import { Inspector } from './Inspector'
 import { Library } from './Library'
 import { Outline } from './Outline'
 import { computeDrop, createRuntime, RuntimeContext, type DragData, type DragState, type Runtime } from './runtime'
+import { bindShortcuts } from './shortcuts'
 import { Toolbar } from './Toolbar'
 import { useLayoutFieldSync } from './useLayoutFieldSync'
+import { useLiveOperations } from './live'
 
 const COLLISION_ID = 'builder-drop'
 /** Distance from the canvas top or bottom edge where auto-scroll starts. */
@@ -29,10 +32,6 @@ const AUTO_SCROLL_EDGE = 56
 /** Pixels per tick at the very edge. Slower further from the edge. */
 const AUTO_SCROLL_MAX_STEP = 22
 const AUTO_SCROLL_TICK_MS = 16
-
-/** Elements where editor shortcuts must not fire: text inputs and Payload's modals and drawers. */
-const SHORTCUT_EXCLUDED =
-  'input, textarea, select, [contenteditable="true"], [role="dialog"], [role="listbox"], .drawer, .payload__modal-item, .rs__control'
 
 /** Scrolls the iframe on a timer while the pointer rests near its top or bottom edge during a drag. */
 function startAutoScroll(runtime: Runtime): () => void {
@@ -54,6 +53,9 @@ export function Editor({ config, path }: { config: BuilderClientConfig; path: st
   const { config: payloadConfig } = useConfig()
   const [runtime] = useState(() => createRuntime(config, payloadConfig.routes.api))
   const { ready } = useLayoutFieldSync(runtime.store, path)
+  const { id: docId } = useDocumentInfo()
+  const live = useLiveOperations({ config, docId, store: runtime.store, enabled: ready, highlightMs: 2500 })
+  useEffect(() => runtime.live.set(live), [runtime, live])
   const stopAutoScroll = useRef<(() => void) | null>(null)
   const dndId = useId()
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
@@ -72,24 +74,16 @@ export function Editor({ config, path }: { config: BuilderClientConfig; path: st
 
   useEffect(() => () => stopAutoScroll.current?.(), [])
 
-  // Test hook: lets browser automation read the layout and the selection.
+  // Debugging aid in development only: browser automation reads the layout and the selection.
   useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return
     Object.assign(window, { __builderEditor: runtime })
+    return () => {
+      Reflect.deleteProperty(window, '__builderEditor')
+    }
   }, [runtime])
 
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.defaultPrevented) return
-      const target = e.target as HTMLElement | null
-      if (target?.closest?.(SHORTCUT_EXCLUDED)) return
-      const key = keyAction(e)
-      if (!key) return
-      e.preventDefault()
-      runtime.runKey(key)
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [runtime])
+  useEffect(() => bindShortcuts(runtime, document, { forwarded: false }), [runtime])
 
   // Drop zones are not dnd-kit droppables. The measured rects decide the target, and the
   // result travels to the drag handlers as collision data.
@@ -107,7 +101,7 @@ export function Editor({ config, path }: { config: BuilderClientConfig; path: st
     const data = active.data.current as DragData
     runtime.pointerLock.set(true)
     runtime.store.hover(null)
-    runtime.drag.set({ source: data.source, label: data.label, zone: null, target: null, pointer: null })
+    runtime.drag.set({ source: data.source, label: data.label, icon: data.icon, zone: null, target: null, pointer: null })
     stopAutoScroll.current = startAutoScroll(runtime)
   }
 
@@ -125,12 +119,17 @@ export function Editor({ config, path }: { config: BuilderClientConfig; path: st
     runtime.pointerLock.set(false)
   }
 
-  const onDragEnd = () => {
+  const onDragEnd = ({ active }: DragEndEvent) => {
     // Use the drag store, not event.collisions: it is also refreshed when the canvas scrolls.
     const state = runtime.drag.get()
     endDrag()
     if (!state?.target || state.target.noop) return
     const { source, target } = state
+    const section = (active.data.current as DragData | undefined)?.blocks
+    if (section) {
+      insertBlocks(runtime, section, target.to)
+      return
+    }
     if (source.kind === 'block') {
       runtime.store.apply({ type: 'move', id: source.id, to: target.to }, { select: source.id })
       return

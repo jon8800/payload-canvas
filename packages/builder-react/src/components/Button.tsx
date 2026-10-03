@@ -3,11 +3,11 @@ import type { BlockComponentProps } from '../render/types'
 import { asText, PlaceholderText } from './placeholder'
 
 /** An `<a>` when the link resolves to an href, otherwise a `<span>`. */
-export function Button({ props, className, attributes, mode, resolveLink }: BlockComponentProps) {
+export function Button({ props, className, attributes, mode }: BlockComponentProps) {
   const label = asText(props.label)
   if (!label && mode !== 'canvas') return null
   const content = label || <PlaceholderText>Button</PlaceholderText>
-  const link = linkAttributes(props.link, resolveLink)
+  const link = linkAttributes(props.link)
   if (!link) {
     return (
       <span {...attributes} className={className}>

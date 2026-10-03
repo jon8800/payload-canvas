@@ -1,13 +1,6 @@
 // Styles panel. Payload CSS variables only, no Tailwind (it would leak into the admin).
 
 @layer payload-default {
-  .builder-editor__width {
-    align-self: center;
-    color: var(--theme-elevation-500);
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-  }
-
   .builder-styles {
     --bs-accent: var(--be-accent, var(--color-blue-500, #2f6fec));
     --bs-border: var(--theme-elevation-150);
@@ -153,7 +146,54 @@
     color: var(--bs-muted);
     font-size: 11px;
 
+    strong {
+      color: var(--theme-text);
+      font-weight: 600;
+    }
+
     code {
+      margin-left: 2px;
+      padding: 0 4px;
+      border-radius: 3px;
+      background: color-mix(in srgb, var(--bs-accent) 12%, transparent);
+      color: var(--bs-accent);
+    }
+  }
+
+  // The canvas is narrower than the chosen breakpoint: these styles are not visible right now.
+  .builder-styles__width-hint {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 0;
+    padding: 6px 6px 6px 10px;
+    border: 1px solid color-mix(in srgb, var(--theme-warning-650, #b07a00) 40%, transparent);
+    border-radius: var(--style-radius-s, 4px);
+    background: color-mix(in srgb, var(--theme-warning-650, #b07a00) 10%, transparent);
+    color: var(--theme-text);
+    font-size: 11.5px;
+    line-height: 1.4;
+  }
+
+  .builder-styles__width-action {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
+    padding: 0 8px;
+    border: 1px solid var(--bs-border);
+    border-radius: var(--style-radius-s, 4px);
+    background: var(--theme-elevation-0);
+    color: var(--theme-text);
+    font: inherit;
+    font-size: 11.5px;
+    font-weight: 500;
+    cursor: pointer;
+
+    &:hover {
+      border-color: var(--bs-accent);
       color: var(--bs-accent);
     }
   }

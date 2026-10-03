@@ -1,10 +1,8 @@
 'use client'
 
-// Links the Styles panel breakpoint and the canvas width (toolbar devices).
+// Canvas devices. A device only resizes the canvas. The Styles panel picks its breakpoint on its own.
 
-import type { Breakpoint } from '../../../core'
-import type { EditorStore } from '../store'
-import { breakpointAt, canvasWidthFor, MOBILE_WIDTH, TABLET_WIDTH } from './tokens'
+import { MOBILE_WIDTH, TABLET_WIDTH } from './tokens'
 
 export type Device = 'desktop' | 'tablet' | 'mobile'
 
@@ -17,17 +15,6 @@ export function deviceForWidth(width: number | null): Device | null {
   return null
 }
 
-type Widths = Record<Breakpoint, number>
-
-/** Edits `bp` and resizes the canvas to its minimum width. */
-export function selectBreakpoint(store: EditorStore, widths: Widths, bp: Breakpoint) {
-  store.setCanvasWidth(canvasWidthFor(widths, bp))
-  store.setVariant({ ...store.getState().variant, breakpoint: bp })
-}
-
-/** Resizes the canvas and edits the largest breakpoint that applies at the new width. */
-export function selectDevice(store: EditorStore, widths: Widths, device: Device, stageWidth: number) {
-  const width = DEVICE_WIDTHS[device]
-  store.setCanvasWidth(width)
-  store.setVariant({ ...store.getState().variant, breakpoint: breakpointAt(widths, width ?? stageWidth) })
-}
+/** Narrowest and widest custom canvas widths. Wider frames zoom out to fit the stage. */
+export const MIN_CANVAS_WIDTH = 320
+export const MAX_CANVAS_WIDTH = 2560

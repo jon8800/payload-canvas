@@ -1,7 +1,7 @@
-// Website builder blocks, shared by payload.config.ts, the frontend renderer and the seed.
-// Server only: `@payload-toolkit/builder` includes the Payload plugin. Client code (the canvas)
-// imports `resolveLink` from `@/lib/links` and the components from `@/components/blocks`.
-import { defaultBlocks, defineBlock } from '@payload-toolkit/builder'
+// Website builder blocks: one list for payload.config.ts, the site renderer, the canvas iframe and
+// the seed. Client-safe: `@payload-toolkit/builder/blocks` has no server code.
+import { defaultBlocks, defineBlock } from '@payload-toolkit/builder/blocks'
+import { formClassList } from '@/components/blocks/formClasses'
 
 export { resolveLink } from '@/lib/links'
 
@@ -9,7 +9,11 @@ export { resolveLink } from '@/lib/links'
 export const formBlock = defineBlock({
   type: 'form',
   label: 'Form',
+  icon: 'form',
+  category: 'Interactive',
   fields: [{ name: 'form', type: 'relationship', relationTo: 'forms', required: true }],
+  // The component's own Tailwind classes. The plugin adds them to the generated CSS.
+  classes: formClassList,
   ai: {
     description:
       'Embeds a form from the Forms collection (form-builder plugin). Visitors fill it in and ' +
