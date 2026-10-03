@@ -7,6 +7,7 @@ A website builder for Payload CMS v3: composable layout blocks, a visual drag-dr
 - The code so far was written by weaker AI models. Much of it is clunky or half working. **Nothing here is sacred** — any part can be ripped out, replaced, or redesigned. Do not preserve a pattern only because it exists.
 - Goal: a robust, flexible builder that works with **any collection shape and any fields**, likely shipped as a Payload plugin (with the starter as a reference app). Inspiration: Shopify theme customizer, Elementor, Webflow.
 - Later: make it agentic — an AI must be able to read the data model and the available blocks and build pages (MCP and/or skills). The owner's MCP plugin lives at `C:\Projects\sandbox\payload-plugins\payload-mcp-toolkit`.
+- `docs/architecture.md` is the target design (draft). Read it before building any part of the plugin.
 - `STRATEGY.md` holds the earlier product strategy. It predates the plugin direction and will be revised.
 
 ## Tech stack
