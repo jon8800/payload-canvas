@@ -52,8 +52,30 @@ export type BlockDefinition = {
   slots?: Record<string, SlotDefinition>
   /** Adds `className` and the style controls. Default true. */
   styles?: boolean
+  /** Classes a newly inserted block starts with (e.g. "flex flex-col gap-4" for a stack). */
+  defaultClassName?: string
   /** Text for AI tools: what the block is for, plus a small example. */
   ai?: { description: string; example?: Omit<Partial<Block>, 'id'> }
+}
+
+// ---------------------------------------------------------------------------
+// Config the plugin passes to the admin editor
+// ---------------------------------------------------------------------------
+
+/**
+ * Set by the plugin on the layout field as `admin.custom.builder` (field `admin.custom` reaches
+ * the client; top-level `custom` does not). Must be JSON-serializable: block field configs are
+ * stripped of functions (validate, hooks, filterOptions) before they are put here.
+ */
+export type BuilderClientConfig = {
+  collection: string
+  /** Name of the layout JSON field. */
+  field: string
+  blocks: BlockDefinition[]
+  /** Frontend route of the canvas iframe, e.g. "/builder-canvas". */
+  canvasPath: string
+  /** Full API path that returns CanvasCssInput as JSON, e.g. "/api/builder/canvas-css". */
+  cssEndpoint: string
 }
 
 // ---------------------------------------------------------------------------
