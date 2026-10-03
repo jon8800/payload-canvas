@@ -167,3 +167,98 @@ test('loadLayoutData calls payload.find once per collection', async () => {
   })
   assert.deepEqual(out.blocks[1]!.props, { image: { id: 'm2', collection: 'media' } })
 })
+
+test('resolveLayoutData walks link groups, arrays, blocks fields and rich text', async () => {
+  const defs = [
+    {
+      type: 'button',
+      label: 'Button',
+      fields: [
+        {
+          name: 'link',
+          type: 'group',
+          fields: [
+            { name: 'type', type: 'select', options: ['url', 'reference'] },
+            { name: 'reference', type: 'relationship', relationTo: ['pages', 'posts'] },
+          ],
+        },
+      ],
+    },
+    {
+      type: 'cards',
+      label: 'Cards',
+      fields: [
+        {
+          name: 'rows',
+          type: 'array',
+          fields: [
+            { name: 'image', type: 'upload', relationTo: 'media' },
+            { name: 'nested', type: 'array', fields: [{ name: 'author', type: 'relationship', relationTo: 'users' }] },
+          ],
+        },
+        {
+          name: 'sections',
+          type: 'blocks',
+          blocks: [{ slug: 'hero', fields: [{ name: 'bg', type: 'upload', relationTo: 'media' }] }],
+        },
+        { name: 'body', type: 'richText' },
+      ],
+    },
+  ] as BlockDefinition[]
+  const body = {
+    root: {
+      type: 'root',
+      children: [
+        { type: 'upload', relationTo: 'media', value: 'm9', fields: null },
+        {
+          type: 'paragraph',
+          children: [
+            { type: 'link', fields: { linkType: 'internal', doc: { relationTo: 'pages', value: 'g2' } }, children: [] },
+            { type: 'link', fields: { linkType: 'custom', url: '/x' }, children: [] },
+            { type: 'text', text: 'plain' },
+          ],
+        },
+        { type: 'relationship', relationTo: 'posts', value: { id: 'p1', loaded: true } },
+      ],
+    },
+  }
+  const input: Layout = {
+    version: 1,
+    blocks: [
+      { id: 'b', type: 'button', props: { link: { type: 'reference', reference: { relationTo: 'pages', value: 'g1' } } } },
+      {
+        id: 'c',
+        type: 'cards',
+        props: {
+          rows: [{ id: 'r1', image: 'm1', nested: [{ author: 'u1' }] }, { id: 'r2' }],
+          sections: [{ blockType: 'hero', bg: 'm2' }, { blockType: 'unknown', bg: 'm3' }],
+          body,
+        },
+      },
+    ],
+  }
+  const { calls, fetchDocs } = makeFetch()
+  const before = structuredClone(input)
+  const out = await resolveLayoutData(input, defs, fetchDocs)
+  assert.deepEqual(input, before)
+  const byCollection = Object.fromEntries(calls.map((c) => [c.collection, c.ids.toSorted()]))
+  assert.deepEqual(byCollection, { pages: ['g1', 'g2'], media: ['m1', 'm2', 'm9'], users: ['u1'] })
+
+  assert.deepEqual(out.blocks[0]!.props!.link, {
+    type: 'reference',
+    reference: { relationTo: 'pages', value: { id: 'g1', from: 'pages' } },
+  })
+  const props = out.blocks[1]!.props!
+  assert.deepEqual(props.rows, [
+    { id: 'r1', image: { id: 'm1', from: 'media' }, nested: [{ author: { id: 'u1', from: 'users' } }] },
+    { id: 'r2' },
+  ])
+  assert.deepEqual(props.sections, [{ blockType: 'hero', bg: { id: 'm2', from: 'media' } }, { blockType: 'unknown', bg: 'm3' }])
+  const root = (props.body as typeof body).root
+  assert.deepEqual(root.children[0], { type: 'upload', relationTo: 'media', value: { id: 'm9', from: 'media' }, fields: null })
+  const links = (root.children[1] as { children: Array<{ fields: unknown }> }).children
+  assert.deepEqual(links[0]!.fields, { linkType: 'internal', doc: { relationTo: 'pages', value: { id: 'g2', from: 'pages' } } })
+  // Unchanged nodes keep their identity.
+  assert.equal(links[1], body.root.children[1]!.children![1])
+  assert.equal(root.children[2], body.root.children[2])
+})

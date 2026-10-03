@@ -1,6 +1,7 @@
 import path from 'node:path'
-import type { CollectionConfig, Config, Field, JSONField, Plugin } from 'payload'
+import type { CollectionConfig, Config, Field, JSONField, Plugin, RichTextField } from 'payload'
 import { defaultBlocks } from '../blocks'
+import { richTextFieldName } from '../core/blocks'
 import { EMPTY_LAYOUT, type BlockDefinition, type BuilderClientConfig } from '../core/types'
 import { getCanvasCssInput, getStyleTokens, type CssOptions, type TailwindPlugins } from '../css'
 import { layoutBeforeChange } from './hook'
@@ -164,6 +165,12 @@ function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): Collect
     type: 'json',
     admin: { hidden: true },
   }
+  const richText = richTextSupportField(blocks, field)
+  if (richText && fields.some((f) => 'name' in f && f.name === richText.name)) {
+    throw new Error(
+      `[websiteBuilder] Collection "${collection.slug}" already has a field named "${richText.name}". The plugin needs this name for rich text block props.`,
+    )
+  }
 
   const views = collection.admin?.components?.views
   if (views?.edit?.root) {
@@ -182,7 +189,7 @@ function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): Collect
   } as EditViews
   return {
     ...collection,
-    fields: [...fields, layoutField, generatedCssField],
+    fields: [...fields, layoutField, generatedCssField, ...(richText ? [richText] : [])],
     hooks: {
       ...collection.hooks,
       beforeChange: [
@@ -197,6 +204,44 @@ function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): Collect
         views: { ...views, edit },
       },
     },
+  }
+}
+
+/** The first richText field in a list of fields (at any depth) that matches `test`. */
+function findRichText(fields: readonly Field[], test: (f: RichTextField) => boolean): RichTextField | undefined {
+  for (const f of fields) {
+    if (f.type === 'richText' && test(f)) return f
+    const nested =
+      f.type === 'tabs'
+        ? f.tabs.flatMap((tab) => tab.fields)
+        : f.type === 'blocks'
+          ? (f.blocks ?? []).flatMap((b) => (typeof b === 'string' ? [] : b.fields))
+          : 'fields' in f && Array.isArray(f.fields)
+            ? f.fields
+            : []
+    const found = findRichText(nested, test)
+    if (found) return found
+  }
+  return undefined
+}
+
+/**
+ * A hidden, virtual richText field (no database column). The block inspector renders Payload's
+ * Lexical editor through it (`RenderLexical` needs a real field config). It uses the editor of the
+ * first block richText field that sets one, otherwise the app's default editor.
+ * `undefined` when no block has a richText prop.
+ */
+function richTextSupportField(blocks: BlockDefinition[], layoutField: string): RichTextField | undefined {
+  const all = blocks.flatMap((block) => block.fields)
+  if (!findRichText(all, () => true)) return undefined
+  const editor = findRichText(all, (f) => Boolean(f.editor))?.editor
+  return {
+    name: richTextFieldName(layoutField),
+    type: 'richText',
+    virtual: true,
+    // Payload makes virtual fields read-only unless readOnly is explicitly false.
+    admin: { hidden: true, readOnly: false },
+    ...(editor ? { editor } : {}),
   }
 }
 

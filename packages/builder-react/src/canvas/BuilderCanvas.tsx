@@ -17,7 +17,7 @@ import {
 } from '@payload-toolkit/builder/protocol'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
-import { RenderLayout, resolveLayoutData, type BlockComponents } from '../index'
+import { RenderLayout, resolveLayoutData, type BlockComponents, type ResolveLink } from '../index'
 import { createRestFetchDocs } from './fetchDocs'
 import { measure } from './measure'
 
@@ -26,6 +26,8 @@ export type BuilderCanvasProps = {
   components?: BlockComponents
   /** Tailwind plugins by id, the same map the plugin config uses on the server. */
   plugins?: TailwindPlugins
+  /** Link resolver. Must match the site's `RenderLayout` `resolveLink`. */
+  resolveLink?: ResolveLink
 }
 
 /** Editor-only styles: visible empty slots and dimmed hidden blocks. Never part of the site CSS. */
@@ -53,7 +55,7 @@ function send(message: CanvasToAdmin) {
 
 type Compiler = { status: 'loading' } | { status: 'ready'; compiler: CanvasCompiler } | { status: 'failed' }
 
-export function BuilderCanvas({ components, plugins }: BuilderCanvasProps) {
+export function BuilderCanvas({ components, plugins, resolveLink }: BuilderCanvasProps) {
   const [init, setInit] = useState<CanvasInit | null>(null)
   const [layout, setLayout] = useState<Layout | null>(null)
   const [resolved, setResolved] = useState<Layout | null>(null)
@@ -240,7 +242,14 @@ export function BuilderCanvas({ components, plugins }: BuilderCanvasProps) {
           <p data-builder-empty-page="">Drag a block here from the library.</p>
         )}
         {visible && (
-          <RenderLayout layout={resolved} blocks={init?.blocks} components={components} css={css} mode="canvas" />
+          <RenderLayout
+            layout={resolved}
+            blocks={init?.blocks}
+            components={components}
+            css={css}
+            mode="canvas"
+            resolveLink={resolveLink}
+          />
         )}
       </div>
     </>

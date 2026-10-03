@@ -66,24 +66,7 @@ export interface Config {
     users: UserAuthOperations;
     'payload-mcp-api-keys': PayloadMcpApiKeyAuthOperations;
   };
-  blocks: {
-    heading: HeadingBlock;
-    paragraph: ParagraphBlock;
-    list: ListBlock;
-    blockquote: BlockquoteBlock;
-    image: ImageBlock;
-    video: VideoBlock;
-    icon: IconBlock;
-    button: ButtonBlock;
-    link: LinkBlock;
-    formEmbed: FormEmbedBlock;
-    spacer: SpacerBlock;
-    divider: DividerBlock;
-    container_1: ContainerBlock_1;
-    grid_1: GridBlock_1;
-    container: ContainerBlock;
-    grid: GridBlock;
-  };
+  blocks: {};
   collections: {
     users: User;
     media: Media;
@@ -203,218 +186,30 @@ export interface PayloadMcpApiKeyAuthOperations {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "HeadingBlock".
+ * via the `definition` "users".
  */
-export interface HeadingBlock {
-  _hidden?: boolean | null;
-  text: string;
-  tag?: ('h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6') | null;
-  styles?:
+export interface User {
+  id: number;
+  name?: string | null;
+  updatedAt: string;
+  createdAt: string;
+  email: string;
+  resetPasswordToken?: string | null;
+  resetPasswordExpiration?: string | null;
+  salt?: string | null;
+  hash?: string | null;
+  resetPasswordRequestedAt?: string | null;
+  loginAttempts?: number | null;
+  lockUntil?: string | null;
+  sessions?:
     | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  htmlTag?:
-    | (
-        | 'div'
-        | 'section'
-        | 'article'
-        | 'header'
-        | 'footer'
-        | 'aside'
-        | 'main'
-        | 'nav'
-        | 'span'
-        | 'figure'
-        | 'blockquote'
-      )
-    | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'heading';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "ParagraphBlock".
- */
-export interface ParagraphBlock {
-  _hidden?: boolean | null;
-  content?: {
-    root: {
-      type: string;
-      children: {
-        type: any;
-        version: number;
-        [k: string]: unknown;
-      }[];
-      direction: ('ltr' | 'rtl') | null;
-      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
-      indent: number;
-      version: number;
-    };
-    [k: string]: unknown;
-  } | null;
-  styles?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  htmlTag?:
-    | (
-        | 'div'
-        | 'section'
-        | 'article'
-        | 'header'
-        | 'footer'
-        | 'aside'
-        | 'main'
-        | 'nav'
-        | 'span'
-        | 'figure'
-        | 'blockquote'
-      )
-    | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'paragraph';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "ListBlock".
- */
-export interface ListBlock {
-  _hidden?: boolean | null;
-  items?:
-    | {
-        text: string;
-        id?: string | null;
+        id: string;
+        createdAt?: string | null;
+        expiresAt: string;
       }[]
     | null;
-  listType?: ('unordered' | 'ordered') | null;
-  styles?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  htmlTag?:
-    | (
-        | 'div'
-        | 'section'
-        | 'article'
-        | 'header'
-        | 'footer'
-        | 'aside'
-        | 'main'
-        | 'nav'
-        | 'span'
-        | 'figure'
-        | 'blockquote'
-      )
-    | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'list';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "BlockquoteBlock".
- */
-export interface BlockquoteBlock {
-  _hidden?: boolean | null;
-  content?: {
-    root: {
-      type: string;
-      children: {
-        type: any;
-        version: number;
-        [k: string]: unknown;
-      }[];
-      direction: ('ltr' | 'rtl') | null;
-      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
-      indent: number;
-      version: number;
-    };
-    [k: string]: unknown;
-  } | null;
-  citation?: string | null;
-  styles?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  htmlTag?:
-    | (
-        | 'div'
-        | 'section'
-        | 'article'
-        | 'header'
-        | 'footer'
-        | 'aside'
-        | 'main'
-        | 'nav'
-        | 'span'
-        | 'figure'
-        | 'blockquote'
-      )
-    | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'blockquote';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "ImageBlock".
- */
-export interface ImageBlock {
-  _hidden?: boolean | null;
-  image: number | Media;
-  alt?: string | null;
-  caption?: string | null;
-  styles?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  htmlTag?:
-    | (
-        | 'div'
-        | 'section'
-        | 'article'
-        | 'header'
-        | 'footer'
-        | 'aside'
-        | 'main'
-        | 'nav'
-        | 'span'
-        | 'figure'
-        | 'blockquote'
-      )
-    | null;
-  objectFit?: ('cover' | 'contain' | 'fill' | 'none') | null;
-  aspectRatio?: ('auto' | '1/1' | '4/3' | '16/9' | '3/2') | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'image';
+  password?: string | null;
+  collection: 'users';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -537,169 +332,13 @@ export interface FolderInterface {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "VideoBlock".
- */
-export interface VideoBlock {
-  _hidden?: boolean | null;
-  source?: ('upload' | 'external') | null;
-  video?: (number | null) | Media;
-  /**
-   * Full URL to the video (e.g. YouTube, Vimeo)
-   */
-  url?: string | null;
-  poster?: (number | null) | Media;
-  styles?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  htmlTag?:
-    | (
-        | 'div'
-        | 'section'
-        | 'article'
-        | 'header'
-        | 'footer'
-        | 'aside'
-        | 'main'
-        | 'nav'
-        | 'span'
-        | 'figure'
-        | 'blockquote'
-      )
-    | null;
-  autoplay?: boolean | null;
-  loop?: boolean | null;
-  muted?: boolean | null;
-  controls?: boolean | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'video';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "IconBlock".
- */
-export interface IconBlock {
-  _hidden?: boolean | null;
-  icon?: (number | null) | Media;
-  /**
-   * Icon name for accessibility
-   */
-  name?: string | null;
-  styles?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  htmlTag?:
-    | (
-        | 'div'
-        | 'section'
-        | 'article'
-        | 'header'
-        | 'footer'
-        | 'aside'
-        | 'main'
-        | 'nav'
-        | 'span'
-        | 'figure'
-        | 'blockquote'
-      )
-    | null;
-  size?: ('sm' | 'md' | 'lg' | 'xl') | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'icon';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "ButtonBlock".
- */
-export interface ButtonBlock {
-  _hidden?: boolean | null;
-  type: 'internal' | 'external';
-  /**
-   * Full URL including https://
-   */
-  url?: string | null;
-  reference?:
-    | ({
-        relationTo: 'pages';
-        value: number | Page;
-      } | null)
-    | ({
-        relationTo: 'posts';
-        value: number | Post;
-      } | null);
-  label: string;
-  newTab?: boolean | null;
-  variant?: ('default' | 'outline' | 'ghost' | 'destructive' | 'secondary' | 'link') | null;
-  size?: ('sm' | 'default' | 'lg' | 'icon') | null;
-  styles?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  htmlTag?:
-    | (
-        | 'div'
-        | 'section'
-        | 'article'
-        | 'header'
-        | 'footer'
-        | 'aside'
-        | 'main'
-        | 'nav'
-        | 'span'
-        | 'figure'
-        | 'blockquote'
-      )
-    | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'button';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "pages".
  */
 export interface Page {
   id: number;
   title: string;
   slug: string;
-  layout?:
-    | (
-        | HeadingBlock
-        | ParagraphBlock
-        | ListBlock
-        | BlockquoteBlock
-        | ImageBlock
-        | VideoBlock
-        | IconBlock
-        | ButtonBlock
-        | LinkBlock
-        | FormEmbedBlock
-        | SpacerBlock
-        | DividerBlock
-        | ContainerBlock
-        | GridBlock
-      )[]
-    | null;
   publishedAt?: string | null;
-  _compiledBlockCSS?: string | null;
   meta?: {
     title?: string | null;
     description?: string | null;
@@ -726,60 +365,25 @@ export interface Page {
     | number
     | boolean
     | null;
+  builderRichText?: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  } | null;
   updatedAt: string;
   createdAt: string;
   deletedAt?: string | null;
   _status?: ('draft' | 'published') | null;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "LinkBlock".
- */
-export interface LinkBlock {
-  _hidden?: boolean | null;
-  type: 'internal' | 'external';
-  /**
-   * Full URL including https://
-   */
-  url?: string | null;
-  reference?:
-    | ({
-        relationTo: 'pages';
-        value: number | Page;
-      } | null)
-    | ({
-        relationTo: 'posts';
-        value: number | Post;
-      } | null);
-  label: string;
-  newTab?: boolean | null;
-  styles?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  htmlTag?:
-    | (
-        | 'div'
-        | 'section'
-        | 'article'
-        | 'header'
-        | 'footer'
-        | 'aside'
-        | 'main'
-        | 'nav'
-        | 'span'
-        | 'figure'
-        | 'blockquote'
-      )
-    | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'link';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -795,25 +399,6 @@ export interface Post {
   categories?: (number | Category)[] | null;
   tags?: (number | Tag)[] | null;
   publishedAt?: string | null;
-  layout?:
-    | (
-        | HeadingBlock
-        | ParagraphBlock
-        | ListBlock
-        | BlockquoteBlock
-        | ImageBlock
-        | VideoBlock
-        | IconBlock
-        | ButtonBlock
-        | LinkBlock
-        | FormEmbedBlock
-        | SpacerBlock
-        | DividerBlock
-        | ContainerBlock
-        | GridBlock
-      )[]
-    | null;
-  _compiledBlockCSS?: string | null;
   meta?: {
     title?: string | null;
     description?: string | null;
@@ -822,37 +407,43 @@ export interface Post {
      */
     image?: (number | null) | Media;
   };
+  builder?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  builderCss?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  builderRichText?: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  } | null;
   updatedAt: string;
   createdAt: string;
   deletedAt?: string | null;
   _status?: ('draft' | 'published') | null;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "users".
- */
-export interface User {
-  id: number;
-  name?: string | null;
-  updatedAt: string;
-  createdAt: string;
-  email: string;
-  resetPasswordToken?: string | null;
-  resetPasswordExpiration?: string | null;
-  salt?: string | null;
-  hash?: string | null;
-  resetPasswordRequestedAt?: string | null;
-  loginAttempts?: number | null;
-  lockUntil?: string | null;
-  sessions?:
-    | {
-        id: string;
-        createdAt?: string | null;
-        expiresAt: string;
-      }[]
-    | null;
-  password?: string | null;
-  collection: 'users';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -887,12 +478,18 @@ export interface Tag {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "FormEmbedBlock".
+ * via the `definition` "template-parts".
  */
-export interface FormEmbedBlock {
-  _hidden?: boolean | null;
-  form: number | Form;
-  styles?:
+export interface TemplatePart {
+  id: number;
+  title: string;
+  type: 'header' | 'footer' | 'custom';
+  displayCondition?: {
+    mode?: ('entireSite' | 'specificPages' | 'collectionType' | 'excludePages') | null;
+    pages?: (number | Page)[] | null;
+    collectionType?: ('pages' | 'posts') | null;
+  };
+  builder?:
     | {
         [k: string]: unknown;
       }
@@ -901,24 +498,58 @@ export interface FormEmbedBlock {
     | number
     | boolean
     | null;
-  htmlTag?:
-    | (
-        | 'div'
-        | 'section'
-        | 'article'
-        | 'header'
-        | 'footer'
-        | 'aside'
-        | 'main'
-        | 'nav'
-        | 'span'
-        | 'figure'
-        | 'blockquote'
-      )
+  builderCss?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
     | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'formEmbed';
+  builderRichText?: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+  deletedAt?: string | null;
+  _status?: ('draft' | 'published') | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "redirects".
+ */
+export interface Redirect {
+  id: number;
+  from: string;
+  to?: {
+    type?: ('reference' | 'custom') | null;
+    reference?:
+      | ({
+          relationTo: 'pages';
+          value: number | Page;
+        } | null)
+      | ({
+          relationTo: 'posts';
+          value: number | Post;
+        } | null);
+    url?: string | null;
+  };
+  isRegex?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1087,382 +718,6 @@ export interface Form {
         id?: string | null;
       }[]
     | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "SpacerBlock".
- */
-export interface SpacerBlock {
-  _hidden?: boolean | null;
-  styles?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  htmlTag?:
-    | (
-        | 'div'
-        | 'section'
-        | 'article'
-        | 'header'
-        | 'footer'
-        | 'aside'
-        | 'main'
-        | 'nav'
-        | 'span'
-        | 'figure'
-        | 'blockquote'
-      )
-    | null;
-  height?: ('xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl') | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'spacer';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "DividerBlock".
- */
-export interface DividerBlock {
-  _hidden?: boolean | null;
-  styles?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  htmlTag?:
-    | (
-        | 'div'
-        | 'section'
-        | 'article'
-        | 'header'
-        | 'footer'
-        | 'aside'
-        | 'main'
-        | 'nav'
-        | 'span'
-        | 'figure'
-        | 'blockquote'
-      )
-    | null;
-  style?: ('solid' | 'dashed' | 'dotted') | null;
-  thickness?: ('thin' | 'normal' | 'thick') | null;
-  color?:
-    | (
-        | 'none'
-        | 'primary'
-        | 'secondary'
-        | 'muted'
-        | 'accent'
-        | 'destructive'
-        | 'background'
-        | 'foreground'
-        | 'card'
-        | 'popover'
-      )
-    | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'divider';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "ContainerBlock".
- */
-export interface ContainerBlock {
-  _hidden?: boolean | null;
-  /**
-   * Nested child blocks
-   */
-  children?:
-    | (
-        | HeadingBlock
-        | ParagraphBlock
-        | ListBlock
-        | BlockquoteBlock
-        | ImageBlock
-        | VideoBlock
-        | IconBlock
-        | ButtonBlock
-        | LinkBlock
-        | FormEmbedBlock
-        | SpacerBlock
-        | DividerBlock
-        | ContainerBlock_1
-        | GridBlock_1
-      )[]
-    | null;
-  styles?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  htmlTag?:
-    | (
-        | 'div'
-        | 'section'
-        | 'article'
-        | 'header'
-        | 'footer'
-        | 'aside'
-        | 'main'
-        | 'nav'
-        | 'span'
-        | 'figure'
-        | 'blockquote'
-      )
-    | null;
-  maxWidth?: ('none' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full') | null;
-  display?: ('block' | 'flex' | 'grid') | null;
-  flexDirection?: ('row' | 'col') | null;
-  alignItems?: ('start' | 'center' | 'end' | 'stretch') | null;
-  justifyContent?: ('start' | 'center' | 'end' | 'between' | 'around') | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'container';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "ContainerBlock_1".
- */
-export interface ContainerBlock_1 {
-  _hidden?: boolean | null;
-  /**
-   * Nested child blocks
-   */
-  children?:
-    | (
-        | HeadingBlock
-        | ParagraphBlock
-        | ListBlock
-        | BlockquoteBlock
-        | ImageBlock
-        | VideoBlock
-        | IconBlock
-        | ButtonBlock
-        | LinkBlock
-        | FormEmbedBlock
-        | SpacerBlock
-        | DividerBlock
-      )[]
-    | null;
-  styles?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  htmlTag?:
-    | (
-        | 'div'
-        | 'section'
-        | 'article'
-        | 'header'
-        | 'footer'
-        | 'aside'
-        | 'main'
-        | 'nav'
-        | 'span'
-        | 'figure'
-        | 'blockquote'
-      )
-    | null;
-  maxWidth?: ('none' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full') | null;
-  display?: ('block' | 'flex' | 'grid') | null;
-  flexDirection?: ('row' | 'col') | null;
-  alignItems?: ('start' | 'center' | 'end' | 'stretch') | null;
-  justifyContent?: ('start' | 'center' | 'end' | 'between' | 'around') | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'container_1';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "GridBlock_1".
- */
-export interface GridBlock_1 {
-  _hidden?: boolean | null;
-  /**
-   * Nested child blocks
-   */
-  children?:
-    | (
-        | HeadingBlock
-        | ParagraphBlock
-        | ListBlock
-        | BlockquoteBlock
-        | ImageBlock
-        | VideoBlock
-        | IconBlock
-        | ButtonBlock
-        | LinkBlock
-        | FormEmbedBlock
-        | SpacerBlock
-        | DividerBlock
-      )[]
-    | null;
-  styles?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  htmlTag?:
-    | (
-        | 'div'
-        | 'section'
-        | 'article'
-        | 'header'
-        | 'footer'
-        | 'aside'
-        | 'main'
-        | 'nav'
-        | 'span'
-        | 'figure'
-        | 'blockquote'
-      )
-    | null;
-  columns?: number | null;
-  gap?: ('none' | 'xs' | 'sm' | 'md' | 'lg' | 'xl') | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'grid_1';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "GridBlock".
- */
-export interface GridBlock {
-  _hidden?: boolean | null;
-  /**
-   * Nested child blocks
-   */
-  children?:
-    | (
-        | HeadingBlock
-        | ParagraphBlock
-        | ListBlock
-        | BlockquoteBlock
-        | ImageBlock
-        | VideoBlock
-        | IconBlock
-        | ButtonBlock
-        | LinkBlock
-        | FormEmbedBlock
-        | SpacerBlock
-        | DividerBlock
-        | ContainerBlock_1
-        | GridBlock_1
-      )[]
-    | null;
-  styles?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  htmlTag?:
-    | (
-        | 'div'
-        | 'section'
-        | 'article'
-        | 'header'
-        | 'footer'
-        | 'aside'
-        | 'main'
-        | 'nav'
-        | 'span'
-        | 'figure'
-        | 'blockquote'
-      )
-    | null;
-  columns?: number | null;
-  gap?: ('none' | 'xs' | 'sm' | 'md' | 'lg' | 'xl') | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'grid';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "template-parts".
- */
-export interface TemplatePart {
-  id: number;
-  title: string;
-  type: 'header' | 'footer' | 'custom';
-  displayCondition?: {
-    mode?: ('entireSite' | 'specificPages' | 'collectionType' | 'excludePages') | null;
-    pages?: (number | Page)[] | null;
-    collectionType?: ('pages' | 'posts') | null;
-  };
-  layout?:
-    | (
-        | HeadingBlock
-        | ParagraphBlock
-        | ListBlock
-        | BlockquoteBlock
-        | ImageBlock
-        | VideoBlock
-        | IconBlock
-        | ButtonBlock
-        | LinkBlock
-        | FormEmbedBlock
-        | SpacerBlock
-        | DividerBlock
-        | ContainerBlock
-        | GridBlock
-      )[]
-    | null;
-  _compiledBlockCSS?: string | null;
-  updatedAt: string;
-  createdAt: string;
-  deletedAt?: string | null;
-  _status?: ('draft' | 'published') | null;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "redirects".
- */
-export interface Redirect {
-  id: number;
-  from: string;
-  to?: {
-    type?: ('reference' | 'custom') | null;
-    reference?:
-      | ({
-          relationTo: 'pages';
-          value: number | Page;
-        } | null)
-      | ({
-          relationTo: 'posts';
-          value: number | Post;
-        } | null);
-    url?: string | null;
-  };
-  isRegex?: boolean | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -2081,9 +1336,7 @@ export interface MediaSelect<T extends boolean = true> {
 export interface PagesSelect<T extends boolean = true> {
   title?: T;
   slug?: T;
-  layout?: T | {};
   publishedAt?: T;
-  _compiledBlockCSS?: T;
   meta?:
     | T
     | {
@@ -2093,6 +1346,7 @@ export interface PagesSelect<T extends boolean = true> {
       };
   builder?: T;
   builderCss?: T;
+  builderRichText?: T;
   updatedAt?: T;
   createdAt?: T;
   deletedAt?: T;
@@ -2111,8 +1365,6 @@ export interface PostsSelect<T extends boolean = true> {
   categories?: T;
   tags?: T;
   publishedAt?: T;
-  layout?: T | {};
-  _compiledBlockCSS?: T;
   meta?:
     | T
     | {
@@ -2120,6 +1372,9 @@ export interface PostsSelect<T extends boolean = true> {
         description?: T;
         image?: T;
       };
+  builder?: T;
+  builderCss?: T;
+  builderRichText?: T;
   updatedAt?: T;
   createdAt?: T;
   deletedAt?: T;
@@ -2168,8 +1423,9 @@ export interface TemplatePartsSelect<T extends boolean = true> {
         pages?: T;
         collectionType?: T;
       };
-  layout?: T | {};
-  _compiledBlockCSS?: T;
+  builder?: T;
+  builderCss?: T;
+  builderRichText?: T;
   updatedAt?: T;
   createdAt?: T;
   deletedAt?: T;

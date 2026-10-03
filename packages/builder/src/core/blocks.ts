@@ -17,3 +17,12 @@ export function getBlockDefinition(blocks: BlockDefinition[], type: string): Blo
 export function slotNames(def: BlockDefinition | undefined): string[] {
   return def?.slots ? Object.keys(def.slots) : []
 }
+
+/**
+ * Name of the hidden, virtual richText field the plugin adds next to a layout field. The block
+ * inspector points Payload's Lexical editor (`RenderLexical`) at it, so rich text props use the
+ * app's own editor config. It stores nothing.
+ */
+export function richTextFieldName(layoutField: string): string {
+  return `${layoutField}RichText`
+}

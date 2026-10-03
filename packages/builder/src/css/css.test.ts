@@ -6,8 +6,9 @@ import { describe, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 
 import { createCanvasCompiler } from './browser'
-import { clearCssCache, compileClasses, getCanvasCssInput, tracingIncludes } from './index'
-import { countUtilityLayers, extractUtilities, splitTopLevel } from './shared'
+import { clearCssCache, compileClasses, getCanvasCssInput, getStyleTokens, tracingIncludes } from './index'
+import { type CanvasCssData, countUtilityLayers, extractUtilities, splitTopLevel } from './shared'
+import { parseThemeEntries, tokensFromTheme } from './tokens'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const starter = path.resolve(here, '../../../../apps/starter')
@@ -156,4 +157,71 @@ describe('timing', () => {
       )
     })
   }
+})
+
+const names = (list: { name: string }[]) => list.map((t) => t.name)
+
+describe('getStyleTokens', () => {
+
+  test('reads theme colors first, then the palette', async () => {
+    const { colors } = await getStyleTokens(options)
+    const list = names(colors)
+    for (const name of ['primary', 'primary-foreground', 'muted', 'muted-foreground', 'background', 'border', 'ring']) {
+      assert.ok(list.includes(name), `missing color ${name}`)
+    }
+    assert.deepEqual(colors.find((c) => c.name === 'primary'), { name: 'primary', value: 'var(--primary)' })
+    assert.equal(list[0], 'background', 'theme colors come first, in theme order')
+    assert.ok(list.indexOf('error') < list.indexOf('red-500'), 'theme colors before the palette')
+    assert.match(colors.find((c) => c.name === 'red-500')?.value ?? '', /^oklch\(/)
+    for (const name of ['black', 'white', 'transparent', 'current', 'inherit']) assert.ok(list.includes(name), name)
+    assert.equal(new Set(list).size, list.length, 'no duplicate colors')
+  })
+
+  test('reads spacing, type, radius, shadows, breakpoints and containers', async () => {
+    const tokens = await getStyleTokens(options)
+    assert.deepEqual(tokens.spacing.slice(0, 4), ['0', 'px', '0.5', '1'])
+    for (const key of ['4', '8', '12', '96']) assert.ok(tokens.spacing.includes(key), `spacing ${key}`)
+    assert.ok(names(tokens.fontSizes).includes('lg') && names(tokens.fontSizes).includes('xl'))
+    assert.ok(!names(tokens.fontSizes).some((n) => n.includes('--') || n.startsWith('shadow')), 'nested keys leaked')
+    assert.deepEqual(tokens.fontWeights.find((t) => t.name === 'bold'), { name: 'bold', value: '700' })
+    assert.ok(names(tokens.fonts).includes('sans') && !names(tokens.fonts).some((n) => n.startsWith('weight')))
+    assert.ok(names(tokens.leading).includes('tight') && names(tokens.tracking).includes('wide'))
+    assert.deepEqual(tokens.radius.find((t) => t.name === 'lg'), { name: 'lg', value: 'var(--radius)' })
+    assert.ok(names(tokens.shadows).includes('md'))
+    assert.deepEqual(names(tokens.breakpoints), ['sm', 'md', 'lg', 'xl', '2xl'])
+    assert.equal(tokens.breakpoints.at(-1)?.value, '86rem', 'the app value, not the default')
+    assert.ok(names(tokens.containers).includes('7xl'))
+  })
+
+  test('lists every utility class, including theme and plugin classes', async () => {
+    const { classList } = await getStyleTokens(options)
+    for (const cls of ['bg-primary', 'pt-4', 'prose', 'text-muted-foreground', 'rounded-lg']) {
+      assert.ok(classList.includes(cls), `missing ${cls}`)
+    }
+    assert.ok(!classList.some((c) => c.includes(':')), 'class list has no variants')
+    assert.equal(new Set(classList).size, classList.length, 'no duplicate classes')
+    const kb = JSON.stringify(await getStyleTokens(options)).length / 1024
+    console.log(`StyleTokens: ${classList.length} classes, ${kb.toFixed(0)} KB JSON`)
+  })
+
+  test('the @theme parse fallback gives the same tokens (without a class list)', async () => {
+    const tokens = await getStyleTokens(options)
+    const input = (await getCanvasCssInput(options)) as unknown as CanvasCssData
+    const fallback = tokensFromTheme(parseThemeEntries(input), null)
+    assert.deepEqual({ ...fallback, classList: undefined }, { ...tokens, classList: undefined })
+    assert.deepEqual(fallback.classList, [])
+  })
+
+  test('caches per entry content: a cache hit is fast', async () => {
+    clearCssCache()
+    let t0 = performance.now()
+    const first = await getStyleTokens(options)
+    const cold = performance.now() - t0
+    t0 = performance.now()
+    const second = await getStyleTokens(options)
+    const hit = performance.now() - t0
+    assert.equal(second, first, 'same cached object')
+    assert.ok(hit < 10, `cache hit took ${hit.toFixed(1)} ms`)
+    console.log(`getStyleTokens: cold ${cold.toFixed(1)} ms, cache hit ${hit.toFixed(2)} ms`)
+  })
 })

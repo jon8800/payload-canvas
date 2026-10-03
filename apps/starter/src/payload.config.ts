@@ -16,8 +16,8 @@ import sharp from 'sharp'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
-import { allBlocks } from '@/blocks/registry'
 import { builderBlocks } from '@/builder'
+import { documentPath } from '@/lib/links'
 import { Users } from '@/collections/Users'
 import { Media } from '@/collections/Media'
 import { Pages } from '@/collections/Pages'
@@ -73,7 +73,6 @@ export default buildConfig({
   }),
   editor: lexicalEditor(),
   email: process.env.SMTP_HOST ? smtpAdapter : undefined,
-  blocks: allBlocks,
   collections: [
     Users,
     Media,
@@ -196,7 +195,9 @@ export default buildConfig({
     // Must stay last: it adds top-level fields after other plugins (SEO tabbedUI) move fields into tabs.
     websiteBuilder({
       collections: {
-        pages: { field: 'builder', url: (doc) => `/${doc.slug}` },
+        pages: { field: 'builder', url: (doc) => documentPath('pages', doc.slug) ?? '/' },
+        posts: { field: 'builder', url: (doc) => documentPath('posts', doc.slug) ?? '/blog' },
+        'template-parts': { field: 'builder' },
       },
       blocks: builderBlocks,
       css: {

@@ -1,11 +1,9 @@
-import type { BlockSlug, CollectionConfig } from 'payload'
+import type { CollectionConfig } from 'payload'
 
-import { allBlockSlugs } from '../blocks/registry'
 import { authenticated } from '../access/authenticated'
 import { authenticatedOrPublished } from '../access/authenticatedOrPublished'
 import { populatePublishedAt } from '../hooks/populatePublishedAt'
 import { revalidatePage } from '../hooks/revalidatePage'
-import { compileBlockStyles } from '../hooks/compileBlockStyles'
 import { generatePreviewPath } from '../utilities/generatePreviewPath'
 
 export const Pages: CollectionConfig = {
@@ -33,20 +31,6 @@ export const Pages: CollectionConfig = {
         collection: 'pages',
         req,
       }),
-    components: {
-      views: {
-        edit: {
-          customiser: {
-            Component: '@/views/customiser/index#CustomiserView',
-            path: '/customiser',
-            tab: {
-              href: '/customiser',
-              label: 'Customiser',
-            },
-          },
-        },
-      },
-    },
   },
   versions: {
     maxPerDoc: 50,
@@ -59,7 +43,7 @@ export const Pages: CollectionConfig = {
   enableQueryPresets: true,
   hooks: {
     afterChange: [revalidatePage],
-    beforeChange: [populatePublishedAt, compileBlockStyles],
+    beforeChange: [populatePublishedAt],
   },
   fields: [
     {
@@ -75,20 +59,9 @@ export const Pages: CollectionConfig = {
       admin: { position: 'sidebar' },
     },
     {
-      name: 'layout',
-      type: 'blocks',
-      blockReferences: [...allBlockSlugs] as BlockSlug[],
-      blocks: [],
-    },
-    {
       name: 'publishedAt',
       type: 'date',
       admin: { position: 'sidebar' },
-    },
-    {
-      name: '_compiledBlockCSS',
-      type: 'textarea',
-      admin: { hidden: true },
     },
   ],
 }

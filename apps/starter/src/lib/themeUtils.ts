@@ -88,12 +88,14 @@ export function buildCSSVariables(theme: ThemeData): Record<string, string> {
 }
 
 /**
- * Convert a CSS variables record to a `:root { ... }` style string.
+ * Convert a CSS variables record to a `:root:root { ... }` style string.
+ * The doubled selector wins over the default `:root` values in globals.css whatever the load
+ * order (the canvas iframe adds its compiled CSS after this tag).
  * Returns empty string if no variables are set.
  */
 export function cssVarsToString(vars: Record<string, string>): string {
   const entries = Object.entries(vars)
   if (entries.length === 0) return ''
   const declarations = entries.map(([k, v]) => `${k}: ${v};`).join(' ')
-  return `:root { ${declarations} }`
+  return `:root:root { ${declarations} }`
 }

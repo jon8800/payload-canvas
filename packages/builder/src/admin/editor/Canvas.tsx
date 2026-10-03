@@ -6,19 +6,13 @@ import { deepestBlockAt } from '../../core'
 import { unwrap, type CanvasToAdmin } from '../../protocol'
 import { Overlay } from './Overlay'
 import { computeDrop, useRuntime } from './runtime'
+import { useEditor } from './store'
 import { useValue } from './valueStore'
 
-export type Device = 'desktop' | 'tablet' | 'mobile'
-
-export const deviceWidths: Record<Device, string> = {
-  desktop: '100%',
-  tablet: '768px',
-  mobile: '390px',
-}
-
-export function Canvas({ device }: { device: Device }) {
+export function Canvas() {
   const runtime = useRuntime()
   const { iframeRef, pointerLock, config } = runtime
+  const width = useEditor(runtime.store, (s) => s.canvasWidth)
   const locked = useValue(pointerLock)
   const error = useValue(runtime.canvasError)
 
@@ -96,7 +90,7 @@ export function Canvas({ device }: { device: Device }) {
       )}
       <div
         className="builder-editor__frame"
-        style={{ width: deviceWidths[device] }}
+        style={{ width: width === null ? '100%' : `${width}px` }}
         // While dragging, the iframe ignores the pointer, so forward the wheel to keep scrolling.
         onWheel={locked ? (e) => runtime.postToCanvas({ type: 'scrollBy', dx: e.deltaX, dy: e.deltaY }) : undefined}
       >

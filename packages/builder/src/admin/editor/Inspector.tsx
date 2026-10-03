@@ -1,14 +1,15 @@
 'use client'
 
-import { CheckboxInput, RenderFields, TextInput, useConfig, useDocumentInfo } from '@payloadcms/ui'
-import { useMemo, useState, type ChangeEvent, type ReactNode } from 'react'
+import { CheckboxInput, RenderFields, useConfig, useDocumentInfo } from '@payloadcms/ui'
+import { useMemo, useState, type ChangeEvent } from 'react'
 import type { ClientField } from 'payload'
 
 import { findBlock, getBlockDefinition } from '../../core'
 import type { Block } from '../../core/types'
-import { RenderBlockField } from './renderField'
+import { BlockContentFields } from './renderField'
 import { useRuntime } from './runtime'
 import { useEditor } from './store'
+import { StylesPanel } from './styles/StylesPanel'
 
 type TabsProps<T extends string> = { value: T; options: { id: T; label: string }[]; onChange: (id: T) => void }
 
@@ -75,41 +76,9 @@ function BlockPane() {
           { id: 'styles', label: 'Styles' },
         ]}
       />
-      {tab === 'content' ? <ContentFields block={block} /> : <StyleFields block={block} />}
+      {tab === 'content' ? <BlockContentFields block={block} /> : <StyleFields block={block} />}
     </div>
   )
-}
-
-function ContentFields({ block }: { block: Block }) {
-  const runtime = useRuntime()
-  const def = getBlockDefinition(runtime.config.blocks, block.type)
-  if (!def) return <p className="builder-editor__hint">Unknown block type “{block.type}”.</p>
-
-  const fields: ReactNode[] = []
-  for (const field of def.fields) {
-    if (!('name' in field)) continue
-    const admin = field.admin as { hidden?: boolean; disabled?: boolean } | undefined
-    if (admin?.hidden || admin?.disabled) continue
-    const name = field.name
-    fields.push(
-      <RenderBlockField
-        key={name}
-        field={field}
-        path={`builder.${block.id}.${name}`}
-        value={block.props?.[name]}
-        onChange={(value) => {
-          const empty = value === undefined || value === null || value === ''
-          runtime.store.apply(
-            empty ? { type: 'update', id: block.id, unsetProps: [name] } : { type: 'update', id: block.id, props: { [name]: value } },
-            { mergeKey: `props:${block.id}:${name}` },
-          )
-        }}
-      />,
-    )
-  }
-
-  if (fields.length === 0) return <p className="builder-editor__hint">This block has no content fields.</p>
-  return <div className="builder-editor__fields">{fields}</div>
 }
 
 function StyleFields({ block }: { block: Block }) {
@@ -118,19 +87,10 @@ function StyleFields({ block }: { block: Block }) {
 
   return (
     <div className="builder-editor__fields">
-      {def?.styles !== false && (
-        <TextInput
-          label="Classes"
-          description="Tailwind classes, for example: bg-red-500 p-8 md:flex"
-          path={`builder.${block.id}.className`}
-          value={block.className ?? ''}
-          onChange={(e: ChangeEvent<HTMLInputElement>) =>
-            runtime.store.apply(
-              { type: 'update', id: block.id, className: e.target.value || null },
-              { mergeKey: `className:${block.id}` },
-            )
-          }
-        />
+      {def?.styles === false ? (
+        <p className="builder-editor__hint">This block has no style controls.</p>
+      ) : (
+        <StylesPanel block={block} />
       )}
       <CheckboxInput
         id={`builder-${block.id}-hidden`}

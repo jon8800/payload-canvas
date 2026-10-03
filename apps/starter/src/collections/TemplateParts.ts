@@ -1,10 +1,8 @@
-import type { BlockSlug, CollectionConfig } from 'payload'
+import type { CollectionConfig } from 'payload'
 
-import { allBlockSlugs } from '../blocks/registry'
 import { authenticated } from '../access/authenticated'
 import { authenticatedOrPublished } from '../access/authenticatedOrPublished'
 import { revalidateTemplatePart } from '../hooks/revalidateTemplatePart'
-import { compileBlockStyles } from '../hooks/compileBlockStyles'
 import { generatePreviewPath } from '../utilities/generatePreviewPath'
 
 export const TemplateParts: CollectionConfig = {
@@ -32,20 +30,6 @@ export const TemplateParts: CollectionConfig = {
         collection: 'template-parts',
         req,
       }),
-    components: {
-      views: {
-        edit: {
-          customiser: {
-            Component: '@/views/customiser/index#CustomiserView',
-            path: '/customiser',
-            tab: {
-              href: '/customiser',
-              label: 'Customiser',
-            },
-          },
-        },
-      },
-    },
   },
   versions: {
     maxPerDoc: 50,
@@ -57,7 +41,6 @@ export const TemplateParts: CollectionConfig = {
   enableQueryPresets: true,
   hooks: {
     afterChange: [revalidateTemplatePart],
-    beforeChange: [compileBlockStyles],
   },
   fields: [
     {
@@ -114,17 +97,6 @@ export const TemplateParts: CollectionConfig = {
           },
         },
       ],
-    },
-    {
-      name: 'layout',
-      type: 'blocks',
-      blockReferences: [...allBlockSlugs] as BlockSlug[],
-      blocks: [],
-    },
-    {
-      name: '_compiledBlockCSS',
-      type: 'textarea',
-      admin: { hidden: true },
     },
   ],
 }

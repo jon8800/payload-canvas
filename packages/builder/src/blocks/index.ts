@@ -1,30 +1,96 @@
-import type { CollectionSlug } from 'payload'
+import type { CollectionSlug, Field } from 'payload'
 import { defineBlock } from '../core/blocks'
 import type { BlockDefinition } from '../core/types'
 
 export type DefaultBlocksOptions = {
-  /** Upload collection for the image block. Default "media". */
+  /** Upload collection for the image and video blocks. Default "media". */
   mediaCollection?: string
+  /**
+   * Collections a button or link can point to (for example ["pages", "posts"]). Stored as
+   * `{ relationTo, value }`. Empty (the default) leaves only URL links.
+   */
+  linkCollections?: string[]
 }
+
+/**
+ * Shows a field only when a sibling field has a value. JSON-safe (Payload's `admin.condition` is a
+ * function and does not reach the admin client). The inspector reads it from `admin.custom`.
+ */
+export type BuilderCondition = { field: string; equals: unknown }
+
+const when = (field: string, equals: unknown) => ({ custom: { builderCondition: { field, equals } satisfies BuilderCondition } })
 
 // Field configs here are plain data (no functions), so they serialize to the admin client as is.
 
-/** The built-in blocks: stack, grid, heading, text, image. */
+/** The link group used by the button and link blocks. Its value is `LinkValue` in builder-react. */
+function linkField(linkCollections: string[]): Field {
+  const hasReference = linkCollections.length > 0
+  const fields: Field[] = [
+    {
+      name: 'type',
+      type: 'select',
+      label: 'Link to',
+      options: hasReference
+        ? [
+            { label: 'URL', value: 'url' },
+            { label: 'Page or document', value: 'reference' },
+          ]
+        : [{ label: 'URL', value: 'url' }],
+      defaultValue: 'url',
+    },
+    {
+      name: 'url',
+      type: 'text',
+      label: 'URL',
+      admin: { description: 'For example /contact, https://example.com or mailto:hi@example.com.', ...when('type', 'url') },
+    },
+  ]
+  if (hasReference) {
+    fields.push({
+      name: 'reference',
+      type: 'relationship',
+      label: 'Document',
+      relationTo: linkCollections as CollectionSlug[],
+      admin: when('type', 'reference'),
+    })
+  }
+  fields.push({ name: 'newTab', type: 'checkbox', label: 'Open in a new tab' })
+  return { name: 'link', type: 'group', label: 'Link', fields }
+}
+
+/**
+ * The built-in blocks: stack, grid, heading, text, richText, image, button, link, list, quote,
+ * divider, spacer, video.
+ */
 export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[] {
-  const mediaCollection = options?.mediaCollection ?? 'media'
+  const mediaCollection = (options?.mediaCollection ?? 'media') as CollectionSlug
+  const linkCollections = options?.linkCollections ?? []
+  const exampleLink = linkCollections.length > 0
+    ? { type: 'reference', reference: { relationTo: linkCollections[0], value: 1 } }
+    : { type: 'url', url: '/contact' }
 
   const stack = defineBlock({
     type: 'stack',
     label: 'Stack',
-    fields: [],
+    fields: [
+      {
+        name: 'as',
+        type: 'select',
+        label: 'HTML element',
+        options: ['div', 'section', 'header', 'footer', 'main', 'nav', 'article', 'aside'],
+        defaultValue: 'div',
+        admin: { description: 'The HTML tag. Use "section" for page sections, "header" and "footer" for page chrome.' },
+      },
+    ],
     slots: { children: { label: 'Children' } },
     defaultClassName: 'flex flex-col gap-4',
     ai: {
       description:
         'A container that lays out its children in a column (or a row with "flex-row"). ' +
-        'Use it to group blocks and build sections.',
+        'Use it to group blocks and build sections. Set "as" to "section", "header", "footer" and so on for semantic HTML.',
       example: {
         type: 'stack',
+        props: { as: 'section' },
         className: 'flex flex-col gap-4',
         slots: {
           children: [
@@ -86,8 +152,51 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     label: 'Text',
     fields: [{ name: 'text', type: 'textarea', label: 'Text', required: true }],
     ai: {
-      description: 'A paragraph of plain text. Line breaks are kept.',
+      description: 'A paragraph of plain text. Line breaks are kept. Use richText for formatting, links and lists.',
       example: { type: 'text', props: { text: 'We design and build fast websites.' }, className: 'text-lg' },
+    },
+  })
+
+  const richText = defineBlock({
+    type: 'richText',
+    label: 'Rich text',
+    fields: [{ name: 'content', type: 'richText', label: 'Content', required: true }],
+    defaultClassName: 'prose',
+    ai: {
+      description:
+        'Formatted text (Lexical JSON): paragraphs, headings, bold and italic, links and lists. ' +
+        'Use it for articles and longer copy. The "prose" class styles the content.',
+      example: {
+        type: 'richText',
+        className: 'prose',
+        props: {
+          content: {
+            root: {
+              type: 'root',
+              version: 1,
+              format: '',
+              indent: 0,
+              direction: 'ltr',
+              children: [
+                {
+                  type: 'paragraph',
+                  version: 1,
+                  format: '',
+                  indent: 0,
+                  direction: 'ltr',
+                  textFormat: 0,
+                  textStyle: '',
+                  children: [
+                    { type: 'text', version: 1, text: 'We build ', format: 0, detail: 0, mode: 'normal', style: '' },
+                    { type: 'text', version: 1, text: 'fast', format: 1, detail: 0, mode: 'normal', style: '' },
+                    { type: 'text', version: 1, text: ' websites.', format: 0, detail: 0, mode: 'normal', style: '' },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      },
     },
   })
 
@@ -95,7 +204,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     type: 'image',
     label: 'Image',
     fields: [
-      { name: 'image', type: 'upload', label: 'Image', relationTo: mediaCollection as CollectionSlug, required: true },
+      { name: 'image', type: 'upload', label: 'Image', relationTo: mediaCollection, required: true },
       {
         name: 'alt',
         type: 'text',
@@ -109,5 +218,154 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     },
   })
 
-  return [stack, grid, heading, text, image]
+  const button = defineBlock({
+    type: 'button',
+    label: 'Button',
+    fields: [
+      { name: 'label', type: 'text', label: 'Label', required: true },
+      linkField(linkCollections),
+    ],
+    defaultClassName:
+      'inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground',
+    ai: {
+      description:
+        'A call-to-action button. "link.type" is "url" (set "link.url") or "reference" (set "link.reference" to ' +
+        '{ relationTo, value }). Without a link it renders as plain text.',
+      example: {
+        type: 'button',
+        props: { label: 'Contact us', link: exampleLink },
+        className:
+          'inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground',
+      },
+    },
+  })
+
+  const link = defineBlock({
+    type: 'link',
+    label: 'Link',
+    fields: [linkField(linkCollections)],
+    slots: { children: { label: 'Content' } },
+    defaultClassName: 'block',
+    ai: {
+      description:
+        'A clickable container: everything inside it links to one place. Use it for cards that link to a page. ' +
+        'Do not put buttons or other links inside it.',
+      example: {
+        type: 'link',
+        props: { link: exampleLink },
+        className: 'block rounded-lg border p-6',
+        slots: {
+          children: [
+            { id: 'b_example_1', type: 'heading', props: { text: 'Pricing', level: '3' } },
+            { id: 'b_example_2', type: 'text', props: { text: 'See our plans.' } },
+          ],
+        },
+      },
+    },
+  })
+
+  const list = defineBlock({
+    type: 'list',
+    label: 'List',
+    fields: [
+      {
+        name: 'items',
+        type: 'array',
+        label: 'Items',
+        fields: [{ name: 'text', type: 'text', label: 'Text', required: true }],
+      },
+      { name: 'ordered', type: 'checkbox', label: 'Numbered list' },
+    ],
+    defaultClassName: 'list-disc pl-6 space-y-1',
+    ai: {
+      description: 'A bulleted list (or numbered with "ordered": true) of short text items.',
+      example: {
+        type: 'list',
+        props: { items: [{ text: 'Fast' }, { text: 'Simple' }, { text: 'Secure' }] },
+        className: 'list-disc pl-6 space-y-1',
+      },
+    },
+  })
+
+  const quote = defineBlock({
+    type: 'quote',
+    label: 'Quote',
+    fields: [
+      { name: 'quote', type: 'textarea', label: 'Quote', required: true },
+      { name: 'cite', type: 'text', label: 'Source', admin: { description: 'Who said it, for example "Jane Doe, CEO".' } },
+    ],
+    defaultClassName: 'border-l-4 pl-4 italic',
+    ai: {
+      description: 'A quotation or testimonial, with an optional source.',
+      example: {
+        type: 'quote',
+        props: { quote: 'They rebuilt our site in a week.', cite: 'Jane Doe, Acme' },
+        className: 'border-l-4 pl-4 italic',
+      },
+    },
+  })
+
+  const divider = defineBlock({
+    type: 'divider',
+    label: 'Divider',
+    fields: [],
+    defaultClassName: 'my-8 border-t',
+    ai: {
+      description: 'A horizontal line (<hr>) between sections.',
+      example: { type: 'divider', className: 'my-8 border-t' },
+    },
+  })
+
+  const spacer = defineBlock({
+    type: 'spacer',
+    label: 'Spacer',
+    fields: [],
+    defaultClassName: 'h-8',
+    ai: {
+      description: 'Empty vertical space. Set the height with a class such as "h-16". Prefer gap and padding classes.',
+      example: { type: 'spacer', className: 'h-16' },
+    },
+  })
+
+  const video = defineBlock({
+    type: 'video',
+    label: 'Video',
+    fields: [
+      {
+        name: 'source',
+        type: 'select',
+        label: 'Source',
+        options: [
+          { label: 'Upload', value: 'upload' },
+          { label: 'URL (YouTube, Vimeo or a video file)', value: 'url' },
+        ],
+        defaultValue: 'upload',
+      },
+      { name: 'video', type: 'upload', label: 'Video', relationTo: mediaCollection, admin: when('source', 'upload') },
+      {
+        name: 'url',
+        type: 'text',
+        label: 'URL',
+        admin: { description: 'A YouTube or Vimeo link, or a direct link to a video file.', ...when('source', 'url') },
+      },
+      { name: 'poster', type: 'upload', label: 'Poster image', relationTo: mediaCollection },
+      { name: 'autoplay', type: 'checkbox', label: 'Autoplay', admin: { description: 'Browsers only autoplay muted videos.' } },
+      { name: 'loop', type: 'checkbox', label: 'Loop' },
+      { name: 'muted', type: 'checkbox', label: 'Muted' },
+      { name: 'controls', type: 'checkbox', label: 'Show controls', defaultValue: true },
+    ],
+    defaultClassName: 'w-full',
+    ai: {
+      description:
+        `A video: an upload from the "${mediaCollection}" collection (source "upload", set "video") or a ` +
+        'YouTube, Vimeo or video file URL (source "url", set "url").',
+      example: {
+        type: 'video',
+        props: { source: 'url', url: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ', controls: true },
+        className: 'w-full aspect-video',
+      },
+    },
+  })
+
+  return [stack, grid, heading, text, richText, image, button, link, list, quote, divider, spacer, video]
 }

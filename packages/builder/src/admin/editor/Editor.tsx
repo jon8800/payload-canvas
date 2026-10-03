@@ -14,7 +14,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react'
 
 import type { BuilderClientConfig } from '../../core/types'
 import { keyAction } from '../../protocol'
-import { Canvas, type Device } from './Canvas'
+import { Canvas } from './Canvas'
 import { DragLayer } from './DragLayer'
 import { Inspector } from './Inspector'
 import { Library } from './Library'
@@ -54,7 +54,6 @@ export function Editor({ config, path }: { config: BuilderClientConfig; path: st
   const { config: payloadConfig } = useConfig()
   const [runtime] = useState(() => createRuntime(config, payloadConfig.routes.api))
   const { ready } = useLayoutFieldSync(runtime.store, path)
-  const [device, setDevice] = useState<Device>('desktop')
   const stopAutoScroll = useRef<(() => void) | null>(null)
   const dndId = useId()
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
@@ -159,13 +158,13 @@ export function Editor({ config, path }: { config: BuilderClientConfig; path: st
         onDragCancel={endDrag}
       >
         <div ref={fitToViewport} className="builder-editor">
-          <Toolbar device={device} onDevice={setDevice} />
+          <Toolbar />
           <div className="builder-editor__body">
             <aside className="builder-editor__left">
               <Library />
               <Outline />
             </aside>
-            <Canvas device={device} />
+            <Canvas />
             <aside className="builder-editor__right">
               <Inspector />
             </aside>

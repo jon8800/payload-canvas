@@ -12,6 +12,7 @@ type FieldLike = {
   hasMany?: boolean
   fields?: FieldLike[]
   tabs?: Array<{ name?: string; fields?: FieldLike[] }>
+  blocks?: Array<{ slug?: string; fields?: FieldLike[] } | string>
 }
 type Resolve = (collection: string, id: Id) => unknown
 type PropsRecord = Record<string, unknown>
@@ -32,6 +33,52 @@ function mapReference(value: unknown, field: FieldLike, resolve: Resolve): unkno
   return resolve(field.relationTo, value)
 }
 
+type LexicalNode = Record<string, unknown> & { children?: unknown; fields?: unknown }
+
+/** A `{ relationTo, value }` pair whose value is still an ID. */
+function mapRelationPair(pair: unknown, resolve: Resolve): unknown {
+  if (!isRecord(pair) || typeof pair.relationTo !== 'string' || !isId(pair.value)) return pair
+  return { ...pair, value: resolve(pair.relationTo, pair.value) }
+}
+
+/**
+ * Maps the references inside Lexical rich text: upload and relationship nodes
+ * (`{ relationTo, value }`) and internal links (`fields.doc`). Unchanged nodes keep their identity.
+ */
+function mapLexicalNode(node: unknown, resolve: Resolve): unknown {
+  if (!isRecord(node)) return node
+  let next: LexicalNode = node
+  if (node.type === 'upload' || node.type === 'relationship') {
+    next = mapRelationPair(node, resolve) as LexicalNode
+  }
+  if ((node.type === 'link' || node.type === 'autolink') && isRecord(node.fields) && node.fields.doc) {
+    const doc = mapRelationPair(node.fields.doc, resolve)
+    if (doc !== node.fields.doc) next = { ...next, fields: { ...node.fields, doc } }
+  }
+  if (Array.isArray(node.children)) {
+    const children = node.children.map((child) => mapLexicalNode(child, resolve))
+    if (children.some((child, i) => child !== (node.children as unknown[])[i])) next = { ...next, children }
+  }
+  return next
+}
+
+function mapRichText(value: unknown, resolve: Resolve): unknown {
+  if (!isRecord(value) || !isRecord(value.root)) return value
+  const root = mapLexicalNode(value.root, resolve)
+  return root === value.root ? value : { ...value, root }
+}
+
+/** Maps every row of an array or blocks field. */
+function mapRows(value: unknown, fieldsOf: (row: PropsRecord) => FieldLike[] | undefined, resolve: Resolve): unknown {
+  if (!Array.isArray(value)) return value
+  const rows = value.map((row) => {
+    if (!isRecord(row)) return row
+    const fields = fieldsOf(row)
+    return fields ? mapProps(row, fields, resolve) : row
+  })
+  return rows.some((row, i) => row !== value[i]) ? rows : value
+}
+
 /** Maps the reference fields in one props object. Fields without a name share the parent object. */
 function mapProps(props: PropsRecord, fields: FieldLike[], resolve: Resolve): PropsRecord {
   let result = props
@@ -44,6 +91,15 @@ function mapProps(props: PropsRecord, fields: FieldLike[], resolve: Resolve): Pr
     const name = field.name
     if (field.type === 'upload' || field.type === 'relationship') {
       if (name && name in props) set(name, mapReference(props[name], field, resolve))
+    } else if (field.type === 'richText') {
+      if (name && name in props) set(name, mapRichText(props[name], resolve))
+    } else if (field.type === 'array' && name) {
+      if (name in props) set(name, mapRows(props[name], () => field.fields ?? [], resolve))
+    } else if (field.type === 'blocks' && name) {
+      const variants = (field.blocks ?? []).filter((b) => typeof b === 'object')
+      if (name in props) {
+        set(name, mapRows(props[name], (row) => variants.find((b) => b.slug === row.blockType)?.fields, resolve))
+      }
     } else if (field.type === 'group' && name) {
       const nested = props[name]
       if (isRecord(nested)) set(name, mapProps(nested, field.fields ?? [], resolve))

@@ -8,7 +8,7 @@
 
 import { useSyncExternalStore } from 'react'
 
-import { applyOperations, findBlock } from '../../core'
+import { applyOperations, BASE_VARIANT, findBlock, type Variant } from '../../core'
 import type { Layout, Operation } from '../../core/types'
 
 type HistoryEntry = {
@@ -29,6 +29,10 @@ export type EditorState = {
   redoStack: HistoryEntry[]
   /** Last refused operation, shown in the toolbar. */
   lastError: string | null
+  /** Breakpoint and state the Styles panel edits. */
+  variant: Variant
+  /** Canvas iframe width in CSS pixels. `null` fills the stage (desktop). */
+  canvasWidth: number | null
 }
 
 export type ApplyOptions = {
@@ -51,6 +55,8 @@ export function createEditorStore(initial: Layout) {
     undoStack: [],
     redoStack: [],
     lastError: null,
+    variant: BASE_VARIANT,
+    canvasWidth: null,
   }
   const listeners = new Set<() => void>()
 
@@ -160,6 +166,13 @@ export function createEditorStore(initial: Layout) {
     },
     clearError() {
       if (state.lastError) set({ lastError: null })
+    },
+    setVariant(variant: Variant) {
+      const { breakpoint, state: current } = state.variant
+      if (breakpoint !== variant.breakpoint || current !== variant.state) set({ variant })
+    },
+    setCanvasWidth(width: number | null) {
+      if (state.canvasWidth !== width) set({ canvasWidth: width })
     },
   }
 }

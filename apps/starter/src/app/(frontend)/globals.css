@@ -2,8 +2,6 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@source "../../lib/tailwind-safelist.ts";
-@source "../../blocks/**/*.tsx";
 @source "../../components/**/*.tsx";
 @source "../**/*.tsx";
 @source "../../lib/**/*.ts";

@@ -2,7 +2,7 @@ import type { GlobalConfig } from 'payload'
 
 import { anyone } from '../access/anyone'
 import { authenticated } from '../access/authenticated'
-import { revalidateTheme } from '../hooks/revalidateTheme'
+import { deriveThemeTokens, revalidateTheme } from '../hooks/revalidateTheme'
 
 export const ThemeSettings: GlobalConfig = {
   slug: 'theme-settings',
@@ -25,6 +25,7 @@ export const ThemeSettings: GlobalConfig = {
     },
   },
   hooks: {
+    beforeChange: [deriveThemeTokens],
     afterChange: [revalidateTheme],
   },
   fields: [
@@ -174,7 +175,7 @@ export const ThemeSettings: GlobalConfig = {
         custom: { min: 0, max: 2, step: 0.125, unit: 'rem' },
       },
     },
-    // Derived tokens (hidden, computed by afterChange hook)
+    // Derived tokens (hidden, computed by the beforeChange hook)
     {
       name: 'derivedTokens',
       type: 'json',

@@ -1,12 +1,14 @@
 import type { ReactNode } from 'react'
 import type { Block, BlockDefinition } from '@payload-toolkit/builder/core'
 import { defaultComponents } from '../components'
-import type { BlockComponents, BlockComponentProps, RenderLayoutProps, RenderMode } from './types'
+import { defaultResolveLink } from './link'
+import type { BlockComponents, BlockComponentProps, RenderLayoutProps, RenderMode, ResolveLink } from './types'
 
 type Context = {
   mode: RenderMode
   components: BlockComponents
   definitions: Map<string, BlockDefinition>
+  resolveLink: ResolveLink
 }
 
 const PLACEHOLDER_STYLE = { minHeight: 48, minWidth: 48 }
@@ -78,6 +80,7 @@ function renderBlock(block: Block, ctx: Context): ReactNode {
     attributes,
     slotAttributes,
     mode: ctx.mode,
+    resolveLink: ctx.resolveLink,
   }
   return <Component key={block.id} {...componentProps} />
 }
@@ -89,11 +92,13 @@ export function RenderLayout({
   css,
   mode = 'site',
   blocks,
+  resolveLink,
 }: RenderLayoutProps): ReactNode {
   const ctx: Context = {
     mode,
     components: { ...defaultComponents, ...components },
     definitions: new Map((blocks ?? []).map((definition) => [definition.type, definition])),
+    resolveLink: resolveLink ?? defaultResolveLink,
   }
   return (
     <>
