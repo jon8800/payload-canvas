@@ -1,3 +1,4 @@
+import { sectionLibrary } from './data/sections/library'
 import { buildConfig } from 'payload'
 import type { EmailAdapter } from 'payload'
 import { postgresAdapter } from '@payloadcms/db-postgres'
@@ -200,6 +201,7 @@ export default buildConfig({
         'template-parts': { field: 'builder' },
       },
       blocks: builderBlocks,
+      sections: sectionLibrary,
       css: {
         entry: 'src/app/(frontend)/globals.css',
         plugins: { '@tailwindcss/typography': typography },

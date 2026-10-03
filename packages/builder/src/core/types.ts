@@ -54,8 +54,32 @@ export type BlockDefinition = {
   styles?: boolean
   /** Classes a newly inserted block starts with (e.g. "flex flex-col gap-4" for a stack). */
   defaultClassName?: string
+  /**
+   * Tailwind classes the block's React component uses itself. They are added to the generated
+   * CSS (save hook and canvas) whenever the block type appears in a layout.
+   */
+  classes?: string[]
+  /** Icon name from the editor's built-in icon set (e.g. "heading", "image"). Falls back to a generic icon. */
+  icon?: string
+  /** Group in the block library, e.g. "Layout", "Content", "Media", "Interactive". */
+  category?: string
   /** Text for AI tools: what the block is for, plus a small example. */
   ai?: { description: string; example?: Omit<Partial<Block>, 'id'> }
+}
+
+// ---------------------------------------------------------------------------
+// Ready-made sections (inserted as a whole; the main unit for AI tools)
+// ---------------------------------------------------------------------------
+
+export type SectionDefinition = {
+  /** Stable id, e.g. "hero". */
+  id: string
+  label: string
+  description?: string
+  /** Group in the sections library, e.g. "Heroes", "Features", "Calls to action". */
+  category?: string
+  /** The section's block tree. Block ids are regenerated on every insert. */
+  blocks: Block[]
 }
 
 // ---------------------------------------------------------------------------
@@ -78,6 +102,14 @@ export type BuilderClientConfig = {
   cssEndpoint: string
   /** Full API path that returns StyleTokens as JSON, e.g. "/api/builder/style-tokens". */
   tokensEndpoint: string
+  /** Ready-made sections for the library. */
+  sections: SectionDefinition[]
+  /**
+   * Full API path prefix for live editing, e.g. "/api/builder/live". The editor subscribes to
+   * `${liveEndpoint}/${collection}/${id}/events` (Server-Sent Events) and posts operations to
+   * `${liveEndpoint}/${collection}/${id}/operations`.
+   */
+  liveEndpoint: string
 }
 
 // ---------------------------------------------------------------------------

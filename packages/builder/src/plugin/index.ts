@@ -2,7 +2,7 @@ import path from 'node:path'
 import type { CollectionConfig, Config, Field, JSONField, Plugin, RichTextField } from 'payload'
 import { defaultBlocks } from '../blocks'
 import { richTextFieldName } from '../core/blocks'
-import { EMPTY_LAYOUT, type BlockDefinition, type BuilderClientConfig } from '../core/types'
+import { EMPTY_LAYOUT, type BlockDefinition, type BuilderClientConfig, type SectionDefinition } from '../core/types'
 import { getCanvasCssInput, getStyleTokens, type CssOptions, type TailwindPlugins } from '../css'
 import { layoutBeforeChange } from './hook'
 import { toJsonSafe } from './jsonSafe'
@@ -27,6 +27,8 @@ export type WebsiteBuilderOptions = {
   }
   /** Frontend route that renders the canvas iframe. Default "/builder-canvas". */
   canvasPath?: string
+  /** Ready-made sections shown in the editor's library and offered to AI tools. */
+  sections?: SectionDefinition[]
 }
 
 const LAYOUT_FIELD_COMPONENT = '@payload-toolkit/builder/client#LayoutField'
@@ -80,6 +82,8 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           canvasPath,
           cssEndpoint: `${apiRoute}${CANVAS_CSS_PATH}`,
           tokensEndpoint: `${apiRoute}${STYLE_TOKENS_PATH}`,
+          sections: options.sections ?? [],
+          liveEndpoint: `${apiRoute}/builder/live`,
         }
         return addBuilder(collection, { field, clientConfig, blocks, css })
       }),
