@@ -1,320 +1,382 @@
-import { getPayload } from 'payload'
+// Seeds the demo site: theme, media, a contact form, 4 pages, 3 posts, a header and a footer.
+// Idempotent: it deletes the documents it owns (matched by slug, title or filename) first.
+// Run with `pnpm seed:demo`.
+import { getPayload, type Payload } from 'payload'
 import config from '@payload-config'
+import sharp from 'sharp'
+import { validateLayout, type Block, type Layout } from '@payload-toolkit/builder/core'
 
+import { builderBlocks } from '@/builder'
+import { HOME_SLUG } from '@/lib/links'
 import {
-  heroPreset,
-  contentPreset,
-  ctaBannerPreset,
-  collectionGridPreset,
-  featuresPreset,
-  testimonialsPreset,
-  faqPreset,
-  footerCtaPreset,
-} from '@/data/section-presets'
-import { richText, populatePresetContent } from './lib/lexical-helpers.js'
+  cardGrid,
+  contact,
+  content,
+  cta,
+  faq,
+  features,
+  footer,
+  header,
+  hero,
+  image,
+  imageText,
+  lexical,
+  pageLink,
+  quote,
+  richText,
+  stack,
+  testimonials,
+  url,
+} from '@/data/sections'
+
+const SITE_NAME = 'Northwind Studio'
+const PAGE_SLUGS = [HOME_SLUG, 'about', 'services', 'contact']
+const POST_SLUGS = ['designing-with-blocks', 'a-faster-launch', 'theme-tokens-explained']
+const PART_TITLES = ['Header', 'Footer']
+const FORM_TITLE = 'Contact form'
+const CATEGORIES = [
+  { title: 'Design', slug: 'design' },
+  { title: 'Process', slug: 'process' },
+]
+const IMAGES = [
+  { name: 'demo-studio.png', alt: 'An abstract studio scene in indigo and violet', label: 'Studio', from: '#4f46e5', to: '#a855f7' },
+  { name: 'demo-workshop.png', alt: 'An abstract workshop scene in teal and blue', label: 'Workshop', from: '#0d9488', to: '#2563eb' },
+  { name: 'demo-launch.png', alt: 'An abstract launch scene in orange and rose', label: 'Launch', from: '#f97316', to: '#e11d48' },
+]
+
+/** Seed writes skip the Next.js revalidation hooks: they only work inside the Next.js server. */
+const context = { disableRevalidate: true }
+
+type Id = number
+
+function layoutOf(blocks: Block[], where: string): Layout {
+  const layout: Layout = { version: 1, blocks }
+  const errors = validateLayout(layout, builderBlocks)
+  if (errors.length > 0) {
+    const lines = errors.map((e) => `  ${e.code} ${e.path}: ${e.message}`).join('\n')
+    throw new Error(`Invalid layout for ${where}:\n${lines}`)
+  }
+  return layout
+}
+
+async function clear(payload: Payload) {
+  const forms = await payload.find({ collection: 'forms', where: { title: { equals: FORM_TITLE } }, limit: 100, depth: 0 })
+  const formIds = forms.docs.map((f) => f.id)
+  if (formIds.length > 0) {
+    await payload.delete({ collection: 'form-submissions', where: { form: { in: formIds } } })
+    await payload.delete({ collection: 'forms', where: { id: { in: formIds } } })
+  }
+  await payload.delete({ collection: 'template-parts', where: { title: { in: PART_TITLES } }, trash: true, context })
+  await payload.delete({ collection: 'posts', where: { slug: { in: POST_SLUGS } }, trash: true, context })
+  await payload.delete({ collection: 'pages', where: { slug: { in: PAGE_SLUGS } }, trash: true, context })
+  await payload.delete({ collection: 'categories', where: { slug: { in: CATEGORIES.map((c) => c.slug) } } })
+  await payload.delete({ collection: 'media', where: { filename: { in: IMAGES.map((i) => i.name) } } })
+}
+
+async function placeholderImage(label: string, from: string, to: string): Promise<Buffer> {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/></linearGradient></defs>
+  <rect width="1600" height="1000" fill="url(#g)"/>
+  <circle cx="1250" cy="250" r="260" fill="#fff" fill-opacity="0.12"/>
+  <circle cx="300" cy="820" r="340" fill="#fff" fill-opacity="0.08"/>
+  <rect x="560" y="380" width="480" height="240" rx="24" fill="#fff" fill-opacity="0.16"/>
+  <text x="800" y="525" font-family="Arial, Helvetica, sans-serif" font-size="88" font-weight="700" fill="#fff" text-anchor="middle">${label}</text>
+</svg>`
+  return sharp(Buffer.from(svg)).png().toBuffer()
+}
+
+async function seedTheme(payload: Payload) {
+  const current = await payload.findGlobal({ slug: 'theme-settings' })
+  const colors = { ...current.colors, primary: '#4f46e5' }
+  await payload.updateGlobal({
+    slug: 'theme-settings',
+    data: { colors, fonts: { sans: 'Inter' }, borderRadius: '0.75' },
+    context,
+  })
+}
+
+async function seedMedia(payload: Payload): Promise<Array<{ id: Id; alt: string }>> {
+  const result: Array<{ id: Id; alt: string }> = []
+  for (const img of IMAGES) {
+    const data = await placeholderImage(img.label, img.from, img.to)
+    const doc = await payload.create({
+      collection: 'media',
+      data: { alt: img.alt },
+      file: { data, mimetype: 'image/png', name: img.name, size: data.length },
+    })
+    result.push({ id: doc.id, alt: img.alt })
+  }
+  return result
+}
+
+async function seedForm(payload: Payload): Promise<Id> {
+  const form = await payload.create({
+    collection: 'forms',
+    data: {
+      title: FORM_TITLE,
+      submitButtonLabel: 'Send message',
+      confirmationType: 'message',
+      confirmationMessage: lexical(['Thanks for your message. We will reply within one working day.']),
+      fields: [
+        { blockType: 'text', name: 'name', label: 'Name', required: true, width: 50 },
+        { blockType: 'email', name: 'email', label: 'Email', required: true, width: 50 },
+        {
+          blockType: 'select',
+          name: 'topic',
+          label: 'Topic',
+          required: false,
+          options: [
+            { label: 'New website', value: 'website' },
+            { label: 'Redesign', value: 'redesign' },
+            { label: 'Something else', value: 'other' },
+          ],
+        },
+        { blockType: 'textarea', name: 'message', label: 'Message', required: true },
+      ],
+    },
+  })
+  return form.id
+}
 
 async function seed() {
   const payload = await getPayload({ config })
-  console.log('Seeding demo content...')
+  payload.logger.info('Seeding demo content…')
 
-  // --- Categories ---
-  const categoryData = [
-    { title: 'Technology', slug: 'technology' },
-    { title: 'Design', slug: 'design' },
-    { title: 'Business', slug: 'business' },
-  ] as const
+  await clear(payload)
+  await seedTheme(payload)
+  const [studio, workshop, launch] = await seedMedia(payload)
+  const formId = await seedForm(payload)
 
-  const categories: Record<string, number> = {}
-  for (const cat of categoryData) {
-    const created = await (payload as any).create({
-      collection: 'categories',
-      data: { title: cat.title, slug: cat.slug },
-    })
-    categories[cat.slug] = created.id as number
+  const categoryIds: Id[] = []
+  for (const category of CATEGORIES) {
+    const doc = await payload.create({ collection: 'categories', data: category })
+    categoryIds.push(doc.id)
   }
-  console.log(`Created ${categoryData.length} categories.`)
 
-  // --- Tags ---
-  const tagData = [
-    { title: 'Tutorial', slug: 'tutorial' },
-    { title: 'Guide', slug: 'guide' },
-    { title: 'Announcement', slug: 'announcement' },
-  ] as const
-
-  const tags: Record<string, number> = {}
-  for (const tag of tagData) {
-    const created = await (payload as any).create({
-      collection: 'tags',
-      data: { title: tag.title, slug: tag.slug },
-    })
-    tags[tag.slug] = created.id as number
+  // Pass 1: create the pages, so links can reference their IDs.
+  const pages: Record<string, Id> = {}
+  for (const slug of PAGE_SLUGS) {
+    const title = slug === HOME_SLUG ? 'Home' : slug[0].toUpperCase() + slug.slice(1)
+    const doc = await payload.create({ collection: 'pages', data: { title, slug, _status: 'published' }, context })
+    pages[slug] = doc.id
   }
-  console.log(`Created ${tagData.length} tags.`)
+  const toContact = { label: 'Start a project', link: pageLink(pages.contact) }
+  const toServices = { label: 'See our services', link: pageLink(pages.services) }
 
-  // --- Template Parts ---
-  await (payload as any).create({
+  // Posts.
+  const postBodies = [
+    {
+      title: 'Designing with blocks',
+      excerpt: 'Why we build every page from small, reusable blocks, and what that means for your team.',
+      image: studio,
+      paragraphs: [
+        'A page made of small blocks is easy to change. A heading, a text, a button: each block does one job.',
+        'Editors move blocks around in the page builder. Developers add new blocks when the site needs them.',
+      ],
+      quote: { quote: 'The best design system is the one your editors actually use.', cite: 'Ada, design lead' },
+    },
+    {
+      title: 'A faster launch',
+      excerpt: 'How ready-made sections cut the time from first sketch to live site.',
+      image: launch,
+      paragraphs: [
+        'Most sites need the same sections: a hero, features, a call to action and a contact form.',
+        'We start from ready-made sections and change the words, the images and the colors.',
+      ],
+      quote: { quote: 'We launched in two weeks instead of two months.', cite: 'Sam, product owner' },
+    },
+    {
+      title: 'Theme tokens explained',
+      excerpt: 'One primary color and one font change the whole site. Here is how theme tokens work.',
+      image: workshop,
+      paragraphs: [
+        'The theme settings store a few colors, the fonts and the corner radius.',
+        'Every block uses these values through classes like bg-primary, so one change updates every page.',
+      ],
+      quote: { quote: 'Change the primary color once, and every button follows.', cite: 'Lee, developer' },
+    },
+  ]
+  const posts: Id[] = []
+  for (const [i, post] of postBodies.entries()) {
+    const slug = POST_SLUGS[i]
+    const bodyImage = [studio, workshop, launch][(i + 1) % 3]
+    const body = stack('div', 'flex flex-col gap-8', [
+      richText(lexical([...post.paragraphs, { h2: 'What we learned' }, { ul: ['Keep blocks small', 'Reuse sections', 'Let the theme do the styling'] }]), 'prose max-w-none'),
+      quote(post.quote.quote, post.quote.cite, 'border-l-4 border-primary pl-6 text-xl italic'),
+      // A different image than the featured one, which the post route shows above the body.
+      image(bodyImage.id, bodyImage.alt, 'w-full rounded-lg'),
+    ])
+    const doc = await payload.create({
+      collection: 'posts',
+      data: {
+        title: post.title,
+        slug,
+        excerpt: post.excerpt,
+        featuredImage: post.image.id,
+        categories: [categoryIds[i % categoryIds.length]],
+        publishedAt: new Date(Date.UTC(2026, 8, 10 + i * 7)).toISOString(),
+        _status: 'published',
+        builder: layoutOf([body], `post "${slug}"`),
+      },
+      context,
+    })
+    posts.push(doc.id)
+  }
+
+  // Pass 2: page content.
+  const pageLayouts: Record<string, Block[]> = {
+    [HOME_SLUG]: [
+      hero.create({
+        title: 'Websites your team can change in minutes',
+        text: `${SITE_NAME} designs and builds fast, flexible websites. You edit every page with blocks, no developer needed.`,
+        primary: toContact,
+        secondary: toServices,
+      }),
+      features.create({
+        title: 'Why teams choose us',
+        intro: 'Three things we care about on every project.',
+        items: [
+          { title: 'Fast pages', text: 'Server-rendered pages with only the CSS each page needs.' },
+          { title: 'Easy editing', text: 'Drag blocks, change text and swap images in a visual builder.' },
+          { title: 'Your brand', text: 'Theme colors and fonts flow through every section.' },
+        ],
+      }),
+      imageText.create({
+        title: 'A small studio with a big toolbox',
+        paragraphs: [
+          'We are designers and developers who build on Payload CMS.',
+          'Every site we ship comes with ready-made sections your team can reuse.',
+        ],
+        image: studio,
+        action: { label: 'About us', link: pageLink(pages.about) },
+      }),
+      testimonials.create({
+        title: 'What clients say',
+        items: [
+          { quote: 'Our marketing team builds landing pages on their own now.', cite: 'Maria Lopez, Head of Marketing' },
+          { quote: 'The new site loads twice as fast as the old one.', cite: 'Tom Becker, CTO' },
+        ],
+      }),
+      cta.create({
+        title: 'Ready to start?',
+        text: 'Tell us about your project. We reply within one working day.',
+        primary: toContact,
+        secondary: { label: 'Read the blog', link: url('/blog') },
+      }),
+    ],
+    about: [
+      hero.create({ title: 'About us', text: 'A small team that builds websites people enjoy editing.' }),
+      imageText.create({
+        title: 'How we started',
+        paragraphs: [
+          'We spent years building sites that only developers could change.',
+          'So we built a page builder on top of Payload CMS, and now our clients edit their own sites.',
+        ],
+        image: workshop,
+        imageRight: true,
+      }),
+      content.create({
+        title: 'How we work',
+        body: [
+          'Every project starts with a short workshop. We agree on goals, pages and content.',
+          { h3: 'Our process' },
+          { ul: ['Workshop and sitemap', 'Design in the browser', 'Build with blocks', 'Train your editors'] },
+          'After launch, your team owns the site. We stay available for new blocks and features.',
+        ],
+      }),
+      cta.create({ title: 'Work with us', text: 'We take on a few new projects every quarter.', primary: toContact }),
+    ],
+    services: [
+      hero.create({ title: 'Services', text: 'From the first sketch to a site your team runs on its own.', primary: toContact }),
+      cardGrid.create({
+        title: 'What we do',
+        intro: 'Pick one service or combine them.',
+        cards: [
+          { title: 'Website design', text: 'A clear design system built from theme tokens and blocks.', image: studio },
+          { title: 'Payload development', text: 'Collections, custom blocks and integrations.', image: workshop },
+          { title: 'Launch and training', text: 'We launch the site and train your editors.', image: launch },
+        ],
+      }),
+      faq.create({
+        title: 'Questions',
+        items: [
+          { question: 'How long does a project take?', answer: 'Most sites launch in four to eight weeks.' },
+          { question: 'Can we edit the site ourselves?', answer: 'Yes. Every page is built with blocks in the visual builder.' },
+          { question: 'Do you host the site?', answer: 'We deploy to your server or a VPS of your choice.' },
+        ],
+      }),
+      cta.create({ title: 'Have a project in mind?', text: 'Send us a short message.', primary: toContact }),
+    ],
+    contact: [
+      hero.create({ title: 'Contact', text: 'Tell us about your project and we will get back to you.' }),
+      contact.create({
+        title: 'Get in touch',
+        text: 'Fill in the form, or reach us directly.',
+        formId,
+        details: ['hello@northwind.example', '+1 555 0100', 'Mon to Fri, 9:00 to 17:00'],
+      }),
+    ],
+  }
+  for (const slug of PAGE_SLUGS) {
+    await payload.update({
+      collection: 'pages',
+      id: pages[slug],
+      data: { _status: 'published', builder: layoutOf(pageLayouts[slug], `page "${slug}"`) },
+      context,
+    })
+  }
+
+  // Template parts.
+  const nav = [
+    { label: 'Home', link: pageLink(pages[HOME_SLUG]) },
+    { label: 'About', link: pageLink(pages.about) },
+    { label: 'Services', link: pageLink(pages.services) },
+    { label: 'Blog', link: url('/blog') },
+  ]
+  await payload.create({
     collection: 'template-parts',
     data: {
       title: 'Header',
       type: 'header',
+      displayCondition: { mode: 'entireSite' },
       _status: 'published',
-      layout: [
-        {
-          blockType: 'container',
-          htmlTag: 'header' as const,
-          display: 'flex',
-          justifyContent: 'between',
-          alignItems: 'center',
-          padding: {
-            top: { base: 'custom', custom: 16 },
-            right: { base: 'none' },
-            bottom: { base: 'custom', custom: 16 },
-            left: { base: 'none' },
-          },
-          maxWidth: 'xl',
-          children: [
-            {
-              blockType: 'heading',
-              text: 'My Website',
-              tag: 'h3',
-            },
-            {
-              blockType: 'container',
-              htmlTag: 'nav' as const,
-              display: 'flex',
-              customClasses: 'gap-6',
-              children: [
-                { blockType: 'link', label: 'Home', type: 'internal', doc: null, url: '/' },
-                { blockType: 'link', label: 'About', type: 'external', url: '/about' },
-                { blockType: 'link', label: 'Blog', type: 'external', url: '/blog' },
-                { blockType: 'link', label: 'Contact', type: 'external', url: '/contact' },
-              ],
-            },
-          ],
-        },
-      ],
+      builder: layoutOf([header.create({ siteName: SITE_NAME, home: pageLink(pages[HOME_SLUG]), nav, cta: { label: 'Contact', link: pageLink(pages.contact) } })], 'header'),
     },
+    context,
   })
-
-  await (payload as any).create({
+  await payload.create({
     collection: 'template-parts',
     data: {
       title: 'Footer',
       type: 'footer',
+      displayCondition: { mode: 'entireSite' },
       _status: 'published',
-      layout: [
-        {
-          blockType: 'container',
-          htmlTag: 'footer' as const,
-          display: 'flex',
-          flexDirection: 'col',
-          alignItems: 'center',
-          padding: {
-            top: { base: 'custom', custom: 32 },
-            right: { base: 'none' },
-            bottom: { base: 'custom', custom: 32 },
-            left: { base: 'none' },
-          },
-          maxWidth: 'xl',
-          backgroundColor: { preset: 'custom', custom: '#f1f5f9' },
-          children: [
-            {
-              blockType: 'paragraph',
-              content: richText('Copyright 2026 My Website. All rights reserved.'),
-              customClasses: 'text-center text-sm',
-            },
-            {
-              blockType: 'container',
-              htmlTag: 'div' as const,
-              display: 'flex',
-              customClasses: 'gap-4 mt-2',
-              children: [
-                { blockType: 'link', label: 'Twitter', type: 'external', url: '#' },
-                { blockType: 'link', label: 'GitHub', type: 'external', url: '#' },
-                { blockType: 'link', label: 'LinkedIn', type: 'external', url: '#' },
-              ],
-            },
-          ],
-        },
-      ],
+      builder: layoutOf(
+        [
+          footer.create({
+            siteName: SITE_NAME,
+            tagline: 'Websites your team can change in minutes.',
+            links: [...nav, { label: 'Contact', link: pageLink(pages.contact) }],
+            copyright: `© ${new Date().getFullYear()} ${SITE_NAME}. All rights reserved.`,
+          }),
+        ],
+        'footer',
+      ),
     },
-  })
-  console.log('Created 2 template parts (header, footer).')
-
-  // --- Pages ---
-
-  // Home page
-  const homeHero = populatePresetContent(heroPreset.blocks, {
-    paragraph: 'Build beautiful, content-managed websites with a composable block system. Choose from pre-built sections or create your own.',
-  })
-  const homeFeatures = populatePresetContent(featuresPreset.blocks, {
-    paragraph: 'Our platform delivers exceptional speed with optimised builds and edge caching for near-instant page loads.',
-  })
-  const homeGrid = populatePresetContent(collectionGridPreset.blocks, {
-    paragraph: 'Explore our latest articles and resources to help you get the most out of the platform.',
-  })
-  const homeCta = populatePresetContent(ctaBannerPreset.blocks, {
-    paragraph: 'Join thousands of developers building modern websites with our composable block-based approach.',
+    context,
   })
 
-  await (payload as any).create({
-    collection: 'pages',
-    data: {
-      title: 'Home',
-      slug: 'home',
-      _status: 'published',
-      layout: [...homeHero, ...homeFeatures, ...homeGrid, ...homeCta] as any,
-    },
-  })
+  await payload.updateGlobal({ slug: 'site-settings', data: { homePage: pages[HOME_SLUG] }, context })
 
-  // About page
-  const aboutContent = populatePresetContent(contentPreset.blocks, {
-    paragraph: 'We believe in making web development accessible. Our block-based approach lets you focus on content while maintaining full design flexibility.',
-  })
-  const aboutTestimonials = populatePresetContent(testimonialsPreset.blocks, {
-    paragraph: 'This platform changed the way we build websites. The composable blocks make it incredibly easy to create consistent, beautiful pages.',
-  })
-
-  const aboutCta = populatePresetContent(footerCtaPreset.blocks, {
-    paragraph: 'Ready to build your next project? Get started with our composable block system today.',
-  })
-
-  await (payload as any).create({
-    collection: 'pages',
-    data: {
-      title: 'About',
-      slug: 'about',
-      _status: 'published',
-      layout: [...aboutContent, ...aboutTestimonials, ...aboutCta] as any,
-    },
-  })
-
-  // Services page
-  const servicesHero = populatePresetContent(heroPreset.blocks, {
-    paragraph: 'We offer a comprehensive suite of tools and services to help you build, deploy, and manage your web presence.',
-  })
-  // Override heading text in cloned hero
-  if (servicesHero[0]?.children) {
-    const children = servicesHero[0].children as any[]
-    const heading = children.find((c) => c.blockType === 'heading')
-    if (heading) heading.text = 'Our Services'
-  }
-  const servicesFeatures = populatePresetContent(featuresPreset.blocks, {
-    paragraph: 'Each service is designed to integrate seamlessly with the rest of our platform for a unified development experience.',
-  })
-  const servicesCta = populatePresetContent(ctaBannerPreset.blocks, {
-    paragraph: 'Get in touch with our team to find the right solution for your project needs.',
-  })
-
-  await (payload as any).create({
-    collection: 'pages',
-    data: {
-      title: 'Services',
-      slug: 'services',
-      _status: 'published',
-      layout: [...servicesHero, ...servicesFeatures, ...servicesCta] as any,
-    },
-  })
-
-  // Contact page
-  const contactContent = populatePresetContent(contentPreset.blocks, {
-    paragraph: 'We would love to hear from you. Whether you have questions about our platform, need technical support, or want to discuss a project, our team is here to help.',
-  })
-  // Override heading
-  if (contactContent[0]?.children) {
-    const children = contactContent[0].children as any[]
-    const heading = children.find((c) => c.blockType === 'heading')
-    if (heading) heading.text = 'Contact Us'
-  }
-
-  const contactFaq = populatePresetContent(faqPreset.blocks, {
-    paragraph: 'Check our FAQ below for quick answers to common questions about our platform and services.',
-  })
-
-  await (payload as any).create({
-    collection: 'pages',
-    data: {
-      title: 'Contact',
-      slug: 'contact',
-      _status: 'published',
-      layout: [...contactContent, ...contactFaq] as any,
-    },
-  })
-
-  console.log('Created 4 pages (Home, About, Services, Contact).')
-
-  // --- Posts ---
-  const posts = [
-    {
-      title: 'Getting Started with Payload CMS',
-      slug: 'getting-started-with-payload-cms',
-      excerpt: 'Learn how to set up and configure Payload CMS for your next web project with this step-by-step guide.',
-      categories: [categories['technology']],
-      tags: [tags['tutorial']],
-      content: populatePresetContent(contentPreset.blocks, {
-        paragraph: 'Payload CMS is a modern, headless content management system built with TypeScript. It provides a powerful admin panel, flexible data modelling, and seamless integration with Next.js. In this guide, we will walk through the initial setup process and explore the key concepts you need to know.',
-      }),
-    },
-    {
-      title: 'Building Composable Layouts',
-      slug: 'building-composable-layouts',
-      excerpt: 'Discover how to create flexible, reusable page layouts using composable blocks and section presets.',
-      categories: [categories['design']],
-      tags: [tags['guide']],
-      content: populatePresetContent(contentPreset.blocks, {
-        paragraph: 'Composable layouts let you build pages from reusable blocks rather than monolithic templates. Each block handles a single responsibility -- headings, paragraphs, images, containers, grids -- and can be combined freely. Section presets provide starting points for common layouts like hero sections, feature grids, and call-to-action banners.',
-      }),
-    },
-    {
-      title: 'Deploying Your Site',
-      slug: 'deploying-your-site',
-      excerpt: 'A comprehensive guide to deploying your Payload CMS site with Docker, including database configuration and environment setup.',
-      categories: [categories['technology']],
-      tags: [tags['guide']],
-      content: populatePresetContent(contentPreset.blocks, {
-        paragraph: 'Deploying a Payload CMS site involves setting up your database, configuring environment variables, and building the application for production. Docker simplifies this process by packaging everything into reproducible containers. This guide covers the complete deployment workflow from local development to production.',
-      }),
-    },
-    {
-      title: 'Introducing Our New Platform',
-      slug: 'introducing-our-new-platform',
-      excerpt: 'We are excited to announce the launch of our new website platform built on Payload CMS with composable blocks.',
-      categories: [categories['business']],
-      tags: [tags['announcement']],
-      content: populatePresetContent(contentPreset.blocks, {
-        paragraph: 'After months of development, we are thrilled to introduce our new website platform. Built on Payload CMS with a composable block system, it gives content teams the flexibility to create beautiful pages without developer intervention. The platform includes pre-built section presets, live preview, and a visual customiser.',
-      }),
-    },
-  ]
-
-  for (const post of posts) {
-    await (payload as any).create({
-      collection: 'posts',
-      data: {
-        title: post.title,
-        slug: post.slug,
-        excerpt: post.excerpt,
-        categories: post.categories,
-        tags: post.tags,
-        _status: 'published',
-        layout: post.content as any,
-      },
-    })
-  }
-  console.log(`Created ${posts.length} posts.`)
-
-  // Summary
-  console.log('\nDemo seeding complete!')
-  console.log(`  ${categoryData.length} categories`)
-  console.log(`  ${tagData.length} tags`)
-  console.log('  2 template parts (header, footer)')
-  console.log('  4 pages (Home, About, Services, Contact)')
-  console.log(`  ${posts.length} posts`)
-
-  process.exit(0)
+  payload.logger.info(
+    `Seeded: theme, ${IMAGES.length} images, 1 form, ${CATEGORIES.length} categories, ${PAGE_SLUGS.length} pages, ${posts.length} posts, header and footer.`,
+  )
 }
 
-seed().catch((err) => {
-  console.error('Seeding failed:', err)
+try {
+  await seed()
+  process.exit(0)
+} catch (error) {
+  console.error('Seeding failed:', error)
   process.exit(1)
-})
+}

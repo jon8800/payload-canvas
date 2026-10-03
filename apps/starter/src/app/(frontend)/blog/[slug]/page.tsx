@@ -3,7 +3,7 @@ import { draftMode } from 'next/headers'
 import Image from 'next/image'
 import { getPayload } from 'payload'
 import configPromise from '@payload-config'
-import { RenderBlocks } from '@/blocks/RenderBlocks'
+import { BuilderContent } from '@/components/BuilderContent'
 import { LivePreviewListener } from '@/components/LivePreviewListener'
 import { generateMeta } from '@/utilities/generateMeta'
 import { notFound } from 'next/navigation'
@@ -80,7 +80,7 @@ export default async function BlogPost({ params }: Props) {
       {post.excerpt && <p className="mt-6 text-lg text-muted-foreground">{post.excerpt}</p>}
 
       <div className="mt-8">
-        <RenderBlocks blocks={(post.layout as any[]) || []} compiledBlockCSS={(post as any)._compiledBlockCSS} />
+        <BuilderContent doc={post} payload={payload} draft={draft} />
       </div>
     </article>
     </>

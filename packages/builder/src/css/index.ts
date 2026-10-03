@@ -17,6 +17,7 @@ import {
   type Stylesheet,
   stylesheetKey,
 } from './shared'
+import { buildStyleTokens } from './tokens'
 
 /** Tailwind plugins by the id used in `@plugin "<id>"`, e.g. { '@tailwindcss/typography': typography }. */
 export type TailwindPlugins = Record<string, unknown>
@@ -234,6 +235,7 @@ export function clearCssCache() {
   fileCache.clear()
   inputCache.clear()
   cssCache.clear()
+  tokensCache.clear()
 }
 
 /** Escapes glob characters that are common in Next route folders: `(group)`, `[slug]`, `{a,b}`. */
@@ -258,11 +260,21 @@ export function tracingIncludes(entryRelativeToApp: string): string[] {
   ]
 }
 
+const tokensCache = new Lru<Promise<StyleTokens>>(8)
+
 /**
  * Design tokens and the class list from the app's Tailwind theme, for the Styles panel.
- * Cached per entry content. Owner: tokens agent.
+ * Uses Tailwind's design system API; falls back to parsing @theme if that API breaks
+ * (see tokens.ts). Cached per entry path, entry content and plugin ids.
  */
 export async function getStyleTokens(options: CssOptions): Promise<StyleTokens> {
-  void options
-  throw new Error('not implemented')
+  const entryCss = await readCached(options.entry)
+  const pluginIds = Object.keys(options.plugins ?? {}).toSorted().join(',')
+  const key = hash('tokens', options.entry, entryCss, pluginIds)
+  const cached = tokensCache.get(key)
+  if (cached) return cached
+  const pending = getInput(options).then(async (input) => (await buildStyleTokens(input, options.plugins)).tokens)
+  tokensCache.set(key, pending)
+  pending.catch(() => tokensCache.delete(key))
+  return pending
 }

@@ -1,9 +1,12 @@
 'use client'
 
-import type { Device } from './Canvas'
+import { useMemo } from 'react'
+
 import { DesktopIcon, MobileIcon, RedoIcon, TabletIcon, UndoIcon } from './icons'
 import { useRuntime } from './runtime'
 import { useEditor } from './store'
+import { breakpointWidths, useStyleTokens, withFallback } from './styles/tokens'
+import { deviceForWidth, selectDevice } from './styles/viewport'
 
 const devices = [
   { id: 'desktop', label: 'Desktop', Icon: DesktopIcon },
@@ -11,11 +14,24 @@ const devices = [
   { id: 'mobile', label: 'Mobile', Icon: MobileIcon },
 ] as const
 
-export function Toolbar({ device, onDevice }: { device: Device; onDevice: (device: Device) => void }) {
-  const { store } = useRuntime()
+/** Width the canvas gets on "desktop": the stage minus its padding. */
+function stageWidth(iframe: HTMLIFrameElement | null): number {
+  const stage = iframe?.closest<HTMLElement>('.builder-editor__stage')
+  if (!stage) return window.innerWidth
+  const style = getComputedStyle(stage)
+  return stage.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+}
+
+export function Toolbar() {
+  const { store, config, iframeRef } = useRuntime()
   const canUndo = useEditor(store, (s) => s.undoStack.length > 0)
   const canRedo = useEditor(store, (s) => s.redoStack.length > 0)
   const lastError = useEditor(store, (s) => s.lastError)
+  const width = useEditor(store, (s) => s.canvasWidth)
+  // Loads the tokens early (shared cache with the Styles panel) for the breakpoint widths.
+  const { tokens } = useStyleTokens(config.tokensEndpoint)
+  const widths = useMemo(() => breakpointWidths(withFallback(tokens)), [tokens])
+  const device = deviceForWidth(width)
 
   return (
     <div className="builder-editor__toolbar">
@@ -40,12 +56,13 @@ export function Toolbar({ device, onDevice }: { device: Device; onDevice: (devic
             type="button"
             className="builder-editor__tool"
             aria-pressed={device === id}
-            onClick={() => onDevice(id)}
+            onClick={() => selectDevice(store, widths, id, stageWidth(iframeRef.current))}
             title={label}
           >
             <Icon /> {label}
           </button>
         ))}
+        {width !== null && <span className="builder-editor__width">{width}px</span>}
       </div>
       {lastError && (
         <output className="builder-editor__error">

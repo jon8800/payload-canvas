@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { draftMode } from 'next/headers'
 import { getPayload } from 'payload'
 import configPromise from '@payload-config'
-import { PageContent } from '@/components/PageContent'
+import { BuilderContent } from '@/components/BuilderContent'
 import { LivePreviewListener } from '@/components/LivePreviewListener'
 import { generateMeta } from '@/utilities/generateMeta'
 import { notFound } from 'next/navigation'
@@ -22,7 +22,7 @@ export default async function Page({ params }: Props) {
     where: { slug: { equals: slugPath } },
     limit: 1,
     draft,
-    depth: 2,
+    depth: 0,
   })
 
   const page = docs[0]
@@ -32,7 +32,7 @@ export default async function Page({ params }: Props) {
     <>
       {draft && <LivePreviewListener />}
       <main>
-        <PageContent page={page} payload={payload} draft={draft} />
+        <BuilderContent doc={page} payload={payload} draft={draft} />
       </main>
     </>
   )

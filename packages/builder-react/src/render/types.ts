@@ -6,6 +6,20 @@ import type { Block, BlockDefinition, Layout } from '@payload-toolkit/builder/co
 /** "site" renders the public page. "canvas" adds editor attributes and empty-slot placeholders. */
 export type RenderMode = 'site' | 'canvas'
 
+/**
+ * The value of a link group (the `link` prop of the button and link blocks).
+ * `reference.value` is the loaded document after `resolveLayoutData`, or still an ID.
+ */
+export type LinkValue = {
+  type?: 'url' | 'reference' | null
+  url?: string | null
+  reference?: { relationTo: string; value: unknown } | null
+  newTab?: boolean | null
+}
+
+/** Turns a link into an href. `null` means "no link": the block renders without an `<a>`. */
+export type ResolveLink = (link: LinkValue) => string | null
+
 export type BlockComponentProps = {
   block: Block
   /** Props after data loading (upload/relationship IDs replaced by documents when loaded). */
@@ -18,6 +32,8 @@ export type BlockComponentProps = {
   /** Spread on the element that directly contains each slot's children. */
   slotAttributes: Record<string, Record<string, string>>
   mode: RenderMode
+  /** The renderer's link resolver (RenderLayout's `resolveLink`, or the default one). */
+  resolveLink: ResolveLink
 }
 
 export type BlockComponents = Record<string, ComponentType<BlockComponentProps>>
@@ -35,6 +51,11 @@ export type RenderLayoutProps = {
    * Without them, canvas mode assumes every block has a "children" slot.
    */
   blocks?: BlockDefinition[]
+  /**
+   * Maps links (button, link block, internal rich text links) to an href. Default: the URL for
+   * URL links, `/${slug}` for a loaded document with a `slug`, otherwise no link.
+   */
+  resolveLink?: ResolveLink
 }
 
 /** Loads documents for a batch of ids in one collection. */

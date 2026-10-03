@@ -1,5 +1,6 @@
 import { createElement } from 'react'
 import type { BlockComponentProps } from '../render/types'
+import { asText, PlaceholderText } from './placeholder'
 
 type Tag = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
 
@@ -9,7 +10,9 @@ function toTag(level: unknown): Tag {
   return `h${n}` as Tag
 }
 
-export function Heading({ props, className, attributes }: BlockComponentProps) {
-  const text = typeof props.text === 'string' ? props.text : ''
-  return createElement(toTag(props.level), { ...attributes, className }, text)
+export function Heading({ props, className, attributes, mode }: BlockComponentProps) {
+  const text = asText(props.text)
+  if (!text && mode !== 'canvas') return null
+  const content = text || <PlaceholderText>Heading</PlaceholderText>
+  return createElement(toTag(props.level), { ...attributes, className }, content)
 }

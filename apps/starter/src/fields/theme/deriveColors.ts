@@ -36,7 +36,8 @@ function autoForeground(hex: string): string {
   const color = parse(hex)
   if (!color) return 'oklch(0.145 0 0)'
   const oklch = toOklch(color)
-  return oklch.l > 0.5 ? 'oklch(0.145 0 0)' : 'oklch(0.985 0 0)'
+  // 0.65, not 0.5: saturated mid-tone brand colors (indigo, blue) read better with light text.
+  return oklch.l > 0.65 ? 'oklch(0.145 0 0)' : 'oklch(0.985 0 0)'
 }
 
 export type CoreColors = {

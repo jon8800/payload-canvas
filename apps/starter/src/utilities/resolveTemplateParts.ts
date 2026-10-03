@@ -1,5 +1,5 @@
 import { cache } from 'react'
-import { getPayload } from 'payload'
+import { getPayload, type Where } from 'payload'
 import configPromise from '@payload-config'
 
 type PartType = 'header' | 'footer' | 'custom'
@@ -12,7 +12,7 @@ async function resolve(
 ) {
   const payload = await getPayload({ config: configPromise })
 
-  const where: Record<string, any> = {
+  const where: Where = {
     type: { equals: partType },
   }
   if (!draft) {
@@ -23,7 +23,8 @@ async function resolve(
     collection: 'template-parts',
     where,
     limit: 0,
-    depth: 2,
+    // Depth 1 loads the display condition pages (their slugs). The layout data loads separately.
+    depth: 1,
     draft: draft || false,
   })
 

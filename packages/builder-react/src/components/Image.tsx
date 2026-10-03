@@ -1,6 +1,7 @@
 import type { BlockComponentProps } from '../render/types'
+import { PlaceholderBox } from './placeholder'
 
-function isDoc(value: unknown): value is Record<string, unknown> {
+export function isDoc(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && typeof (value as { url?: unknown }).url === 'string'
 }
 
@@ -14,20 +15,14 @@ export function Image({ props, className, attributes, mode }: BlockComponentProp
   if (!isDoc(doc)) {
     // The upload is not loaded (or not set). Nothing on the site, a placeholder in the editor.
     if (mode !== 'canvas') return null
-    return (
-      <div
-        {...attributes}
-        className={className}
-        style={{ minHeight: 96, minWidth: 96, background: 'rgba(128, 128, 128, 0.15)' }}
-      />
-    )
+    return <PlaceholderBox attributes={attributes} className={className} label="Image" />
   }
   return (
     <img
       {...attributes}
       className={className}
       src={doc.url as string}
-      alt={asString(doc.alt) ?? asString(props.alt) ?? ''}
+      alt={asString(props.alt) ?? asString(doc.alt) ?? ''}
       width={asNumber(doc.width)}
       height={asNumber(doc.height)}
       loading="lazy"
