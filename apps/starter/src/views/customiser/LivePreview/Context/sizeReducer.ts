@@ -23,6 +23,6 @@ export const sizeReducer = (state: SizeReducerState, action: SizeReducerAction) 
     case 'width':
       return { ...state, width: action.value }
     default:
-      return { ...state, ...(action?.value || {}) }
+      return { ...state, ...action?.value }
   }
 }

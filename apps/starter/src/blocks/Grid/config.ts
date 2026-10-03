@@ -19,7 +19,7 @@ export const GridBlock: RecursiveBlock = (children?: Field): Block => ({
       tabs: [
         {
           label: 'Content',
-          fields: [...(children ? [children] : [])],
+          fields: (children ? [children] : []),
         },
         {
           label: 'Styles',

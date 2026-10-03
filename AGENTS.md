@@ -16,8 +16,9 @@ A website builder for Payload CMS v3: composable layout blocks, a visual drag-dr
   - Request interception lives in `src/proxy.ts` (Next 16 renamed `middleware.ts`).
   - `revalidateTag(tag, profile)` takes 2 arguments — use `{ expire: 0 }` as the profile.
 - **React 19.3**, **Tailwind v4** (CSS-first, no `tailwind.config`), **shadcn/ui**, **Base UI** primitives
-- **TypeScript 6** — not 7, because typescript-eslint does not support 7 yet. `tsconfig.json` keeps `baseUrl` (with `ignoreDeprecations: "6.0"`) because the shadcn CLI needs it to resolve `@/` imports.
-- **ESLint 9** flat config (`eslint.config.mjs`) — not 10, because eslint-config-next's plugins do not support 10 yet.
+- **TypeScript 7** (native compiler). `baseUrl` is gone; `paths` entries start with `./`.
+  - The shadcn CLI mis-resolves `@/` without `baseUrl`: after `pnpm dlx shadcn@latest add <name>`, change `from "cn"` to `from "@/lib/utils"` in the new files and run `pnpm remove cn`.
+- **Oxlint** (`.oxlintrc.json`), not ESLint. Vendored shadcn files in `src/components/ui/` are not linted.
 - **pnpm 10** workspaces, **Turborepo**, **Turbopack** (never fall back to webpack)
 - **PostgreSQL** locally and in production. Deployment target: VPS / Docker (no Vercel-specific features).
 
@@ -30,6 +31,7 @@ A website builder for Payload CMS v3: composable layout blocks, a visual drag-dr
 - **Server Components by default** — push client boundaries to leaf nodes only.
 - **Use public Payload APIs** (`@payloadcms/ui` exports, documented hooks) over deep imports of Payload internals.
 - **Write files as UTF-8 without a BOM.** Turbopack fails to parse `tsconfig.json` with a BOM. On Windows PowerShell 5.1, `Set-Content -Encoding utf8` adds a BOM — use the Write/Edit tools instead.
+- **Payload 4 is coming** (canary today). Keep admin UI code in a thin layer — Payload CSS variables, Base UI primitives, SCSS — so it can be adapted when v4 changes the admin UI.
 
 ## Repository layout
 
@@ -61,7 +63,7 @@ Run from `apps/starter/`:
 - `pnpm dev` — dev server (also syncs the DB schema via `push: true`)
 - `pnpm build` — production build
 - `pnpm typecheck` — type check
-- `pnpm lint` — ESLint (the existing code still has about 90 errors, mostly `any` and `@ts-nocheck` in `views/customiser/`)
+- `pnpm lint` — Oxlint (must report 0 problems)
 - `pnpm generate:types` / `pnpm generate:importmap` — run after changing collections, blocks, or admin components
 - `pnpm seed:demo` — seed demo content
 

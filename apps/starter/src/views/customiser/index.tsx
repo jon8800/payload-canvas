@@ -12,15 +12,15 @@ export const CustomiserView: PayloadServerReactComponent<EditViewComponent> = as
 
   if (collectionConfig) {
     livePreviewConfig = {
-      ...(livePreviewConfig || {}),
-      ...(collectionConfig.admin.livePreview || {}),
+      ...livePreviewConfig,
+      ...collectionConfig.admin.livePreview,
     }
   }
 
   if (globalConfig) {
     livePreviewConfig = {
-      ...(livePreviewConfig || {}),
-      ...(globalConfig.admin.livePreview || {}),
+      ...livePreviewConfig,
+      ...globalConfig.admin.livePreview,
     }
   }
 

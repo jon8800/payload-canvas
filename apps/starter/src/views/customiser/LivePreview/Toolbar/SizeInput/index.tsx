@@ -1,5 +1,5 @@
 'use client'
-import React, { useCallback, useEffect } from 'react'
+import React, { useCallback } from 'react'
 
 import { useLivePreviewContext } from '../../Context/context'
 import './index.scss'
@@ -40,19 +40,23 @@ export const PreviewFrameSizeInput: React.FC<{
     [axis, setBreakpoint, measuredDeviceSize, setSize, zoom],
   )
 
-  useEffect(() => {
-    if (breakpoint === 'responsive' && measuredDeviceSize) {
-      if (axis === 'x') {
-        setInternalState(Number(measuredDeviceSize.width.toFixed(0)) * zoom)
-      } else {
-        setInternalState(Number(measuredDeviceSize.height.toFixed(0)) * zoom)
-      }
-    }
+  // Sync the input from the context during render when the source value changes.
+  let syncedValue: number | undefined
+  if (breakpoint === 'responsive' && measuredDeviceSize) {
+    syncedValue =
+      Number((axis === 'x' ? measuredDeviceSize.width : measuredDeviceSize.height).toFixed(0)) *
+      zoom
+  } else if (breakpoint !== 'responsive' && size) {
+    syncedValue = axis === 'x' ? size.width : size.height
+  }
 
-    if (breakpoint !== 'responsive' && size) {
-      setInternalState(axis === 'x' ? size.width : size.height)
+  const [prevSyncedValue, setPrevSyncedValue] = React.useState<number | undefined | null>(null)
+  if (syncedValue !== prevSyncedValue) {
+    setPrevSyncedValue(syncedValue)
+    if (syncedValue !== undefined) {
+      setInternalState(syncedValue)
     }
-  }, [breakpoint, axis, measuredDeviceSize, size, zoom])
+  }
 
   return (
     <input

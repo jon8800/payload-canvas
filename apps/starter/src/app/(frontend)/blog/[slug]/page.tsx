@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { draftMode } from 'next/headers'
+import Image from 'next/image'
 import { getPayload } from 'payload'
 import configPromise from '@payload-config'
 import { RenderBlocks } from '@/blocks/RenderBlocks'
@@ -65,10 +66,14 @@ export default async function BlogPost({ params }: Props) {
       </div>
 
       {featuredImage?.url && (
-        <img
+        <Image
           src={featuredImage.url}
           alt={featuredImage.alt || post.title}
-          className="mt-6 w-full rounded-lg"
+          width={featuredImage.width ?? 1200}
+          height={featuredImage.height ?? 675}
+          sizes="(max-width: 768px) 100vw, 768px"
+          fetchPriority="high"
+          className="mt-6 h-auto w-full rounded-lg"
         />
       )}
 

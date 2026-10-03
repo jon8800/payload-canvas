@@ -1,14 +1,12 @@
 {
   "compilerOptions": {
     "strict": true,
-    "baseUrl": ".",
-    "ignoreDeprecations": "6.0",
     "esModuleInterop": true,
-    "target": "ES2022",
+    "target": "ES2024",
     "lib": [
       "DOM",
       "DOM.Iterable",
-      "ES2022"
+      "ES2024"
     ],
     "allowJs": true,
     "skipLibCheck": true,

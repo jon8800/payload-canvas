@@ -29,7 +29,7 @@ function renderField(
   formData: Record<string, string | boolean>,
   onChange: (name: string, value: string | boolean) => void,
 ) {
-  const { blockType, name, label, required, defaultValue, width, options, message } = field
+  const { blockType, name, label, required, width, options, message } = field
 
   if (blockType === 'message') {
     if (typeof message === 'string') {

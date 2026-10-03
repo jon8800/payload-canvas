@@ -10,13 +10,13 @@ export const DeviceContainer: React.FC<{
 }> = (props) => {
   const { children } = props
 
-  const deviceFrameRef = React.useRef<HTMLDivElement>(null)
-  const outerFrameRef = React.useRef<HTMLDivElement>(null)
+  const [deviceFrameEl, setDeviceFrameEl] = React.useState<HTMLDivElement | null>(null)
+  const [outerFrameEl, setOuterFrameEl] = React.useState<HTMLDivElement | null>(null)
 
   const { breakpoint, setMeasuredDeviceSize, size: desiredSize, zoom } = useLivePreviewContext()
 
-  const { size: measuredDeviceSize } = useResize(deviceFrameRef.current)
-  const { size: outerFrameSize } = useResize(outerFrameRef.current)
+  const { size: measuredDeviceSize } = useResize(deviceFrameEl)
+  const { size: outerFrameSize } = useResize(outerFrameEl)
 
   let deviceIsLargerThanFrame: boolean = false
 
@@ -80,14 +80,14 @@ export const DeviceContainer: React.FC<{
 
   return (
     <div
-      ref={outerFrameRef}
+      ref={setOuterFrameEl}
       style={{
         height: '100%',
         width: '100%',
       }}
     >
       <div
-        ref={deviceFrameRef}
+        ref={setDeviceFrameEl}
         style={{
           height,
           margin,

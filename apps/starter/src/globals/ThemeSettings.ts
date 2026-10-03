@@ -13,7 +13,7 @@ export const ThemeSettings: GlobalConfig = {
   admin: {
     group: 'Settings',
     livePreview: {
-      url: ({ req }) => {
+      url: () => {
         const params = new URLSearchParams({
           slug: 'style-guide',
           collection: '',

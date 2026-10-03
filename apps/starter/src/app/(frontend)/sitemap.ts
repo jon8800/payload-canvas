@@ -24,14 +24,14 @@ const getCachedSitemap = unstable_cache(
       }),
     ])
 
-    const sitemap: MetadataRoute.Sitemap = [
+    const entries: MetadataRoute.Sitemap = [
       { url: siteUrl, lastModified: new Date(), changeFrequency: 'daily', priority: 1 },
     ]
 
     for (const page of pages) {
       if (page.slug === 'home') continue
 
-      sitemap.push({
+      entries.push({
         url: `${siteUrl}/${page.slug}`,
         lastModified: page.updatedAt ? new Date(page.updatedAt) : new Date(),
         changeFrequency: 'weekly',
@@ -40,7 +40,7 @@ const getCachedSitemap = unstable_cache(
     }
 
     for (const post of posts) {
-      sitemap.push({
+      entries.push({
         url: `${siteUrl}/blog/${post.slug}`,
         lastModified: post.updatedAt ? new Date(post.updatedAt) : new Date(),
         changeFrequency: 'weekly',
@@ -48,7 +48,7 @@ const getCachedSitemap = unstable_cache(
       })
     }
 
-    return sitemap
+    return entries
   },
   ['sitemap'],
   { tags: ['pages-sitemap', 'posts-sitemap'] },

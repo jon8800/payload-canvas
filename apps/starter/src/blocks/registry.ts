@@ -77,7 +77,7 @@ export const allBlockSlugs: string[] = [
  */
 function generateLayoutBlocks(
   factories: RecursiveBlock[],
-  leafSlugs: string[],
+  leafBlockSlugs: string[],
   maxDepth: number,
 ): Block[] {
   const result: Block[] = []
@@ -91,7 +91,7 @@ function generateLayoutBlocks(
       const childrenField: Field = {
         name: 'children',
         type: 'blocks',
-        blockReferences: leafSlugs as BlockSlug[],
+        blockReferences: leafBlockSlugs as BlockSlug[],
         blocks: [],
         maxRows: 20,
         admin: { description: 'Nested child blocks' },
@@ -108,7 +108,7 @@ function generateLayoutBlocks(
       // This level: children can reference leaf blocks + layout blocks at the NEXT depth
       const nextSuffix = depth + 1 === 0 ? '' : `_${depth + 1}`
       const nextLayoutSlugs = factories.map((f) => `${f().slug}${nextSuffix}`)
-      const childrenSlugs = [...leafSlugs, ...nextLayoutSlugs]
+      const childrenSlugs = [...leafBlockSlugs, ...nextLayoutSlugs]
 
       const childrenField: Field = {
         name: 'children',

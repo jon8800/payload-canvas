@@ -68,6 +68,7 @@ export const FontSelectorField: TextFieldClientComponent = function FontSelector
     listEl.querySelectorAll('[data-font]').forEach((el) => observer.observe(el))
 
     return () => observer.disconnect()
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- re-observe the rendered options whenever the filtered list changes
   }, [filteredFonts, loadFont])
 
   function handleClear() {

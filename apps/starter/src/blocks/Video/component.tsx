@@ -54,6 +54,7 @@ export function VideoBlock({
       className={className || undefined}
       style={style}
     >
+      {/* oxlint-disable-next-line jsx-a11y/media-has-caption -- the block has no captions field yet */}
       <video
         src={videoUrl}
         autoPlay={autoplay}

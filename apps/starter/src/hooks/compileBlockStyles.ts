@@ -106,7 +106,6 @@ async function createCompiler(): Promise<Awaited<ReturnType<typeof compile>>> {
 export const compileBlockStyles: CollectionBeforeChangeHook = async ({
   data,
   req,
-  operation,
 }) => {
   const layout = data.layout as BlockLike[] | undefined
   if (!layout?.length) return data
