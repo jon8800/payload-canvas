@@ -1,3 +1,5 @@
+import type { StyleTokens } from '../core/types'
+
 // Server-only Tailwind compile. Owner: css agent. See docs/architecture.md section 8.
 import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
@@ -254,4 +256,13 @@ export function tracingIncludes(entryRelativeToApp: string): string[] {
     './node_modules/shadcn/package.json',
     './node_modules/shadcn/dist/tailwind.css',
   ]
+}
+
+/**
+ * Design tokens and the class list from the app's Tailwind theme, for the Styles panel.
+ * Cached per entry content. Owner: tokens agent.
+ */
+export async function getStyleTokens(options: CssOptions): Promise<StyleTokens> {
+  void options
+  throw new Error('not implemented')
 }
