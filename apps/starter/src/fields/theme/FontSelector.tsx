@@ -106,7 +106,7 @@ export const FontSelectorField: TextFieldClientComponent = function FontSelector
         </div>
 
         <Combobox.Portal>
-          <Combobox.Positioner sideOffset={4} trackAnchorWidth>
+          <Combobox.Positioner sideOffset={4}>
             <Combobox.Popup className="font-selector__popup">
               <Combobox.List ref={listRef} className="font-selector__list">
                 {filteredFonts.map((font, index) => (

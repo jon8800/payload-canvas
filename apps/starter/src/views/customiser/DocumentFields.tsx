@@ -70,7 +70,7 @@ function NestedBlockFields({
   const { config } = useConfig()
   const blocks = useMemo(() =>
     rawBlocks.map((block) =>
-      typeof block === 'string' ? config.blocksMap[block] : block
+      typeof block === 'string' ? config.blocksMap[block as keyof typeof config.blocksMap] : block
     ).filter(Boolean) as ClientBlock[],
     [rawBlocks, config.blocksMap],
   )

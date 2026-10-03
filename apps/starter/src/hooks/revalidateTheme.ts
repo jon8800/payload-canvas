@@ -22,7 +22,7 @@ export const revalidateTheme: GlobalAfterChangeHook = async ({
   // Only derive if at least one core color is set
   const hasAnyColor = Object.values(coreColors).some((v) => v != null && v !== '')
   if (!hasAnyColor) {
-    revalidateTag('theme-settings')
+    revalidateTag('theme-settings', { expire: 0 })
     return doc
   }
 
@@ -37,7 +37,7 @@ export const revalidateTheme: GlobalAfterChangeHook = async ({
   })
 
   payload.logger.info('Revalidating theme-settings cache tag')
-  revalidateTag('theme-settings')
+  revalidateTag('theme-settings', { expire: 0 })
 
   return doc
 }
