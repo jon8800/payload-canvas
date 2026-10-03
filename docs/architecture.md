@@ -18,48 +18,19 @@ A Payload CMS plugin that adds website building to any Payload project:
 | Decision | Choice |
 |---|---|
 | Product shape | Plugin first. The starter app becomes a reference app that installs the plugin. |
-| Style format | Tailwind classes per block. Visual controls read and write classes. A raw class field covers the rest. |
+| Editor | Our own, native to Payload. No third-party editor library (no Puck). We borrow good ideas only. |
+| Dependencies | As few as possible. Drag-drop uses dnd-kit — the copy `@payloadcms/ui` already ships. |
+| Style format | Tailwind classes per block. Visual controls for the main CSS properties read and write classes. A raw class field covers the rest. |
 | Frontend | Headless data plus an optional default React renderer. Users can replace any block component. |
 | AI | Builder tools added to `payload-mcp-toolkit` through its `customTools` option. |
-| Admin UI | Payload CSS variables, Base UI primitives, SCSS. Kept in a thin layer so Payload 4 changes stay cheap. |
+| Admin UI | Payload's own UI components and CSS variables, Base UI primitives where Payload has none, SCSS. Kept in a thin layer so Payload 4 changes stay cheap. |
 
-## 3. Open decision: what the editor is built on
-
-**Recommendation: build on Puck (`@puckeditor/core`, MIT, v0.23) as a library.** We own every Payload part around it.
-
-Puck is an open-source React visual editor. It gives us:
-
-- An iframe canvas with click-to-select, overlays, an outline tree, viewports, and undo/redo.
-- Nested drag-drop through "slot" fields, on the canvas and in the outline.
-- A JSON data model: `{ root, content: [{ type, props: { id, … } }] }`.
-- `dispatch()` actions (`insert`, `move`, `replace`, `remove`, …) that outside code can call. This is how live AI edits reach an open editor.
-- A composable UI (`Puck.Preview`, `Puck.Fields`, `Puck.Outline`) themed with `--puck-*` CSS variables. We map those to Payload's variables.
-
-What we must build ourselves either way:
-
-- Saving through Payload: drafts, versions, autosave, document locking, access control.
-- Payload fields (relationship, upload, rich text) inside the block inspector.
-- Tailwind controls and CSS generation.
-- Live AI edits over a server channel, and later multiplayer (Puck has none).
-
-Risks:
-
-- Puck is pre-1.0. The APIs we rely on most (`overrides`, `plugins`, the drag-drop engine) are marked experimental and change every few months. Mitigation: pin exact versions, and keep all Puck code in one thin layer (Puck config generated from our block registry, plus an action adapter). Our stored data uses Puck's data shape, so leaving Puck later means rewriting the editor, not migrating content.
-- Putting Payload fields inside Puck's inspector is the hardest part. We prototype it first (section 13).
-
-**Not recommended:**
-
-- `@delmaredigital/payload-puck` (v0.9.2). One maintainer, two recent security advisories, inline-CSS styles instead of classes, and it does not reuse Payload's fields or document view. We borrow ideas only.
-- Our own canvas on Payload form state. Payload form state is a flat map of field paths that rebuilds on the server after changes. It fits a deeply nested live canvas badly, and it means rebuilding drag-drop, overlays and undo from zero.
-
-The rest of this document assumes Puck.
-
-## 4. Packages
+## 3. Packages
 
 ```
 packages/
-  builder/           # the Payload plugin: config, fields, hooks, endpoints, admin editor view
-  builder-react/     # default block components and the layout renderer (no Payload, no Puck at render time)
+  builder/           # the Payload plugin: config, fields, hooks, endpoints, admin editor
+  builder-react/     # default block components and the layout renderer (no Payload imports)
   create-payload-starter/
   shared/
 apps/
@@ -70,7 +41,7 @@ Package names are placeholders until we pick the public name.
 
 `builder` has three entry points: `.` (server config), `./client` (admin components), `./rsc` (server components for the admin).
 
-## 5. Plugin config
+## 4. Plugin config
 
 ```ts
 websiteBuilder({
@@ -88,27 +59,33 @@ websiteBuilder({
 For each listed collection, the plugin:
 
 - Adds the layout field (a `json` field, name configurable), unless the developer placed it already with the exported `layoutField()` helper. The helper lets the field live inside tabs or groups.
-- Adds the editor view as a document tab.
-- Adds the hooks that generate CSS and validate the layout on save.
+- Adds the editor as a document tab.
+- Adds the hooks that validate the layout and generate CSS on save.
 - Sets live preview to the `url` function.
 
 The `url` function is the one place that maps a document to its frontend path. Preview, sitemap, link fields and revalidation all use it. No route prefix is hardcoded in the plugin.
 
-## 6. Data model
+## 5. Data model
 
-One `json` field holds the whole layout tree, in Puck's data shape:
+One `json` field holds the whole layout tree:
 
 ```json
 {
-  "root": { "props": {} },
-  "content": [
+  "version": 1,
+  "blocks": [
     {
+      "id": "b_8f2k",
       "type": "stack",
-      "props": {
-        "id": "b_8f2k",
-        "className": "flex flex-col gap-6 md:flex-row",
+      "className": "flex flex-col gap-6 md:flex-row",
+      "slots": {
         "children": [
-          { "type": "heading", "props": { "id": "b_9a1c", "text": "Hello", "level": 2, "className": "text-4xl font-bold" } }
+          {
+            "id": "b_9a1c",
+            "type": "heading",
+            "props": { "text": "Hello", "level": "2" },
+            "className": "text-4xl font-bold",
+            "bindings": { "text": "title" }
+          }
         ]
       }
     }
@@ -116,14 +93,17 @@ One `json` field holds the whole layout tree, in Puck's data shape:
 }
 ```
 
-- Every block has a stable `id`. Selection, AI edits and bindings use the `id`, never an array index.
-- Nesting uses slot props (`children` above) with no depth limit. No more depth copies or `container_1` slugs.
-- Relationship and upload props store IDs. The renderer loads them (section 9).
-- The layout is validated on save against the JSON Schema of each block (section 7).
+A block is `{ id, type, props?, className?, slots?, bindings?, hidden? }`.
 
-Why one JSON field instead of a Payload `blocks` field: unlimited nesting, small form state, and edits that are plain JSON operations. That makes AI edits, undo and multiplayer simple. The trade-off: Payload no longer validates or populates block props for us. The plugin does that.
+- `id` is stable. Selection, AI edits and bindings use the `id`, never an array index.
+- `props` holds the block's own field values. `slots` holds child blocks by slot name, with no depth limit. Keeping them apart makes the tree easy to walk.
+- Relationship and upload props store IDs. The renderer loads them (section 10).
+- `version` lets us migrate the format later.
+- The layout is validated on save against the JSON Schema of each block (section 6).
 
-## 7. Block contract
+Why one JSON field instead of a Payload `blocks` field: unlimited nesting with no depth copies or `container_1` slugs, small form state, and edits that are plain JSON operations. That makes AI edits, undo and multiplayer simple. The trade-off: Payload no longer validates or populates block props for us. The plugin does that.
+
+## 6. Block contract
 
 ```ts
 export const Heading = defineBlock({
@@ -137,15 +117,49 @@ export const Heading = defineBlock({
   styles: true,                               // adds className and the style controls
   ai: {
     description: 'A section or page heading.',
-    example: { text: 'Our services', level: '2', className: 'text-3xl font-semibold' },
+    example: { props: { text: 'Our services', level: '2' }, className: 'text-3xl font-semibold' },
   },
 })
 ```
 
-- **Props are declared with Payload field configs.** From one declaration the plugin generates the Puck field config, a JSON Schema for validation and for AI tools, and TypeScript types.
-- Simple fields (text, number, select, checkbox, array, group) map to Puck's built-in fields.
-- Relationship, upload and rich text fields render as Payload's own field components through a bridge (section 13, prototype 1).
-- The React component is registered separately, in `builder-react` or in the app. Config stays server-safe.
+- **Props are declared with Payload field configs.** From one declaration the plugin generates the inspector controls, a JSON Schema (for validation and for AI tools), and TypeScript types.
+- **Slots** declare where children go and which block types each slot accepts.
+- The React component is registered separately, in `builder-react` or in the app. The config stays server-safe.
+
+## 7. The editor
+
+The editor is a tab inside Payload's document view. Payload keeps doing save, drafts, autosave, versions, locking and access control. We do not fork Payload's edit view and we do not import Payload internals.
+
+```
+┌──────────────┬───────────────────────────────┬──────────────────┐
+│ Outline      │ Canvas (iframe + overlay)     │ Inspector        │
+│ block tree   │                               │ Block | Document │
+│ + block      │                               │ Content / Styles │
+│   library    │                               │                  │
+└──────────────┴───────────────────────────────┴──────────────────┘
+```
+
+**Editor store (client).** One store holds the layout tree, the selection, the hover state and the undo history. It is a small external store read with `useSyncExternalStore`, so only the parts that change re-render. Every change goes through the operations module (section 12). Undo and redo replay operations.
+
+**Sync with Payload.** The store writes the layout to the JSON field with Payload's public `useField` hook (`setValue`). From there Payload's own autosave, drafts and versions take over. The document's other fields (title, SEO, …) appear in the Document tab through Payload's `RenderFields`.
+
+**Canvas.**
+
+- A same-origin iframe loads a plugin route that renders the layout with the real block components. The admin sends the layout to the iframe over `postMessage`, so a change shows at once, with no database write and no server round trip.
+- Each block element carries `data-block-id`. A small script in the iframe measures block rectangles (`ResizeObserver` plus scroll events) and sends them to the admin.
+- The admin draws an **overlay layer** on top of the iframe: hover outline, selection box, block name label, action bar (move, duplicate, delete, add), and drop indicators. The overlay lives in the admin, so it uses Payload's UI and never mixes with the site's CSS.
+- **Drag-drop** uses dnd-kit in the admin. Drop targets come from the measured rectangles and the slot rules, with a custom collision function: before or after a block, or inside an empty slot. The same drag system covers the outline tree and the block library, so you can drag from the library onto the canvas.
+- Device sizes (desktop, tablet, mobile, custom width) resize the iframe. The breakpoint switch in the Styles panel follows the device size.
+- Later: inline text editing on the canvas (double-click a text block).
+
+**Inspector.**
+
+- The Content tab renders the selected block's fields with Payload's public input components: `TextInput`, `TextareaInput`, `SelectInput`, `CheckboxInput`, `UploadInput`, `RelationshipInput`, `DatePicker`, plus `useListDrawer` and `useDocumentDrawer` for picking documents. They look exactly like Payload because they are Payload.
+- These inputs are controlled components. They read from and write to the editor store, not Payload form state.
+- Rich text (Lexical) inside a block is the one open question. See prototype 3.
+- The Styles tab holds the Tailwind controls (section 8).
+
+**Ideas worth borrowing from other editors (Puck, Webflow, Shopify):** permissions per block (can delete, can drag, can edit), an action bar on the selected block, a separate outline tree, viewports, and "slots" as named child lists.
 
 ## 8. Styling
 
@@ -171,42 +185,29 @@ The Theme global stores design tokens: colors, fonts, radius, spacing scale. The
 
 - `<RenderLayout layout css components />` — a server component that walks the JSON and renders each block with its component. `components` overrides any default block.
 - `loadLayoutData(layout, payload)` — loads relationship and upload props in one batch before rendering.
-- The default block components: plain React, Tailwind classes, no Payload or Puck imports at render time. They work in the editor iframe (client) and on the site (server).
+- The default block components: plain React and Tailwind classes, no Payload imports. They work in the editor iframe (client) and on the site (server).
 
 Blocks that need data (for example "latest posts") declare a `load()` function. It runs on the server for the site, and through a plugin endpoint for the editor.
 
-## 11. Editor in the admin
-
-- The editor is a tab inside Payload's document view. Payload keeps doing save, drafts, autosave, versions, locking and access control. We do not fork Payload's edit view.
-- The editor reads and writes the layout field through Payload's public `useField` hook.
-- Layout: outline (left), canvas (center), inspector (right). The inspector has Block and Document tabs. The Document tab shows the document's other fields (title, SEO, …) using Payload's own field rendering.
-- The UI uses Payload CSS variables. Puck's `--puck-*` variables are mapped to them.
-
-## 12. Live AI edits and multiplayer
-
-- **Operations:** every edit is a small JSON operation: `insert`, `move`, `update`, `remove`, `duplicate`. Operations target block ids. They map one-to-one to Puck's `dispatch` actions.
-- **One operations module** applies operations to a layout. The editor, the MCP tools and the server all use the same module.
-- **Server channel:** the plugin adds a Server-Sent Events endpoint per document. When an MCP tool changes a draft, the server publishes the operations. An open editor applies them with `dispatch` and shows who made the change.
-- **Conflicts in v1:** operations apply in order, and the last write wins per prop. The editor shows a notice when someone else is editing.
-- **Multi-server:** v1 uses an in-process event bus. With more than one app server, swap it for Postgres `LISTEN/NOTIFY`.
-- **Later, multiplayer:** add a CRDT (Yjs) on the same operations. Presence (cursors, selections) uses the same channel.
-
-## 13. Prototypes before the full build
-
-These two parts decide whether the plan holds. Build them first, as throwaway code.
-
-1. **Payload fields inside Puck's inspector.** Render a Payload upload field and a relationship field for the selected block, with Payload's form state, inside a Puck custom field. Success: pick an image, the canvas updates, save works.
-2. **Tailwind in the canvas.** Run `@tailwindcss/browser` in the Puck iframe with the app's theme. Success: typing `bg-primary p-8` into the class field shows the result in under 100 ms. Also confirm the save-time compile gives the same CSS.
-
-## 14. Templates and binding
+## 11. Templates and binding
 
 - The plugin adds a Templates collection. Each template targets one collection and holds a layout.
-- Each document in a collection with `templates: true` uses its own template if it has one, then the collection's default template, then a generated default (title plus main content).
+- A document in a collection with `templates: true` uses its own template if it has one, then the collection's default template, then a generated default (title plus main content).
 - **Field block:** shows any field of the current document by path (`content`, `featuredImage`, `author.name`), rendered by the field's type. This is how a template shows the post body.
 - **Binding:** a block stores `bindings: { "text": "title", "image": "author.avatar" }`, keyed by prop path. At render time, bound props take the document's value. Missing values fall back to the literal prop.
 - The binding picker lists only compatible fields. It builds the list by walking the target collection's schema, including one relationship hop.
+- In the editor, a template previews against a sample document the designer picks.
 
-## 15. AI tools (MCP)
+## 12. Operations, live AI edits and multiplayer
+
+- **Operations:** every edit is a small JSON operation: `insert`, `move`, `update`, `remove`, `duplicate`, `setClassName`, `setBindings`. Operations target block ids.
+- **One operations module** applies operations to a layout. It is pure TypeScript with no React and no Payload. The editor, the MCP tools and the server all use it. It is the most tested code in the project.
+- **Server channel:** the plugin adds a Server-Sent Events endpoint per document. When an MCP tool changes a draft, the server publishes the operations. An open editor applies them through the same module and shows who made the change (for example a short highlight on the changed block).
+- **Conflicts in v1:** operations apply in order, and the last write wins per prop. The editor shows a notice when someone else is editing.
+- **Multi-server:** v1 uses an in-process event bus. With more than one app server, swap it for Postgres `LISTEN/NOTIFY`.
+- **Later, multiplayer:** add a CRDT (Yjs) on top of the same operations. Presence (cursors, selections) uses the same channel.
+
+## 13. AI tools (MCP)
 
 Added to `payload-mcp-toolkit` through `customTools`:
 
@@ -222,11 +223,19 @@ Added to `payload-mcp-toolkit` through `customTools`:
 
 Ready-made sections are the main unit the AI should use. AI models build better pages from well-designed sections than from single blocks.
 
-## 16. What happens to the existing code
+## 14. Prototypes first
+
+Three parts decide whether the plan holds. Build them first, about a day each.
+
+1. **Canvas.** Iframe renders a layout from `postMessage`. Rectangle reporting, overlay with hover and selection, and dnd-kit drag into a nested slot. Success: drag a heading into a stack two levels deep, on the canvas, with correct drop indicators.
+2. **Inspector with Payload inputs.** `TextInput`, `SelectInput`, `UploadInput` and `RelationshipInput` bound to the editor store, plus the store synced to the JSON field with `useField`. Success: pick an image, the canvas updates, autosave stores it as a draft.
+3. **Tailwind and rich text.** `@tailwindcss/browser` in the iframe with the app's theme: typing `bg-primary p-8` shows in under 100 ms, and the save-time compile gives the same CSS. Also try Payload's Lexical editor inside the inspector for a text block. If it needs too much of Payload's form state, use a lighter text editor for blocks and keep Lexical for full rich text fields.
+
+## 15. What happens to the existing code
 
 | Area | Action |
 |---|---|
-| Customiser view (`views/customiser/`) | Replace with the Puck-based editor. Keep the device-size toolbar idea. |
+| Customiser view (`views/customiser/`) | Replace with the new editor. Keep the device-size toolbar idea and the click-to-select message. |
 | Blocks (`blocks/`) | Rewrite as `defineBlock` configs plus `builder-react` components. Drop depth copies and suffixed slugs. |
 | Styles JSON field and `compileBlockStyles` | Replace with `className` and the new CSS generation. |
 | Styles panel UI (`components/admin/StylesPanel.tsx`) | Rebuild as Tailwind controls. Reuse its layout ideas. |
@@ -235,12 +244,12 @@ Ready-made sections are the main unit the AI should use. AI models build better 
 | `create-payload-starter` CLI | Rebuild last, once the plugin is stable. |
 | Existing content | Local dev data only. Re-seed instead of migrating. |
 
-## 17. Build order
+## 16. Build order
 
-1. **Prototypes** (section 13).
-2. **Plugin skeleton:** `websiteBuilder()` config, layout field, editor tab with Puck, 5 blocks (stack, grid, heading, text, image), `RenderLayout`, CSS generation.
+1. **Prototypes** (section 14).
+2. **Plugin skeleton:** `websiteBuilder()` config, layout field, operations module with tests, editor tab, 5 blocks (stack, grid, heading, text, image), `RenderLayout`, CSS generation.
 3. **All core blocks and the Styles panel.**
-4. **AI:** operations module, MCP tools, live edits in the open editor.
+4. **AI:** MCP tools and live edits in the open editor.
 5. **Templates and binding.**
 6. **Starter app and CLI** on top of the plugin.
-7. **Later:** multiplayer, presence, an AI chat panel in the admin.
+7. **Later:** inline text editing, multiplayer, presence, an AI chat panel in the admin.
