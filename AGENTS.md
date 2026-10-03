@@ -1,62 +1,74 @@
 # payload-toolkit
 
-A Payload CMS v3 starter for building websites quickly with composable atomic blocks. Turborepo monorepo with `apps/starter` (the Payload + Next.js app), `packages/create-payload-starter` (CLI scaffolder), and `packages/shared` (utilities).
+A website builder for Payload CMS v3: composable layout blocks, a visual drag-drop page builder, theming, and (planned) templates for collection documents. Turborepo monorepo with `apps/starter` (the Payload + Next.js app), `packages/create-payload-starter` (CLI scaffolder), and `packages/shared` (utilities).
 
-See [`STRATEGY.md`](./STRATEGY.md) for the product strategy — target problem, approach, personas, metrics, tracks.
+## Direction
+
+- The code so far was written by weaker AI models. Much of it is clunky or half working. **Nothing here is sacred** — any part can be ripped out, replaced, or redesigned. Do not preserve a pattern only because it exists.
+- Goal: a robust, flexible builder that works with **any collection shape and any fields**, likely shipped as a Payload plugin (with the starter as a reference app). Inspiration: Shopify theme customizer, Elementor, Webflow.
+- Later: make it agentic — an AI must be able to read the data model and the available blocks and build pages (MCP and/or skills). The owner's MCP plugin lives at `C:\Projects\sandbox\payload-plugins\payload-mcp-toolkit`.
+- `STRATEGY.md` holds the earlier product strategy. It predates the plugin direction and will be revised.
 
 ## Tech stack
 
-- **Payload CMS v3** with Postgres adapter, blocks stored as JSON
-- **Next.js 15** (App Router, RSC by default, client components only at leaves)
-- **React 19**, **Tailwind v4** (CSS-first, no `tailwind.config`), **shadcn/ui**, **Base UI** primitives
-- **pnpm** workspaces, **Turborepo**, **Turbopack** (never fall back to webpack)
-- **PostgreSQL** locally and in production
-- Deployment target: VPS / Docker (no Vercel-specific features)
+- **Payload CMS 3.90** with the Postgres adapter, blocks stored as JSON
+- **Next.js 16.3** (App Router, RSC by default, client components only at leaves). Payload 3.x supports Next 16 only, not 17. Bundled Next docs: `apps/starter/node_modules/next/dist/docs/`.
+  - Request interception lives in `src/proxy.ts` (Next 16 renamed `middleware.ts`).
+  - `revalidateTag(tag, profile)` takes 2 arguments — use `{ expire: 0 }` as the profile.
+- **React 19.3**, **Tailwind v4** (CSS-first, no `tailwind.config`), **shadcn/ui**, **Base UI** primitives
+- **TypeScript 6** — not 7, because typescript-eslint does not support 7 yet. `tsconfig.json` keeps `baseUrl` (with `ignoreDeprecations: "6.0"`) because the shadcn CLI needs it to resolve `@/` imports.
+- **ESLint 9** flat config (`eslint.config.mjs`) — not 10, because eslint-config-next's plugins do not support 10 yet.
+- **pnpm 10** workspaces, **Turborepo**, **Turbopack** (never fall back to webpack)
+- **PostgreSQL** locally and in production. Deployment target: VPS / Docker (no Vercel-specific features).
 
-## Critical project rules
+## Project rules
 
 - **Never run `payload migrate` against the local dev database.** Dev uses `push: true` — Drizzle auto-syncs schema on `pnpm dev`. Migration files are only for production deploys; generate via `pnpm payload migrate:create` when prepping a release.
 - **Don't hand-write migrations to express things Payload's collection config can already declare.** For compound unique constraints, use `indexes: [{ fields: [...], unique: true }]` at the collection level paired with `disableUnique: true` on individual fields.
-- **No Tailwind utilities inside admin code.** Admin components use SCSS modules under `@layer payload-default` with Payload CSS variables only. Tailwind Preflight in the frontend would leak into the admin and break Payload's UI.
-- **Block storage is Postgres JSON** — preserves clean schema and avoids type generation explosion across deeply nested blocks.
+- **Data migrations go through the Payload Local API**, not raw SQL, so they work on any database adapter.
+- **No Tailwind utilities inside admin code.** Admin components use SCSS under `@layer payload-default` with Payload CSS variables only. Tailwind Preflight would leak into the admin and break Payload's UI.
 - **Server Components by default** — push client boundaries to leaf nodes only.
+- **Use public Payload APIs** (`@payloadcms/ui` exports, documented hooks) over deep imports of Payload internals.
+- **Write files as UTF-8 without a BOM.** Turbopack fails to parse `tsconfig.json` with a BOM. On Windows PowerShell 5.1, `Set-Content -Encoding utf8` adds a BOM — use the Write/Edit tools instead.
 
 ## Repository layout
 
 ```
 payload-toolkit/
   apps/
-    starter/              # Payload CMS + Next.js app, admin at /admin
+    starter/                 # Payload CMS + Next.js app, admin at /admin
   packages/
     create-payload-starter/  # CLI scaffolder
-    shared/                  # Cross-cutting utilities
-  docs/
-    solutions/            # Documented solutions and patterns (see below)
-    archive/
-      planning-gsd/       # Archived legacy GSD planning docs (read-only reference)
-  .compound-engineering/  # Compound Engineering workflow config
-  STRATEGY.md             # Product strategy (target problem, approach, tracks)
-  CLAUDE.md               # This file
+    shared/                  # DB creation and env helpers for the CLI
+  STRATEGY.md                # Earlier product strategy (to be revised)
+  AGENTS.md                  # This file (CLAUDE.md is a stub that imports it)
 ```
 
-## Documented Solutions
+`apps/starter/AGENTS.md` and `apps/starter/CLAUDE.md` are written by `next dev` itself. Commit them; do not edit them.
 
-`docs/solutions/` — documented solutions and durable patterns from past work, organized by category with YAML frontmatter (`module`, `tags`, `problem_type`, `applies_when`). Categories include `architecture-patterns/`, `conventions/`, `design-patterns/`, plus bug categories. Relevant when implementing or debugging in documented areas — current entries cover Payload admin component conventions, theming variable injection, data migrations via the local API, and the two-pass admin redesign workflow.
+Key places in `apps/starter/src/`:
 
-## Workflow notes
+- `blocks/` — the 14 atomic blocks, `registry.ts`, `RenderBlocks.tsx`
+- `views/customiser/` — the Layout Customizer (3-pane page builder: block tree, iframe preview, fields panel). It replaces the old standalone repo at `C:\Projects\sandbox\payload\payload-customiser`.
+- `fields/theme/`, `globals/` — ThemeSettings, ColorPicker, FontSelector, SliderField
+- `hooks/compileBlockStyles.ts` — compiles per-block Tailwind classes on save
+- `proxy.ts` — redirects and the `x-pathname` request header
 
-- This project uses the **Compound Engineering** plugin (`/ce-*` skills). `STRATEGY.md` and `docs/solutions/` are picked up as grounding by `/ce-plan`, `/ce-brainstorm`, and `/ce-work`.
-- `.planning/` was the legacy GSD workflow scaffold. It's archived under `docs/archive/planning-gsd/` for historical reference and is not actively maintained.
-- Codex CLI is used for code reviews (`codex:codex-rescue`).
+## Commands
 
-## Out of scope
+Run from `apps/starter/`:
 
-The following are explicitly not goals (lifted from the v1.1 strategy):
+- `pnpm dev` — dev server (also syncs the DB schema via `push: true`)
+- `pnpm build` — production build
+- `pnpm typecheck` — type check
+- `pnpm lint` — ESLint (the existing code still has about 90 errors, mostly `any` and `@ts-nocheck` in `views/customiser/`)
+- `pnpm generate:types` / `pnpm generate:importmap` — run after changing collections, blocks, or admin components
+- `pnpm seed:demo` — seed demo content
 
-- Frontend auth (login/register pages) — admin panel only for content management
-- Mobile app — web only
-- Vercel-specific features — must work on VPS/Docker
-- Full CSS property abstraction like Webflow — simplified subset only
-- Per-page theme overrides — global theme only
-- CSS-in-JS / styled-components — Tailwind v4 + CSS variables
-- Dark mode toggle — can be added via theme settings later, not in roadmap
+Local DB: Postgres on `localhost:5432`, database `payload_toolkit_dev` (see `apps/starter/.env`).
+
+## Current status
+
+- **Built:** 14 atomic blocks with nesting, Pages/Posts/TemplateParts collections, 7 Payload plugins, the Layout Customizer, per-block styles panel, ThemeSettings global, setup CLI.
+- **Not built:** templates for collection documents and dynamic data binding (a design existed; it is in git history before the GSD archive was deleted, and needs rework anyway).
+- **Under review:** the whole implementation. Known problems include data-loss bugs in the Customiser, Tailwind-on-save styling that misses classes, and hardwired collection slugs, field names, and the `/blog` route.

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
   // Check for redirects via Payload REST API
@@ -62,9 +62,10 @@ export async function middleware(request: NextRequest) {
     // Regex redirect lookup failed -- continue
   }
 
-  const response = NextResponse.next()
-  response.headers.set('x-pathname', pathname)
-  return response
+  // Pass the path on the request (not the response) so server components can read it via headers()
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.set('x-pathname', pathname)
+  return NextResponse.next({ request: { headers: requestHeaders } })
 }
 
 export const config = {

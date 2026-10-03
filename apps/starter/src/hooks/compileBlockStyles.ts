@@ -95,6 +95,7 @@ async function createCompiler(): Promise<Awaited<ReturnType<typeof compile>>> {
     loadStylesheet: async (id: string, base: string) => {
       const resolved = path.resolve(base, id)
       return {
+        path: resolved,
         content: fs.readFileSync(resolved, 'utf-8'),
         base: path.dirname(resolved),
       }
