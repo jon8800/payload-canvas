@@ -2,7 +2,7 @@ import path from 'node:path'
 import type { CollectionConfig, Config, Field, JSONField, Plugin } from 'payload'
 import { defaultBlocks } from '../blocks'
 import { EMPTY_LAYOUT, type BlockDefinition, type BuilderClientConfig } from '../core/types'
-import { getCanvasCssInput, type CssOptions, type TailwindPlugins } from '../css'
+import { getCanvasCssInput, getStyleTokens, type CssOptions, type TailwindPlugins } from '../css'
 import { layoutBeforeChange } from './hook'
 import { toJsonSafe } from './jsonSafe'
 
@@ -31,6 +31,7 @@ export type WebsiteBuilderOptions = {
 const LAYOUT_FIELD_COMPONENT = '@payload-toolkit/builder/client#LayoutField'
 const TAB_VIEW_COMPONENT = '@payload-toolkit/builder/client#BuilderTabView'
 const CANVAS_CSS_PATH = '/builder/canvas-css'
+const STYLE_TOKENS_PATH = '/builder/style-tokens'
 
 /** Name of the hidden field that stores the generated CSS (`{ hash, css }`) for a layout field. */
 export function cssFieldName(field: string): string {
@@ -77,6 +78,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           blocks: clientBlocks,
           canvasPath,
           cssEndpoint: `${apiRoute}${CANVAS_CSS_PATH}`,
+          tokensEndpoint: `${apiRoute}${STYLE_TOKENS_PATH}`,
         }
         return addBuilder(collection, { field, clientConfig, blocks, css })
       }),
@@ -89,6 +91,15 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
             if (!req.user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
             const input = await getCanvasCssInput(css)
             return Response.json(input, { headers: { 'Cache-Control': 'private, max-age=60' } })
+          },
+        },
+        {
+          path: STYLE_TOKENS_PATH,
+          method: 'get',
+          handler: async (req) => {
+            if (!req.user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+            const tokens = await getStyleTokens(css)
+            return Response.json(tokens, { headers: { 'Cache-Control': 'private, max-age=60' } })
           },
         },
       ],

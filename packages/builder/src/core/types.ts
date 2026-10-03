@@ -76,6 +76,46 @@ export type BuilderClientConfig = {
   canvasPath: string
   /** Full API path that returns CanvasCssInput as JSON, e.g. "/api/builder/canvas-css". */
   cssEndpoint: string
+  /** Full API path that returns StyleTokens as JSON, e.g. "/api/builder/style-tokens". */
+  tokensEndpoint: string
+}
+
+// ---------------------------------------------------------------------------
+// Design tokens from the app's Tailwind theme (for the Styles panel)
+// ---------------------------------------------------------------------------
+
+/** A named theme value, e.g. { name: "primary", value: "var(--primary)" } for `--color-primary`. */
+export type ThemeToken = { name: string; value: string }
+
+/**
+ * Read from the app's compiled Tailwind theme (`@theme`), so the Styles panel offers exactly the
+ * values the site's classes support. JSON-serializable.
+ */
+export type StyleTokens = {
+  /** `--color-*` (theme colors such as primary, plus the default palette like red-500). */
+  colors: ThemeToken[]
+  /** Spacing scale keys valid after p-/m-/gap-, e.g. ["0", "px", "0.5", "1", …, "96"]. */
+  spacing: string[]
+  /** `--text-*`, e.g. { name: "lg", value: "1.125rem" }. */
+  fontSizes: ThemeToken[]
+  /** `--font-weight-*`. */
+  fontWeights: ThemeToken[]
+  /** `--font-*` families, e.g. sans, serif, mono, heading. */
+  fonts: ThemeToken[]
+  /** `--leading-*`. */
+  leading: ThemeToken[]
+  /** `--tracking-*`. */
+  tracking: ThemeToken[]
+  /** `--radius-*`. */
+  radius: ThemeToken[]
+  /** `--shadow-*`. */
+  shadows: ThemeToken[]
+  /** `--breakpoint-*`, in ascending order. */
+  breakpoints: ThemeToken[]
+  /** `--container-*` (max-width sizes like sm, md, 7xl). */
+  containers: ThemeToken[]
+  /** Every utility class name the design system knows (for autocomplete), without variants. */
+  classList: string[]
 }
 
 // ---------------------------------------------------------------------------
