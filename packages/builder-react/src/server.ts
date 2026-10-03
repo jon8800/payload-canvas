@@ -28,8 +28,9 @@ export type LoadedTemplate = {
 export type LoadTemplateArgs = {
   /** Slug of the document's collection, e.g. "posts". */
   collection: string
-  /** The document. Its `template` field may hold an ID or a loaded template. */
-  doc: Doc
+  /** The document (any generated Payload type). Its `template` field may hold an ID or a loaded template. */
+  // oxlint-disable-next-line typescript/no-explicit-any
+  doc: Record<string, any>
   /** Slug of the templates collection. Default "builder-templates". */
   templatesSlug?: string
   /** Draft mode: use the latest template drafts. Otherwise only published templates. */

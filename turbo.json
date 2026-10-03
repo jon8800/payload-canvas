@@ -3,15 +3,21 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**"]
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/build-package.mjs"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**", "!.next/dev/**"]
     },
     "dev": {
       "persistent": true,
       "cache": false
     },
-    "lint": {},
+    "test": {
+      "outputs": []
+    },
     "typecheck": {
-      "dependsOn": ["^build"]
+      "outputs": []
+    },
+    "lint": {
+      "outputs": []
     }
   }
 }

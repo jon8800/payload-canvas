@@ -4,6 +4,9 @@ import configPromise from '@payload-config'
 import { getServerSideURL } from '@/utilities/getURL'
 import { unstable_cache } from 'next/cache'
 
+// Rendered on request (and cached by tag), so a build needs no database.
+export const dynamic = 'force-dynamic'
+
 const getCachedSitemap = unstable_cache(
   async () => {
     const payload = await getPayload({ config: configPromise })

@@ -1,13 +1,13 @@
 # payload-toolkit
 
-A website builder for Payload CMS v3: composable layout blocks, a visual drag-drop page builder, theming, and (planned) templates for collection documents. Turborepo monorepo with `apps/starter` (the Payload + Next.js app), `packages/create-payload-starter` (CLI scaffolder), and `packages/shared` (utilities).
+A website builder plugin for Payload CMS v3: composable layout blocks, a visual drag-drop page builder with a Tailwind styles panel, templates with data binding, and AI page building over MCP with live updates. Turborepo monorepo with `apps/starter` (the Payload + Next.js app), `packages/create-payload-starter` (CLI scaffolder), and `packages/shared` (utilities).
 
 ## Direction
 
 - The code so far was written by weaker AI models. Much of it is clunky or half working. **Nothing here is sacred** — any part can be ripped out, replaced, or redesigned. Do not preserve a pattern only because it exists.
 - Goal: a robust, flexible builder that works with **any collection shape and any fields**, likely shipped as a Payload plugin (with the starter as a reference app). Inspiration: Shopify theme customizer, Elementor, Webflow.
 - Later: make it agentic — an AI must be able to read the data model and the available blocks and build pages (MCP and/or skills). The owner's MCP plugin lives at `C:\Projects\sandbox\payload-plugins\payload-mcp-toolkit`.
-- `docs/architecture.md` is the target design (draft). Read it before building any part of the plugin.
+- `docs/architecture.md` is the design. Read it before changing any part of the plugin. `packages/builder/README.md` is the user guide.
 - `STRATEGY.md` holds the earlier product strategy. It predates the plugin direction and will be revised.
 
 ## Tech stack
@@ -43,12 +43,14 @@ payload-toolkit/
   packages/
     builder/                 # @payload-toolkit/builder — the Payload plugin
       src/core/              #   pure: types (the contract), operations + inverse, tree, drop targets, schema, validation
-      src/blocks/            #   defaultBlocks(): stack, grid, heading, text, image
+      src/blocks/            #   defaultBlocks() (client-safe entry `/blocks`), linkField()
+      src/live/              #   live editing: event bus, SSE events + operations endpoints
+      src/mcp/               #   builderMcpTools() for payload-mcp-toolkit
       src/css/               #   Tailwind compile: server (save hook) and browser (canvas)
       src/protocol/          #   postMessage protocol between editor and canvas iframe
       src/admin/             #   editor UI (Payload-native, SCSS, no Tailwind)
-      src/plugin/            #   websiteBuilder(): fields, save hook, Builder tab, canvas-css endpoint
-    builder-react/           # @payload-toolkit/builder-react — RenderLayout, default block components, canvas runtime
+      src/plugin/            #   websiteBuilder(): fields, save hook, Builder tab, templates collection, endpoints
+    builder-react/           # @payload-toolkit/builder-react — RenderLayout, block components, canvas runtime, /server loadTemplate
     create-payload-starter/  # CLI scaffolder
     shared/                  # DB creation and env helpers for the CLI
   docs/architecture.md       # Target design — read before building
@@ -56,7 +58,7 @@ payload-toolkit/
   AGENTS.md                  # This file (CLAUDE.md is a stub that imports it)
 ```
 
-Packages export TypeScript source (no build step yet); the starter compiles them via `transpilePackages`. `packages/builder/src/core/types.ts` is the shared contract — change it deliberately.
+In the repo the starter compiles package source via `transpilePackages`; published packages ship `dist/` (see `packages/builder/README.md`). `packages/builder/src/core/types.ts` is the shared contract — change it deliberately.
 
 Builder rules that are easy to break:
 
@@ -65,15 +67,20 @@ Builder rules that are easy to break:
 - Every edit goes through `applyOperation(s)`; undo applies the returned inverse operations.
 - Block components add no Tailwind classes of their own — styling comes only from `block.className`, because the generated CSS covers only classes in the data.
 - `websiteBuilder()` must be the last plugin, so the layout field stays top-level.
+- Block components receive only plain data (links arrive pre-resolved), so custom blocks may be client components. Never pass functions as component props.
+- A component that uses its own Tailwind classes must list them in its block definition `classes`.
+- Exactly one copy of `@payloadcms/ui` / `next` may be installed. After any dependency change, check that `readlink -f packages/*/node_modules/@payloadcms/ui apps/starter/node_modules/@payloadcms/ui` all point to one `.pnpm` folder. The root `@babel/core` + `babel-plugin-macros` devDependencies exist only for this.
+- If Turbopack reports "Module not found" for a file that exists (after renames), restart the dev server.
 
 `apps/starter/AGENTS.md` and `apps/starter/CLAUDE.md` are written by `next dev` itself. Commit them; do not edit them.
 
 Key places in `apps/starter/src/`:
 
-- `blocks/` — the 14 atomic blocks, `registry.ts`, `RenderBlocks.tsx`
-- `views/customiser/` — the Layout Customizer (3-pane page builder: block tree, iframe preview, fields panel). It replaces the old standalone repo at `C:\Projects\sandbox\payload\payload-customiser`.
+- `builder.ts` — the blocks list (default blocks + the custom `form` block), shared by site and canvas
+- `data/sections/` — ready-made sections (editor library + seed)
+- `components/BuilderContent.tsx`, `components/ThemeHead.tsx` — site rendering and theme injection
+- `app/(builder-canvas)/` — the canvas iframe route
 - `fields/theme/`, `globals/` — ThemeSettings, ColorPicker, FontSelector, SliderField
-- `hooks/compileBlockStyles.ts` — compiles per-block Tailwind classes on save
 - `proxy.ts` — redirects and the `x-pathname` request header
 
 ## Commands
@@ -93,9 +100,8 @@ Local DB: Postgres on `localhost:5432`, database `payload_toolkit_dev` (see `app
 
 ## Current status
 
-- **New builder (packages/builder, builder-react):** plugin skeleton done (build order step 2). On `pages`, the `builder` field and the Builder tab work end to end: library, outline, canvas with overlay and drag-drop, inspector with Payload inputs, raw class input, undo/redo, autosave/publish, generated CSS, frontend rendering via `src/components/PageContent.tsx`. Next: all core blocks and the visual Styles panel (step 3).
-- **Old system, to be removed:** the old `layout` blocks field, `blocks/`, `views/customiser/` (Customiser tab), the styles JSON field and `compileBlockStyles`. They still run beside the new builder until step 3 replaces them. Do not extend them.
-- **Not built:** theme variables in the canvas, rich text block, templates and binding, MCP tools, live AI edits.
+- **Done:** the plugin with 15 default blocks; the visual editor (outline, canvas with zoom and drag-drop, Payload-native inspector, Webflow-like Styles panel over Tailwind classes, sections library, copy/paste, undo); generated CSS; templates, data binding, Field and Collection list blocks; live editing over SSE; MCP tools for `payload-mcp-toolkit`; the starter app with a demo seed.
+- **Next:** multiplayer cursors (CRDT), inline text editing on the canvas, an AI chat panel in the admin, theme settings moved into the plugin.
 
 <!-- BEGIN:turborepo-agent-rules -->
 

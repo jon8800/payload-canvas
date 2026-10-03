@@ -1,23 +1,18 @@
-services:
-  app:
-    build:
-      context: .
-      args:
-        DATABASE_URL: postgresql://postgres:postgres@db:5432/payload_starter
-        PAYLOAD_SECRET: build-time-secret-replaced-at-runtime
-    ports:
-      - "3000:3000"
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/payload_starter
-      - PAYLOAD_SECRET=${PAYLOAD_SECRET:-change-me-in-production}
-      - NEXT_PUBLIC_SERVER_URL=http://localhost:3000
-    depends_on:
-      db:
-        condition: service_healthy
-    restart: unless-stopped
+# Production-like stack: Postgres, a one-off migrate job and the app.
+# Run from apps/starter (the build context is the repository root):
+#
+#   docker compose up -d db
+#   docker compose run --rm migrate     # applies src/migrations (create them with `pnpm payload migrate:create`)
+#   docker compose up -d --build app
+#
+# `next build` reads the database, so the app build connects to the published db port through
+# host.docker.internal. Set PAYLOAD_SECRET in a .env file next to this file or in your shell.
 
+x-db-url: &db-url postgresql://postgres:postgres@db:5432/payload_starter
+
+services:
   db:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -30,7 +25,46 @@ services:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+
+  migrate:
+    build:
+      context: ../..
+      dockerfile: apps/starter/Dockerfile
+      target: source
+    command: ["pnpm", "payload", "migrate"]
+    environment:
+      DATABASE_URL: *db-url
+      PAYLOAD_SECRET: ${PAYLOAD_SECRET:?Set PAYLOAD_SECRET}
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles: ["tools"]
+
+  app:
+    build:
+      context: ../..
+      dockerfile: apps/starter/Dockerfile
+      args:
+        DATABASE_URL: postgresql://postgres:postgres@host.docker.internal:5432/payload_starter
+        PAYLOAD_SECRET: build-only-secret
+        NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://localhost:3000}
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: *db-url
+      PAYLOAD_SECRET: ${PAYLOAD_SECRET:?Set PAYLOAD_SECRET}
+      NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://localhost:3000}
+      PREVIEW_SECRET: ${PREVIEW_SECRET:-change-me}
+    volumes:
+      - media:/app/apps/starter/public/media
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   pgdata:
+  media:

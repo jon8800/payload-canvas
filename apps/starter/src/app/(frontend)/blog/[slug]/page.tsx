@@ -37,7 +37,7 @@ export default async function BlogPost({ params }: Props) {
   const post = docs[0]
   if (!post) return notFound()
 
-  const doc = post as unknown as Record<string, unknown>
+  const doc = post
   const template = await loadTemplate(payload, { collection: 'posts', doc, draft })
   const ownLayout = normalizeLayout(post.builder)
 
@@ -67,15 +67,20 @@ export default async function BlogPost({ params }: Props) {
 }
 
 export async function generateStaticParams() {
-  const payload = await getPayload({ config: configPromise })
-  const { docs } = await payload.find({
-    collection: 'posts',
-    limit: 1000,
-    where: { _status: { equals: 'published' } },
-    select: { slug: true },
-  })
-
-  return docs.map((post) => ({ slug: post.slug }))
+  // Prerendering is an optimisation: when the database is not reachable at build time
+  // (for example in a Docker build), pages render on first request instead.
+  try {
+    const payload = await getPayload({ config: configPromise })
+    const { docs } = await payload.find({
+      collection: 'posts',
+      limit: 1000,
+      where: { _status: { equals: 'published' } },
+      select: { slug: true },
+    })
+    return docs.map((post) => ({ slug: post.slug }))
+  } catch {
+    return []
+  }
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {

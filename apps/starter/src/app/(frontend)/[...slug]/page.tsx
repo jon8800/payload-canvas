@@ -39,17 +39,22 @@ export default async function Page({ params }: Props) {
 }
 
 export async function generateStaticParams() {
-  const payload = await getPayload({ config: configPromise })
-  const { docs } = await payload.find({
-    collection: 'pages',
-    limit: 1000,
-    where: { _status: { equals: 'published' } },
-    select: { slug: true },
-  })
-
-  return docs.map((page) => ({
-    slug: page.slug ? page.slug.split('/') : [],
-  }))
+  // Prerendering is an optimisation: when the database is not reachable at build time
+  // (for example in a Docker build), pages render on first request instead.
+  try {
+    const payload = await getPayload({ config: configPromise })
+    const { docs } = await payload.find({
+      collection: 'pages',
+      limit: 1000,
+      where: { _status: { equals: 'published' } },
+      select: { slug: true },
+    })
+    return docs.map((page) => ({
+      slug: page.slug ? page.slug.split('/') : [],
+    }))
+  } catch {
+    return []
+  }
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {

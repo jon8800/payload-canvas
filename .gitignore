@@ -12,3 +12,6 @@ dist
 
 # Local test screenshots
 docs/screenshots/
+
+# Packed tarballs (pnpm pack:packages)
+dist-packages/

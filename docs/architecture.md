@@ -280,9 +280,9 @@ The original prototype goals:
 1. ~~Prototypes~~ (done, section 14).
 2. ~~**Plugin skeleton**~~ (done 2026-10-03): `websiteBuilder()` config, layout field, operations module with tests, editor tab, 5 blocks (stack, grid, heading, text, image), `RenderLayout`, CSS generation.
    - Save rules: missing required props block only publishing; unknown props/keys are warnings; other errors block (`LayoutError.code`).
-   - Known gaps: empty heading/text blocks have zero height on the canvas (select them in the outline); a dev hot reload clears undo history; `window.__builderEditor` is a test hook to remove before release; `duplicate` regenerates child ids randomly, so live/multiplayer sync must broadcast the resulting `insert`, not the `duplicate` op.
-3. **All core blocks and the Styles panel.**
-4. **AI:** MCP tools and live edits in the open editor.
-5. **Templates and binding.**
-6. **Starter app and CLI** on top of the plugin.
+   - Known gaps: a dev hot reload clears undo history; `duplicate` regenerates child ids randomly, so live sync broadcasts the resulting `insert`, not the `duplicate` op. (Fixed since: empty blocks get canvas placeholders; the `window.__builderEditor` debug hook exists only in development.)
+3. ~~**All core blocks and the Styles panel.**~~ Done 2026-10-04: 15 default blocks, visual Styles panel over Tailwind classes, sections library, editor redesign.
+4. ~~**AI:**~~ Done 2026-10-04: `builderMcpTools()` for payload-mcp-toolkit, operations endpoint, SSE live events; AI edits flash in open editors without entering the undo history.
+5. ~~**Templates and binding.**~~ Done 2026-10-04: templates collection, bindings with one relationship hop and `$url`, Field and Collection list blocks, sample-document preview.
+6. **Starter app and CLI** on top of the plugin. Starter done; packaging, docs and the CLI in progress.
 7. **Later:** inline text editing, multiplayer, presence, an AI chat panel in the admin.

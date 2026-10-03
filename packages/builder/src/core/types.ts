@@ -115,7 +115,10 @@ export type TemplatesClientConfig = {
 /** Render-time template context: the document the template renders. */
 export type TemplateContext = {
   collection: string
-  doc: Record<string, unknown>
+  // `any` values: Payload's generated document interfaces have no index signature, so they are
+  // not assignable to Record<string, unknown>.
+  // oxlint-disable-next-line typescript/no-explicit-any
+  doc: Record<string, any>
 }
 
 // ---------------------------------------------------------------------------

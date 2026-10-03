@@ -1,8 +1,32 @@
 {
   "name": "@payload-toolkit/builder",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "description": "Visual drag-and-drop website builder for Payload CMS 3: nested layout blocks, Tailwind styling, sections, templates and live AI editing over MCP.",
+  "keywords": [
+    "payload",
+    "payloadcms",
+    "payload-plugin",
+    "page-builder",
+    "website-builder",
+    "drag-and-drop",
+    "tailwindcss",
+    "nextjs",
+    "mcp"
+  ],
+  "license": "MIT",
+  "author": "Eugene Lominos <hello@eugenelominos.com>",
+  "homepage": "https://github.com/jon8800/payload-toolkit/tree/main/packages/builder#readme",
+  "bugs": "https://github.com/jon8800/payload-toolkit/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jon8800/payload-toolkit.git",
+    "directory": "packages/builder"
+  },
   "type": "module",
+  "sideEffects": [
+    "*.scss",
+    "*.css"
+  ],
   "exports": {
     ".": "./src/index.ts",
     "./core": "./src/core/index.ts",
@@ -14,24 +38,84 @@
     "./live": "./src/live/index.ts",
     "./mcp": "./src/mcp/index.ts"
   },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./core": {
+        "types": "./dist/core/index.d.ts",
+        "default": "./dist/core/index.js"
+      },
+      "./blocks": {
+        "types": "./dist/blocks/index.d.ts",
+        "default": "./dist/blocks/index.js"
+      },
+      "./protocol": {
+        "types": "./dist/protocol/index.d.ts",
+        "default": "./dist/protocol/index.js"
+      },
+      "./css": {
+        "types": "./dist/css/index.d.ts",
+        "default": "./dist/css/index.js"
+      },
+      "./css-browser": {
+        "types": "./dist/css/browser.d.ts",
+        "default": "./dist/css/browser.js"
+      },
+      "./client": {
+        "types": "./dist/admin/client.d.ts",
+        "default": "./dist/admin/client.js"
+      },
+      "./live": {
+        "types": "./dist/live/index.d.ts",
+        "default": "./dist/live/index.js"
+      },
+      "./mcp": {
+        "types": "./dist/mcp/index.d.ts",
+        "default": "./dist/mcp/index.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
+    "build": "node ../../scripts/build-package.mjs",
+    "prepack": "node ../../scripts/build-package.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint",
     "test": "node --import tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
-    "@dnd-kit/core": "6.3.1",
-    "@dnd-kit/sortable": "10.0.0"
+    "@dnd-kit/core": "6.3.1"
   },
   "peerDependencies": {
     "@payloadcms/richtext-lexical": "^3.90.0",
     "@payloadcms/ui": "^3.90.0",
     "next": "^16.3.0",
     "payload": "^3.90.0",
+    "payload-mcp-toolkit": ">=0.9.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "tailwindcss": "^4.3.0",
     "zod": "^3.25 || ^4"
+  },
+  "peerDependenciesMeta": {
+    "payload-mcp-toolkit": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@payloadcms/richtext-lexical": "^3.90.2",
@@ -49,9 +133,7 @@
     "typescript": "7.0.2",
     "zod": "^3.25.76"
   },
-  "peerDependenciesMeta": {
-    "zod": {
-      "optional": true
-    }
+  "engines": {
+    "node": ">=20.9.0"
   }
 }
