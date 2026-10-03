@@ -130,6 +130,13 @@ export const Heading = defineBlock({
 
 The editor is a tab inside Payload's document view. Payload keeps doing save, drafts, autosave, versions, locking and access control. We do not fork Payload's edit view and we do not import Payload internals.
 
+**How it mounts (proven in prototype 2).** A custom document tab gets no Payload `Form`, so `useField` has nothing to talk to. The working pattern:
+
+- The builder tab renders Payload's public `DefaultEditView`. That gives Payload's own form, save, drafts, autosave, locking and Publish button.
+- The editor is the layout field's own `Field` component. A React context makes it render the full editor in the builder tab and a compact read-only view in the normal Edit tab.
+- In the builder tab, scoped CSS hides the default fields and sidebar.
+- The plugin adds the layout field at the top level and runs last. Plugins like SEO with `tabbedUI` move fields into tabs, and Payload renders only the active tab.
+
 ```
 ┌──────────────┬───────────────────────────────┬──────────────────┐
 │ Outline      │ Canvas (iframe + overlay)     │ Inspector        │
@@ -139,9 +146,18 @@ The editor is a tab inside Payload's document view. Payload keeps doing save, dr
 └──────────────┴───────────────────────────────┴──────────────────┘
 ```
 
-**Editor store (client).** One store holds the layout tree, the selection, the hover state and the undo history. It is a small external store read with `useSyncExternalStore`, so only the parts that change re-render. Every change goes through the operations module (section 12). Undo and redo replay operations.
+**Editor store (client).** One store holds the layout tree, the selection, the hover state and the undo history. It is a small external store read with `useSyncExternalStore`, so only the parts that change re-render. Every change goes through the operations module (section 12).
 
-**Sync with Payload.** The store writes the layout to the JSON field with Payload's public `useField` hook (`setValue`). From there Payload's own autosave, drafts and versions take over. The document's other fields (title, SEO, …) appear in the Document tab through Payload's `RenderFields`.
+**Undo.** Every operation returns its inverse operation. Undo applies the inverse of the user's own last operation. This way undo never reverts edits that came from an AI agent or another user. (The canvas prototype stored whole layouts. That is simpler, but it would undo other people's changes.)
+
+**Sync with Payload.** The store writes the layout to the JSON field with Payload's public `useField` hook (`setValue`). From there Payload's own autosave, drafts and versions take over. Rules proven in prototype 2:
+
+- On load, set a "last written" reference before filling the store, so the load never writes back.
+- Ignore incoming values that deep-equal the store. Compare without key order, because Postgres `jsonb` reorders keys.
+- Load any other incoming value as an external change.
+- Autosave does not send server hook changes back to the form. So layout hooks must not rewrite the layout on autosave. Generated data (like CSS) goes in a separate field.
+
+The document's other fields (title, SEO, …) appear in the Document tab through Payload's `RenderFields`. Hide fields with `admin.disabled`, not by removing them, so field paths stay valid.
 
 **Canvas.**
 
@@ -149,6 +165,13 @@ The editor is a tab inside Payload's document view. Payload keeps doing save, dr
 - Each block element carries `data-block-id`. A small script in the iframe measures block rectangles (`ResizeObserver` plus scroll events) and sends them to the admin.
 - The admin draws an **overlay layer** on top of the iframe: hover outline, selection box, block name label, action bar (move, duplicate, delete, add), and drop indicators. The overlay lives in the admin, so it uses Payload's UI and never mixes with the site's CSS.
 - **Drag-drop** uses dnd-kit in the admin. Drop targets come from the measured rectangles and the slot rules, with a custom collision function: before or after a block, or inside an empty slot. The same drag system covers the outline tree and the block library, so you can drag from the library onto the canvas.
+  - The iframe gets `pointer-events: none` from `onDragPending`, before the drag starts. Otherwise the iframe swallows pointer moves and dnd-kit never sees them.
+  - The iframe also reports each slot's rectangle and axis (from computed flex direction or grid columns). Without them, grids and horizontal rows get the wrong drop side.
+  - A 12 px band at a container's edge drops before or after the container itself.
+  - Slot rules (which block types a slot accepts) are checked in the drop-target functions, not in the operations module.
+  - Auto-scroll runs on a timer while the pointer holds still at the canvas edge.
+- The iframe repeats its "ready" message until it receives a layout. This avoids a race on reload.
+- `DndContext` gets `id={useId()}` to avoid a hydration mismatch.
 - Device sizes (desktop, tablet, mobile, custom width) resize the iframe. The breakpoint switch in the Styles panel follows the device size.
 - Later: inline text editing on the canvas (double-click a text block).
 
@@ -156,7 +179,8 @@ The editor is a tab inside Payload's document view. Payload keeps doing save, dr
 
 - The Content tab renders the selected block's fields with Payload's public input components: `TextInput`, `TextareaInput`, `SelectInput`, `CheckboxInput`, `UploadInput`, `RelationshipInput`, `DatePicker`, plus `useListDrawer` and `useDocumentDrawer` for picking documents. They look exactly like Payload because they are Payload.
 - These inputs are controlled components. They read from and write to the editor store, not Payload form state.
-- Rich text (Lexical) inside a block is the one open question. See prototype 3.
+- Input adapters (proven in prototype 2): `UploadInput` needs `api={config.routes.api}`. `RelationshipInput` takes and returns `{ relationTo, value }`, so we store only the ID. `SelectInput` returns the option object. `DatePicker` returns a `Date`, stored as an ISO string.
+- **Rich text** uses Payload's own Lexical editor through `RenderLexical` from `@payloadcms/richtext-lexical/client`. It takes `value` and `setValue`, needs no `Form`, and points at a richText field config. The plugin adds a hidden `virtual: true` richText field for that. `RenderLexical` is marked experimental. The fallback is a small editor built from the Lexical packages Payload already re-exports. Both store the same Lexical JSON, which Payload's `RichText` component renders.
 - The Styles tab holds the Tailwind controls (section 8).
 
 **Ideas worth borrowing from other editors (Puck, Webflow, Shopify):** permissions per block (can delete, can drag, can edit), an action bar on the selected block, a separate outline tree, viewports, and "slots" as named child lists.
@@ -169,8 +193,13 @@ The editor is a tab inside Payload's document view. Payload keeps doing save, dr
 
 **CSS generation:**
 
-- On save: a hook collects every class in the layout. It compiles them with Tailwind's `compile(css).build(classes)` against the app's own CSS entry file, so theme tokens like `bg-primary` work. The CSS is stored with the document and cached by a hash of the class set.
-- In the editor: the canvas iframe compiles classes in the browser with `@tailwindcss/browser`, so a change shows at once.
+- On save: a hook collects every class in the layout. It compiles them with Tailwind's `compile(css).build(classes)` against the app's own CSS entry file, so theme tokens like `bg-primary` work. The CSS goes in a separate generated field, cached by a hash of the class set.
+  - Make a new compiler for each save. A cached compiler remembers every class it has seen and outputs all of them. Cache only file reads and plugins.
+  - Keep only the utilities and the `@property` and `@keyframes` rules they use. Drop Preflight, the base layer and `:root`. Theme variables stay in `@layer theme`, so they are never overridden.
+  - Speed: about 40 ms per save for 50 to 300 classes in a production build.
+  - Tailwind plugins are passed as a map in the plugin config (for example `{ '@tailwindcss/typography': typography }`), so Next bundles them.
+  - Standalone output needs `outputFileTracingIncludes` for the CSS entry file and Tailwind's CSS files. `websiteBuilder()` adds these lines, or the docs list them.
+- In the editor: the canvas iframe compiles with Tailwind's own `compile()` running in the browser. The server sends the stylesheets it loaded, so both sides compile from the same input. A new class shows in about 4 ms. (`@tailwindcss/browser` is slightly faster, but it cannot load plugins like typography.)
 - On the frontend: the renderer outputs the stored CSS in a `<style>` tag. Any frontend can use it, with or without its own Tailwind build.
 
 These fix the old problems: compiling against bare Tailwind, overriding theme values, missing classes from component code, and failing in Docker.
@@ -223,9 +252,11 @@ Added to `payload-mcp-toolkit` through `customTools`:
 
 Ready-made sections are the main unit the AI should use. AI models build better pages from well-designed sections than from single blocks.
 
-## 14. Prototypes first
+## 14. Prototypes (done, 2026-10-03)
 
-Three parts decide whether the plan holds. Build them first, about a day each.
+All three passed in a real browser. Their findings are folded into sections 7 and 8. The code is on local branches `proto/canvas`, `proto/inspector` and `proto/tailwind-richtext`, with screenshots under `docs/prototypes/` on each branch. Reuse the tested pure modules from them: the operations and drop-target functions (canvas) and `compileClasses` (Tailwind).
+
+The original prototype goals:
 
 1. **Canvas.** Iframe renders a layout from `postMessage`. Rectangle reporting, overlay with hover and selection, and dnd-kit drag into a nested slot. Success: drag a heading into a stack two levels deep, on the canvas, with correct drop indicators.
 2. **Inspector with Payload inputs.** `TextInput`, `SelectInput`, `UploadInput` and `RelationshipInput` bound to the editor store, plus the store synced to the JSON field with `useField`. Success: pick an image, the canvas updates, autosave stores it as a draft.
@@ -246,7 +277,7 @@ Three parts decide whether the plan holds. Build them first, about a day each.
 
 ## 16. Build order
 
-1. **Prototypes** (section 14).
+1. ~~Prototypes~~ (done, section 14).
 2. **Plugin skeleton:** `websiteBuilder()` config, layout field, operations module with tests, editor tab, 5 blocks (stack, grid, heading, text, image), `RenderLayout`, CSS generation.
 3. **All core blocks and the Styles panel.**
 4. **AI:** MCP tools and live edits in the open editor.
