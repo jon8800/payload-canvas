@@ -11,6 +11,17 @@
 import type { PayloadRequest, SanitizedCollectionConfig } from 'payload'
 import { z, type ZodTypeAny } from 'zod'
 
+import {
+  COLLECTION_LIST_BLOCK,
+  DEFAULT_TEMPLATES_SLUG,
+  FIELD_BLOCK,
+  TEMPLATE_DEFAULT_FIELD,
+  TEMPLATE_LAYOUT_FIELD,
+  TEMPLATE_PREVIEW_FIELD,
+  TEMPLATE_TARGET_FIELD,
+  URL_PATH,
+  withoutBoundRequired,
+} from '../core/bindings'
 import { createId } from '../core/ids'
 import { blockJsonSchema } from '../core/schema'
 import { dataFields, optionValues } from '../core/fields'
@@ -20,6 +31,8 @@ import { validateLayout } from '../core/validate'
 import { actorFromUser, applyLiveOperations, splitLayoutErrors, userLabel, type LiveDocStore } from '../live/apply'
 import { liveRuntimeOf } from '../live/runtime'
 import type { LiveActor } from '../live/types'
+import { listCollectionsOf } from '../plugin/listCollections'
+import { templatesConfigOf } from '../plugin/templates'
 
 // ---------------------------------------------------------------------------
 // Types (structurally compatible with payload-mcp-toolkit's ToolFactoryOutput)
@@ -40,6 +53,8 @@ export type BuilderMcpCollection = {
   field?: string
   /** Frontend path of a document (the same function as in `websiteBuilder`). */
   url?: (doc: Record<string, unknown>) => string
+  /** The documents render through templates (the same flag as in `websiteBuilder`). */
+  templates?: boolean
 }
 
 export type BuilderMcpToolsOptions = {
@@ -51,6 +66,8 @@ export type BuilderMcpToolsOptions = {
   siteUrl?: string
   /** Slug of payload-mcp-toolkit's API-keys collection, used to show the key name in the editor. */
   apiKeyCollection?: string
+  /** The same `templates` options as `websiteBuilder`. Templates are on when a collection sets `templates: true`. */
+  templates?: { slug?: string }
 }
 
 // ---------------------------------------------------------------------------
@@ -58,12 +75,13 @@ export type BuilderMcpToolsOptions = {
 // ---------------------------------------------------------------------------
 
 const LAYOUT_GUIDE = `
-LAYOUT MODEL. A layout is JSON: { "version": 1, "blocks": Block[] }. A Block is { id, type, props?, className?, slots?, hidden? }.
+LAYOUT MODEL. A layout is JSON: { "version": 1, "blocks": Block[] }. A Block is { id, type, props?, className?, slots?, bindings?, hidden? }.
 - id: a string, unique in the whole layout. Operations target blocks by id, never by array index. New blocks need new ids: use "b_" plus 6 lowercase letters or digits (e.g. "b_k3x9qa").
 - type: a block type from listBlocks.
 - props: the block's own values. Get the exact shape with getBlockSchema. Upload and relationship props hold document IDs.
 - className: Tailwind CSS v4 utility classes, with variants such as md:, lg:, hover:, dark:. Theme classes work (bg-primary, text-primary-foreground, text-muted-foreground, font-heading). CSS is generated on save, so any valid class works.
 - slots: child blocks by slot name, e.g. { "children": [ ...blocks ] }. Only block types with slots take children. listBlocks shows which types each slot accepts.
+- bindings: (templates and collection list items only) prop path -> document field path, e.g. { "text": "title" }, { "image": "featuredImage" }, { "link": "$url" }. At render time the prop takes the document's value; when the document has no value the literal prop stays. Get field paths from getBindingSources.
 - Canonical form: leave out empty props, slots and bindings objects and empty slot lists. Set hidden only when true.
 POSITION = { parentId, slot?, index }. parentId null means the page root, whose only slot is "children". slot defaults to "children". index is the block's FINAL index in the target list (0 = first; the list length = append). For a move inside the same list, count positions after the block is taken out.`.trim()
 
@@ -88,6 +106,7 @@ const blockSchema = z
     type: z.string().min(1).describe('Block type from listBlocks.'),
     props: z.record(z.string(), z.unknown()).optional(),
     className: z.string().optional().describe('Tailwind classes.'),
+    bindings: z.record(z.string(), z.string()).optional().describe('Prop path -> document field path (templates and list items).'),
     slots: z.record(z.string(), z.array(z.record(z.string(), z.unknown()))).optional().describe('Child blocks by slot name. Children have the same shape.'),
     hidden: z.boolean().optional(),
   })
@@ -112,7 +131,10 @@ const operationSchema = z.discriminatedUnion('type', [
       unsetProps: z.array(z.string()).optional().describe('Prop names to delete.'),
       className: z.string().nullable().optional().describe('Replaces ALL classes. Send the full class list. null removes it.'),
       hidden: z.boolean().optional(),
-      bindings: z.record(z.string(), z.string().nullable()).optional(),
+      bindings: z
+        .record(z.string(), z.string().nullable())
+        .optional()
+        .describe('Merged into the existing bindings: prop path -> document field path. null removes a binding.'),
     })
     .describe('Change a block in place.'),
 ])
@@ -239,16 +261,27 @@ function outline(blocks: Block[], depth = 0): string[] {
 // ---------------------------------------------------------------------------
 
 export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool[] {
-  const { blocks, sections = [] } = options
-  const slugs = Object.keys(options.collections)
+  const { sections = [] } = options
+  const templateTargets = Object.entries(options.collections).filter(([, c]) => c.templates).map(([slug]) => slug)
+  const templatesSlug = templateTargets.length > 0 ? (options.templates?.slug ?? DEFAULT_TEMPLATES_SLUG) : null
+  const listable = Object.entries(options.collections).filter(([, c]) => c.url).map(([slug]) => slug)
+  // The same block list the plugin validates against (collection list: only collections with a url).
+  const blocks = listCollectionsOf(options.blocks, listable)
+  const collections: Record<string, BuilderMcpCollection> = templatesSlug
+    ? { ...options.collections, [templatesSlug]: { field: TEMPLATE_LAYOUT_FIELD } }
+    : options.collections
+  const slugs = Object.keys(collections)
   if (slugs.length === 0) throw new Error('[builderMcpTools] `collections` is empty.')
-  const fieldOf = (collection: string) => options.collections[collection]?.field ?? 'layout'
+  const fieldOf = (collection: string) => collections[collection]?.field ?? 'layout'
   const apiKeyCollection = options.apiKeyCollection ?? 'payload-mcp-api-keys'
   const keyNames = new Map<string, { name: string | null; at: number }>()
 
   const collectionArg = z
     .enum(slugs as [string, ...string[]])
-    .describe(`Collection of the page. One of: ${slugs.join(', ')}.`)
+    .describe(
+      `Collection of the page. One of: ${slugs.join(', ')}.` +
+        (templatesSlug ? ` "${templatesSlug}" holds templates (layouts for every document of a collection).` : ''),
+    )
   const idArg = z.string().min(1).describe('Document id (from findDocument or searchContent).')
 
   /** The AI actor shown in the editor: the API key's name when it has one. */
@@ -301,6 +334,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     description: [
       'Lists every block type you can use in page layouts: label, description, props, slots (which child types they accept) and an example. Call this before you build or edit a layout.',
       'To build whole page parts (hero, features, pricing, call to action, footer), PREFER ready-made sections: listSections, then insertSection. They are designed and tested. Use single blocks for small additions and edits.',
+      `Dynamic blocks: "${FIELD_BLOCK}" shows one field of the current document (templates), "${COLLECTION_LIST_BLOCK}" lists documents of a collection and repeats its "item" slot per document. Blocks inside a template or a list item can bind props to document fields with "bindings" (see getBindingSources).`,
       LAYOUT_GUIDE,
     ].join('\n\n'),
     parameters: { collection: collectionArg },
@@ -308,7 +342,11 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       text({
         blocks: blocks.map(describeBlock),
         sections: sections.length,
-        next: 'getBlockSchema for exact prop shapes. listSections for ready-made sections. getLayout to read a page.',
+        bindings: BINDINGS_GUIDE,
+        ...(templatesSlug ? { templates: { collection: templatesSlug, targets: templateTargets } } : {}),
+        next:
+          'getBlockSchema for exact prop shapes. listSections for ready-made sections. getLayout to read a page.' +
+          (templatesSlug ? ' listTemplates and getBindingSources for templates.' : ''),
       }),
   }
 
@@ -421,7 +459,8 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     routing: { kind: 'collection', action: 'update' },
     description: [
       'Edits the layout of a document with a list of operations, applied in order, all or nothing. Saves a draft (never publishes). People with the page open in the editor see each change live.',
-      'Operations: insert { block, to }, move { id, to }, remove { id }, duplicate { id, newId? }, update { id, props?, unsetProps?, className?, hidden? }. "update" merges props; className REPLACES all classes, so send the full list.',
+      'Operations: insert { block, to }, move { id, to }, remove { id }, duplicate { id, newId? }, update { id, props?, unsetProps?, className?, hidden?, bindings? }. "update" merges props and bindings; className REPLACES all classes, so send the full list.',
+      'Templates are edited the same way: collection = the templates collection, id = the template id from listTemplates.',
       'If any operation fails, nothing is saved and the error names the failing operation. Call getLayout for current ids first. The result is validated against the block schemas: missing required props are allowed in drafts (warnings), wrong types and slot rules are errors.',
       NO_DIRECT_EDIT,
       LAYOUT_GUIDE,
@@ -480,7 +519,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
           return fail(errorMessage(error))
         }
       }
-      const { blocking, warnings } = splitLayoutErrors(validateLayout(layout, blocks))
+      const { blocking, warnings } = splitLayoutErrors(withoutBoundRequired(validateLayout(layout, blocks), layout))
       return text({ valid: blocking.length === 0, errors: blocking, warnings })
     },
   }
@@ -527,8 +566,84 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     },
   }
 
-  return [listBlocks, getBlockSchema, listSections, insertSection, getLayout, applyOperationsTool, validateLayoutTool, getPreviewUrl]
+  const tools = [listBlocks, getBlockSchema, listSections, insertSection, getLayout, applyOperationsTool, validateLayoutTool, getPreviewUrl]
+  if (!templatesSlug) return tools
+
+  const listTemplates: BuilderMcpTool = {
+    name: 'listTemplates',
+    routing: { kind: 'collection', action: 'read' },
+    description: [
+      `Lists the templates: layouts that render every document of a collection (${templateTargets.join(', ')}). A document uses its own template (its "template" field), else its collection's default template.`,
+      `To edit a template, call getLayout and applyOperations with collection "${templatesSlug}" and the template id. Bind props to the document's fields with "bindings" (getBindingSources lists the fields). To create a template, use createDocument on "${templatesSlug}" with { name, ${TEMPLATE_TARGET_FIELD}, ${TEMPLATE_DEFAULT_FIELD} }.`,
+    ].join('\n'),
+    parameters: {
+      collection: z.enum([templatesSlug]).describe(`Always "${templatesSlug}".`),
+      target: z.enum(templateTargets as [string, ...string[]]).optional().describe('Only templates for this collection.'),
+    },
+    handler: async (args, req) => {
+      try {
+        const result = await req.payload.find({
+          collection: templatesSlug as never,
+          where: args.target ? { [TEMPLATE_TARGET_FIELD]: { equals: args.target } } : {},
+          depth: 0,
+          limit: 200,
+          draft: true,
+          overrideAccess: false,
+          user: req.user,
+          req,
+        })
+        const adminRoute = req.payload.config.routes?.admin ?? '/admin'
+        return text({
+          collection: templatesSlug,
+          templates: (result.docs as Record<string, unknown>[]).map((doc) => ({
+            id: doc.id,
+            name: doc.name,
+            target: doc[TEMPLATE_TARGET_FIELD],
+            isDefault: doc[TEMPLATE_DEFAULT_FIELD] === true,
+            ...(doc[TEMPLATE_PREVIEW_FIELD] ? { previewDocument: doc[TEMPLATE_PREVIEW_FIELD] } : {}),
+            ...(doc._status ? { status: doc._status } : {}),
+            blocks: normalizeLayout(doc[TEMPLATE_LAYOUT_FIELD]).blocks.length,
+            editorPath: `${adminRoute}/collections/${templatesSlug}/${String(doc.id)}/builder`,
+          })),
+          next: 'getLayout to read a template. getBindingSources for the fields its blocks can bind to.',
+        })
+      } catch (error) {
+        return fail(errorMessage(error))
+      }
+    },
+  }
+
+  const sourceSlugs = [...new Set([...templateTargets, ...listable])]
+  const getBindingSources: BuilderMcpTool = {
+    name: 'getBindingSources',
+    routing: { kind: 'collection', action: 'read' },
+    description: [
+      'Lists the fields of a collection that block props can bind to, as dot paths (e.g. "title", "featuredImage", "author.name", "categories.title"). Relationship and upload fields include the related document\'s fields (one level).',
+      BINDINGS_GUIDE,
+    ].join('\n'),
+    parameters: {
+      collection: z
+        .enum(sourceSlugs as [string, ...string[]])
+        .describe(`A template target or a collection a list can show. One of: ${sourceSlugs.join(', ')}.`),
+    },
+    handler: async (args, req) => {
+      const sources = templatesConfigOf(req.payload)?.sources[String(args.collection)]
+      if (!sources) return fail(`No bindable fields for "${String(args.collection)}". Is websiteBuilder configured with templates?`)
+      return text({ collection: args.collection, fields: sources })
+    },
+  }
+
+  return [...tools, listTemplates, getBindingSources]
 }
+
+const BINDINGS_GUIDE = [
+  'BINDINGS. A block in a template (or in a collection list item) binds props to document fields: "bindings": { "<prop path>": "<field path>" }.',
+  'Examples: heading { "text": "title" }, text { "text": "excerpt" }, image { "image": "featuredImage" }, button or link { "link": "$url" }.',
+  `"${URL_PATH}" is the document's page URL. Nested props use dots: { "link.url": "$url" }.`,
+  'Values are converted to the prop type: rich text and dates become plain text in text props. When the document has no value, the literal prop stays, so bound props may stay empty.',
+  `The "${FIELD_BLOCK}" block shows any field by its type (rich text, image, date, text): props { "path": "content" }.`,
+  `In a "${COLLECTION_LIST_BLOCK}" block, blocks in the "item" slot bind to each LISTED document, not to the page.`,
+].join('\n')
 
 /** The draft preview path from the collection's `admin.livePreview.url` or `admin.preview`. */
 async function draftPreviewPath(req: PayloadRequest, collection: string, doc: Record<string, unknown>): Promise<string | null> {

@@ -82,6 +82,7 @@ export interface Config {
     imports: Import;
     'payload-mcp-api-keys': PayloadMcpApiKey;
     search: Search;
+    'builder-templates': BuilderTemplate;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-folders': FolderInterface;
@@ -110,6 +111,7 @@ export interface Config {
     imports: ImportsSelect<false> | ImportsSelect<true>;
     'payload-mcp-api-keys': PayloadMcpApiKeysSelect<false> | PayloadMcpApiKeysSelect<true>;
     search: SearchSelect<false> | SearchSelect<true>;
+    'builder-templates': BuilderTemplatesSelect<false> | BuilderTemplatesSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-folders': PayloadFoldersSelect<false> | PayloadFoldersSelect<true>;
@@ -395,6 +397,24 @@ export interface Post {
   slug: string;
   featuredImage?: (number | null) | Media;
   excerpt?: string | null;
+  /**
+   * The post body. The post template shows it with a Field block.
+   */
+  content?: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  } | null;
   author?: (number | null) | User;
   categories?: (number | Category)[] | null;
   tags?: (number | Tag)[] | null;
@@ -407,6 +427,10 @@ export interface Post {
      */
     image?: (number | null) | Media;
   };
+  /**
+   * Leave empty to use the default template.
+   */
+  template?: (number | null) | BuilderTemplate;
   builder?:
     | {
         [k: string]: unknown;
@@ -475,6 +499,67 @@ export interface Tag {
   slug: string;
   updatedAt: string;
   createdAt: string;
+}
+/**
+ * Layouts for collection documents. Each document renders through its own template or the default one.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "builder-templates".
+ */
+export interface BuilderTemplate {
+  id: number;
+  name: string;
+  /**
+   * The documents this template renders.
+   */
+  targetCollection: 'posts';
+  /**
+   * Used by every document of the collection that has no template of its own.
+   */
+  isDefault?: boolean | null;
+  /**
+   * The editor shows the template with this document's data.
+   */
+  previewDocument?: {
+    relationTo: 'posts';
+    value: number | Post;
+  } | null;
+  layout?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  layoutCss?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  layoutRichText?: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+  _status?: ('draft' | 'published') | null;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -882,6 +967,8 @@ export interface PayloadMcpApiKey {
         | 'applyOperations'
         | 'validateLayout'
         | 'getPreviewUrl'
+        | 'listTemplates'
+        | 'getBindingSources'
       )[]
     | null;
   /**
@@ -912,6 +999,8 @@ export interface PayloadMcpApiKey {
         | 'applyOperations'
         | 'validateLayout'
         | 'getPreviewUrl'
+        | 'listTemplates'
+        | 'getBindingSources'
       )[]
     | null;
   /**
@@ -1133,6 +1222,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'search';
         value: number | Search;
+      } | null)
+    | ({
+        relationTo: 'builder-templates';
+        value: number | BuilderTemplate;
       } | null)
     | ({
         relationTo: 'payload-folders';
@@ -1389,6 +1482,7 @@ export interface PostsSelect<T extends boolean = true> {
   slug?: T;
   featuredImage?: T;
   excerpt?: T;
+  content?: T;
   author?: T;
   categories?: T;
   tags?: T;
@@ -1400,6 +1494,7 @@ export interface PostsSelect<T extends boolean = true> {
         description?: T;
         image?: T;
       };
+  template?: T;
   builder?: T;
   builderCss?: T;
   builderRichText?: T;
@@ -1722,6 +1817,22 @@ export interface SearchSelect<T extends boolean = true> {
   slug?: T;
   updatedAt?: T;
   createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "builder-templates_select".
+ */
+export interface BuilderTemplatesSelect<T extends boolean = true> {
+  name?: T;
+  targetCollection?: T;
+  isDefault?: T;
+  previewDocument?: T;
+  layout?: T;
+  layoutCss?: T;
+  layoutRichText?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  _status?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

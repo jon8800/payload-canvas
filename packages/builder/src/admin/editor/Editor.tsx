@@ -25,6 +25,7 @@ import { bindShortcuts } from './shortcuts'
 import { Toolbar } from './Toolbar'
 import { useLayoutFieldSync } from './useLayoutFieldSync'
 import { useLiveOperations } from './live'
+import { useTemplateController } from './templates/useTemplate'
 
 const COLLISION_ID = 'builder-drop'
 /** Distance from the canvas top or bottom edge where auto-scroll starts. */
@@ -56,6 +57,7 @@ export function Editor({ config, path }: { config: BuilderClientConfig; path: st
   const { id: docId } = useDocumentInfo()
   const live = useLiveOperations({ config, docId, store: runtime.store, enabled: ready, highlightMs: 2500 })
   useEffect(() => runtime.live.set(live), [runtime, live])
+  useTemplateController(runtime)
   const stopAutoScroll = useRef<(() => void) | null>(null)
   const dndId = useId()
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))

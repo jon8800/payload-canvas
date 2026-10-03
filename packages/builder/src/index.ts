@@ -5,8 +5,27 @@ export {
   type WebsiteBuilderOptions,
   type BuilderCollectionOptions,
   type GeneratedCss,
+  type TemplatesOptions,
 } from './plugin'
+export { bindingSources, templatesConfigOf, TEMPLATES_CONFIG_KEY } from './plugin/templates'
+export {
+  DEFAULT_TEMPLATES_SLUG,
+  DOCUMENT_TEMPLATE_FIELD,
+  TEMPLATE_DEFAULT_FIELD,
+  TEMPLATE_LAYOUT_FIELD,
+  TEMPLATE_PREVIEW_FIELD,
+  TEMPLATE_TARGET_FIELD,
+} from './core/bindings'
 export { defaultBlocks, type DefaultBlocksOptions } from './blocks'
 export { defineBlock } from './core/blocks'
 export { EMPTY_LAYOUT } from './core/types'
-export type { Block, BlockDefinition, BuilderClientConfig, Layout, SectionDefinition } from './core/types'
+export type {
+  BindingField,
+  Block,
+  BlockDefinition,
+  BuilderClientConfig,
+  Layout,
+  SectionDefinition,
+  TemplateContext,
+  TemplatesClientConfig,
+} from './core/types'

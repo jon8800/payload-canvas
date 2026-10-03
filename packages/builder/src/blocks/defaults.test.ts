@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
+import { withoutBoundRequired } from '../core/bindings'
 import { layoutJsonSchema } from '../core/schema'
 import { validateLayout } from '../core/validate'
 import type { BlockDefinition } from '../core/types'
@@ -21,6 +22,8 @@ const TYPES = [
   'divider',
   'spacer',
   'video',
+  'field',
+  'collectionList',
 ]
 
 type LooseField = { name?: string; type: string; relationTo?: unknown; fields?: LooseField[]; options?: unknown[]; admin?: { custom?: Record<string, unknown> } }
@@ -88,7 +91,8 @@ describe('defaultBlocks', () => {
         assert.ok(def.ai?.description, `${def.type} has no AI description`)
         assert.ok(def.ai?.example, `${def.type} has no AI example`)
         const layout = { version: 1, blocks: [{ id: 'b_example', type: def.type, ...def.ai?.example }] }
-        assert.deepEqual(validateLayout(layout, blocks), [], def.type)
+        // Bound props may stay empty: the document fills them.
+        assert.deepEqual(withoutBoundRequired(validateLayout(layout, blocks), layout), [], def.type)
       }
     }
   })
@@ -120,6 +124,8 @@ describe('defaultBlocks', () => {
       divider: ['divider', 'Layout'],
       spacer: ['spacer', 'Layout'],
       video: ['video', 'Media'],
+      field: ['field', 'Dynamic'],
+      collectionList: ['collectionList', 'Dynamic'],
     })
   })
 

@@ -10,6 +10,7 @@ import { Overlay } from './Overlay'
 import { computeDrop, useRuntime } from './runtime'
 import { bindShortcuts } from './shortcuts'
 import { useEditor } from './store'
+import { postContext, templateContext } from './templates/state'
 import { breakpointAt, breakpointWidths, useStyleTokens, withFallback } from './styles/tokens'
 import { useValue } from './valueStore'
 
@@ -85,6 +86,8 @@ export function Canvas() {
     const sendAll = () => {
       const { layout, selectedId, hoveredId } = store.getState()
       runtime.postToCanvas({ type: 'init', init: runtime.canvasInit })
+      // Before the layout, so a template's first render already has its document.
+      if (runtime.template.get().isTemplate) postContext(iframeRef.current, templateContext(runtime.template.get()))
       runtime.postToCanvas({ type: 'layout', layout })
       runtime.postToCanvas({ type: 'selection', selectedId, hoveredId })
     }
@@ -111,6 +114,18 @@ export function Canvas() {
       iframe.removeEventListener('load', bind)
       unbind?.()
     }
+  }, [runtime, iframeRef])
+
+  // Admin -> iframe: the template's sample document, whenever it changes.
+  useEffect(() => {
+    if (!runtime.template.get().isTemplate) return
+    let last = templateContext(runtime.template.get())
+    return runtime.template.subscribe(() => {
+      const next = templateContext(runtime.template.get())
+      if (next?.doc === last?.doc && next?.collection === last?.collection) return
+      last = next
+      postContext(iframeRef.current, next)
+    })
   }, [runtime, iframeRef])
 
   // Admin -> iframe: send the layout and the selection whenever they change.

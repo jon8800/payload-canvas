@@ -23,6 +23,7 @@ import { JsonField } from './fields/JsonField'
 import { RichTextField } from './fields/RichTextField'
 import { asId, fromRelationshipInput, isFieldVisible, isRecord, toRelationshipInput, type FieldShape } from './fields/values'
 import { useRuntime } from './runtime'
+import { BindingScopeProvider, FieldSlot } from './templates/Bindable'
 import './fields/fields.scss'
 
 type Props = {
@@ -313,14 +314,13 @@ export function RenderBlockFields({ fields, data, path, onChange }: FieldsProps)
     }
     if (!('name' in field) || !field.name) return
     const name = field.name
+    const fieldPath = `${path}.${name}`
+    const onFieldChange = (value: unknown) => setField(name, value)
     out.push(
-      <RenderBlockField
-        key={name}
-        field={field}
-        path={`${path}.${name}`}
-        value={record[name]}
-        onChange={(value) => setField(name, value)}
-      />,
+      // The slot adds binding controls (templates, collection lists) around the normal input.
+      <FieldSlot key={name} field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} label={fieldLabel(field)}>
+        <RenderBlockField field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} />
+      </FieldSlot>,
     )
   })
   return <>{out}</>
@@ -357,7 +357,9 @@ export function BlockContentFields({ block }: { readonly block: Block }) {
 
   return (
     <div className="builder-editor__fields">
-      <RenderBlockFields fields={def.fields} data={props} path={`builder.${block.id}`} onChange={handleChange} />
+      <BindingScopeProvider block={block} prefix={`builder.${block.id}.`}>
+        <RenderBlockFields fields={def.fields} data={props} path={`builder.${block.id}`} onChange={handleChange} />
+      </BindingScopeProvider>
     </div>
   )
 }

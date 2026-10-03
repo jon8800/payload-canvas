@@ -6,6 +6,7 @@ import { Icon, type IconName } from './icons'
 import { useRuntime } from './runtime'
 import { shortcutList } from './shortcuts'
 import { useEditor } from './store'
+import { TemplateControl } from './templates/SamplePicker'
 import { breakpointAt, breakpointWidths, useStyleTokens, withFallback } from './styles/tokens'
 import { DEVICE_WIDTHS, deviceForWidth, MAX_CANVAS_WIDTH, MIN_CANVAS_WIDTH, type Device } from './styles/viewport'
 import { useValue } from './valueStore'
@@ -53,6 +54,7 @@ export function Toolbar() {
         >
           <Icon name="redo" />
         </button>
+        <TemplateControl />
       </div>
 
       <div className="builder-editor__toolbar-center">

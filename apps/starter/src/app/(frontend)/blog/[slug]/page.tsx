@@ -1,9 +1,12 @@
 import type { Metadata } from 'next'
 import { draftMode } from 'next/headers'
-import Image from 'next/image'
 import { getPayload } from 'payload'
 import configPromise from '@payload-config'
-import { BuilderContent } from '@/components/BuilderContent'
+import { normalizeLayout } from '@payload-toolkit/builder/core'
+import { renderRichText } from '@payload-toolkit/builder-react'
+import { loadTemplate } from '@payload-toolkit/builder-react/server'
+import { resolveLink } from '@/builder'
+import { BuilderContent, BuilderLayout } from '@/components/BuilderContent'
 import { LivePreviewListener } from '@/components/LivePreviewListener'
 import { generateMeta } from '@/utilities/generateMeta'
 import { notFound } from 'next/navigation'
@@ -12,6 +15,11 @@ type Props = {
   params: Promise<{ slug: string }>
 }
 
+/**
+ * A blog post renders through its template: the post's own template, else the default "Post
+ * template" (Templates collection). Without a template: the post's own builder layout, then the
+ * title and content.
+ */
 export default async function BlogPost({ params }: Props) {
   const { isEnabled: draft } = await draftMode()
   const { slug } = await params
@@ -22,67 +30,38 @@ export default async function BlogPost({ params }: Props) {
     where: { slug: { equals: slug } },
     limit: 1,
     draft,
-    depth: 2,
+    // Depth 1: bound uploads and relationships (featured image, author, categories) arrive as documents.
+    depth: 1,
   })
 
   const post = docs[0]
   if (!post) return notFound()
 
-  const author = typeof post.author === 'object' && post.author !== null ? post.author : null
-  const featuredImage =
-    typeof post.featuredImage === 'object' && post.featuredImage !== null
-      ? post.featuredImage
-      : null
-  const categories = Array.isArray(post.categories)
-    ? post.categories
-        .map((c) => (typeof c === 'object' && c !== null ? c.title : null))
-        .filter(Boolean)
-    : []
-  const tags = Array.isArray(post.tags)
-    ? post.tags
-        .map((t) => (typeof t === 'object' && t !== null ? t.title : null))
-        .filter(Boolean)
-    : []
+  const doc = post as unknown as Record<string, unknown>
+  const template = await loadTemplate(payload, { collection: 'posts', doc, draft })
+  const ownLayout = normalizeLayout(post.builder)
 
   return (
     <>
       {draft && <LivePreviewListener />}
-      <article className="mx-auto max-w-3xl px-4 py-8">
-      <h1 className="text-3xl font-bold">{post.title}</h1>
-
-      <div className="mt-4 flex flex-wrap gap-4 text-sm text-muted-foreground">
-        {author && <span>By {author.email}</span>}
-        {post.publishedAt && (
-          <time dateTime={post.publishedAt}>
-            {new Date(post.publishedAt).toLocaleDateString('en-US', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-            })}
-          </time>
+      <main>
+        {template ? (
+          <BuilderLayout
+            layout={template.layout}
+            css={template.css}
+            payload={payload}
+            draft={draft}
+            context={{ collection: 'posts', doc }}
+          />
+        ) : ownLayout.blocks.length > 0 ? (
+          <BuilderContent doc={post} payload={payload} draft={draft} />
+        ) : (
+          <article className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-16">
+            <h1 className="text-4xl font-bold tracking-tight">{post.title}</h1>
+            {post.content ? <div className="prose max-w-none">{renderRichText(post.content, resolveLink)}</div> : null}
+          </article>
         )}
-        {categories.length > 0 && <span>Categories: {categories.join(', ')}</span>}
-        {tags.length > 0 && <span>Tags: {tags.join(', ')}</span>}
-      </div>
-
-      {featuredImage?.url && (
-        <Image
-          src={featuredImage.url}
-          alt={featuredImage.alt || post.title}
-          width={featuredImage.width ?? 1200}
-          height={featuredImage.height ?? 675}
-          sizes="(max-width: 768px) 100vw, 768px"
-          fetchPriority="high"
-          className="mt-6 h-auto w-full rounded-lg"
-        />
-      )}
-
-      {post.excerpt && <p className="mt-6 text-lg text-muted-foreground">{post.excerpt}</p>}
-
-      <div className="mt-8">
-        <BuilderContent doc={post} payload={payload} draft={draft} />
-      </div>
-    </article>
+      </main>
     </>
   )
 }

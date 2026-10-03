@@ -19,6 +19,7 @@ import { removeBlock } from './actions'
 import { createEditorStore, type EditorStore } from './store'
 import { createValueStore, type ValueStore } from './valueStore'
 import type { LiveState } from './live'
+import { initialTemplateState, type TemplateState } from './templates/state'
 
 export const OUTLINE_INDENT = 16
 
@@ -66,6 +67,12 @@ export type Runtime = {
   help: ValueStore<boolean>
   /** Live editing state (remote changes, presence). Null until the live stream starts. */
   live: ValueStore<LiveState | null>
+  /** Template mode: the target collection and the sample document the canvas previews. */
+  template: ValueStore<TemplateState>
+  /** The inspector's top tab. Other parts open the Document tab (e.g. "choose a collection"). */
+  inspectorTab: ValueStore<'block' | 'document'>
+  /** Payload's REST route, e.g. "/api". */
+  api: string
   iframeRef: RefObject<HTMLIFrameElement | null>
   outlineRef: RefObject<HTMLDivElement | null>
   inspectorRef: RefObject<HTMLDivElement | null>
@@ -129,6 +136,9 @@ export function createRuntime(config: BuilderClientConfig, api: string): Runtime
     notice,
     help: createValueStore(false),
     live: createValueStore<LiveState | null>(null),
+    template: createValueStore<TemplateState>(initialTemplateState(config)),
+    inspectorTab: createValueStore<'block' | 'document'>('block'),
+    api,
     iframeRef,
     outlineRef: createRef<HTMLDivElement>(),
     inspectorRef: createRef<HTMLDivElement>(),

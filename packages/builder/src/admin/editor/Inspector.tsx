@@ -14,6 +14,7 @@ import { shortcutList } from './shortcuts'
 import { useEditor } from './store'
 import { Popover, usePopover } from './styles/popover'
 import { StylesPanel } from './styles/StylesPanel'
+import { useValue } from './valueStore'
 
 type TabsProps<T extends string> = {
   value: T
@@ -42,8 +43,10 @@ function Tabs<T extends string>({ value, options, onChange, variant = 'underline
 }
 
 export function Inspector() {
-  const { inspectorRef } = useRuntime()
-  const [tab, setTab] = useState<'block' | 'document'>('block')
+  const runtime = useRuntime()
+  const { inspectorRef } = runtime
+  const tab = useValue(runtime.inspectorTab)
+  const setTab = runtime.inspectorTab.set
   return (
     <div ref={inspectorRef} className="builder-editor__inspector">
       <div className="builder-editor__inspector-head">
@@ -240,7 +243,9 @@ function disableField(fields: ClientField[], name: string): ClientField[] {
 
 /** The document's other fields (title, SEO, …), bound to Payload's own form. */
 function DocumentPane() {
-  const { config } = useRuntime()
+  const runtime = useRuntime()
+  const { config } = runtime
+  const { isTemplate } = useValue(runtime.template)
   const { collectionSlug, docPermissions } = useDocumentInfo()
   const { getEntityConfig } = useConfig()
   const fields = useMemo(
@@ -251,7 +256,9 @@ function DocumentPane() {
   return (
     <>
       <p className="builder-editor__hint builder-editor__document-intro">
-        Page settings. Changes save with the page, like in the Edit tab.
+        {isTemplate
+          ? 'Template settings: the collection it is for and the default preview document. Changes save with the template.'
+          : 'Page settings. Changes save with the page, like in the Edit tab.'}
       </p>
       <RenderFields
         fields={fields}

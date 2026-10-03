@@ -20,6 +20,7 @@ import { fileURLToPath } from 'url'
 
 import { builderBlocks } from '@/builder'
 import { documentPath } from '@/lib/links'
+import { revalidateTemplate } from '@/hooks/revalidateTemplate'
 import { Users } from '@/collections/Users'
 import { Media } from '@/collections/Media'
 import { Pages } from '@/collections/Pages'
@@ -33,7 +34,8 @@ import { ThemeSettings } from '@/globals/ThemeSettings'
 /** Collections with the page builder. Shared by the builder plugin and its MCP tools. */
 const builderCollections: WebsiteBuilderOptions['collections'] = {
   pages: { field: 'builder', url: (doc) => documentPath('pages', doc.slug) ?? '/' },
-  posts: { field: 'builder', url: (doc) => documentPath('posts', doc.slug) ?? '/blog' },
+  // Posts render through templates (Templates collection): a default "Post template" or the post's own.
+  posts: { field: 'builder', url: (doc) => documentPath('posts', doc.slug) ?? '/blog', templates: true },
   'template-parts': { field: 'builder' },
 }
 
@@ -204,6 +206,7 @@ export default buildConfig({
       collections: builderCollections,
       blocks: builderBlocks,
       sections: sectionLibrary,
+      templates: { hooks: { afterChange: [revalidateTemplate] } },
       css: {
         entry: 'src/app/(frontend)/globals.css',
         plugins: { '@tailwindcss/typography': typography },

@@ -3,7 +3,13 @@
 // Runs inside the canvas iframe. It renders the layout it gets from the admin editor and reports
 // block and slot rectangles, the pointer and editor shortcuts back. It holds no selection or drop logic.
 
-import { collectClasses, type BlockDefinition, type Layout } from '@payload-toolkit/builder/core'
+import {
+  collectClasses,
+  resolveBindings,
+  type BlockDefinition,
+  type Layout,
+  type TemplateContext,
+} from '@payload-toolkit/builder/core'
 import type { CanvasCssInput, TailwindPlugins } from '@payload-toolkit/builder/css'
 import { createCanvasCompiler, type CanvasCompiler } from '@payload-toolkit/builder/css-browser'
 import {
@@ -17,8 +23,17 @@ import {
 } from '@payload-toolkit/builder/protocol'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
-import { RenderLayout, resolveLayoutData, type BlockComponents, type ResolveLink } from '../index'
-import { createRestFetchDocs } from './fetchDocs'
+import {
+  attachListItems,
+  defaultResolveLink,
+  listQueries,
+  RenderLayout,
+  resolveLayoutData,
+  urlResolver,
+  type BlockComponents,
+  type ResolveLink,
+} from '../index'
+import { createRestFetchDocs, fetchListItems } from './fetchDocs'
 import { measure } from './measure'
 
 export type BuilderCanvasProps = {
@@ -47,6 +62,9 @@ const EDITOR_CSS = `
   background: repeating-linear-gradient(45deg, rgb(0 0 0 / 0.03) 0 6px, transparent 6px 12px);
 }
 [data-builder-hidden] { opacity: 0.35; }
+/* Repeated collection list items (2nd, 3rd, …): shown dimmed, never selectable. */
+[data-builder-repeat] { pointer-events: none; }
+[data-builder-repeat]:not([data-builder-repeat] [data-builder-repeat]) { opacity: 0.6; }
 [data-builder-empty-page] {
   padding: 48px 24px;
   font: 14px/1.5 system-ui, sans-serif;
@@ -64,6 +82,8 @@ type Compiler = { status: 'loading' } | { status: 'ready'; compiler: CanvasCompi
 export function BuilderCanvas({ blocks, components, plugins, resolveLink }: BuilderCanvasProps) {
   const [init, setInit] = useState<CanvasInit | null>(null)
   const [layout, setLayout] = useState<Layout | null>(null)
+  // The document a template renders (the editor's sample document). Null on normal pages.
+  const [context, setContext] = useState<TemplateContext | null>(null)
   const [resolved, setResolved] = useState<Layout | null>(null)
   const [compiler, setCompiler] = useState<Compiler>({ status: 'loading' })
   const rootRef = useRef<HTMLDivElement>(null)
@@ -125,6 +145,9 @@ export function BuilderCanvas({ blocks, components, plugins, resolveLink }: Buil
           return
         case 'scrollIntoView':
           scrollToBlock(message.id)
+          return
+        case 'context':
+          setContext(message.context)
       }
     }
     const onScroll = () => {
@@ -206,13 +229,19 @@ export function BuilderCanvas({ blocks, components, plugins, resolveLink }: Buil
     }
   }, [cssEndpoint])
 
-  // Replace upload and relationship IDs with documents. The newest layout wins.
+  // Bind the template to the sample document, load collection lists, then replace upload and
+  // relationship IDs with documents. The newest layout wins.
   const resolveRun = useRef(0)
   const definitions = ownBlocks ?? init?.blocks
+  const [linkResolver] = useState(() => resolveLink ?? defaultResolveLink)
   useEffect(() => {
     if (!layout || !init || !definitions) return
     const run = ++resolveRun.current
-    resolveLayoutData(layout, definitions, createRestFetchDocs(init.api))
+    const bound = context ? resolveBindings(layout, context, definitions, { url: urlResolver(linkResolver) }) : layout
+    const queries = listQueries(bound, context)
+    Promise.all(queries.map((query) => fetchListItems(init.api, query)))
+      .then((lists) => attachListItems(bound, new Map(queries.map((query, i) => [query.blockId, lists[i]]))))
+      .then((withItems) => resolveLayoutData(withItems, definitions, createRestFetchDocs(init.api)))
       .then((next) => {
         if (run === resolveRun.current) setResolved(next)
       })
@@ -221,7 +250,7 @@ export function BuilderCanvas({ blocks, components, plugins, resolveLink }: Buil
         setResolved(layout)
         send({ type: 'error', message: `Canvas data failed to load: ${String(error)}` })
       })
-  }, [layout, init, definitions])
+  }, [layout, init, definitions, context, linkResolver])
 
   // One compile per distinct class set (about 4 ms). `null` until a layout is resolved.
   // Block definitions add the classes their components use (`BlockDefinition.classes`).
@@ -262,6 +291,7 @@ export function BuilderCanvas({ blocks, components, plugins, resolveLink }: Buil
             css={css}
             mode="canvas"
             resolveLink={resolveLink}
+            context={context}
           />
         )}
       </div>

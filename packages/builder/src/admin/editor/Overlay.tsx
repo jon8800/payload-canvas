@@ -66,6 +66,11 @@ export function Overlay() {
               <span className={`builder-editor__tag${roomAbove(selectedRect) ? '' : ' builder-editor__tag--inside'}`}>
                 <BlockIcon name={runtime.blockIcon(selected.type)} size={12} />
                 {runtime.blockLabel(selected.type)}
+                {selected.bindings && Object.keys(selected.bindings).length > 0 && (
+                  <span className="builder-editor__tag-bound" title="Shows data from a document">
+                    <Icon name="bind" size={11} />
+                  </span>
+                )}
                 {selected.hidden && <Icon name="eyeOff" size={12} />}
               </span>
             )}

@@ -1,9 +1,13 @@
 // Types shared by the renderer and the default components.
 
 import type { ComponentType, ReactNode } from 'react'
-import type { Block, BlockDefinition, Layout } from '@payload-toolkit/builder/core'
+import type { Block, BlockDefinition, Layout, TemplateContext } from '@payload-toolkit/builder/core'
 
-/** "site" renders the public page. "canvas" adds editor attributes and empty-slot placeholders. */
+/**
+ * "site" renders the public page. "canvas" adds editor attributes and empty-slot placeholders.
+ * In canvas mode, repeated collection list items after the first get `data-builder-repeat`
+ * instead of editor attributes.
+ */
 export type RenderMode = 'site' | 'canvas'
 
 /**
@@ -77,9 +81,15 @@ export type RenderLayoutProps = {
   blocks?: BlockDefinition[]
   /**
    * Maps links (link groups and internal rich text links) to an href. Default: the URL for
-   * URL links, `/${slug}` for a loaded document with a `slug`, otherwise no link.
+   * URL links, `/${slug}` for a loaded document with a `slug`, otherwise no link. It also gives the
+   * `$url` binding path its value.
    */
   resolveLink?: ResolveLink
+  /**
+   * The document a template renders. Bound props (`block.bindings`) and Field blocks read it.
+   * Load it with `depth: 1` and pass the same context to `loadLayoutData`.
+   */
+  context?: TemplateContext | null
 }
 
 /** Loads documents for a batch of ids in one collection. */

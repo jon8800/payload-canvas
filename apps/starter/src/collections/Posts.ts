@@ -68,6 +68,11 @@ export const Posts: CollectionConfig = {
       type: 'textarea',
     },
     {
+      name: 'content',
+      type: 'richText',
+      admin: { description: 'The post body. The post template shows it with a Field block.' },
+    },
+    {
       name: 'author',
       type: 'relationship',
       relationTo: 'users',

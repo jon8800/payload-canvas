@@ -1,4 +1,4 @@
-import type { FetchDocs } from '../index'
+import type { FetchDocs, ListQuery } from '../index'
 
 type Doc = Record<string, unknown>
 
@@ -44,4 +44,34 @@ export function createRestFetchDocs(api: string): FetchDocs {
     )
     return result
   }
+}
+
+/** One promise per list query. Key: api + collection + limit + sort. */
+const listCache = new Map<string, Promise<Doc[]>>()
+
+/**
+ * Loads a collection list's documents over REST (`depth=1`, latest drafts), cached for the life
+ * of the iframe. The page's own document is filtered out here, so one request serves every page.
+ */
+export function fetchListItems(api: string, query: ListQuery): Promise<Doc[]> {
+  const limit = query.limit + (query.exclude === undefined ? 0 : 1)
+  const key = `${api}\u0000${query.collection}\u0000${limit}\u0000${query.sort}`
+  let request = listCache.get(key)
+  if (!request) {
+    const params = new URLSearchParams({ limit: String(limit), sort: query.sort, depth: '1', draft: 'true' })
+    request = fetch(`${api}/${encodeURIComponent(query.collection)}?${params}`, { credentials: 'include' })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+        const body = (await res.json()) as { docs?: Doc[] }
+        return body.docs ?? []
+      })
+      .catch(() => {
+        listCache.delete(key)
+        return []
+      })
+    listCache.set(key, request)
+  }
+  return request.then((docs) =>
+    docs.filter((doc) => query.exclude === undefined || String(doc.id) !== String(query.exclude)).slice(0, query.limit),
+  )
 }

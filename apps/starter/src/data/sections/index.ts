@@ -10,10 +10,13 @@ import { footer } from './footer'
 import { header } from './header'
 import { hero } from './hero'
 import { imageText } from './imageText'
+import { postList } from './posts'
 import { testimonials } from './testimonials'
 
 export * from './build'
 export { lexical, type RichTextInput } from './lexical'
-export { cardGrid, contact, content, cta, faq, features, footer, header, hero, imageText, testimonials }
+export { cardGrid, contact, content, cta, faq, features, footer, header, hero, imageText, postList, testimonials }
+export { postCard } from './posts'
 
-export const sections = { hero, features, imageText, content, testimonials, faq, cardGrid, cta, contact, header, footer }
+export const sections = { hero, features, imageText, content, testimonials, faq, cardGrid, cta, contact, header, footer, postList }
+export { postTemplate } from './postTemplate'

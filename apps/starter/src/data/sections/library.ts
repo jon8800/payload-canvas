@@ -13,6 +13,7 @@ import { footer } from './footer'
 import { header } from './header'
 import { hero } from './hero'
 import { imageText } from './imageText'
+import { postList } from './posts'
 import { testimonials } from './testimonials'
 
 /** Dummy ID for factories that need a media or form ID. `withoutMedia` removes it. */
@@ -261,6 +262,13 @@ export const sectionLibrary: SectionDefinition[] = [
         }),
       ),
     ],
+  },
+  {
+    id: 'latest-posts',
+    label: 'Latest posts',
+    description: 'A title above a grid of the three latest blog posts. The cards fill in from the posts.',
+    category: 'Dynamic',
+    blocks: [postList.create({ title: 'Latest posts', intro: 'News and notes from the team.' })],
   },
   {
     id: 'header-simple',

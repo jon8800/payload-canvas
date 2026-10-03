@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { ValidationError, type CollectionBeforeChangeHook } from 'payload'
+import { withoutBoundRequired } from '../core/bindings'
 import { collectClasses } from '../core/classes'
 import { normalizeLayout } from '../core/tree'
 import type { BlockDefinition, Layout } from '../core/types'
@@ -82,7 +83,8 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
       Boolean(collection.versions?.drafts) && (data._status ?? originalDoc?._status) === 'published'
     const blocking: LayoutError[] = []
     const warnings: LayoutError[] = []
-    for (const error of validateLayout(layout, blocks)) {
+    // A bound prop gets its value from the document, so its literal may stay empty.
+    for (const error of withoutBoundRequired(validateLayout(layout, blocks), layout)) {
       const warning = isWarning(error) || (isMissingRequired(error) && !publishing)
       if (warning) warnings.push(error)
       else blocking.push(error)
