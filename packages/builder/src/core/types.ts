@@ -83,6 +83,42 @@ export type SectionDefinition = {
 }
 
 // ---------------------------------------------------------------------------
+// Templates and binding (docs/architecture.md section 11)
+// ---------------------------------------------------------------------------
+
+/**
+ * One field of a template's target collection that block props can bind to. Built by walking the
+ * collection's Payload fields: groups and arrays become `children`, and relationship/upload fields
+ * get one level of `children` from the related collection (one hop). `path` is a dot path from the
+ * document root, e.g. "title", "seo.description", "author.name".
+ */
+export type BindingField = {
+  path: string
+  label: string
+  /** Payload field type, e.g. "text", "richText", "upload", "relationship", "date", "group". */
+  type: string
+  relationTo?: string | string[]
+  hasMany?: boolean
+  children?: BindingField[]
+}
+
+/** Template data for the editor. Null when no collection uses templates. */
+export type TemplatesClientConfig = {
+  /** Slug of the templates collection, e.g. "builder-templates". */
+  collection: string
+  /** Name of the templates collection's field that holds the target collection slug. */
+  targetField: string
+  /** Bindable fields per template target collection slug. */
+  sources: Record<string, BindingField[]>
+}
+
+/** Render-time template context: the document the template renders. */
+export type TemplateContext = {
+  collection: string
+  doc: Record<string, unknown>
+}
+
+// ---------------------------------------------------------------------------
 // Config the plugin passes to the admin editor
 // ---------------------------------------------------------------------------
 
@@ -110,6 +146,8 @@ export type BuilderClientConfig = {
    * `${liveEndpoint}/${collection}/${id}/operations`.
    */
   liveEndpoint: string
+  /** Templates and binding. Null when no collection uses templates. */
+  templates: TemplatesClientConfig | null
 }
 
 // ---------------------------------------------------------------------------

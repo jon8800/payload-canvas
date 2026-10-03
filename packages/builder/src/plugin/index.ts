@@ -95,6 +95,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           tokensEndpoint: `${apiRoute}${STYLE_TOKENS_PATH}`,
           sections: options.sections ?? [],
           liveEndpoint: `${apiRoute}${LIVE_PATH}`,
+          templates: null,
         }
         return addBuilder(collection, { field, clientConfig, blocks, css })
       }),
