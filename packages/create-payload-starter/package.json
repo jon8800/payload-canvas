@@ -1,26 +1,33 @@
 {
-  "name": "@jon8800/create-payload-starter",
+  "name": "create-payload-toolkit",
   "version": "0.1.0",
+  "description": "Scaffold a Payload CMS website builder project from the payload-toolkit starter",
+  "license": "MIT",
   "type": "module",
   "bin": {
-    "create-payload-starter": "./dist/index.js"
+    "create-payload-toolkit": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20.9"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc",
     "dev": "tsx src/index.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@clack/prompts": "^1.8.1",
-    "@jon8800/shared": "workspace:*",
     "cross-spawn": "^7.0.6",
-    "ejs": "^6.0.1",
+    "pg": "^8.23.1",
     "tar": "^7.5.22"
   },
   "devDependencies": {
     "@types/cross-spawn": "^6.0.6",
-    "@types/ejs": "^3.1.5",
     "@types/node": "^24.19.1",
+    "@types/pg": "^8.23.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }

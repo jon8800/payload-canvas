@@ -1,6 +1,8 @@
 {
-  "name": "@jon8800/shared",
+  "name": "@payload-toolkit/shared",
   "version": "0.1.0",
+  "private": true,
+  "description": "Deprecated. The CLI no longer uses this package.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

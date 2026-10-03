@@ -3,9 +3,12 @@
   "private": true,
   "scripts": {
     "build": "turbo run build",
+    "build:packages": "turbo run build --filter=./packages/*",
     "dev": "turbo run dev",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
-    "typecheck": "turbo run typecheck"
+    "pack:packages": "pnpm --filter @payload-toolkit/builder --filter @payload-toolkit/builder-react exec pnpm pack --pack-destination ../../dist-packages"
   },
   "devDependencies": {
     "turbo": "^2.11.7",

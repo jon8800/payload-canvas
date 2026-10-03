@@ -1,21 +1,71 @@
 {
   "name": "@payload-toolkit/builder-react",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "description": "Default React components and the layout renderer for @payload-toolkit/builder: RenderLayout, loadLayoutData and the canvas iframe runtime.",
+  "keywords": [
+    "payload",
+    "payloadcms",
+    "page-builder",
+    "website-builder",
+    "react",
+    "react-server-components",
+    "tailwindcss",
+    "nextjs"
+  ],
+  "license": "MIT",
+  "author": "Eugene Lominos <hello@eugenelominos.com>",
+  "homepage": "https://github.com/jon8800/payload-toolkit/tree/main/packages/builder-react#readme",
+  "bugs": "https://github.com/jon8800/payload-toolkit/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jon8800/payload-toolkit.git",
+    "directory": "packages/builder-react"
+  },
   "type": "module",
+  "sideEffects": [
+    "*.scss",
+    "*.css"
+  ],
   "exports": {
     ".": "./src/index.ts",
-    "./canvas": "./src/canvas/index.ts"
+    "./canvas": "./src/canvas/index.ts",
+    "./server": "./src/server.ts"
   },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./canvas": {
+        "types": "./dist/canvas/index.d.ts",
+        "default": "./dist/canvas/index.js"
+      },
+      "./server": {
+        "types": "./dist/server.d.ts",
+        "default": "./dist/server.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
+    "build": "node ../../scripts/build-package.mjs",
+    "prepack": "node ../../scripts/build-package.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint",
     "test": "node --import tsx --test \"src/**/*.test.ts\""
   },
-  "dependencies": {
-    "@payload-toolkit/builder": "workspace:*"
-  },
   "peerDependencies": {
+    "@payload-toolkit/builder": "^0.1.0",
     "@payloadcms/richtext-lexical": "^3.90.0",
     "payload": "^3.90.0",
     "react": "^19.2.0",
@@ -23,6 +73,7 @@
     "tailwindcss": "^4.3.0"
   },
   "devDependencies": {
+    "@payload-toolkit/builder": "workspace:*",
     "@payloadcms/richtext-lexical": "^3.90.2",
     "@payloadcms/ui": "^3.90.2",
     "@types/node": "^24",
@@ -36,5 +87,8 @@
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.15",
     "typescript": "7.0.2"
+  },
+  "engines": {
+    "node": ">=20.9.0"
   }
 }

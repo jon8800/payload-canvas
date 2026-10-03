@@ -1,0 +1,15 @@
+# Used by `docker build -f apps/starter/Dockerfile .` (build context: the repository root).
+**/node_modules
+**/.next
+**/.turbo
+**/dist
+**/*.tsbuildinfo
+**/.env
+**/.env.*
+!**/.env.example
+.git
+.claude
+docs
+dist-packages
+apps/starter/public/media/*
+!apps/starter/public/media/.gitkeep
