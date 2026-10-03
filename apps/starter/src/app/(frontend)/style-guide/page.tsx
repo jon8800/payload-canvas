@@ -74,8 +74,9 @@ export default async function StyleGuidePage() {
         <h2 className="text-2xl font-semibold mb-4 text-muted-foreground">Form Elements</h2>
         <div className="space-y-4 max-w-md">
           <div>
-            <label className="text-sm font-medium mb-1 block">Text Input</label>
+            <label htmlFor="sg-text" className="text-sm font-medium mb-1 block">Text Input</label>
             <input
+              id="sg-text"
               type="text"
               placeholder="Type something..."
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -83,15 +84,15 @@ export default async function StyleGuidePage() {
             />
           </div>
           <div>
-            <label className="text-sm font-medium mb-1 block">Select</label>
-            <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+            <label htmlFor="sg-select" className="text-sm font-medium mb-1 block">Select</label>
+            <select id="sg-select" className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
               <option>Option 1</option>
               <option>Option 2</option>
             </select>
           </div>
           <div className="flex items-center gap-2">
-            <input type="checkbox" className="size-4 rounded border-input" readOnly checked />
-            <label className="text-sm">Checkbox label</label>
+            <input id="sg-checkbox" type="checkbox" className="size-4 rounded border-input" readOnly checked />
+            <label htmlFor="sg-checkbox" className="text-sm">Checkbox label</label>
           </div>
         </div>
       </section>

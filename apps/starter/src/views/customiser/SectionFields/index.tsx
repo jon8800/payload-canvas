@@ -203,7 +203,7 @@ const SortableBlock: React.FC<{
   const { selectedSection, setSelectedSection } = useSelectedSection()
   const { dispatchFields, setModified } = useForm()
   const [isCollapsed, setIsCollapsed] = useState(false)
-  const { activeItem, overItem, dropPosition, registerBlock, unregisterBlock, isDragging: isGlobalDragging } = useDragContext()
+  const { activeItem, overItem, dropPosition, registerBlock, unregisterBlock } =useDragContext()
 
   const blockConfig = blocks.find((block) => block.slug === row.blockType)
 
@@ -258,7 +258,7 @@ const SortableBlock: React.FC<{
   ).length
   const fieldHasErrors = hasSubmitted && rowErrorCount > 0
 
-  const [nestedRowsState, setNestedRowsState] = useState<Record<string, boolean>>({})
+  const [, setNestedRowsState] = useState<Record<string, boolean>>({})
 
   const handleNestedRowsChange = useCallback((fieldName: string, hasRows: boolean) => {
     setNestedRowsState(prev => {
@@ -385,7 +385,20 @@ const SortableBlock: React.FC<{
               <ChevronIcon collapsed={isCollapsed} />
             </button>
           )}
-          <div className={`${baseClass}__block-label`} onClick={handleSectionSelect}>
+          <div
+            className={`${baseClass}__block-label`}
+            onClick={handleSectionSelect}
+            onKeyDown={(e) => {
+              if (e.target !== e.currentTarget) return
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                handleSectionSelect()
+              }
+            }}
+            // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- contains an interactive input, so it cannot be a button element
+            role="button"
+            tabIndex={0}
+          >
             {isEditing ? (
               <input
                 ref={inputRef}
@@ -657,7 +670,7 @@ const AddBlockButton: React.FC<{
 }
 
 function SectionFieldsContent({
-  docPermissions,
+  docPermissions: _docPermissions,
   field,
   readOnly: readOnlyProp,
   schemaPathSegments,

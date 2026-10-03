@@ -29,18 +29,6 @@ function desaturate(hex: string, factor: number): string {
 }
 
 /**
- * Rotate the hue of a hex color by the given degrees.
- */
-function rotateHue(hex: string, degrees: number): string {
-  const color = parse(hex)
-  if (!color) return hex
-  const oklch = toOklch(color)
-  oklch.h = ((oklch.h || 0) + degrees) % 360
-  if (oklch.h < 0) oklch.h += 360
-  return formatCss(oklch)
-}
-
-/**
  * Compute a foreground color (dark or light) based on the lightness of a background color.
  * Returns dark foreground for light backgrounds, light foreground for dark backgrounds.
  */
@@ -156,12 +144,6 @@ export function deriveAllColors(core: CoreColors): Record<string, string> {
   if (core.primary) {
     const lightnessOffsets = [0, -0.05, -0.1, -0.15, -0.2]
     for (let i = 0; i < 5; i++) {
-      const rotated = rotateHue(core.primary, i * 30)
-      const adjusted = adjustLightness(
-        // Parse the oklch string back for lightness adjustment
-        rotated.startsWith('oklch') ? core.primary : rotated,
-        lightnessOffsets[i],
-      )
       // Apply both hue rotation and lightness in one step
       const color = parse(core.primary)
       if (color) {

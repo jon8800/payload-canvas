@@ -18,6 +18,7 @@ export const IFrame: React.FC<Props> = (props) => {
   const { zoom } = useLivePreviewContext()
 
   return (
+    // oxlint-disable-next-line react/iframe-missing-sandbox -- same-origin preview needs allow-scripts + allow-same-origin, which makes a sandbox attribute ineffective
     <iframe
       className={baseClass}
       onLoad={() => {

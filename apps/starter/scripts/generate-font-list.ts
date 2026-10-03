@@ -20,7 +20,7 @@ function main() {
   // Extract font family names sorted alphabetically
   const families = Object.values(data)
     .map((font) => font.family)
-    .sort((a, b) => a.localeCompare(b))
+    .toSorted((a, b) => a.localeCompare(b))
 
   const outputPath = resolve(__dirname, '../src/data/google-fonts.json')
   writeFileSync(outputPath, JSON.stringify(families, null, 0))

@@ -78,6 +78,7 @@ function LivePreviewSync() {
     if (previewWindowType === 'iframe' && iframeRef?.current) {
       iframeRef.current.contentWindow?.postMessage(message, url)
     }
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- mostRecentUpdate is a deliberate re-send trigger
   }, [mostRecentUpdate, iframeRef, popupRef, previewWindowType, url, appIsReady])
 
   return null

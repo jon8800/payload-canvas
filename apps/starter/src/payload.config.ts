@@ -9,7 +9,7 @@ import { formBuilderPlugin } from '@payloadcms/plugin-form-builder'
 import { importExportPlugin } from '@payloadcms/plugin-import-export'
 import { mcpPlugin } from '@payloadcms/plugin-mcp'
 import { searchPlugin } from '@payloadcms/plugin-search'
-import nodemailer from 'nodemailer'
+import { createTransport } from 'nodemailer'
 import sharp from 'sharp'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -24,13 +24,12 @@ import { Tags } from '@/collections/Tags'
 import { TemplateParts } from '@/collections/TemplateParts'
 import { SiteSettings } from '@/globals/SiteSettings'
 import { ThemeSettings } from '@/globals/ThemeSettings'
-import { handleFormEmails } from '@/collections/forms/handleFormEmails'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
 
 const smtpAdapter: EmailAdapter = ({ payload }) => {
-  const transport = nodemailer.createTransport({
+  const transport = createTransport({
     host: process.env.SMTP_HOST || 'localhost',
     port: Number(process.env.SMTP_PORT) || 587,
     secure: process.env.SMTP_SECURE === 'true',
@@ -150,9 +149,6 @@ export default buildConfig({
             },
           },
         ],
-        hooks: {
-          afterChange: [handleFormEmails],
-        },
       },
     }),
 

@@ -28,7 +28,6 @@ import {
   useDocumentInfo,
   useNav,
   useServerFunctions,
-  useTranslation,
 } from '@payloadcms/ui'
 import { abortAndIgnore } from '@payloadcms/ui/utilities/abortAndIgnore'
 import { handleBackToDashboard } from '@payloadcms/ui/utilities/handleBackToDashboard'
@@ -108,7 +107,6 @@ const CustomiserView: React.FC<Props> = ({
     },
   } = useConfig()
   const router = useRouter()
-  const { t } = useTranslation()
   const { previewWindowType } = useLivePreviewContext()
   const { refreshCookieAsync, user } = useAuth()
   const { reportUpdate } = useDocumentEvents()
@@ -130,11 +128,15 @@ const CustomiserView: React.FC<Props> = ({
 
   const formStateAbortControllerRef = useRef(new AbortController())
 
-  const [editSessionStartTime, setEditSessionStartTime] = useState(Date.now())
+  const [editSessionStartTime, setEditSessionStartTime] = useState(() => Date.now())
+  const [hasShownLockedModal, setHasShownLockedModal] = useState(false)
 
   const lockExpiryTime = lastUpdateTime + lockDurationInMilliseconds
 
+  // Re-checked on every render so a lock that expires while the view is open is noticed
+  // oxlint-disable-next-line react/purity -- same check as Payload's own edit view
   const isLockExpired = Date.now() > lockExpiryTime
+  const userID = user?.id
 
   const documentLockStateRef = useRef<{
     hasShownLockedModal: boolean
@@ -244,7 +246,7 @@ const CustomiserView: React.FC<Props> = ({
           formState: optimisticState, // Use optimistic state as base
           globalSlug,
           operation,
-          returnLockStatus: isLockingEnabled ? true : false,
+          returnLockStatus: isLockingEnabled,
           schemaPath,
           signal: controller.signal,
           skipValidation: !submitted, // Skip validation until form is submitted (matches Payload pattern)
@@ -266,8 +268,9 @@ const CustomiserView: React.FC<Props> = ({
                 : lockedState.user.id
 
             if (!documentLockStateRef.current || lockedUserID !== previousOwnerID) {
-              if (previousOwnerID === user.id && lockedUserID !== user.id) {
+              if (previousOwnerID === userID && lockedUserID !== userID) {
                 setShowTakeOverModal(true)
+                setHasShownLockedModal(true)
                 documentLockStateRef.current.hasShownLockedModal = true
               }
 
@@ -304,7 +307,7 @@ const CustomiserView: React.FC<Props> = ({
       operation,
       schemaPath,
       setDocumentIsLocked,
-      user?.id,
+      userID,
       setCurrentEditor,
     ],
   )
@@ -365,7 +368,7 @@ const CustomiserView: React.FC<Props> = ({
   // Close the nav when the component mounts
   useEffect(() => {
     setNavOpen(false)
-  }, [])
+  }, [setNavOpen])
 
   // Listen for block selection messages from the preview iframe
   useEffect(() => {
@@ -386,7 +389,7 @@ const CustomiserView: React.FC<Props> = ({
       : currentEditor !== user?.id) &&
     !isReadOnlyForIncomingUser &&
     !showTakeOverModal &&
-    !documentLockStateRef.current?.hasShownLockedModal &&
+    !hasShownLockedModal &&
     !isLockExpired
 
   const layoutField = findBlocksField(fields, CUSTOMISER_BLOCKS_FIELD)

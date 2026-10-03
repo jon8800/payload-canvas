@@ -9,13 +9,17 @@ function fieldSchemaToJSON(fieldSchema: ClientField[] | undefined) {
   return JSON.parse(JSON.stringify(fieldSchema))
 }
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 
 import type { usePopupWindow } from '../usePopupWindow'
 
 import { customCollisionDetection } from './collisionDetection'
 import { LivePreviewContext } from './context'
 import { sizeReducer } from './sizeReducer'
+
+function subscribeNoop() {
+  return () => {}
+}
 
 /**
  * Ensures the URL is absolute. Relative URLs (e.g., `/next/preview?...`) need to be
@@ -61,7 +65,12 @@ export const LivePreviewProvider: React.FC<LivePreviewProviderProps> = ({
   const [previewWindowType, setPreviewWindowType] = useState<'iframe' | 'popup'>('iframe')
 
   const [appIsReady, setAppIsReady] = useState(false)
-  const [listeningForMessages, setListeningForMessages] = useState(false)
+  // False on the server and during hydration, true after mount.
+  const listeningForMessages = useSyncExternalStore(
+    subscribeNoop,
+    () => true,
+    () => false,
+  )
 
   const iframeRef = React.useRef<HTMLIFrameElement>(null)
 
@@ -154,12 +163,10 @@ export const LivePreviewProvider: React.FC<LivePreviewProviderProps> = ({
 
     window.addEventListener('message', handleMessage)
 
-    setListeningForMessages(true)
-
     return () => {
       window.removeEventListener('message', handleMessage)
     }
-  }, [url, listeningForMessages])
+  }, [url])
 
   const handleWindowChange = useCallback(
     (type: 'iframe' | 'popup') => {
@@ -172,13 +179,12 @@ export const LivePreviewProvider: React.FC<LivePreviewProviderProps> = ({
     [openPopupWindow],
   )
 
-  useEffect(() => {
-    const newPreviewWindowType = isPopupOpen ? 'popup' : 'iframe'
-
-    if (newPreviewWindowType !== previewWindowType) {
-      handleWindowChange('iframe')
-    }
-  }, [previewWindowType, isPopupOpen, handleWindowChange])
+  // Adjust state during render when the popup state disagrees with the window type.
+  const newPreviewWindowType = isPopupOpen ? 'popup' : 'iframe'
+  if (newPreviewWindowType !== previewWindowType) {
+    setAppIsReady(false)
+    setPreviewWindowType('iframe')
+  }
 
   return (
     <LivePreviewContext.Provider

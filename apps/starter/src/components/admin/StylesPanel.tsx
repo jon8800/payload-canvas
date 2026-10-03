@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { CodeEditor, useField } from '@payloadcms/ui'
 import { Collapsible } from '@base-ui/react/collapsible'
 import { Select } from '@base-ui/react/select'
@@ -58,17 +58,6 @@ type StylesData = {
 }
 
 // ── Preset options ──
-
-const spacingOptions = [
-  { label: '-', value: '' },
-  { label: 'None', value: 'none' },
-  { label: 'XS', value: 'xs' },
-  { label: 'SM', value: 'sm' },
-  { label: 'MD', value: 'md' },
-  { label: 'LG', value: 'lg' },
-  { label: 'XL', value: 'xl' },
-  { label: '2XL', value: '2xl' },
-]
 
 const borderRadiusOptions = [
   { label: '-', value: '' },
@@ -390,7 +379,10 @@ function ClassTokenInput({ value, onChange }: ClassTokenInputProps) {
   const [inputValue, setInputValue] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const chips = value ? value.split(/\s+/).filter(Boolean) : []
+  const chips = useMemo(
+    () => (value ? value.split(/\s+/).filter(Boolean) : []),
+    [value],
+  )
 
   const addChip = useCallback(
     (text: string) => {
@@ -424,6 +416,7 @@ function ClassTokenInput({ value, onChange }: ClassTokenInputProps) {
 
   return (
     <div
+      role="presentation"
       className="chip-input-wrapper"
       onClick={() => inputRef.current?.focus()}
     >
@@ -501,9 +494,9 @@ export function StylesPanel({ path }: TextFieldClientProps) {
 
   return (
     <div className="styles-panel">
-      <label className="styles-panel-title">
+      <span className="styles-panel-title">
         Styles
-      </label>
+      </span>
 
       {/* Spacing -- always visible, not collapsible */}
       <div className="spacing-section">
@@ -562,15 +555,15 @@ export function StylesPanel({ path }: TextFieldClientProps) {
       {/* Custom CSS */}
       <Section title="Custom CSS">
         <div className="custom-css-field">
-          <label>Inline CSS</label>
+          <span className="custom-css-label">Inline CSS</span>
           <div className="code-editor-wrapper">
             <CodeEditor
               language="css"
               minHeight={160}
               maxHeight={300}
               value={styles.customCSS?.inlineCSS ?? ''}
-              onChange={(value: string | undefined) =>
-                handleUpdate(['customCSS', 'inlineCSS'], value || undefined)
+              onChange={(nextValue: string | undefined) =>
+                handleUpdate(['customCSS', 'inlineCSS'], nextValue || undefined)
               }
             />
           </div>
@@ -579,7 +572,7 @@ export function StylesPanel({ path }: TextFieldClientProps) {
           </span>
         </div>
         <div className="custom-css-field">
-          <label>Tailwind Classes</label>
+          <span className="custom-css-label">Tailwind Classes</span>
           <ClassTokenInput
             value={styles.customCSS?.classes ?? ''}
             onChange={(val) => handleUpdate(['customCSS', 'classes'], val)}

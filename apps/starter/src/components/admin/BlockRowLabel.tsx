@@ -17,10 +17,7 @@ function useMediaThumbnail(mediaId: number | string | null): string | null {
 
   useEffect(() => {
     if (!mediaId) return
-    if (mediaCache.has(mediaId)) {
-      setUrl(mediaCache.get(mediaId)!)
-      return
-    }
+    if (mediaCache.has(mediaId)) return
     let cancelled = false
     fetch(`/api/media/${mediaId}?depth=0`, { credentials: 'include' })
       .then((r) => r.json())
@@ -38,7 +35,8 @@ function useMediaThumbnail(mediaId: number | string | null): string | null {
     }
   }, [mediaId])
 
-  return url
+  if (!mediaId) return url
+  return mediaCache.get(mediaId) ?? url
 }
 
 // ── Block type icons (16x16 SVG paths) ──
@@ -336,6 +334,7 @@ export function BlockRowLabel() {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
       {thumbnail ? (
+        // oxlint-disable-next-line next/no-img-element -- admin thumbnail, next/image not used in Payload admin
         <img
           src={thumbnail}
           alt=""

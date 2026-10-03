@@ -152,12 +152,11 @@ function SelectedSectionFields({
   const { getFormState } = useServerFunctions()
   const { id, collectionSlug, globalSlug, getDocPreferences } = useDocumentInfo()
   const { dispatchFields } = useForm()
-  const [isInitialized, setIsInitialized] = useState(false)
+  const [initializedSection, setInitializedSection] = useState<string | null>(null)
+  const isInitialized = initializedSection === selectedSection
   const abortControllerRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
-    setIsInitialized(false)
-
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
     }
@@ -194,12 +193,12 @@ function SelectedSectionFields({
               })
             }
           }
-          setIsInitialized(true)
+          setInitializedSection(selectedSection)
         }
       } catch (error) {
         if (!controller.signal.aborted) {
           console.error('Error initializing form state:', error)
-          setIsInitialized(true)
+          setInitializedSection(selectedSection)
         }
       }
     }
