@@ -1,5 +1,12 @@
 // Server entry: the Payload plugin and block helpers. Owner: plugin agent.
-export { websiteBuilder, type WebsiteBuilderOptions, type BuilderCollectionOptions } from './plugin'
+export {
+  websiteBuilder,
+  cssFieldName,
+  type WebsiteBuilderOptions,
+  type BuilderCollectionOptions,
+  type GeneratedCss,
+} from './plugin'
 export { defaultBlocks, type DefaultBlocksOptions } from './blocks'
 export { defineBlock } from './core/blocks'
-export type { Block, BlockDefinition, Layout } from './core/types'
+export { EMPTY_LAYOUT } from './core/types'
+export type { Block, BlockDefinition, BuilderClientConfig, Layout } from './core/types'

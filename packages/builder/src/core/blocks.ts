@@ -1,4 +1,9 @@
-import type { BlockDefinition } from './types'
+import type { BlockDefinition, SlotDefinition } from './types'
+
+/** True when the slot accepts the block type. `allow` undefined or containing "*" accepts any type. */
+export function slotAccepts(slot: SlotDefinition, type: string): boolean {
+  return !slot.allow || slot.allow.includes('*') || slot.allow.includes(type)
+}
 
 export function defineBlock<T extends BlockDefinition>(def: T): T {
   return def

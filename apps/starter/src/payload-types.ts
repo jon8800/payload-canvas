@@ -708,6 +708,24 @@ export interface Page {
      */
     image?: (number | null) | Media;
   };
+  builder?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  builderCss?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   updatedAt: string;
   createdAt: string;
   deletedAt?: string | null;
@@ -2073,6 +2091,8 @@ export interface PagesSelect<T extends boolean = true> {
         description?: T;
         image?: T;
       };
+  builder?: T;
+  builderCss?: T;
   updatedAt?: T;
   createdAt?: T;
   deletedAt?: T;

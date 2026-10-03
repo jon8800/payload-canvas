@@ -278,7 +278,9 @@ The original prototype goals:
 ## 16. Build order
 
 1. ~~Prototypes~~ (done, section 14).
-2. **Plugin skeleton:** `websiteBuilder()` config, layout field, operations module with tests, editor tab, 5 blocks (stack, grid, heading, text, image), `RenderLayout`, CSS generation.
+2. ~~**Plugin skeleton**~~ (done 2026-10-03): `websiteBuilder()` config, layout field, operations module with tests, editor tab, 5 blocks (stack, grid, heading, text, image), `RenderLayout`, CSS generation.
+   - Save rules: missing required props block only publishing; unknown props/keys are warnings; other errors block (`LayoutError.code`).
+   - Known gaps: empty heading/text blocks have zero height on the canvas (select them in the outline); a dev hot reload clears undo history; `window.__builderEditor` is a test hook to remove before release; `duplicate` regenerates child ids randomly, so live/multiplayer sync must broadcast the resulting `insert`, not the `duplicate` op.
 3. **All core blocks and the Styles panel.**
 4. **AI:** MCP tools and live edits in the open editor.
 5. **Templates and binding.**
