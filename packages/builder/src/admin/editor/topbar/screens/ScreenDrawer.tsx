@@ -4,7 +4,8 @@
 //
 // Payload renders them on the server through its public `renderDocument` server function: the
 // same one its document drawer uses, with `paramsOverride` set to the screen's admin path. The
-// screens navigate inside the drawer (DrawerRouter.tsx). Back returns to the last screen.
+// screens navigate inside the drawer (DrawerRouter.tsx). Back returns to the last screen. If the
+// drawer router cannot work (a Next upgrade), the screen opens as a normal admin page instead.
 //
 // Restore goes through the builder, not through Payload's Restore button: the live session owns
 // the layout, so it must reset the session for every editor (live/document.ts). The drawer hides
@@ -18,7 +19,7 @@ import { Icon } from '../../icons'
 import { useRuntime } from '../../runtime'
 import { useValue } from '../../valueStore'
 import type { DocumentScreen } from '../document'
-import { DrawerRouter, type DrawerNavigation } from './DrawerRouter'
+import { DrawerRouter, drawerRouterSupport, warnDrawerFallback, type DrawerNavigation } from './DrawerRouter'
 import './screens.scss'
 
 /** A screen below the document's admin path: `['versions']`, `['versions', id]` or `['api']`. */
@@ -63,7 +64,35 @@ export function ScreenDrawer() {
   // Payload's list writes its query into the page URL (history.replaceState, `?limit=10`). The
   // builder's own URL comes back when the drawer closes.
   const pageUrl = useRef<string | null>(null)
+
+  // Leaves the builder for another page. The builder's own URL goes back first, so the browser's
+  // Back button returns to the builder.
+  const leave = useCallback(
+    (url: URL) => {
+      const restore = pageUrl.current
+      pageUrl.current = null
+      if (restore !== null && `${window.location.pathname}${window.location.search}` !== restore) window.history.replaceState(window.history.state, '', restore)
+      closeModal(slug)
+      if (url.origin === window.location.origin) router.push(`${url.pathname}${url.search}`)
+      else window.location.assign(url.href)
+    },
+    [closeModal, slug, router],
+  )
+  // The drawer router does not work: the screen opens as a normal admin page.
+  const fallBack = useCallback(
+    (reason: string, route: Route) => {
+      warnDrawerFallback(reason)
+      leave(new URL(`${docPath}/${route.path.map(encodeURIComponent).join('/')}${route.search}`, window.location.origin))
+    },
+    [docPath, leave],
+  )
+
   const open = useEffectEvent((screen: DocumentScreen) => {
+    const support = drawerRouterSupport()
+    if (!support.ok) {
+      fallBack(support.reason, { path: [screen], search: '' })
+      return
+    }
     pageUrl.current ??= `${window.location.pathname}${window.location.search}`
     setHistory([{ path: [screen], search: '' }])
     openModal(slug)
@@ -136,14 +165,16 @@ export function ScreenDrawer() {
         setHistory((list) => (navigation.kind === 'push' ? [...list, route] : [...list.slice(0, -1), route]))
         return
       }
-      closeModal(slug)
       // The document's edit view: the builder already is that view.
-      if (url.pathname === docPath) return
-      if (url.origin === window.location.origin) router.push(`${url.pathname}${url.search}`)
-      else window.location.assign(url.href)
+      if (url.pathname === docPath) {
+        closeModal(slug)
+        return
+      }
+      leave(url)
     },
-    [shownRoute, docPath, closeModal, slug, router, reload],
+    [shownRoute, docPath, closeModal, slug, leave, reload],
   )
+  const onUnavailable = useCallback((reason: string) => fallBack(reason, shownRoute ?? { path: ['versions'], search: '' }), [fallBack, shownRoute])
 
   const versionId = current?.path[0] === 'versions' ? current.path[1] : undefined
   const canRestore = Boolean(versionId) && meta.canUpdate
@@ -186,6 +217,7 @@ export function ScreenDrawer() {
             search={shown.route.search}
             segments={segments}
             onNavigate={navigate}
+            onUnavailable={onUnavailable}
           >
             {shown.node}
           </DrawerRouter>

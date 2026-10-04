@@ -99,6 +99,11 @@
     }
   }
 
+  // Wraps the screen only to catch its link clicks: no box of its own.
+  .builder-screen-drawer__screen {
+    display: contents;
+  }
+
   .builder-screen-drawer__loading {
     display: flex;
     flex-direction: column;
