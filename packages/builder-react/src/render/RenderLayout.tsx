@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from 'react'
+import { Fragment, memo, type ReactNode } from 'react'
 import {
   COLLECTION_LIST_BLOCK,
   LIST_ITEM_SLOT,
@@ -57,7 +57,16 @@ function slotNamesOf(block: Block, ctx: Context): string[] {
   return [...names]
 }
 
+/**
+ * One block on the canvas. Memoized by block identity: the canvas keeps unchanged blocks as the
+ * same objects (`shareStructure`), so an edit renders only the changed block and its ancestors.
+ */
+const CanvasBlock = memo(function CanvasBlock({ block, ctx }: { block: Block; ctx: Context }) {
+  return renderBlock(block, ctx)
+})
+
 function renderBlocks(blocks: Block[], ctx: Context): ReactNode[] {
+  if (ctx.mode === 'canvas') return blocks.map((block) => <CanvasBlock key={block.id} block={block} ctx={ctx} />)
   return blocks.map((block) => renderBlock(block, ctx))
 }
 
@@ -162,6 +171,46 @@ function renderBlock(stored: Block, ctx: Context): ReactNode {
   return <Component key={block.id} {...componentProps} />
 }
 
+function createContext(
+  mode: RenderMode,
+  components: BlockComponents | undefined,
+  blocks: BlockDefinition[] | undefined,
+  resolveLink: ResolveLink,
+  context: TemplateContext | null,
+): Context {
+  return {
+    mode,
+    // The built-in rich text and Field blocks get the resolver through a closure, never through props.
+    components: { ...defaultComponents, richText: richTextFor(resolveLink), field: fieldFor(resolveLink), ...components },
+    definitions: new Map((blocks ?? DEFAULT_DEFINITIONS).map((definition) => [definition.type, definition])),
+    resolveLinks: linkVisitor(resolveLink),
+    binding: { url: urlResolver(resolveLink) },
+    context,
+    repeat: false,
+  }
+}
+
+/** The canvas's last render context and the inputs it was made from. */
+let canvasContext: { inputs: unknown[]; ctx: Context } | null = null
+
+/**
+ * The render context. On the canvas it stays the same object while its inputs stay the same, so
+ * memoized blocks can skip. The site builds a fresh one per render (nothing is kept between requests).
+ */
+function contextFor(
+  mode: RenderMode,
+  components: BlockComponents | undefined,
+  blocks: BlockDefinition[] | undefined,
+  resolveLink: ResolveLink,
+  context: TemplateContext | null,
+): Context {
+  if (mode !== 'canvas') return createContext(mode, components, blocks, resolveLink, context)
+  const inputs = [components, blocks, resolveLink, context]
+  if (canvasContext && canvasContext.inputs.every((input, i) => input === inputs[i])) return canvasContext.ctx
+  canvasContext = { inputs, ctx: createContext(mode, components, blocks, resolveLink, context) }
+  return canvasContext.ctx
+}
+
 function linkVisitor(resolveLink: ResolveLink): VisitField {
   return (field, value) => (isLinkField(field) ? resolveLinkValue(value, resolveLink) : value)
 }
@@ -181,16 +230,7 @@ export function RenderLayout({
   resolveLink = defaultResolveLink,
   context,
 }: RenderLayoutProps): ReactNode {
-  const ctx: Context = {
-    mode,
-    // The built-in rich text and Field blocks get the resolver through a closure, never through props.
-    components: { ...defaultComponents, richText: richTextFor(resolveLink), field: fieldFor(resolveLink), ...components },
-    definitions: new Map((blocks ?? DEFAULT_DEFINITIONS).map((definition) => [definition.type, definition])),
-    resolveLinks: linkVisitor(resolveLink),
-    binding: { url: urlResolver(resolveLink) },
-    context: context ?? null,
-    repeat: false,
-  }
+  const ctx = contextFor(mode, components, blocks, resolveLink, context ?? null)
   return (
     <>
       <BuilderStyle css={css} />

@@ -16,7 +16,6 @@
     "seed:demo": "payload run ./scripts/seed-demo.ts",
     "create:admin": "payload run ./scripts/create-admin.ts",
     "start": "next start",
-    "generate:fonts": "tsx scripts/generate-font-list.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -42,11 +41,9 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
-    "culori": "^4.0.2",
     "date-fns": "^4.4.0",
     "embla-carousel-react": "^8.6.0",
     "geist": "^1.7.2",
-    "google-font-metadata": "^6.0.8",
     "graphql": "^16.14.2",
     "input-otp": "^1.5.0",
     "lucide-react": "1.51.0",
@@ -56,7 +53,6 @@
     "payload": "^3.90.2",
     "payload-mcp-toolkit": "^0.9.0",
     "react": "19.3.0",
-    "react-colorful": "^5.8.1",
     "react-day-picker": "^10.0.2",
     "react-dom": "19.3.0",
     "react-resizable-panels": "^4.14.2",
@@ -73,7 +69,6 @@
   "devDependencies": {
     "@clack/prompts": "^1.8.1",
     "@tailwindcss/postcss": "^4.3.3",
-    "@types/culori": "^4.0.1",
     "@types/node": "24.19.1",
     "@types/nodemailer": "^8.0.2",
     "@types/pg": "^8.23.1",

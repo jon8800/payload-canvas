@@ -1,5 +1,6 @@
 import { createElement } from 'react'
 import type { BlockComponentProps } from '../render/types'
+import { editableText } from '../render/editable'
 import { PlaceholderText } from './placeholder'
 
 type Item = { id?: unknown; text?: unknown }
@@ -23,16 +24,19 @@ export function hasListTypeClass(className: string | undefined): boolean {
  * class it shows bullets (disc) or numbers (decimal) inline, so an ordered list never shows bullets.
  */
 export function List({ props, className, attributes, mode }: BlockComponentProps) {
-  const items = (Array.isArray(props.items) ? props.items : [])
-    .filter(isItem)
-    .filter((item) => typeof item.text === 'string' && item.text)
+  // Keep each row's index in the stored array: the canvas edits `items.<index>.text`.
+  const items = (Array.isArray(props.items) ? (props.items as unknown[]) : [])
+    .map((item, index) => ({ item, index }))
+    .filter((row): row is { item: Item; index: number } => isItem(row.item) && typeof row.item.text === 'string' && row.item.text !== '')
   if (items.length === 0 && mode !== 'canvas') return null
   const ordered = props.ordered === true
   const children =
     items.length > 0
-      ? items.map((item, i) => (
+      ? items.map(({ item, index }) => (
           // Array rows from Payload's inputs carry an id. Rows written by hand may not.
-          <li key={typeof item.id === 'string' ? item.id : i}>{item.text as string}</li>
+          <li key={typeof item.id === 'string' ? item.id : index} {...editableText(mode, `items.${index}.text`)}>
+            {item.text as string}
+          </li>
         ))
       : (
           <li>

@@ -1,13 +1,32 @@
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
-import { ValidationError, type CollectionAfterChangeHook, type CollectionBeforeChangeHook } from 'payload'
+import {
+  APIError,
+  ValidationError,
+  type CollectionAfterChangeHook,
+  type CollectionBeforeChangeHook,
+  type CollectionBeforeOperationHook,
+} from 'payload'
 import { validateBindings, withoutBoundRequired } from '../core/bindings'
+import { richTextFieldName } from '../core/blocks'
 import { collectClasses } from '../core/classes'
 import { describeLayoutErrors } from '../core/issues'
 import { normalizeLayout } from '../core/tree'
 import type { BindingField, BlockDefinition, Layout } from '../core/types'
 import { isBlockingError, isLayoutWarning, validateLayout, type LayoutError } from '../core/validate'
 import { compileClasses, type CssOptions } from '../css'
+import {
+  checkStaleSave,
+  defaultFieldClock,
+  KEEP_LOCK_CONTEXT,
+  recordFieldChanges,
+  rememberLocks,
+  restoreLocks,
+  staleSaveMessage,
+  topFieldLabel,
+  type FieldClock,
+  type LockPayload,
+} from '../live/fieldsGuard'
 import type { SessionManager } from '../live/session'
 
 /** Value of the generated CSS field. */
@@ -30,6 +49,8 @@ type HookOptions = {
   sessions?: SessionManager
   /** Checks bindings against the data model (when templates are on). */
   bindings?: BindingCheck
+  /** Who changed which field last (the stale-save check). Default: the process-wide clock. */
+  fieldClock?: FieldClock
 }
 
 /** `context` flag of the session's own draft saves. */
@@ -41,6 +62,28 @@ export const SESSION_SAVE_CONTEXT = 'builderSession'
 export const KEEP_LAYOUT_CONTEXT = 'builderKeepLayout'
 /** `context` key where the guard records the session seq it wrote. */
 const GUARD_SEQ_CONTEXT = 'builderSessionSeq'
+
+/**
+ * A save by the plugin itself: the session's draft, publish / unpublish / revert, or the template
+ * "Default" flag. It keeps Payload's document lock and skips the stale-save check.
+ */
+function isPluginSave(context: Record<string, unknown> | undefined): boolean {
+  return Boolean(context?.[SESSION_SAVE_CONTEXT] || context?.[KEEP_LAYOUT_CONTEXT] || context?.[KEEP_LOCK_CONTEXT])
+}
+
+/**
+ * Before a plugin save, remembers Payload's lock on the document, so `layoutAfterChange` can put
+ * it back (Payload deletes the lock on every update). See live/fieldsGuard.ts.
+ */
+export function keepLockBeforeOperation(options: { collection: string }): CollectionBeforeOperationHook {
+  return async ({ args, context, operation, req }) => {
+    const id = (args as { id?: unknown }).id
+    if (operation !== 'update' || !context || !isPluginSave(context)) return args
+    if (typeof id !== 'string' && typeof id !== 'number') return args
+    await rememberLocks({ payload: req.payload as unknown as LockPayload, req, collection: options.collection, id, context })
+    return args
+  }
+}
 
 function isGeneratedCss(value: unknown): value is GeneratedCss {
   if (!value || typeof value !== 'object') return false
@@ -102,6 +145,9 @@ export function checkLayout(
  */
 export function layoutBeforeChange(options: HookOptions): CollectionBeforeChangeHook {
   const { collection: slug, field, cssField, blocks, css, sessions, bindings } = options
+  const clock = options.fieldClock ?? defaultFieldClock()
+  // The layout and the plugin's own fields: the session protects them, not the stale-save check.
+  const pluginFields = new Set([field, cssField, richTextFieldName(field)])
 
   return async ({ collection, context, data, operation, originalDoc, req }) => {
     if (!data) return data
@@ -116,6 +162,25 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
       if (open) {
         data[field] = structuredClone(open.layout)
         if (context) context[GUARD_SEQ_CONTEXT] = open.seq
+      }
+    }
+
+    // Stale-save check for the other fields (title, slug, SEO, …): a form loaded before someone
+    // else changed a field must not undo that change. See live/fieldsGuard.ts.
+    if (operation === 'update' && docId !== undefined) {
+      const conflicts = checkStaleSave({
+        clock,
+        collection: slug,
+        id: docId,
+        data,
+        originalDoc,
+        skip: pluginFields,
+        user: req.user,
+        context,
+        pluginSave: isPluginSave(context),
+      })
+      if (conflicts.length > 0) {
+        throw new APIError(staleSaveMessage(conflicts, (name) => topFieldLabel(collection.fields, name)), 409, undefined, true)
       }
     }
 
@@ -176,12 +241,18 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
  * state again. This matters after Publish: a later draft save of the same layout would mark the
  * document as changed.
  */
-export function layoutAfterChange(options: { collection: string; sessions: SessionManager }): CollectionAfterChangeHook {
-  return ({ context, doc }) => {
+export function layoutAfterChange(options: { collection: string; sessions: SessionManager; fieldClock?: FieldClock }): CollectionAfterChangeHook {
+  const clock = options.fieldClock ?? defaultFieldClock()
+  return async ({ context, doc, operation, req }) => {
+    if (doc?.id === undefined) return doc
     const seq = context?.[GUARD_SEQ_CONTEXT]
-    if (typeof seq === 'number' && doc?.id !== undefined) {
+    if (typeof seq === 'number') {
       options.sessions.markSaved(options.collection, doc.id, seq, { updatedAt: doc.updatedAt, status: doc._status })
     }
+    if (operation !== 'update') return doc
+    recordFieldChanges({ clock, collection: options.collection, doc, user: req.user, context })
+    // Same transaction as Payload's delete of the lock, so nobody sees the document unlocked.
+    await restoreLocks({ payload: req.payload as unknown as LockPayload, req, collection: options.collection, id: doc.id, context })
     return doc
   }
 }

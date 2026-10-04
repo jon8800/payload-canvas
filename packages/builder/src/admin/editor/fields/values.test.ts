@@ -2,9 +2,12 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import {
+  formatProblem,
   fromRelationshipInput,
   isFieldVisible,
+  numberMessage,
   parseJsonText,
+  parseNumberText,
   rowLabel,
   setKey,
   toJsonText,
@@ -100,5 +103,47 @@ describe('json text', () => {
     assert.deepEqual(parseJsonText('{"a":1}'), { ok: true, value: { a: 1 } })
     assert.deepEqual(parseJsonText('  '), { ok: true, value: undefined })
     assert.equal(parseJsonText('{a').ok, false)
+  })
+})
+
+describe('number text', () => {
+  const limits = { min: 1, max: 100 }
+
+  it('stores valid numbers and empty text', () => {
+    assert.deepEqual(parseNumberText('5', limits), { ok: true, value: 5 })
+    assert.deepEqual(parseNumberText(' 100 ', limits), { ok: true, value: 100 })
+    assert.deepEqual(parseNumberText('2.5', {}), { ok: true, value: 2.5 })
+    assert.deepEqual(parseNumberText('-5', {}), { ok: true, value: -5 })
+    assert.deepEqual(parseNumberText('', limits), { ok: true, value: null })
+  })
+
+  it('flags numbers outside min/max at once, other text only after typing', () => {
+    for (const text of ['500', '0', '-5']) {
+      assert.deepEqual(parseNumberText(text, limits), { ok: false, error: 'Enter a number from 1 to 100.', partial: false }, text)
+    }
+    for (const text of ['-', 'abc', '1e3', '0x10']) {
+      assert.deepEqual(parseNumberText(text, limits), { ok: false, error: 'Enter a number from 1 to 100.', partial: true }, text)
+    }
+    assert.equal(parseNumberText('', { ...limits, required: true }).ok, false)
+  })
+
+  it('names the limits the field has', () => {
+    assert.equal(numberMessage({ min: 1 }), 'Enter a number of 1 or more.')
+    assert.equal(numberMessage({ max: 10 }), 'Enter a number of 10 or less.')
+    assert.equal(numberMessage({}), 'Enter a number.')
+  })
+})
+
+describe('formatProblem', () => {
+  const url = { name: 'url', type: 'text', admin: { custom: { builderFormat: 'videoUrl' } } }
+
+  it('runs the check named by builderFormat', () => {
+    assert.equal(formatProblem(url, 'https://youtu.be/aqz-KE-bpKQ'), null)
+    assert.match(formatProblem(url, 'not a url') ?? '', /https:\/\//)
+  })
+
+  it('ignores fields without a known format', () => {
+    assert.equal(formatProblem({ name: 'x', type: 'text' }, 'not a url'), null)
+    assert.equal(formatProblem({ name: 'x', type: 'text', admin: { custom: { builderFormat: 'nope' } } }, 'x'), null)
   })
 })

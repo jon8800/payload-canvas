@@ -394,3 +394,132 @@ Templates (from the templates pass):
 
 - During the run, someone edited `packages/builder/src/live/apply.ts` and `document.ts`. The canvas once showed a Turbopack "Export payloadErrorMessage doesn't exist" error. It cleared on reload, so it is not counted.
 - The browser automation daemon often timed out at 2560x1440. The auto-scroll-while-dragging test is therefore inconclusive: the canvas moved only 55 px while the pointer rested at the top edge. Re-test it by hand. The code is in `Editor.tsx:33-50`.
+
+---
+
+## Status after fix round (2026-10-04)
+
+Checked against the code on the evening of 2026-10-04. The dev server was down for part of the check (another agent was moving the theme into the plugin), so most front-end items were checked in the code, not in the browser. "Fixed here" means fixed in this hardening round.
+
+Totals: report items 57 fixed, 8 open, 4 won't fix. Design critique: 16 fixed, 2 open, 2 won't fix.
+
+### Blocker
+
+- B1 — fixed — `plugin/templates.ts` `keepOneDefault` acts only on a published, ticked default. Draft autosaves no longer publish another template.
+- B2 — fixed — the Image `image` prop is optional, library sections drop media ids, and Publish names the problem blocks (`topbar/problems.ts`).
+
+### Major
+
+- M1 — fixed — `BuilderScreen.tsx` wraps the editor in `EditDepthProvider`, so upload stays in a drawer.
+- M2 — fixed — Desktop frames at least 1280 px and zooms to fit (`Canvas.tsx`).
+- M3 — fixed — the Styles panel shows "Overridden at md by …" with an action to edit that breakpoint.
+- M4 — fixed — the rich text toolbar is width-capped. Ctrl+K adds a link.
+- M5 — fixed — the message is deduplicated ("Title is required"). Document-field problems open the settings drawer.
+- M6 — fixed — the Link slot refuses interactive blocks at any depth.
+- M7 — fixed — outline rows show block names, with rename (F2). New containers go after the selected section.
+- M8 — fixed — outline rows have roving tabindex. Page settings, Preview and the library search have names.
+- M9 — fixed — header, page and footer share one compiled stylesheet (`compilePageCss`).
+- M10 — fixed — the Menu block has a mobile disclosure and `aria-current`.
+- M11 — fixed — `generateMeta.ts` falls back to the page title plus the site name and sets a description.
+- M12 — fixed — `not-found.tsx`, `global-not-found.tsx` and `NotFoundContent.tsx` exist.
+- M13 — fixed — `requireBlocksForDefault` refuses to publish an empty default template.
+- M14 — fixed — bindings load with `overrideAccess: false`, and the picker hides `email`.
+- M15 — fixed — a link binds only to `$url` or to URL-like fields.
+
+### Minor
+
+- m1 — fixed — `scrollToBlock` keeps a margin, and the canvas sends the reveal again after an insert.
+- m2 — fixed — Escape is ignored while a popover is open.
+- m3 — fixed — `useUndoKeys` passes Ctrl+Z from the combobox to the editor.
+- m4 — fixed — whitespace is collapsed on write, and unknown classes are flagged.
+- m5 — fixed — fonts map to `var(--font-<name>)`, and the app can pass `fontFamilies`.
+- m6 — open (partly fixed) — developer tokens are under "More theme colors", but long names such as `secondary-foreground` are still cut off in the 2-column grid. Files: `admin/editor/styles/ColorPicker.tsx`, `styles.scss`.
+- m7 — open — the Video source has no URL check, and the canvas shows an empty placeholder. Files: `blocks/defaults.ts` (Video field `validate`), `builder-react/src/components/Video.tsx`.
+- m8 — fixed — the width box clamps to 320–2560 and says so.
+- m9 — fixed — the editor warns "<name> deleted the block you had selected".
+- m10 — fixed — distinct initials (BD, BD2) and "You (another tab)".
+- m11 — fixed — the live chip is width-capped, and the offline text is short.
+- m12 — open (partly fixed) — the chips fit the block and the setup card is plain. The panel still looks ready before the first message, because nothing reads the server's `ai.ready` / `setupProblem`. File: `admin/editor/assistant/controller.ts`.
+- m13 — won't fix — Payload's autosave creates the record when the create view opens. That is Payload's behavior for autosave collections. The builder shows "Untitled" instead of the id.
+- m14 — open (partly fixed) — the site CSS adds `overflow-wrap`, but the canvas does not load it, and the Heading and Text defaults have no `break-words`. File: `blocks/defaults.ts`.
+- m15 — won't fix — not reproducible. The M1 drawer-depth fix is the likely cause.
+- m16 — fixed — the preview URL carries no secret.
+- m17 — fixed — the library search box has `aria-label`.
+- m18 — fixed — `robots.txt` serves, `og:image` is no longer linked, and the site now has a favicon (`app/(frontend)/icon.svg`, fixed here). The origin comes from `NEXT_PUBLIC_SERVER_URL`, which is a deploy setting (`.env` has `http://localhost:3000`).
+- m19 — fixed — the input border mixes background and foreground 50%.
+- m20 — fixed — a 2 px `:focus-visible` ring, a skip link and `aria-current`.
+- m21 — fixed — form fields are full width below `sm`.
+- m22 — fixed — inline errors with `aria-invalid` / `aria-describedby`, and `role="alert"`.
+- m23 — fixed — SEO titles use the site name from Site Settings.
+- m24 — fixed — header, footer and sections share `px-5 md:px-8` around `max-w-6xl`.
+- m25 — won't fix — the canvas leaves out the header and footer on purpose (`(builder-canvas)/layout.tsx`).
+- m26 — fixed — menus have labels. Card titles are H2 when the list has no title.
+- m27 — fixed — page queries filter `_status: 'published'` outside draft mode.
+- m28 — fixed — rich text binds only to textarea props.
+- m29 — fixed — the Field block leaves out group and array fields.
+- m30 — open — "Number of items" still turns each keystroke into a number, with no 1–100 message. File: `admin/editor/fields/renderField.tsx`.
+- m31 — fixed — the outline shows a broken-binding badge.
+- m32 — open (partly fixed) — `aria-selected` and the per-row dates are fixed. Posts that use another template are still listed with no hint. Files: `admin/editor/templates/SamplePicker.tsx`, `useTemplate.ts`.
+- m33 — won't fix — unconfirmed. "You (another tab)" now covers your own earlier session.
+
+### Polish
+
+- p1 — fixed — the action bar is compact and can sit below or inside small blocks.
+- p2 — fixed — left/right arrows in rows, up/down arrows in columns.
+- p3 — fixed — one name row, and no tooltip while following.
+- p4 — fixed — focus goes to the first field after an insert.
+- p5 — fixed — the inspector goes back to Content for a different block type.
+- p6 — fixed — Cut, Hide, Move and Select parent are listed.
+- p7 — fixed — the settings drawer has no Publish, no "Open builder" and no "…" menu.
+- p8 — open (partly fixed) — "Copy block ID" is gone, and Rename, Paste and Select parent are there. "Save as section" does not exist. File: `admin/editor/inspector/Inspector.tsx`.
+- p9 — fixed — the layout field reads "N sections, M blocks in total".
+- p10 — fixed — the Pages and Posts lists have a Status column (Payload shows Draft or Published, not "Changed").
+- p11 — open — the Stack default is `flex flex-col gap-4` and Rich text is `prose`, with no padding or width. File: `blocks/defaults.ts`.
+- p12 — fixed — prose colors follow the theme foreground.
+- p13 — fixed — a zoom control with fit, in and out.
+- p14 — fixed — the templates list shows collection labels and "Default".
+- p15 — fixed — the fallback label is read once.
+- p16 — fixed — 2 columns at 768 px.
+- p17 — fixed — images get a `srcset` from Payload's image sizes.
+- p18 — fixed — email and phone are `mailto:` / `tel:` links.
+- p19 — fixed — nothing on the site imports the toast CSS.
+
+### Design critique (`design-critique.md`)
+
+Editor priority issues, in order (D1 Styles panel, D2 AI entry points, D3 settings drawer, D4 outline and action bar, D5 Add panel):
+
+- D1 — fixed — groups open only when they have values. The box model hides All/X/Y behind a toggle.
+- D2 — fixed — one AI entry (inspector tab, Ctrl+I). The assistant uses the editor accent.
+- D3 — fixed here — the drawer has no layout field, Publish or actions, and it is now at most 1040 px wide, on the right (`topbar/topbar.scss`, marker in `topbar/settingsDrawer.tsx`).
+- D4 — fixed — rows show names, with rename. The action bar is drag, parent and "More".
+- D5 — open (partly fixed) — the Add panel starts closed once the page has blocks. Section thumbnails are still wireframes, and there is no "+" between blocks. Files: `admin/editor/Library.tsx`, the canvas overlay.
+
+Front-end priority issues (DF1 mobile header, DF2 images, DF3 page structure and proof, DF4 contact form, DF5 theme):
+
+- DF1 — fixed — the Menu block folds into a disclosure below `md`, with 44 px targets.
+- DF2 — fixed — the seed images are mockups and editorial compositions, not labelled gradients.
+- DF3 — won't fix (rest) — "Selected work" and left-aligned interior headers exist. Testimonial photos are not added, because the seed has no portrait images.
+- DF4 — fixed — stacked on mobile, `text-base` inputs, inline errors and a designed success state.
+- DF5 — fixed — Newsreader and Hanken Grotesk, and a deep-green primary (the theme is moving into the plugin).
+
+Minor observations (Dm1–Dm6 editor, Dm7–Dm10 front end):
+
+- Dm1 — fixed — command cards scroll instead of breaking words. Claude Code and Codex are tabs.
+- Dm2 — fixed — disabled items are neutral. Safe actions come first, destructive ones after a separator.
+- Dm3 — fixed — the title box has a hover border.
+- Dm4 — fixed — "You are editing this block in another tab".
+- Dm5 — fixed here — collaborator colors no longer use blue, cyan, indigo or violet, which were close to the editor's blue selection (`live/session.ts`).
+- Dm6 — open — there is no Publish shortcut, so the empty inspector cannot list one. Files: `admin/editor/shortcuts.ts`, `inspector/Inspector.tsx`.
+- Dm7 — fixed — the footer has a contact column.
+- Dm8 — fixed here — "More posts" on the post template has a centered heading, like the article (`data/sections/postTemplate.ts`). Existing databases get it on the next `pnpm seed:demo`.
+- Dm9 — fixed — bullets use the muted foreground.
+- Dm10 — won't fix — three FAQ items work as a static list, as the critique says.
+
+### Found during this round
+
+- Fixed here — Payload's "Document locked" dialog opened behind the builder's settings drawer (modal z-index 30, drawer 100 and up). A second person saw an editable form with no warning. `topbar/topbar.scss` lifts the lock dialogs above drawers.
+- Open (Payload behavior) — in the settings drawer, the lock dialog's "Go back" button goes to the collection list and leaves the builder. "View read-only" is the right choice there. A fix needs a custom drawer or a Payload change.
+
+### Open items for the editor UI owners
+
+m6, m7, m12, m14, m30, m32, p8, p11, D5, Dm6. Each has one line above, with its files.

@@ -7,12 +7,15 @@
 // aria-current. Inner classes come from MENU_CLASS_MAP, which the block definition lists in `classes`.
 import { useEffect, useRef, useSyncExternalStore } from 'react'
 import { MENU_CLASS_MAP as C } from '@payload-toolkit/builder/blocks'
+import { editableText } from '../render/editable'
 import { linkAttributes, type LinkAttributes } from '../render/link'
+import type { RenderMode } from '../render/types'
 import type { BlockComponentProps } from '../render/types'
 import { asText, PlaceholderText } from './placeholder'
 
 type Collapse = 'md' | 'lg' | 'never'
-type Item = { key: string; label: string; link: LinkAttributes | null }
+/** `index` is the row's index in the stored array: the canvas edits `items.<index>.label`. */
+type Item = { key: string; index: number; label: string; link: LinkAttributes | null }
 
 const subscribe = (onChange: () => void) => {
   window.addEventListener('popstate', onChange)
@@ -48,14 +51,21 @@ function toItems(value: unknown): Item[] {
     const { id, label, link } = row as { id?: unknown; label?: unknown; link?: unknown }
     const text = asText(label)
     if (!text) return []
-    return [{ key: typeof id === 'string' ? id : String(i), label: text, link: linkAttributes(link) }]
+    return [{ key: typeof id === 'string' ? id : String(i), index: i, label: text, link: linkAttributes(link) }]
   })
 }
 
-function MenuLink({ item, className, current }: { item: Item; className: string; current: boolean }) {
-  if (!item.link) return <span className={className}>{item.label}</span>
+function MenuLink({ item, className, current, mode }: { item: Item; className: string; current: boolean; mode: RenderMode }) {
+  const editable = editableText(mode, `items.${item.index}.label`)
+  if (!item.link) {
+    return (
+      <span {...editable} className={className}>
+        {item.label}
+      </span>
+    )
+  }
   return (
-    <a {...item.link} className={className} aria-current={current ? 'page' : undefined}>
+    <a {...item.link} {...editable} className={className} aria-current={current ? 'page' : undefined}>
       {item.label}
     </a>
   )
@@ -112,7 +122,7 @@ export function Menu({ props, className, attributes, mode }: BlockComponentProps
   const list = (linkClass: string) =>
     items.map((item) => (
       <li key={item.key}>
-        <MenuLink item={item} className={linkClass} current={current(item)} />
+        <MenuLink item={item} className={linkClass} current={current(item)} mode={mode} />
       </li>
     ))
 
@@ -134,7 +144,7 @@ export function Menu({ props, className, attributes, mode }: BlockComponentProps
             <ul className={C.panelList}>
               {items.map((item) => (
                 <li key={item.key}>
-                  <MenuLink item={item} className={C.panelLink} current={current(item)} />
+                  <MenuLink item={item} className={C.panelLink} current={current(item)} mode={mode} />
                 </li>
               ))}
             </ul>

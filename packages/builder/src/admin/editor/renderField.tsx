@@ -18,10 +18,11 @@ import { getBlockDefinition } from '../../core'
 import type { Block } from '../../core/types'
 
 import { ArrayField } from './fields/ArrayField'
+import { CheckedTextField, NumberField } from './fields/CheckedInputs'
 import { GroupField } from './fields/GroupField'
 import { JsonField } from './fields/JsonField'
 import { RichTextField } from './fields/RichTextField'
-import { asId, fromRelationshipInput, isFieldVisible, isRecord, toRelationshipInput, type FieldShape } from './fields/values'
+import { asId, formatProblem, fromRelationshipInput, isFieldVisible, isRecord, toRelationshipInput, type FieldShape } from './fields/values'
 import { useRuntime } from './runtime'
 import { BindingScopeProvider, FieldSlot } from './templates/Bindable'
 import './fields/fields.scss'
@@ -90,6 +91,19 @@ export function RenderBlockField({ field, onChange, path, value }: Props) {
     case 'text':
     case 'email': {
       if (field.type === 'text' && field.hasMany) return <Unsupported label={label} reason="text fields with hasMany are not supported yet." />
+      if (field.admin?.custom?.builderFormat) {
+        return (
+          <CheckedTextField
+            check={(input) => formatProblem(field as FieldShape, input)}
+            description={description}
+            label={label}
+            onChange={onChange}
+            path={path}
+            required={required}
+            value={asString(value)}
+          />
+        )
+      }
       return (
         <TextInput
           description={description}
@@ -105,17 +119,15 @@ export function RenderBlockField({ field, onChange, path, value }: Props) {
     case 'number': {
       if (field.hasMany) return <Unsupported label={label} reason="number fields with hasMany are not supported yet." />
       return (
-        <TextInput
+        <NumberField
           description={description}
           label={label}
-          onChange={(e: ChangeEvent<HTMLInputElement>) => {
-            const raw = e.target.value.trim()
-            const number = Number(raw)
-            onChange(raw === '' || Number.isNaN(number) ? null : number)
-          }}
+          limits={{ min: field.min, max: field.max, required }}
+          onChange={onChange}
           path={path}
+          placeholder={typeof field.defaultValue === 'number' ? String(field.defaultValue) : undefined}
           required={required}
-          value={asString(value)}
+          value={value}
         />
       )
     }

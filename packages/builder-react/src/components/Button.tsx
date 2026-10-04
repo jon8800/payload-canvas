@@ -1,3 +1,4 @@
+import { editableText } from '../render/editable'
 import { linkAttributes } from '../render/link'
 import type { BlockComponentProps } from '../render/types'
 import { asText, PlaceholderText } from './placeholder'
@@ -10,13 +11,13 @@ export function Button({ props, className, attributes, mode }: BlockComponentPro
   const link = linkAttributes(props.link)
   if (!link) {
     return (
-      <span {...attributes} className={className}>
+      <span {...attributes} {...editableText(mode, 'label')} className={className}>
         {content}
       </span>
     )
   }
   return (
-    <a {...attributes} {...link} className={className}>
+    <a {...attributes} {...editableText(mode, 'label')} {...link} className={className}>
       {content}
     </a>
   )

@@ -7,7 +7,9 @@ import type { ReactNode } from 'react'
 
 import { getServerSideURL } from '@/utilities/getURL'
 import { mergeOpenGraph } from '@/utilities/mergeOpenGraph'
-import { ThemeHead } from '@/components/ThemeHead'
+import { ThemeStyle } from '@payload-toolkit/builder-react/server'
+import config from '@payload-config'
+import { getPayload } from 'payload'
 
 import './globals.css'
 
@@ -15,11 +17,12 @@ import './globals.css'
  * The document shell only. Each page renders its own frame (header part, content, footer part)
  * through `SiteFrame`, so all builder layouts on a page share one stylesheet.
  */
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const payload = await getPayload({ config })
   return (
     <html className={cn(GeistSans.variable, GeistMono.variable)} lang="en">
       <head>
-        <ThemeHead />
+        <ThemeStyle payload={payload} />
       </head>
       <body className="font-sans antialiased">{children}</body>
     </html>

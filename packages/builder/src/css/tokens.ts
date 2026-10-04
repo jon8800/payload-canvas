@@ -243,8 +243,13 @@ export function tokensFromTheme(entries: ThemeEntries, classList: string[] | nul
     fontWeights: strip(valid('fontWeights')),
     // The value is the variable, not the stack in the entry file: the site's theme may override
     // `--font-sans` at runtime (for example with Inter), so a stack like "GeistSans, …" would
-    // name a font the page does not use (QA m5).
-    fonts: strip(valid('fonts')).map((token) => ({ name: token.name, value: `var(--font-${token.name})` })),
+    // name a font the page does not use (QA m5). An alias of other font variables
+    // (`--font-display: var(--font-heading, var(--font-sans))`) keeps its value, so
+    // `applyFontFamilies` can follow it to the theme's family.
+    fonts: strip(valid('fonts')).map((token) => ({
+      name: token.name,
+      value: FONT_ALIAS.test(token.value.trim()) ? token.value.trim() : `var(--font-${token.name})`,
+    })),
     leading: strip(valid('leading')),
     tracking: strip(valid('tracking')),
     radius: strip(valid('radius')),
@@ -253,6 +258,40 @@ export function tokensFromTheme(entries: ThemeEntries, classList: string[] | nul
     containers: strip(valid('containers')),
     classList: classList ?? [],
   }
+}
+
+/** A font value made only of `var(--font-…)` references, with optional fallbacks. */
+const FONT_ALIAS = /^var\(\s*--font-[\w-]+\s*(,[\s\S]*)?\)$/
+
+/** Font family names by font variable name, e.g. `{ sans: 'Inter', heading: 'Fraunces' }`. */
+export type FontFamilies = Record<string, string | null | undefined>
+
+/**
+ * Resolves `var(--font-<name>[, fallback])` in a font value with the families the site really
+ * uses. Returns the family name when the value resolves to one, else the value unchanged.
+ */
+export function resolveFontValue(value: string, families: FontFamilies, depth = 0): string {
+  if (depth > 8) return value
+  const match = value.trim().match(/^var\(\s*--font-([\w-]+)\s*(?:,([\s\S]*))?\)$/)
+  if (!match) return value
+  const family = families[match[1]]?.trim()
+  if (family) return family
+  const fallback = match[2]?.trim()
+  if (!fallback) return value
+  const resolved = resolveFontValue(fallback, families, depth + 1)
+  return resolved === fallback && FONT_ALIAS.test(fallback) ? value : resolved
+}
+
+/**
+ * Font tokens with the site's real families: `sans` shows "Inter", and an alias such as
+ * `display: var(--font-heading, var(--font-sans))` shows the heading family (or the body family
+ * when the theme has no heading font). Tokens that resolve to nothing keep their value.
+ */
+export function applyFontFamilies(fonts: ThemeToken[], families: FontFamilies): ThemeToken[] {
+  return fonts.map((token) => {
+    const value = resolveFontValue(token.value, families)
+    return value === token.value ? token : { ...token, value }
+  })
 }
 
 // ---------------------------------------------------------------------------------------------

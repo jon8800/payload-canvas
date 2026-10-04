@@ -1,5 +1,6 @@
 import { createElement } from 'react'
 import type { BlockComponentProps } from '../render/types'
+import { editableText } from '../render/editable'
 import { asText, PlaceholderText } from './placeholder'
 
 type Tag = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
@@ -14,5 +15,5 @@ export function Heading({ props, className, attributes, mode }: BlockComponentPr
   const text = asText(props.text)
   if (!text && mode !== 'canvas') return null
   const content = text || <PlaceholderText>Heading</PlaceholderText>
-  return createElement(toTag(props.level), { ...attributes, className }, content)
+  return createElement(toTag(props.level), { ...attributes, ...editableText(mode, 'text'), className }, content)
 }

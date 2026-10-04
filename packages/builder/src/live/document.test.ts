@@ -5,6 +5,7 @@ import { findBlock } from '../core/tree'
 import type { BlockDefinition, Layout } from '../core/types'
 import { actorFromUser } from './apply'
 import { documentEndpoints, loadDocMeta } from './document'
+import { KEEP_LOCK_CONTEXT } from './fieldsGuard'
 import type { LiveRuntime } from './runtime'
 import { createSessionManager, type SessionTarget } from './session'
 import type { BuilderDocMeta, LivePublishedEvent, LiveSavedEvent, LiveSessionEvent, MultiplayerEvent, PublishResponse } from './types'
@@ -196,6 +197,18 @@ describe('publish endpoints', () => {
     assert.equal(textOf(db.latest.layout), 'Published')
     assert.equal(db.latest._status, 'published')
     assert.equal(events.find((e): e is LivePublishedEvent => e.type === 'published')?.action, 'revert')
+  })
+
+  it("publish, unpublish, revert and the session's draft saves skip Payload's document lock and keep it", async () => {
+    const { call, edit, db } = setup()
+    await edit('Draft edit')
+    for (const action of ['publish', 'revert', 'unpublish']) assert.ok(((await call(action)).body as PublishResponse).ok)
+    assert.ok(db.writes.length >= 4)
+    for (const write of db.writes) {
+      assert.equal(write.overrideLock, true)
+      const context = write.context as Doc
+      assert.ok(context[KEEP_LOCK_CONTEXT] || context.builderSession, 'every save is a plugin save')
+    }
   })
 
   it('refuses revert without a published version, users without update access and collections without drafts', async () => {

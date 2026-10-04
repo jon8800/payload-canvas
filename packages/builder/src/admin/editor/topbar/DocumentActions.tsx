@@ -11,9 +11,11 @@ import { BlockIcon, Icon, type IconName } from '../icons'
 import { blockSummary } from '../names'
 import { useEditor } from '../store'
 import { useRuntime } from '../runtime'
+import { publishShortcut } from '../shortcuts'
 import { Popover, usePopover } from '../styles/popover'
 import { useCollectionLabel } from '../templates/useTemplate'
 import { useValue } from '../valueStore'
+import { publishState } from './document'
 import type { PublishProblem } from './problems'
 import { SettingsDrawerSlug } from './settingsDrawer'
 
@@ -178,10 +180,8 @@ export function PublishButton() {
   const unpublishSlug = `builder-unpublish-${meta.collection}-${meta.id}`
 
   const published = meta.publishedAt !== null
-  const pending = Boolean(live?.pending)
-  // Unsaved session commits make a new draft: the server saves them before it publishes.
-  const changed = meta.status !== 'published' || Boolean(live?.unsaved)
-  const canPublish = meta.drafts && meta.canUpdate && changed && !pending && busy === null
+  const { changed, canPublish } = publishState(meta, busy, live)
+  const shortcut = publishShortcut()
 
   // Safe actions first; the ones that change what the site shows last, after a separator.
   const items: MenuItem[] = [
@@ -208,7 +208,8 @@ export function PublishButton() {
           type="button"
           className="builder-bar__publish-main"
           disabled={!canPublish}
-          data-tooltip={changed ? 'Publish the draft to the site' : 'Nothing changed since the last publish'}
+          data-tooltip={changed ? `Publish the draft to the site · ${shortcut.text}` : 'Nothing changed since the last publish'}
+          aria-keyshortcuts={shortcut.aria}
           onClick={() => void runtime.doc.run('publish')}
         >
           {busy && busy !== 'rename' ? label[busy] : 'Publish changes'}

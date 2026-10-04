@@ -17,6 +17,7 @@ import { compileClasses } from '@payload-toolkit/builder/css'
 import { isRecord } from './render/fields'
 
 export { loadLayoutData, type LoadLayoutOptions } from './render/resolve'
+export { loadTheme, ThemeStyle, type LoadedTheme, type ThemeStyleProps } from './theme/ThemeStyle'
 
 type Doc = Record<string, unknown>
 

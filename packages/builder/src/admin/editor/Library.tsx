@@ -1,7 +1,7 @@
 'use client'
 
 import { useDraggable } from '@dnd-kit/core'
-import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { memo, useDeferredValue, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 
 import type { Block, BlockDefinition, SectionDefinition } from '../../core/types'
 import { insertBlocks, insertNewBlock, sectionPosition } from './actions'
@@ -42,6 +42,8 @@ export function Library() {
   const { config, store } = useRuntime()
   const [tab, setTab] = useState<Tab>('blocks')
   const [query, setQuery] = useState('')
+  // The input updates at once; the filtered lists follow in a deferred render.
+  const listQuery = useDeferredValue(query)
   // Open on an empty page. Once the page has blocks the outline matters more: the panel starts closed.
   const [open, setOpen] = useState(() => store.getState().layout.blocks.length === 0)
   const sectionCount = config.sections?.length ?? 0
@@ -95,7 +97,7 @@ export function Library() {
             />
           </label>
           <div className="builder-editor__insert-body">
-            {tab === 'blocks' ? <BlockList query={query} /> : <SectionList query={query} />}
+            {tab === 'blocks' ? <BlockList query={listQuery} /> : <SectionList query={listQuery} />}
           </div>
         </>
       )}
@@ -116,7 +118,7 @@ function NoMatches({ query }: { query: string }) {
   return <p className="builder-editor__hint builder-editor__hint--center">Nothing matches “{query.trim()}”.</p>
 }
 
-function BlockList({ query }: { query: string }) {
+const BlockList = memo(function BlockList({ query }: { query: string }) {
   const { config } = useRuntime()
   const groups = useMemo(
     () =>
@@ -136,7 +138,7 @@ function BlockList({ query }: { query: string }) {
       </div>
     </Group>
   ))
-}
+})
 
 function BlockTile({ def }: { def: BlockDefinition }) {
   const runtime = useRuntime()
@@ -164,7 +166,7 @@ function BlockTile({ def }: { def: BlockDefinition }) {
   )
 }
 
-function SectionList({ query }: { query: string }) {
+const SectionList = memo(function SectionList({ query }: { query: string }) {
   const { config } = useRuntime()
   const sections = useMemo(() => config.sections ?? [], [config.sections])
   const groups = useMemo(
@@ -192,7 +194,7 @@ function SectionList({ query }: { query: string }) {
       </div>
     </Group>
   ))
-}
+})
 
 function SectionCard({ section }: { section: SectionDefinition }) {
   const runtime = useRuntime()

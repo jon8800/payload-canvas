@@ -86,9 +86,6 @@ importers:
       cmdk:
         specifier: ^1.1.1
         version: 1.1.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      culori:
-        specifier: ^4.0.2
-        version: 4.0.2
       date-fns:
         specifier: ^4.4.0
         version: 4.4.0
@@ -98,9 +95,6 @@ importers:
       geist:
         specifier: ^1.7.2
         version: 1.7.2(next@16.3.8(@babel/core@7.29.7)(@types/node@24.19.1)(babel-plugin-macros@3.1.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(sass@1.77.4))
-      google-font-metadata:
-        specifier: ^6.0.8
-        version: 6.0.8
       graphql:
         specifier: ^16.14.2
         version: 16.14.2
@@ -128,9 +122,6 @@ importers:
       react:
         specifier: 19.3.0
         version: 19.3.0
-      react-colorful:
-        specifier: ^5.8.1
-        version: 5.8.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       react-day-picker:
         specifier: ^10.0.2
         version: 10.0.2(@types/react@19.3.0)(react@19.3.0)
@@ -174,9 +165,6 @@ importers:
       '@tailwindcss/postcss':
         specifier: ^4.3.3
         version: 4.3.3
-      '@types/culori':
-        specifier: ^4.0.1
-        version: 4.0.1
       '@types/node':
         specifier: 24.19.1
         version: 24.19.1
@@ -210,12 +198,18 @@ importers:
 
   packages/builder:
     dependencies:
+      '@base-ui/react':
+        specifier: ^1.8.0
+        version: 1.8.0(@date-fns/tz@1.5.0)(@types/react@19.3.0)(date-fns@4.4.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/core':
         specifier: 6.3.1
         version: 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       payload-mcp-toolkit:
         specifier: '>=0.9.0'
         version: 0.9.0(@payloadcms/ui@3.90.2(@types/react@19.3.0)(monaco-editor@0.55.1)(next@16.3.8(@babel/core@7.29.7)(@types/node@24.19.1)(babel-plugin-macros@3.1.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(sass@1.77.4))(payload@3.90.2(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@7.0.2))(next@16.3.8(@babel/core@7.29.7)(@types/node@24.19.1)(babel-plugin-macros@3.1.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(sass@1.77.4))(payload@3.90.2(graphql@16.14.2)(typescript@7.0.2))(zod@3.25.76)
+      react-colorful:
+        specifier: ^5.8.1
+        version: 5.8.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
     devDependencies:
       '@anthropic-ai/sdk':
         specifier: ^0.131.0
@@ -235,6 +229,9 @@ importers:
       '@types/react-dom':
         specifier: 19.3.0
         version: 19.3.0(@types/react@19.3.0)
+      google-font-metadata:
+        specifier: ^6.0.8
+        version: 6.0.8
       next:
         specifier: 16.3.8
         version: 16.3.8(@babel/core@7.29.7)(@types/node@24.19.1)(babel-plugin-macros@3.1.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(sass@1.77.4)
@@ -264,6 +261,25 @@ importers:
         version: 3.25.76
 
   packages/builder-react:
+    dependencies:
+      '@lexical/history':
+        specifier: 0.50.0
+        version: 0.50.0(typescript@7.0.2)
+      '@lexical/list':
+        specifier: 0.50.0
+        version: 0.50.0(typescript@7.0.2)
+      '@lexical/rich-text':
+        specifier: 0.50.0
+        version: 0.50.0(typescript@7.0.2)
+      '@lexical/selection':
+        specifier: 0.50.0
+        version: 0.50.0(typescript@7.0.2)
+      '@lexical/utils':
+        specifier: 0.50.0
+        version: 0.50.0(typescript@7.0.2)
+      lexical:
+        specifier: 0.50.0
+        version: 0.50.0(typescript@7.0.2)
     devDependencies:
       '@payload-toolkit/builder':
         specifier: workspace:*
@@ -2231,9 +2247,6 @@ packages:
   '@types/cross-spawn@6.0.6':
     resolution: {integrity: sha512-fXRhhUkG4H3TQk5dBhQ7m/JDdSNHKwR2BBia62lhwEIq9xGiQKLxd6LymNhn47SjXhsUEPmxi+PKw2OkW4LLjA==}
 
-  '@types/culori@4.0.1':
-    resolution: {integrity: sha512-43M51r/22CjhbOXyGT361GZ9vncSVQ39u62x5eJdBQFviI8zWp2X5jzqg7k4M6PVgDQAClpy2bUe2dtwEgEDVQ==}
-
   '@types/d3-array@3.2.2':
     resolution: {integrity: sha512-hOLWVbm7uRza0BYXpIIW5pxfrKe0W+D5lrFiAEYR+pb6w3N2SwSMaJbXdUfSEv+dT4MfHBLtn5js0LAWaO6otw==}
 
@@ -2784,10 +2797,6 @@ packages:
 
   csv-stringify@6.5.2:
     resolution: {integrity: sha512-RFPahj0sXcmUyjrObAK+DOWtMvMIFV328n4qZJhgX3x2RqkQgOTU2mCUmiFR0CzM6AzChlRSUErjiJeEt8BaQA==}
-
-  culori@4.0.2:
-    resolution: {integrity: sha512-1+BhOB8ahCn4O0cep0Sh2l9KCOfOdY+BXJnKMHFFzDEouSr/el18QwXEMRlOj9UY5nCeA8UN3a/82rUWRBeyBw==}
-    engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
 
   d3-array@3.2.4:
     resolution: {integrity: sha512-tdQAmyA18i4J7wprpYq8ClcxZy3SC31QMeByyCFyRt7BVHdREQZ5lpzoe5mFEYZUWe+oq8HBvk9JjpibyEV4Jg==}
@@ -6876,8 +6885,6 @@ snapshots:
     dependencies:
       '@types/node': 24.19.1
 
-  '@types/culori@4.0.1': {}
-
   '@types/d3-array@3.2.2': {}
 
   '@types/d3-color@3.1.3': {}
@@ -7330,8 +7337,6 @@ snapshots:
   csv-parse@5.6.0: {}
 
   csv-stringify@6.5.2: {}
-
-  culori@4.0.2: {}
 
   d3-array@3.2.4:
     dependencies:

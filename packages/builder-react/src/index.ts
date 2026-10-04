@@ -20,9 +20,12 @@ export {
   type LinkAttributes,
 } from './render/link'
 export { parseVideoUrl, type VideoEmbed } from './components/videoUrl'
+export { editableText, EDITABLE_TEXT_ATTRIBUTE } from './render/editable'
 export { defaultComponents } from './components'
 export { BuilderStyle, RenderLayout } from './render/RenderLayout'
 export { loadLayoutData, resolveLayoutData, urlResolver, type LoadLayoutOptions } from './render/resolve'
 export { attachListItems, listItemsOf, listQueries, type ListQuery } from './render/lists'
 export { fieldFor } from './components/Field'
 export { renderRichText } from './components/RichText'
+export { applyThemeOutput, ThemeLive } from './theme/ThemeLive'
+export { THEME_FONTS_SELECTOR, THEME_PRECEDENCE, THEME_STYLE_SELECTOR, themeStyleHref } from './theme/constants'

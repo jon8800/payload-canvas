@@ -17,6 +17,7 @@ import type { BlockDefinition } from '../core/types'
 import { checkLayout, type BindingCheck } from '../plugin/hook'
 import { documentPath, draftPreviewPath } from '../plugin/links'
 import { payloadErrorMessage, payloadFieldErrors } from './apply'
+import { KEEP_LOCK_CONTEXT } from './fieldsGuard'
 import { LIVE_PATH, requestActor, targetOf } from './endpoints'
 import type { LiveRuntime } from './runtime'
 import type { SessionTarget } from './session'
@@ -223,6 +224,9 @@ export async function runPublishAction(
   }
   const payload = api(req)
   const common = { collection: target.collection, id: target.id, depth: 0, overrideAccess: false, user: req.user, req }
+  // A plugin save: it skips Payload's document lock and keeps it (someone may be in the settings
+  // drawer). See fieldsGuard.ts.
+  const save = { ...common, overrideLock: true, context: { [KEEP_LOCK_CONTEXT]: true } }
   const fields = payload.collections[target.collection]?.config.fields
   try {
     let doc: Record<string, unknown>
@@ -231,7 +235,7 @@ export async function runPublishAction(
       if (published._status !== 'published') return { ok: false, status: 409, error: 'This document has no published version.' }
       await runtime.sessions.reset(target.collection, target.id, normalizeLayout(published[target.field]))
       const { id: _id, ...data } = published
-      doc = await payload.update({ ...common, data: { ...data, _status: 'published' }, draft: false })
+      doc = await payload.update({ ...save, data: { ...data, _status: 'published' }, draft: false })
     } else {
       await runtime.sessions.flush(target.collection, target.id)
       if (action === 'publish' && check) {
@@ -243,7 +247,7 @@ export async function runPublishAction(
           return { ok: false, status: 422, error: summarizeProblems({ blockIds: errors.map((e) => e.blockId), layoutDamaged: true }), errors }
         }
       }
-      doc = await payload.update({ ...common, data: { _status: action === 'publish' ? 'published' : 'draft' }, draft: false })
+      doc = await payload.update({ ...save, data: { _status: action === 'publish' ? 'published' : 'draft' }, draft: false })
     }
     const event: LivePublishedEvent = {
       type: 'published',

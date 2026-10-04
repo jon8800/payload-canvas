@@ -8,11 +8,10 @@
 // reverts someone else's edit. Undo applies the inverse as NEW local operations, so it syncs like
 // any edit. Parts of it that no longer apply (someone else changed or deleted the block) are skipped.
 
-import { useSyncExternalStore } from 'react'
-
 import { applyOperation, BASE_VARIANT, findBlock, type Variant } from '../../core'
 import type { Block, Layout, Operation } from '../../core/types'
 import { createSyncEngine, type SyncOptions, type SyncUpdate } from './live/sync'
+import { useSelector, type Equality } from './valueStore'
 
 type HistoryEntry = {
   /** Applied in order, these undo (or redo) one user action. */
@@ -45,8 +44,13 @@ export type EditorState = {
 export type ApplyOptions = {
   /** Selection after the edit. `undefined` keeps the current selection. */
   select?: string | null
-  /** Edits with the same key within MERGE_WINDOW_MS become one undo step. */
+  /** Edits with the same key within MERGE_WINDOW_MS (or `mergeWithin`) become one undo step. */
   mergeKey?: string
+  /**
+   * How long after the last edit an edit with the same `mergeKey` still merges, in ms.
+   * Default MERGE_WINDOW_MS. An inline editing session passes Infinity: the whole session is one step.
+   */
+  mergeWithin?: number
   /**
    * Consecutive edits with the same group become one undo step, however far apart in time
    * (all operations of one AI assistant turn). An edit with another group or none ends the group.
@@ -216,7 +220,10 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
       const top = state.undoStack.at(-1)
       const grouped = Boolean(applyOptions.group) && top?.group === applyOptions.group
       const merge =
-        !grouped && applyOptions.mergeKey && top?.mergeKey === applyOptions.mergeKey && now - top.at < MERGE_WINDOW_MS
+        !grouped &&
+        applyOptions.mergeKey &&
+        top?.mergeKey === applyOptions.mergeKey &&
+        now - top.at < (applyOptions.mergeWithin ?? MERGE_WINDOW_MS)
       const undoStack =
         top && grouped
           ? // Undo the newest edit first, then the older ones in the group.
@@ -298,11 +305,11 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
   }
 }
 
-/** Subscribes to one slice of the editor state. The selector must return a stable reference. */
-export function useEditor<T>(store: EditorStore, selector: (state: EditorState) => T): T {
-  return useSyncExternalStore(
-    store.subscribe,
-    () => selector(store.getState()),
-    () => selector(store.getState()),
-  )
+/**
+ * Subscribes to one slice of the editor state. The component renders only when the slice changes.
+ * Without `isEqual` the selector must return a stable reference (a value from the state, or a
+ * primitive). With `isEqual` (e.g. `sameItems`) it may build a new array or object.
+ */
+export function useEditor<T>(store: EditorStore, selector: (state: EditorState) => T, isEqual?: Equality<T>): T {
+  return useSelector(store.subscribe, store.getState, selector, isEqual)
 }

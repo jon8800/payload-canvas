@@ -37,3 +37,5 @@ export type {
   TemplateContext,
   TemplatesClientConfig,
 } from './core/types'
+export type { ThemeOptions } from './theme/config'
+export { DEFAULT_THEME_SLUG } from './theme/config'

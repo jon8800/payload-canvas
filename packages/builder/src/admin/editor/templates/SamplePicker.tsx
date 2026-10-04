@@ -4,6 +4,7 @@
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 
+import { DOCUMENT_TEMPLATE_FIELD, TEMPLATE_DEFAULT_FIELD, TEMPLATE_TARGET_FIELD } from '../../../core/bindings'
 import { Icon } from '../icons'
 import { useRuntime } from '../runtime'
 import { Popover, stopEditorKeys, usePopover } from '../styles/popover'
@@ -106,6 +107,7 @@ function SampleList({
   const inputRef = useRef<HTMLInputElement>(null)
   const listId = useId()
   const activeDoc = docs[Math.min(active, docs.length - 1)]
+  const otherTemplate = useOtherTemplate(collection, docs)
 
   useEffect(() => inputRef.current?.focus(), [])
 
@@ -163,6 +165,7 @@ function SampleList({
               id={`${listId}-${doc.id}`}
               active={i === active}
               current={doc.id === current}
+              otherTemplate={otherTemplate.has(String(doc.id))}
               onPick={onPick}
               onHover={() => setActive(i)}
             />
@@ -176,11 +179,77 @@ function SampleList({
 
 const scrollIntoView = (el: HTMLElement | null) => el?.scrollIntoView({ block: 'nearest' })
 
+const idOf = (value: unknown): string | null => {
+  if (typeof value === 'string' || typeof value === 'number') return String(value)
+  if (typeof value === 'object' && value !== null && 'id' in value) return idOf(value.id)
+  return null
+}
+
+async function getDocs(url: string, signal: AbortSignal): Promise<Record<string, unknown>[]> {
+  const response = await fetch(url, { credentials: 'include', signal, headers: { Accept: 'application/json' } })
+  if (!response.ok) return []
+  const body = (await response.json()) as { docs?: Record<string, unknown>[] }
+  return body.docs ?? []
+}
+
+/**
+ * The ids of listed documents that the site shows with another template: their own `template`
+ * field, else the collection's default template. Empty while loading or when the request fails,
+ * so no row is marked by mistake.
+ */
+function useOtherTemplate(collection: string, docs: DocOption[]): ReadonlySet<string> {
+  const runtime = useRuntime()
+  const { collection: templates, id: self } = useValue(runtime.doc.meta)
+  const ids = docs.map((doc) => String(doc.id)).join(',')
+  const [result, setResult] = useState<{ ids: string; other: Set<string> }>({ ids: '', other: new Set() })
+
+  useEffect(() => {
+    if (!ids) return
+    const controller = new AbortController()
+    const list = new URLSearchParams({
+      depth: '0',
+      draft: 'true',
+      limit: String(ids.split(',').length),
+      'where[id][in]': ids,
+      [`select[${DOCUMENT_TEMPLATE_FIELD}]`]: 'true',
+    })
+    // The published default template of the collection (the one `keepOneDefault` keeps).
+    const fallback = new URLSearchParams({
+      depth: '0',
+      limit: '1',
+      [`where[${TEMPLATE_DEFAULT_FIELD}][equals]`]: 'true',
+      [`where[${TEMPLATE_TARGET_FIELD}][equals]`]: collection,
+    })
+    Promise.all([
+      getDocs(`${runtime.api}/${collection}?${list}`, controller.signal),
+      getDocs(`${runtime.api}/${templates}?${fallback}`, controller.signal),
+    ])
+      .then(([found, defaults]) => {
+        const defaultId = idOf(defaults[0]?.id)
+        const other = new Set<string>()
+        for (const doc of found) {
+          const used = idOf(doc[DOCUMENT_TEMPLATE_FIELD]) ?? defaultId
+          if (used !== null && used !== String(self)) other.add(String(doc.id))
+        }
+        setResult({ ids, other })
+      })
+      .catch(() => {
+        // Aborted or offline: no marks.
+      })
+    return () => controller.abort()
+  }, [runtime.api, collection, templates, self, ids])
+
+  return result.ids === ids ? result.other : EMPTY
+}
+
+const EMPTY: ReadonlySet<string> = new Set()
+
 function SampleRow({
   doc,
   id,
   active,
   current,
+  otherTemplate,
   onPick,
   onHover,
 }: {
@@ -188,6 +257,8 @@ function SampleRow({
   id: string
   active: boolean
   current: boolean
+  /** The site shows this document with another template. It can still be the preview. */
+  otherTemplate: boolean
   onPick: (id: Id) => void
   onHover: () => void
 }) {
@@ -216,6 +287,11 @@ function SampleRow({
           </span>
         )}
       </span>
+      {otherTemplate && (
+        <span className="builder-template__status" title="The site shows this document with another template">
+          Other template
+        </span>
+      )}
       {doc.status === 'draft' && <span className="builder-template__status">Draft</span>}
       {current && <Icon name="check" size={13} className="builder-bind__row-check" />}
     </li>

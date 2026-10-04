@@ -1,5 +1,24 @@
 import type { Axis, CanvasMeasurement, Rect, SlotRect } from '@payload-toolkit/builder/core'
 
+const sameRect = (a: Rect, b: Rect) => a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
+
+/** True when two measurements are equal. Stops at the first difference (scrolling changes `scroll` first). */
+export function sameMeasurement(a: CanvasMeasurement | null, b: CanvasMeasurement): boolean {
+  if (!a) return false
+  if (a.scroll.x !== b.scroll.x || a.scroll.y !== b.scroll.y || a.documentHeight !== b.documentHeight) return false
+  if (a.viewport.width !== b.viewport.width || a.viewport.height !== b.viewport.height || a.rootAxis !== b.rootAxis) return false
+  if (a.blocks.length !== b.blocks.length || a.slots.length !== b.slots.length) return false
+  for (let i = 0; i < a.blocks.length; i++) {
+    if (a.blocks[i].id !== b.blocks[i].id || !sameRect(a.blocks[i].rect, b.blocks[i].rect)) return false
+  }
+  for (let i = 0; i < a.slots.length; i++) {
+    const x = a.slots[i]
+    const y = b.slots[i]
+    if (x.ownerId !== y.ownerId || x.slot !== y.slot || x.axis !== y.axis || x.empty !== y.empty || !sameRect(x.rect, y.rect)) return false
+  }
+  return true
+}
+
 function toRect(r: DOMRect): Rect {
   return { x: r.x, y: r.y, width: r.width, height: r.height }
 }

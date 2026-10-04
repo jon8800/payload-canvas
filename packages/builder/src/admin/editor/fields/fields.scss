@@ -145,7 +145,8 @@
     padding: 4px 10px 10px;
   }
 
-  .builder-field-json__error {
+  // The message under an input (`InputError`).
+  .builder-field-error {
     margin: 4px 0 0;
     color: var(--theme-error-500);
     font-size: 12px;

@@ -90,5 +90,13 @@
   },
   "engines": {
     "node": ">=20.9.0"
+  },
+  "dependencies": {
+    "@lexical/history": "0.50.0",
+    "@lexical/list": "0.50.0",
+    "@lexical/rich-text": "0.50.0",
+    "@lexical/selection": "0.50.0",
+    "@lexical/utils": "0.50.0",
+    "lexical": "0.50.0"
   }
 }

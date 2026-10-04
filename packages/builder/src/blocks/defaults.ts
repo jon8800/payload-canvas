@@ -64,6 +64,40 @@ const MENU_CLASSES = [
 ]
 
 /**
+ * Why a video URL cannot play, as one sentence for the inspector, or null when it can (or is
+ * empty). Absolute URLs must be http(s). YouTube and Vimeo links must name a video. Any other URL
+ * plays as a file. Keep in sync with `videoUrl.ts` in `@payload-toolkit/builder-react`.
+ */
+export function videoUrlProblem(value: unknown): string | null {
+  const url = typeof value === 'string' ? value.trim() : ''
+  if (!url || url.startsWith('/')) return null
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return 'Enter a full link that starts with https://, for example https://www.youtube.com/watch?v=…'
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return 'Enter a link that starts with https://.'
+  const host = parsed.hostname.replace(/^(www\.|m\.|music\.)/, '')
+  const parts = parsed.pathname.split('/').filter(Boolean)
+  if (host === 'youtu.be' || host === 'youtube.com' || host === 'youtube-nocookie.com') {
+    const id =
+      host === 'youtu.be'
+        ? parts[0]
+        : parts[0] === 'watch'
+          ? parsed.searchParams.get('v')
+          : ['embed', 'shorts', 'live', 'v'].includes(parts[0] ?? '')
+            ? parts[1]
+            : null
+    return id && /^[\w-]{11}$/.test(id) ? null : 'This YouTube link does not point to a video. Use the link from Share under the video.'
+  }
+  if (host === 'vimeo.com' || host === 'player.vimeo.com') {
+    return parts.some((part) => /^\d+$/.test(part)) ? null : 'This Vimeo link does not point to a video. Use the link from Share under the video.'
+  }
+  return null
+}
+
+/**
  * The built-in blocks: stack, grid, heading, text, richText, image, button, link, list, quote,
  * divider, spacer, video, and the dynamic blocks field and collectionList.
  */
@@ -151,7 +185,8 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         admin: { description: 'HTML heading level: "1" renders <h1>, "2" renders <h2>, and so on.' },
       },
     ],
-    defaultClassName: 'text-3xl font-bold',
+    // `break-words`: a long word (a URL, a product code) wraps instead of widening the page.
+    defaultClassName: 'text-3xl font-bold break-words',
     ai: {
       description: 'A page or section heading. Use level "1" once per page, "2" for sections.',
       example: { type: 'heading', props: { text: 'Our services', level: '2' }, className: 'text-3xl font-bold' },
@@ -164,6 +199,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     icon: 'text',
     category: 'Content',
     fields: [{ name: 'text', type: 'textarea', label: 'Text', required: true }],
+    defaultClassName: 'break-words',
     ai: {
       description: 'A paragraph of plain text. Line breaks are kept. Use richText for formatting, links and lists.',
       example: { type: 'text', props: { text: 'We design and build fast websites.' }, className: 'text-lg' },
@@ -443,7 +479,11 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         name: 'url',
         type: 'text',
         label: 'URL',
-        admin: { description: 'A YouTube or Vimeo link, or a direct link to a video file.', ...when('source', 'url') },
+        admin: {
+          description: 'A YouTube or Vimeo link, or a direct link to a video file.',
+          // The inspector runs `videoUrlProblem` on this field and shows its message.
+          custom: { ...when('source', 'url').custom, builderFormat: 'videoUrl' },
+        },
       },
       { name: 'poster', type: 'upload', label: 'Poster image', relationTo: mediaCollection },
       { name: 'autoplay', type: 'checkbox', label: 'Autoplay', admin: { description: 'Browsers only autoplay muted videos.' } },

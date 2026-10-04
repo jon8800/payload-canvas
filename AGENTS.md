@@ -50,7 +50,7 @@ payload-toolkit/
       src/protocol/          #   postMessage protocol between editor and canvas iframe
       src/admin/             #   editor UI (Payload-native, SCSS, no Tailwind); server/ holds the full-screen view (RSC)
       src/plugin/            #   websiteBuilder(): fields, save hook, builder view + tab, templates collection, endpoints
-    builder-react/           # @payload-toolkit/builder-react — RenderLayout, block components, canvas runtime, /server loadTemplate
+    builder-react/           # @payload-toolkit/builder-react — RenderLayout, block components, canvas runtime (inline editing), /server loadTemplate + ThemeStyle
     create-payload-starter/  # CLI scaffolder
     shared/                  # DB creation and env helpers for the CLI
   docs/architecture.md       # Target design — read before building
@@ -78,9 +78,9 @@ Key places in `apps/starter/src/`:
 
 - `builder.ts` — the blocks list (default blocks + the custom `form` block), shared by site and canvas
 - `data/sections/` — ready-made sections (editor library + seed)
-- `components/BuilderContent.tsx`, `components/ThemeHead.tsx` — site rendering and theme injection
+- `components/BuilderContent.tsx` — site rendering. The theme comes from the plugin: `websiteBuilder({ theme })` and `<ThemeStyle>` from `@payload-toolkit/builder-react/server`
 - `app/(builder-canvas)/` — the canvas iframe route
-- `fields/theme/`, `globals/` — ThemeSettings, ColorPicker, FontSelector, SliderField
+- `globals/` — SiteSettings
 - `proxy.ts` — redirects and the `x-pathname` request header
 
 The editor opens full screen at `/admin/builder/:collection/:id` (a root admin view without Payload's nav; `packages/builder/src/admin/server/BuilderView.tsx`). The document's Builder tab and the layout field link there. Publish, unpublish and revert are live endpoints (`packages/builder/src/live/document.ts`); the top bar is `packages/builder/src/admin/editor/topbar/`.
@@ -102,9 +102,9 @@ Local DB: Postgres on `localhost:5432`, database `payload_toolkit_dev` (see `app
 
 ## Current status
 
-- **Done:** the plugin with 15 default blocks; the full-screen builder view with one top bar (title rename, status, save state, preview, page settings drawer, publish / unpublish / revert); the visual editor (outline, canvas with zoom and drag-drop, Payload-native inspector, Webflow-like Styles panel over Tailwind classes, sections library, copy/paste, undo); generated CSS; templates, data binding, Field and Collection list blocks; live editing over SSE; MCP tools for `payload-mcp-toolkit`; the AI assistant panel (`src/ai/` server loop with Claude, `src/admin/editor/assistant/` UI); the starter app with a demo seed.
+- **Done:** the plugin with 15 default blocks; the full-screen builder view with one top bar (title rename, status, save state, preview, page settings drawer, publish / unpublish / revert); the visual editor (outline, canvas with zoom and drag-drop, Payload-native inspector, Webflow-like Styles panel over Tailwind classes, sections library, copy/paste, undo); inline text editing on the canvas (plain and rich text); the Theme global in the plugin; generated CSS; templates, data binding, Field and Collection list blocks; multiplayer over SSE (Payload's document lock stays on for non-layout fields); MCP tools for `payload-mcp-toolkit`; the AI assistant panel (`src/ai/` server loop with Claude, `src/admin/editor/assistant/` UI); the starter app with a demo seed.
 - **AI testing without a key:** set `BUILDER_AI_FAKE=1` in `apps/starter/.env` (dev only) for a scripted fake model. Remove it afterwards.
-- **Next:** inline text editing on the canvas, theme settings moved into the plugin. Multiplayer runs in one server process only (see docs/architecture.md section 12, "Limits").
+- **Next:** "Save as section", real section thumbnails, a "+" between blocks on the canvas. Multiplayer runs in one server process only (see docs/architecture.md section 12, "Limits").
 
 <!-- BEGIN:turborepo-agent-rules -->
 

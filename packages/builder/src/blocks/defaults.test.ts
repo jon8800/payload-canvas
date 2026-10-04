@@ -5,7 +5,7 @@ import { withoutBoundRequired } from '../core/bindings'
 import { layoutJsonSchema } from '../core/schema'
 import { validateLayout } from '../core/validate'
 import type { BlockDefinition } from '../core/types'
-import { defaultBlocks } from './defaults'
+import { defaultBlocks, videoUrlProblem } from './defaults'
 import { isLinkField, linkField } from './link'
 
 const TYPES = [
@@ -84,6 +84,27 @@ describe('defaultBlocks', () => {
     assert.deepEqual(condition('video'), { field: 'source', equals: 'upload' })
     assert.deepEqual(condition('url'), { field: 'source', equals: 'url' })
     assert.equal(condition('poster'), undefined)
+    assert.equal(fields.find((f) => f.name === 'url')?.admin?.custom?.builderFormat, 'videoUrl')
+  })
+
+  it('videoUrlProblem explains links that cannot play', () => {
+    for (const ok of [
+      '',
+      '/media/clip.mp4',
+      'https://cdn.example.com/clip.mp4',
+      'https://www.youtube.com/watch?v=aqz-KE-bpKQ',
+      'https://youtu.be/aqz-KE-bpKQ?t=30',
+      'https://www.youtube.com/shorts/aqz-KE-bpKQ',
+      'https://vimeo.com/76979871',
+      'https://player.vimeo.com/video/76979871',
+    ]) {
+      assert.equal(videoUrlProblem(ok), null, ok)
+    }
+    assert.match(videoUrlProblem('not a url') ?? '', /starts with https:\/\//)
+    assert.match(videoUrlProblem('javascript:alert(1)') ?? '', /https:\/\//)
+    assert.match(videoUrlProblem('https://www.youtube.com/watch?v=short') ?? '', /YouTube link/)
+    assert.match(videoUrlProblem('https://www.youtube.com/@channel') ?? '', /YouTube link/)
+    assert.match(videoUrlProblem('https://vimeo.com/channels/staffpicks') ?? '', /Vimeo link/)
   })
 
   it('every AI example is a valid block, with and without link collections', () => {
@@ -150,6 +171,13 @@ describe('defaultBlocks', () => {
     const menu = defaultBlocks().find((b) => b.type === 'menu')
     for (const name of ['group', 'md:contents', 'lg:hidden', 'group-open:block', 'aria-[current=page]:underline']) {
       assert.ok(menu?.classes?.includes(name), name)
+    }
+  })
+
+  it('heading and text wrap long words', () => {
+    const blocks = defaultBlocks()
+    for (const type of ['heading', 'text']) {
+      assert.match(blocks.find((b) => b.type === type)?.defaultClassName ?? '', /(^|\s)break-words(\s|$)/, type)
     }
   })
 

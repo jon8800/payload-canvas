@@ -8,7 +8,7 @@ import { useConfig } from '@payloadcms/ui'
 import { useEffect, useState } from 'react'
 
 import type { Runtime } from '../runtime'
-import { useValue } from '../valueStore'
+import { useValueSelector } from '../valueStore'
 import { docTitle } from './binding'
 import type { Id, SampleDoc, TemplateState } from './state'
 
@@ -68,10 +68,11 @@ function patch(runtime: Runtime, next: Partial<TemplateState>) {
  */
 export function useTemplateController(runtime: Runtime) {
   const { api } = runtime
-  const { isTemplate, choice } = useValue(runtime.template)
-  const { template } = useValue(runtime.doc.meta)
-  const target = isTemplate ? (template?.target ?? null) : null
-  const preferred = previewId(template?.preview, target)
+  // Primitives only: the editor root calls this hook, so it must not render on every state change.
+  const isTemplate = useValueSelector(runtime.template, (state) => state.isTemplate)
+  const choice = useValueSelector(runtime.template, (state) => state.choice)
+  const target = useValueSelector(runtime.doc.meta, ({ template }) => (isTemplate ? (template?.target ?? null) : null))
+  const preferred = useValueSelector(runtime.doc.meta, ({ template }) => previewId(template?.preview, target))
   const titleField = useTitleField(target)
 
   useEffect(() => {

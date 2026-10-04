@@ -1184,12 +1184,24 @@ export interface PayloadLockedDocument {
         value: number | Media;
       } | null)
     | ({
+        relationTo: 'pages';
+        value: number | Page;
+      } | null)
+    | ({
+        relationTo: 'posts';
+        value: number | Post;
+      } | null)
+    | ({
         relationTo: 'categories';
         value: number | Category;
       } | null)
     | ({
         relationTo: 'tags';
         value: number | Tag;
+      } | null)
+    | ({
+        relationTo: 'template-parts';
+        value: number | TemplatePart;
       } | null)
     | ({
         relationTo: 'redirects';
@@ -1210,6 +1222,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'search';
         value: number | Search;
+      } | null)
+    | ({
+        relationTo: 'builder-templates';
+        value: number | BuilderTemplate;
       } | null)
     | ({
         relationTo: 'payload-folders';
@@ -1967,56 +1983,59 @@ export interface ThemeSetting {
   id: number;
   colors?: {
     /**
-     * Default: #0a0a0a (oklch(0.205 0 0))
+     * Buttons, links and accents. Empty: the default from your CSS.
      */
     primary?: string | null;
     /**
-     * Default: #f5f5f5 (oklch(0.97 0 0))
+     * Secondary buttons and surfaces. Empty: the default from your CSS.
      */
     secondary?: string | null;
     /**
-     * Default: #f5f5f5 (oklch(0.97 0 0))
+     * Highlights and hover surfaces. Empty: the default from your CSS.
      */
     accent?: string | null;
     /**
-     * Default: #f5f5f5 (oklch(0.97 0 0))
+     * Quiet surfaces. Secondary text is derived from the background and text colors. Empty: the default from your CSS.
      */
     muted?: string | null;
     /**
-     * Default: #ef4444 (oklch(0.577 0.245 27.325))
+     * Errors and destructive actions. Empty: the default from your CSS.
      */
     destructive?: string | null;
     /**
-     * Default: #ffffff (oklch(1 0 0))
+     * Page background. Cards and popovers use it too. Empty: the default from your CSS.
      */
     background?: string | null;
     /**
-     * Default: #171717 (oklch(0.145 0 0))
+     * Body text. Borders are mixed from the background and this color. Empty: the default from your CSS.
      */
     foreground?: string | null;
   };
+  /**
+   * Google Fonts. The site loads the chosen families.
+   */
   fonts?: {
     /**
-     * Google Font family name
+     * Sets --font-sans. Empty: the default from your CSS.
      */
     sans?: string | null;
     /**
-     * Google Font family for headings (the font-display class). Empty: the body font.
+     * Sets --font-heading. Empty: your CSS decides, usually the body font.
      */
     heading?: string | null;
     /**
-     * Google Font family name
+     * Sets --font-mono. Empty: the default from your CSS.
      */
     mono?: string | null;
   };
   spacing?: {
     /**
-     * Base spacing unit in px. Scales: xs=1x, sm=2x, md=4x, lg=6x, xl=8x, 2xl=12x
+     * Tailwind spacing unit in px (--spacing). p-4 is 4 units. Tailwind default: 4. Empty: the default from your CSS.
      */
     baseMultiplier?: number | null;
   };
   /**
-   * Global border radius in rem. shadcn derives sm/md/lg/xl from this.
+   * Base corner radius in rem (--radius). Empty: the default from your CSS.
    */
   borderRadius?: string | null;
   derivedTokens?:

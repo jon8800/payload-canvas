@@ -220,6 +220,7 @@ function WidthInput({ value, onCommit, onRefuse }: { value: number; onCommit: (p
 function ShortcutHelp() {
   const runtime = useRuntime()
   const open = useValue(runtime.help)
+  const { drafts } = useValue(runtime.doc.meta)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -247,7 +248,7 @@ function ShortcutHelp() {
         <section className="builder-editor__help-panel" aria-label="Keyboard shortcuts">
           <p className="builder-editor__help-title">Keyboard shortcuts</p>
           <dl>
-            {shortcutList({ ai: Boolean(runtime.config.ai) }).map(({ keys, label }) => (
+            {shortcutList({ ai: Boolean(runtime.config.ai), publish: drafts }).map(({ keys, label }) => (
               <div key={label} className="builder-editor__help-row">
                 <dt>{label}</dt>
                 <dd>
