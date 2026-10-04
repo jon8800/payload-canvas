@@ -58,6 +58,8 @@ export function Editor({ config, path }: { config: BuilderClientConfig; path: st
   const live = useLiveOperations({ config, docId, store: runtime.store, enabled: ready, highlightMs: 2500 })
   useEffect(() => runtime.live.set(live), [runtime, live])
   useTemplateController(runtime)
+  useEffect(() => runtime.assistant?.setDocument(config.collection, docId), [runtime, config.collection, docId])
+  useEffect(() => () => runtime.assistant?.stop(), [runtime])
   const stopAutoScroll = useRef<(() => void) | null>(null)
   const dndId = useId()
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))

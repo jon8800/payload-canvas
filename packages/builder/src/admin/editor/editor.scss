@@ -137,7 +137,10 @@
   .builder-editor__group--end [data-tooltip],
   .builder-editor__block-head [data-tooltip],
   .builder-editor__panel-tools [data-tooltip]:last-child,
-  .builder-editor__actions [data-tooltip]:last-child {
+  .builder-editor__actions [data-tooltip]:last-child,
+  .builder-assistant__head [data-tooltip],
+  .builder-assistant__turn-head [data-tooltip],
+  .builder-assistant__field [data-tooltip] {
     &:hover::after {
       left: auto;
       right: 0;

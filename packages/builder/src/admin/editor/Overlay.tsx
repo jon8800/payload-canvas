@@ -29,6 +29,7 @@ export function Overlay() {
   const drag = useValue(runtime.drag)
   const { zoom } = useValue(runtime.frame)
   const live = useValue(runtime.live)
+  const assistantFlash = useValue(runtime.assistantFlash)
   const selectedId = useEditor(runtime.store, (s) => s.selectedId)
   const hoveredId = useEditor(runtime.store, (s) => s.hoveredId)
   const layout = useEditor(runtime.store, (s) => s.layout)
@@ -105,6 +106,22 @@ export function Overlay() {
               <span className={`builder-editor__tag builder-editor__tag--remote${roomAbove(rect) ? '' : ' builder-editor__tag--inside'}`}>
                 <Icon name={live.lastChange.actor.type === 'ai' ? 'sparkle' : 'user'} size={12} />
                 {live.lastChange.actor.label}
+              </span>
+            )}
+          </div>
+        )
+      })}
+      {[...assistantFlash].flatMap(([id, at]) => {
+        const rect = rectOf(id)
+        return rect ? [{ id, at, rect }] : []
+      }).map(({ id, at, rect }, i) => {
+        return (
+          // The time in the key restarts the flash when the assistant changes the block again.
+          <div key={`${id}:${at}`} className="builder-editor__remote builder-editor__remote--assistant" style={box(rect)}>
+            {i === 0 && (
+              <span className={`builder-editor__tag builder-editor__tag--remote${roomAbove(rect) ? '' : ' builder-editor__tag--inside'}`}>
+                <Icon name="sparkle" size={12} />
+                Assistant
               </span>
             )}
           </div>

@@ -18,6 +18,7 @@ First public release.
 - Templates for collection documents: a templates collection, per-document and default templates, bindings from block props to document fields (one relationship hop), the Field block and the Collection list block.
 - Layout validation against JSON Schemas built from the block fields.
 - Live editing: a Server-Sent Events channel per document and an operations endpoint. Open editors show changes from other sources as they happen.
+- AI assistant in the editor (`websiteBuilder({ ai: {} })`): a chat panel that edits the open page with Claude (default `claude-opus-5-5`). Changes stream onto the canvas, each reply is one undo step, and autosave stores them. Needs `ANTHROPIC_API_KEY` and the optional peer `@anthropic-ai/sdk`.
 - MCP tools for `payload-mcp-toolkit` (`builderMcpTools`): list blocks and sections, read and validate layouts, apply operations, insert sections, get preview URLs, list templates and binding sources.
 - Pure, tested core: layout operations, tree helpers, drop targets, class parsing.
 

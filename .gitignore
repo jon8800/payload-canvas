@@ -15,3 +15,6 @@ docs/screenshots/
 
 # Packed tarballs (pnpm pack:packages)
 dist-packages/
+
+# Local helper scripts
+apps/starter/scripts/_*.ts

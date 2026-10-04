@@ -19,6 +19,14 @@ export type AiOptions = {
   maxSteps?: number
   /** Upload collection the assistant may pick images from. Default "media". */
   mediaCollection?: string
+  /** Output limit per model call, thinking included. Default 32000. */
+  maxTokens?: number
+  /**
+   * Server-side refusal fallback (`fallbacks: "default"`): when a safety classifier declines a
+   * request, the API retries it on Anthropic's recommended fallback model. Default: on for
+   * "claude-opus-5-5", off for other models.
+   */
+  fallbacks?: boolean
 }
 
 /** Set on BuilderClientConfig.ai when the assistant is enabled. */
@@ -33,7 +41,16 @@ export type AiClientConfig = {
  * content (text, thinking, tool_use, tool_result blocks) so history can be replayed append-only.
  * The client keeps the history per document (localStorage) and sends it back on every request.
  */
-export type AiMessage = { role: 'user' | 'assistant'; content: unknown }
+export type AiMessage = {
+  role: 'user' | 'assistant'
+  content: unknown
+  /**
+   * Set by the server on user messages that are not chat bubbles: `context` (the editor state the
+   * server added to the user's message) and `tool_results`. Store and send them back like any
+   * message; do not render them. The server never sends this field to the API.
+   */
+  kind?: 'context' | 'tool_results'
+}
 
 /** POST `${endpoint}/chat` body. */
 export type AiChatRequest = {
@@ -53,7 +70,9 @@ export type AiChatRequest = {
 }
 
 /**
- * Server-Sent Events from the chat endpoint, in order. `event:` is the type, `data:` the JSON.
+ * Server-Sent Events from the chat endpoint, in order. `event:` is the type, `data:` the whole
+ * event object as JSON (including `type`). Errors before the stream starts (401, 400, 403, 404)
+ * use the same format: the body is one `error` event.
  * - text: streamed assistant text (append to the current bubble)
  * - tool: a tool call started (`status: 'running'`) or finished (`'done' | 'error'`), with a short
  *   human summary ("Inserted Hero section", "Updated 3 blocks")

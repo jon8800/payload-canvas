@@ -16,6 +16,7 @@ import type {
 } from '../../core/types'
 import { post, rectContains, type AdminToCanvas, type CanvasInit, type KeyAction } from '../../protocol'
 import { removeBlock } from './actions'
+import { createAssistant, type AssistantController } from './assistant/controller'
 import { createEditorStore, type EditorStore } from './store'
 import { createValueStore, type ValueStore } from './valueStore'
 import type { LiveState } from './live'
@@ -46,6 +47,8 @@ export type DragState = {
 /** The canvas frame: its width in CSS pixels and the zoom that fits it into the stage. */
 export type FrameSize = { width: number; zoom: number }
 
+export type InspectorTab = 'block' | 'document' | 'assistant'
+
 export type Runtime = {
   config: BuilderClientConfig
   /** Sent to the iframe on every `ready`. */
@@ -70,7 +73,15 @@ export type Runtime = {
   /** Template mode: the target collection and the sample document the canvas previews. */
   template: ValueStore<TemplateState>
   /** The inspector's top tab. Other parts open the Document tab (e.g. "choose a collection"). */
-  inspectorTab: ValueStore<'block' | 'document'>
+  inspectorTab: ValueStore<InspectorTab>
+  /** The AI assistant chat. Null when the plugin has no `ai` option. */
+  assistant: AssistantController | null
+  /** Blocks the assistant just changed, with the time of the change. The overlay flashes them. */
+  assistantFlash: ValueStore<ReadonlyMap<string, number>>
+  /** Set to the current time to focus the assistant's input (the panel opened). */
+  assistantFocus: ValueStore<number>
+  /** Opens the assistant tab and focuses its input, or (when `open` is not true and it is open) goes back to the Block tab. */
+  toggleAssistant: (open?: boolean) => void
   /** Payload's REST route, e.g. "/api". */
   api: string
   iframeRef: RefObject<HTMLIFrameElement | null>
@@ -137,7 +148,19 @@ export function createRuntime(config: BuilderClientConfig, api: string): Runtime
     help: createValueStore(false),
     live: createValueStore<LiveState | null>(null),
     template: createValueStore<TemplateState>(initialTemplateState(config)),
-    inspectorTab: createValueStore<'block' | 'document'>('block'),
+    inspectorTab: createValueStore<InspectorTab>('block'),
+    assistant: null,
+    assistantFlash: createValueStore<ReadonlyMap<string, number>>(new Map()),
+    assistantFocus: createValueStore(0),
+    toggleAssistant(open) {
+      if (!runtime.assistant) return
+      if (open !== true && runtime.inspectorTab.get() === 'assistant') {
+        runtime.inspectorTab.set('block')
+        return
+      }
+      runtime.inspectorTab.set('assistant')
+      runtime.assistantFocus.set(Date.now())
+    },
     api,
     iframeRef,
     outlineRef: createRef<HTMLDivElement>(),
@@ -167,6 +190,7 @@ export function createRuntime(config: BuilderClientConfig, api: string): Runtime
       return block
     },
   }
+  if (config.ai) runtime.assistant = createAssistant(runtime, config.ai.endpoint)
   return runtime
 }
 

@@ -17,6 +17,7 @@ export {
   TEMPLATE_TARGET_FIELD,
 } from './core/bindings'
 export { defaultBlocks, type DefaultBlocksOptions } from './blocks'
+export type { AiChatRequest, AiClientConfig, AiMessage, AiOptions, AiStreamEvent } from './ai/types'
 export { defineBlock } from './core/blocks'
 export { EMPTY_LAYOUT } from './core/types'
 export type {
