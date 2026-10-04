@@ -15,3 +15,17 @@ export { TEXT_LIST_BLOCK, TEXT_LIST_ITEM_BLOCK, TEXT_LIST_SLOT, joinListItem, sp
 export { blockName, defineBlock, fitsParent, getBlockDefinition, placementError, slotAccepts, slotAcceptsAt, slotNames, starterSlots } from './blocks'
 export { FORMATS, formatProblem, isPlayableVideoUrl, parseVideoUrl, videoUrlProblem, type FormatCheck, type VideoEmbed, type VideoOptions } from './formats'
 export { describeLayoutErrors, summarizeProblems, type LayoutIssue } from './issues'
+export { conditionFromFunction, conditionMet, readCondition, type BuilderCondition } from './conditions'
+export {
+  convertPayloadBlocksLayout,
+  definitionForBlockType,
+  isPayloadBlocksValue,
+  payloadSlugOf,
+  toPayloadBlock,
+  withFieldDefaults,
+  type ConvertPayloadOptions,
+  type PayloadBlockData,
+  type PayloadConversion,
+  type PayloadConversionReport,
+} from './convertPayload'
+export { collectReferences, readReferences, referenceKey, referenceTargets, sameReferences, type Reference, type ReferenceTargets } from './references'

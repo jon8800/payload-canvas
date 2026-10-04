@@ -14,6 +14,18 @@ export {
   type SiteCssConfig,
 } from './plugin'
 export { bindingSources, templatesConfigOf, TEMPLATES_CONFIG_KEY } from './plugin/templates'
+export {
+  backfillReferences,
+  DEFAULT_REFERENCES_FIELD,
+  findReferrers,
+  FORCE_DELETE_CONTEXT,
+  referencesConfigOf,
+  REFERENCES_CONFIG_KEY,
+  type BackfillResult,
+  type ReferencesOptions,
+  type ReferencesServerConfig,
+  type Referrer,
+} from './plugin/references'
 export { builderViewPath } from './plugin/links'
 export {
   DEFAULT_TEMPLATES_SLUG,
@@ -23,7 +35,16 @@ export {
   TEMPLATE_PREVIEW_FIELD,
   TEMPLATE_TARGET_FIELD,
 } from './core/bindings'
-export { defaultBlocks, type DefaultBlocksOptions } from './blocks'
+export { defaultBlocks, fromPayloadBlocks, type DefaultBlocksOptions, type FromPayloadBlocksOptions, type PayloadBlockOverride } from './blocks'
+export { convertPayloadBlocksLayout, type PayloadConversion, type PayloadConversionReport } from './core/convertPayload'
+export {
+  formatMigrationReport,
+  migrateBlocksField,
+  type MigrateBlocksOptions,
+  type MigrateBlocksReport,
+  type MigrateCounts,
+  type MigrateIssue,
+} from './migrate'
 export type { AiChatRequest, AiClientConfig, AiMessage, AiOptions, AiStreamEvent } from './ai/types'
 export { defineBlock } from './core/blocks'
 export { EMPTY_LAYOUT } from './core/types'

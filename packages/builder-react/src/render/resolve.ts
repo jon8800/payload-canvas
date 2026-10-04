@@ -190,6 +190,8 @@ export async function loadLayoutData(
       draft,
       limit: ids.length,
       pagination: false,
+      // Join fields (for example media's "Used in") are not needed to render; skip their subqueries.
+      joins: false,
     })
     return new Map(
       (result.docs as Array<Record<string, unknown>>).map((doc) => [doc.id as Id, doc]),

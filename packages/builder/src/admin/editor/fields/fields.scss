@@ -35,6 +35,19 @@
     gap: calc(var(--base) * 0.75);
   }
 
+  // Point field: longitude and latitude side by side.
+  .builder-field-point {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--base) * 0.25);
+  }
+
+  .builder-field-point__inputs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: calc(var(--base) * 0.5);
+  }
+
   // Array field: Payload's look (Collapsible rows, drag handle, "..." row menu), sized for the
   // narrow inspector.
   .builder-field-array {

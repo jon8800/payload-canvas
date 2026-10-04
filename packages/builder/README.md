@@ -23,16 +23,18 @@ Two packages:
 4. [Plugin options](#plugin-options)
 5. [Rendering](#rendering)
 6. [Custom blocks](#custom-blocks)
-7. [Sections](#sections)
-8. [Styling](#styling)
-9. [Theme](#theme)
-10. [Templates and binding](#templates-and-binding)
-11. [AI assistant](#ai-assistant)
-12. [AI editing over MCP](#ai-editing-over-mcp)
-13. [Multiplayer editing](#multiplayer-editing)
-14. [Production and Docker](#production-and-docker)
-15. [Deploying](#deploying)
-16. [Troubleshooting](#troubleshooting)
+7. [Using existing Payload blocks](#using-existing-payload-blocks)
+8. [Sections](#sections)
+9. [Styling](#styling)
+10. [Theme](#theme)
+11. [Templates and binding](#templates-and-binding)
+12. [References and Used in](#references-and-used-in)
+13. [AI assistant](#ai-assistant)
+14. [AI editing over MCP](#ai-editing-over-mcp)
+15. [Multiplayer editing](#multiplayer-editing)
+16. [Production and Docker](#production-and-docker)
+17. [Deploying](#deploying)
+18. [Troubleshooting](#troubleshooting)
 
 ## Requirements
 
@@ -310,6 +312,7 @@ websiteBuilder({
   ai: { effort: 'medium' },    // the AI assistant in the editor
   theme: { admin: { group: 'Settings' } }, // the Theme global; `false` leaves it out
   editor: { dragMode: 'smooth' }, // the default drag and drop style; each user can change it
+  references: { usedIn: ['media'], protectDelete: ['media'] }, // "Used in" lists; `false` turns them off
 })
 ```
 
@@ -333,12 +336,14 @@ websiteBuilder({
 | `theme` | `ThemeOptions \| false` | The Theme global. On by default. `false` leaves it out. See [Theme](#theme). |
 | `editor.dragMode` | `'indicator' \| 'smooth'` | The default drag and drop style. `indicator` (the default) shows a drop line; `smooth` lifts the block and moves the other blocks out of the way. Each user can change it in the editor. See [The builder view](#the-builder-view). |
 | `css.fontFamilies` | `(payload) => Record<name, family>` | Font families set at runtime some other way than the Theme global, for the Styles panel's Font list. Its names win over the theme's. |
+| `references` | `{ field?, usedIn?, protectDelete?, maxListed? } \| false` | Which media and documents each layout uses: "Used in" lists and delete protection. On by default. `false` turns it off. See [References and Used in](#references-and-used-in). |
 
 For each listed collection the plugin adds:
 
 - the layout field (`json`) with the editor as its field component,
 - a hidden `<field>Css` field that stores `{ hash, css }`,
 - a hidden virtual rich text field, when a block has a rich text prop,
+- a hidden `builderRefs` relationship field that lists the media and documents the layout uses (see [References and Used in](#references-and-used-in)),
 - the **Builder** document tab, a link to the full-screen view (`/admin/builder/<slug>/<id>`; the plugin adds this root view once for all collections),
 - a `beforeChange` hook that validates the layout and compiles its CSS, takes the layout from the live session while one is open, and rejects a save from an out-of-date form (see [Multiplayer editing](#multiplayer-editing)),
 - a `beforeOperation` and an `afterChange` hook for the live session and Payload's document lock.
@@ -365,9 +370,9 @@ It also adds these endpoints (signed-in users only):
 
 | Import | Use it in | Holds |
 |---|---|---|
-| `@payload-toolkit/builder` | `payload.config.ts` (server) | `websiteBuilder`, `defineBlock`, `defaultBlocks`, types |
-| `@payload-toolkit/builder/blocks` | anywhere | `defaultBlocks`, `defineBlock`, `linkField` |
-| `@payload-toolkit/builder/core` | anywhere | layout types, `normalizeLayout`, `validateLayout`, `applyOperations`, tree helpers |
+| `@payload-toolkit/builder` | `payload.config.ts` (server) | `websiteBuilder`, `defineBlock`, `defaultBlocks`, `fromPayloadBlocks`, `migrateBlocksField`, types |
+| `@payload-toolkit/builder/blocks` | anywhere | `defaultBlocks`, `defineBlock`, `linkField`, `fromPayloadBlocks` |
+| `@payload-toolkit/builder/core` | anywhere | layout types, `normalizeLayout`, `validateLayout`, `applyOperations`, tree helpers, `convertPayloadBlocksLayout`, `toPayloadBlock` |
 | `@payload-toolkit/builder/css` | server | `compileClasses`, `getStyleTokens`, `tracingIncludes` |
 | `@payload-toolkit/builder/theme` | anywhere | `themeCss`, `themeVariables`, `themeOutput`, `deriveColors`, `googleFontsHref`, `themeConfigOf`, theme types |
 | `@payload-toolkit/builder/theme-client` | Payload import map, or your own fields | `ThemeColorField`, `ThemeFontField`, `ThemeSliderField` |
@@ -474,6 +479,157 @@ export const blocks = [...defaultBlocks({ linkCollections: ['pages'] }), pricing
 - `linkField()` stores `{ type, url, reference, newTab }`. The component receives it resolved, with `href`, `target` and `rel`.
 - The default blocks are `stack`, `grid`, `heading`, `text`, `richText`, `image`, `video`, `button`, `link`, `menu`, `list` with its `listItem` blocks, `quote`, `divider`, `spacer`, `collectionList` (documents from a collection) and `field` (a field of the document a template renders).
 - A list holds its items as `listItem` blocks in its `items` slot, so each item can be selected, dragged, styled and edited on the canvas. Enter at the end of an item adds the next one; Backspace at the start of an item joins it to the one before. Older layouts stored the items as a prop (`props.items: [{ text }]`). `normalizeLayout` turns them into `listItem` blocks when a layout loads, and the List component still renders the old prop until the layout is saved again. A list whose `items` prop is bound to document data keeps the old form.
+
+## Using existing Payload blocks
+
+A site that already has a Payload `blocks` field (for example `pages.layout` with sections and nested blocks) can keep its block configs and its components. The builder gets a field of its own, one script copies the content over, and the old field stays until you remove it.
+
+What carries over:
+
+- **Block configs.** `fromPayloadBlocks()` turns Payload `Block` configs into builder blocks. Every field stays a Payload field config, so the inspector shows it with Payload's own inputs: text, textarea, email, code, number, checkbox, select, radio, date, upload, relationship, rich text, JSON, point, group, array, row, collapsible and tabs (also `hasMany` text and number).
+- **Nested blocks fields become slots.** A `blocks` field at the block's own level (also inside rows, collapsibles and unnamed tabs) becomes a slot with the same name. Its `blocks` and `blockReferences` become the slot's `allow`.
+- **Conditions.** An `admin.condition` that tests one sibling field, such as `(_, siblingData) => siblingData?.type === 'custom'`, becomes a JSON condition. The inspector hides the field, and an empty required field that is hidden does not block publishing.
+- **Components.** `fromPayloadComponents()` renders components written for Payload's data (`{ blockType, ...fields }`) unchanged.
+- **Content.** `migrateBlocksField()` converts every document, its drafts and its versions.
+
+### Step by step
+
+These steps assume a site like this: `pages.layout` is a `blocks` field that references section blocks (`fullWidth`, `twoColumn`) from `config.blocks`, and the sections have nested `blocks` fields (`content`, `leftColumn`, `rightColumn`) with leaf blocks.
+
+**1. Install** the packages and add the canvas route, as in [Install](#install).
+
+**2. Give the builder its own field.** Keep `layout` as it is.
+
+```ts
+websiteBuilder({
+  collections: { pages: { field: 'builderLayout', url: (doc) => `/${doc.slug}` } },
+  blocks,
+  css: { entry: 'src/app/(frontend)/globals.css' },
+})
+```
+
+If you give the builder the name of the existing `blocks` field (`field: 'layout'`), the app does not start, and the error points here.
+
+**3. Make builder blocks from your block configs.** Put them in the client-safe blocks file:
+
+```ts
+// src/builder.ts
+import { defaultBlocks, fromPayloadBlocks } from '@payload-toolkit/builder/blocks'
+import { allLeafBlocks, allSectionBlocks } from './blocks'
+
+const siteBlocks = fromPayloadBlocks([...allSectionBlocks, ...allLeafBlocks], {
+  // The blocks the page's own blocks field allows. The others go only inside the sections that take them.
+  root: ['fullWidth', 'twoColumn'],
+  // Builder types become siteHeading, siteImage, …, so they do not clash with the default blocks.
+  prefix: 'site',
+})
+
+export const blocks = [...defaultBlocks({ linkCollections: ['pages'] }), ...siteBlocks]
+```
+
+| Option | What it does |
+|---|---|
+| `references` | Your `config.blocks`, when the list you pass does not hold every block that `blockReferences` names. |
+| `root` | Slugs that may go in the page's root list. Every other block gets `parents`: the blocks whose nested blocks fields take it, as in Payload. Default: every block may go anywhere. |
+| `prefix` | Prefix for the builder `type` (`prefix: 'site'` turns `heading` into `siteHeading`). You need it when a slug is also a default block (`heading`, `image`, `button`, `richText`, `list`, `link`, …). The plugin refuses two blocks with the same type. Payload data keeps its `blockType`. |
+| `styles` | Adds `className` and the Styles panel. Default `false`: your components style themselves. |
+| `category` | Library group for blocks without `admin.group`. Default "Site sections" (blocks with slots) or "Site blocks". |
+| `overrides` | Per slug: `label`, `category`, `icon`, `styles`, `defaultClassName`, `classes`, `ai`, `parents`, and `slots` (merged into a slot, for example `{ content: { allow: ['*'] } }`). |
+| `onWarning` | Gets the messages about things that do not carry over. Default: `console.warn` outside production. `false` turns them off. |
+
+`labels.singular` becomes the label, and `admin.group` the library category. `interfaceName`, `dbName`, `imageURL` and the block's own admin components are not used.
+
+**4. Wrap your components.** Use the same map as your `RenderBlocks`, keyed by Payload slug:
+
+```ts
+// src/components/blocks.ts (client-safe)
+import { fromPayloadComponents } from '@payload-toolkit/builder-react'
+import { blocks } from '@/builder'
+import { FullWidthComponent } from '@/blocks/sections/fullWidth/component'
+import { HeadingLeaf } from '@/blocks/leaves/heading/component'
+
+export const components = fromPayloadComponents({ fullWidth: FullWidthComponent, heading: HeadingLeaf /* … */ }, blocks)
+```
+
+Each component gets the props it always got: `{ id, blockType, blockName, ...fields }`. `loadLayoutData` loads uploads and relationships (one level deep), and missing fields get their `defaultValue`. Each slot arrives under its field name as an array of Payload-shaped blocks, so `<RenderLeaves blocks={content} />` keeps working. The component also gets a `builder` prop (see below).
+
+**5. Convert the content.** Run a dry run first. It writes nothing and lists what it would do:
+
+```ts
+// scripts/migrate-blocks.ts
+import config from '@payload-config'
+import { formatMigrationReport, migrateBlocksField } from '@payload-toolkit/builder'
+import { getPayload } from 'payload'
+
+const payload = await getPayload({ config })
+const report = await migrateBlocksField(payload, {
+  collection: 'pages',
+  from: 'layout',
+  to: 'builderLayout',
+  dryRun: !process.argv.includes('write'),
+})
+console.log(formatMigrationReport(report))
+process.exit(0)
+```
+
+```bash
+pnpm payload run scripts/migrate-blocks.ts         # dry run
+pnpm payload run scripts/migrate-blocks.ts write   # convert
+```
+
+`payload run` drops `--flags`, so the script reads a plain word. The report gives:
+
+- counts for documents and versions,
+- the block types without a definition (left out),
+- the fields with data that no definition has (left out),
+- the layouts that need a fix in the builder (for example a select value that is no longer an option).
+
+Close every builder tab while it runs. An open builder keeps its own copy of the layout and saves it again.
+
+- Every document, every draft and every version is converted in place. No new versions are made, `updatedAt` stays, and the old field never changes.
+- A second run skips documents whose builder field has content. `overwrite: true` converts them again (unchanged results are skipped).
+- After a real run it refreshes the documents' "Used in" records (`backfillReferences`), because its writes skip the save hook.
+- It writes through the database adapter (`updateOne`, `updateVersion`), so no hooks run. It compiles the CSS itself. Tested on Postgres. On MongoDB it converts the documents but not the versions.
+- Options: `where` (only some documents), `versions: false`, `overwrite`, `blocks` (default: the plugin's blocks), `log`.
+
+**6. Render pages with the builder.** Change the page route to `RenderLayout` with `page.builderLayout` and `page.builderLayoutCss` (see [step 7 of Install](#7-render-pages-on-the-site)). Pass your wrapped `components` to `RenderLayout` and to `BuilderCanvas`.
+
+**7. Remove the old field later**, once every page renders from the builder. Until then, note that Publish in the builder publishes the whole document, the old field's latest draft included.
+
+### Slots and existing components: the trade-off
+
+A component that renders its children itself (`<RenderLeaves blocks={content} />`) works as it is: the site shows the same HTML. In the editor you can select, move and edit the block, and you can edit and move its children in the outline and the inspector. On the canvas you cannot click or drag those children, because your renderer does not give their elements the builder's block ids.
+
+To make the children editable on the canvas, render the slot with `PayloadSlot`. In the builder it renders the builder's children (each with its block id) in an element that takes the slot's drop attributes. Outside the builder it renders your old code:
+
+```tsx
+import { PayloadSlot, type PayloadBlockProps } from '@payload-toolkit/builder-react'
+
+export function TwoColumnComponent({ leftColumn, rightColumn, builder }: PayloadBlockProps<TwoColumnBlock>) {
+  return (
+    <div className="grid gap-10 md:grid-cols-2">
+      <PayloadSlot builder={builder} name="leftColumn" className="space-y-8">
+        <RenderLeaves blocks={leftColumn} />
+      </PayloadSlot>
+      <PayloadSlot builder={builder} name="rightColumn" className="space-y-8">
+        <RenderLeaves blocks={rightColumn} />
+      </PayloadSlot>
+    </div>
+  )
+}
+```
+
+The `builder` prop holds `mode`, `className`, `slots` (rendered children by slot name) and `slotAttributes`. In the canvas, the adapter puts the block id on your component's first element through a `display: contents` wrapper, so the layout stays as on the site. A component that renders nothing gets a small placeholder.
+
+### Limitations
+
+- **Classes in the editor.** The canvas compiles only the classes in the layout and in each block's `classes`. Your components' own Tailwind classes are missing there unless you list them (`overrides: { fullWidth: { classes: [...] } }`) or import your site's compiled CSS in the canvas layout (`src/app/(builder-canvas)/layout.tsx`). On the site, your own Tailwind build covers them as before.
+- **Server components that fetch data** (for example a model grid that calls `payload.find`) cannot run in the canvas, which is a client page. Leave them out of the canvas map: the canvas shows "Name: no preview in the editor", and the block stays selectable. The site renders them as usual.
+- **Custom admin components** on fields (a custom `Field`) need Payload's form, so the inspector shows the default input for the field type. `fromPayloadBlocks` lists them in a warning.
+- **Conditions** that read the document, the user or several fields are not converted: the field always shows (also listed in a warning). `validate` functions, field hooks and function `defaultValue`s of block fields do not run in the builder.
+- **Loaded data** is one level deep. A component that needs deeper data loads it itself.
+- **Blocks fields inside a group, a named tab or an array** stay props, edited as JSON. Localized block fields are not supported.
+- A Payload slug `list` with an `items` array is read as the old built-in list (`normalizeLayout`). Use `prefix` to avoid that.
 
 ## Sections
 
@@ -706,6 +862,63 @@ return <RenderLayout layout={layout} css={found.css} context={context} blocks={b
 - `loadLayoutData(layout, blocks, payload, { draft, context, resolveLink })` resolves bindings and Field blocks against `context`, loads collection lists, and loads upload and relationship props. Pass the same `context` to `RenderLayout`.
 - `getByPath(doc, path)` and `resolveBindings(layout, context, blocks)` from `@payload-toolkit/builder/core` do the same work for a custom renderer.
 
+## References and Used in
+
+A layout is one JSON value, so Payload cannot see which images and documents a page uses. The plugin keeps a list of them in a hidden field. With it, Payload shows where a media file is used, refuses to delete a file that a page still uses, and gives search and sitemap code clean relation data.
+
+What the plugin adds:
+
+- **A hidden `builderRefs` field** on every builder collection, the templates collection and the saved sections collection. It is a polymorphic `relationship` field with `hasMany`. It points at every collection the blocks can reference: the `relationTo` of upload and relationship props, the collections of link fields, and the upload collections when a block has a rich text prop.
+- **A save hook** that fills the field from the layout on every save that sends the layout: the live session's draft saves, publish, the Edit view, the REST API and the Local API. The field is server-owned. The hook ignores values that clients send. A save without the layout keeps the stored list.
+- **"Used in"** on the media collection: a "Used in" section in the edit view lists the pages, posts, templates and sections that use the file, one Payload `join` field per builder collection (`usedInPages`, `usedInBuilderTemplates`, …). Empty lists are hidden. The REST and Local APIs return the same join fields.
+- **Delete protection** on the media collection: deleting a file that a builder document still uses fails with "This document is still used by Home (Pages), About (Pages) and 3 more. Remove it from those documents first." The edit view, the list view's bulk delete and the API all show this message.
+
+What counts as a reference:
+
+- Upload and relationship props, also inside groups, arrays, blocks fields and named tabs. Nested slots and hidden blocks count.
+- Link groups (`linkField()`) of type "Page or document". A URL link that still holds an old document choice does not count.
+- Upload, relationship and internal link nodes in rich text props.
+- Not bindings: a bound prop reads the rendered document at runtime, so it has no fixed ID. The prop's own value (its fallback) counts.
+- IDs of documents that do not exist are left out, so a save never fails on a deleted image.
+
+Which version counts. Collections with drafts have two states. The delete protection checks both the published document and the latest draft. "Used in" in the admin shows the latest drafts. When a draft no longer uses a file but the published page still does, the delete is refused, but "Used in" does not list that page. Publish the page, then delete the file.
+
+Options:
+
+```ts
+websiteBuilder({
+  // ...
+  references: {
+    field: 'builderRefs',          // name of the hidden field
+    usedIn: ['media', 'forms'],     // collections that show "Used in"; default: the upload collections the blocks use
+    protectDelete: ['media'],       // collections that refuse to delete used documents; default: the same upload collections
+    maxListed: 5,                   // how many documents the error message names
+  },
+})
+```
+
+- `references: false` turns all of this off.
+- To delete a used document anyway, pass the context flag: `payload.delete({ collection: 'media', id, context: { builderForceDelete: true } })` (`FORCE_DELETE_CONTEXT` from `@payload-toolkit/builder`). Postgres removes the deleted document from every `builderRefs` list.
+- `findReferrers(payload, { relationTo: 'media', value: id })` from `@payload-toolkit/builder` returns the builder documents that use a document (published and latest draft), for your own checks.
+- Search and sitemaps can query the field like any relationship: `where: { builderRefs: { equals: { relationTo: 'media', value: id } } }`.
+
+**Existing documents.** Documents saved before this version have an empty list until their next save. To fill them now, run the backfill once:
+
+```ts
+// scripts/backfill-references.ts — run with `pnpm payload run ./scripts/backfill-references.ts`
+import { getPayload } from 'payload'
+import config from '@payload-config'
+import { backfillReferences } from '@payload-toolkit/builder'
+
+const payload = await getPayload({ config })
+console.log(await backfillReferences(payload))
+process.exit(0)
+```
+
+It writes only the `builderRefs` field of each document and of each latest draft, through the database adapter: no hooks run, no new versions, and `updatedAt` does not change. It skips documents that are already right, so you can run it again.
+
+**Database schema.** The field adds rows to the builder collections' `_rels` tables (and their version tables). In development, `pnpm dev` pushes the change. Before a production deploy, create a migration with `pnpm payload migrate:create`.
+
 ## AI assistant
 
 The editor gets an **Assistant** panel. The user types a request, for example "add a pricing section with three tiers", and the model edits the open page. Each change appears on the canvas as it happens. One reply is one undo step. The assistant never saves or publishes: the editor saves the page as usual.
@@ -894,6 +1107,7 @@ Notes:
 - **Idle streams stay open.** The server sends a heartbeat every 10 s (`live.heartbeatMs`). That is well inside nginx's default `proxy_read_timeout` of 60 s. If you raise the heartbeat interval, keep it below your proxy's read timeout.
 - **Use HTTP/2 to the browser.** Over HTTP/1.1 a browser opens at most 6 connections per site, and each open builder tab keeps one of them for its event stream. With several builder tabs open, the admin and the site in the same browser start to wait for connections. HTTP/2 sends everything over one connection.
 - **Database schema.** This version keeps Payload's document lock on for builder collections (earlier versions set `lockDocuments: false`). That adds one column per builder collection to `payload_locked_documents_rels`. Create a migration (`pnpm payload migrate:create`) and run it before you start the new version, or every save of a builder document fails with "column … does not exist".
+- **References need a migration too.** The `builderRefs` field (see [References and Used in](#references-and-used-in)) adds columns to the `_rels` tables of every builder collection and their version tables. Create a migration with `pnpm payload migrate:create` before you deploy, then run `backfillReferences(payload)` once.
 
 ## Troubleshooting
 
@@ -920,6 +1134,10 @@ All entries must show one version. Pin `payload`, `@payloadcms/*` and `next` to 
 **Saving fails in production with "Cannot read stylesheet".** Standalone output is missing a CSS file. Add it to `outputFileTracingIncludes`.
 
 **Saving fails with "Tailwind plugin "x" is used by @plugin in the CSS entry but is not in the plugins map".** Add the plugin to `css.plugins` and to the canvas page's `plugins`.
+
+**"Collection "pages" already has a "blocks" field named "layout"".** The builder needs a `json` field. Give it its own name (`field: 'builderLayout'`) and convert the content: see [Using existing Payload blocks](#using-existing-payload-blocks).
+
+**"Two blocks have the type "heading"".** A block made with `fromPayloadBlocks` has the same type as another block. Set `prefix` in `fromPayloadBlocks`.
 
 **After adding `payload-mcp-toolkit`, `user.email` fails to typecheck.** The toolkit adds an API-key auth strategy, so `req.user` and `payload.auth()` can return an API key. Check `'email' in user` before you read user fields.
 

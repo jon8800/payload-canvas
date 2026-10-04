@@ -49,7 +49,9 @@ import {
   type SavedSectionsServerConfig,
 } from './sections'
 import { toJsonSafe } from './jsonSafe'
+import { collectionLabel } from './labels'
 import { listCollectionsOf } from './listCollections'
+import { addReferences, REFERENCES_CONFIG_KEY, resolveReferences, type ReferencesOptions } from './references'
 import {
   bindingSources,
   documentTemplateField,
@@ -62,6 +64,7 @@ import {
 
 export type { GeneratedCss } from './hook'
 export type { SavedSectionsOptions } from './sections'
+export type { ReferencesOptions } from './references'
 
 /**
  * Server-only key in `config.custom`: what the site needs to compile one stylesheet for every
@@ -76,18 +79,6 @@ export type SiteCssConfig = { css: CssOptions; blocks: BlockDefinition[] }
 export function siteCssConfigOf(payload: { config: { custom?: Record<string, unknown> } }): SiteCssConfig | null {
   const value = payload.config.custom?.[SITE_CSS_KEY] as SiteCssConfig | undefined
   return value?.css && Array.isArray(value.blocks) ? value : null
-}
-
-/** A collection's plural label as plain text (static labels only), else its slug in words ("blog-posts" -> "Blog posts"). */
-function collectionLabel(collection: CollectionConfig): string {
-  const label = collection.labels?.plural
-  if (typeof label === 'string') return label
-  if (label && typeof label === 'object') {
-    const first = (label as Record<string, unknown>).en ?? Object.values(label)[0]
-    if (typeof first === 'string') return first
-  }
-  const words = collection.slug.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').trim()
-  return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase()
 }
 
 export type BuilderCollectionOptions = {
@@ -168,6 +159,13 @@ export type WebsiteBuilderOptions = {
   theme?: ThemeOptions | false
   /** Editor behaviour, e.g. `{ dragMode: 'smooth' }`. See the README's "Drag and drop" section. */
   editor?: EditorOptions
+  /**
+   * References: a hidden `builderRefs` field on every builder collection lists the media and
+   * documents its layout uses. Upload collections the blocks use (e.g. media) get a "Used in" list
+   * and refuse to delete documents that are still used. On by default; `false` turns it off. See
+   * the README's "References and Used in" section.
+   */
+  references?: ReferencesOptions | false
 }
 
 const LAYOUT_FIELD_COMPONENT = '@payload-toolkit/builder/client#LayoutField'
@@ -267,6 +265,12 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
     }
 
     const blocks = listCollectionsOf(options.blocks ?? defaultBlocks(), [...withUrl])
+    const duplicate = blocks.find((b, i) => blocks.findIndex((other) => other.type === b.type) !== i)
+    if (duplicate) {
+      throw new Error(
+        `[websiteBuilder] Two blocks have the type "${duplicate.type}". Every block type must be unique. For blocks made with fromPayloadBlocks(), set \`prefix\` (for example \`prefix: 'site'\` makes "${duplicate.type}" "site${duplicate.type.charAt(0).toUpperCase()}${duplicate.type.slice(1)}").`,
+      )
+    }
 
     // Saved sections: a collection of sections people saved from the editor.
     const savedSections: SavedSectionsServerConfig | null =
@@ -282,6 +286,16 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
         savedSectionsCollection({ slug: savedSections.slug, blocks, options: options.savedSections || undefined }),
       ]
     }
+    // References: which media and documents each layout uses ("Used in", delete protection).
+    const references = resolveReferences({
+      options: options.references,
+      collections,
+      blocks,
+      sources: {
+        ...Object.fromEntries(Object.entries(builderOptions).map(([slug, o]) => [slug, { layout: o.field ?? 'layout' }])),
+        ...(savedSections ? { [savedSections.slug]: { layout: 'blocks', blocksOnly: true } } : {}),
+      },
+    })
     const clientBlocks = toJsonSafe(blocks)
     const css: CssOptions = {
       entry: path.resolve(process.cwd(), options.css.entry),
@@ -308,7 +322,8 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
               skip: Object.fromEntries(
                 Object.entries(builderOptions).map(([slug, o]) => {
                   const field = o.field ?? 'layout'
-                  return [slug, new Set([field, cssFieldName(field), richTextFieldName(field), DOCUMENT_TEMPLATE_FIELD])]
+                  const plugin = [field, cssFieldName(field), richTextFieldName(field), DOCUMENT_TEMPLATE_FIELD]
+                  return [slug, new Set(references ? [...plugin, references.field] : plugin)]
                 }),
               ),
               withUrl,
@@ -346,7 +361,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       },
       collections: collections.map((collection) => {
         const collectionOptions = builderOptions[collection.slug]
-        if (!collectionOptions) return collection
+        if (!collectionOptions) return references ? addReferences(collection, references) : collection
         const field = collectionOptions.field ?? 'layout'
         fieldNames[collection.slug] = field
         const clientConfig: BuilderClientConfig = {
@@ -364,7 +379,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           themeEndpoint: theme ? theme.endpoint : null,
           editor: { dragMode: options.editor?.dragMode ?? 'indicator' },
         }
-        return addBuilder(collection, {
+        const built = addBuilder(collection, {
           field,
           clientConfig,
           blocks,
@@ -373,7 +388,10 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           bindings: bindingCheck(collection.slug),
           // Runs after the layout hook, so it sees the live session's layout.
           afterLayout: collection.slug === templatesSlug && targets.length > 0 ? [requireBlocksForDefault] : [],
+          ownFields: references ? [references.field] : [],
         })
+        // After the layout hook, so the references follow the layout the session guard put in.
+        return references ? addReferences(built, references) : built
       }),
       // Server-only: the MCP tools read the live runtime from here, so they share the bus and lock.
       custom: {
@@ -384,6 +402,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
         ...(templates ? { [TEMPLATES_CONFIG_KEY]: templates } : {}),
         ...(theme ? { [THEME_CONFIG_KEY]: theme } : {}),
         ...(savedSections ? { [SAVED_SECTIONS_CONFIG_KEY]: savedSections } : {}),
+        ...(references ? { [REFERENCES_CONFIG_KEY]: references } : {}),
       },
       globals: themeOptions ? [...(config.globals ?? []), themeGlobal(themeOptions)] : config.globals,
       endpoints: [
@@ -477,19 +496,19 @@ type AddBuilderArgs = {
   bindings?: BindingCheck
   /** beforeChange hooks that run after the layout hook. */
   afterLayout?: CollectionBeforeChangeHook[]
+  /** More server-owned fields the stale-save check leaves out (the references field). */
+  ownFields?: readonly string[]
 }
 
 function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): CollectionConfig {
-  const { field, clientConfig, blocks, css, sessions, bindings, afterLayout = [] } = args
+  const { field, clientConfig, blocks, css, sessions, bindings, afterLayout = [], ownFields } = args
   const cssField = cssFieldName(field)
 
   // An existing field with this name (also inside rows, collapsibles or unnamed tabs) is reused
   // and moved to the top level.
   const { fields, found } = takeField(collection.fields, field)
   if (found && found.type !== 'json') {
-    throw new Error(
-      `[websiteBuilder] Field "${field}" in collection "${collection.slug}" must be a "json" field, not "${found.type}".`,
-    )
+    throw new Error(wrongFieldTypeMessage(collection.slug, field, found.type))
   }
   if (fields.some((f) => 'name' in f && f.name === cssField)) {
     throw new Error(
@@ -544,7 +563,7 @@ function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): Collect
       beforeOperation: [...(collection.hooks?.beforeOperation ?? []), keepLockBeforeOperation({ collection: collection.slug })],
       beforeChange: [
         ...(collection.hooks?.beforeChange ?? []),
-        layoutBeforeChange({ collection: collection.slug, field, cssField, blocks, css, sessions, bindings }),
+        layoutBeforeChange({ collection: collection.slug, field, cssField, blocks, css, sessions, bindings, ownFields }),
         ...afterLayout,
       ],
       afterChange: [...(collection.hooks?.afterChange ?? []), layoutAfterChange({ collection: collection.slug, sessions })],
@@ -567,6 +586,21 @@ function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): Collect
       },
     },
   }
+}
+
+/** The error for a layout field name that a field of another type already uses. */
+function wrongFieldTypeMessage(collection: string, field: string, type: string): string {
+  const suggestion = field === 'builderLayout' ? 'builder' : 'builderLayout'
+  const intro = `[websiteBuilder] Collection "${collection}" already has a "${type}" field named "${field}". The builder stores its layout in a "json" field.`
+  if (type === 'blocks') {
+    return (
+      `${intro} Keep your blocks field and give the builder a field of its own: ` +
+      `websiteBuilder({ collections: { ${collection}: { field: '${suggestion}' } } }). ` +
+      'Your block configs work as builder blocks with fromPayloadBlocks(), and migrateBlocksField() copies the content over. ' +
+      'See "Using existing Payload blocks" in the @payload-toolkit/builder README.'
+    )
+  }
+  return `${intro} Pick another name: websiteBuilder({ collections: { ${collection}: { field: '${suggestion}' } } }).`
 }
 
 /** The first richText field in a list of fields (at any depth) that matches `test`. */

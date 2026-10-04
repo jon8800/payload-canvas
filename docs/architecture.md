@@ -104,6 +104,16 @@ A block is `{ id, type, props?, className?, slots?, bindings?, hidden? }`.
 
 Why one JSON field instead of a Payload `blocks` field: unlimited nesting with no depth copies or `container_1` slugs, small form state, and edits that are plain JSON operations. That makes AI edits, undo and multiplayer simple. The trade-off: Payload no longer validates or populates block props for us. The plugin does that.
 
+**References.** Payload cannot see the IDs inside the JSON, so the plugin keeps them in a hidden field as well (`plugin/references.ts`, `core/references.ts`):
+
+- `builderRefs` is a polymorphic `relationship` field with `hasMany` on every builder collection, the templates collection and saved sections. Its `relationTo` comes from the block definitions: upload and relationship fields, link fields, and the upload collections when a block has rich text.
+- `collectReferences(layout, blocks)` (pure, tested) walks the layout along the field configs and returns `{ relationTo, value }[]` without duplicates. It reads nested slots, hidden blocks, groups, arrays, blocks fields, named tabs, link groups of type "reference" and Lexical upload, relationship and internal link nodes. Bindings have no fixed ID, so they add nothing.
+- A `beforeChange` hook runs after the layout hook, so it sees the layout the session guard put in. Every write path goes through it: session drafts, publish, Edit view, REST, Local API. It checks only new IDs against the database (one query per collection), because a dangling ID would break the save on the foreign key. Unchanged lists cost no query.
+- "Used in": the referenced upload collections get one `join` field per builder collection, `on: 'builderRefs'`. Payload 3.90 supports a single-collection join on a polymorphic `hasMany` field. A multi-collection join (`collection: [...]`) does not work here: it needs the `on` field as a column of the main table, and a `hasMany` field lives in the `_rels` table. The admin reads with `draft: true`, so the joins show the latest drafts.
+- Delete protection: a `beforeDelete` hook on the protected collections queries the published documents and the latest drafts. It throws a public `APIError` (409), which the edit view and the bulk delete show as a toast. `context.builderForceDelete` skips it.
+- Backfill: `backfillReferences(payload)` writes only the field with `payload.db.updateOne` / `updateVersion` (`updatedAt: null` keeps the timestamp). No hooks, no new versions.
+- Population: the renderer already loads upload and relationship props with one `find` per collection (`loadLayoutData`). Populating `builderRefs` instead would also cost one query per collection (Payload's dataloader batches by collection), so the renderer does not use it.
+
 ## 6. Block contract
 
 ```ts
@@ -126,6 +136,15 @@ export const Heading = defineBlock({
 - **Props are declared with Payload field configs.** From one declaration the plugin generates the inspector controls, a JSON Schema (for validation and for AI tools), and TypeScript types.
 - **Slots** declare where children go and which block types each slot accepts.
 - The React component is registered separately, in `builder-react` or in the app. The config stays server-safe.
+
+**Existing Payload blocks** (README: "Using existing Payload blocks"). A site with a Payload `blocks` field keeps its block configs, its components and its content:
+
+- `fromPayloadBlocks(configs, options)` (`blocks/payload.ts`, client-safe) makes one definition per Payload block, inline nested blocks and referenced blocks included. Fields stay Payload field configs. A nested `blocks` field at the block's own data level (also in rows, collapsibles, unnamed tabs) becomes a slot of that name; its blocks and `blockReferences` become `allow`. With `root`, the other blocks get `parents` (the blocks that take them). `prefix` renames the types; `definition.payload.slug` keeps the Payload slug, so data and components still use `blockType`.
+- `admin.condition` functions that test one sibling field become `admin.custom.builderCondition` (`core/conditions.ts` reads the function's source; minified code works). Conditions have `equals`, `notEquals` or `truthy`. The inspector hides the field, and `validateLayout` skips the required check of a hidden field, as Payload does. Custom admin components, other conditions and blocks fields inside groups or arrays are reported with `onWarning`.
+- `convertPayloadBlocksLayout(value, blocks)` (`core/convertPayload.ts`, pure, tested) turns `[{ id, blockType, blockName, ...fields }]` into a layout: slot fields become slots recursively, `blockName` becomes `label`, `null` values and fields without a definition are left out, populated references become IDs, and the result goes through `normalizeLayout`. A builder layout converts to itself. `toPayloadBlock` is the reverse, for components.
+- `migrateBlocksField(payload, { collection, from, to })` (`migrate/`) converts each document and each version in place through the adapter's `updateOne` / `updateVersion`, writing only the builder field and its CSS. The Local API cannot do this safely: `payload.update` on a document with a newer draft makes the published data the latest version again. Then it runs `backfillReferences`. Dry run by default; idempotent.
+- `fromPayloadComponent(s)` (`builder-react/src/render/payload.tsx`) gives a Payload-shaped component its old props, with each slot as a nested Payload-shaped array plus a `builder` prop with the rendered slots. In the canvas a `display: contents` host (`PayloadRoot`) puts the editor attributes on the component's first element. Children that the component renders itself have no block ids, so the canvas can select only the block itself; `PayloadSlot` renders a slot with the builder instead, so its children are editable on the canvas too.
+- Dev fixture: `apps/starter/src/legacy-fixture/` (`NEXT_PUBLIC_BUILDER_LEGACY_DEMO=1`): a `legacy-pages` collection, copied block configs, components, seed, migrate and cleanup scripts, and `/legacy-demo/:slug`.
 
 ## 7. The editor
 
@@ -285,7 +304,7 @@ The original prototype goals:
 | Theme global, ColorPicker, FontSelector, SliderField | Keep the data idea and the pickers. Output Tailwind `@theme` variables. |
 | Collections Pages, Posts, TemplateParts | Move to the starter app. The plugin adds builder fields to them. |
 | `create-payload-starter` CLI | Rebuild last, once the plugin is stable. |
-| Existing content | Local dev data only. Re-seed instead of migrating. |
+| Existing content | Starter: local dev data only, re-seed. Sites with a Payload `blocks` field: `migrateBlocksField` (section 6). |
 
 ## 16. Build order
 
@@ -299,3 +318,5 @@ The original prototype goals:
 6. ~~**Starter app and CLI**~~ Done 2026-10-04: starter, packaging, docs, the `create-payload-toolkit` CLI.
 7. ~~**Multiplayer, presence, AI chat panel, full-screen view, inline text editing, theme in the plugin.**~~ Done 2026-10-04.
 8. ~~**"+" between blocks, saved sections, real section thumbnails.**~~ Done 2026-10-04.
+9. ~~**References and "Used in".**~~ Done 2026-10-05: `builderRefs`, join fields on media, delete protection, backfill (section 5).
+10. ~~**Existing Payload blocks.**~~ Done 2026-10-05: `fromPayloadBlocks`, `fromPayloadComponents`, `PayloadSlot`, `convertPayloadBlocksLayout`, `migrateBlocksField` (section 6).

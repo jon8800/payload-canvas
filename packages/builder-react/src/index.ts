@@ -23,6 +23,14 @@ export { parseVideoUrl, type VideoEmbed } from './components/videoUrl'
 export { editableText, EDITABLE_TEXT_ATTRIBUTE } from './render/editable'
 export { defaultComponents } from './components'
 export { BuilderStyle, RenderLayout } from './render/RenderLayout'
+export {
+  fromPayloadComponent,
+  fromPayloadComponents,
+  PayloadSlot,
+  type FromPayloadComponentOptions,
+  type PayloadBlockProps,
+  type PayloadBuilderProps,
+} from './render/payload'
 export { loadLayoutData, resolveLayoutData, urlResolver, type LoadLayoutOptions } from './render/resolve'
 export { attachListItems, listItemsOf, listQueries, type ListQuery } from './render/lists'
 export { fieldFor } from './components/Field'

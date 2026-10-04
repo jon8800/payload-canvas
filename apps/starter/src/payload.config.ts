@@ -29,6 +29,9 @@ import { Categories } from '@/collections/Categories'
 import { Tags } from '@/collections/Tags'
 import { TemplateParts } from '@/collections/TemplateParts'
 import { SiteSettings } from '@/globals/SiteSettings'
+import { LegacyPages } from '@/legacy-fixture/collection'
+import { LEGACY_COLLECTION, legacyDemo } from '@/legacy-fixture/enabled'
+import { legacyBlockConfigs } from '@/legacy-fixture/configs'
 
 /** Collections with the page builder. Shared by the builder plugin and its MCP tools. */
 const builderCollections: WebsiteBuilderOptions['collections'] = {
@@ -36,6 +39,8 @@ const builderCollections: WebsiteBuilderOptions['collections'] = {
   // Posts render through templates (Templates collection): a default "Post template" or the post's own.
   posts: { field: 'builder', url: (doc) => documentPath('posts', doc.slug) ?? '/blog', templates: true },
   'template-parts': { field: 'builder' },
+  // Dev fixture: the old content stays in the `layout` blocks field; the builder gets its own field.
+  ...(legacyDemo ? { [LEGACY_COLLECTION]: { field: 'builderLayout', url: (doc) => `/legacy-demo/${String(doc.slug ?? '')}` } } : {}),
 }
 
 const filename = fileURLToPath(import.meta.url)
@@ -91,7 +96,10 @@ export default buildConfig({
     Categories,
     Tags,
     TemplateParts,
+    ...(legacyDemo ? [LegacyPages] : []),
   ],
+  // Dev fixture: the legacy pages' blocks, referenced by slug (`blockReferences`).
+  ...(legacyDemo ? { blocks: legacyBlockConfigs } : {}),
   globals: [SiteSettings],
   jobs: {
     autoRun: [{ cron: '*/5 * * * *', queue: 'default' }],

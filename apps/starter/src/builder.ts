@@ -2,6 +2,7 @@
 // the seed. Client-safe: `@payload-toolkit/builder/blocks` has no server code.
 import { defaultBlocks, defineBlock } from '@payload-toolkit/builder/blocks'
 import { formClassList } from '@/components/blocks/formClasses'
+import { legacyBuilderBlocks, legacyDemo } from '@/legacy-fixture'
 
 export { resolveLink } from '@/lib/links'
 
@@ -27,4 +28,6 @@ export const formBlock = defineBlock({
 export const builderBlocks = [
   ...defaultBlocks({ mediaCollection: 'media', linkCollections: ['pages', 'posts'] }),
   formBlock,
+  // Dev fixture: existing Payload blocks used as builder blocks (NEXT_PUBLIC_BUILDER_LEGACY_DEMO=1).
+  ...(legacyDemo ? legacyBuilderBlocks : []),
 ]

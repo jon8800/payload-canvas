@@ -82,6 +82,12 @@ export type BlockDefinition = {
   category?: string
   /** Text for AI tools: what the block is for, plus a small example. */
   ai?: { description: string; example?: Omit<Partial<Block>, 'id'> }
+  /**
+   * Set by `fromPayloadBlocks`: the Payload block config this definition was made from. Its
+   * `slug` is the `blockType` in Payload data. The content conversion and the component adapter
+   * use it, so a block may get another `type` (for example to avoid a clash with `heading`).
+   */
+  payload?: { slug: string }
 }
 
 // ---------------------------------------------------------------------------

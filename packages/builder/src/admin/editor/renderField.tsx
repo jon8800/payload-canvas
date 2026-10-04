@@ -11,7 +11,7 @@ import {
   UploadInput,
   useConfig,
 } from '@payloadcms/ui'
-import type { ChangeEvent, ReactNode } from 'react'
+import { Fragment, type ChangeEvent, type ReactNode } from 'react'
 import type { Field, OptionObject } from 'payload'
 
 import { getBlockDefinition } from '../../core'
@@ -20,8 +20,10 @@ import type { Block } from '../../core/types'
 import { ArrayField } from './fields/ArrayField'
 import { isStructuralChange } from './fields/arrayState'
 import { CheckedTextField, NumberField } from './fields/CheckedInputs'
-import { GroupField } from './fields/GroupField'
+import { FieldSection, GroupField } from './fields/GroupField'
 import { JsonField } from './fields/JsonField'
+import { ManyValuesField } from './fields/ManyValuesField'
+import { PointField } from './fields/PointField'
 import { RichTextField } from './fields/RichTextField'
 import { asId, formatProblem, fromRelationshipInput, isFieldVisible, isRecord, toRelationshipInput, type FieldShape } from './fields/values'
 import { useRuntime } from './runtime'
@@ -91,7 +93,9 @@ export function RenderBlockField({ field, onChange, path, value }: Props) {
   switch (field.type) {
     case 'text':
     case 'email': {
-      if (field.type === 'text' && field.hasMany) return <Unsupported label={label} reason="text fields with hasMany are not supported yet." />
+      if (field.type === 'text' && field.hasMany) {
+        return <ManyValuesField description={description} kind="text" label={label} onChange={onChange} path={path} required={required} value={value} />
+      }
       if (field.admin?.custom?.builderFormat) {
         return (
           <CheckedTextField
@@ -118,7 +122,9 @@ export function RenderBlockField({ field, onChange, path, value }: Props) {
     }
 
     case 'number': {
-      if (field.hasMany) return <Unsupported label={label} reason="number fields with hasMany are not supported yet." />
+      if (field.hasMany) {
+        return <ManyValuesField description={description} kind="number" label={label} onChange={onChange} path={path} required={required} value={value} />
+      }
       return (
         <NumberField
           description={description}
@@ -248,6 +254,23 @@ export function RenderBlockField({ field, onChange, path, value }: Props) {
     case 'json':
       return <JsonField description={description} label={label} onChange={onChange} path={path} required={required} value={value} />
 
+    case 'point':
+      return <PointField description={description} label={label} onChange={onChange} path={path} required={required} value={value} />
+
+    case 'blocks':
+      // A blocks field inside a group or array of a block made by fromPayloadBlocks. Blocks fields at
+      // the block's own level are slots and never reach the inspector.
+      return (
+        <JsonField
+          description={description ?? 'Nested blocks, as JSON: [{ "blockType": "…", … }].'}
+          label={label}
+          onChange={onChange}
+          path={path}
+          required={required}
+          value={value}
+        />
+      )
+
     case 'richText':
       return <RichTextField label={label} onChange={onChange} path={path} value={value} />
 
@@ -280,14 +303,20 @@ type FieldsProps = {
   readonly path: string
   /** Receives the whole new object. `undefined` when it became empty. */
   readonly onChange: (data: Record<string, unknown> | undefined) => void
+  /**
+   * Every field that shares `data`, when `fields` is only part of them (a row, a collapsible or an
+   * unnamed tab). Conditions read sibling defaults from it. Default: `fields`.
+   */
+  readonly scope?: readonly Field[]
 }
 
 /**
  * Renders a list of fields against one object. Handles `admin.custom.builderCondition`, hidden
  * fields, and layout-only fields (row, collapsible, unnamed group, unnamed tabs) that share
- * the parent's data. Named tabs render as groups.
+ * the parent's data. Collapsibles, and unnamed tabs when there are several, get a small heading.
+ * Named tabs render as groups.
  */
-export function RenderBlockFields({ fields, data, path, onChange }: FieldsProps) {
+export function RenderBlockFields({ fields, data, path, onChange, scope = fields }: FieldsProps) {
   const record = isRecord(data) ? data : {}
   const setField = (name: string, value: unknown) => {
     const next = { ...record }
@@ -298,14 +327,22 @@ export function RenderBlockFields({ fields, data, path, onChange }: FieldsProps)
 
   const out: ReactNode[] = []
   fields.forEach((field, index) => {
-    if (!isFieldVisible(field as FieldShape, record, fields as FieldShape[])) return
+    if (!isFieldVisible(field as FieldShape, record, scope)) return
     if (field.type === 'ui' || field.type === 'join') return
 
-    if (field.type === 'row' || field.type === 'collapsible' || (field.type === 'group' && !('name' in field && field.name))) {
-      out.push(<RenderBlockFields key={`layout-${index}`} fields={field.fields} data={record} path={path} onChange={onChange} />)
+    if (field.type === 'collapsible') {
+      const shared = <RenderBlockFields fields={field.fields} data={record} path={path} onChange={onChange} scope={scope} />
+      const title = text(field.label)
+      out.push(title ? <FieldSection key={`layout-${index}`} label={title}>{shared}</FieldSection> : <Fragment key={`layout-${index}`}>{shared}</Fragment>)
+      return
+    }
+    if (field.type === 'row' || (field.type === 'group' && !('name' in field && field.name))) {
+      out.push(<RenderBlockFields key={`layout-${index}`} fields={field.fields} data={record} path={path} onChange={onChange} scope={scope} />)
       return
     }
     if (field.type === 'tabs') {
+      // Several tabs get their labels as headings; a single tab shows its fields as they are.
+      const headed = field.tabs.length > 1
       field.tabs.forEach((tab, tabIndex) => {
         const key = `tab-${index}-${tabIndex}`
         if ('name' in tab && tab.name) {
@@ -322,7 +359,9 @@ export function RenderBlockFields({ fields, data, path, onChange }: FieldsProps)
           )
           return
         }
-        out.push(<RenderBlockFields key={key} fields={tab.fields} data={record} path={path} onChange={onChange} />)
+        const shared = <RenderBlockFields fields={tab.fields} data={record} path={path} onChange={onChange} scope={scope} />
+        const title = headed ? text(tab.label) : undefined
+        out.push(title ? <FieldSection key={key} label={title}>{shared}</FieldSection> : <Fragment key={key}>{shared}</Fragment>)
       })
       return
     }
