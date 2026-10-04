@@ -84,3 +84,11 @@ export function actorFromUser(user: unknown, aiLabel?: string): LiveActor {
   }
   return { type: 'user', id: `user:${userId}`, label: userLabel(user) }
 }
+
+/** The error message of a failed Payload call, with the field messages of a ValidationError. */
+export function payloadErrorMessage(error: unknown): string {
+  const data = (error as { data?: { errors?: { message?: unknown }[] } })?.data
+  const details = (data?.errors ?? []).map((e) => e.message).filter((m): m is string => typeof m === 'string' && m !== '')
+  if (details.length > 0) return details.join('\n')
+  return error instanceof Error ? error.message : String(error)
+}

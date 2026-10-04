@@ -6,12 +6,16 @@
 //
 // - Stream: GET {liveEndpoint}/:collection/:id/events?clientId=…[&seq=…&session=…]
 //   Events: `session` (full state), `commit`, `collaborators`, `awareness`, `saved` (the draft
-//   holds the session up to a seq) and `published` (publish, unpublish, revert).
+//   holds the session up to a seq), `saveFailed` (the server could not save the draft; it retries)
+//   and `published` (publish, unpublish, revert).
 //   On a reconnect with the last session id and seq, the server may replay missed commits
 //   (then `collaborators`); otherwise, or at any time, a fresh `session` replaces the confirmed
 //   layout and the engine rebases local changes on it. A `session` with `reset` (Revert to
 //   published) discards local changes and the undo history instead.
 // - Commits: POST …/commit, one batch at a time. The broadcast echo is the acknowledgement.
+//   A failed request (network down, 5xx) keeps the changes queued and retries with backoff; the
+//   browser's `online` event and every new session send them at once. While changes are not
+//   confirmed, leaving the page asks first (`beforeunload`).
 // - Awareness: POST …/awareness. Selection and hover go out at once, the cursor at most every
 //   50 ms, nothing while the tab is hidden.
 
@@ -27,6 +31,7 @@ import type {
   LiveCommitEvent,
   LiveCommitRequest,
   LivePublishedEvent,
+  LiveSaveFailedEvent,
   LiveSavedEvent,
   LiveSessionEvent,
 } from '../../../live/types'
@@ -59,6 +64,10 @@ export type LiveState = {
   savedAt: string | null
   /** A connection or permission problem. */
   lastError: string | null
+  /** The browser is offline, or this editor's commit requests fail. Local changes stay queued. */
+  offline: boolean
+  /** The server could not save the draft (it keeps retrying). Null after the next save. */
+  saveError: Omit<LiveSaveFailedEvent, 'type'> | null
 }
 
 /** Another editor's selection and canvas width (changes rarely). */
@@ -105,6 +114,8 @@ export function useMultiplayer(
       unsaved: false,
       savedAt: null,
       lastError: null,
+      offline: false,
+      saveError: null,
     }
     const publish = (patch: Partial<LiveState>) => {
       state = { ...state, ...patch }
@@ -171,7 +182,11 @@ export function useMultiplayer(
 
     // --- commits ---------------------------------------------------------------------------
 
-    let sendAttempt = 0
+    /** Offline: the browser says so, or the last commit request failed. */
+    const publishOffline = () => {
+      const offline = !navigator.onLine || engine.getState().sendFailures > 0
+      if (offline !== state.offline) publish({ offline })
+    }
     const post = (path: string, body: unknown) =>
       fetch(`${base}/${path}`, {
         method: 'POST',
@@ -180,27 +195,29 @@ export function useMultiplayer(
         body: JSON.stringify(body),
       })
     engine.setTransport((request: LiveCommitRequest) => {
-      const retry = () => {
-        sendAttempt += 1
-        engine.sendFailed(request.batchId, Math.min(MAX_BACKOFF_MS, 500 * 2 ** sendAttempt))
+      const failed = () => {
+        engine.sendFailed(request.batchId)
+        publishOffline()
       }
       post('commit', request)
         .then(async (res) => {
+          // A server error is not an answer about the batch: send it again later.
+          if (res.status >= 500) return failed()
           const data = (await res.json().catch(() => null)) as { ok?: unknown; seq?: unknown; error?: unknown } | null
           if (data && typeof data.ok === 'boolean') {
-            sendAttempt = 0
             // A 400 (the result would be invalid) has no seq: it is a rejection at the current seq.
             const seq = typeof data.seq === 'number' ? data.seq : engine.getState().seq
             engine.response(
               request.batchId,
               data.ok ? { ok: true, seq } : { ok: false, error: typeof data.error === 'string' ? data.error : 'The change was refused', seq },
             )
+            publishOffline()
             return
           }
           if (res.status === 401 || res.status === 403) publish({ lastError: 'You are not allowed to edit this document.' })
-          retry()
+          failed()
         })
-        .catch(retry)
+        .catch(failed)
     })
 
     const offResync = engine.onResync(() => {
@@ -271,6 +288,25 @@ export function useMultiplayer(
     const offFrame = runtime.frame.subscribe(throttledAwareness)
     const onVisibility = () => sendAwareness()
     document.addEventListener('visibilitychange', onVisibility)
+
+    // --- offline and leaving ---------------------------------------------------------------
+
+    const onOnline = () => {
+      engine.retryNow()
+      publishOffline()
+      // Do not wait for the stream's backoff.
+      if (state.status !== 'open') reconnect(0)
+    }
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (engine.getState().pending === 0) return
+      // Changes this editor made that the server has not confirmed would be lost.
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('online', onOnline)
+    window.addEventListener('offline', publishOffline)
+    window.addEventListener('beforeunload', onBeforeUnload)
+    publishOffline()
     // Acknowledgements do not touch the store, so check the "unsaved" dot on a timer too.
     const pendingTimer = setInterval(() => {
       const pending = engine.getState().pending > 0
@@ -305,7 +341,9 @@ export function useMultiplayer(
       }
       engine.session(data.seq, normalizeLayout(data.layout), data.sessionId ?? null, data.reset === true)
       const savedSeq = data.savedSeq ?? data.seq
-      publish({ self: data.self ?? null, status: 'open', lastError: null, savedSeq, unsaved: data.seq > savedSeq })
+      // A save error still current follows this event.
+      publish({ self: data.self ?? null, status: 'open', lastError: null, savedSeq, unsaved: data.seq > savedSeq, saveError: null })
+      publishOffline()
       if (data.reset) runtime.notify('The page was reset to its published version.')
       runtime.cursors.set(
         new Map(
@@ -338,6 +376,7 @@ export function useMultiplayer(
         resuming = false
         engine.resumed()
         publish({ status: 'open' })
+        publishOffline()
         lastSent = null
         sendAwareness()
       }
@@ -351,13 +390,19 @@ export function useMultiplayer(
         confirmResume()
         engine.commit(data)
         publishSaveState()
+        // The echo of an own batch can arrive before the HTTP answer.
+        publishOffline()
       })
       es.addEventListener('saved', (e) => {
         const data = parse<LiveSavedEvent>(e)
         if (!data) return
-        publish({ savedSeq: Math.max(state.savedSeq, data.seq), savedAt: data.at })
+        publish({ savedSeq: Math.max(state.savedSeq, data.seq), savedAt: data.at, saveError: null })
         publishSaveState()
         runtime.doc.handleEvent(data)
+      })
+      es.addEventListener('saveFailed', (e) => {
+        const data = parse<LiveSaveFailedEvent>(e)
+        if (data) publish({ saveError: { at: data.at, message: data.message, retrying: data.retrying } })
       })
       es.addEventListener('published', (e) => {
         const data = parse<LivePublishedEvent>(e)
@@ -412,6 +457,9 @@ export function useMultiplayer(
       offPointer()
       offFrame()
       document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('offline', publishOffline)
+      window.removeEventListener('beforeunload', onBeforeUnload)
       engine.setTransport(null)
       engine.disconnected()
       runtime.live.set(null)

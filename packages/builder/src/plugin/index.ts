@@ -100,6 +100,7 @@ export type WebsiteBuilderOptions = {
 
 const LAYOUT_FIELD_COMPONENT = '@payload-toolkit/builder/client#LayoutField'
 const BUILDER_TAB_COMPONENT = '@payload-toolkit/builder/client#BuilderTab'
+const PUBLISH_BUTTON_COMPONENT = '@payload-toolkit/builder/client#PublishButton'
 const BUILDER_VIEW_COMPONENT = '@payload-toolkit/builder/rsc#BuilderView'
 const BUILDER_REDIRECT_COMPONENT = '@payload-toolkit/builder/rsc#BuilderRedirect'
 /** Key of the full-screen builder view in `admin.components.views`. */
@@ -381,6 +382,12 @@ function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): Collect
       ...collection.admin,
       components: {
         ...collection.admin?.components,
+        // The builder's settings drawer must not show a second Publish (see settingsDrawer.tsx).
+        // A collection with its own Publish button keeps it.
+        edit: {
+          ...collection.admin?.components?.edit,
+          PublishButton: collection.admin?.components?.edit?.PublishButton ?? PUBLISH_BUTTON_COMPONENT,
+        },
         views: { ...views, edit },
       },
     },

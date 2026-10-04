@@ -32,6 +32,7 @@ import { MetaDescriptionComponent as MetaDescriptionComponent_a8a977ebc872c5d5ea
 import { MetaImageComponent as MetaImageComponent_a8a977ebc872c5d5ea7ee689724c0860 } from '@payloadcms/plugin-seo/client'
 import { PreviewComponent as PreviewComponent_a8a977ebc872c5d5ea7ee689724c0860 } from '@payloadcms/plugin-seo/client'
 import { LayoutField as LayoutField_4264ddaffcf8eeec506364d4835aed4d } from '@payload-toolkit/builder/client'
+import { PublishButton as PublishButton_4264ddaffcf8eeec506364d4835aed4d } from '@payload-toolkit/builder/client'
 import { BuilderRedirect as BuilderRedirect_c0c1af4cd1961baf9cba09efadb7433a } from '@payload-toolkit/builder/rsc'
 import { BuilderTab as BuilderTab_4264ddaffcf8eeec506364d4835aed4d } from '@payload-toolkit/builder/client'
 import { FormatField as FormatField_cdf7e044479f899a31f804427d568b36 } from '@payloadcms/plugin-import-export/rsc'
@@ -101,6 +102,7 @@ export const importMap = {
   "@payloadcms/plugin-seo/client#MetaImageComponent": MetaImageComponent_a8a977ebc872c5d5ea7ee689724c0860,
   "@payloadcms/plugin-seo/client#PreviewComponent": PreviewComponent_a8a977ebc872c5d5ea7ee689724c0860,
   "@payload-toolkit/builder/client#LayoutField": LayoutField_4264ddaffcf8eeec506364d4835aed4d,
+  "@payload-toolkit/builder/client#PublishButton": PublishButton_4264ddaffcf8eeec506364d4835aed4d,
   "@payload-toolkit/builder/rsc#BuilderRedirect": BuilderRedirect_c0c1af4cd1961baf9cba09efadb7433a,
   "@payload-toolkit/builder/client#BuilderTab": BuilderTab_4264ddaffcf8eeec506364d4835aed4d,
   "@payloadcms/plugin-import-export/rsc#FormatField": FormatField_cdf7e044479f899a31f804427d568b36,

@@ -3,7 +3,8 @@
 // One session per "collection:id", created on the first connection or commit. It holds the
 // layout at sequence `seq`. Commits apply in arrival order (all or nothing), raise `seq` by 1 and
 // go to every connection. The session saves the draft after a pause (debounced), and the save
-// hook takes the layout from the session while it is open (see plugin/hook.ts).
+// hook takes the layout from the session while it is open (see plugin/hook.ts). A failed save
+// goes to the editors as `saveFailed` and is tried again with backoff while commits are unsaved.
 //
 // In-process only: with more than one app server, route each document to one server (sticky
 // routing), because the session state lives in memory.
@@ -11,7 +12,7 @@
 import { normalizeLayout } from '../core/tree'
 import type { BlockDefinition, Layout, Operation } from '../core/types'
 import { validateLayout, type LayoutError } from '../core/validate'
-import { actorFromUser, resolveOperations, splitLayoutErrors, type LiveDocStore } from './apply'
+import { actorFromUser, payloadErrorMessage, resolveOperations, splitLayoutErrors, type LiveDocStore } from './apply'
 import { createKeyedMutex } from './mutex'
 import type {
   Awareness,
@@ -20,6 +21,8 @@ import type {
   LiveAwarenessEvent,
   LiveCollaboratorsEvent,
   LiveCommitEvent,
+  LiveFlushResponse,
+  LiveSaveFailedEvent,
   LiveSavedEvent,
   LiveSessionEvent,
   MultiplayerEvent,
@@ -60,8 +63,11 @@ export type SessionManagerOptions = {
   aiIdleMs?: number
   /** Commits kept for replay after a reconnect. Default 500. */
   logSize?: number
-  /** Failed saves in a row before the session stops retrying (until the next commit). Default 3. */
-  maxPersistFailures?: number
+  /**
+   * Waits before the next try after the 1st, 2nd, … failed save. The last value repeats while the
+   * session has unsaved commits. Default 2 s, 5 s, 15 s, then every 30 s.
+   */
+  retryDelaysMs?: number[]
   logger?: { error(message: string, error?: unknown): void }
 }
 
@@ -144,8 +150,11 @@ export interface SessionManager {
    * fresh `session` event with `reset: true`. False when no session is open.
    */
   reset(collection: string, id: string | number, layout: Layout): Promise<boolean>
-  /** Saves now if the session has unsaved commits. Resolves when the draft is saved. */
-  flush(collection: string, id: string | number): Promise<void>
+  /**
+   * Saves now if the session has unsaved commits (also during a retry wait). Resolves when the
+   * save ends: `ok: false` with the reason when it failed (the session keeps retrying).
+   */
+  flush(collection: string, id: string | number): Promise<LiveFlushResponse>
   /** Saves every session with unsaved commits. */
   flushAll(): Promise<void>
   /** Number of sessions with unsaved commits. */
@@ -257,7 +266,10 @@ type Session = {
   firstDirtyAt: number | null
   persistTimer: unknown
   persisting: Promise<void> | null
+  /** Failed saves in a row. While above 0, `persistTimer` is the retry (backoff), not the debounce. */
   failures: number
+  /** The last failed save, until a save works. Sent to editors that connect meanwhile. */
+  saveError: LiveSaveFailedEvent | null
   evictTimer: unknown
 }
 
@@ -294,7 +306,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
   const evictAfterMs = options.evictAfterMs ?? 60_000
   const aiIdleMs = options.aiIdleMs ?? 30_000
   const logSize = options.logSize ?? 500
-  const maxFailures = options.maxPersistFailures ?? 3
+  const retryDelays = options.retryDelaysMs?.length ? options.retryDelaysMs : [2000, 5000, 15_000, 30_000]
   const logger = options.logger ?? { error: (message: string, error?: unknown) => console.error(message, error) }
 
   const sessions = new Map<string, Session>()
@@ -340,6 +352,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
           persistTimer: null,
           persisting: null,
           failures: 0,
+          saveError: null,
           evictTimer: null,
         }
         sessions.set(key, session)
@@ -424,6 +437,22 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     }, wait)
   }
 
+  /** The next try after a failed save, with backoff. */
+  const scheduleRetry = (session: Session) => {
+    if (session.persistTimer !== null) timers.clear(session.persistTimer)
+    const wait = retryDelays[Math.min(session.failures, retryDelays.length) - 1] ?? retryDelays[0]
+    session.persistTimer = timers.set(() => {
+      session.persistTimer = null
+      void persist(session)
+    }, wait)
+  }
+
+  /** A save that worked, or a save outside the session that holds every commit: the error is over. */
+  const clearFailure = (session: Session) => {
+    session.failures = 0
+    session.saveError = null
+  }
+
   const persist = (session: Session): Promise<void> => {
     if (session.persisting) return session.persisting
     if (!dirty(session)) {
@@ -447,18 +476,32 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
           overrideAccess: false,
         })
         session.persistedSeq = Math.max(session.persistedSeq, seq)
-        session.failures = 0
+        clearFailure(session)
         deliver(session, savedEvent(seq, { updatedAt: saved?.updatedAt, status: saved?._status }))
       } catch (error) {
         session.failures += 1
+        // No permission does not fix itself: wait for the next commit or a manual retry.
+        const status = statusOf(error)
+        session.saveError = {
+          type: 'saveFailed',
+          at: new Date(timers.now()).toISOString(),
+          message: payloadErrorMessage(error) || 'The draft could not be saved.',
+          retrying: status !== 401 && status !== 403,
+        }
         logger.error(`[websiteBuilder] Could not save the live session of ${session.key} (try ${session.failures}).`, error)
+        deliver(session, session.saveError)
       }
     })()
     const done = run.then(() => {
       session.persisting = null
-      if (dirty(session) && session.failures < maxFailures) {
-        session.firstDirtyAt ??= timers.now()
-        schedulePersist(session)
+      if (dirty(session)) {
+        if (session.failures === 0) {
+          // Commits arrived during the save.
+          session.firstDirtyAt ??= timers.now()
+          schedulePersist(session)
+        } else if (session.saveError?.retrying) {
+          scheduleRetry(session)
+        }
       }
       maybeEvict(session)
     })
@@ -467,10 +510,12 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
   }
 
   const markDirty = (session: Session) => {
-    session.failures = 0
     session.firstDirtyAt ??= timers.now()
-    // A save in flight reschedules itself when it ends.
-    if (!session.persisting) schedulePersist(session)
+    // A save in flight reschedules itself when it ends. While saves fail, the backoff timer stays:
+    // new commits do not hammer a broken database.
+    if (session.persisting) return
+    if (session.failures > 0 && session.persistTimer !== null) return
+    schedulePersist(session)
   }
 
   // ---- AI collaborators -------------------------------------------------
@@ -545,6 +590,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
       } else {
         send(sessionEvent(session, info), eventId(session))
       }
+      if (session.saveError) send(session.saveError)
       deliver(session, collaboratorsEvent(session), undefined, clientId)
 
       return {
@@ -653,6 +699,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
       session.persistedSeq = Math.max(session.persistedSeq, seq)
       deliver(session, savedEvent(Math.min(seq, session.seq), info))
       if (dirty(session)) return
+      clearFailure(session)
       if (session.persistTimer !== null) timers.clear(session.persistTimer)
       session.persistTimer = null
       session.firstDirtyAt = null
@@ -681,6 +728,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
         session.sessionId = globalThis.crypto.randomUUID().slice(0, 8)
         session.seq += 1
         session.persistedSeq = session.seq
+        clearFailure(session)
         session.log = []
         session.knownBlocking = null
         for (const member of session.members.values()) {
@@ -697,19 +745,19 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
 
     async flush(collection, id) {
       const session = sessions.get(channelKey(collection, id))
-      if (!session) return
+      if (!session) return { ok: true }
       if (session.persisting) await session.persisting
-      if (session.persistTimer !== null) {
-        timers.clear(session.persistTimer)
-        session.persistTimer = null
-      }
-      await persist(session)
-      // A save that started before the last commits leaves them dirty: save once more.
-      if (dirty(session) && session.failures === 0) {
+      const save = async () => {
         if (session.persistTimer !== null) timers.clear(session.persistTimer)
         session.persistTimer = null
+        // A manual save counts as one more try for the backoff.
         await persist(session)
       }
+      await save()
+      // A save that started before the last commits leaves them dirty: save once more.
+      if (dirty(session) && session.failures === 0) await save()
+      if (!dirty(session)) return { ok: true }
+      return { ok: false, error: session.saveError?.message ?? 'The draft could not be saved.' }
     },
 
     async flushAll() {

@@ -5,7 +5,7 @@ import { applyOperation, findBlock, walkBlocks } from '../../../core'
 import type { Block, Layout, Operation } from '../../../core/types'
 import type { LiveCommitEvent, LiveCommitRequest, LiveCommitResponse } from '../../../live/types'
 import { createEditorStore, UNDO_NONE, UNDO_PARTIAL } from '../store'
-import { createSyncEngine, type Schedule, type SyncUpdate } from './sync'
+import { createSyncEngine, sendRetryDelay, type Schedule, type SyncUpdate } from './sync'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -621,6 +621,153 @@ describe('rejections', () => {
     t.engine.commit(remote(1, t.sent[0].ops, 'me', t.sent[0].batchId))
     assert.deepEqual(t.updates.at(-1)?.dropped, ['ins'])
     assert.deepEqual(ids(t.engine.getState().visible), ['n', 'a', 'b'])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Offline: a transport that fails (network down, server errors)
+// ---------------------------------------------------------------------------
+
+/** A clock with real delays: timers run when `advance` passes their time. */
+function timedClock() {
+  let now = 0
+  let timers: { at: number; fn: () => void; cancelled: boolean }[] = []
+  const schedule: Schedule = (fn, ms) => {
+    const timer = { at: now + ms, fn, cancelled: false }
+    timers.push(timer)
+    return () => {
+      timer.cancelled = true
+    }
+  }
+  return {
+    schedule,
+    advance(ms: number) {
+      const end = now + ms
+      for (;;) {
+        const due = timers.filter((t) => !t.cancelled && t.at <= end).toSorted((a, b) => a.at - b.at)[0]
+        if (!due) break
+        timers = timers.filter((t) => t !== due)
+        now = due.at
+        due.fn()
+      }
+      now = end
+    },
+  }
+}
+
+/** An engine whose transport fails while `down` is true, like fetch does for the live hook. */
+function flaky(initial: Layout = layout(heading('a'), heading('b'))) {
+  const clock = timedClock()
+  const sent: LiveCommitRequest[] = []
+  const failed: LiveCommitRequest[] = []
+  let down = true
+  const engine = createSyncEngine(initial, { clientId: 'me', schedule: clock.schedule, newBatchId: () => `f${++batchSeq}` })
+  engine.setTransport((request) => {
+    if (down) {
+      failed.push(request)
+      engine.sendFailed(request.batchId)
+      return
+    }
+    sent.push(request)
+  })
+  engine.session(0, initial, 's1')
+  return {
+    engine,
+    clock,
+    sent,
+    failed,
+    set down(value: boolean) {
+      down = value
+    },
+  }
+}
+
+describe('offline (failing transport)', () => {
+  it('keeps every change queued and visible while sends fail, with backoff', () => {
+    const t = flaky()
+    local(t.engine, setText('a', 'A1'), 'one')
+    t.clock.advance(30) // coalesce, then the send fails
+    assert.equal(t.failed.length, 1)
+    assert.equal(t.engine.getState().sendFailures, 1)
+    assert.equal(t.engine.getState().inflight, null)
+    local(t.engine, setText('b', 'B1'), 'two')
+    assert.equal(t.engine.getState().pending, 2)
+    assert.equal(textOf(t.engine.getState().visible, 'a'), 'A1')
+    assert.equal(textOf(t.engine.getState().visible, 'b'), 'B1')
+    // Retries after 1 s, 2 s, 4 s (each failing): nothing goes out in between.
+    t.clock.advance(999)
+    assert.equal(t.failed.length, 1)
+    t.clock.advance(1 + 30)
+    assert.equal(t.failed.length, 2)
+    t.clock.advance(2000 + 30)
+    assert.equal(t.failed.length, 3)
+    t.clock.advance(3999)
+    assert.equal(t.failed.length, 3)
+    t.clock.advance(1 + 30)
+    assert.equal(t.failed.length, 4)
+    assert.equal(t.engine.getState().sendFailures, 4)
+    // Every retry carries both changes, in order.
+    assert.deepEqual(t.failed[3].ops, [setText('a', 'A1'), setText('b', 'B1')])
+    assert.equal(t.engine.getState().pending, 2)
+  })
+
+  it('sends the queue once the network is back, and the answer ends the offline state', () => {
+    const t = flaky()
+    local(t.engine, setText('a', 'A1'), 'one')
+    t.clock.advance(30)
+    t.down = false
+    t.clock.advance(1000 + 30)
+    assert.equal(t.sent.length, 1)
+    t.engine.response(t.sent[0].batchId, { ok: true, seq: 1 })
+    assert.equal(t.engine.getState().sendFailures, 0)
+    t.engine.commit(echo(t.sent[0], 1))
+    assert.equal(t.engine.getState().pending, 0)
+    assert.equal(textOf(t.engine.getState().confirmed, 'a'), 'A1')
+  })
+
+  it('the echo arriving before the HTTP answer also ends the offline state', () => {
+    const t = flaky()
+    local(t.engine, setText('a', 'A1'))
+    t.clock.advance(30)
+    t.down = false
+    t.clock.advance(1000 + 30)
+    t.engine.commit(echo(t.sent[0], 1))
+    assert.equal(t.engine.getState().sendFailures, 0)
+    t.engine.response(t.sent[0].batchId, { ok: true, seq: 1 })
+    assert.equal(t.engine.getState().sendFailures, 0)
+  })
+
+  it('retryNow sends at once instead of waiting for the backoff', () => {
+    const t = flaky()
+    local(t.engine, setText('a', 'A1'))
+    t.clock.advance(30)
+    t.clock.advance(1000 + 30)
+    t.clock.advance(2000 + 30) // 3 failures: the next try waits 4 s
+    t.down = false
+    t.engine.retryNow()
+    t.clock.advance(30)
+    assert.equal(t.sent.length, 1)
+  })
+
+  it('a new session (the stream is back) sends the queue at once and rebases it', () => {
+    const t = flaky()
+    local(t.engine, setText('a', 'A1'), 'one')
+    t.clock.advance(30)
+    t.engine.disconnected()
+    t.down = false
+    // Meanwhile someone else changed "b".
+    t.engine.session(1, layout(heading('a'), heading('b', 'B-remote')), 's1')
+    t.clock.advance(30)
+    assert.equal(t.sent.length, 1)
+    assert.equal(t.sent[0].baseSeq, 1)
+    assert.deepEqual(t.sent[0].ops, [setText('a', 'A1')])
+    const visible = t.engine.getState().visible
+    assert.equal(textOf(visible, 'a'), 'A1')
+    assert.equal(textOf(visible, 'b'), 'B-remote')
+  })
+
+  it('backs off to every 15 s', () => {
+    assert.deepEqual([1, 2, 3, 4, 5, 9].map(sendRetryDelay), [1000, 2000, 4000, 8000, 15_000, 15_000])
   })
 })
 
