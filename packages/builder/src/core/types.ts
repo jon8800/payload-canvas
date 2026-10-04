@@ -3,6 +3,7 @@
 // It is pure TypeScript: no React, no Payload runtime imports.
 
 import type { Field } from 'payload'
+import type { AiClientConfig } from '../ai/types'
 
 // ---------------------------------------------------------------------------
 // Layout data (stored in one JSON field)
@@ -151,6 +152,8 @@ export type BuilderClientConfig = {
   liveEndpoint: string
   /** Templates and binding. Null when no collection uses templates. */
   templates: TemplatesClientConfig | null
+  /** The AI assistant. Null when the plugin has no `ai` option. */
+  ai: AiClientConfig | null
 }
 
 // ---------------------------------------------------------------------------
