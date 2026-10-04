@@ -146,6 +146,33 @@ describe('chat endpoint', () => {
     assert.equal(events.at(-1)?.type, 'done')
   })
 
+  it('loads saved sections per request: in the context and insertable by id', async () => {
+    const { req } = fakeReq()
+    const finds: Record<string, unknown>[] = []
+    ;(req.payload as unknown as { find: unknown }).find = async (args: Record<string, unknown>) => {
+      finds.push(args)
+      return {
+        docs: [{ id: 12, name: 'Team intro', blocks: [{ id: 's1', type: 'heading', props: { text: 'Our team' } }] }],
+      }
+    }
+    const { client } = createFakeClient([
+      { content: [{ type: 'tool_use', id: 'toolu_1', name: 'insertSection', input: { sectionId: 'saved:12' } }], stop_reason: 'tool_use' },
+      { content: [{ type: 'text', text: 'Done.' }], stop_reason: 'end_turn' },
+    ])
+    const response = await handler({
+      savedSections: { slug: 'builder-sections' },
+      loadClient: async () => ({ client, describeError: () => null }),
+    })(req)
+    const events = await readEvents(response)
+    assert.equal(finds[0].collection, 'builder-sections')
+    assert.equal(finds[0].overrideAccess, false)
+    const context = JSON.stringify(events[0].type === 'message' ? events[0].message.content : null)
+    assert.match(context, /- saved:12: Team intro: heading \\"Our team\\"/)
+    const inserted = events.flatMap((e) => (e.type === 'operations' ? e.ops : []))
+    assert.equal(inserted.length, 1)
+    assert.ok(inserted[0].type === 'insert' && inserted[0].block.props?.text === 'Our team')
+  })
+
   it('reports missing credentials as no_api_key', async () => {
     const { req } = fakeReq()
     const { client } = createFakeClient([new Error('Could not resolve authentication method.')])

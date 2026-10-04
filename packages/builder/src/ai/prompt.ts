@@ -16,6 +16,8 @@ export type PromptCatalog = {
   bindings: boolean
   /** Extra instructions from the plugin option `ai.instructions`. */
   instructions?: string
+  /** Saved sections are on: the prompt says where they are listed (the list itself is per request). */
+  savedSections?: boolean
 }
 
 /** Default Tailwind palette colors (red-500 …) and keywords. The prompt lists only theme colors. */
@@ -63,15 +65,23 @@ function stylingGuide(tokens: StyleTokens | null): string {
   return lines.join('\n')
 }
 
-function sectionCatalog(sections: SectionDefinition[]): string {
-  if (sections.length === 0) return 'SECTION CATALOG\nThis site has no ready-made sections. Build from blocks.'
+const SAVED_SECTIONS_NOTE =
+  'Sections people saved on this site are not in this catalog. When there are any, <editor_context> lists them. Insert them with insertSection { sectionId: "saved:<id>" } like catalog sections.'
+
+function sectionCatalog(sections: SectionDefinition[], saved: boolean): string {
+  if (sections.length === 0) {
+    return saved
+      ? `SECTION CATALOG\nThis site has no ready-made sections. ${SAVED_SECTIONS_NOTE} Otherwise build from blocks.`
+      : 'SECTION CATALOG\nThis site has no ready-made sections. Build from blocks.'
+  }
   const entries = sections.map((s) => {
     const head = `## ${s.id}: ${s.label}${s.category ? ` (${s.category})` : ''}`
     const description = s.description ? `\n${s.description}` : ''
     return `${head}${description}\n${outline(s.blocks).join('\n')}`
   })
   return [
-    'SECTION CATALOG. Ready-made, designed sections. Insert one with insertSection { sectionId }. The outline shows its blocks (type and start of the text). listSections { full: true } returns the full JSON.',
+    'SECTION CATALOG. Ready-made, designed sections. Insert one with insertSection { sectionId }. The outline shows its blocks (type and start of the text). listSections { full: true } returns the full JSON.' +
+      (saved ? `\n${SAVED_SECTIONS_NOTE}` : ''),
     ...entries,
   ].join('\n\n')
 }
@@ -109,7 +119,7 @@ RICH TEXT
     layoutGuide('the block catalog'),
     ...(catalog.bindings ? [BINDINGS_GUIDE] : []),
     `BLOCK CATALOG (JSON). Every block type you can use, with its props, slots, description and an example. getBlockSchema returns the exact JSON Schema of one type.\n${JSON.stringify(catalog.blocks.map(describeBlock))}`,
-    sectionCatalog(catalog.sections),
+    sectionCatalog(catalog.sections, catalog.savedSections === true),
   ]
   const extra = catalog.instructions?.trim()
   if (extra) parts.push(`INSTRUCTIONS FROM THE SITE OWNER\n${extra}`)
@@ -134,6 +144,8 @@ export type ContextInput = {
   templateTarget?: string | null
   /** Template mode: the sample document. */
   sample?: TemplateContext | null
+  /** Saved sections the user can read (people made them on this site). Not in the cached system prompt. */
+  savedSections?: SectionDefinition[]
 }
 
 const MAX_STRING = 160
@@ -161,6 +173,23 @@ export function summarizeDoc(value: unknown, depth = 0): unknown {
     return out
   }
   return String(value)
+}
+
+/** At most this many saved sections are listed in the context message. */
+export const CONTEXT_SAVED_SECTIONS = 30
+const OUTLINE_MAX = 160
+
+/** One line per saved section: id, name, category and a condensed outline of its blocks. */
+function savedSectionsBlock(sections: SectionDefinition[] | undefined): string[] {
+  if (!sections || sections.length === 0) return []
+  const lines = sections.slice(0, CONTEXT_SAVED_SECTIONS).map((s) => {
+    const condensed = outline(s.blocks).map((line) => line.trim()).join(', ')
+    const short = condensed.length > OUTLINE_MAX ? `${condensed.slice(0, OUTLINE_MAX)}…` : condensed
+    return `- ${s.id}: ${s.label}${s.category ? ` (${s.category})` : ''}: ${short}`
+  })
+  const more = sections.length - CONTEXT_SAVED_SECTIONS
+  if (more > 0) lines.push(`- …and ${more} more. listSections lists them all.`)
+  return ['Saved sections (made by people on this site). Insert with insertSection { sectionId }:', ...lines]
 }
 
 function canvasLine(width: number | null | undefined, breakpoints: ContextInput['breakpoints']): string | null {
@@ -199,6 +228,7 @@ export function contextText(input: ContextInput): string {
   } else {
     lines.push('Selected block: none.')
   }
+  lines.push(...savedSectionsBlock(input.savedSections))
   lines.push(`Current layout (${input.layout.blocks.length} top-level blocks):`, JSON.stringify(input.layout), '</editor_context>')
   return lines.join('\n')
 }

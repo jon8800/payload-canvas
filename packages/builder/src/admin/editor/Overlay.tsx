@@ -6,9 +6,11 @@ import type { CSSProperties } from 'react'
 import { findBlock, findLocation } from '../../core'
 import type { CanvasMeasurement, Layout, Rect } from '../../core/types'
 import { copySelection, duplicateBlock, moveBy, removeBlock, toggleHidden } from './actions'
+import { requestSaveSection } from './sections/SectionDialog'
 import { BlockIcon, Icon, type IconName } from './icons'
 import { inlineEditing } from './inline'
 import { InlineToolbar } from './InlineToolbar'
+import { InsertHandle } from './insert/InsertHandle'
 import { blockName } from './names'
 import { Popover, usePopover } from './styles/popover'
 import { PeerCursors, PeerSelections } from './live/PresenceUI'
@@ -138,6 +140,7 @@ export function Overlay() {
           {editing && editRect && inline?.kind === 'rich' && <InlineToolbar inline={inline} rect={editRect} zoom={zoom} />}
         </>
       )}
+      <InsertHandle />
       <PeerCursors />
       {indicator && (
         <div className={`builder-editor__drop builder-editor__drop--${indicator.kind}`} style={box(indicator.rect)}>
@@ -253,6 +256,9 @@ function ActionBar({ id, label, icon, layout, rect, measurement, inside, below, 
     { icon: 'duplicate', label: 'Duplicate', keys: 'Ctrl+D', run: () => duplicateBlock(runtime, id) },
     { icon: 'copy', label: 'Copy', keys: 'Ctrl+C', run: () => copySelection(runtime) },
     { icon: block?.hidden ? 'eye' : 'eyeOff', label: block?.hidden ? 'Show on the site' : 'Hide on the site', run: () => toggleHidden(runtime, id) },
+    ...(runtime.sections.enabled && block
+      ? [{ icon: 'section' as const, label: 'Save as section…', run: () => requestSaveSection(runtime, block) }]
+      : []),
     'separator',
     { icon: 'delete', label: 'Delete', keys: 'Del', danger: true, run: () => removeBlock(runtime, id) },
   ]

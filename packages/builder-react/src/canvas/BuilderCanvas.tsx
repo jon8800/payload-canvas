@@ -7,7 +7,6 @@ import {
   collectClasses,
   createId,
   findBlock,
-  resolveBindings,
   type BlockDefinition,
   type CanvasMeasurement,
   type Layout,
@@ -25,25 +24,17 @@ import {
   type CanvasToAdmin,
   type PointerKind,
 } from '@payload-toolkit/builder/protocol'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { flushSync } from 'react-dom'
 
-import {
-  attachListItems,
-  defaultResolveLink,
-  listQueries,
-  RenderLayout,
-  resolveLayoutData,
-  urlResolver,
-  type BlockComponents,
-  type ResolveLink,
-} from '../index'
-import { createRestFetchDocs, fetchListItems } from './fetchDocs'
+import { defaultResolveLink, RenderLayout, type BlockComponents, type ResolveLink } from '../index'
 import { editableAt, firstEditable, type EditableTarget } from './inline/dom'
 import { bindingFor, inlineKind, valueAtPath, withPropValue } from './inline/model'
 import { startPlainSession, type InlineSession, type SessionOptions } from './inline/session'
 import { measure, sameMeasurement } from './measure'
+import { resolveCanvasLayout } from './resolveLayout'
 import { shareStructure } from './share'
+import { ThumbnailCanvas } from './thumbnail/ThumbnailCanvas'
 
 export type BuilderCanvasProps = {
   /**
@@ -129,7 +120,22 @@ const definitionIn = (latest: Latest, type: string) => latest.definitions?.find(
 /** How long a released freeze waits for the admin's layout at most. */
 const RELEASE_MS = 1500
 
-export function BuilderCanvas({ blocks, components, plugins, resolveLink }: BuilderCanvasProps) {
+const subscribeNothing = () => () => {}
+const canvasMode = () => (new URLSearchParams(window.location.search).get('mode') === 'thumbnail' ? 'thumbnail' : 'editor')
+
+/**
+ * The canvas iframe page. `?mode=thumbnail` turns it into the hidden renderer of the library's
+ * section thumbnails; otherwise it is the editor's canvas.
+ */
+export function BuilderCanvas(props: BuilderCanvasProps) {
+  // Null on the server and in the hydration render: the page reads its URL in the browser only.
+  const mode = useSyncExternalStore(subscribeNothing, canvasMode, () => null)
+  if (mode === 'thumbnail') return <ThumbnailCanvas {...props} />
+  if (mode === 'editor') return <EditorCanvas {...props} />
+  return null
+}
+
+function EditorCanvas({ blocks, components, plugins, resolveLink }: BuilderCanvasProps) {
   const [init, setInit] = useState<CanvasInit | null>(null)
   const [layout, setLayout] = useState<Layout | null>(null)
   // The document a template renders (the editor's sample document). Null on normal pages.
@@ -432,11 +438,7 @@ export function BuilderCanvas({ blocks, components, plugins, resolveLink }: Buil
   useEffect(() => {
     if (!layout || !init || !definitions) return
     const run = ++resolveRun.current
-    const bound = context ? resolveBindings(layout, context, definitions, { url: urlResolver(linkResolver) }) : layout
-    const queries = listQueries(bound, context)
-    Promise.all(queries.map((query) => fetchListItems(init.api, query)))
-      .then((lists) => attachListItems(bound, new Map(queries.map((query, i) => [query.blockId, lists[i]]))))
-      .then((withItems) => resolveLayoutData(withItems, definitions, createRestFetchDocs(init.api)))
+    resolveCanvasLayout(layout, context, init.api, definitions, linkResolver)
       .then((next) => {
         if (run === resolveRun.current) setResolved((current) => shareStructure(current, next))
       })

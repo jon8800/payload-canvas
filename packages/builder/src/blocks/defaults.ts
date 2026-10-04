@@ -64,40 +64,6 @@ const MENU_CLASSES = [
 ]
 
 /**
- * Why a video URL cannot play, as one sentence for the inspector, or null when it can (or is
- * empty). Absolute URLs must be http(s). YouTube and Vimeo links must name a video. Any other URL
- * plays as a file. Keep in sync with `videoUrl.ts` in `@payload-toolkit/builder-react`.
- */
-export function videoUrlProblem(value: unknown): string | null {
-  const url = typeof value === 'string' ? value.trim() : ''
-  if (!url || url.startsWith('/')) return null
-  let parsed: URL
-  try {
-    parsed = new URL(url)
-  } catch {
-    return 'Enter a full link that starts with https://, for example https://www.youtube.com/watch?v=…'
-  }
-  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return 'Enter a link that starts with https://.'
-  const host = parsed.hostname.replace(/^(www\.|m\.|music\.)/, '')
-  const parts = parsed.pathname.split('/').filter(Boolean)
-  if (host === 'youtu.be' || host === 'youtube.com' || host === 'youtube-nocookie.com') {
-    const id =
-      host === 'youtu.be'
-        ? parts[0]
-        : parts[0] === 'watch'
-          ? parsed.searchParams.get('v')
-          : ['embed', 'shorts', 'live', 'v'].includes(parts[0] ?? '')
-            ? parts[1]
-            : null
-    return id && /^[\w-]{11}$/.test(id) ? null : 'This YouTube link does not point to a video. Use the link from Share under the video.'
-  }
-  if (host === 'vimeo.com' || host === 'player.vimeo.com') {
-    return parts.some((part) => /^\d+$/.test(part)) ? null : 'This Vimeo link does not point to a video. Use the link from Share under the video.'
-  }
-  return null
-}
-
-/**
  * The built-in blocks: stack, grid, heading, text, richText, image, button, link, list, quote,
  * divider, spacer, video, and the dynamic blocks field and collectionList.
  */
@@ -481,7 +447,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         label: 'URL',
         admin: {
           description: 'A YouTube or Vimeo link, or a direct link to a video file.',
-          // The inspector runs `videoUrlProblem` on this field and shows its message.
+          // Format `videoUrl` (core/formats.ts): the inspector shows the message, publishing needs a good link.
           custom: { ...when('source', 'url').custom, builderFormat: 'videoUrl' },
         },
       },

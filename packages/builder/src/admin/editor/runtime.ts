@@ -22,6 +22,9 @@ import { createEditorStore, type EditorStore } from './store'
 import { createDocumentController, type DocumentController } from './topbar/document'
 import { problemSummary, publishProblems, type PublishProblem } from './topbar/problems'
 import { createValueStore, type ValueStore } from './valueStore'
+import type { InsertSpot } from './insert/spots'
+import { createSectionsController, type SectionsController } from './sections/controller'
+import { createThumbnailService, type ThumbnailService } from './sections/thumbnails'
 import type { CollaboratorCursor, LiveState, Peer, PeerCursor } from './live'
 import { initialTemplateState, type TemplateState } from './templates/state'
 
@@ -103,6 +106,12 @@ export type Runtime = {
   assistantFocus: ValueStore<number>
   /** Opens the assistant tab and focuses its input, or (when `open` is not true and it is open) goes back to the Block tab. */
   toggleAssistant: (open?: boolean) => void
+  /** Where the canvas "+" button is (the pointer's nearest insert position). Null hides it. */
+  insertSpot: ValueStore<InsertSpot | null>
+  /** Saved sections and the section dialog. */
+  sections: SectionsController
+  /** Real thumbnails of sections for the library. */
+  thumbnails: ThumbnailService
   /** Payload's REST route, e.g. "/api". */
   api: string
   iframeRef: RefObject<HTMLIFrameElement | null>
@@ -174,9 +183,10 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
     if (next.length !== list.length) problems.set(next)
   })
 
+  const canvasInit: CanvasInit = { blocks: config.blocks, cssEndpoint: config.cssEndpoint, api }
   const runtime: Runtime = {
     config,
-    canvasInit: { blocks: config.blocks, cssEndpoint: config.cssEndpoint, api },
+    canvasInit,
     store,
     measurement: createValueStore<CanvasMeasurement | null>(null),
     drag: createValueStore<DragState | null>(null),
@@ -224,6 +234,14 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
       runtime.inspectorTab.set('assistant')
       runtime.assistantFocus.set(Date.now())
     },
+    insertSpot: createValueStore<InsertSpot | null>(null),
+    sections: createSectionsController(api, config.savedSections?.collection ?? null),
+    thumbnails: createThumbnailService({
+      canvasPath: config.canvasPath,
+      init: canvasInit,
+      themeEndpoint: config.themeEndpoint ?? null,
+      definitions: config.blocks,
+    }),
     api,
     iframeRef,
     outlineRef: createRef<HTMLDivElement>(),

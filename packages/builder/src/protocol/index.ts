@@ -2,7 +2,7 @@
 // Both sides check `event.origin` and `event.source` before they trust a message.
 // Pure TypeScript: no React, no Payload runtime imports.
 
-import type { BlockDefinition, CanvasMeasurement, Layout, Rect, TemplateContext } from '../core/types'
+import type { Block, BlockDefinition, CanvasMeasurement, Layout, Rect, TemplateContext } from '../core/types'
 
 export const CHANNEL = 'payload-builder' as const
 
@@ -16,6 +16,23 @@ export type CanvasInit = {
 }
 
 export type PointerKind = 'move' | 'leave' | 'click'
+
+// ---------------------------------------------------------------------------
+// Section thumbnails. A hidden canvas iframe (`?mode=thumbnail`) renders one section at a time
+// with the app's components and theme, and returns a picture of it.
+// ---------------------------------------------------------------------------
+
+/** One section to picture. The iframe answers with a `thumbnail` message with the same `key`. */
+export type ThumbnailRequest = {
+  key: string
+  blocks: Block[]
+  /** The theme to render with (the plugin's theme endpoint output), or null to keep the page's own. */
+  theme: { css: string; fontsHref: string | null } | null
+  /** Width of the picture in pixels. The iframe renders at its own width and scales down. */
+  outputWidth: number
+  /** Taller sections are cut at this height, in canvas CSS pixels. */
+  maxHeight: number
+}
 
 export type KeyAction = 'undo' | 'redo' | 'delete' | 'escape'
 
@@ -79,6 +96,8 @@ export type CanvasToAdmin =
    * canvas editor cannot read.
    */
   | { type: 'inlineRefused'; id: string; path: string; reason: 'bound' | 'unsupported'; field?: string }
+  /** Thumbnail mode: the picture of a requested section as a data URL, or null with the error. */
+  | { type: 'thumbnail'; key: string; url: string | null; width?: number; height?: number; error?: string }
 
 export type AdminToCanvas =
   | { type: 'init'; init: CanvasInit }
@@ -99,6 +118,8 @@ export type AdminToCanvas =
   | { type: 'inlineStop' }
   /** Rich text: a toolbar command for the current session. */
   | { type: 'inlineCommand'; command: RichCommand }
+  /** Thumbnail mode: picture one section. Requests queue up in the iframe. */
+  | { type: 'thumbnail'; request: ThumbnailRequest }
 
 type Envelope<T> = { channel: typeof CHANNEL; payload: T }
 

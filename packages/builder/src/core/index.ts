@@ -12,4 +12,5 @@ export { validateLayout, isBlockingError, isLayoutWarning, PUBLISH_ONLY_CODES, t
 export * from './styles'
 export * from './bindings'
 export { blockName, defineBlock, getBlockDefinition, placementError, slotAccepts, slotAcceptsAt, slotNames } from './blocks'
+export { FORMATS, formatProblem, isPlayableVideoUrl, parseVideoUrl, videoUrlProblem, type FormatCheck, type VideoEmbed, type VideoOptions } from './formats'
 export { describeLayoutErrors, summarizeProblems, type LayoutIssue } from './issues'

@@ -7,6 +7,7 @@
 import { useConfig } from '@payloadcms/ui'
 import { useEffect, useState } from 'react'
 
+import { DOCUMENT_TEMPLATE_FIELD, TITLE_KEYS } from '../../../core/bindings'
 import type { Runtime } from '../runtime'
 import { useValueSelector } from '../valueStore'
 import { docTitle } from './binding'
@@ -19,6 +20,13 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
 const isId = (value: unknown): value is Id => (typeof value === 'string' && value !== '') || typeof value === 'number'
+
+/** An id as text, from an id or a populated document. */
+export const idOf = (value: unknown): string | null => {
+  if (typeof value === 'string' || typeof value === 'number') return String(value)
+  if (isRecord(value) && 'id' in value) return idOf(value.id)
+  return null
+}
 
 async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(url, { credentials: 'include', signal, headers: { Accept: 'application/json' } })
@@ -111,9 +119,26 @@ export function useTemplateController(runtime: Runtime) {
   }, [runtime, api, isTemplate, target, choice, preferred, titleField])
 }
 
-export type DocOption = { id: Id; title: string; status?: string; updatedAt?: string }
+export type DocOption = {
+  id: Id
+  title: string
+  status?: string
+  updatedAt?: string
+  /** Id of the template the document picked for itself, or null (it follows the default template). */
+  template: string | null
+}
 
-/** Searches a collection's documents by title (newest first). Runs only while `enabled`. */
+/** The fields a picker row needs. The search asks for only these, so it stays small. */
+function searchSelect(titleField: string | undefined): Record<string, string> {
+  const fields = new Set<string>([...TITLE_KEYS, '_status', 'updatedAt', DOCUMENT_TEMPLATE_FIELD])
+  if (titleField) fields.add(titleField)
+  return Object.fromEntries([...fields].map((name) => [`select[${name}]`, 'true']))
+}
+
+/**
+ * Searches a collection's documents by title (newest first). Runs only while `enabled`. The one
+ * request also returns each document's own template, so the picker needs no other request.
+ */
 export function useDocSearch(api: string, collection: string | null, titleField: string | undefined, query: string, enabled: boolean) {
   const [state, setState] = useState<{ docs: DocOption[]; loading: boolean; error: string | null }>({
     docs: [],
@@ -128,7 +153,13 @@ export function useDocSearch(api: string, collection: string | null, titleField:
     const timer = window.setTimeout(
       () => {
         setState((s) => ({ ...s, loading: true, error: null }))
-        const params = new URLSearchParams({ limit: String(SEARCH_LIMIT), depth: '0', sort: '-updatedAt', draft: 'true' })
+        const params = new URLSearchParams({
+          limit: String(SEARCH_LIMIT),
+          depth: '0',
+          sort: '-updatedAt',
+          draft: 'true',
+          ...searchSelect(titleField),
+        })
         if (q) params.set(`where[${titleField ?? 'id'}][${titleField ? 'like' : 'equals'}]`, q)
         fetchJson<FindResult>(`${api}/${collection}?${params}`, controller.signal)
           .then((result) =>
@@ -140,6 +171,7 @@ export function useDocSearch(api: string, collection: string | null, titleField:
                 title: docTitle(d, titleField),
                 status: typeof d._status === 'string' ? d._status : undefined,
                 updatedAt: typeof d.updatedAt === 'string' ? d.updatedAt : undefined,
+                template: idOf(d[DOCUMENT_TEMPLATE_FIELD]),
               })),
             }),
           )

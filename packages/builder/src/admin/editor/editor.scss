@@ -2346,4 +2346,216 @@
   .builder-editor__notice--warning svg {
     color: var(--theme-warning-500, #f59e0b);
   }
+
+  // ---------------------------------------------------------------------------
+  // Canvas "+" between blocks (insert/InsertHandle.tsx). Overlay coordinates: the button keeps
+  // its screen size at any zoom (`--be-inv`).
+  // ---------------------------------------------------------------------------
+
+  .builder-editor__overlay .builder-editor__insert-plus {
+    position: absolute;
+    z-index: 3;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 2px solid var(--theme-bg);
+    border-radius: 50%;
+    background: var(--be-accent);
+    color: var(--be-accent-fg);
+    box-shadow: 0 1px 4px rgb(0 0 0 / 0.3);
+    cursor: pointer;
+    pointer-events: auto;
+    transform: translate(-50%, -50%) scale(var(--be-inv, 1));
+    animation: builder-plus-in 120ms var(--be-ease) both;
+    transition: background-color 120ms ease, box-shadow 120ms ease;
+
+    &:hover,
+    &[aria-expanded='true'] {
+      background: var(--be-accent-strong);
+      box-shadow: 0 0 0 3px var(--be-accent-soft), 0 1px 4px rgb(0 0 0 / 0.3);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--be-accent);
+      outline-offset: 2px;
+    }
+
+    svg {
+      stroke-width: 2.25;
+    }
+  }
+
+  @keyframes builder-plus-in {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(calc(var(--be-inv, 1) * 0.6));
+    }
+  }
+
+  .builder-editor__insert-mark {
+    position: absolute;
+    box-sizing: border-box;
+    pointer-events: none;
+  }
+
+  .builder-editor__insert-mark--between {
+    background: var(--be-accent);
+  }
+
+  .builder-editor__insert-mark--empty {
+    outline: calc(var(--be-px) * 2) dashed var(--be-accent);
+    outline-offset: calc(var(--be-px) * -2);
+    background: var(--be-accent-soft);
+  }
+
+  // The insert picker: a search field over one list of blocks and sections.
+  .builder-editor__menu.builder-editor__picker {
+    width: 280px;
+    max-height: min(420px, calc(100vh - 16px));
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .builder-editor__picker-body {
+    display: flex;
+    flex-direction: column;
+    max-height: inherit;
+  }
+
+  .builder-editor__search.builder-editor__picker-search {
+    margin: 8px 8px 4px;
+
+    // The field's border shows the focus.
+    input:focus-visible {
+      outline: none;
+    }
+  }
+
+  .builder-editor__picker-list {
+    flex: 1;
+    min-height: 0;
+    max-height: 340px;
+    padding: 0 4px 6px;
+    overflow: hidden auto;
+    scrollbar-width: thin;
+  }
+
+  .builder-editor__picker-heading {
+    margin: 8px 8px 4px;
+    color: var(--be-muted);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .builder-editor__picker-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 30px;
+    padding: 0 8px;
+    border-radius: var(--be-radius);
+    color: var(--theme-text);
+    font-size: 12.5px;
+    cursor: pointer;
+
+    &[aria-selected='true'] {
+      background: var(--be-hover);
+
+      .builder-editor__picker-icon {
+        color: var(--be-accent);
+      }
+    }
+  }
+
+  .builder-editor__picker-icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    color: var(--be-muted);
+  }
+
+  .builder-editor__picker-label {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .builder-editor__picker-hint {
+    flex: none;
+    margin-left: auto;
+    padding-left: 8px;
+    color: var(--be-subtle);
+    font-size: 11px;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Section cards: real thumbnails and the saved section menu
+  // ---------------------------------------------------------------------------
+
+  .builder-editor__card-wrap {
+    position: relative;
+
+    &:hover .builder-editor__card-more,
+    .builder-editor__card-more[aria-expanded='true'],
+    .builder-editor__card-more:focus-visible {
+      opacity: 1;
+    }
+  }
+
+  .builder-editor__card-wrap .builder-editor__card-more {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    background: var(--theme-bg);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
+    opacity: 0;
+    transition: opacity 120ms ease, background-color 120ms ease;
+
+    &:hover::after {
+      left: auto;
+      right: 0;
+      transform: none;
+    }
+  }
+
+  // A picture of the section: the top of it, full width. Short sections give short cards.
+  .builder-editor__thumb--picture {
+    height: auto;
+    min-height: 40px;
+    max-height: 132px;
+    background: #fff;
+    mask-image: none;
+  }
+
+  .builder-editor__thumb-img {
+    display: block;
+    width: 100%;
+    height: auto;
+    animation: builder-fade-in 160ms ease both;
+  }
+}
+
+// The saved section dialogs render in Payload's modal container, outside the editor.
+@layer payload-default {
+  .builder-section-dialog .confirmation-modal__content {
+    gap: 4px;
+  }
+
+  .builder-section-dialog__fields {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+    min-width: min(420px, 80vw);
+  }
+
+  .builder-section-dialog__intro {
+    margin: 0;
+    color: var(--theme-elevation-600);
+  }
 }

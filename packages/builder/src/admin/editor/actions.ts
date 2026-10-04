@@ -67,15 +67,30 @@ export function withNewIds(block: Block): Block {
  * inspector to focus its first field, and says where it went ("Added Heading in Section").
  */
 export function insertNewBlock(runtime: Runtime, type: string): boolean {
+  return insertNewBlockAt(runtime, type, insertPosition(runtime, type))
+}
+
+/** Adds a new block of `type` at `to`, selects it and asks the inspector to focus its first field. */
+export function insertNewBlockAt(runtime: Runtime, type: string, to: Position): boolean {
   const block = runtime.createBlock(type)
   if (!block) return false
-  const to = insertPosition(runtime, type)
   if (!runtime.store.apply({ type: 'insert', block, to }, { select: block.id })) return false
   runtime.focusRequest.set(block.id)
   const parent = to.parentId ? findBlock(runtime.store.getState().layout, to.parentId) : null
   const label = runtime.blockLabel(type)
   runtime.notify(parent ? `Added ${label} in ${parent.label?.trim() || runtime.blockLabel(parent.type)}` : `Added ${label}`)
   return true
+}
+
+/**
+ * `to` with its index clamped to the list as it is now (the page may have changed since the
+ * position was picked). Null when the parent block is gone.
+ */
+export function currentPosition(layout: Layout, to: Position): Position | null {
+  if (to.parentId === null) return { ...to, index: Math.min(to.index, layout.blocks.length) }
+  const parent = findBlock(layout, to.parentId)
+  if (!parent) return null
+  return { ...to, index: Math.min(to.index, parent.slots?.[to.slot ?? 'children']?.length ?? 0) }
 }
 
 /** Inserts copies (new ids) of `blocks` as one undo step and selects the first one. */

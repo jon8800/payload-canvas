@@ -116,6 +116,9 @@ export function formatDate(value: string | Date): string {
   return Number.isNaN(date.getTime()) ? String(value) : dateFormat.format(date)
 }
 
+/** The fields `titleOf` reads, in order. */
+export const TITLE_KEYS = ['title', 'name', 'label', 'slug', 'filename'] as const
+
 /**
  * A readable name for a document: title, name, label, slug, filename, then id. Never the email:
  * a user's email is private, also when the user is the document's author.
@@ -123,7 +126,7 @@ export function formatDate(value: string | Date): string {
 export function titleOf(doc: unknown): string | undefined {
   if (isRelationPair(doc)) return titleOf(doc.value)
   if (!isPlainObject(doc)) return typeof doc === 'string' || typeof doc === 'number' ? String(doc) : undefined
-  for (const key of ['title', 'name', 'label', 'slug', 'filename']) {
+  for (const key of TITLE_KEYS) {
     const value = doc[key]
     if (typeof value === 'string' && value) return value
   }

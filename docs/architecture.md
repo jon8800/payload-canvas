@@ -171,6 +171,7 @@ The editor is a full-screen root admin view at `{admin}/builder/:collection/:id`
 - The iframe repeats its "ready" message until it receives a layout. This avoids a race on reload.
 - `DndContext` gets `id={useId()}` to avoid a hydration mismatch.
 - Device sizes (desktop, tablet, mobile, custom width) resize the iframe. The breakpoint switch in the Styles panel follows the device size.
+- **Insert between blocks.** Hovering the canvas shows a "+" on the edge nearest the pointer, between two blocks, or in the middle of an empty slot (`admin/editor/insert/spots.ts`, pure). The canvas script already reports the pointer, so the admin computes the spot from the measured rects and the slot rules, and stores it only when it changes. A click opens a picker (blocks and sections that fit, by `slotAcceptsAt`) that inserts at that position. Hidden while dragging and while editing text inline.
 - Inline text editing: double-click text on the canvas (or press Enter on a selected block) to edit it in place. Components mark text elements with `editableText(mode, path)`. Plain text is a `contenteditable` element. Rich text loads a small Lexical editor (the same version as Payload, with Payload-compatible link nodes) and a floating toolbar, only when editing starts. One editing session is one undo step (`mergeWithin`). Edits go through the normal operations, so collaborators see the typing live.
 
 **Inspector.**
@@ -255,6 +256,10 @@ Added to `payload-mcp-toolkit` through `customTools`:
 
 Ready-made sections are the main unit the AI should use. AI models build better pages from well-designed sections than from single blocks.
 
+**Saved sections.** Editors save any block (with its children) as a section ("Save as section…"). The plugin owns a `builder-sections` collection (`plugin/sections.ts`; signed-in users by default; `savedSections: false` turns it off). The library lists them under "Saved"; `listSections` / `insertSection` (MCP and the assistant) load them per request, as the user, and accept `saved:<id>`, the document id or the name. The assistant's system prompt stays stable: saved sections go into the per-request context message.
+
+**Section thumbnails.** One hidden canvas iframe (`?mode=thumbnail`, 1280 px wide) renders one section at a time with the app's components, CSS and theme. It copies the rendered DOM into an SVG `<foreignObject>` with the page's CSS (fonts and images inlined as data URLs), draws it on a canvas and returns a WebP data URL (`builder-react/src/canvas/thumbnail/capture.ts`, no dependency). The editor asks only for cards in view (IntersectionObserver), one at a time in idle time, and keeps the pictures in memory and IndexedDB, keyed by a hash of the section content (ids left out), the theme output and the block definitions. A theme save (BroadcastChannel, tab focus) changes the key, so pictures follow the theme. The iframe is removed after 30 s without work. Why not a live scaled render per card: one iframe per card costs too much memory, and one shared live iframe cannot sit under a scrolling list of draggable cards.
+
 ## 14. Prototypes (done, 2026-10-03)
 
 All three passed in a real browser. Their findings are folded into sections 7 and 8. The code is on local branches `proto/canvas`, `proto/inspector` and `proto/tailwind-richtext`, with screenshots under `docs/prototypes/` on each branch. Reuse the tested pure modules from them: the operations and drop-target functions (canvas) and `compileClasses` (Tailwind).
@@ -289,3 +294,4 @@ The original prototype goals:
 5. ~~**Templates and binding.**~~ Done 2026-10-04: templates collection, bindings with one relationship hop and `$url`, Field and Collection list blocks, sample-document preview.
 6. ~~**Starter app and CLI**~~ Done 2026-10-04: starter, packaging, docs, the `create-payload-toolkit` CLI.
 7. ~~**Multiplayer, presence, AI chat panel, full-screen view, inline text editing, theme in the plugin.**~~ Done 2026-10-04.
+8. ~~**"+" between blocks, saved sections, real section thumbnails.**~~ Done 2026-10-04.

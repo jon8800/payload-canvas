@@ -4,7 +4,6 @@
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 
-import { DOCUMENT_TEMPLATE_FIELD, TEMPLATE_DEFAULT_FIELD, TEMPLATE_TARGET_FIELD } from '../../../core/bindings'
 import { Icon } from '../icons'
 import { useRuntime } from '../runtime'
 import { Popover, stopEditorKeys, usePopover } from '../styles/popover'
@@ -107,7 +106,8 @@ function SampleList({
   const inputRef = useRef<HTMLInputElement>(null)
   const listId = useId()
   const activeDoc = docs[Math.min(active, docs.length - 1)]
-  const otherTemplate = useOtherTemplate(collection, docs)
+  const { id: self, template } = useValue(runtime.doc.meta)
+  const defaultId = template?.defaultId === undefined || template.defaultId === null ? null : String(template.defaultId)
 
   useEffect(() => inputRef.current?.focus(), [])
 
@@ -165,7 +165,7 @@ function SampleList({
               id={`${listId}-${doc.id}`}
               active={i === active}
               current={doc.id === current}
-              otherTemplate={otherTemplate.has(String(doc.id))}
+              otherTemplate={usesOtherTemplate(doc, self, defaultId)}
               onPick={onPick}
               onHover={() => setActive(i)}
             />
@@ -179,70 +179,15 @@ function SampleList({
 
 const scrollIntoView = (el: HTMLElement | null) => el?.scrollIntoView({ block: 'nearest' })
 
-const idOf = (value: unknown): string | null => {
-  if (typeof value === 'string' || typeof value === 'number') return String(value)
-  if (typeof value === 'object' && value !== null && 'id' in value) return idOf(value.id)
-  return null
-}
-
-async function getDocs(url: string, signal: AbortSignal): Promise<Record<string, unknown>[]> {
-  const response = await fetch(url, { credentials: 'include', signal, headers: { Accept: 'application/json' } })
-  if (!response.ok) return []
-  const body = (await response.json()) as { docs?: Record<string, unknown>[] }
-  return body.docs ?? []
-}
-
 /**
- * The ids of listed documents that the site shows with another template: their own `template`
- * field, else the collection's default template. Empty while loading or when the request fails,
- * so no row is marked by mistake.
+ * True when the site shows this document with another template: its own `template` field, else
+ * the collection's default template (`defaultId`, null when there is none). Both come from data
+ * the editor already has.
  */
-function useOtherTemplate(collection: string, docs: DocOption[]): ReadonlySet<string> {
-  const runtime = useRuntime()
-  const { collection: templates, id: self } = useValue(runtime.doc.meta)
-  const ids = docs.map((doc) => String(doc.id)).join(',')
-  const [result, setResult] = useState<{ ids: string; other: Set<string> }>({ ids: '', other: new Set() })
-
-  useEffect(() => {
-    if (!ids) return
-    const controller = new AbortController()
-    const list = new URLSearchParams({
-      depth: '0',
-      draft: 'true',
-      limit: String(ids.split(',').length),
-      'where[id][in]': ids,
-      [`select[${DOCUMENT_TEMPLATE_FIELD}]`]: 'true',
-    })
-    // The published default template of the collection (the one `keepOneDefault` keeps).
-    const fallback = new URLSearchParams({
-      depth: '0',
-      limit: '1',
-      [`where[${TEMPLATE_DEFAULT_FIELD}][equals]`]: 'true',
-      [`where[${TEMPLATE_TARGET_FIELD}][equals]`]: collection,
-    })
-    Promise.all([
-      getDocs(`${runtime.api}/${collection}?${list}`, controller.signal),
-      getDocs(`${runtime.api}/${templates}?${fallback}`, controller.signal),
-    ])
-      .then(([found, defaults]) => {
-        const defaultId = idOf(defaults[0]?.id)
-        const other = new Set<string>()
-        for (const doc of found) {
-          const used = idOf(doc[DOCUMENT_TEMPLATE_FIELD]) ?? defaultId
-          if (used !== null && used !== String(self)) other.add(String(doc.id))
-        }
-        setResult({ ids, other })
-      })
-      .catch(() => {
-        // Aborted or offline: no marks.
-      })
-    return () => controller.abort()
-  }, [runtime.api, collection, templates, self, ids])
-
-  return result.ids === ids ? result.other : EMPTY
+function usesOtherTemplate(doc: DocOption, self: Id, defaultId: string | null): boolean {
+  const used = doc.template ?? defaultId
+  return used !== null && used !== String(self)
 }
-
-const EMPTY: ReadonlySet<string> = new Set()
 
 function SampleRow({
   doc,

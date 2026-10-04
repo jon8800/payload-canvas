@@ -9,6 +9,7 @@ import type { LiveDocStore } from '../live/apply'
 import { LIVE_RUNTIME_KEY, type LiveRuntime } from '../live/runtime'
 import { createSessionManager } from '../live/session'
 import type { LiveCommitEvent, MultiplayerEvent } from '../live/types'
+import { SAVED_SECTIONS_CONFIG_KEY } from '../plugin/sections'
 import { builderMcpTools, sectionInsertOps, type BuilderMcpTool } from './index'
 
 const blocks: BlockDefinition[] = [
@@ -43,8 +44,11 @@ const tool = (name: string): BuilderMcpTool => {
 }
 const args = (name: string, value: unknown) => z.object(tool(name).parameters).safeParse(value)
 
-/** A fake request: one page document, the API-key collection, and the live runtime on the config. */
-function fakeRequest(layout: Layout = { version: 1, blocks: [] }) {
+/**
+ * A fake request: one page document, the API-key collection, and the live runtime on the config.
+ * `savedDocs` turns saved sections on: `find` on "builder-sections" returns them.
+ */
+function fakeRequest(layout: Layout = { version: 1, blocks: [] }, savedDocs?: Record<string, unknown>[]) {
   const runtime: LiveRuntime = { sessions: createSessionManager({ persistDebounceMs: 5 }), canUpdate: async () => true }
   let doc: Record<string, unknown> = { id: 'p1', title: 'Home', slug: 'home', _status: 'draft', updatedAt: 't0', layout }
   const calls: Record<string, unknown>[] = []
@@ -57,7 +61,16 @@ function fakeRequest(layout: Layout = { version: 1, blocks: [] }) {
         },
       },
     },
-    config: { serverURL: '', routes: { admin: '/admin' }, custom: { [LIVE_RUNTIME_KEY]: runtime } },
+    config: {
+      serverURL: '',
+      routes: { admin: '/admin' },
+      custom: { [LIVE_RUNTIME_KEY]: runtime, ...(savedDocs ? { [SAVED_SECTIONS_CONFIG_KEY]: { slug: 'builder-sections' } } : {}) },
+    },
+    async find(a: Record<string, unknown>) {
+      calls.push({ op: 'find', ...a })
+      if (a.collection !== 'builder-sections' || !savedDocs) throw new Error(`Unexpected find on ${String(a.collection)}`)
+      return { docs: structuredClone(savedDocs) }
+    },
     async findByID(a: Record<string, unknown>) {
       calls.push({ op: 'findByID', ...a })
       if (a.collection === 'payload-mcp-api-keys') return { id: 7, name: 'Claude Desktop' }
@@ -277,6 +290,66 @@ describe('write tools', () => {
 
     const unknown = await tool('insertSection').handler({ collection: 'pages', id: 'p1', sectionId: 'nope' }, req, {})
     assert.equal(unknown.isError, true)
+  })
+})
+
+describe('saved sections', () => {
+  const savedDocs = [
+    {
+      id: 12,
+      name: 'Team intro',
+      category: 'Team',
+      blocks: [{ id: 's1', type: 'stack', slots: { children: [{ id: 's2', type: 'heading', props: { text: 'Our team' } }] } }],
+    },
+    { id: 13, name: 'Empty', blocks: [] },
+  ]
+
+  it('listSections lists saved sections after the built-in ones, as the request user', async () => {
+    const { req, calls } = fakeRequest(undefined, savedDocs)
+    const body = json(await tool('listSections').handler({ collection: 'pages' }, req, {}))
+    const list = body.sections as Record<string, unknown>[]
+    assert.deepEqual(
+      list.map((s) => [s.id, s.label, s.saved ?? false]),
+      [
+        ['hero', 'Hero', false],
+        ['saved:12', 'Team intro', true],
+      ],
+    )
+    assert.match(String(list[1].outline), /heading "Our team"/)
+    assert.deepEqual(body.categories, ['Heroes', 'Team'])
+    const find = calls.find((c) => c.op === 'find')
+    assert.equal(find?.overrideAccess, false)
+    assert.equal(find?.user, req.user)
+
+    const team = json(await tool('listSections').handler({ collection: 'pages', category: 'Team' }, req, {}))
+    assert.deepEqual((team.sections as Record<string, unknown>[]).map((s) => s.id), ['saved:12'])
+  })
+
+  it('listSections without saved sections does not query', async () => {
+    const { req, calls } = fakeRequest()
+    const body = json(await tool('listSections').handler({ collection: 'pages' }, req, {}))
+    assert.deepEqual((body.sections as Record<string, unknown>[]).map((s) => s.id), ['hero'])
+    assert.equal(calls.some((c) => c.op === 'find'), false)
+  })
+
+  for (const ref of ['saved:12', '12', 'team INTRO']) {
+    it(`insertSection inserts a saved section by "${ref}"`, async () => {
+      const { req } = fakeRequest(undefined, savedDocs)
+      const body = json(await tool('insertSection').handler({ collection: 'pages', id: 'p1', sectionId: ref }, req, {}))
+      assert.equal(body.section, 'saved:12')
+      const ids = body.insertedIds as string[]
+      assert.equal(ids.length, 2)
+      assert.ok(!ids.includes('s1') && !ids.includes('s2'))
+      const layout = json(await tool('getLayout').handler({ collection: 'pages', id: 'p1' }, req, {})).layout as Layout
+      assert.equal(findBlock(layout, ids[1])?.props?.text, 'Our team')
+    })
+  }
+
+  it('insertSection names the known sections for an unknown id', async () => {
+    const { req } = fakeRequest(undefined, savedDocs)
+    const result = await tool('insertSection').handler({ collection: 'pages', id: 'p1', sectionId: 'saved:99' }, req, {})
+    assert.equal(result.isError, true)
+    assert.match(result.content[0].text, /Unknown section "saved:99"\. Known sections: hero, saved:12 \("Team intro"\)\./)
   })
 })
 

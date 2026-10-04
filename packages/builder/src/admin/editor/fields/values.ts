@@ -3,7 +3,7 @@
 
 import type { CollectionSlug, ValueWithRelation } from 'payload'
 
-import { videoUrlProblem } from '../../../blocks/defaults'
+import { formatProblem as formatMessage } from '../../../core/formats'
 
 /** `admin.custom.builderCondition`: show the field only when a sibling field equals a value (or one of a list). */
 export type BuilderCondition = { field: string; equals: unknown }
@@ -151,16 +151,9 @@ export function parseJsonText(text: string): { ok: true; value: unknown } | { ok
 // Payload `validate` function is lost on the way. These checks are data instead.
 // ---------------------------------------------------------------------------
 
-/** Checks for `admin.custom.builderFormat`. Each returns a message, or null when the value is fine. */
-const FORMAT_CHECKS: Record<string, (value: unknown) => string | null> = {
-  videoUrl: videoUrlProblem,
-}
-
-/** The message for a text value that does not match the field's `admin.custom.builderFormat`, else null. */
+/** The message for a text value that does not match the field's `admin.custom.builderFormat` (core/formats.ts), else null. */
 export function formatProblem(field: FieldShape, value: unknown): string | null {
-  const format = field.admin?.custom?.builderFormat
-  const check = typeof format === 'string' ? FORMAT_CHECKS[format] : undefined
-  return check ? check(value) : null
+  return formatMessage(field.admin?.custom?.builderFormat, value)
 }
 
 export type NumberLimits = { min?: number; max?: number; required?: boolean }
