@@ -1,7 +1,15 @@
 // Templates for collection documents (docs/architecture.md section 11): the templates collection,
 // the `template` relationship on each target collection, and the bindable field list per collection.
 
-import type { CollectionBeforeChangeHook, CollectionConfig, CollectionSlug, Field, RelationshipField } from 'payload'
+import {
+  ValidationError,
+  type CollectionAfterChangeHook,
+  type CollectionBeforeChangeHook,
+  type CollectionConfig,
+  type CollectionSlug,
+  type Field,
+  type RelationshipField,
+} from 'payload'
 import {
   DOCUMENT_TEMPLATE_FIELD,
   TEMPLATE_DEFAULT_FIELD,
@@ -11,6 +19,7 @@ import {
   URL_PATH,
 } from '../core/bindings'
 import { dataFields, textOf, type DataField } from '../core/fields'
+import { normalizeLayout } from '../core/tree'
 import type { BindingField, TemplatesClientConfig } from '../core/types'
 
 /** Server-only key in `config.custom`: the templates data (`TemplatesClientConfig`) for the MCP tools. */
@@ -57,7 +66,8 @@ function ownFields(collection: LooseCollection, skip: ReadonlySet<string>): Data
     if (!names.has(name)) extra.push({ name, type, label })
   }
   add('id', 'text', 'ID')
-  if (collection.auth) add('email', 'email', 'Email')
+  // Auth collections: Payload's own `email`, `hash`, `salt` and tokens are never offered. They are
+  // private, and a template renders for anonymous visitors.
   if (collection.timestamps !== false) {
     add('createdAt', 'date', 'Created at')
     add('updatedAt', 'date', 'Updated at')
@@ -129,49 +139,123 @@ export function bindingSources(args: {
 // Collections and fields
 // ---------------------------------------------------------------------------
 
-/** Keeps one default template per target collection: setting a default clears the others. */
-const keepOneDefault: CollectionBeforeChangeHook = async ({ collection, data, originalDoc, req }) => {
-  if (!data || data[TEMPLATE_DEFAULT_FIELD] !== true) return data
-  const target = data[TEMPLATE_TARGET_FIELD] ?? originalDoc?.[TEMPLATE_TARGET_FIELD]
-  if (typeof target !== 'string') return data
-  const unchanged = originalDoc?.[TEMPLATE_DEFAULT_FIELD] === true && originalDoc?.[TEMPLATE_TARGET_FIELD] === target
-  if (unchanged) return data
-  await req.payload.update({
-    collection: collection.slug as CollectionSlug,
+/** `context` flag of the plugin's own saves of other templates (clearing "Default"). */
+const DEFAULT_CONTEXT = 'builderTemplateDefault'
+/** Same value as `KEEP_LAYOUT_CONTEXT` in hook.ts: the session guard leaves the layout alone. */
+const KEEP_LAYOUT = 'builderKeepLayout'
+
+const isPublished = (doc: Record<string, unknown> | undefined) => doc?._status === 'published'
+
+/**
+ * A default template must have blocks: an empty default would silently replace a working one
+ * (every document would fall back to the plain title and content). Checked on publish only, so
+ * a new template can be ticked as default while it is still a draft. Runs after the layout hook,
+ * so the layout is the live session's.
+ */
+export const requireBlocksForDefault: CollectionBeforeChangeHook = ({ data, originalDoc, req }) => {
+  if (!data) return data
+  const publishing = (data._status ?? originalDoc?._status) === 'published'
+  const isDefault = (data[TEMPLATE_DEFAULT_FIELD] ?? originalDoc?.[TEMPLATE_DEFAULT_FIELD]) === true
+  if (!publishing || !isDefault) return data
+  const layout = normalizeLayout(data[TEMPLATE_LAYOUT_FIELD] ?? originalDoc?.[TEMPLATE_LAYOUT_FIELD])
+  if (layout.blocks.length > 0) return data
+  throw new ValidationError(
+    {
+      errors: [
+        {
+          path: TEMPLATE_DEFAULT_FIELD,
+          message: 'A default template needs at least one block. Add blocks in the builder, or untick "Default template".',
+        },
+      ],
+      req,
+    },
+    req.t,
+  )
+}
+
+/**
+ * Keeps one published default template per target collection. When a template is published as
+ * the default, the other published defaults of the same collection lose the flag. Their
+ * published version keeps its data, and an unpublished draft stays an unpublished draft (with
+ * the flag off too): nothing goes live that nobody published. Draft saves change nothing, so
+ * ticking "Default template" takes effect on Publish.
+ */
+export const keepOneDefault: CollectionAfterChangeHook = async ({ collection, context, doc, req }) => {
+  if (context?.[DEFAULT_CONTEXT]) return doc
+  if (!isPublished(doc) || doc?.[TEMPLATE_DEFAULT_FIELD] !== true) return doc
+  const target = doc[TEMPLATE_TARGET_FIELD]
+  if (typeof target !== 'string') return doc
+  const slug = collection.slug as CollectionSlug
+  const others = await req.payload.find({
+    collection: slug,
     where: {
       and: [
         { [TEMPLATE_TARGET_FIELD]: { equals: target } },
         { [TEMPLATE_DEFAULT_FIELD]: { equals: true } },
-        ...(originalDoc?.id === undefined ? [] : [{ id: { not_equals: originalDoc.id } }]),
+        { id: { not_equals: doc.id } },
       ],
     },
-    data: { [TEMPLATE_DEFAULT_FIELD]: false },
-    req,
+    draft: false,
     depth: 0,
-    context: { ...req.context, builderTemplateDefault: true },
+    pagination: false,
+    req,
   })
-  return data
+  for (const other of others.docs as unknown as Record<string, unknown>[]) {
+    // A template that was never published is not live. Its draft takes over when it is published.
+    if (!isPublished(other)) continue
+    const id = other.id as string | number
+    const latest = (await req.payload.findByID({ collection: slug, id, draft: true, depth: 0, req })) as unknown as Record<string, unknown>
+    const { id: _id, ...published } = other
+    // 1. The published version, unchanged except for the flag (exactly its own layout).
+    await req.payload.update({
+      collection: slug,
+      id,
+      data: { ...published, [TEMPLATE_DEFAULT_FIELD]: false, _status: 'published' },
+      draft: false,
+      depth: 0,
+      req,
+      context: { [DEFAULT_CONTEXT]: true, [KEEP_LAYOUT]: true },
+    })
+    // 2. A newer unpublished draft goes back on top, with the flag off. An open live session
+    //    gives it its current layout (the session guard).
+    if (latest._status === 'draft') {
+      const { id: _draftId, ...draft } = latest
+      await req.payload.update({
+        collection: slug,
+        id,
+        data: { ...draft, [TEMPLATE_DEFAULT_FIELD]: false },
+        draft: true,
+        depth: 0,
+        req,
+        context: { [DEFAULT_CONTEXT]: true },
+      })
+    }
+  }
+  return doc
 }
 
 /** The templates collection, before the builder field is added (the plugin adds it like any builder collection). */
 export function templatesCollection(args: {
   slug: string
   targets: string[]
+  /** Labels of the target collections, for the "Collection" select. Default: the slugs. */
+  targetLabels?: Record<string, string>
   hooks?: CollectionConfig['hooks']
 }): CollectionConfig {
-  const { slug, targets, hooks } = args
+  const { slug, targets, hooks, targetLabels } = args
   return {
     slug,
     labels: { singular: 'Template', plural: 'Templates' },
     admin: {
       useAsTitle: 'name',
-      defaultColumns: ['name', TEMPLATE_TARGET_FIELD, TEMPLATE_DEFAULT_FIELD, 'updatedAt'],
+      defaultColumns: ['name', TEMPLATE_TARGET_FIELD, TEMPLATE_DEFAULT_FIELD, '_status', 'updatedAt'],
       description: 'Layouts for collection documents. Each document renders through its own template or the default one.',
     },
     versions: { maxPerDoc: 20, drafts: { autosave: { interval: 300 } } },
     hooks: {
       ...hooks,
-      beforeChange: [keepOneDefault, ...(hooks?.beforeChange ?? [])],
+      // `requireBlocksForDefault` runs after the layout hook; the plugin adds it there.
+      afterChange: [keepOneDefault, ...(hooks?.afterChange ?? [])],
     },
     fields: [
       { name: 'name', type: 'text', required: true },
@@ -180,7 +264,7 @@ export function templatesCollection(args: {
         type: 'select',
         label: 'Collection',
         required: true,
-        options: targets,
+        options: targets.map((value) => ({ value, label: targetLabels?.[value] ?? value })),
         defaultValue: targets[0],
         admin: { position: 'sidebar', description: 'The documents this template renders.' },
       },
@@ -189,7 +273,12 @@ export function templatesCollection(args: {
         type: 'checkbox',
         label: 'Default template',
         defaultValue: false,
-        admin: { position: 'sidebar', description: 'Used by every document of the collection that has no template of its own.' },
+        admin: {
+          position: 'sidebar',
+          description:
+            'Used by every document of the collection that has no template of its own. Takes effect when you publish this template. It needs at least one block.',
+          components: { Cell: '@payload-toolkit/builder/client#TemplateDefaultCell' },
+        },
       },
       {
         name: TEMPLATE_PREVIEW_FIELD,

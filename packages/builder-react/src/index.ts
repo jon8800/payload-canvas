@@ -21,7 +21,7 @@ export {
 } from './render/link'
 export { parseVideoUrl, type VideoEmbed } from './components/videoUrl'
 export { defaultComponents } from './components'
-export { RenderLayout } from './render/RenderLayout'
+export { BuilderStyle, RenderLayout } from './render/RenderLayout'
 export { loadLayoutData, resolveLayoutData, urlResolver, type LoadLayoutOptions } from './render/resolve'
 export { attachListItems, listItemsOf, listQueries, type ListQuery } from './render/lists'
 export { fieldFor } from './components/Field'

@@ -17,6 +17,7 @@ import type {
   PublishResponse,
 } from '../../../live/types'
 import { createValueStore, type ValueStore } from '../valueStore'
+import type { PublishFailure } from './problems'
 
 export type DocumentBusy = PublishAction | 'rename' | null
 
@@ -71,10 +72,20 @@ export function statusAfterSave(meta: BuilderDocMeta, savedStatus: string | unde
   return meta.publishedAt ? 'changed' : 'draft'
 }
 
-export function createDocumentController(
-  context: { config: BuilderClientConfig; api: string; notify: (text: string) => void },
-  initial: BuilderDocMeta,
-): DocumentController {
+type DocumentContext = {
+  config: BuilderClientConfig
+  api: string
+  notify: (text: string) => void
+  /**
+   * A publish failed. Returns the problems' summary ("2 blocks need attention") when the editor
+   * can list them, else null (the error text is shown as it is).
+   */
+  onPublishFailed?: (failure: PublishFailure) => string | null
+  /** A publish worked: old problems are gone. */
+  onPublished?: () => void
+}
+
+export function createDocumentController(context: DocumentContext, initial: BuilderDocMeta): DocumentController {
   const { config, api, notify } = context
   const meta = createValueStore(initial)
   const busy = createValueStore<DocumentBusy>(null)
@@ -112,9 +123,12 @@ export function createDocumentController(
         const response = await fetch(`${endpoint}/${action}`, { method: 'POST', credentials: 'include' })
         const body = (await response.json().catch(() => null)) as PublishResponse | null
         if (!body?.ok) {
-          toast.error(body && !body.ok ? body.error : `Could not ${action} the document (${response.status}).`)
+          const failure: PublishFailure = body && !body.ok ? body : { error: `Could not ${action} the document (${response.status}).` }
+          const summary = action === 'publish' ? (context.onPublishFailed?.(failure) ?? null) : null
+          toast.error(summary ? `Not published: ${summary}.` : (failure.error ?? `Could not ${action} the document.`))
           return false
         }
+        if (action === 'publish') context.onPublished?.()
         meta.set(body.meta)
         toast.success(`The ${action === 'revert' ? 'draft changes were dropped' : `document was ${DONE[action]}`}.`)
         return true

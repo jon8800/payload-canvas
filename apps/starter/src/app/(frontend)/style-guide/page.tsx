@@ -1,11 +1,13 @@
 import { draftMode } from 'next/headers'
 import { LivePreviewListener } from '@/components/LivePreviewListener'
+import { SiteFrame } from '@/components/BuilderContent'
 
 export default async function StyleGuidePage() {
   const { isEnabled: draft } = await draftMode()
 
   return (
-    <main className="container mx-auto py-12 px-4 max-w-4xl">
+    <SiteFrame pathname="/style-guide" draft={draft}>
+    <div className="container mx-auto py-12 px-4 max-w-4xl">
       {draft && <LivePreviewListener />}
       <h1 className="text-4xl font-bold mb-8">Style Guide</h1>
 
@@ -134,7 +136,8 @@ export default async function StyleGuidePage() {
           <span className="w-16 text-center">full</span>
         </div>
       </section>
-    </main>
+    </div>
+    </SiteFrame>
   )
 }
 

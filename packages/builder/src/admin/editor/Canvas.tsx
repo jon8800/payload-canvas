@@ -6,6 +6,7 @@ import { deepestBlockAt } from '../../core'
 import { unwrap, type CanvasToAdmin } from '../../protocol'
 import { ancestors } from './actions'
 import { BlockIcon, Icon } from './icons'
+import { blockName } from './names'
 import { cursorAt } from './live'
 import { FollowFrame } from './live/PresenceUI'
 import { Overlay } from './Overlay'
@@ -14,12 +15,15 @@ import { bindShortcuts } from './shortcuts'
 import { useEditor } from './store'
 import { postContext, templateContext } from './templates/state'
 import { breakpointAt, breakpointWidths, useStyleTokens, withFallback } from './styles/tokens'
+import { DESKTOP_WIDTH } from './styles/viewport'
 import { useValue } from './valueStore'
 
 /** Space between the stage edge and the frame. */
 const STAGE_PADDING = 24
 const NOTICE_MS = 1800
 const WARNING_MS = 5000
+/** Times for the canvas to render a new block before it scrolls to it. */
+const REVEAL_DELAYS_MS = [120, 600]
 
 export function Canvas() {
   const runtime = useRuntime()
@@ -45,8 +49,12 @@ export function Canvas() {
     return () => observer.disconnect()
   }, [])
 
-  const frameWidth = width ?? stage.width
-  const zoom = frameWidth > stage.width && stage.width > 0 ? stage.width / frameWidth : 1
+  // Desktop fills the stage, but is at least DESKTOP_WIDTH wide: a laptop shows the desktop
+  // layout zoomed out, not the tablet layout at full size.
+  const frameWidth = width ?? Math.max(DESKTOP_WIDTH, stage.width)
+  const fit = frameWidth > stage.width && stage.width > 0 ? stage.width / frameWidth : 1
+  const [zoomMode, setZoomMode] = useState<ZoomMode>('fit')
+  const zoom = zoomMode === 'fit' ? fit : zoomMode
   useEffect(() => runtime.frame.set({ width: frameWidth, zoom }), [runtime, frameWidth, zoom])
 
   // Iframe -> admin messages.
@@ -140,14 +148,27 @@ export function Canvas() {
   // Admin -> iframe: send the layout and the selection whenever they change.
   useEffect(() => {
     let last = runtime.store.getState()
-    return runtime.store.subscribe(() => {
+    let reveal: number[] = []
+    const unsubscribe = runtime.store.subscribe(() => {
       const next = runtime.store.getState()
       if (next.layout !== last.layout) runtime.postToCanvas({ type: 'layout', layout: next.layout })
       if (next.selectedId !== last.selectedId || next.hoveredId !== last.hoveredId) {
         runtime.postToCanvas({ type: 'selection', selectedId: next.selectedId, hoveredId: next.hoveredId })
       }
+      // A new block selected in the same edit (insert, paste, duplicate) is not on the canvas yet
+      // when the selection arrives. Ask again once it has rendered, so it scrolls into view.
+      const id = next.selectedId
+      if (id && id !== last.selectedId && next.layout !== last.layout) {
+        for (const timer of reveal) window.clearTimeout(timer)
+        // Twice: a large section may need its styles compiled before it has its full height.
+        reveal = REVEAL_DELAYS_MS.map((delay) => window.setTimeout(() => runtime.postToCanvas({ type: 'scrollIntoView', id }), delay))
+      }
       last = next
     })
+    return () => {
+      for (const timer of reveal) window.clearTimeout(timer)
+      unsubscribe()
+    }
   }, [runtime])
 
   const frameStyle = {
@@ -194,8 +215,55 @@ export function Canvas() {
         <FollowFrame />
         <Notice />
       </div>
-      <StatusBar frameWidth={frameWidth} zoom={zoom} />
+      <StatusBar frameWidth={frameWidth} zoom={zoom} fit={fit} zoomMode={zoomMode} onZoom={setZoomMode} />
     </section>
+  )
+}
+
+/** "fit" zooms the frame out until it fits the stage. A number is a fixed zoom; the stage scrolls sideways. */
+type ZoomMode = 'fit' | number
+const ZOOM_STEPS = [0.25, 0.33, 0.5, 0.67, 0.75, 1]
+
+/** Zoom out, the current zoom (click to fit), zoom in. */
+function ZoomControl({ zoom, fit, mode, onZoom }: { zoom: number; fit: number; mode: ZoomMode; onZoom: (mode: ZoomMode) => void }) {
+  const percent = Math.round(zoom * 100)
+  const smaller = ZOOM_STEPS.toReversed().find((step) => step < zoom - 0.005)
+  const larger = ZOOM_STEPS.find((step) => step > zoom + 0.005)
+  // A fixed zoom that equals the fit zoom goes back to "fit", so the frame follows the stage again.
+  const pick = (step: number | undefined) => step !== undefined && onZoom(Math.abs(step - fit) < 0.005 ? 'fit' : step)
+  return (
+    <span className="builder-editor__zoom-control">
+      <button
+        type="button"
+        className="builder-editor__icon-button builder-editor__icon-button--small"
+        aria-label="Zoom out"
+        data-tooltip="Zoom out"
+        disabled={smaller === undefined}
+        onClick={() => pick(smaller)}
+      >
+        <Icon name="minus" size={14} />
+      </button>
+      <button
+        type="button"
+        className="builder-editor__zoom"
+        aria-pressed={mode === 'fit'}
+        aria-label={`Zoom ${percent}%. ${mode === 'fit' ? 'Fits the stage.' : 'Click to fit the stage.'}`}
+        data-tooltip={mode === 'fit' ? 'Zoom fits the stage' : 'Fit to the stage'}
+        onClick={() => onZoom('fit')}
+      >
+        {mode === 'fit' ? `Fit · ${percent}%` : `${percent}%`}
+      </button>
+      <button
+        type="button"
+        className="builder-editor__icon-button builder-editor__icon-button--small"
+        aria-label="Zoom in"
+        data-tooltip="Zoom in"
+        disabled={larger === undefined}
+        onClick={() => pick(larger)}
+      >
+        <Icon name="plus" size={14} />
+      </button>
+    </span>
   )
 }
 
@@ -218,7 +286,19 @@ function Notice() {
 }
 
 /** Selection path (clickable) on the left, width, breakpoint and zoom on the right. */
-function StatusBar({ frameWidth, zoom }: { frameWidth: number; zoom: number }) {
+function StatusBar({
+  frameWidth,
+  zoom,
+  fit,
+  zoomMode,
+  onZoom,
+}: {
+  frameWidth: number
+  zoom: number
+  fit: number
+  zoomMode: ZoomMode
+  onZoom: (mode: ZoomMode) => void
+}) {
   const runtime = useRuntime()
   const layout = useEditor(runtime.store, (s) => s.layout)
   const selectedId = useEditor(runtime.store, (s) => s.selectedId)
@@ -247,7 +327,7 @@ function StatusBar({ frameWidth, zoom }: { frameWidth: number; zoom: number }) {
                 onPointerLeave={() => runtime.store.hover(null)}
               >
                 <BlockIcon name={runtime.blockIcon(block.type)} size={14} />
-                {runtime.blockLabel(block.type)}
+                {blockName(block, runtime.blockLabel(block.type))}
               </button>
             </span>
           ))
@@ -255,10 +335,10 @@ function StatusBar({ frameWidth, zoom }: { frameWidth: number; zoom: number }) {
       </nav>
       {px > 0 && (
         <span className="builder-editor__frame-info">
-          <span>
+          <span data-tooltip="Canvas width and the breakpoint it shows">
             {px} px · {breakpointAt(widths, px)}
           </span>
-          {zoom < 1 && <span className="builder-editor__zoom">{Math.round(zoom * 100)}%</span>}
+          <ZoomControl zoom={zoom} fit={fit} mode={zoomMode} onZoom={onZoom} />
         </span>
       )}
     </footer>

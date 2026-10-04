@@ -200,6 +200,10 @@ describe('loadTemplate', () => {
     const empty = fakePayload([tpl(1, { isDefault: true, layout: { version: 1, blocks: [] } })])
     assert.equal(await loadTemplate(empty, { collection: 'posts', doc: {} }), null)
   })
+  it('skips an empty default and uses the next default (QA M13)', async () => {
+    const both = fakePayload([tpl(5, { isDefault: true, layout: { version: 1, blocks: [] } }), tpl(6, { isDefault: true })])
+    assert.equal((await loadTemplate(both, { collection: 'posts', doc: {} }))?.template.id, 6)
+  })
   it('returns null when the app has no templates collection', async () => {
     const none = { collections: {} } as unknown as Payload
     assert.equal(await loadTemplate(none, { collection: 'posts', doc: {} }), null)
@@ -226,10 +230,19 @@ describe('loadLayoutData', () => {
     assert.deepEqual(listed.map((d) => d.id), [2, 3])
     const listCall = calls.find((c) => c.collection === 'posts')!
     assert.equal(listCall.depth, 1)
+    // The visitor's access: anonymous by default, so private fields of related documents stay out.
+    assert.equal(listCall.overrideAccess, false)
+    assert.equal(listCall.user, null)
     assert.equal(listCall.limit, 5)
     assert.equal(listCall.sort, '-createdAt')
     // Item bindings stay for render time.
     assert.deepEqual(loaded.blocks[1].slots?.item?.[0]?.bindings, { text: 'title' })
+  })
+  it('loads list items with the given user', async () => {
+    const calls: Call[] = []
+    const user = { id: 9 }
+    await loadLayoutData({ version: 1, blocks: [{ id: 'l', type: 'collectionList', props: { collection: 'posts' } }] }, blocks, fakePayload([], calls), { user })
+    assert.equal(calls.find((c) => c.collection === 'posts')?.user, user)
   })
   it('lists drafts in draft mode', async () => {
     const loaded = await loadLayoutData(

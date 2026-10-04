@@ -5,13 +5,104 @@
 
 import { useId, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode } from 'react'
 
-import type { StylePropertyDef, StyleTokens } from '../../../core'
+import type { Breakpoint, StylePropertyDef, StyleTokens } from '../../../core'
+import { Icon } from '../icons'
+import { useRuntime } from '../runtime'
 import { ColorField } from './ColorPicker'
 import { useStyles } from './context'
-import { ResetIcon } from './icons'
+import { ChevronIcon, ResetIcon } from './icons'
 import { displayValue, parseTyped } from './model'
 import { filterSuggestions, Popover, SuggestList, usePopover, type Suggestion } from './popover'
-import { sourceHint, useProp } from './useProp'
+import { overrideHint, sourceHint, useProp } from './useProp'
+
+/**
+ * Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y in a style control undo the editor, not the input: the value
+ * is already applied, so the input has nothing of its own to undo.
+ */
+export function useUndoKeys(): (e: KeyboardEvent<HTMLElement>) => boolean {
+  const { store } = useRuntime()
+  return (e) => {
+    const mod = e.ctrlKey || e.metaKey
+    const key = e.key.toLowerCase()
+    if (!mod || (key !== 'z' && key !== 'y')) return false
+    e.preventDefault()
+    e.stopPropagation()
+    if (key === 'y' || e.shiftKey) store.redo()
+    else store.undo()
+    return true
+  }
+}
+
+/** The breakpoint button of an override note: switches the panel to the breakpoint that wins. */
+function useEditBreakpoint(): (breakpoint: Breakpoint) => void {
+  const { store } = useRuntime()
+  const { variant } = useStyles()
+  return (breakpoint) => store.setVariant({ ...variant, breakpoint })
+}
+
+/**
+ * Says that a larger breakpoint overrides this value on the canvas ("Overridden at md and wider
+ * by md:text-6xl."), with a button that switches the panel to that breakpoint.
+ */
+export function OverrideNote({ prop }: { prop: string }) {
+  const { override } = useProp(prop)
+  const edit = useEditBreakpoint()
+  if (!override) return null
+  return (
+    <p className="builder-styles__override">
+      <Icon name="warning" size={12} />
+      <span>{overrideHint(override)}</span>
+      <button type="button" className="builder-styles__override-action" onClick={() => edit(override.variant.breakpoint)}>
+        Edit {override.variant.breakpoint}
+      </button>
+    </p>
+  )
+}
+
+/** The compact form of OverrideNote for small fields: an icon button. */
+export function OverrideFlag({ prop }: { prop: string }) {
+  const { override } = useProp(prop)
+  const edit = useEditBreakpoint()
+  if (!override) return null
+  const hint = `${overrideHint(override)} Edit ${override.variant.breakpoint}.`
+  return (
+    <button
+      type="button"
+      className="builder-styles__override-flag"
+      title={hint}
+      aria-label={hint}
+      onClick={() => edit(override.variant.breakpoint)}
+    >
+      <Icon name="warning" size={11} />
+    </button>
+  )
+}
+
+/** True when any of `props` has a value at the current variant (set, from a shorthand, or inherited). */
+export function useAnyValue(props: string[]): boolean {
+  const { read } = useStyles()
+  return props.some((p) => read.get(p) !== null)
+}
+
+/**
+ * A collapsible group inside a section ("As a child", "More sizing"). It starts open when one of
+ * its `props` has a value, so a set value is never hidden.
+ */
+export function SubSection({ title, props, children }: { title: string; props: string[]; children: ReactNode }) {
+  const hasValue = useAnyValue(props)
+  const [open, setOpen] = useState(hasValue)
+  return (
+    <div className="builder-styles__sub" data-open={open}>
+      <button type="button" className="builder-styles__sub-head" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span className="builder-styles__chevron">
+          <ChevronIcon />
+        </span>
+        {title}
+      </button>
+      {open && <div className="builder-styles__sub-body">{children}</div>}
+    </div>
+  )
+}
 
 export function ResetButton({ prop }: { prop: string }) {
   const { isSet, set, def } = useProp(prop)
@@ -31,16 +122,19 @@ export function ResetButton({ prop }: { prop: string }) {
 
 /** Label, control and reset button in one line. Hidden when the class model has no such property. */
 export function Row({ prop, label, children }: { prop: string; label?: string; children?: ReactNode }) {
-  const { def, value } = useProp(prop)
+  const { def, value, override } = useProp(prop)
   if (!def) return null
   return (
-    <div className="builder-styles__row" data-source={value?.source ?? 'none'}>
-      <span className="builder-styles__label" title={sourceHint(value)}>
-        {label ?? def.label}
-      </span>
-      <div className="builder-styles__control">{children ?? <AutoControl prop={prop} />}</div>
-      <ResetButton prop={prop} />
-    </div>
+    <>
+      <div className="builder-styles__row" data-source={value?.source ?? 'none'} data-overridden={override ? true : undefined}>
+        <span className="builder-styles__label" title={sourceHint(value)}>
+          {label ?? def.label}
+        </span>
+        <div className="builder-styles__control">{children ?? <AutoControl prop={prop} />}</div>
+        <ResetButton prop={prop} />
+      </div>
+      <OverrideNote prop={prop} />
+    </>
   )
 }
 
@@ -158,7 +252,8 @@ export function ValueInput({
   cell?: boolean
   placeholder?: string
 }) {
-  const { def, value, isSet, set } = useProp(prop)
+  const { def, value, isSet, set, override } = useProp(prop)
+  const undoKeys = useUndoKeys()
   const listId = useId()
   const pop = usePopover('manual', true)
   const [draft, setDraft] = useState<string | null>(null)
@@ -178,6 +273,8 @@ export function ValueInput({
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    // While typing, Ctrl+Z stays the input's own undo.
+    if (draft === null && undoKeys(e)) return
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault()
       if (!pop.open) pop.show(e.currentTarget)
@@ -209,9 +306,10 @@ export function ValueInput({
       <input
         className={cell ? 'builder-styles__cell' : 'builder-styles__input'}
         data-source={value?.source ?? 'none'}
+        data-overridden={override ? true : undefined}
         value={draft ?? shown}
         placeholder={inheritedText || placeholder || (cell ? '–' : '')}
-        title={sourceHint(value) ?? def.label}
+        title={override ? overrideHint(override) : (sourceHint(value) ?? def.label)}
         aria-label={def.label}
         role="combobox"
         aria-expanded={pop.open}
@@ -269,6 +367,7 @@ export function findOption(def: StylePropertyDef | undefined, names: string[]) {
 
 export function EnumSelect({ prop }: { prop: string }) {
   const { def, value, isSet, set } = useProp(prop)
+  const undoKeys = useUndoKeys()
   if (!def?.options) return null
   const inherited = !isSet && value ? def.options.find((o) => o.value === value.value)?.label ?? value.value : null
   return (
@@ -279,6 +378,7 @@ export function EnumSelect({ prop }: { prop: string }) {
       title={sourceHint(value)}
       value={isSet ? value?.value : ''}
       onChange={(e) => set(e.target.value || null)}
+      onKeyDown={undoKeys}
     >
       <option value="">{inherited ? `${inherited} (inherited)` : '–'}</option>
       {def.options.map((o) => (

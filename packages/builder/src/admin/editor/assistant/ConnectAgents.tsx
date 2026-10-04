@@ -5,7 +5,7 @@
 // appear in the open editor. Subscriptions are never used as API keys: the CLIs are the MCP clients.
 
 import { useConfig } from '@payloadcms/ui'
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState, type KeyboardEvent } from 'react'
 
 import { Icon } from '../icons'
 
@@ -13,6 +13,11 @@ import { Icon } from '../icons'
 const MCP_KEYS_SLUG = 'payload-mcp-api-keys'
 const SERVER_NAME = 'payload-builder'
 const KEY_ENV = 'PAYLOAD_MCP_KEY'
+type Agent = 'claude' | 'codex'
+const AGENTS: { id: Agent; label: string }[] = [
+  { id: 'claude', label: 'Claude Code' },
+  { id: 'codex', label: 'Codex' },
+]
 export const CONNECT_DOCS = 'https://github.com/jon8800/payload-toolkit/blob/main/docs/ai/connect-claude-code-and-codex.md'
 
 export function ConnectAgents({ onClose }: { onClose?: () => void }) {
@@ -24,6 +29,19 @@ export function ConnectAgents({ onClose }: { onClose?: () => void }) {
   const origin = config.serverURL || (typeof window === 'undefined' ? '' : window.location.origin)
   const hasMcp = config.collections.some((c) => c.slug === MCP_KEYS_SLUG)
   const url = `${origin}${api}/mcp`
+  const [agent, setAgent] = useState<Agent>('claude')
+  const baseId = useId()
+  const tabId = (id: Agent) => `${baseId}-tab-${id}`
+  const panelId = `${baseId}-panel`
+
+  // Arrow keys move between the two tabs, as in any tab list.
+  const onTabKeyDown = (e: KeyboardEvent) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Home' && e.key !== 'End') return
+    e.preventDefault()
+    const next = AGENTS[e.key === 'Home' ? 0 : e.key === 'End' ? AGENTS.length - 1 : (AGENTS.findIndex((a) => a.id === agent) + (e.key === 'ArrowRight' ? 1 : -1) + AGENTS.length) % AGENTS.length].id
+    setAgent(next)
+    document.getElementById(tabId(next))?.focus()
+  }
 
   const claude = `claude mcp add --transport http ${SERVER_NAME} ${url} --header "Authorization: Bearer <key>"`
   const codex = `codex mcp add ${SERVER_NAME} --url ${url} --bearer-token-env-var ${KEY_ENV}`
@@ -48,31 +66,55 @@ export function ConnectAgents({ onClose }: { onClose?: () => void }) {
           This site has no MCP endpoint yet. Add <code>payload-mcp-toolkit</code> with <code>builderMcpTools()</code>, as the guide shows.
         </p>
       ) : (
-        <ol className="builder-assistant__steps">
-          <li>
-            <span className="builder-assistant__step-title">Create an MCP API key</span>
+        <>
+          <div className="builder-assistant__step">
+            <span className="builder-assistant__step-title">1. Create an MCP API key</span>
             <span className="builder-assistant__step-text">Pick the Editor preset. The key shows only once: copy it.</span>
             <a className="builder-assistant__link" href={`${admin}/collections/${MCP_KEYS_SLUG}/create`} target="_blank" rel="noopener noreferrer">
               MCP → API Keys <Icon name="external" size={12} />
             </a>
-          </li>
-          <li>
-            <span className="builder-assistant__step-title">Claude Code</span>
-            <span className="builder-assistant__step-text">Run this, with your key in place of &lt;key&gt;:</span>
-            <CopyCode code={claude} label="Copy the Claude Code command" />
-          </li>
-          <li>
-            <span className="builder-assistant__step-title">Codex</span>
-            <span className="builder-assistant__step-text">
-              Put the key in the <code>{KEY_ENV}</code> environment variable, then run:
-            </span>
-            <CopyCode code={codex} label="Copy the Codex command" />
-            <span className="builder-assistant__step-text">
-              Or add this to <code>~/.codex/config.toml</code>:
-            </span>
-            <CopyCode code={codexToml} label="Copy the Codex config" />
-          </li>
-        </ol>
+          </div>
+          <div className="builder-assistant__step">
+            <span className="builder-assistant__step-title">2. Add this site to your tool</span>
+            <div className="builder-editor__segmented builder-editor__segmented--full" role="tablist" aria-label="Tool">
+              {AGENTS.map((a) => (
+                <button
+                  key={a.id}
+                  id={tabId(a.id)}
+                  type="button"
+                  role="tab"
+                  className="builder-editor__segment"
+                  aria-selected={agent === a.id}
+                  aria-controls={panelId}
+                  tabIndex={agent === a.id ? 0 : -1}
+                  onClick={() => setAgent(a.id)}
+                  onKeyDown={onTabKeyDown}
+                >
+                  {a.label}
+                </button>
+              ))}
+            </div>
+            <div id={panelId} role="tabpanel" aria-labelledby={tabId(agent)} className="builder-assistant__tabpanel">
+              {agent === 'claude' ? (
+                <>
+                  <span className="builder-assistant__step-text">Run this. Put your key in place of &lt;key&gt;.</span>
+                  <CopyCode code={claude} label="Copy the Claude Code command" />
+                </>
+              ) : (
+                <>
+                  <span className="builder-assistant__step-text">
+                    Put the key in the <code>{KEY_ENV}</code> environment variable. Then run this.
+                  </span>
+                  <CopyCode code={codex} label="Copy the Codex command" />
+                  <span className="builder-assistant__step-text">
+                    Or add this to <code>~/.codex/config.toml</code>.
+                  </span>
+                  <CopyCode code={codexToml} label="Copy the Codex config" />
+                </>
+              )}
+            </div>
+          </div>
+        </>
       )}
       <p className="builder-assistant__card-text">
         Then ask, for example: “Use payload-builder to add a pricing section to this page.”

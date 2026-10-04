@@ -2,6 +2,7 @@
 //   GET  {api}/builder/live/:collection/:id/events?clientId=&seq=&session=   Server-Sent Events
 //   POST {api}/builder/live/:collection/:id/commit      LiveCommitRequest -> LiveCommitResponse
 //   POST {api}/builder/live/:collection/:id/awareness   LiveAwarenessRequest -> { ok }
+//   POST {api}/builder/live/:collection/:id/leave       { clientId } -> { ok } (a tab closes: drop its presence now)
 //   POST {api}/builder/live/:collection/:id/flush       -> LiveFlushResponse (save the session now)
 //   POST {api}/builder/live/:collection/:id/operations  { ops, clientId? } -> LiveOperationsResponse
 // Payload passes the handler's Response body through unbuffered, so the stream works inside
@@ -236,6 +237,21 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
     },
   }
 
+  // A tab that closes or reloads leaves at once (navigator.sendBeacon on pagehide), so others do
+  // not see a stale copy of it until the heartbeat notices.
+  const leave: Endpoint = {
+    path: `${LIVE_PATH}/:collection/:id/leave`,
+    method: 'post',
+    handler: async (req) => {
+      const prepared = await prepare(req)
+      if (prepared instanceof Response) return prepared
+      const { target, body } = prepared
+      if (typeof body.clientId !== 'string') return json({ ok: false, error: '`clientId` is required' }, 400)
+      const owner = requestActor(req.user).id
+      return json({ ok: runtime.sessions.disconnect(target.collection, target.id, body.clientId, owner) })
+    },
+  }
+
   // "Retry now" after a failed save: saves the session's unsaved commits at once.
   const flush: Endpoint = {
     path: `${LIVE_PATH}/:collection/:id/flush`,
@@ -277,7 +293,7 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
     },
   }
 
-  return [events, commitEndpoint, awareness, flush, operations]
+  return [events, commitEndpoint, awareness, leave, flush, operations]
 }
 
 // ---------------------------------------------------------------------------

@@ -193,14 +193,24 @@ export function RenderLayout({
   }
   return (
     <>
-      {css ? (
-        <style
-          data-builder-css=""
-          // The CSS comes from the plugin's own compiler. Break any closing tag so it cannot end the element.
-          dangerouslySetInnerHTML={{ __html: css.replaceAll('</style', '<\\/style') }}
-        />
-      ) : null}
+      <BuilderStyle css={css} />
       {renderBlocks(layout.blocks, ctx)}
     </>
+  )
+}
+
+/**
+ * The generated CSS in a `<style data-builder-css>` tag (nothing without CSS). When a page renders
+ * several layouts (header, page, footer), output it once with `compilePageCss` (`/server`) and
+ * give those `RenderLayout`s no `css`: one stylesheet keeps Tailwind's variant order.
+ */
+export function BuilderStyle({ css }: { css?: string | null }): ReactNode {
+  if (!css) return null
+  return (
+    <style
+      data-builder-css=""
+      // The CSS comes from the plugin's own compiler. Break any closing tag so it cannot end the element.
+      dangerouslySetInnerHTML={{ __html: css.replaceAll('</style', '<\\/style') }}
+    />
   )
 }

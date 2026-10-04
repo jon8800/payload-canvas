@@ -3,35 +3,33 @@
 // Editor actions shared by the toolbar, the overlay, the outline, the inspector and the shortcuts:
 // insert, duplicate, remove, hide, copy and paste.
 
-import { createId, findBlock, findLocation, getBlockDefinition, slotNames } from '../../core'
-import type { Block, BlockDefinition, Layout, Operation, Position } from '../../core/types'
+import { createId, findBlock, findLocation, getBlockDefinition, slotAcceptsAt, slotNames } from '../../core'
+import type { Block, Layout, Operation, Position } from '../../core/types'
 import type { Runtime } from './runtime'
-
-/** True when `slot` of a block with type `ownerType` accepts `type`. The root list accepts all. */
-export function accepts(blocks: BlockDefinition[], ownerType: string | null, slot: string, type: string): boolean {
-  if (ownerType === null) return true
-  const allow = getBlockDefinition(blocks, ownerType)?.slots?.[slot]?.allow
-  return !allow || allow.includes(type) || allow.includes('*')
-}
 
 /**
  * Where a click-inserted block goes: into the selected container's first slot, else after the
- * selected block, else at the end of the page. Each choice must pass the slot's `allow` rule.
+ * selected block, else at the end of the page. Each choice must pass the nesting rules (a form
+ * never goes inside a link). `block` is a block type, or a whole block (paste) whose children count too.
+ * A container added while a top-level block is selected goes after it: a new section, not a
+ * section inside the selected one.
  */
-export function insertPosition(runtime: Runtime, type: string): Position {
+export function insertPosition(runtime: Runtime, block: string | Block): Position {
   const { blocks } = runtime.config
+  const type = typeof block === 'string' ? block : block.type
   const { layout, selectedId } = runtime.store.getState()
   const end: Position = { parentId: null, index: layout.blocks.length }
   const selected = selectedId ? findBlock(layout, selectedId) : null
   if (!selected) return end
+  const topLevel = layout.blocks.findIndex((b) => b.id === selected.id)
+  if (topLevel >= 0 && slotNames(getBlockDefinition(blocks, type)).length > 0) return { parentId: null, index: topLevel + 1 }
   const slot = slotNames(getBlockDefinition(blocks, selected.type))[0]
-  if (slot && accepts(blocks, selected.type, slot, type)) {
+  if (slot && slotAcceptsAt(blocks, layout, selected.id, slot, block)) {
     return { parentId: selected.id, slot, index: selected.slots?.[slot]?.length ?? 0 }
   }
   const location = findLocation(layout, selected.id)
   if (!location) return end
-  const parentType = location.parentId ? (findBlock(layout, location.parentId)?.type ?? null) : null
-  if (!accepts(blocks, parentType, location.slot, type)) return end
+  if (!slotAcceptsAt(blocks, layout, location.parentId, location.slot, block)) return end
   return { parentId: location.parentId, slot: location.slot, index: location.index + 1 }
 }
 
@@ -64,6 +62,22 @@ export function withNewIds(block: Block): Block {
   return copy
 }
 
+/**
+ * Adds a new block of `type` where a click puts it (see insertPosition), selects it, asks the
+ * inspector to focus its first field, and says where it went ("Added Heading in Section").
+ */
+export function insertNewBlock(runtime: Runtime, type: string): boolean {
+  const block = runtime.createBlock(type)
+  if (!block) return false
+  const to = insertPosition(runtime, type)
+  if (!runtime.store.apply({ type: 'insert', block, to }, { select: block.id })) return false
+  runtime.focusRequest.set(block.id)
+  const parent = to.parentId ? findBlock(runtime.store.getState().layout, to.parentId) : null
+  const label = runtime.blockLabel(type)
+  runtime.notify(parent ? `Added ${label} in ${parent.label?.trim() || runtime.blockLabel(parent.type)}` : `Added ${label}`)
+  return true
+}
+
 /** Inserts copies (new ids) of `blocks` as one undo step and selects the first one. */
 export function insertBlocks(runtime: Runtime, blocks: Block[], to: Position): boolean {
   const fresh = blocks.map(withNewIds)
@@ -88,6 +102,14 @@ export function removeBlock(runtime: Runtime, id: string) {
 export function toggleHidden(runtime: Runtime, id: string) {
   const block = findBlock(runtime.store.getState().layout, id)
   if (block) runtime.store.apply({ type: 'update', id, hidden: !block.hidden })
+}
+
+/** Gives a block its own name in the outline and the breadcrumbs. An empty name removes it. */
+export function renameBlock(runtime: Runtime, id: string, label: string) {
+  const block = findBlock(runtime.store.getState().layout, id)
+  const next = label.trim().slice(0, 80)
+  if (!block || next === (block.label ?? '')) return
+  runtime.store.apply({ type: 'update', id, label: next || null })
 }
 
 export function moveBy(runtime: Runtime, id: string, delta: number) {
@@ -173,7 +195,7 @@ export function copySelection(runtime: Runtime, data?: DataTransfer | null): boo
 export function pasteBlocks(runtime: Runtime, blocks: Block[]): boolean {
   const first = blocks[0]
   if (!first) return false
-  const done = insertBlocks(runtime, blocks, insertPosition(runtime, first.type))
+  const done = insertBlocks(runtime, blocks, insertPosition(runtime, first))
   if (done) runtime.notify(blocks.length === 1 ? `Pasted ${runtime.blockLabel(first.type)}` : `Pasted ${blocks.length} blocks`)
   return done
 }

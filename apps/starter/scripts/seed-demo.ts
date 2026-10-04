@@ -3,7 +3,6 @@
 // Run with `pnpm seed:demo`.
 import { getPayload, type Payload } from 'payload'
 import config from '@payload-config'
-import sharp from 'sharp'
 import { validateLayout, withoutBoundRequired, type Block, type Layout } from '@payload-toolkit/builder/core'
 
 import { builderBlocks } from '@/builder'
@@ -25,7 +24,9 @@ import {
   postTemplate,
   testimonials,
   url,
+  work,
 } from '@/data/sections'
+import { DEMO_IMAGES, renderDemoImage, type DemoImage } from './seed-demo-images'
 
 const SITE_NAME = 'Northwind Studio'
 const PAGE_SLUGS = [HOME_SLUG, 'about', 'services', 'contact', 'blog']
@@ -37,11 +38,11 @@ const CATEGORIES = [
   { title: 'Design', slug: 'design' },
   { title: 'Process', slug: 'process' },
 ]
-const IMAGES = [
-  { name: 'demo-studio.png', alt: 'An abstract studio scene in indigo and violet', label: 'Studio', from: '#4f46e5', to: '#a855f7' },
-  { name: 'demo-workshop.png', alt: 'An abstract workshop scene in teal and blue', label: 'Workshop', from: '#0d9488', to: '#2563eb' },
-  { name: 'demo-launch.png', alt: 'An abstract launch scene in orange and rose', label: 'Launch', from: '#f97316', to: '#e11d48' },
-]
+/** Images from earlier versions of the seed, removed on the next run. */
+const OLD_IMAGE_NAMES = ['demo-studio.png', 'demo-workshop.png', 'demo-launch.png']
+const EMAIL = 'hello@northwind.example'
+const PHONE = '+1 555 0100'
+const HOURS = 'Mon to Fri, 9:00 to 17:00'
 
 /** Seed writes skip the Next.js revalidation hooks: they only work inside the Next.js server. */
 const context = { disableRevalidate: true }
@@ -71,42 +72,49 @@ async function clear(payload: Payload) {
   await payload.delete({ collection: 'posts', where: { slug: { in: POST_SLUGS } }, trash: true, context })
   await payload.delete({ collection: 'pages', where: { slug: { in: PAGE_SLUGS } }, trash: true, context })
   await payload.delete({ collection: 'categories', where: { slug: { in: CATEGORIES.map((c) => c.slug) } } })
-  await payload.delete({ collection: 'media', where: { filename: { in: IMAGES.map((i) => i.name) } } })
+  const names = [...DEMO_IMAGES.map((i) => i.name), ...OLD_IMAGE_NAMES]
+  await payload.delete({ collection: 'media', where: { filename: { in: names } } })
 }
 
-async function placeholderImage(label: string, from: string, to: string): Promise<Buffer> {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
-  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/></linearGradient></defs>
-  <rect width="1600" height="1000" fill="url(#g)"/>
-  <circle cx="1250" cy="250" r="260" fill="#fff" fill-opacity="0.12"/>
-  <circle cx="300" cy="820" r="340" fill="#fff" fill-opacity="0.08"/>
-  <rect x="560" y="380" width="480" height="240" rx="24" fill="#fff" fill-opacity="0.16"/>
-  <text x="800" y="525" font-family="Arial, Helvetica, sans-serif" font-size="88" font-weight="700" fill="#fff" text-anchor="middle">${label}</text>
-</svg>`
-  return sharp(Buffer.from(svg)).png().toBuffer()
-}
-
+/**
+ * The studio's theme: warm paper, ink text and a deep green, with Newsreader for headings and
+ * Hanken Grotesk for body text. The theme hook derives borders and secondary text from these.
+ */
 async function seedTheme(payload: Payload) {
-  const current = await payload.findGlobal({ slug: 'theme-settings' })
-  const colors = { ...current.colors, primary: '#4f46e5' }
   await payload.updateGlobal({
     slug: 'theme-settings',
-    data: { colors, fonts: { sans: 'Inter' }, borderRadius: '0.75' },
+    data: {
+      colors: {
+        primary: '#1f4536',
+        secondary: '#ebe5da',
+        accent: '#e4dccd',
+        muted: '#ece6db',
+        destructive: '#b42318',
+        background: '#f6f3ec',
+        foreground: '#1c1b18',
+      },
+      fonts: { sans: 'Hanken Grotesk', heading: 'Newsreader' },
+      borderRadius: '0.5',
+    },
     context,
   })
 }
 
-async function seedMedia(payload: Payload): Promise<Array<{ id: Id; alt: string }>> {
-  const result: Array<{ id: Id; alt: string }> = []
-  for (const img of IMAGES) {
-    const data = await placeholderImage(img.label, img.from, img.to)
+type Media = { id: Id; alt: string }
+
+/** Uploads the demo images. Keys are the file names without "demo-" and ".jpg", e.g. "work-bakery". */
+async function seedMedia(payload: Payload): Promise<Record<string, Media>> {
+  const result: Record<string, Media> = {}
+  const upload = async (img: DemoImage) => {
+    const data = await renderDemoImage(img)
     const doc = await payload.create({
       collection: 'media',
       data: { alt: img.alt },
-      file: { data, mimetype: 'image/png', name: img.name, size: data.length },
+      file: { data, mimetype: 'image/jpeg', name: img.name, size: data.length },
     })
-    result.push({ id: doc.id, alt: img.alt })
+    result[img.name.replace(/^demo-|\.jpg$/g, '')] = { id: doc.id, alt: img.alt }
   }
+  for (const img of DEMO_IMAGES) await upload(img)
   return result
 }
 
@@ -145,7 +153,7 @@ async function seed() {
 
   await clear(payload)
   await seedTheme(payload)
-  const [studio, workshop, launch] = await seedMedia(payload)
+  const media = await seedMedia(payload)
   const formId = await seedForm(payload)
 
   const categoryIds: Id[] = []
@@ -169,7 +177,7 @@ async function seed() {
     {
       title: 'Designing with blocks',
       excerpt: 'Why we build every page from small, reusable blocks, and what that means for your team.',
-      image: studio,
+      image: media['post-blocks'],
       paragraphs: [
         'A page made of small blocks is easy to change. A heading, a text, a button: each block does one job.',
         'Editors move blocks around in the page builder. Developers add new blocks when the site needs them.',
@@ -179,7 +187,7 @@ async function seed() {
     {
       title: 'A faster launch',
       excerpt: 'How ready-made sections cut the time from first sketch to live site.',
-      image: launch,
+      image: media['post-launch'],
       paragraphs: [
         'Most sites need the same sections: a hero, features, a call to action and a contact form.',
         'We start from ready-made sections and change the words, the images and the colors.',
@@ -189,7 +197,7 @@ async function seed() {
     {
       title: 'Theme tokens explained',
       excerpt: 'One primary color and one font change the whole site. Here is how theme tokens work.',
-      image: workshop,
+      image: media['post-tokens'],
       paragraphs: [
         'The theme settings store a few colors, the fonts and the corner radius.',
         'Every block uses these values through classes like bg-primary, so one change updates every page.',
@@ -228,10 +236,22 @@ async function seed() {
   const pageLayouts: Record<string, Block[]> = {
     [HOME_SLUG]: [
       hero.create({
+        variant: 'home',
         title: 'Websites your team can change in minutes',
-        text: `${SITE_NAME} designs and builds fast, flexible websites. You edit every page with blocks, no developer needed.`,
+        text: `${SITE_NAME} is a small design and development studio. We build fast websites on Payload CMS, and your team edits every page with blocks.`,
         primary: toContact,
         secondary: toServices,
+        notes: ['Website design', 'Payload development', 'Launch and editor training'],
+      }),
+      work.create({
+        title: 'Selected work',
+        intro: 'A few recent sites. Each one is built from blocks its team edits every week.',
+        items: [
+          { title: 'Linden Bakery', meta: 'Ordering site and weekly menu · Design and build', image: media['work-bakery'] },
+          { title: 'Hale Architects', meta: 'Portfolio and project archive · Design system', image: media['work-architects'] },
+          { title: 'Riverside Arts', meta: 'Festival programme and venues · Build and training', image: media['work-festival'] },
+          { title: 'Oakmoor Clinic', meta: 'Service pages and online booking · Design and build', image: media['work-clinic'] },
+        ],
       }),
       features.create({
         title: 'Why teams choose us',
@@ -248,7 +268,7 @@ async function seed() {
           'We are designers and developers who build on Payload CMS.',
           'Every site we ship comes with ready-made sections your team can reuse.',
         ],
-        image: studio,
+        image: media['studio-desk'],
         action: { label: 'About us', link: pageLink(pages.about) },
       }),
       testimonials.create({
@@ -273,7 +293,7 @@ async function seed() {
           'We spent years building sites that only developers could change.',
           'So we built a page builder on top of Payload CMS, and now our clients edit their own sites.',
         ],
-        image: workshop,
+        image: media['workshop-wall'],
         imageRight: true,
       }),
       content.create({
@@ -293,9 +313,9 @@ async function seed() {
         title: 'What we do',
         intro: 'Pick one service or combine them.',
         cards: [
-          { title: 'Website design', text: 'A clear design system built from theme tokens and blocks.', image: studio },
-          { title: 'Payload development', text: 'Collections, custom blocks and integrations.', image: workshop },
-          { title: 'Launch and training', text: 'We launch the site and train your editors.', image: launch },
+          { title: 'Website design', text: 'A clear design system built from theme tokens and blocks.', image: media['post-tokens'] },
+          { title: 'Payload development', text: 'Collections, custom blocks and integrations.', image: media['post-blocks'] },
+          { title: 'Launch and training', text: 'We launch the site and train your editors.', image: media['post-launch'] },
         ],
       }),
       faq.create({
@@ -316,9 +336,13 @@ async function seed() {
       hero.create({ title: 'Contact', text: 'Tell us about your project and we will get back to you.' }),
       contact.create({
         title: 'Get in touch',
-        text: 'Fill in the form, or reach us directly.',
+        text: 'Fill in the form, or reach us directly. We reply within one working day.',
         formId,
-        details: ['hello@northwind.example', '+1 555 0100', 'Mon to Fri, 9:00 to 17:00'],
+        details: [
+          { label: 'Email', value: EMAIL, href: `mailto:${EMAIL}` },
+          { label: 'Phone', value: PHONE, href: `tel:${PHONE.replace(/[^+\d]/g, '')}` },
+          { label: 'Hours', value: HOURS },
+        ],
       }),
     ],
   }
@@ -347,10 +371,10 @@ async function seed() {
 
   // Template parts.
   const nav = [
-    { label: 'Home', link: pageLink(pages[HOME_SLUG]) },
     { label: 'About', link: pageLink(pages.about) },
     { label: 'Services', link: pageLink(pages.services) },
     { label: 'Blog', link: url('/blog') },
+    { label: 'Contact', link: pageLink(pages.contact) },
   ]
   await payload.create({
     collection: 'template-parts',
@@ -359,7 +383,7 @@ async function seed() {
       type: 'header',
       displayCondition: { mode: 'entireSite' },
       _status: 'published',
-      builder: layoutOf([header.create({ siteName: SITE_NAME, home: pageLink(pages[HOME_SLUG]), nav, cta: { label: 'Contact', link: pageLink(pages.contact) } })], 'header'),
+      builder: layoutOf([header.create({ siteName: SITE_NAME, home: pageLink(pages[HOME_SLUG]), nav, cta: toContact })], 'header'),
     },
     context,
   })
@@ -374,8 +398,9 @@ async function seed() {
         [
           footer.create({
             siteName: SITE_NAME,
-            tagline: 'Websites your team can change in minutes.',
-            links: [...nav, { label: 'Contact', link: pageLink(pages.contact) }],
+            tagline: 'A small design and development studio. We build websites on Payload CMS that your team can edit.',
+            links: [{ label: 'Home', link: pageLink(pages[HOME_SLUG]) }, ...nav],
+            contact: { email: EMAIL, phone: PHONE, hours: HOURS },
             copyright: `© ${new Date().getFullYear()} ${SITE_NAME}. All rights reserved.`,
           }),
         ],
@@ -385,10 +410,18 @@ async function seed() {
     context,
   })
 
-  await payload.updateGlobal({ slug: 'site-settings', data: { homePage: pages[HOME_SLUG] }, context })
+  await payload.updateGlobal({
+    slug: 'site-settings',
+    data: {
+      homePage: pages[HOME_SLUG],
+      siteName: SITE_NAME,
+      siteDescription: 'A small design and development studio that builds fast websites on Payload CMS, which your team edits with blocks.',
+    },
+    context,
+  })
 
   payload.logger.info(
-    `Seeded: theme, ${IMAGES.length} images, 1 form, ${CATEGORIES.length} categories, ${PAGE_SLUGS.length} pages, ${posts.length} posts, the post template, header and footer.`,
+    `Seeded: theme, ${DEMO_IMAGES.length} images, 1 form, ${CATEGORIES.length} categories, ${PAGE_SLUGS.length} pages, ${posts.length} posts, the post template, header and footer.`,
   )
 }
 

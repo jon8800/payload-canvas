@@ -51,8 +51,14 @@ export type LiveOperationsResponse =
   | { ok: true; layout: Layout; ops: Operation[]; seq?: number; version?: string; warnings?: LiveError[] }
   | { ok: false; error: string; errors?: LiveError[] }
 
-/** A layout problem, as returned to clients. Same shape as core `LayoutError`. */
-export type LiveError = { blockId?: string; path: string; message: string; code: string }
+/**
+ * A problem, as returned to clients. Same shape as core `LayoutError`.
+ * From the publish endpoint, `message` is readable ("Image: choose an image", "Title: this field
+ * is required"); `blockId` is set for block problems and absent for document fields, whose `path`
+ * is the field path ("title", "slug", "meta.title"). `where` names the block's parents
+ * ("Hero › Grid"). Raw layout paths ("blocks[2].slots…") appear only in `path`.
+ */
+export type LiveError = { blockId?: string; path: string; message: string; code: string; where?: string }
 
 // ---------------------------------------------------------------------------
 // Multiplayer (server-authoritative document sessions). See docs/architecture.md section 12.
@@ -66,6 +72,11 @@ export type LiveError = { blockId?: string; path: string; message: string; code:
 /** One person (or AI) connected to a document, with a stable per-tab id and a display color. */
 export type CollaboratorInfo = {
   clientId: string
+  /**
+   * Who this is: the Payload user id for people, the agent or API key id for AI. Two tabs of the
+   * same person share it, so an editor can label its own other tab "You (another tab)".
+   */
+  userId: string
   name: string
   type: 'user' | 'ai'
   /** CSS color, stable per user (hashed from the user id). */
@@ -258,4 +269,8 @@ export type BuilderDocMeta = {
   template: { target: string | null; preview: unknown } | null
 }
 
-export type PublishResponse = { ok: true; meta: BuilderDocMeta } | { ok: false; error: string }
+/**
+ * `error` is one readable line ("Title and 3 blocks need attention."). `errors` lists each problem
+ * (see `LiveError`), deduplicated, when the action failed on validation.
+ */
+export type PublishResponse = { ok: true; meta: BuilderDocMeta } | { ok: false; error: string; errors?: LiveError[] }

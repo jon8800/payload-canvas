@@ -4,7 +4,7 @@ import { useDraggable } from '@dnd-kit/core'
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 
 import type { Block, BlockDefinition, SectionDefinition } from '../../core/types'
-import { insertBlocks, insertPosition, sectionPosition } from './actions'
+import { insertBlocks, insertNewBlock, sectionPosition } from './actions'
 import { BlockIcon, Icon } from './icons'
 import { useRuntime, type DragData } from './runtime'
 
@@ -39,10 +39,11 @@ type Tab = 'blocks' | 'sections'
  * or click it to insert it at the selection.
  */
 export function Library() {
-  const { config } = useRuntime()
+  const { config, store } = useRuntime()
   const [tab, setTab] = useState<Tab>('blocks')
   const [query, setQuery] = useState('')
-  const [open, setOpen] = useState(true)
+  // Open on an empty page. Once the page has blocks the outline matters more: the panel starts closed.
+  const [open, setOpen] = useState(() => store.getState().layout.blocks.length === 0)
   const sectionCount = config.sections?.length ?? 0
 
   return (
@@ -84,6 +85,7 @@ export function Library() {
             <Icon name="search" size={14} />
             <input
               type="search"
+              aria-label={tab === 'blocks' ? 'Search blocks' : 'Search sections'}
               placeholder={tab === 'blocks' ? 'Search blocks' : 'Search sections'}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -142,11 +144,7 @@ function BlockTile({ def }: { def: BlockDefinition }) {
   const data: DragData = { source: { kind: 'new', blockType: def.type }, label: def.label, icon }
   const { setNodeRef, listeners, attributes } = useDraggable({ id: `library:${def.type}`, data })
 
-  const insert = () => {
-    const block = runtime.createBlock(def.type)
-    if (!block) return
-    runtime.store.apply({ type: 'insert', block, to: insertPosition(runtime, def.type) }, { select: block.id })
-  }
+  const insert = () => insertNewBlock(runtime, def.type)
 
   return (
     <button
@@ -255,6 +253,15 @@ function Wire({ block }: { block: Block }) {
   switch (block.type) {
     case 'heading': {
       const level = Number(block.props?.level ?? 2)
+      const text = typeof block.props?.text === 'string' ? block.props.text.trim() : ''
+      // Real words make sections easy to tell apart; the bar stands in for an empty heading.
+      if (text) {
+        return (
+          <span className="wf-heading-text" data-level={level <= 1 ? 1 : level === 2 ? 2 : 3} data-center={center || undefined}>
+            {text}
+          </span>
+        )
+      }
       return <span className="wf-heading" data-level={level <= 1 ? 1 : level === 2 ? 2 : 3} data-center={center || undefined} />
     }
     case 'text':

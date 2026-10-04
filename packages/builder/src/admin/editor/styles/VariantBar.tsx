@@ -1,8 +1,10 @@
 'use client'
 
-// Breakpoint chips and state buttons. Dots mark variants that already have classes.
-// The breakpoint here is independent of the canvas width. When the canvas is too narrow for the
-// chosen breakpoint, a hint offers to resize it.
+// Breakpoint chips and the state select. Dots mark variants that already have classes.
+// The breakpoint here is independent of the canvas width. Edits at "all sizes" reach every
+// screen; a control whose value a larger breakpoint overrides on the canvas says so and offers
+// to edit that breakpoint (see OverrideNote). When the canvas is too narrow for the chosen
+// breakpoint, a hint offers to resize it.
 
 import { useMemo } from 'react'
 
@@ -13,7 +15,12 @@ import { useValue } from '../valueStore'
 import { useStyles } from './context'
 import { BREAKPOINTS, breakpointWidths } from './tokens'
 
-const STATE_LABELS: Record<StyleState, string> = { default: 'Default', hover: 'Hover', focus: 'Focus', active: 'Active' }
+const STATE_LABELS: Record<StyleState, string> = {
+  default: 'Default',
+  hover: 'On hover',
+  focus: 'On focus',
+  active: 'While pressed',
+}
 
 function safeVariantsInUse(className: string, tokens: StyleTokens): Variant[] {
   try {
@@ -23,9 +30,9 @@ function safeVariantsInUse(className: string, tokens: StyleTokens): Variant[] {
   }
 }
 
-/** "base · all sizes", "md · 768px and wider". */
+/** "all screen sizes", "md · 768 px and wider". */
 export function breakpointLabel(bp: Breakpoint, widths: Record<Breakpoint, number>): string {
-  return bp === 'base' ? 'base · all sizes' : `${bp} · ${widths[bp]}px and wider`
+  return bp === 'base' ? 'all screen sizes' : `${bp} · ${widths[bp]} px and wider`
 }
 
 export function VariantBar() {
@@ -48,39 +55,44 @@ export function VariantBar() {
             type="button"
             className="builder-styles__chip"
             aria-pressed={variant.breakpoint === bp}
-            title={bp === 'base' ? 'Styles for all screen sizes (mobile first)' : `Styles for screens ${widths[bp]}px and wider`}
+            title={bp === 'base' ? 'Styles for every screen size' : `Styles for screens ${widths[bp]} px and wider`}
             onClick={() => store.setVariant({ ...variant, breakpoint: bp })}
           >
-            <span className="builder-styles__chip-name">{bp}</span>
-            <span className="builder-styles__chip-width">{bp === 'base' ? 'all' : `${widths[bp]}+`}</span>
+            <span className="builder-styles__chip-name">{bp === 'base' ? 'All' : bp}</span>
+            <span className="builder-styles__chip-width">{bp === 'base' ? 'sizes' : `${widths[bp]}+`}</span>
             {inUse.some((v) => v.breakpoint === bp) && <span className="builder-styles__dot" />}
           </button>
         ))}
       </fieldset>
-      <fieldset className="builder-styles__states" aria-label="State">
-        {STATES.map((id) => (
-          <button
-            key={id}
-            type="button"
-            className="builder-styles__state"
-            aria-pressed={variant.state === id}
-            onClick={() => store.setVariant({ ...variant, state: id })}
+      <div className="builder-styles__state-row">
+        <p className="builder-styles__variant-hint">
+          Editing <strong>{breakpointLabel(variant.breakpoint, widths)}</strong>
+          {prefix && (
+            <>
+              {' '}
+              <code>{prefix}</code>
+            </>
+          )}
+        </p>
+        <label className="builder-styles__state-field">
+          State
+          <select
+            className="builder-styles__select"
+            value={variant.state}
+            onChange={(e) => store.setVariant({ ...variant, state: e.target.value as StyleState })}
           >
-            {STATE_LABELS[id]}
-            {inUse.some((v) => v.breakpoint === variant.breakpoint && v.state === id) && <span className="builder-styles__dot" />}
-          </button>
-        ))}
-      </fieldset>
-      <p className="builder-styles__variant-hint">
-        Editing <strong>{breakpointLabel(variant.breakpoint, widths)}</strong>
-        {variant.state !== 'default' && <> · on {variant.state}</>}
-        {prefix && (
-          <>
-            {' '}
-            <code>{prefix}</code>
-          </>
-        )}
-      </p>
+            {STATES.map((id) => {
+              const used = id !== 'default' && inUse.some((v) => v.breakpoint === variant.breakpoint && v.state === id)
+              return (
+                <option key={id} value={id}>
+                  {STATE_LABELS[id]}
+                  {used ? ' •' : ''}
+                </option>
+              )
+            })}
+          </select>
+        </label>
+      </div>
       {tooNarrow && (
         <output className="builder-styles__width-hint">
           <span>

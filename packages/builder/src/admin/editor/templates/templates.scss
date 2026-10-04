@@ -148,12 +148,10 @@
     max-width: 45%;
     margin-left: auto;
     overflow: hidden;
-    padding: 1px 5px;
-    border-radius: 3px;
-    background: var(--theme-elevation-100);
-    color: var(--theme-elevation-600);
+    padding: 1px 0;
+    color: var(--theme-elevation-500);
     font-family: var(--font-mono, monospace);
-    font-size: 11px;
+    font-size: 10.5px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -206,9 +204,9 @@
     gap: 4px;
     min-width: 0;
     padding: 6px 8px;
-    border-left: 2px solid color-mix(in srgb, var(--theme-success-500) 45%, transparent);
+    // The binding chip above already says the value is bound; the preview is a plain quiet box.
     background: var(--theme-elevation-50);
-    border-radius: 0 var(--style-radius-s, 4px) var(--style-radius-s, 4px) 0;
+    border-radius: var(--style-radius-s, 4px);
   }
 
   .builder-bind__preview-from {
@@ -430,7 +428,7 @@
     color: var(--theme-text);
     cursor: pointer;
 
-    &[aria-selected='true'] {
+    &[data-active] {
       background: var(--theme-elevation-100);
     }
 
@@ -606,6 +604,11 @@
     border-radius: 4px;
     background: color-mix(in srgb, var(--theme-success-500) 14%, transparent);
     color: var(--theme-success-600);
+  }
+
+  .builder-editor__row-bound--broken {
+    background: color-mix(in srgb, var(--theme-warning-500) 18%, transparent);
+    color: var(--theme-warning-700, var(--theme-warning-500));
   }
 
   .builder-editor__row:hover .builder-editor__row-bound {

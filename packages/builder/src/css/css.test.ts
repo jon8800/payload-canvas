@@ -185,6 +185,7 @@ describe('getStyleTokens', () => {
     assert.ok(!names(tokens.fontSizes).some((n) => n.includes('--') || n.startsWith('shadow')), 'nested keys leaked')
     assert.deepEqual(tokens.fontWeights.find((t) => t.name === 'bold'), { name: 'bold', value: '700' })
     assert.ok(names(tokens.fonts).includes('sans') && !names(tokens.fonts).some((n) => n.startsWith('weight')))
+    assert.equal(tokens.fonts.find((t) => t.name === 'sans')?.value, 'var(--font-sans)')
     assert.ok(names(tokens.leading).includes('tight') && names(tokens.tracking).includes('wide'))
     assert.deepEqual(tokens.radius.find((t) => t.name === 'lg'), { name: 'lg', value: 'var(--radius)' })
     assert.ok(names(tokens.shadows).includes('md'))

@@ -41,13 +41,24 @@ describe('resolveAi', () => {
   })
 
   it('gives the editor provider, label, model and key env', () => {
-    assert.deepEqual(aiClientConfig({ provider: { type: 'openrouter' } }, '/api/builder/ai', {}), {
+    const config = aiClientConfig({ provider: { type: 'openrouter' } }, '/api/builder/ai', {})
+    assert.deepEqual({ ...config, setupProblem: undefined }, {
       endpoint: '/api/builder/ai',
       model: DEFAULT_OPENROUTER_MODEL,
       provider: 'openrouter',
       providerLabel: 'OpenRouter',
       keyEnv: 'OPENROUTER_API_KEY',
+      ready: false,
+      setupProblem: undefined,
     })
+    assert.match(config.setupProblem ?? '', /not set up/)
+  })
+  it('tells the editor whether a key exists (QA m12)', () => {
+    assert.equal(aiClientConfig({ provider: { type: 'openrouter' } }, '/a', { OPENROUTER_API_KEY: 'sk' }).ready, true)
+    assert.equal(aiClientConfig({}, '/a', { ANTHROPIC_API_KEY: 'sk' }).ready, true)
+    const none = aiClientConfig({}, '/a', {})
+    assert.equal(none.ready, false)
+    assert.match(none.setupProblem ?? '', /ANTHROPIC_API_KEY/)
   })
 })
 

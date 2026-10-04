@@ -2,7 +2,7 @@
 
 // The full-screen builder's one top bar. Left: back, the admin home, the document title and its
 // status. Center: undo, redo and the canvas width. Right: who is here, the save state, preview,
-// page settings, the assistant, help and Publish.
+// page settings, help and Publish. The AI assistant opens from the inspector tab (or Ctrl+I).
 
 import { Link, useConfig } from '@payloadcms/ui'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
@@ -14,14 +14,14 @@ import { shortcutList } from '../shortcuts'
 import { useEditor } from '../store'
 import { TemplateControl } from '../templates/SamplePicker'
 import { breakpointAt, breakpointWidths, useStyleTokens, withFallback } from '../styles/tokens'
-import { DEVICE_WIDTHS, deviceForWidth, MAX_CANVAS_WIDTH, MIN_CANVAS_WIDTH, type Device } from '../styles/viewport'
+import { DESKTOP_WIDTH, DEVICE_WIDTHS, deviceForWidth, MAX_CANVAS_WIDTH, MIN_CANVAS_WIDTH, type Device } from '../styles/viewport'
 import { useValue } from '../valueStore'
-import { DocumentTitle, StatusChip } from './DocumentTitle'
+import { DocumentTitle, documentTitle, StatusChip } from './DocumentTitle'
 import { PageSettings, PreviewButton, PublishButton, SaveState } from './DocumentActions'
 import './topbar.scss'
 
 const devices: { id: Device; label: string; icon: IconName }[] = [
-  { id: 'desktop', label: 'Desktop · fill the stage', icon: 'desktop' },
+  { id: 'desktop', label: `Desktop · ${DESKTOP_WIDTH} px or wider`, icon: 'desktop' },
   { id: 'tablet', label: 'Tablet · 768 px', icon: 'tablet' },
   { id: 'mobile', label: 'Mobile · 390 px', icon: 'mobile' },
 ]
@@ -30,7 +30,9 @@ const devices: { id: Device; label: string; icon: IconName }[] = [
 export function TopBar({ icon }: { icon: ReactNode }) {
   const runtime = useRuntime()
   const { meta } = runtime.doc
-  const { title, collection, id } = useValue(meta)
+  const doc = useValue(meta)
+  const { collection, id } = doc
+  const title = documentTitle(doc) || 'Untitled'
   const {
     config: { routes },
   } = useConfig()
@@ -84,7 +86,6 @@ export function TopBar({ icon }: { icon: ReactNode }) {
         <span className="builder-bar__divider" />
         <PreviewButton />
         <PageSettings />
-        <AssistantButton />
         <ShortcutHelp />
         <PublishButton />
       </div>
@@ -147,8 +148,12 @@ function CanvasWidth({ widths }: { widths: Parameters<typeof breakpointAt>[0] })
           </button>
         ))}
       </fieldset>
-      <WidthInput key={shownWidth} value={shownWidth} onCommit={(px) => store.setCanvasWidth(px)} />
-      <span className="builder-editor__bp-badge" title="Largest breakpoint active at this width">
+      <WidthInput key={shownWidth} value={shownWidth} onCommit={(px) => store.setCanvasWidth(px)} onRefuse={runtime.warn} />
+      <span
+        className="builder-editor__bp-badge"
+        data-tooltip="The breakpoint the canvas shows at this width"
+        aria-label={`Breakpoint ${shownWidth > 0 ? breakpointAt(widths, shownWidth) : 'unknown'}`}
+      >
         {shownWidth > 0 ? breakpointAt(widths, shownWidth) : '–'}
       </span>
     </div>
@@ -170,50 +175,37 @@ function EditorError() {
   )
 }
 
-/** Opens the AI assistant in the right panel. Hidden when the plugin has no `ai` option. */
-function AssistantButton() {
-  const runtime = useRuntime()
-  const tab = useValue(runtime.inspectorTab)
-  if (!runtime.assistant) return null
-  const open = tab === 'assistant'
-  return (
-    <button
-      type="button"
-      className="builder-editor__icon-button builder-assistant__toolbar-button"
-      aria-label={open ? 'Close the AI assistant' : 'Open the AI assistant'}
-      aria-pressed={open}
-      data-tooltip="AI assistant · Ctrl+I"
-      onClick={() => runtime.toggleAssistant()}
-    >
-      <Icon name="sparkle" />
-    </button>
-  )
-}
+const clamp = (px: number) => Math.min(MAX_CANVAS_WIDTH, Math.max(MIN_CANVAS_WIDTH, px))
 
-/** Custom canvas width. Enter or blur applies it; Escape reverts. */
-function WidthInput({ value, onCommit }: { value: number; onCommit: (px: number) => void }) {
+/** Custom canvas width. Enter or blur applies it; Escape reverts. Out-of-range values are clamped, with a notice. */
+function WidthInput({ value, onCommit, onRefuse }: { value: number; onCommit: (px: number) => void; onRefuse: (text: string) => void }) {
   const [draft, setDraft] = useState(String(value))
   const commit = () => {
     const px = Math.round(Number(draft))
-    if (!Number.isFinite(px) || px <= 0 || px === value) return setDraft(String(value))
-    onCommit(Math.min(MAX_CANVAS_WIDTH, Math.max(MIN_CANVAS_WIDTH, px)))
+    if (!draft.trim() || !Number.isFinite(px) || px === value) return setDraft(String(value))
+    const next = clamp(px)
+    if (next !== px) onRefuse(`The canvas width must be ${MIN_CANVAS_WIDTH}–${MAX_CANVAS_WIDTH} px. It is now ${next} px.`)
+    if (next === value) return setDraft(String(value))
+    onCommit(next)
   }
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') e.currentTarget.blur()
     if (e.key === 'Escape') {
+      // Escape only reverts the width; it must not clear the block selection.
+      e.stopPropagation()
       setDraft(String(value))
       e.currentTarget.blur()
     }
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       e.preventDefault()
       const step = (e.shiftKey ? 100 : 10) * (e.key === 'ArrowUp' ? 1 : -1)
-      onCommit(Math.min(MAX_CANVAS_WIDTH, Math.max(MIN_CANVAS_WIDTH, value + step)))
+      onCommit(clamp(value + step))
     }
   }
   return (
-    <label className="builder-editor__width-input" data-tooltip="Custom width (↑/↓ to step)">
+    <label className="builder-editor__width-input" data-tooltip={`Custom width, ${MIN_CANVAS_WIDTH}–${MAX_CANVAS_WIDTH} px (↑/↓ to step)`}>
       <input
-        aria-label="Canvas width in pixels"
+        aria-label={`Canvas width in pixels, ${MIN_CANVAS_WIDTH} to ${MAX_CANVAS_WIDTH}`}
         inputMode="numeric"
         value={draft}
         onChange={(e) => setDraft(e.target.value.replace(/[^\d]/g, ''))}

@@ -514,7 +514,7 @@ export interface BuilderTemplate {
    */
   targetCollection: 'posts';
   /**
-   * Used by every document of the collection that has no template of its own.
+   * Used by every document of the collection that has no template of its own. Takes effect when you publish this template. It needs at least one block.
    */
   isDefault?: boolean | null;
   /**
@@ -1945,6 +1945,14 @@ export interface PayloadQueryPresetsSelect<T extends boolean = true> {
 export interface SiteSetting {
   id: number;
   /**
+   * Shown after each page title in the browser tab and in search results, for example "About | Northwind Studio".
+   */
+  siteName?: string | null;
+  /**
+   * Used in search results for pages that have no description of their own.
+   */
+  siteDescription?: string | null;
+  /**
    * Select the page to display at the root URL (/)
    */
   homePage?: (number | null) | Page;
@@ -1993,6 +2001,10 @@ export interface ThemeSetting {
      */
     sans?: string | null;
     /**
+     * Google Font family for headings (the font-display class). Empty: the body font.
+     */
+    heading?: string | null;
+    /**
      * Google Font family name
      */
     mono?: string | null;
@@ -2024,6 +2036,8 @@ export interface ThemeSetting {
  * via the `definition` "site-settings_select".
  */
 export interface SiteSettingsSelect<T extends boolean = true> {
+  siteName?: T;
+  siteDescription?: T;
   homePage?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -2049,6 +2063,7 @@ export interface ThemeSettingsSelect<T extends boolean = true> {
     | T
     | {
         sans?: T;
+        heading?: T;
         mono?: T;
       };
   spacing?:

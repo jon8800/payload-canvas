@@ -30,6 +30,7 @@ export type ThemeData = {
   }
   fonts?: {
     sans?: string | null
+    heading?: string | null
     mono?: string | null
   }
   spacing?: {
@@ -79,6 +80,9 @@ export function buildCSSVariables(theme: ThemeData): Record<string, string> {
   // Fonts
   if (theme.fonts?.sans) {
     vars['--font-sans'] = `'${theme.fonts.sans}', sans-serif`
+  }
+  if (theme.fonts?.heading) {
+    vars['--font-heading'] = `'${theme.fonts.heading}', serif`
   }
   if (theme.fonts?.mono) {
     vars['--font-mono'] = `'${theme.fonts.mono}', monospace`

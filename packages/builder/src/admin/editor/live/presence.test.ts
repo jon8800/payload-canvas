@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import type { CanvasMeasurement, Layout } from '../../../core/types'
-import { changedIds, cursorAt, cursorPoint, initials, sameAwareness, shortName } from './presence'
+import { changedIds, cursorAt, cursorPoint, distinctInitials, initials, sameAwareness, shortName } from './presence'
 
 const layout: Layout = {
   version: 1,
@@ -54,6 +54,30 @@ describe('presence helpers', () => {
     assert.equal(initials(''), '?')
     assert.equal(shortName('builder-dev@local.test'), 'builder-dev')
     assert.equal(shortName('Claude'), 'Claude')
+  })
+
+  it('distinctInitials keeps plain initials when they differ', () => {
+    const map = distinctInitials(['Ana Lima', 'Claude', 'Ana Lima'])
+    assert.equal(map.get('Ana Lima'), 'AL')
+    assert.equal(map.get('Claude'), 'C')
+    assert.equal(map.size, 2)
+  })
+
+  it('distinctInitials separates names that give the same initials', () => {
+    const map = distinctInitials(['builder-dev@local.test', 'builder-dev2@local.test'])
+    assert.equal(map.get('builder-dev@local.test'), 'BD')
+    assert.equal(map.get('builder-dev2@local.test'), 'BD2')
+  })
+
+  it('distinctInitials falls back to first and last character, then a counter', () => {
+    const letters = distinctInitials(['Ana Lima', 'Ann Lee'])
+    assert.notEqual(letters.get('Ana Lima'), letters.get('Ann Lee'))
+    assert.equal(letters.get('Ana Lima'), 'AA')
+    assert.equal(letters.get('Ann Lee'), 'AE')
+    const same = distinctInitials(['Ann Lee', 'Ana Lee'])
+    assert.equal(new Set(same.values()).size, 2)
+    const counted = distinctInitials(['Al Be', 'Ax Be', 'Ab Be', 'At Be'])
+    assert.equal(new Set(counted.values()).size, 4)
   })
 
   it('changedIds lists inserted, moved and updated blocks, not removed ones', () => {

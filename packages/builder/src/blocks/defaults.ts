@@ -19,6 +19,50 @@ export type DefaultBlocksOptions = {
   listCollections?: string[]
 }
 
+/** Block types a Link block may hold directly: content without its own links or controls. */
+const LINK_CONTENT = ['stack', 'grid', 'heading', 'text', 'image', 'list', 'quote', 'divider', 'spacer', 'field']
+
+/**
+ * Interactive block types: never inside a Link block, at any depth. `form` is the starter's custom
+ * form block; a type that does not exist is ignored.
+ */
+const INTERACTIVE = ['link', 'button', 'menu', 'richText', 'video', 'collectionList', 'form']
+
+/**
+ * Classes the menu component uses itself (the toggle, the panel and the links). They are listed in
+ * the block's `classes`, so the generated CSS has them. Keep in sync with `Menu.tsx` in
+ * `@payload-toolkit/builder-react`.
+ */
+export const MENU_CLASS_MAP = {
+  /** The inline list: its items become children of the <nav>, so the block's className lays them out. */
+  list: { md: 'hidden md:contents', lg: 'hidden lg:contents', never: 'contents' },
+  toggleWrap: { md: 'md:hidden', lg: 'lg:hidden' },
+  link:
+    'inline-flex items-center py-2 opacity-75 transition-opacity hover:opacity-100 ' +
+    'aria-[current=page]:opacity-100 aria-[current=page]:underline decoration-1 underline-offset-8',
+  toggle:
+    'flex min-h-11 min-w-11 cursor-pointer list-none items-center justify-center gap-2 rounded-md px-2 -mr-2 ' +
+    '[&::-webkit-details-marker]:hidden',
+  iconOpen: 'size-5 group-open:hidden',
+  iconClose: 'hidden size-5 group-open:block',
+  panel:
+    'absolute inset-x-0 top-full z-50 border-y border-border bg-background px-5 pt-2 pb-6 text-foreground ' +
+    'shadow-[0_24px_40px_-24px_rgb(0_0_0/0.3)]',
+  panelList: 'flex flex-col',
+  panelLink:
+    'flex min-h-12 items-center border-b border-border py-3 text-lg ' +
+    'aria-[current=page]:font-semibold aria-[current=page]:underline decoration-1 underline-offset-8',
+} as const
+
+const MENU_CLASSES = [
+  ...new Set(
+    Object.values(MENU_CLASS_MAP)
+      .flatMap((value) => (typeof value === 'string' ? [value] : Object.values(value)))
+      .flatMap((value) => value.split(' ')),
+  ),
+  'group',
+]
+
 /**
  * The built-in blocks: stack, grid, heading, text, richText, image, button, link, list, quote,
  * divider, spacer, video, and the dynamic blocks field and collectionList.
@@ -177,7 +221,9 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     icon: 'image',
     category: 'Media',
     fields: [
-      { name: 'image', type: 'upload', label: 'Image', relationTo: mediaCollection, required: true },
+      // Not required: a ready-made section can ship an empty image and still publish. The site
+      // renders nothing for an empty image; the canvas shows a placeholder.
+      { name: 'image', type: 'upload', label: 'Image', relationTo: mediaCollection },
       {
         name: 'alt',
         type: 'text',
@@ -186,7 +232,9 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
       },
     ],
     ai: {
-      description: `An image from the "${mediaCollection}" collection, stored by its document ID.`,
+      description:
+        `An image from the "${mediaCollection}" collection, stored by its document ID. ` +
+        'Without an image it renders nothing on the site.',
       example: { type: 'image', props: { image: 1, alt: 'Team photo' }, className: 'w-full rounded-lg' },
     },
   })
@@ -221,12 +269,14 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     icon: 'link',
     category: 'Interactive',
     fields: [linkField({ collections: linkCollections })],
-    slots: { children: { label: 'Content' } },
+    // Interactive content inside <a> is invalid HTML. `allow` limits direct children; `disallow`
+    // refuses these types at any depth (a button inside a stack inside the link, for example).
+    slots: { children: { label: 'Content', allow: LINK_CONTENT, disallow: INTERACTIVE } },
     defaultClassName: 'block',
     ai: {
       description:
         'A clickable container: everything inside it links to one place. Use it for cards that link to a page. ' +
-        'Do not put buttons or other links inside it.',
+        `It holds only ${LINK_CONTENT.join(', ')} blocks, and never links, buttons, forms, menus or lists of links.`,
       example: {
         type: 'link',
         props: { link: exampleLink },
@@ -237,6 +287,64 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
             { id: 'b_example_2', type: 'text', props: { text: 'See our plans.' } },
           ],
         },
+      },
+    },
+  })
+
+  const menu = defineBlock({
+    type: 'menu',
+    label: 'Menu',
+    icon: 'menu',
+    category: 'Interactive',
+    fields: [
+      {
+        name: 'items',
+        type: 'array',
+        label: 'Links',
+        fields: [
+          { name: 'label', type: 'text', label: 'Label', required: true },
+          linkField({ collections: linkCollections }),
+        ],
+      },
+      {
+        name: 'label',
+        type: 'text',
+        label: 'Menu name',
+        defaultValue: 'Main',
+        admin: { description: 'Read by screen readers, for example "Main" or "Footer".' },
+      },
+      {
+        name: 'collapse',
+        type: 'select',
+        label: 'Small screens',
+        options: [
+          { label: 'Menu button below tablet width', value: 'md' },
+          { label: 'Menu button below laptop width', value: 'lg' },
+          { label: 'Always show the links', value: 'never' },
+        ],
+        defaultValue: 'md',
+        admin: { description: 'On small screens the links fold into a "Menu" button with a panel.' },
+      },
+    ],
+    defaultClassName: 'flex flex-row items-center gap-6 text-sm font-medium',
+    classes: MENU_CLASSES,
+    ai: {
+      description:
+        'Site navigation: a <nav> with a list of links. The link to the current page is marked. ' +
+        'On small screens the links fold into a "Menu" button that opens a panel ("collapse": "md" or "lg"; ' +
+        '"never" keeps the links visible, for footers). The className lays out the links. ' +
+        'Put it in a header stack that has the "relative" class, so the panel opens below the header.',
+      example: {
+        type: 'menu',
+        props: {
+          label: 'Main',
+          collapse: 'md',
+          items: [
+            { label: 'About', link: { type: 'url', url: '/about' } },
+            { label: 'Contact', link: { type: 'url', url: '/contact' } },
+          ],
+        },
+        className: 'flex flex-row items-center gap-6 text-sm font-medium',
       },
     },
   })
@@ -444,5 +552,5 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     },
   })
 
-  return [stack, grid, heading, text, richText, image, button, link, list, quote, divider, spacer, video, field, collectionList]
+  return [stack, grid, heading, text, richText, image, button, link, menu, list, quote, divider, spacer, video, field, collectionList]
 }

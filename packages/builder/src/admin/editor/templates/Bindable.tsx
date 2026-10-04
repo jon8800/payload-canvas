@@ -22,6 +22,8 @@ import {
   findBindingField,
   hasBindableField,
   isCompatible,
+  isFieldBlockSource,
+  isObviousPath,
   LIST_BLOCK,
   listAncestor,
   previewValue,
@@ -225,7 +227,6 @@ function BindButton({
 
 function BoundField({
   field,
-  path,
   label,
   children,
   block,
@@ -246,7 +247,10 @@ function BoundField({
 
   return (
     <div className="builder-bind builder-bind--bound field-type">
-      <FieldLabel label={label} path={path} required={required} />
+      {/* Visual label only: the button below and the fallback input carry the accessible names. */}
+      <div aria-hidden="true">
+        <FieldLabel as="span" label={label} required={required} />
+      </div>
       <div className={`builder-bind__chip${source ? '' : ' builder-bind__chip--missing'}`}>
         <button
           type="button"
@@ -254,12 +258,13 @@ function BoundField({
           aria-haspopup="listbox"
           aria-expanded={popover.open}
           disabled={!scope?.collection}
+          aria-label={`${label} shows ${trail.join(' › ')}${scope?.collection ? '. Change the field' : ''}`}
           title={scope?.collection ? 'Change the field' : undefined}
           onClick={(e) => popover.toggle(e.currentTarget.parentElement ?? e.currentTarget)}
         >
           <Icon name={source ? fieldIcon(source) : 'warning'} size={13} />
           <span className="builder-bind__chip-label">{trail.join(' › ')}</span>
-          <code className="builder-bind__chip-path">{bound}</code>
+          {!isObviousPath(source?.label ?? '', bound) && <code className="builder-bind__chip-path">{bound}</code>}
         </button>
         <button type="button" className="builder-bind__chip-x" aria-label="Unbind" data-tooltip="Unbind" onClick={() => bind(null)}>
           <Icon name="close" size={12} />
@@ -337,7 +342,7 @@ export function SamplePreview({ scope, source }: { scope: BindingScope | null; s
 /** The Field block's `path`: picks any field of the scope's document. */
 function FieldPathInput({ value, onChange, label, children, scope }: SlotProps & { scope: BindingScope | null }) {
   const popover = usePopover('auto')
-  const accept = useCallback(() => true, [])
+  const accept = isFieldBlockSource
   const collectionLabel = useCollectionLabel(scope?.collection ?? null)
   const path = typeof value === 'string' && value ? value : null
 
@@ -360,7 +365,7 @@ function FieldPathInput({ value, onChange, label, children, scope }: SlotProps &
   const trail = path ? bindingTrail(scope.fields, path) : []
   return (
     <div className="field-type builder-bind">
-      <FieldLabel label={label} required />
+      <FieldLabel as="span" label={label} required />
       <button
         type="button"
         className={`builder-bind__select${path && !source ? ' builder-bind__select--missing' : ''}`}
@@ -372,7 +377,7 @@ function FieldPathInput({ value, onChange, label, children, scope }: SlotProps &
           <>
             <Icon name={source ? fieldIcon(source) : 'warning'} size={13} />
             <span className="builder-bind__chip-label">{trail.join(' › ')}</span>
-            <code className="builder-bind__chip-path">{path}</code>
+            {!isObviousPath(source?.label ?? '', path) && <code className="builder-bind__chip-path">{path}</code>}
           </>
         ) : (
           <span className="builder-bind__placeholder">Choose a field…</span>

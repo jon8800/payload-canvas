@@ -1,4 +1,4 @@
-import { heading, richText, stack, styles, type Section } from './build'
+import { heading, richText, stack, styles, defineSection } from './build'
 import { lexical, type RichTextInput } from './lexical'
 
 export type ContentInput = {
@@ -6,14 +6,14 @@ export type ContentInput = {
   body: RichTextInput[]
 }
 
-export const content: Section<ContentInput> = {
+export const content = defineSection<ContentInput>({
   name: 'Content',
-  description: 'A narrow column of long-form text: a title and a rich text body styled with the typography plugin.',
+  description: 'Long-form text: a title on the left and a rich text body (about 65 characters per line) on the right.',
   create: ({ title, body }) =>
     stack('section', styles.section, [
-      stack('div', 'mx-auto flex w-full max-w-3xl flex-col gap-6', [
-        heading(title, '2', styles.sectionTitle),
-        richText(lexical(body), 'prose max-w-none'),
+      stack('div', 'mx-auto grid w-full max-w-6xl grid-cols-1 gap-8 md:grid-cols-12 md:gap-12', [
+        heading(title, '2', `md:col-span-4 ${styles.sectionTitle}`),
+        richText(lexical(body), 'prose prose-lg max-w-[65ch] md:col-span-8'),
       ]),
     ]),
-}
+})

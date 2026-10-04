@@ -136,7 +136,8 @@ describe('validateLayout', () => {
       errors.map((e) => e.path),
       ['blocks[0].slots.children', 'blocks[1].slots.side', 'blocks[1].slots.children', 'blocks[2].slots.children[0]'],
     )
-    assert.match(errors[3].message, /does not accept "heading"/)
+    assert.match(errors[3].message, /Heading cannot go inside Row/)
+    assert.equal(errors[3].code, 'nesting')
   })
 
   it('checks required props, unknown props and className', () => {

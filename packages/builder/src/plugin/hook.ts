@@ -1,16 +1,24 @@
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { ValidationError, type CollectionAfterChangeHook, type CollectionBeforeChangeHook } from 'payload'
-import { withoutBoundRequired } from '../core/bindings'
+import { validateBindings, withoutBoundRequired } from '../core/bindings'
 import { collectClasses } from '../core/classes'
+import { describeLayoutErrors } from '../core/issues'
 import { normalizeLayout } from '../core/tree'
-import type { BlockDefinition, Layout } from '../core/types'
-import { validateLayout, type LayoutError } from '../core/validate'
+import type { BindingField, BlockDefinition, Layout } from '../core/types'
+import { isBlockingError, isLayoutWarning, validateLayout, type LayoutError } from '../core/validate'
 import { compileClasses, type CssOptions } from '../css'
 import type { SessionManager } from '../live/session'
 
 /** Value of the generated CSS field. */
 export type GeneratedCss = { hash: string; css: string }
+
+/** Bindable fields per collection, and the collection a document's own bindings read. */
+export type BindingCheck = {
+  sources: Record<string, readonly BindingField[]>
+  /** The collection the layout's root bindings read (a template's target), or null. */
+  collectionOf: (doc: Record<string, unknown>) => string | null
+}
 
 type HookOptions = {
   collection: string
@@ -20,10 +28,17 @@ type HookOptions = {
   css: CssOptions
   /** The live document sessions. While one is open, it owns the layout (see the guard below). */
   sessions?: SessionManager
+  /** Checks bindings against the data model (when templates are on). */
+  bindings?: BindingCheck
 }
 
 /** `context` flag of the session's own draft saves. */
 export const SESSION_SAVE_CONTEXT = 'builderSession'
+/**
+ * `context` flag of saves that must store exactly the layout they send (for example when the
+ * plugin clears another template's "Default" flag). The session guard leaves them alone.
+ */
+export const KEEP_LAYOUT_CONTEXT = 'builderKeepLayout'
 /** `context` key where the guard records the session seq it wrote. */
 const GUARD_SEQ_CONTEXT = 'builderSessionSeq'
 
@@ -46,20 +61,31 @@ async function hashInput(classes: string[], entry: string): Promise<string> {
   return hash.digest('hex').slice(0, 16)
 }
 
-/** Problems that never block a save. A developer removing a block field must not break pages. */
-function isWarning(error: LayoutError): boolean {
-  return error.code === 'unknown-prop' || error.code === 'unknown-key'
-}
-
-/** Missing required props block only publishing, so drafts and autosave can hold unfinished blocks. */
-function isMissingRequired(error: LayoutError): boolean {
-  return error.code === 'required'
-}
-
 function formatErrors(errors: LayoutError[]): string {
   return errors
     .map((error) => (error.path ? `${error.path}: ${error.message}` : error.message))
     .join('\n')
+}
+
+/**
+ * Every problem of a layout, split for this save. With `publishing`, missing required props,
+ * nesting and binding problems block too. The save hook and the publish endpoint share this, so
+ * the endpoint can name the blocks before it calls Payload. Bound props may stay empty.
+ */
+export function checkLayout(
+  layout: Layout,
+  options: { blocks: readonly BlockDefinition[]; publishing: boolean; bindings?: BindingCheck; doc?: Record<string, unknown> },
+): { blocking: LayoutError[]; warnings: LayoutError[] } {
+  const { blocks, publishing, bindings } = options
+  const errors = withoutBoundRequired(validateLayout(layout, blocks as BlockDefinition[]), layout)
+  if (bindings) errors.push(...validateBindings(layout, blocks, bindings.sources, bindings.collectionOf(options.doc ?? {})))
+  const blocking: LayoutError[] = []
+  const warnings: LayoutError[] = []
+  for (const error of errors) {
+    if (isBlockingError(error, publishing)) blocking.push(error)
+    else warnings.push(error)
+  }
+  return { blocking, warnings }
 }
 
 /**
@@ -69,12 +95,13 @@ function formatErrors(errors: LayoutError[]): string {
  * because of CSS.
  *
  * Validation: unknown props and unknown block keys are logged, never blocking. Missing required
- * props block only when the document is published (collections with drafts). On collections
- * without drafts they are logged. All other errors (shape, duplicate ids, unknown block types,
- * slot rules, wrong prop types) always block.
+ * props, blocks in slots that refuse them and bindings the prop cannot use block only when the
+ * document is published (collections with drafts). On collections without drafts they are
+ * logged. All other errors (shape, duplicate ids, unknown block types, wrong prop types) always
+ * block. The error text is readable ("Image: choose an image"); raw paths go to the server log.
  */
 export function layoutBeforeChange(options: HookOptions): CollectionBeforeChangeHook {
-  const { collection: slug, field, cssField, blocks, css, sessions } = options
+  const { collection: slug, field, cssField, blocks, css, sessions, bindings } = options
 
   return async ({ collection, context, data, operation, originalDoc, req }) => {
     if (!data) return data
@@ -83,7 +110,8 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
     // A save from anywhere else (a stale autosave, Publish, the REST API) gets the session's
     // layout, so it can never overwrite collaborators. Publish therefore publishes the session.
     const docId = originalDoc?.id as string | number | undefined
-    if (sessions && operation === 'update' && docId !== undefined && !context?.[SESSION_SAVE_CONTEXT]) {
+    const own = context?.[SESSION_SAVE_CONTEXT] || context?.[KEEP_LAYOUT_CONTEXT]
+    if (sessions && operation === 'update' && docId !== undefined && !own) {
       const open = sessions.peek(slug, docId)
       if (open) {
         data[field] = structuredClone(open.layout)
@@ -99,25 +127,20 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
     if (data[field] === undefined) return data
 
     const layout: Layout = normalizeLayout(data[field])
+    // A KEEP_LAYOUT save re-stores an already published layout (only another field changes), so
+    // rules added since then do not block it.
     const publishing =
-      Boolean(collection.versions?.drafts) && (data._status ?? originalDoc?._status) === 'published'
-    const blocking: LayoutError[] = []
-    const warnings: LayoutError[] = []
-    // A bound prop gets its value from the document, so its literal may stay empty.
-    for (const error of withoutBoundRequired(validateLayout(layout, blocks), layout)) {
-      const warning = isWarning(error) || (isMissingRequired(error) && !publishing)
-      if (warning) warnings.push(error)
-      else blocking.push(error)
-    }
+      Boolean(collection.versions?.drafts) && (data._status ?? originalDoc?._status) === 'published' && !context?.[KEEP_LAYOUT_CONTEXT]
+    const { blocking, warnings } = checkLayout(layout, { blocks, publishing, bindings, doc: { ...originalDoc, ...data } })
     if (blocking.length > 0) {
+      req.payload.logger.info(`[websiteBuilder] ${slug}.${field} not saved:\n${formatErrors(blocking)}`)
       // One entry for the field, so the admin shows every problem under it.
-      throw new ValidationError(
-        { collection: slug, errors: [{ path: field, message: formatErrors(blocking) }], req },
-        req.t,
-      )
+      const lines = describeLayoutErrors(layout, blocking, blocks).map((issue) => issue.message)
+      throw new ValidationError({ collection: slug, errors: [{ path: field, message: lines.join('\n') }], req }, req.t)
     }
-    if (warnings.length > 0) {
-      req.payload.logger.warn(`[websiteBuilder] ${slug}.${field} saved with warnings:\n${formatErrors(warnings)}`)
+    const logged = warnings.filter(isLayoutWarning)
+    if (logged.length > 0) {
+      req.payload.logger.warn(`[websiteBuilder] ${slug}.${field} saved with warnings:\n${formatErrors(logged)}`)
     }
     data[field] = layout
 

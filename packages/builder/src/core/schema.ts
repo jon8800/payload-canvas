@@ -105,9 +105,10 @@ function blockSchema(def: BlockDefinition, all: BlockDefinition[]): Schema {
     for (const [name, slot] of Object.entries(def.slots)) {
       const types = allowedTypes(slot, all)
       const label = slot.label ? `${slot.label}. ` : ''
+      const refused = slot.disallow?.length ? ` Never put these anywhere inside it, at any depth: ${slot.disallow.join(', ')}.` : ''
       slots[name] =
         types.length > 0
-          ? { type: 'array', description: `${label}Accepts: ${types.join(', ')}.`, items: blockRefs(types) }
+          ? { type: 'array', description: `${label}Accepts: ${types.join(', ')}.${refused}`, items: blockRefs(types) }
           : { type: 'array', description: `${label}Accepts no known block types.`, maxItems: 0 }
     }
     properties.slots = {
@@ -123,6 +124,10 @@ function blockSchema(def: BlockDefinition, all: BlockDefinition[]): Schema {
     additionalProperties: { type: 'string' },
   }
   properties.hidden = { type: 'boolean', description: 'Hidden blocks stay in the data but do not render.' }
+  properties.label = {
+    type: 'string',
+    description: 'Optional name for editors, shown in the outline (e.g. "Hero", "Pricing"). Never rendered on the site.',
+  }
 
   const required = ['id', 'type']
   if (dataFields(def.fields as unknown[]).some((f) => f.required)) required.push('props')

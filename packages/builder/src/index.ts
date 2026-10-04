@@ -8,6 +8,10 @@ export {
   type BuilderCollectionOptions,
   type GeneratedCss,
   type TemplatesOptions,
+  type FontFamilies,
+  SITE_CSS_KEY,
+  siteCssConfigOf,
+  type SiteCssConfig,
 } from './plugin'
 export { bindingSources, templatesConfigOf, TEMPLATES_CONFIG_KEY } from './plugin/templates'
 export { builderViewPath } from './plugin/links'

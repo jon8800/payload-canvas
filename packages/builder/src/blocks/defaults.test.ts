@@ -17,6 +17,7 @@ const TYPES = [
   'image',
   'button',
   'link',
+  'menu',
   'list',
   'quote',
   'divider',
@@ -119,6 +120,7 @@ describe('defaultBlocks', () => {
       image: ['image', 'Media'],
       button: ['button', 'Interactive'],
       link: ['link', 'Interactive'],
+      menu: ['menu', 'Interactive'],
       list: ['list', 'Content'],
       quote: ['quote', 'Content'],
       divider: ['divider', 'Layout'],
@@ -127,6 +129,28 @@ describe('defaultBlocks', () => {
       field: ['field', 'Dynamic'],
       collectionList: ['collectionList', 'Dynamic'],
     })
+  })
+
+  it('a link holds only non-interactive content, at any depth', () => {
+    const slot = defaultBlocks().find((b) => b.type === 'link')?.slots?.children
+    for (const type of ['link', 'button', 'menu', 'richText', 'video', 'collectionList', 'form']) {
+      assert.ok(!slot?.allow?.includes(type), `${type} is allowed`)
+      assert.ok(slot?.disallow?.includes(type), `${type} is not disallowed`)
+    }
+    assert.ok(slot?.allow?.includes('heading'))
+  })
+
+  it('the image is optional, so a section with an empty image can publish', () => {
+    const blocks = defaultBlocks()
+    const layout = { version: 1, blocks: [{ id: 'i', type: 'image', props: { alt: 'Team' } }] }
+    assert.deepEqual(validateLayout(layout, blocks), [])
+  })
+
+  it('the menu lists every class its component uses', () => {
+    const menu = defaultBlocks().find((b) => b.type === 'menu')
+    for (const name of ['group', 'md:contents', 'lg:hidden', 'group-open:block', 'aria-[current=page]:underline']) {
+      assert.ok(menu?.classes?.includes(name), name)
+    }
   })
 
   it('the list block starts without a list-style class', () => {

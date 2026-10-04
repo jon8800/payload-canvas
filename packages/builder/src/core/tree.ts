@@ -78,11 +78,11 @@ export function subtreeIds(block: Block, out: string[] = []): string[] {
 
 // Canonical form (produced here and kept by every operation):
 // - no empty `props`, `bindings` or `slots` objects, and no empty slot lists
-// - `hidden` is stored only when true
+// - `hidden` is stored only when true, `label` only when non-empty (trimmed)
 // - every id is a non-empty string, unique in the layout
 // The operations module relies on this form for exact undo.
 
-const BLOCK_KEYS = new Set(['id', 'type', 'blockType', 'blockName', 'props', 'className', 'slots', 'children', 'bindings', 'hidden'])
+const BLOCK_KEYS = new Set(['id', 'type', 'blockType', 'blockName', 'props', 'className', 'slots', 'children', 'bindings', 'hidden', 'label'])
 
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
@@ -158,6 +158,7 @@ function normalizeBlock(value: unknown, seen: Set<string>): Block | null {
   }
 
   if (value.hidden === true) block.hidden = true
+  if (typeof value.label === 'string' && value.label.trim() !== '') block.label = value.label.trim()
   return block
 }
 

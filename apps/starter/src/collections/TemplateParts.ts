@@ -14,7 +14,7 @@ export const TemplateParts: CollectionConfig = {
     update: authenticated,
   },
   admin: {
-    defaultColumns: ['title', 'type', 'updatedAt'],
+    defaultColumns: ['title', 'type', '_status', 'updatedAt'],
     useAsTitle: 'title',
     livePreview: {
       url: ({ data, req }) =>

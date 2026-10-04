@@ -1,61 +1,43 @@
 'use client'
 
-// One collapsible section per style group. Open state is remembered in localStorage.
+// One collapsible section per style group. Only the groups that matter for the block start open.
 
 import { useState, type ReactNode } from 'react'
 
 import type { StyleGroup } from '../../../core'
 import { BoxModel, MiniField, MiniRow } from './BoxModel'
 import { useStyles } from './context'
-import { AutoControl, Row, Segmented, sizeSuggestions, SliderControl, ValueInput, type SegmentItem } from './controls'
+import { AutoControl, Row, Segmented, sizeSuggestions, SliderControl, SubSection, useAnyValue, ValueInput, type SegmentItem } from './controls'
 import type { Suggestion } from './popover'
 import * as I from './icons'
 import { propertiesIn, propertyDef } from './model'
 
 // ---------------------------------------------------------------------------
-// Collapsible sections
+// Collapsible sections. A section opens when it has a value, or when it is the main group for the
+// block type (Typography for text, Layout for containers). The panel remounts per block, so the
+// user's own open and close choices last while the block stays selected.
 // ---------------------------------------------------------------------------
 
-const OPEN_KEY = 'payload-builder:styles-open'
-const DEFAULT_OPEN = ['layout', 'spacing', 'size', 'typography']
-let openSet: Set<string> | null = null
+const TEXT_TYPES = new Set(['heading', 'text', 'richText', 'quote', 'button', 'list', 'link', 'field'])
+const CONTAINER_TYPES = new Set(['stack', 'grid', 'collectionList'])
 
-function openSections(): Set<string> {
-  if (openSet) return openSet
-  try {
-    const stored = localStorage.getItem(OPEN_KEY)
-    openSet = new Set(stored ? (JSON.parse(stored) as string[]) : DEFAULT_OPEN)
-  } catch {
-    openSet = new Set(DEFAULT_OPEN)
-  }
-  return openSet
-}
-
-function useOpen(id: string): [boolean, () => void] {
-  const [open, setOpen] = useState(() => openSections().has(id))
-  const toggle = () => {
-    const set = openSections()
-    if (open) set.delete(id)
-    else set.add(id)
-    try {
-      localStorage.setItem(OPEN_KEY, JSON.stringify([...set]))
-    } catch {
-      // Private mode or full storage: the state just is not remembered.
-    }
-    setOpen(!open)
-  }
-  return [open, toggle]
+function mainGroup(blockType: string): StyleGroup | null {
+  if (TEXT_TYPES.has(blockType)) return 'typography'
+  if (CONTAINER_TYPES.has(blockType)) return 'layout'
+  if (blockType === 'image' || blockType === 'video') return 'size'
+  return null
 }
 
 function Section({ group, title, children }: { group: StyleGroup; title: string; children: ReactNode }) {
-  const { read } = useStyles()
-  const [open, toggle] = useOpen(group)
+  const { read, blockType } = useStyles()
   const props = propertiesIn(group)
+  const hasValue = useAnyValue(props.map((d) => d.id))
+  const [open, setOpen] = useState(() => hasValue || mainGroup(blockType) === group)
   if (props.length === 0) return null
   const hasSet = props.some((d) => read.get(d.id)?.source === 'set')
   return (
     <section className="builder-styles__section" data-open={open}>
-      <button type="button" className="builder-styles__section-head" aria-expanded={open} onClick={toggle}>
+      <button type="button" className="builder-styles__section-head" aria-expanded={open} onClick={() => setOpen(!open)}>
         <span className="builder-styles__chevron">
           <I.ChevronIcon />
         </span>
@@ -64,21 +46,6 @@ function Section({ group, title, children }: { group: StyleGroup; title: string;
       </button>
       {open && <div className="builder-styles__section-body">{children}</div>}
     </section>
-  )
-}
-
-function SubSection({ id, title, children }: { id: string; title: string; children: ReactNode }) {
-  const [open, toggle] = useOpen(id)
-  return (
-    <div className="builder-styles__sub" data-open={open}>
-      <button type="button" className="builder-styles__sub-head" aria-expanded={open} onClick={toggle}>
-        <span className="builder-styles__chevron">
-          <I.ChevronIcon />
-        </span>
-        {title}
-      </button>
-      {open && <div className="builder-styles__sub-body">{children}</div>}
-    </div>
   )
 }
 
@@ -224,7 +191,7 @@ function LayoutSection() {
           <MiniField prop="gap-y" caption="Y" />
         </MiniRow>
       )}
-      <SubSection id="layout-child" title="As a child">
+      <SubSection title="As a child" props={['align-self', 'flex', 'grow', 'shrink', 'basis', 'order', 'col-span', 'row-span']}>
         <Row prop="align-self" label="Align self">
           <Segmented prop="align-self" items={[{ match: ['auto'], label: 'Auto', text: 'Auto' }, ...ALIGN]} />
         </Row>
@@ -238,7 +205,7 @@ function LayoutSection() {
         <Row prop="col-span" label="Col span" />
         <Row prop="row-span" label="Row span" />
       </SubSection>
-      <SubSection id="layout-overflow" title="Overflow">
+      <SubSection title="Overflow" props={['overflow', 'overflow-x', 'overflow-y']}>
         <Row prop="overflow" />
         <Row prop="overflow-x" label="Overflow X" />
         <Row prop="overflow-y" label="Overflow Y" />
@@ -275,16 +242,18 @@ function SizeSection() {
         <MiniField prop="width" caption="Width" suggestions={size} />
         <MiniField prop="height" caption="Height" suggestions={size} />
       </MiniRow>
-      <MiniRow label="Min">
-        <MiniField prop="min-width" caption="Width" suggestions={size} />
-        <MiniField prop="min-height" caption="Height" suggestions={size} />
-      </MiniRow>
       <MiniRow label="Max">
         <MiniField prop="max-width" caption="Width" suggestions={maxWidth} />
         <MiniField prop="max-height" caption="Height" suggestions={size} />
       </MiniRow>
-      <Row prop="aspect-ratio" label="Ratio" />
-      <Row prop="object-fit" label="Fit" />
+      <SubSection title="More sizing" props={['min-width', 'min-height', 'aspect-ratio', 'object-fit']}>
+        <MiniRow label="Min">
+          <MiniField prop="min-width" caption="Width" suggestions={size} />
+          <MiniField prop="min-height" caption="Height" suggestions={size} />
+        </MiniRow>
+        <Row prop="aspect-ratio" label="Ratio" />
+        <Row prop="object-fit" label="Fit" />
+      </SubSection>
     </Section>
   )
 }
@@ -319,8 +288,8 @@ function TypographySection() {
       <Row prop="font-family" label="Font" />
       <Row prop="font-size" label="Size" />
       <Row prop="font-weight" label="Weight" />
-      <Row prop="line-height" label="Height" />
-      <Row prop="letter-spacing" label="Spacing" />
+      <Row prop="line-height" label="Line height" />
+      <Row prop="letter-spacing" label="Letter spacing" />
       <Row prop="text-color" label="Color" />
       <Row prop="text-align" label="Align">
         <Segmented prop="text-align" items={TEXT_ALIGN} />
@@ -334,7 +303,7 @@ function TypographySection() {
       <Row prop="text-decoration" label="Decoration">
         <Segmented prop="text-decoration" items={DECORATION} />
       </Row>
-      <Row prop="white-space" label="Spaces" />
+      <Row prop="white-space" label="Whitespace" />
       <Row prop="text-wrap" label="Wrap" />
     </Section>
   )

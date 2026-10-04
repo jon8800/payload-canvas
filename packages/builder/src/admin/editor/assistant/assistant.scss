@@ -1,11 +1,12 @@
 // The AI assistant panel in the inspector. Payload CSS variables only, inside Payload's layer,
-// so it follows the admin's light and dark theme. The AI color matches the canvas flash.
+// so it follows the admin's light and dark theme. It uses the editor's accent (Payload's success
+// color) and Payload's neutral scale. Violet belongs to the AI's presence on the canvas, not here.
 
 @layer payload-default {
   .builder-editor {
-    --ba-ai: var(--be-remote, #8b5cf6);
-    --ba-ai-soft: color-mix(in srgb, var(--ba-ai) 12%, transparent);
-    --ba-ai-line: color-mix(in srgb, var(--ba-ai) 30%, transparent);
+    --ba-accent: var(--be-accent, var(--theme-success-500));
+    --ba-accent-soft: color-mix(in srgb, var(--ba-accent) 12%, transparent);
+    --ba-accent-line: color-mix(in srgb, var(--ba-accent) 35%, transparent);
   }
 
   @keyframes builder-assistant-in {
@@ -62,51 +63,6 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Header
-  // ---------------------------------------------------------------------------
-
-  .builder-assistant__head {
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: space-between;
-    height: 40px;
-    padding: 0 8px 0 12px;
-    border-bottom: 1px solid var(--be-border-soft);
-  }
-
-  .builder-assistant__title {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    font-weight: 600;
-  }
-
-  .builder-assistant__title {
-    min-width: 0;
-  }
-
-  .builder-assistant__model {
-    overflow: hidden;
-    max-width: 180px;
-    padding: 1px 6px;
-    border-radius: 9px;
-    background: var(--theme-elevation-100);
-    color: var(--be-muted);
-    font-size: 10.5px;
-    font-weight: 500;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .builder-assistant__head-actions {
-    display: inline-flex;
-    flex: none;
-    gap: 2px;
-  }
-
-  // ---------------------------------------------------------------------------
   // Use Claude Code or Codex
   // ---------------------------------------------------------------------------
 
@@ -121,26 +77,29 @@
     display: block;
   }
 
-  .builder-assistant__steps {
+  .builder-assistant__step {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    margin: 0;
-    padding-left: 18px;
+    align-items: stretch;
+    gap: 6px;
     font-size: 12.5px;
-
-    li {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 4px;
-    }
 
     code {
       padding: 1px 4px;
       border-radius: 4px;
       background: var(--theme-elevation-100);
     }
+
+    > .builder-assistant__link {
+      align-self: flex-start;
+    }
+  }
+
+  .builder-assistant__tabpanel {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
   }
 
   .builder-assistant__step-title {
@@ -158,11 +117,17 @@
     align-self: stretch;
     gap: 4px;
 
+    // Commands never wrap: a broken line would copy wrong and read worse. They scroll sideways.
     .builder-assistant__card-code {
       flex: 1;
       min-width: 0;
-      white-space: pre-wrap;
-      word-break: break-all;
+      overflow-x: auto;
+      white-space: pre;
+      scrollbar-width: thin;
+    }
+
+    .builder-editor__icon-button {
+      flex: none;
     }
   }
 
@@ -173,8 +138,8 @@
     width: 22px;
     height: 22px;
     border-radius: 6px;
-    background: var(--ba-ai-soft);
-    color: var(--ba-ai);
+    background: var(--theme-elevation-100);
+    color: var(--be-muted);
   }
 
   .builder-assistant__badge--small {
@@ -323,7 +288,7 @@
     }
 
     a {
-      color: var(--ba-ai);
+      color: var(--theme-text);
       text-decoration: underline;
       text-underline-offset: 2px;
     }
@@ -345,7 +310,7 @@
       height: 1.1em;
       margin-left: 2px;
       border-radius: 1px;
-      background: var(--ba-ai);
+      background: var(--theme-text);
       vertical-align: text-bottom;
       animation: builder-assistant-blink 1s steps(1) infinite;
     }
@@ -387,8 +352,8 @@
     width: 16px;
     height: 16px;
     border-radius: 50%;
-    background: var(--ba-ai-soft);
-    color: var(--ba-ai);
+    background: var(--ba-accent-soft);
+    color: var(--ba-accent);
   }
 
   .builder-assistant__chip-label {
@@ -400,7 +365,7 @@
   }
 
   .builder-assistant__chip--running {
-    border-color: var(--ba-ai-line);
+    border-color: var(--theme-elevation-300);
 
     .builder-assistant__chip-icon {
       background: none;
@@ -443,8 +408,8 @@
   .builder-assistant__spinner {
     width: 12px;
     height: 12px;
-    border: 1.5px solid var(--ba-ai-line);
-    border-top-color: var(--ba-ai);
+    border: 1.5px solid var(--theme-elevation-200);
+    border-top-color: var(--theme-elevation-700);
     border-radius: 50%;
     animation: builder-assistant-spin 700ms linear infinite;
   }
@@ -466,7 +431,7 @@
       width: 4px;
       height: 4px;
       border-radius: 50%;
-      background: var(--ba-ai);
+      background: var(--theme-elevation-500);
       animation: builder-assistant-dot 1.2s ease-in-out infinite;
     }
 
@@ -497,9 +462,34 @@
     background: var(--theme-elevation-50);
   }
 
-  .builder-assistant__card--setup {
-    border-color: var(--ba-ai-line);
-    background: linear-gradient(180deg, var(--ba-ai-soft), transparent 70%), var(--theme-elevation-50);
+  .builder-assistant__details {
+    font-size: 12.5px;
+
+    summary {
+      width: fit-content;
+      color: var(--theme-elevation-800);
+      font-weight: 500;
+      cursor: pointer;
+
+      &:focus-visible {
+        outline: 2px solid var(--be-accent);
+        outline-offset: 2px;
+      }
+    }
+  }
+
+  .builder-assistant__details-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--be-border-soft);
+
+    .builder-assistant__card-code {
+      overflow-x: auto;
+      white-space: pre;
+    }
   }
 
   .builder-assistant__card--error {
@@ -511,16 +501,6 @@
       margin-top: 2px;
       color: var(--theme-error-500);
     }
-  }
-
-  .builder-assistant__card-icon {
-    display: inline-grid;
-    place-items: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
-    background: var(--ba-ai-soft);
-    color: var(--ba-ai);
   }
 
   .builder-assistant__card-title {
@@ -542,10 +522,6 @@
       border-radius: 4px;
       background: var(--theme-elevation-100);
     }
-  }
-
-  .builder-assistant__card--setup .builder-assistant__card-text {
-    display: block;
   }
 
   .builder-assistant__card-code {
@@ -579,7 +555,14 @@
     cursor: pointer;
 
     &:hover {
-      color: var(--ba-ai);
+      color: var(--be-accent-strong);
+      text-decoration: underline;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--be-accent);
+      outline-offset: 2px;
+      border-radius: var(--be-radius);
     }
   }
 
@@ -609,9 +592,8 @@
     height: 44px;
     margin-bottom: 6px;
     border-radius: 12px;
-    background: var(--ba-ai-soft);
-    box-shadow: inset 0 0 0 1px var(--ba-ai-line);
-    color: var(--ba-ai);
+    background: var(--theme-elevation-100);
+    color: var(--be-muted);
   }
 
   .builder-assistant__empty-title {
@@ -644,16 +626,15 @@
     cursor: pointer;
     transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
 
-    svg {
-      flex: none;
-      color: var(--ba-ai);
-      opacity: 0.7;
+    &:hover {
+      border-color: var(--theme-elevation-300);
+      background: var(--be-hover);
+      color: var(--theme-text);
     }
 
-    &:hover {
-      border-color: var(--ba-ai-line);
-      background: var(--ba-ai-soft);
-      color: var(--theme-text);
+    &:focus-visible {
+      outline: 2px solid var(--be-accent);
+      outline-offset: 2px;
     }
   }
 
@@ -725,6 +706,11 @@
       background: var(--theme-elevation-150);
       color: var(--theme-text);
     }
+
+    &:focus-visible {
+      outline: 2px solid var(--be-accent);
+      outline-offset: 1px;
+    }
   }
 
   .builder-assistant__field {
@@ -738,8 +724,8 @@
     transition: border-color 120ms ease, box-shadow 120ms ease;
 
     &:focus-within {
-      border-color: var(--ba-ai);
-      box-shadow: 0 0 0 3px var(--ba-ai-soft);
+      border-color: var(--ba-accent);
+      box-shadow: 0 0 0 3px var(--ba-accent-soft);
     }
 
     &[data-disabled] {
@@ -776,6 +762,7 @@
     }
   }
 
+  // The primary button, as Payload colors it: solid text color on the page color.
   .builder-assistant__send {
     display: inline-grid;
     flex: none;
@@ -785,13 +772,13 @@
     padding: 0;
     border: 0;
     border-radius: 8px;
-    background: var(--ba-ai);
-    color: #fff;
+    background: var(--theme-elevation-800);
+    color: var(--theme-elevation-0);
     cursor: pointer;
     transition: opacity 120ms ease, background-color 120ms ease, transform 120ms ease;
 
     &:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--ba-ai) 86%, #000);
+      background: var(--theme-text);
     }
 
     &:active:not(:disabled) {
@@ -805,22 +792,33 @@
     }
 
     &:focus-visible {
-      outline: 2px solid var(--ba-ai);
+      outline: 2px solid var(--be-accent);
       outline-offset: 2px;
     }
   }
 
   .builder-assistant__send--stop {
-    background: var(--theme-elevation-800);
-    color: var(--theme-elevation-0);
+    background: var(--theme-elevation-150);
+    color: var(--theme-text);
 
     &:hover:not(:disabled) {
-      background: var(--theme-text);
+      background: var(--theme-elevation-250, var(--theme-elevation-200));
     }
+  }
+
+  .builder-assistant__foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 0;
   }
 
   .builder-assistant__footnote {
     display: flex;
+    flex: 1;
+    min-width: 0;
+    flex-wrap: wrap;
     align-items: center;
     gap: 3px;
     margin: 0;
@@ -834,20 +832,6 @@
       border-bottom-width: 1px;
       font-size: 10px;
     }
-  }
-
-  // Toolbar button and inspector tab: the AI color marks the assistant.
-  .builder-assistant__toolbar-button {
-    color: var(--ba-ai);
-
-    &[aria-pressed='true'] {
-      background: var(--ba-ai-soft);
-      color: var(--ba-ai);
-    }
-  }
-
-  .builder-editor__inspector-head .builder-editor__segment svg {
-    color: var(--ba-ai);
   }
 
   @media (prefers-reduced-motion: reduce) {

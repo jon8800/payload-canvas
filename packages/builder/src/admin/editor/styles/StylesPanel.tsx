@@ -14,7 +14,7 @@ import { createReader } from './model'
 import { stopEditorKeys } from './popover'
 import { RawClasses } from './RawClasses'
 import { StyleSections } from './sections'
-import { reloadStyleTokens, useStyleTokens, withFallback } from './tokens'
+import { BREAKPOINTS, breakpointAt, breakpointWidths, reloadStyleTokens, useStyleTokens, withFallback } from './tokens'
 import { VariantBar } from './VariantBar'
 import './styles.scss'
 
@@ -24,6 +24,9 @@ export function StylesPanel({ block }: { block: Block }) {
   const entry = useStyleTokens(tokensEndpoint)
   const tokens = useMemo(() => withFallback(entry.tokens), [entry.tokens])
   const variant = useEditor(runtime.store, (s) => s.variant)
+  const frame = useValue(runtime.frame)
+  const widths = useMemo(() => breakpointWidths(tokens), [tokens])
+  const canvasBreakpoint = frame.width > 0 ? breakpointAt(widths, frame.width) : 'base'
   const className = block.className ?? ''
   const blockId = block.id
   const [error] = useState(() => createValueStore<string | null>(null))
@@ -32,15 +35,21 @@ export function StylesPanel({ block }: { block: Block }) {
   const value = useMemo<StylesContextValue>(
     () => ({
       blockId,
+      blockType: block.type,
       className,
       variant,
       tokens,
       read: createReader(className, variant, tokens),
+      canvasRead:
+        BREAKPOINTS.indexOf(canvasBreakpoint) > BREAKPOINTS.indexOf(variant.breakpoint)
+          ? createReader(className, { ...variant, breakpoint: canvasBreakpoint }, tokens)
+          : null,
+      canvasBreakpoint,
       set: (property, v, options) => error.set(writeStyle(runtime, blockId, variant, tokens, property, v, options)),
       setClassName: (next, mergeKey) => writeClassName(runtime, blockId, next, mergeKey),
       error,
     }),
-    [runtime, blockId, className, variant, tokens, error],
+    [runtime, blockId, block.type, className, variant, tokens, error, canvasBreakpoint],
   )
 
   return (

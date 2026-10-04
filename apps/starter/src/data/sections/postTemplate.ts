@@ -1,23 +1,26 @@
 // The default layout of a blog post: a template whose blocks bind to the post's fields.
 import type { Block } from '@payload-toolkit/builder/core'
-import { bare, bind, field, heading, stack } from './build'
+import { bare, bind, field, heading, stack, styles } from './build'
 import { postList } from './posts'
 
 export function postTemplate(): Block[] {
   return [
-    stack('article', 'flex flex-col', [
-      stack('header', 'bg-muted px-6 pt-20 pb-32 md:pt-28', [
-        stack('div', 'mx-auto flex max-w-3xl flex-col items-center gap-5 text-center', [
-          field('publishedAt', 'text-sm font-medium text-muted-foreground'),
-          bind(heading('Post title', '1', 'text-4xl font-bold tracking-tight md:text-5xl'), { text: 'title' }),
-          bind(bare('text', 'text-lg text-muted-foreground md:text-xl'), { text: 'excerpt' }),
+    {
+      ...stack('article', 'flex flex-col', [
+        stack('header', 'px-5 pt-14 pb-10 md:px-8 md:pt-24 md:pb-14', [
+          stack('div', 'mx-auto flex w-full max-w-3xl flex-col gap-5', [
+            field('publishedAt', 'text-sm text-muted-foreground'),
+            bind(heading('Post title', '1', 'font-display text-4xl leading-[1.06] tracking-[-0.02em] md:text-6xl'), { text: 'title' }),
+            bind(bare('text', styles.lead), { text: 'excerpt' }),
+          ]),
         ]),
+        stack('div', 'mx-auto w-full max-w-5xl px-5 md:px-8', [
+          bind(bare('image', 'aspect-[16/9] w-full rounded-md object-cover'), { image: 'featuredImage' }),
+        ]),
+        stack('div', 'mx-auto w-full max-w-3xl px-5 py-14 md:px-8 md:py-20', [field('content', 'prose prose-lg max-w-none')]),
+        stack('div', 'border-t border-border', [postList.create({ title: 'More posts', limit: 3, excludeCurrent: true })]),
       ]),
-      stack('div', 'mx-auto -mt-20 w-full max-w-4xl px-6', [
-        bind(bare('image', 'aspect-[16/9] w-full rounded-2xl object-cover shadow-lg'), { image: 'featuredImage' }),
-      ]),
-      stack('div', 'mx-auto w-full max-w-3xl px-6 py-16', [field('content', 'prose prose-lg max-w-none')]),
-      stack('div', 'border-t border-border', [postList.create({ title: 'More posts', limit: 3, excludeCurrent: true })]),
-    ]),
+      label: 'Post',
+    },
   ]
 }

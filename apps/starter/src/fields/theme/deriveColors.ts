@@ -29,6 +29,25 @@ function desaturate(hex: string, factor: number): string {
 }
 
 /**
+ * A color between `from` and `to` in OKLCH: `amount` 0 is `from`, 1 is `to`. Lightness and chroma
+ * mix; the hue stays `from`'s when `from` has one, so tints keep the surface's warmth.
+ */
+function mix(from: string, to: string, amount: number): string | null {
+  const a = parse(from)
+  const b = parse(to)
+  if (!a || !b) return null
+  const x = toOklch(a)
+  const y = toOklch(b)
+  const hue = (x.c ?? 0) > 0.005 ? x.h : y.h
+  return formatCss({
+    mode: 'oklch',
+    l: x.l + (y.l - x.l) * amount,
+    c: (x.c ?? 0) + ((y.c ?? 0) - (x.c ?? 0)) * amount,
+    h: hue,
+  })
+}
+
+/**
  * Compute a foreground color (dark or light) based on the lightness of a background color.
  * Returns dark foreground for light backgrounds, light foreground for dark backgrounds.
  */
@@ -84,7 +103,10 @@ export function deriveAllColors(core: CoreColors): Record<string, string> {
   }
   if (core.muted) {
     set('muted', hexToOklch(core.muted))
-    set('muted-foreground', autoForeground(core.muted))
+    // Secondary text: about two thirds of the way from the background to the foreground, so it reads
+    // as quieter text and still passes 4.5:1 on the background and on muted surfaces.
+    const quiet = core.background && core.foreground ? mix(core.background, core.foreground, 0.68) : null
+    set('muted-foreground', quiet ?? autoForeground(core.muted))
   }
   if (core.destructive) {
     set('destructive', hexToOklch(core.destructive))
@@ -107,8 +129,12 @@ export function deriveAllColors(core: CoreColors): Record<string, string> {
     set('popover-foreground', hexToOklch(core.foreground))
   }
 
-  // Derived from secondary: border, input (desaturated)
-  if (core.secondary) {
+  // Borders: a tint of the foreground over the background. Dividers stay quiet (about 14%).
+  // Form controls need 3:1 against the page (WCAG 1.4.11), so their border is much stronger.
+  if (core.background && core.foreground) {
+    set('border', mix(core.background, core.foreground, 0.14))
+    set('input', mix(core.background, core.foreground, 0.5))
+  } else if (core.secondary) {
     const desaturated = desaturate(core.secondary, 0.3)
     set('border', desaturated)
     set('input', desaturated)
@@ -134,7 +160,9 @@ export function deriveAllColors(core: CoreColors): Record<string, string> {
     set('sidebar-accent', hexToOklch(core.accent))
     set('sidebar-accent-foreground', autoForeground(core.accent))
   }
-  if (core.secondary) {
+  if (core.background && core.foreground) {
+    set('sidebar-border', mix(core.background, core.foreground, 0.14))
+  } else if (core.secondary) {
     set('sidebar-border', desaturate(core.secondary, 0.3))
   }
   if (core.primary) {

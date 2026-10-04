@@ -47,6 +47,12 @@ export type AssistantState = {
   failed: string | null
   /** The input text. Kept here so it survives tab switches and comes back after Stop. */
   draft: string
+  /**
+   * The server said it has no API key. The client cannot know this before the first request, so
+   * the panel shows a setup state from then on (not per message) until the user checks again.
+   * Holds the server's message, for the developer details.
+   */
+  setup: string | null
 }
 
 export type AssistantController = ReturnType<typeof createAssistant>
@@ -65,6 +71,7 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
     notice: null,
     failed: null,
     draft: '',
+    setup: null,
   })
   let collection = ''
   let docId: string | number | null = null
@@ -191,6 +198,13 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
     let messages = history.messages
     let failed: string | null = null
     let draft = state.get().draft
+    let setup = state.get().setup
+    if (notice?.kind === 'setup') {
+      // No key: the setup state replaces the chat. With no reply, the branch below returns the
+      // prompt to the input, as it does after Stop.
+      setup = notice.message
+      notice = answered ? null : { kind: 'info', message: '' }
+    }
     if (answered) {
       messages = closeTurn(history.messages, partial)
     } else {
@@ -199,7 +213,7 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
       messages = history.messages.slice(0, live.turnStart)
       const text = typeof prompt?.content === 'string' ? prompt.content : ''
       if (notice?.kind === 'info') {
-        // Stopped before any reply: give the prompt back to edit.
+        // Stopped before any reply, or no key: give the prompt back to edit.
         if (!draft.trim()) draft = text
         notice = null
       } else {
@@ -217,7 +231,7 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
       const tool = part.kind === 'tool' ? tools[part.callId] : undefined
       if (part.kind === 'tool' && tool?.status === 'running') tools[part.callId] = { ...tool, status: 'error' }
     }
-    state.set({ ...state.get(), history: { messages, tools }, live: null, streaming: false, notice, failed, draft })
+    state.set({ ...state.get(), history: { messages, tools }, live: null, streaming: false, notice, failed, draft, setup })
     save()
   }
 
@@ -307,12 +321,13 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
         notice: matches ? null : { kind: 'info', message: `New chat: the assistant now uses ${ai?.providerLabel ?? 'another provider'} (${ai?.model ?? 'another model'}).` },
         failed: null,
         draft: '',
+        setup: state.get().setup,
       })
     },
     newChat() {
       abort?.abort()
       const { key, draft } = state.get()
-      state.set({ key, history: emptyHistory(), streaming: false, live: null, notice: null, failed: null, draft })
+      state.set({ key, history: emptyHistory(), streaming: false, live: null, notice: null, failed: null, draft, setup: state.get().setup })
       save()
     },
     retry() {
@@ -321,6 +336,10 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
     },
     setDraft(draft: string) {
       if (state.get().draft !== draft) patch({ draft })
+    },
+    /** "Try again" in the setup state: show the chat again. The next send checks the key. */
+    clearSetup() {
+      patch({ setup: null })
     },
     dismissNotice() {
       patch({ notice: null })

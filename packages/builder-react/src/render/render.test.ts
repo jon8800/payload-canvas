@@ -168,6 +168,21 @@ test('image: resolved doc renders an img, unresolved id is empty or a placeholde
   }
   assert.match(render({ layout: fallbackAlt }), /alt="Prop alt"/)
 
+  // Payload image sizes with the same aspect ratio become a srcset; crops of another ratio do not.
+  const sized = {
+    ...doc,
+    sizes: {
+      thumbnail: { url: '/media/a-300x225.jpg', width: 300, height: 225 },
+      square: { url: '/media/a-500x500.jpg', width: 500, height: 500 },
+      medium: { url: '/media/a 600.jpg', width: 600, height: 450 },
+      empty: { url: null, width: null, height: null },
+    },
+  }
+  assert.match(
+    render({ layout: { version: 1, blocks: [imageBlock({ image: sized })] } }),
+    /srcSet="\/media\/a-300x225.jpg 300w, \/media\/a%20600.jpg 600w, \/media\/a.jpg 800w" sizes="auto, 100vw"/,
+  )
+
   const unresolved: Layout = { version: 1, blocks: [imageBlock({ image: 1 })] }
   assert.equal(render({ layout: unresolved }), '')
   assert.match(render({ layout: unresolved, mode: 'canvas' }), /<div data-block-id="i" data-block-type="image" data-builder-placeholder="" class="rounded" style=/)

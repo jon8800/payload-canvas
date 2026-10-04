@@ -2,13 +2,28 @@ import type { Metadata } from 'next'
 import { draftMode } from 'next/headers'
 import { getPayload } from 'payload'
 import configPromise from '@payload-config'
-import { BuilderContent } from '@/components/BuilderContent'
+import { partOf, SiteFrame, visitorOf } from '@/components/BuilderContent'
 import { LivePreviewListener } from '@/components/LivePreviewListener'
-import { generateMeta } from '@/utilities/generateMeta'
-import { notFound } from 'next/navigation'
+import { generateMeta, notFoundMeta } from '@/utilities/generateMeta'
+import { MissingPage } from '@/components/NotFoundContent'
 
 type Props = {
   params: Promise<{ slug: string[] }>
+}
+
+/** The page at a slug, with the visitor's access (published only for visitors). */
+async function findPage(slugPath: string, draft: boolean, depth = 0) {
+  const payload = await getPayload({ config: configPromise })
+  const { docs } = await payload.find({
+    collection: 'pages',
+    where: { and: [{ slug: { equals: slugPath } }, ...(draft ? [] : [{ _status: { equals: 'published' as const } }])] },
+    limit: 1,
+    draft,
+    depth,
+    overrideAccess: false,
+    user: (await visitorOf(payload, draft)) as never,
+  })
+  return docs[0] ?? null
 }
 
 export default async function Page({ params }: Props) {
@@ -16,25 +31,13 @@ export default async function Page({ params }: Props) {
   const { slug } = await params
   const slugPath = slug.join('/')
 
-  const payload = await getPayload({ config: configPromise })
-  const { docs } = await payload.find({
-    collection: 'pages',
-    where: { and: [{ slug: { equals: slugPath } }, ...(draft ? [] : [{ _status: { equals: 'published' as const } }])] },
-    limit: 1,
-    draft,
-    depth: 0,
-  })
-
-  const page = docs[0]
-  if (!page) return notFound()
+  const page = await findPage(slugPath, draft)
+  if (!page) return <MissingPage pathname={`/${slugPath}`} />
 
   return (
-    <>
-      {draft && <LivePreviewListener />}
-      <main>
-        <BuilderContent doc={page} payload={payload} draft={draft} />
-      </main>
-    </>
+    <SiteFrame pathname={`/${slugPath}`} draft={draft} main={partOf(page)}>
+      {draft ? <LivePreviewListener /> : null}
+    </SiteFrame>
   )
 }
 
@@ -58,19 +61,10 @@ export async function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { isEnabled: draft } = await draftMode()
   const { slug } = await params
   const slugPath = slug.join('/')
-
-  const payload = await getPayload({ config: configPromise })
-  const { docs } = await payload.find({
-    collection: 'pages',
-    where: { slug: { equals: slugPath } },
-    limit: 1,
-    select: { title: true, slug: true, meta: true },
-  })
-
-  const page = docs[0]
-  if (!page) return {}
-
-  return generateMeta({ doc: page })
+  const page = await findPage(slugPath, draft, 1)
+  if (!page) return notFoundMeta()
+  return generateMeta({ doc: page, path: `/${slugPath}` })
 }

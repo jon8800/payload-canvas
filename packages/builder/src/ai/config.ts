@@ -106,7 +106,30 @@ export function resolveAi(ai: AiOptions, env: Env = process.env): ResolvedAi {
 /** `BuilderClientConfig.ai` for the editor. */
 export function aiClientConfig(ai: AiOptions, endpoint: string, env: Env = process.env): AiClientConfig {
   const resolved = resolveAi(ai, env)
-  return { endpoint, model: resolved.model, provider: resolved.provider.type, providerLabel: resolved.label, keyEnv: resolved.keyEnv }
+  const setupProblem = resolved.problem ?? missingCredential(resolved.provider, env)
+  return {
+    endpoint,
+    model: resolved.model,
+    provider: resolved.provider.type,
+    providerLabel: resolved.label,
+    keyEnv: resolved.keyEnv,
+    ready: setupProblem === null,
+    setupProblem,
+  }
+}
+
+/**
+ * Why the assistant cannot answer yet (no key in the server environment), or null. Read when the
+ * server starts. Anthropic also accepts `ant auth login` credentials, which cannot be seen here,
+ * so the Anthropic message says "probably".
+ */
+function missingCredential(provider: AiProvider, env: Env): string | null {
+  if (provider.type === 'anthropic') {
+    if (clean(env.ANTHROPIC_API_KEY) || clean(env.ANTHROPIC_AUTH_TOKEN)) return null
+    return 'The AI assistant is probably not set up: the server has no ANTHROPIC_API_KEY. Ask your developer to add an API key.'
+  }
+  const missing = openAiTarget(provider, { env }).missingKey
+  return missing ? `The AI assistant is not set up yet. ${missing}` : null
 }
 
 /** The history identity the editor uses: `${provider}:${model}`. */

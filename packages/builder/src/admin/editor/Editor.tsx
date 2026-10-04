@@ -147,7 +147,7 @@ export function Editor({ config, meta, icon }: EditorProps) {
       return
     }
     const block = runtime.createBlock(source.blockType)
-    if (block) runtime.store.apply({ type: 'insert', block, to: target.to }, { select: block.id })
+    if (block && runtime.store.apply({ type: 'insert', block, to: target.to }, { select: block.id })) runtime.focusRequest.set(block.id)
   }
 
   return (

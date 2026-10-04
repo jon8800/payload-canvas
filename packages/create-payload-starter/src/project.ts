@@ -75,7 +75,6 @@ export function writeEnv(targetDir: string, databaseUrl: string): void {
   let content = fs.readFileSync(example, 'utf8')
   content = set(content, 'DATABASE_URL', databaseUrl)
   content = set(content, 'PAYLOAD_SECRET', secret())
-  content = set(content, 'PREVIEW_SECRET', secret())
   content = set(content, 'NEXT_PUBLIC_SERVER_URL', 'http://localhost:3000')
   fs.writeFileSync(path.join(targetDir, '.env'), content)
 }

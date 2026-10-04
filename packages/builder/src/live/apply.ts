@@ -3,7 +3,7 @@
 
 import { applyOperation } from '../core/operations'
 import { findBlock, findLocation } from '../core/tree'
-import type { Layout, Operation } from '../core/types'
+import type { BlockDefinition, Layout, Operation } from '../core/types'
 import type { LayoutError } from '../core/validate'
 import type { LiveActor } from './types'
 
@@ -23,14 +23,15 @@ type Resolved = { ok: true; layout: Layout; ops: Operation[] } | { ok: false; er
  * A `duplicate` regenerates child ids at random, so it is broadcast as the `insert` of the
  * finished copy: every client then gets the same ids.
  */
-export function resolveOperations(layout: Layout, ops: unknown): Resolved {
+export function resolveOperations(layout: Layout, ops: unknown, blocks?: readonly BlockDefinition[]): Resolved {
   if (!Array.isArray(ops)) return { ok: false, error: 'Operations must be an array' }
   if (ops.length === 0) return { ok: false, error: 'No operations given' }
   let current = layout
   const out: Operation[] = []
   for (let i = 0; i < ops.length; i++) {
     const op = ops[i] as Operation
-    const result = applyOperation(current, op)
+    // With block definitions, inserts and moves also follow the slot rules (allow / disallow).
+    const result = applyOperation(current, op, blocks ? { blocks } : undefined)
     if (!result.ok) {
       const type = typeof op === 'object' && op !== null && typeof op.type === 'string' ? op.type : 'invalid'
       return { ok: false, error: `Operation ${i} (${type}): ${result.error}` }
@@ -85,10 +86,47 @@ export function actorFromUser(user: unknown, aiLabel?: string): LiveActor {
   return { type: 'user', id: `user:${userId}`, label: userLabel(user) }
 }
 
-/** The error message of a failed Payload call, with the field messages of a ValidationError. */
-export function payloadErrorMessage(error: unknown): string {
-  const data = (error as { data?: { errors?: { message?: unknown }[] } })?.data
-  const details = (data?.errors ?? []).map((e) => e.message).filter((m): m is string => typeof m === 'string' && m !== '')
-  if (details.length > 0) return details.join('\n')
+/** One field error of a Payload ValidationError. */
+export type PayloadFieldError = { path: string; message: string; label?: string }
+
+function humanizePath(path: string): string {
+  const name = path.split('.').at(-1)?.replace(/\[\d+\]/g, '') ?? path
+  const words = name.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').trim()
+  return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase()
+}
+
+function labelText(label: unknown): string | undefined {
+  if (typeof label === 'string' && label) return label
+  if (label && typeof label === 'object') {
+    const first = (label as Record<string, unknown>).en ?? Object.values(label)[0]
+    if (typeof first === 'string' && first) return first
+  }
+  return undefined
+}
+
+/** The field errors of a Payload ValidationError (empty for other errors). */
+export function payloadFieldErrors(error: unknown): PayloadFieldError[] {
+  const data = (error as { data?: { errors?: { message?: unknown; path?: unknown; label?: unknown }[] } })?.data
+  const out: PayloadFieldError[] = []
+  for (const e of data?.errors ?? []) {
+    if (typeof e.message !== 'string' || !e.message) continue
+    const label = labelText(e.label)
+    out.push({ path: typeof e.path === 'string' ? e.path : '', message: e.message, ...(label ? { label } : {}) })
+  }
+  return out
+}
+
+/**
+ * The error message of a failed Payload call. A ValidationError gives one line per problem,
+ * named after its field ("Title: This field is required."), without duplicates.
+ */
+export function payloadErrorMessage(error: unknown, layoutField?: string): string {
+  const lines = new Set<string>()
+  for (const e of payloadFieldErrors(error)) {
+    // The layout field's message is already one readable line per block problem.
+    if (!e.path || e.path === layoutField) lines.add(e.message)
+    else lines.add(`${e.label?.split(' > ').at(-1) ?? humanizePath(e.path)}: ${e.message}`)
+  }
+  if (lines.size > 0) return [...lines].join('\n')
   return error instanceof Error ? error.message : String(error)
 }

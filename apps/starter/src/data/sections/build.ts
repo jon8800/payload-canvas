@@ -20,6 +20,20 @@ export type Section<Input> = {
   create: (input: Input) => Block
 }
 
+/**
+ * Defines a section. The root block of every tree it creates gets the section's name as its
+ * `label` (unless the tree sets its own), so the outline and publish errors name the section.
+ */
+export function defineSection<Input>(section: Section<Input>): Section<Input> {
+  return {
+    ...section,
+    create: (input) => {
+      const root = section.create(input)
+      return { ...root, label: root.label ?? section.name }
+    },
+  }
+}
+
 /** A label and where it goes. Used for buttons and nav links. */
 export type Action = { label: string; link: LinkInput }
 
@@ -27,20 +41,38 @@ export const url = (href: string): LinkInput => ({ type: 'url', url: href })
 export const pageLink = (id: number | string): LinkInput => ({ type: 'reference', reference: { relationTo: 'pages', value: id } })
 export const postLink = (id: number | string): LinkInput => ({ type: 'reference', reference: { relationTo: 'posts', value: id } })
 
-/** Class sets shared by the sections. Theme colors come from the ThemeSettings variables. */
+/**
+ * Class sets shared by the sections. Theme colors and fonts come from the ThemeSettings variables:
+ * `font-display` is the heading font, the body uses the sans font.
+ * Spacing rhythm: sections are px-5 / md:px-8 around a max-w-6xl container, py-20 / md:py-28.
+ */
+const BUTTON = 'inline-flex min-h-12 items-center justify-center rounded-full px-6 text-base font-medium'
 export const styles = {
-  buttonPrimary:
-    'inline-flex items-center justify-center rounded-md bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90',
-  buttonOutline:
-    'inline-flex items-center justify-center rounded-md border border-border bg-background px-5 py-3 text-sm font-medium text-foreground transition-colors hover:bg-muted',
-  buttonInverted:
-    'inline-flex items-center justify-center rounded-md bg-primary-foreground px-5 py-3 text-sm font-medium text-primary transition-opacity hover:opacity-90',
-  section: 'px-6 py-20',
-  container: 'mx-auto flex w-full max-w-6xl flex-col gap-12',
-  sectionTitle: 'text-3xl font-bold tracking-tight md:text-4xl',
-  lead: 'text-lg text-muted-foreground',
+  buttonPrimary: `${BUTTON} bg-primary text-primary-foreground transition-opacity hover:opacity-90`,
+  buttonOutline: `${BUTTON} border border-foreground/25 text-foreground transition-colors hover:border-foreground`,
+  buttonInverted: `${BUTTON} bg-primary-foreground text-primary transition-opacity hover:opacity-90`,
+  buttonOutlineInverted: `${BUTTON} border border-primary-foreground/40 transition-colors hover:border-primary-foreground`,
+  section: 'px-5 py-20 md:px-8 md:py-28',
+  container: 'mx-auto flex w-full max-w-6xl flex-col gap-12 md:gap-16',
+  /** The home page's opening title. */
+  displayTitle: 'font-display text-5xl leading-[1.02] tracking-[-0.03em] sm:text-6xl md:text-7xl lg:text-[5.5rem]',
+  /** The title of an inner page. */
+  pageTitle: 'font-display text-5xl leading-[1.04] tracking-[-0.025em] md:text-6xl lg:text-7xl',
+  sectionTitle: 'font-display text-4xl leading-[1.08] tracking-[-0.02em] md:text-5xl',
+  cardTitle: 'text-xl font-semibold tracking-tight',
+  lead: 'max-w-[60ch] text-lg leading-relaxed text-muted-foreground md:text-xl',
+  body: 'max-w-[62ch] text-lg leading-relaxed text-muted-foreground',
   muted: 'text-muted-foreground',
+  textLink: 'inline-flex min-h-11 items-center font-medium underline decoration-1 underline-offset-[6px] hover:decoration-2',
+  image: 'aspect-[4/3] w-full rounded-md object-cover',
 }
+
+/** A title on the left and an intro on the right (stacked on phones). Used above grids. */
+export const sectionHeader = (title: string, intro?: string) =>
+  stack('div', 'flex flex-col gap-4 md:flex-row md:items-end md:justify-between md:gap-12', [
+    heading(title, '2', `max-w-2xl ${styles.sectionTitle}`),
+    ...(intro ? [text(intro, `${styles.lead} md:max-w-md`)] : []),
+  ])
 
 function block(type: string, props?: Record<string, unknown>, className?: string, children?: Block[]): Block {
   const result: Block = { id: createId(), type }
@@ -65,6 +97,9 @@ export const quote = (value: string, cite: string, className?: string) => block(
 export const divider = (className?: string) => block('divider', undefined, className)
 export const spacer = (className?: string) => block('spacer', undefined, className)
 export const form = (id: number | string, className?: string) => block('form', { form: id }, className)
+/** Site navigation. `collapse`: the width below which links fold into a "Menu" button ("never" for footers). */
+export const menu = (items: Action[], label: string, collapse: 'md' | 'lg' | 'never', className: string) =>
+  block('menu', { label, collapse, items: items.map((item) => ({ label: item.label, link: item.link })) }, className)
 
 /** Binds props to document fields (templates and collection list items), e.g. { text: 'title' }. */
 export const bind = (target: Block, bindings: Record<string, string>): Block => ({ ...target, bindings: { ...target.bindings, ...bindings } })

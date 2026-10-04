@@ -105,11 +105,16 @@
     }
   }
 
+  // An open menu or popover covers its own trigger's tooltip.
+  .builder-editor [data-tooltip][aria-expanded='true']:hover::after {
+    content: none;
+  }
+
   // Controls near the right edge open their tooltip to the left.
   .builder-bar__end [data-tooltip],
   .builder-editor__block-head [data-tooltip],
   .builder-editor__panel-tools [data-tooltip]:last-child,
-  .builder-editor__actions [data-tooltip]:last-child,
+  .builder-editor__actions [aria-haspopup='menu'],
   .builder-assistant__head [data-tooltip],
   .builder-assistant__turn-head [data-tooltip],
   .builder-assistant__field [data-tooltip] {
@@ -764,6 +769,36 @@
       background: color-mix(in srgb, var(--be-accent) 30%, transparent);
     }
 
+    // A heading with its real words, so sections are easy to tell apart.
+    .wf-heading-text {
+      display: -webkit-box;
+      max-width: 92%;
+      overflow: hidden;
+      color: var(--theme-elevation-800);
+      font-size: 8px;
+      font-weight: 700;
+      line-height: 1.15;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+
+      &[data-level='1'] {
+        font-size: 9.5px;
+      }
+
+      &[data-level='3'] {
+        font-size: 7px;
+        font-weight: 600;
+      }
+
+      &[data-center] {
+        text-align: center;
+      }
+    }
+
+    .wf-row > .wf-heading-text {
+      max-width: 45%;
+    }
+
     .wf-heading {
       display: block;
       width: 58%;
@@ -1056,6 +1091,42 @@
     color: var(--be-subtle);
   }
 
+  // A block that stopped the last publish.
+  .builder-editor__row-problem {
+    display: grid;
+    flex: none;
+    place-items: center;
+    margin-left: auto;
+    color: var(--theme-error-500);
+  }
+
+  .builder-editor__row--problem .builder-editor__row-type {
+    color: var(--theme-error-500);
+  }
+
+  .builder-editor__row:hover .builder-editor__row-problem {
+    display: none;
+  }
+
+  // Inline rename in the outline and the inspector header.
+  .builder-editor__rename {
+    flex: 1;
+    min-width: 0;
+    height: 22px;
+    padding: 0 6px;
+    border: 1px solid var(--be-accent);
+    border-radius: var(--be-radius);
+    outline: 0;
+    background: var(--theme-input-bg, var(--theme-bg));
+    color: var(--theme-text);
+    font: inherit;
+    font-size: 12.5px;
+
+    &::placeholder {
+      color: var(--be-subtle);
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Inspector
   // ---------------------------------------------------------------------------
@@ -1111,13 +1182,64 @@
     min-width: 0;
   }
 
+  // The block's name. A click renames it, so it looks like text with a quiet hover box.
   .builder-editor__block-title {
+    align-self: flex-start;
+    max-width: 100%;
+    margin: 0 -4px;
+    padding: 0 4px;
     overflow: hidden;
+    border: 1px solid transparent;
+    border-radius: var(--be-radius);
+    background: none;
+    color: var(--theme-text);
+    font: inherit;
     font-size: 14px;
     font-weight: 600;
     line-height: 1.3;
+    text-align: left;
     text-overflow: ellipsis;
     white-space: nowrap;
+    cursor: text;
+
+    &:hover {
+      border-color: var(--be-border);
+    }
+  }
+
+  .builder-editor__block-name .builder-editor__rename {
+    flex: none;
+    height: 22px;
+    font-size: 13px;
+  }
+
+  .builder-editor__block-problems {
+    display: flex;
+    gap: 8px;
+    margin: 0 0 12px;
+    padding: 8px 10px;
+    border: 1px solid color-mix(in srgb, var(--theme-error-500) 40%, transparent);
+    border-radius: var(--be-radius-m);
+    background: color-mix(in srgb, var(--theme-error-500) 8%, transparent);
+    color: var(--theme-text);
+    font-size: 12.5px;
+
+    > svg {
+      flex: none;
+      margin-top: 2px;
+      color: var(--theme-error-500);
+    }
+
+    ul {
+      margin: 2px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+  }
+
+  .builder-editor__block-problems-title {
+    margin: 0;
+    font-weight: 600;
   }
 
   .builder-editor__block-sub {
@@ -1225,7 +1347,8 @@
     }
   }
 
-  .builder-editor__menu-item--danger {
+  // A disabled destructive item is neutral: red says "this acts", and it cannot act.
+  .builder-editor__menu-item--danger:not(:disabled) {
     color: var(--theme-error-500);
 
     svg {
@@ -1260,16 +1383,16 @@
     position: relative;
     display: flex;
     flex: 1;
-    justify-content: center;
+    // "safe": a frame wider than the stage (a fixed zoom) starts at the left edge and scrolls.
+    justify-content: safe center;
     align-items: flex-start;
     min-height: 0;
-    overflow: hidden;
+    overflow: auto hidden;
   }
 
   .builder-editor__frame-wrap {
     position: relative;
     flex: none;
-    transition: width 280ms var(--be-ease);
   }
 
   .builder-editor__frame {
@@ -1284,9 +1407,7 @@
       0 12px 40px rgb(0 0 0 / 0.14),
       0 2px 6px rgb(0 0 0 / 0.08);
     transform-origin: 0 0;
-    transition:
-      width 280ms var(--be-ease),
-      transform 280ms var(--be-ease);
+    transition: transform 280ms var(--be-ease);
   }
 
   .builder-editor__iframe {
@@ -1403,13 +1524,34 @@
     font-variant-numeric: tabular-nums;
   }
 
+  .builder-editor__zoom-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+  }
+
   .builder-editor__zoom {
-    padding: 1px 6px;
+    min-width: 44px;
+    height: 22px;
+    padding: 0 6px;
+    border: 0;
     border-radius: var(--be-radius);
     background: var(--theme-elevation-100);
-    color: var(--theme-elevation-700);
+    color: var(--theme-elevation-800);
+    font: inherit;
     font-size: 11px;
     font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--theme-elevation-150);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--be-accent);
+      outline-offset: 1px;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1512,6 +1654,57 @@
     margin-top: 4px;
     margin-left: -4px;
     transform: scale(var(--be-inv, 1)) translate(-100%, 0);
+  }
+
+  // Narrow blocks: under the block, at its left edge, so the bar never covers the name tag.
+  .builder-editor__actions--below {
+    margin-top: 4px;
+    transform: scale(var(--be-inv, 1));
+  }
+
+  .builder-editor__menu-keys {
+    margin-left: auto;
+    padding-left: 12px;
+    border: 0;
+    background: none;
+    color: var(--be-subtle);
+    font-size: 11px;
+  }
+
+  // Blocks that stopped the last publish.
+  .builder-editor__problem-box {
+    position: absolute;
+    pointer-events: none;
+    outline: calc(var(--be-px) * 2) dashed var(--theme-error-500);
+    outline-offset: calc(var(--be-px) * -2);
+    background: color-mix(in srgb, var(--theme-error-500) 6%, transparent);
+  }
+
+  .builder-editor__problem-tag {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 280px;
+    height: 20px;
+    padding: 0 7px 0 5px;
+    overflow: hidden;
+    border-radius: 4px 0 0;
+    background: var(--theme-error-500);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transform-origin: 100% 100%;
+    transform: scale(var(--be-inv, 1));
+
+    svg {
+      flex: none;
+    }
   }
 
   .builder-editor__actions-sep {
@@ -1666,6 +1859,30 @@
     color: var(--theme-elevation-600);
   }
 
+  .builder-summary__body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .builder-summary__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--theme-text);
+
+    li {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  .builder-summary__more {
+    color: var(--theme-elevation-500);
+  }
+
   .builder-summary__error {
     color: var(--theme-error-500);
   }
@@ -1693,6 +1910,8 @@
 
   .builder-editor__live {
     display: inline-flex;
+    flex: 0 1 auto;
+    min-width: 0;
     align-items: center;
     gap: 8px;
     margin-right: 4px;
@@ -1701,8 +1920,13 @@
 
   .builder-editor__live-activity {
     display: inline-flex;
+    flex: 0 1 auto;
     align-items: center;
     gap: 5px;
+    max-width: 200px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     padding: 2px 8px;
     border-radius: 999px;
     background: color-mix(in srgb, var(--be-peer, var(--be-remote)) 16%, transparent);

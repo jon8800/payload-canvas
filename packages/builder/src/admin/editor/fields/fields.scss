@@ -158,5 +158,14 @@
     .rich-text-lexical--show-gutter .editor-scroller > .editor {
       padding-left: 0;
     }
+
+    // The inline toolbar is wider than the inspector. Its groups wrap onto more lines, so every
+    // button (link included) stays inside the column. Lexical moves a toolbar that reaches the
+    // right edge 32 px further left, so the toolbar stays 40 px narrower than the editor.
+    .inline-toolbar-popup {
+      flex-wrap: wrap;
+      row-gap: 2px;
+      max-width: calc(100% - 40px);
+    }
   }
 }

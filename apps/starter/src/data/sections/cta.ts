@@ -1,4 +1,4 @@
-import { button, heading, stack, styles, text, type Action, type Section } from './build'
+import { button, heading, stack, styles, text, type Action, defineSection } from './build'
 
 export type CtaInput = {
   title: string
@@ -7,21 +7,20 @@ export type CtaInput = {
   secondary?: Action
 }
 
-const OUTLINE_INVERTED =
-  'inline-flex items-center justify-center rounded-md border border-primary-foreground px-5 py-3 text-sm font-medium'
-
-export const cta: Section<CtaInput> = {
+export const cta = defineSection<CtaInput>({
   name: 'Call to action',
-  description: 'A bold banner in the primary color with a title, a short text and one or two buttons.',
+  description: 'A band in the primary color: a large title and a short text, with one or two buttons beside them.',
   create: ({ title, text: body, primary, secondary }) =>
-    stack('section', 'bg-primary px-6 py-20 text-primary-foreground', [
-      stack('div', 'mx-auto flex max-w-2xl flex-col items-center gap-6 text-center', [
-        heading(title, '2', styles.sectionTitle),
-        text(body, 'text-lg opacity-80'),
-        stack('div', 'flex flex-row flex-wrap justify-center gap-4', [
+    stack('section', 'bg-primary px-5 py-20 text-primary-foreground md:px-8 md:py-28', [
+      stack('div', 'mx-auto flex w-full max-w-6xl flex-col gap-10 md:flex-row md:items-end md:justify-between', [
+        stack('div', 'flex max-w-3xl flex-col gap-5', [
+          heading(title, '2', 'font-display text-4xl leading-[1.05] tracking-[-0.02em] md:text-6xl'),
+          text(body, 'max-w-[52ch] text-lg leading-relaxed opacity-80'),
+        ]),
+        stack('div', 'flex flex-row flex-wrap gap-3 md:shrink-0', [
           button(primary, styles.buttonInverted),
-          ...(secondary ? [button(secondary, OUTLINE_INVERTED)] : []),
+          ...(secondary ? [button(secondary, styles.buttonOutlineInverted)] : []),
         ]),
       ]),
     ]),
-}
+})

@@ -12,11 +12,12 @@ import { hero } from './hero'
 import { imageText } from './imageText'
 import { postList } from './posts'
 import { testimonials } from './testimonials'
+import { work } from './work'
 
 export * from './build'
 export { lexical, type RichTextInput } from './lexical'
-export { cardGrid, contact, content, cta, faq, features, footer, header, hero, imageText, postList, testimonials }
+export { cardGrid, contact, content, cta, faq, features, footer, header, hero, imageText, postList, testimonials, work }
 export { postCard } from './posts'
 
-export const sections = { hero, features, imageText, content, testimonials, faq, cardGrid, cta, contact, header, footer, postList }
+export const sections = { hero, work, features, imageText, content, testimonials, faq, cardGrid, cta, contact, header, footer, postList }
 export { postTemplate } from './postTemplate'

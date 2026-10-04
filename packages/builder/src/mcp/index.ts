@@ -101,6 +101,7 @@ const blockSchema = z
     bindings: z.record(z.string(), z.string()).optional().describe('Prop path -> document field path (templates and list items).'),
     slots: z.record(z.string(), z.array(z.record(z.string(), z.unknown()))).optional().describe('Child blocks by slot name. Children have the same shape.'),
     hidden: z.boolean().optional(),
+    label: z.string().optional().describe('Name for editors, shown in the outline (e.g. "Hero"). Never rendered. Give each top-level section one.'),
   })
   .passthrough()
 
@@ -123,6 +124,7 @@ const operationSchema = z.discriminatedUnion('type', [
       unsetProps: z.array(z.string()).optional().describe('Prop names to delete.'),
       className: z.string().nullable().optional().describe('Replaces ALL classes. Send the full class list. null removes it.'),
       hidden: z.boolean().optional(),
+      label: z.string().nullable().optional().describe('Name for editors (outline). null or "" removes it.'),
       bindings: z
         .record(z.string(), z.string().nullable())
         .optional()
@@ -387,9 +389,9 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     routing: { kind: 'collection', action: 'update' },
     description: [
       'Edits the layout of a document with a list of operations, applied in order, all or nothing. Saves a draft about a second later (never publishes). People with the page open in the editor see each change live.',
-      'Operations: insert { block, to }, move { id, to }, remove { id }, duplicate { id, newId? }, update { id, props?, unsetProps?, className?, hidden?, bindings? }. "update" merges props and bindings; className REPLACES all classes, so send the full list.',
+      'Operations: insert { block, to }, move { id, to }, remove { id }, duplicate { id, newId? }, update { id, props?, unsetProps?, className?, hidden?, bindings?, label? }. "update" merges props and bindings; className REPLACES all classes, so send the full list.',
       'Templates are edited the same way: collection = the templates collection, id = the template id from listTemplates.',
-      'If any operation fails, nothing is saved and the error names the failing operation. Call getLayout for current ids first. The result is validated against the block schemas: missing required props are allowed in drafts (warnings), wrong types and slot rules are errors.',
+      'If any operation fails, nothing is saved and the error names the failing operation. Call getLayout for current ids first. The result is validated against the block schemas: missing required props are allowed in drafts (warnings), wrong types are errors. insert and move refuse a block that a slot does not accept, also deeper inside (for example no button or form anywhere inside a link).',
       NO_DIRECT_EDIT,
       LAYOUT_GUIDE,
     ].join('\n\n'),

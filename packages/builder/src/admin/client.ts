@@ -6,3 +6,4 @@
 export { BuilderTab } from './BuilderTab'
 export { PublishButton } from './editor/topbar/settingsDrawer'
 export { LayoutField } from './LayoutField'
+export { TemplateDefaultCell } from './TemplateDefaultCell'

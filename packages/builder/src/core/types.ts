@@ -26,6 +26,11 @@ export type Block = {
   bindings?: Record<string, string>
   /** Hidden blocks stay in the data but do not render on the site. */
   hidden?: boolean
+  /**
+   * A name the editor gives the block (outline, breadcrumbs, error messages), e.g. "Hero".
+   * Never rendered on the site. Stored only when non-empty.
+   */
+  label?: string
 }
 
 export type Layout = {
@@ -41,8 +46,14 @@ export const EMPTY_LAYOUT: Layout = { version: 1, blocks: [] }
 
 export type SlotDefinition = {
   label?: string
-  /** Block types this slot accepts. `undefined` means any type. */
+  /** Block types this slot accepts as direct children. `undefined` means any type. */
   allow?: string[]
+  /**
+   * Block types refused anywhere inside this slot, at any depth (not only direct children).
+   * Example: a link's content slot refuses links, buttons and forms, because interactive content
+   * inside `<a>` is invalid HTML.
+   */
+  disallow?: string[]
 }
 
 export type BlockDefinition = {
@@ -224,6 +235,8 @@ export type Operation =
       hidden?: boolean
       /** Shallow merge into `bindings`. A `null` value removes that binding. */
       bindings?: Record<string, string | null>
+      /** The editor's name for the block. `null` or "" removes it. */
+      label?: string | null
     }
 
 /** `inverse` undoes this operation when applied in order to the resulting layout. */

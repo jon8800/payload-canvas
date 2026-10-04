@@ -2,12 +2,12 @@
 
 /* oxlint-disable jsx-a11y/prefer-tag-over-role, jsx-a11y/no-noninteractive-element-to-interactive-role -- the field list is a listbox with option rows */
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 
 import type { BindingField } from '../../../core/types'
 import { Icon, type IconName } from '../icons'
 import { Popover, stopEditorKeys, usePopover } from '../styles/popover'
-import { pickerRows, previewValue, URL_PATH, valueAt, type PickerRow } from './binding'
+import { isObviousPath, pickerRows, previewValue, URL_PATH, valueAt, type PickerRow } from './binding'
 
 const TYPE_ICONS: Record<string, IconName> = {
   text: 'text',
@@ -87,6 +87,8 @@ function PickerBody({ title, fields, accept, sample, current, onPick, emptyText 
   const [active, setActive] = useState(() => Math.max(0, selectable.findIndex((r) => r.field.path === current)))
   const inputRef = useRef<HTMLInputElement>(null)
   const activePath = selectable[Math.min(active, selectable.length - 1)]?.field.path
+  const listId = useId()
+  const rowId = (path: string) => `${listId}-${path}`
 
   useEffect(() => inputRef.current?.focus(), [])
 
@@ -124,16 +126,21 @@ function PickerBody({ title, fields, accept, sample, current, onPick, emptyText 
             setActive(0)
           }}
           aria-label="Search fields"
+          role="combobox"
+          aria-expanded
+          aria-controls={listId}
+          aria-activedescendant={activePath ? rowId(activePath) : undefined}
         />
       </label>
       {rows.length === 0 ? (
         <p className="builder-bind__picker-empty">{query.trim() ? `No field matches “${query.trim()}”.` : emptyText}</p>
       ) : (
-        <ul className="builder-bind__rows" role="listbox" aria-label={title}>
+        <ul id={listId} className="builder-bind__rows" role="listbox" aria-label={title}>
           {rows.map((row) => (
             <PickerRowItem
               key={row.field.path}
               row={row}
+              id={rowId(row.field.path)}
               active={row.field.path === activePath}
               current={row.field.path === current}
               sample={sample}
@@ -151,6 +158,7 @@ const scrollIntoView = (el: HTMLElement | null) => el?.scrollIntoView({ block: '
 
 function PickerRowItem({
   row,
+  id,
   active,
   current,
   sample,
@@ -158,6 +166,7 @@ function PickerRowItem({
   onHover,
 }: {
   row: PickerRow
+  id: string
   active: boolean
   current: boolean
   sample: Record<string, unknown> | null
@@ -178,11 +187,13 @@ function PickerRowItem({
   const hint = field.path === URL_PATH ? null : sampleHint(sample, field)
   return (
     <li
+      id={id}
       ref={active ? scrollIntoView : undefined}
       className="builder-bind__row"
       style={style}
       role="option"
-      aria-selected={active}
+      aria-selected={current}
+      data-active={active || undefined}
       data-current={current || undefined}
       onMouseDown={(e) => {
         e.preventDefault()
@@ -195,7 +206,7 @@ function PickerRowItem({
       </span>
       <span className="builder-bind__row-text">
         <span className="builder-bind__row-label">{field.label}</span>
-        <code className="builder-bind__row-path">{field.path}</code>
+        {!isObviousPath(field.label, field.path) && <code className="builder-bind__row-path">{field.path}</code>}
       </span>
       {hint && <span className="builder-bind__row-hint">{hint}</span>}
       {current && <Icon name="check" size={13} className="builder-bind__row-check" />}
