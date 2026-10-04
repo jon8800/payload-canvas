@@ -1,7 +1,6 @@
 'use client'
-// Admin client entry. Owner: editor agent.
-// Contract used by the plugin (import map paths):
-//   '@payload-toolkit/builder/client#BuilderTabView' — document tab view (renders Payload's DefaultEditView)
-//   '@payload-toolkit/builder/client#LayoutField'    — the layout JSON field's Field component
-export { BuilderTabView } from './BuilderTabView'
+// Admin client entry (import map paths used by the plugin):
+//   '@payload-toolkit/builder/client#LayoutField' — the layout JSON field: a summary and "Open builder"
+//   '@payload-toolkit/builder/client#BuilderTab'  — the document's "Builder" tab, a link to the full-screen view
+export { BuilderTab } from './BuilderTab'
 export { LayoutField } from './LayoutField'

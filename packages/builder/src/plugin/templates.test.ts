@@ -106,7 +106,6 @@ describe('websiteBuilder with templates', () => {
     for (const slug of ['posts', 'pages', 'builder-templates']) {
       const templates = builderConfig(slug).templates
       assert.equal(templates?.collection, 'builder-templates')
-      assert.equal(templates?.targetField, 'targetCollection')
       assert.ok(templates?.sources.posts && templates.sources.pages, slug)
     }
     const postFields = builderConfig('posts').templates!.sources.posts

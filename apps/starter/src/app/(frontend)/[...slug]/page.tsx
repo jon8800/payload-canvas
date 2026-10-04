@@ -19,7 +19,7 @@ export default async function Page({ params }: Props) {
   const payload = await getPayload({ config: configPromise })
   const { docs } = await payload.find({
     collection: 'pages',
-    where: { slug: { equals: slugPath } },
+    where: { and: [{ slug: { equals: slugPath } }, ...(draft ? [] : [{ _status: { equals: 'published' as const } }])] },
     limit: 1,
     draft,
     depth: 0,

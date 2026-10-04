@@ -115,6 +115,13 @@ export type LiveSessionEvent = {
   collaborators: Array<CollaboratorInfo & { awareness: Awareness | null }>
   /** This connection's own clientId as the server knows it. */
   self: CollaboratorInfo
+  /** The highest seq the saved draft contains. Commits above it are not saved yet. */
+  savedSeq?: number
+  /**
+   * The layout was replaced as a whole (Revert to published). Editors drop their unsent changes
+   * and their undo history instead of rebasing them on the new layout.
+   */
+  reset?: boolean
 }
 
 /** Who is connected changed (join/leave). */
@@ -130,7 +137,40 @@ export type LiveAwarenessEvent = {
   awareness: Awareness
 }
 
-export type MultiplayerEvent = LiveCommitEvent | LiveSessionEvent | LiveCollaboratorsEvent | LiveAwarenessEvent
+/**
+ * The document was saved with the session layout up to `seq`: by the session itself (about a
+ * second after the last commit) or by another save while the session was open (Publish, the
+ * settings drawer, the REST API).
+ */
+export type LiveSavedEvent = {
+  type: 'saved'
+  seq: number
+  /** ISO time of the save. */
+  at: string
+  /** `updatedAt` of the saved document. */
+  updatedAt?: string
+  /** `_status` of the saved document (collections with drafts). */
+  status?: string
+}
+
+/** Someone published, unpublished or reverted the document to its published version. */
+export type LivePublishedEvent = {
+  type: 'published'
+  action: PublishAction
+  /** `_status` of the document after the action. */
+  status: 'draft' | 'published'
+  at: string
+  updatedAt?: string
+  actor: LiveActor
+}
+
+export type MultiplayerEvent =
+  | LiveCommitEvent
+  | LiveSessionEvent
+  | LiveCollaboratorsEvent
+  | LiveAwarenessEvent
+  | LiveSavedEvent
+  | LivePublishedEvent
 
 /** `POST {liveEndpoint}/:collection/:id/commit` — one batch of local operations, sent in order. */
 export type LiveCommitRequest = {
@@ -151,3 +191,52 @@ export type LiveCommitResponse =
 
 /** `POST {liveEndpoint}/:collection/:id/awareness` */
 export type LiveAwarenessRequest = { clientId: string; awareness: Awareness }
+
+// ---------------------------------------------------------------------------
+// Document header and publishing (the full-screen builder view).
+//
+//   GET  {liveEndpoint}/:collection/:id/meta       -> BuilderDocMeta
+//   POST {liveEndpoint}/:collection/:id/publish    -> PublishResponse
+//   POST {liveEndpoint}/:collection/:id/unpublish  -> PublishResponse
+//   POST {liveEndpoint}/:collection/:id/revert     -> PublishResponse
+// ---------------------------------------------------------------------------
+
+/** `publish`: publish the draft. `unpublish`: back to draft. `revert`: drop the draft changes. */
+export type PublishAction = 'publish' | 'unpublish' | 'revert'
+
+/**
+ * Status of a document in a collection with drafts, as Payload's own header shows it:
+ * `changed` means published, with a newer draft.
+ */
+export type DocStatus = 'draft' | 'published' | 'changed'
+
+/** What the builder's top bar shows about the open document. */
+export type BuilderDocMeta = {
+  collection: string
+  id: string
+  /** The document title (`admin.useAsTitle`), else the id. */
+  title: string
+  /** The field that holds the title. Null when the collection has no `useAsTitle`. */
+  titleField: string | null
+  /** The collection has drafts (and so Publish). */
+  drafts: boolean
+  /** Null when the collection has no drafts. */
+  status: DocStatus | null
+  createdAt: string | null
+  /** Last change of the newest draft. */
+  updatedAt: string | null
+  /** When the published version was saved. Null when nothing is published. */
+  publishedAt: string | null
+  /** Number of versions. Null when versions are off or not readable. */
+  versions: number | null
+  /** The public page, from the collection's `url` option. */
+  url: string | null
+  /** The draft preview, from the collection's `admin.livePreview.url` or `admin.preview`. */
+  previewUrl: string | null
+  /** The user may change the document. */
+  canUpdate: boolean
+  /** Template documents: the collection the template is for and its preview document. */
+  template: { target: string | null; preview: unknown } | null
+}
+
+export type PublishResponse = { ok: true; meta: BuilderDocMeta } | { ok: false; error: string }

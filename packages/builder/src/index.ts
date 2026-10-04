@@ -2,12 +2,15 @@
 export {
   websiteBuilder,
   cssFieldName,
+  BUILDER_VIEW_KEY,
+  BUILDER_VIEW_PATH,
   type WebsiteBuilderOptions,
   type BuilderCollectionOptions,
   type GeneratedCss,
   type TemplatesOptions,
 } from './plugin'
 export { bindingSources, templatesConfigOf, TEMPLATES_CONFIG_KEY } from './plugin/templates'
+export { builderViewPath } from './plugin/links'
 export {
   DEFAULT_TEMPLATES_SLUG,
   DOCUMENT_TEMPLATE_FIELD,

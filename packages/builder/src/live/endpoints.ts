@@ -49,13 +49,16 @@ function statusOf(error: unknown): number {
   return typeof status === 'number' ? status : 500
 }
 
-function targetOf(req: PayloadRequest, collections: LiveEndpointOptions['collections']): SessionTarget | Response {
-  const params = (req.routeParams ?? {}) as Record<string, unknown>
-  const collection = typeof params.collection === 'string' ? params.collection : ''
-  const id = typeof params.id === 'string' ? params.id : ''
+/** The session target of a builder document, or null when the collection is not a builder collection. */
+export function sessionTargetOf(
+  payload: { collections: unknown },
+  collections: LiveEndpointOptions['collections'],
+  collection: string,
+  id: string,
+): SessionTarget | null {
   const options = collections[collection]
-  if (!options || !id) return json({ ok: false, error: `"${collection}" is not a builder collection` }, 404)
-  const configs = req.payload.collections as Record<
+  if (!options || !id) return null
+  const configs = payload.collections as Record<
     string,
     { config: { versions?: { drafts?: boolean | { autosave?: unknown } } } } | undefined
   >
@@ -67,6 +70,14 @@ function targetOf(req: PayloadRequest, collections: LiveEndpointOptions['collect
     drafts: Boolean(drafts),
     autosave: typeof drafts === 'object' && Boolean(drafts.autosave),
   }
+}
+
+/** The document of a live endpoint request (`:collection/:id`), or a 404 response. */
+export function targetOf(req: PayloadRequest, collections: LiveEndpointOptions['collections']): SessionTarget | Response {
+  const params = (req.routeParams ?? {}) as Record<string, unknown>
+  const collection = typeof params.collection === 'string' ? params.collection : ''
+  const id = typeof params.id === 'string' ? params.id : ''
+  return sessionTargetOf(req.payload, collections, collection, id) ?? json({ ok: false, error: `"${collection}" is not a builder collection` }, 404)
 }
 
 /** The actor of a request: people by display name, API keys as AI agents. */

@@ -13,7 +13,7 @@ import { useCollectionLabel, useDocSearch, useTitleField, type DocOption } from 
 
 /**
  * Toolbar control in template mode: labels the mode and picks the document the canvas previews
- * ("Template · previewing <title>"). Without a target collection it points to the Document settings.
+ * ("Template · previewing <title>"). Without a target collection it opens the settings drawer.
  */
 export function TemplateControl() {
   const runtime = useRuntime()
@@ -29,8 +29,8 @@ export function TemplateControl() {
       <button
         type="button"
         className="builder-template__control builder-template__control--warn"
-        data-tooltip="Pick the collection in the Document settings or the Edit tab"
-        onClick={() => runtime.inspectorTab.set('document')}
+        data-tooltip="Pick the collection in the page settings"
+        onClick={runtime.doc.openSettings}
       >
         <Icon name="warning" size={14} />
         <span className="builder-template__mode">Template</span>

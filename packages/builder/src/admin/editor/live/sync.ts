@@ -47,6 +47,8 @@ export type SyncUpdate = {
   commit?: LiveCommitEvent
   /** The server's reason, for `reason: 'rejected'` when changes were dropped. */
   error?: string
+  /** A `session` that replaced the layout as a whole: local changes were discarded. */
+  reset?: boolean
 }
 
 export type LocalResult =
@@ -284,23 +286,22 @@ export function createSyncEngine(initial: Layout, options: SyncOptions) {
       return result
     },
 
-    /** An external layout (the Payload form). Accepted in solo mode only: in live mode the session wins. */
-    load(layout: Layout): boolean {
-      if (mode === 'live') return false
-      confirmed = layout
-      visible = layout
-      return true
-    },
-
     /**
      * Full state from the server: the first event on connect, or the answer to a resync.
      * `id` is the server's session id. A new id means the server started a new session (restart).
+     * `reset`: the layout was replaced as a whole (Revert to published). Local changes that are
+     * not confirmed yet are discarded instead of being sent again on top of it.
      */
-    session(nextSeq: number, layout: Layout, id?: string | null) {
+    session(nextSeq: number, layout: Layout, id?: string | null, reset = false) {
       mode = 'live'
       const newSession = id ? sessionId !== null && id !== sessionId : nextSeq < seq
       if (id) sessionId = id
-      if (inflight) {
+      if (reset) {
+        inflight = null
+        queued = []
+        retryCancel?.()
+        retryCancel = null
+      } else if (inflight) {
         if (newSession) {
           // The server lost its session (restart). Send the batch again on the new one.
           queued = [...inflight.changes, ...queued]
@@ -316,7 +317,7 @@ export function createSyncEngine(initial: Layout, options: SyncOptions) {
       synced = true
       holdUntil = null
       const dropped = rebase()
-      emit({ layout: visible, reason: 'session', dropped })
+      emit({ layout: visible, reason: 'session', dropped, ...(reset ? { reset: true } : {}) })
       scheduleFlush()
     },
 

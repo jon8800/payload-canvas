@@ -38,7 +38,7 @@ function usePeersOn(blockId: string): Peer[] {
 // Toolbar
 // ---------------------------------------------------------------------------
 
-/** Who else is here (click to follow), the last remote change, and the connection state. */
+/** Who else is here (click to follow) and the last remote change. The save state shows the connection. */
 export function Presence({ widths }: { widths: Parameters<typeof breakpointAt>[0] }) {
   const runtime = useRuntime()
   const live = useValue(runtime.live)
@@ -47,14 +47,6 @@ export function Presence({ widths }: { widths: Parameters<typeof breakpointAt>[0
   if (!live) return null
 
   const others = live.collaborators
-  const status =
-    live.status === 'open'
-      ? live.pending
-        ? 'Syncing your changes…'
-        : 'Live · changes sync instantly'
-      : live.status === 'connecting'
-        ? 'Connecting…'
-        : 'Reconnecting… your changes are kept and sent when back'
   const recent = live.lastChange && live.changes.size > 0 ? live.lastChange : null
 
   const tooltip = (peer: Peer | undefined, name: string, ai: boolean) => {
@@ -65,7 +57,7 @@ export function Presence({ widths }: { widths: Parameters<typeof breakpointAt>[0
   }
 
   return (
-    <div className="builder-editor__live" data-status={live.status} data-pending={live.pending || undefined}>
+    <div className="builder-editor__live">
       {recent && (
         <span className="builder-editor__live-activity" style={peerStyle(recent.color)}>
           <Icon name={recent.actor.type === 'ai' ? 'sparkle' : 'user'} size={12} />
@@ -106,7 +98,6 @@ export function Presence({ widths }: { widths: Parameters<typeof breakpointAt>[0
           )}
         </fieldset>
       )}
-      <span className="builder-editor__live-dot" data-tooltip={status} />
     </div>
   )
 }

@@ -10,10 +10,11 @@ import {
   type DragMoveEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
-import { ShimmerEffect, useConfig, useDocumentInfo } from '@payloadcms/ui'
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { ShimmerEffect, useConfig } from '@payloadcms/ui'
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 
 import type { BuilderClientConfig } from '../../core/types'
+import type { BuilderDocMeta } from '../../live/types'
 import { insertBlocks } from './actions'
 import { Canvas } from './Canvas'
 import { DragLayer } from './DragLayer'
@@ -22,11 +23,11 @@ import { Library } from './Library'
 import { Outline } from './Outline'
 import { computeDrop, createRuntime, RuntimeContext, toCanvasPoint, type DragData, type DragState, type Runtime } from './runtime'
 import { bindShortcuts } from './shortcuts'
-import { Toolbar } from './Toolbar'
-import { useLayoutFieldSync } from './useLayoutFieldSync'
 import { cursorAt, useMultiplayer } from './live'
 import { useFollow } from './live/useFollow'
 import { useTemplateController } from './templates/useTemplate'
+import { TopBar } from './topbar/TopBar'
+import { useValue } from './valueStore'
 
 const COLLISION_ID = 'builder-drop'
 /** Distance from the canvas top or bottom edge where auto-scroll starts. */
@@ -51,12 +52,25 @@ function startAutoScroll(runtime: Runtime): () => void {
   return () => window.clearInterval(timer)
 }
 
-export function Editor({ config, path }: { config: BuilderClientConfig; path: string }) {
+type EditorProps = {
+  config: BuilderClientConfig
+  /** The document as the server loaded it. */
+  meta: BuilderDocMeta
+  /** The admin's icon graphic, for the top bar. */
+  icon: ReactNode
+}
+
+/**
+ * The full-screen editor. The document's live session is the source of truth for the layout: the
+ * server loads the draft into it, and every edit goes through it (docs/architecture.md section 12).
+ */
+export function Editor({ config, meta, icon }: EditorProps) {
   const { config: payloadConfig } = useConfig()
-  const [runtime] = useState(() => createRuntime(config, payloadConfig.routes.api))
-  const { ready } = useLayoutFieldSync(runtime.store, path)
-  const { id: docId } = useDocumentInfo()
-  useMultiplayer(runtime, { docId, enabled: ready })
+  const [runtime] = useState(() => createRuntime(config, payloadConfig.routes.api, meta))
+  const docId = meta.id
+  useMultiplayer(runtime, { docId })
+  // Ready once the first session arrived. A reconnect keeps the editor open.
+  const ready = Boolean(useValue(runtime.live)?.self)
   useFollow(runtime)
   useTemplateController(runtime)
   useEffect(() => runtime.assistant?.setDocument(config.collection, docId), [runtime, config.collection, docId])
@@ -64,18 +78,6 @@ export function Editor({ config, path }: { config: BuilderClientConfig; path: st
   const stopAutoScroll = useRef<(() => void) | null>(null)
   const dndId = useId()
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
-
-  // Fill the viewport below Payload's header, tabs and document controls, whatever their height.
-  const fitToViewport = useCallback((el: HTMLDivElement | null) => {
-    if (!el) return
-    const fit = () => {
-      const top = el.getBoundingClientRect().top + window.scrollY
-      el.style.height = `${Math.max(520, window.innerHeight - top)}px`
-    }
-    fit()
-    window.addEventListener('resize', fit)
-    return () => window.removeEventListener('resize', fit)
-  }, [])
 
   useEffect(() => () => stopAutoScroll.current?.(), [])
 
@@ -148,8 +150,6 @@ export function Editor({ config, path }: { config: BuilderClientConfig; path: st
     if (block) runtime.store.apply({ type: 'insert', block, to: target.to }, { select: block.id })
   }
 
-  if (!ready) return <ShimmerEffect height="480px" />
-
   return (
     <RuntimeContext value={runtime}>
       <DndContext
@@ -166,18 +166,35 @@ export function Editor({ config, path }: { config: BuilderClientConfig; path: st
         onDragEnd={onDragEnd}
         onDragCancel={endDrag}
       >
-        <div ref={fitToViewport} className="builder-editor">
-          <Toolbar />
-          <div className="builder-editor__body">
-            <aside className="builder-editor__left">
-              <Library />
-              <Outline />
-            </aside>
-            <Canvas />
-            <aside className="builder-editor__right">
-              <Inspector />
-            </aside>
-          </div>
+        <div className="builder-editor">
+          <TopBar icon={icon} />
+          {ready ? (
+            <div className="builder-editor__body">
+              <aside className="builder-editor__left">
+                <Library />
+                <Outline />
+              </aside>
+              <Canvas />
+              <aside className="builder-editor__right">
+                <Inspector />
+              </aside>
+            </div>
+          ) : (
+            <div className="builder-editor__body builder-editor__body--loading" aria-busy="true" aria-label="Loading the editor">
+              <aside className="builder-editor__left">
+                <ShimmerEffect height="34px" />
+                <ShimmerEffect height="160px" />
+                <ShimmerEffect height="34px" />
+              </aside>
+              <div className="builder-editor__stage">
+                <ShimmerEffect height="100%" />
+              </div>
+              <aside className="builder-editor__right">
+                <ShimmerEffect height="34px" />
+                <ShimmerEffect height="240px" />
+              </aside>
+            </div>
+          )}
           <DragLayer />
         </div>
       </DndContext>

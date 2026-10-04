@@ -26,7 +26,7 @@ export default async function HomePage() {
   const homePageId = typeof homePageRef === 'object' ? homePageRef.id : homePageRef
   const { docs } = await payload.find({
     collection: 'pages',
-    where: { id: { equals: homePageId } },
+    where: { and: [{ id: { equals: homePageId } }, ...(draft ? [] : [{ _status: { equals: 'published' as const } }])] },
     limit: 1,
     depth: 0,
     draft,

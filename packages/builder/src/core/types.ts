@@ -107,8 +107,6 @@ export type BindingField = {
 export type TemplatesClientConfig = {
   /** Slug of the templates collection, e.g. "builder-templates". */
   collection: string
-  /** Name of the templates collection's field that holds the target collection slug. */
-  targetField: string
   /** Bindable fields per template target collection slug. */
   sources: Record<string, BindingField[]>
 }

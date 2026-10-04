@@ -14,10 +14,12 @@ import type {
   Point,
   Rect,
 } from '../../core/types'
+import type { BuilderDocMeta } from '../../live/types'
 import { post, rectContains, type AdminToCanvas, type CanvasInit, type KeyAction } from '../../protocol'
 import { removeBlock } from './actions'
 import { createAssistant, type AssistantController } from './assistant/controller'
 import { createEditorStore, type EditorStore } from './store'
+import { createDocumentController, type DocumentController } from './topbar/document'
 import { createValueStore, type ValueStore } from './valueStore'
 import type { CollaboratorCursor, LiveState, Peer, PeerCursor } from './live'
 import { initialTemplateState, type TemplateState } from './templates/state'
@@ -49,7 +51,7 @@ export type Notice = { text: string; at: number; tone?: 'warning' }
 /** The canvas frame: its width in CSS pixels and the zoom that fits it into the stage. */
 export type FrameSize = { width: number; zoom: number }
 
-export type InspectorTab = 'block' | 'document' | 'assistant'
+export type InspectorTab = 'block' | 'assistant'
 
 export type Runtime = {
   config: BuilderClientConfig
@@ -82,8 +84,10 @@ export type Runtime = {
   follow: ValueStore<string | null>
   /** Template mode: the target collection and the sample document the canvas previews. */
   template: ValueStore<TemplateState>
-  /** The inspector's top tab. Other parts open the Document tab (e.g. "choose a collection"). */
+  /** The inspector's top tab. */
   inspectorTab: ValueStore<InspectorTab>
+  /** The open document: what the top bar shows, publishing, renaming and the settings drawer. */
+  doc: DocumentController
   /** The AI assistant chat. Null when the plugin has no `ai` option. */
   assistant: AssistantController | null
   /** Blocks the assistant just changed, with the time of the change. The overlay flashes them. */
@@ -130,8 +134,11 @@ function loadCollapsed(): ReadonlySet<string> {
   }
 }
 
-/** `api` is Payload's REST route (`config.routes.api`), used by the iframe to load documents. */
-export function createRuntime(config: BuilderClientConfig, api: string): Runtime {
+/**
+ * `api` is Payload's REST route (`config.routes.api`), used by the iframe to load documents.
+ * `document` is the open document as the server loaded it.
+ */
+export function createRuntime(config: BuilderClientConfig, api: string, document: BuilderDocMeta): Runtime {
   const store = createEditorStore(EMPTY_LAYOUT)
   const iframeRef = createRef<HTMLIFrameElement>()
   const blockLabel = (type: string) => getBlockDefinition(config.blocks, type)?.label ?? type
@@ -165,6 +172,7 @@ export function createRuntime(config: BuilderClientConfig, api: string): Runtime
     follow: createValueStore<string | null>(null),
     template: createValueStore<TemplateState>(initialTemplateState(config)),
     inspectorTab: createValueStore<InspectorTab>('block'),
+    doc: createDocumentController({ config, api, notify: (text) => notice.set({ text, at: Date.now() }) }, document),
     assistant: null,
     assistantFlash: createValueStore<ReadonlyMap<string, number>>(new Map()),
     assistantFocus: createValueStore(0),

@@ -1,5 +1,6 @@
-// Live editing (server side): multiplayer document sessions, the shared operation helpers and
-// the SSE, commit, awareness and operations endpoints. See docs/architecture.md section 12.
+// Live editing (server side): multiplayer document sessions, the shared operation helpers, the
+// SSE, commit, awareness and operations endpoints, and the document meta and publish endpoints.
+// See docs/architecture.md section 12.
 export * from './types'
 export { createKeyedMutex, type KeyedMutex } from './mutex'
 export {
@@ -14,6 +15,7 @@ export {
   type SessionTarget,
   type SessionTimers,
   type SessionSnapshot,
+  type SavedInfo,
   type SessionSend,
   type CommitArgs,
   type CommitResult,
@@ -30,4 +32,16 @@ export {
   type UpdateAccessCheck,
 } from './runtime'
 export { resolveOperations, splitLayoutErrors, actorFromUser, userLabel, type LiveDocStore } from './apply'
-export { liveEndpoints, sessionStream, sseFrame, requestActor, LIVE_PATH, SSE_HEADERS, type LiveEndpointOptions } from './endpoints'
+export { liveEndpoints, sessionStream, sseFrame, requestActor, sessionTargetOf, targetOf, LIVE_PATH, SSE_HEADERS, type LiveEndpointOptions } from './endpoints'
+export {
+  builderConfigOf,
+  documentEndpoints,
+  loadDocMeta,
+  payloadErrorMessage,
+  runPublishAction,
+  BUILDER_CONFIG_KEY,
+  type BuilderCollectionServer,
+  type BuilderServerConfig,
+  type DocMetaArgs,
+  type DocumentEndpointOptions,
+} from './document'

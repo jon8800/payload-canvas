@@ -1,6 +1,6 @@
 # @payload-toolkit/builder
 
-A visual page builder for Payload CMS 3. It adds a **Builder** tab to the collections you choose. Editors drag blocks onto a live canvas, nest them without limit, and style them with Tailwind classes. AI agents can build and edit the same pages over MCP, and an open editor shows each AI change as it happens.
+A visual page builder for Payload CMS 3. It adds a full-screen builder to the collections you choose. Editors drag blocks onto a live canvas, nest them without limit, and style them with Tailwind classes. AI agents can build and edit the same pages over MCP, and an open editor shows each AI change as it happens.
 
 - Works in any Payload 3.90+ app on Next.js 16 and React 19.
 - The layout is one JSON field per document. Nothing changes in your other fields.
@@ -19,17 +19,18 @@ Two packages:
 
 1. [Requirements](#requirements)
 2. [Install](#install)
-3. [Plugin options](#plugin-options)
-4. [Rendering](#rendering)
-5. [Custom blocks](#custom-blocks)
-6. [Sections](#sections)
-7. [Styling](#styling)
-8. [Templates and binding](#templates-and-binding)
-9. [AI assistant](#ai-assistant)
-10. [AI editing over MCP](#ai-editing-over-mcp)
-11. [Multiplayer editing](#multiplayer-editing)
-12. [Production and Docker](#production-and-docker)
-13. [Troubleshooting](#troubleshooting)
+3. [The builder view](#the-builder-view)
+4. [Plugin options](#plugin-options)
+5. [Rendering](#rendering)
+6. [Custom blocks](#custom-blocks)
+7. [Sections](#sections)
+8. [Styling](#styling)
+9. [Templates and binding](#templates-and-binding)
+10. [AI assistant](#ai-assistant)
+11. [AI editing over MCP](#ai-editing-over-mcp)
+12. [Multiplayer editing](#multiplayer-editing)
+13. [Production and Docker](#production-and-docker)
+14. [Troubleshooting](#troubleshooting)
 
 ## Requirements
 
@@ -224,8 +225,32 @@ pnpm dev
 
 1. Open `http://localhost:3000/admin` and create the first user.
 2. Create a page with a title and a slug, for example `about`.
-3. Open the **Builder** tab. Click or drag blocks from **Add**. Edit content in the right panel. Style blocks in **Styles**.
-4. Click **Publish changes** and open `http://localhost:3000/about`.
+3. Click the **Builder** tab (or **Open builder** on the layout field). The builder opens full screen. Click or drag blocks from **Add**. Edit content in the right panel. Style blocks in **Styles**.
+4. Click **Publish changes** in the top bar and open `http://localhost:3000/about`.
+
+## The builder view
+
+The builder is a full-screen admin view at `/admin/builder/<collection>/<id>`. It has no Payload nav and no document header: one top bar holds everything.
+
+How editors open it:
+
+- the document's **Builder** tab (a link to the view),
+- the **Open builder** button on the layout field in the normal Edit view (a new document must be saved first),
+- the old tab URL `/admin/collections/<collection>/<id>/builder`, which redirects to the view.
+
+The top bar, left to right:
+
+- **Back** to the document's Edit view, the admin icon (to the dashboard), and `Collection › Title`. Click the title to rename the document: Enter or leaving the field saves it (as a draft when the collection has drafts). Escape cancels.
+- The status: **Draft** (never published), **Published**, or **Changed** (published, with newer draft changes). Hover it for the last change, the creation date, the last publish and the number of versions (a link to the Versions view).
+- Undo and redo, the device sizes, a custom width and the active breakpoint. In a template: the sample document the canvas previews.
+- The people on the page, and the save state: **Saving…** while changes are on their way, then **Saved · 12:04**.
+- **Preview** opens the draft preview (the collection's `admin.livePreview.url`, else `admin.preview`), or the public page (the plugin's `url` option), in a new tab.
+- **Page settings** opens the document's own edit form in a Payload drawer: title, slug, SEO, and for a template its collection and sample document. The top bar updates after each save.
+- The AI assistant (with the `ai` option), the keyboard shortcuts, and **Publish changes**. Its menu has **Unpublish**, **Revert to published** (drops all draft changes, after a confirmation), and links to the Edit view, the Versions view, the API view and the live page.
+
+Publishing. All editors of a document share one live session (see [Multiplayer editing](#multiplayer-editing)). The session saves the layout as a draft about a second after each change. **Publish changes** saves what is still unsaved, then publishes with Payload's Local API as the signed-in user, so access control, hooks and versions work as usual. **Unpublish** sets the document back to draft. **Revert to published** loads the published version into the session, so every open editor reloads the canvas, and saves it again. Every open editor sees the new status at once.
+
+Access. The view sends signed-out visitors to the login page and back. Users without admin access go to Payload's "unauthorized" page. A document that does not exist, or a collection without the builder, shows "not found". A user who can read but not update the document gets the normal Edit view.
 
 ## Plugin options
 
@@ -271,7 +296,7 @@ For each listed collection the plugin adds:
 - the layout field (`json`) with the editor as its field component,
 - a hidden `<field>Css` field that stores `{ hash, css }`,
 - a hidden virtual rich text field, when a block has a rich text prop,
-- the **Builder** document tab at `/admin/collections/<slug>/<id>/builder`,
+- the **Builder** document tab, a link to the full-screen view (`/admin/builder/<slug>/<id>`; the plugin adds this root view once for all collections),
 - a `beforeChange` hook that validates the layout and compiles its CSS, and that takes the layout from the live session while one is open,
 - an `afterChange` hook for the live session,
 - `lockDocuments: false`, unless `multiplayer` is `false`.
@@ -286,6 +311,10 @@ It also adds these endpoints (signed-in users only):
 | `POST /api/builder/live/:collection/:id/commit` | Applies one batch of operations to the live session (editors). |
 | `POST /api/builder/live/:collection/:id/awareness` | Sends your selection and pointer to the other editors. |
 | `POST /api/builder/live/:collection/:id/operations` | Applies operations to the live session and returns the new layout (scripts and integrations). |
+| `GET /api/builder/live/:collection/:id/meta` | What the builder's top bar shows: title, status, dates, versions count, preview links. |
+| `POST /api/builder/live/:collection/:id/publish` | Saves the live session, then publishes the document. |
+| `POST /api/builder/live/:collection/:id/unpublish` | Sets the document back to draft. |
+| `POST /api/builder/live/:collection/:id/revert` | Drops the draft changes: the live session and the draft get the published version. |
 | `POST /api/builder/ai/chat` | The AI assistant (only with the `ai` option). Streams Server-Sent Events. |
 
 ### Entry points
@@ -298,7 +327,8 @@ It also adds these endpoints (signed-in users only):
 | `@payload-toolkit/builder/css` | server | `compileClasses`, `getStyleTokens`, `tracingIncludes` |
 | `@payload-toolkit/builder/mcp` | server | `builderMcpTools` |
 | `@payload-toolkit/builder/live` | server | the live sessions and endpoints |
-| `@payload-toolkit/builder/client` | Payload import map only | admin components |
+| `@payload-toolkit/builder/client` | Payload import map only | admin client components (layout field, Builder tab) |
+| `@payload-toolkit/builder/rsc` | Payload import map only | admin server components (the builder view, the tab redirect) |
 
 ## Rendering
 
@@ -472,7 +502,7 @@ websiteBuilder({
 
 What the plugin adds:
 
-- A templates collection (`builder-templates`) with drafts and the Builder tab. Each template has a target collection (`targetCollection`), a "default for this collection" checkbox (`isDefault`) and a sample document for the editor preview (`previewDocument`).
+- A templates collection (`builder-templates`) with drafts and the builder. Each template has a target collection (`targetCollection`), a "default for this collection" checkbox (`isDefault`) and a sample document for the editor preview (`previewDocument`).
 - A `template` relationship in the sidebar of every document in a collection with `templates: true`.
 
 Which template a document uses: its own `template`, else the newest default template of its collection, else none. Templates with an empty layout are skipped.
@@ -625,7 +655,7 @@ plugins: [
 
 ## Multiplayer editing
 
-Several people can have the same page open in the Builder tab. Each change shows for the others at once, with their selections and pointers in their own color. AI agents over MCP join the same way.
+Several people can have the same page open in the builder. Each change shows for the others at once, with their selections and pointers in their own color. AI agents over MCP join the same way.
 
 How it works:
 
@@ -633,6 +663,7 @@ How it works:
 - An editor applies its own change at once, then sends it to `commit`. The server applies changes in the order they arrive, raises `seq` by 1, and sends each change to every open editor. A change that no longer applies (for example, someone deleted its block) is rejected, and that editor drops it.
 - The server saves the session as a draft about 1 second after the last change (at the latest every 5 seconds). The save runs as the person who made the last change, with their access rules, and the normal save hook compiles the CSS.
 - While a session is open, the session owns the layout. Any other save of the document gets the session's layout: a stale autosave from another tab, a REST update, or **Publish**. Publish therefore publishes what everyone sees in the editor.
+- Every editor gets a `saved` event after each save and a `published` event after Publish, Unpublish or Revert, so the top bar shows the same status for everyone.
 - The session closes 60 seconds after the last editor leaves and its draft is saved.
 - Payload's document lock would let only one person open a document, so the plugin turns it off on builder collections. Set `multiplayer: false` to keep the lock.
 
@@ -661,11 +692,11 @@ pnpm why @payloadcms/ui
 
 All entries must show one version. Pin `payload`, `@payloadcms/*` and `next` to the same versions across your workspace, then run `pnpm install`. In a monorepo, check that the app and the builder resolve to the same folder: `readlink -f node_modules/@payloadcms/ui` (or `Get-Item node_modules\@payloadcms\ui | Select-Object Target` in PowerShell).
 
-**The Builder tab is empty, or the log says the layout field "is no longer a top-level field".** Another plugin moved the field into tabs after the builder added it (for example `seoPlugin({ tabbedUI: true })`). Put `websiteBuilder` last in `plugins`.
+**The builder is empty, or the log says the layout field "is no longer a top-level field".** Another plugin moved the field into tabs after the builder added it (for example `seoPlugin({ tabbedUI: true })`). Put `websiteBuilder` last in `plugins`.
 
 **"Collection "x" does not exist".** The plugin runs before the collection is added. Add the collection in `collections`, or put `websiteBuilder` after the plugin that adds it.
 
-**The Builder tab shows "Module not found" or no editor.** Run `pnpm payload generate:importmap` after you add the plugin.
+**The builder shows "Module not found", "not found" or no editor.** Run `pnpm payload generate:importmap` after you add or update the plugin.
 
 **The canvas stays blank or shows "Canvas CSS failed to load".** Check that `/builder-canvas` (or your `canvasPath`) renders, that it uses a root layout with `<html>` and `<body>`, and that `css.entry` points to a file that exists.
 

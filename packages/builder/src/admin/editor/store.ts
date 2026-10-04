@@ -3,8 +3,8 @@
 // The editor store: layout, selection, hover and the undo history.
 // Every layout change goes through the sync engine (`live/sync.ts`), which applies operations with
 // the core module and, in live mode, sends them to the server and rebases them on remote commits.
-// Undo stores the INVERSE operations of the user's own edits only. External changes (Payload
-// form, AI agents, other users) replace the layout without entering the history, so undo never
+// Undo stores the INVERSE operations of the user's own edits only. External changes (AI agents,
+// other users) replace the layout without entering the history, so undo never
 // reverts someone else's edit. Undo applies the inverse as NEW local operations, so it syncs like
 // any edit. Parts of it that no longer apply (someone else changed or deleted the block) are skipped.
 
@@ -40,11 +40,6 @@ export type EditorState = {
   variant: Variant
   /** Canvas iframe width in CSS pixels. `null` fills the stage (desktop). */
   canvasWidth: number | null
-  /**
-   * Where the last layout change came from. `remote`: another editor, through the live session
-   * (the server already saves it, so the Payload form is not marked modified).
-   */
-  origin: 'local' | 'remote'
 }
 
 export type ApplyOptions = {
@@ -130,7 +125,6 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
     lastError: null,
     variant: BASE_VARIANT,
     canvasWidth: null,
-    origin: 'local',
   }
   const listeners = new Set<() => void>()
   const warnings = new Set<(text: string) => void>()
@@ -154,10 +148,14 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
     const dropped = new Set(update.dropped)
     const keep = (entry: HistoryEntry) => !(entry.tags.length > 0 && entry.tags.every((tag) => dropped.has(tag)))
     const selectedBefore = state.selectedId
+    if (update.reset) {
+      // The layout was replaced as a whole: the history no longer applies to it.
+      set({ layout: update.layout, undoStack: [], redoStack: [] })
+      return
+    }
     if (update.layout === state.layout && dropped.size === 0) return
     set({
       layout: update.layout,
-      origin: 'remote',
       ...(dropped.size > 0 ? { undoStack: state.undoStack.filter(keep), redoStack: state.redoStack.filter(keep) } : {}),
     })
     if (dropped.size > 0) warn(update.error ? `${EDIT_DROPPED} (${update.error})` : EDIT_DROPPED)
@@ -239,22 +237,11 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
               ].slice(-HISTORY_LIMIT)
       set({
         layout: result.layout,
-        origin: 'local',
         undoStack,
         redoStack: [],
         lastError: null,
         ...(applyOptions.select !== undefined ? { selectedId: applyOptions.select } : {}),
       })
-      return true
-    },
-
-    /**
-     * Replaces the layout with a change that did not come from this user (the Payload form).
-     * History stays. Returns false when a live session owns the layout: the session wins.
-     */
-    load(layout: Layout): boolean {
-      if (!sync.load(layout)) return false
-      set({ layout, origin: 'local' })
       return true
     },
 
@@ -268,7 +255,6 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
       }
       set({
         layout: done.layout,
-        origin: 'local',
         undoStack: state.undoStack.slice(0, -1),
         redoStack: [...state.redoStack, done.reverse],
         selectedId: entry.selectedId,
@@ -286,7 +272,6 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
       }
       set({
         layout: done.layout,
-        origin: 'local',
         redoStack: state.redoStack.slice(0, -1),
         undoStack: [...state.undoStack, done.reverse],
         selectedId: entry.selectedId,

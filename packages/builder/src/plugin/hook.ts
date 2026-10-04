@@ -156,7 +156,9 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
 export function layoutAfterChange(options: { collection: string; sessions: SessionManager }): CollectionAfterChangeHook {
   return ({ context, doc }) => {
     const seq = context?.[GUARD_SEQ_CONTEXT]
-    if (typeof seq === 'number' && doc?.id !== undefined) options.sessions.markSaved(options.collection, doc.id, seq)
+    if (typeof seq === 'number' && doc?.id !== undefined) {
+      options.sessions.markSaved(options.collection, doc.id, seq, { updatedAt: doc.updatedAt, status: doc._status })
+    }
     return doc
   }
 }

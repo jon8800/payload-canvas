@@ -2,34 +2,6 @@
 // Works in Payload's light and dark theme: every color comes from a theme variable.
 
 @layer payload-default {
-  // In the builder tab: hide every default field except the editor, and hide the sidebar.
-  .builder-tab-view {
-    .document-fields__fields > :not(.builder-layout-field) {
-      display: none;
-    }
-
-    .document-fields__sidebar-wrap {
-      display: none;
-    }
-
-    .document-fields__main {
-      display: block;
-    }
-
-    .document-fields__edit {
-      padding: 0;
-      border: 0;
-    }
-
-    .document-fields__edit > * {
-      max-width: none;
-    }
-  }
-
-  .builder-layout-field {
-    width: 100%;
-  }
-
   @keyframes builder-fade-in {
     from {
       opacity: 0;
@@ -62,14 +34,14 @@
 
     display: flex;
     flex-direction: column;
-    // The editor sets its exact height from its top offset.
-    height: 720px;
+    // The full-screen view: the whole viewport, the top bar first.
+    height: 100dvh;
     min-height: 520px;
+    overflow: hidden;
     color: var(--theme-text);
     font-family: var(--font-body);
     font-size: 13px;
     background: var(--be-panel);
-    border-top: 1px solid var(--be-border);
 
     button {
       font-family: inherit;
@@ -134,7 +106,7 @@
   }
 
   // Controls near the right edge open their tooltip to the left.
-  .builder-editor__group--end [data-tooltip],
+  .builder-bar__end [data-tooltip],
   .builder-editor__block-head [data-tooltip],
   .builder-editor__panel-tools [data-tooltip]:last-child,
   .builder-editor__actions [data-tooltip]:last-child,
@@ -306,37 +278,8 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Toolbar
+  // Canvas width controls (in the top bar, see topbar/topbar.scss)
   // ---------------------------------------------------------------------------
-
-  .builder-editor__toolbar {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    align-items: center;
-    gap: 16px;
-    height: 44px;
-    padding: 0 12px;
-    border-bottom: 1px solid var(--be-border);
-    background: var(--be-panel);
-  }
-
-  .builder-editor__group {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    min-width: 0;
-  }
-
-  .builder-editor__group--end {
-    justify-content: flex-end;
-    gap: 8px;
-  }
-
-  .builder-editor__toolbar-center {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
 
   .builder-editor__width-input {
     display: inline-flex;
@@ -1143,10 +1086,6 @@
     }
   }
 
-  .builder-editor__document-intro {
-    margin-bottom: 12px;
-  }
-
   .builder-editor__block-head {
     display: flex;
     align-items: center;
@@ -1249,6 +1188,9 @@
   }
 
   .builder-editor__menu.builder-styles__popover {
+    // Menus outside the Styles panel do not inherit its border color.
+    --bs-border: var(--be-border, var(--theme-elevation-150));
+
     min-width: 200px;
     padding: 4px;
   }
@@ -1779,23 +1721,6 @@
     color: var(--theme-error-500);
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .builder-editor__live-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--theme-elevation-400);
-  }
-
-  .builder-editor__live[data-status="open"] .builder-editor__live-dot {
-    background: var(--theme-success-500);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-success-500) 25%, transparent);
-  }
-
-  .builder-editor__live[data-pending] .builder-editor__live-dot {
-    background: var(--theme-warning-500, #f59e0b);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-warning-500, #f59e0b) 25%, transparent);
   }
 
   // ---------------------------------------------------------------------------

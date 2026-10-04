@@ -1,12 +1,12 @@
 'use client'
 
-// Template mode: reads the template's target collection from the document form, loads the sample
-// document the canvas previews, and searches documents for the "Preview with" picker.
+// Template mode: reads the template's target collection from the loaded document (refreshed when
+// the settings drawer saves), loads the sample document the canvas previews, and searches
+// documents for the "Preview with" picker.
 
-import { useConfig, useFormFields } from '@payloadcms/ui'
+import { useConfig } from '@payloadcms/ui'
 import { useEffect, useState } from 'react'
 
-import { TEMPLATE_PREVIEW_FIELD } from '../../../core/bindings'
 import type { Runtime } from '../runtime'
 import { useValue } from '../valueStore'
 import { docTitle } from './binding'
@@ -50,7 +50,7 @@ export function useCollectionLabel(collection: string | null, form: 'plural' | '
   return collection
 }
 
-/** The preview document id from the form value, when it points into the target collection. */
+/** The preview document id from the template's preview field, when it points into the target collection. */
 function previewId(value: unknown, target: string | null): Id | null {
   if (!target || !isRecord(value) || value.relationTo !== target) return null
   if (isId(value.value)) return value.value
@@ -63,17 +63,15 @@ function patch(runtime: Runtime, next: Partial<TemplateState>) {
 }
 
 /**
- * Keeps `runtime.template` in sync with the document form: the target collection, and the sample
- * document (the designer's pick, else the template's preview document, else the newest document).
+ * Keeps `runtime.template` in sync with the template document: the target collection, and the
+ * sample document (the designer's pick, else the template's preview document, else the newest).
  */
 export function useTemplateController(runtime: Runtime) {
-  const { config, api } = runtime
+  const { api } = runtime
   const { isTemplate, choice } = useValue(runtime.template)
-  const targetField = config.templates?.targetField ?? ''
-  const targetValue = useFormFields(([fields]) => (isTemplate ? fields[targetField]?.value : undefined))
-  const previewValue = useFormFields(([fields]) => (isTemplate ? fields[TEMPLATE_PREVIEW_FIELD]?.value : undefined))
-  const target = typeof targetValue === 'string' && targetValue ? targetValue : null
-  const preferred = previewId(previewValue, target)
+  const { template } = useValue(runtime.doc.meta)
+  const target = isTemplate ? (template?.target ?? null) : null
+  const preferred = previewId(template?.preview, target)
   const titleField = useTitleField(target)
 
   useEffect(() => {

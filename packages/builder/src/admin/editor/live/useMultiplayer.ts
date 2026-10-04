@@ -5,10 +5,12 @@
 // width) in the runtime's value stores. See docs/architecture.md section 12.
 //
 // - Stream: GET {liveEndpoint}/:collection/:id/events?clientId=…[&seq=…&session=…]
-//   Events: `session` (full state), `commit`, `collaborators`, `awareness`.
+//   Events: `session` (full state), `commit`, `collaborators`, `awareness`, `saved` (the draft
+//   holds the session up to a seq) and `published` (publish, unpublish, revert).
 //   On a reconnect with the last session id and seq, the server may replay missed commits
 //   (then `collaborators`); otherwise, or at any time, a fresh `session` replaces the confirmed
-//   layout and the engine rebases local changes on it.
+//   layout and the engine rebases local changes on it. A `session` with `reset` (Revert to
+//   published) discards local changes and the undo history instead.
 // - Commits: POST …/commit, one batch at a time. The broadcast echo is the acknowledgement.
 // - Awareness: POST …/awareness. Selection and hover go out at once, the cursor at most every
 //   50 ms, nothing while the tab is hidden.
@@ -24,6 +26,8 @@ import type {
   LiveCollaboratorsEvent,
   LiveCommitEvent,
   LiveCommitRequest,
+  LivePublishedEvent,
+  LiveSavedEvent,
   LiveSessionEvent,
 } from '../../../live/types'
 import type { Runtime } from '../runtime'
@@ -47,6 +51,12 @@ export type LiveState = {
   lastChange: LiveChange | null
   /** Local changes the server has not confirmed yet. */
   pending: boolean
+  /** The highest seq the saved draft holds. */
+  savedSeq: number
+  /** Confirmed commits that are not saved yet (the session saves about a second after the last one). */
+  unsaved: boolean
+  /** ISO time of the last save. Null until the first save after connecting. */
+  savedAt: string | null
   /** A connection or permission problem. */
   lastError: string | null
 }
@@ -62,14 +72,14 @@ const MAX_BACKOFF_MS = 15_000
 
 export function useMultiplayer(
   runtime: Runtime,
-  { docId, enabled = true, highlightMs = 2500 }: { docId: string | number | null | undefined; enabled?: boolean; highlightMs?: number },
+  { docId, highlightMs = 2500 }: { docId: string | number | null | undefined; highlightMs?: number },
 ): void {
   const { config, store } = runtime
   const id = docId === null || docId === undefined || docId === '' ? null : String(docId)
   const base = id ? `${config.liveEndpoint}/${encodeURIComponent(config.collection)}/${encodeURIComponent(id)}` : null
 
   useEffect(() => {
-    if (!enabled || !base) return
+    if (!base) return
     const engine = store.sync
     engine.setMode('live')
 
@@ -91,6 +101,9 @@ export function useMultiplayer(
       changes: new Map(),
       lastChange: null,
       pending: false,
+      savedSeq: 0,
+      unsaved: false,
+      savedAt: null,
       lastError: null,
     }
     const publish = (patch: Partial<LiveState>) => {
@@ -274,6 +287,12 @@ export function useMultiplayer(
       }
     }
 
+    /** Commits above the saved seq are not saved yet. */
+    const publishSaveState = () => {
+      const unsaved = engine.getState().seq > state.savedSeq
+      if (unsaved !== state.unsaved) publish({ unsaved })
+    }
+
     const onSession = (data: LiveSessionEvent & { sessionId?: string }) => {
       resuming = false
       forceSession = false
@@ -284,8 +303,10 @@ export function useMultiplayer(
         if (collaborator.clientId === engine.clientId) continue
         others.set(collaborator.clientId, collaborator)
       }
-      engine.session(data.seq, normalizeLayout(data.layout), data.sessionId ?? null)
-      publish({ self: data.self ?? null, status: 'open', lastError: null })
+      engine.session(data.seq, normalizeLayout(data.layout), data.sessionId ?? null, data.reset === true)
+      const savedSeq = data.savedSeq ?? data.seq
+      publish({ self: data.self ?? null, status: 'open', lastError: null, savedSeq, unsaved: data.seq > savedSeq })
+      if (data.reset) runtime.notify('The page was reset to its published version.')
       runtime.cursors.set(
         new Map(
           [...others.values()].map(({ awareness, ...info }) => [info.clientId, { info, cursor: awareness?.cursor ?? null, at: Date.now() }]),
@@ -329,6 +350,18 @@ export function useMultiplayer(
         if (!data) return
         confirmResume()
         engine.commit(data)
+        publishSaveState()
+      })
+      es.addEventListener('saved', (e) => {
+        const data = parse<LiveSavedEvent>(e)
+        if (!data) return
+        publish({ savedSeq: Math.max(state.savedSeq, data.seq), savedAt: data.at })
+        publishSaveState()
+        runtime.doc.handleEvent(data)
+      })
+      es.addEventListener('published', (e) => {
+        const data = parse<LivePublishedEvent>(e)
+        if (data) runtime.doc.handleEvent(data)
       })
       es.addEventListener('collaborators', (e) => {
         const data = parse<LiveCollaboratorsEvent>(e)
@@ -386,5 +419,5 @@ export function useMultiplayer(
       runtime.cursors.set(new Map())
       runtime.follow.set(null)
     }
-  }, [base, enabled, highlightMs, runtime, store])
+  }, [base, highlightMs, runtime, store])
 }
