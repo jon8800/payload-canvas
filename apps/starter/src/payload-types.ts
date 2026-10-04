@@ -93,6 +93,13 @@ export interface Config {
     'payload-query-presets': PayloadQueryPreset;
   };
   collectionsJoins: {
+    media: {
+      usedInPages: 'pages';
+      usedInPosts: 'posts';
+      usedInTemplateParts: 'template-parts';
+      usedInBuilderTemplates: 'builder-templates';
+      usedInBuilderSections: 'builder-sections';
+    };
     'payload-folders': {
       documentsAndFolders: 'payload-folders' | 'media';
     };
@@ -237,6 +244,31 @@ export interface Media {
     };
     [k: string]: unknown;
   } | null;
+  usedInPages?: {
+    docs?: (number | Page)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
+  usedInPosts?: {
+    docs?: (number | Post)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
+  usedInTemplateParts?: {
+    docs?: (number | TemplatePart)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
+  usedInBuilderTemplates?: {
+    docs?: (number | BuilderTemplate)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
+  usedInBuilderSections?: {
+    docs?: (number | BuilderSection)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
   folder?: (number | null) | FolderInterface;
   updatedAt: string;
   createdAt: string;
@@ -310,32 +342,6 @@ export interface Media {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "payload-folders".
- */
-export interface FolderInterface {
-  id: number;
-  name: string;
-  folder?: (number | null) | FolderInterface;
-  documentsAndFolders?: {
-    docs?: (
-      | {
-          relationTo?: 'payload-folders';
-          value: number | FolderInterface;
-        }
-      | {
-          relationTo?: 'media';
-          value: number | Media;
-        }
-    )[];
-    hasNextPage?: boolean;
-    totalDocs?: number;
-  };
-  folderType?: 'media'[] | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "pages".
  */
 export interface Page {
@@ -384,6 +390,37 @@ export interface Page {
     };
     [k: string]: unknown;
   } | null;
+  /**
+   * Filled by the website builder from the layout on every save.
+   */
+  builderRefs?:
+    | (
+        | {
+            relationTo: 'media';
+            value: number | Media;
+          }
+        | {
+            relationTo: 'pages';
+            value: number | Page;
+          }
+        | {
+            relationTo: 'posts';
+            value: number | Post;
+          }
+        | {
+            relationTo: 'forms';
+            value: number | Form;
+          }
+        | {
+            relationTo: 'exports';
+            value: number | Export;
+          }
+        | {
+            relationTo: 'imports';
+            value: number | Import;
+          }
+      )[]
+    | null;
   updatedAt: string;
   createdAt: string;
   deletedAt?: string | null;
@@ -466,6 +503,37 @@ export interface Post {
     };
     [k: string]: unknown;
   } | null;
+  /**
+   * Filled by the website builder from the layout on every save.
+   */
+  builderRefs?:
+    | (
+        | {
+            relationTo: 'media';
+            value: number | Media;
+          }
+        | {
+            relationTo: 'pages';
+            value: number | Page;
+          }
+        | {
+            relationTo: 'posts';
+            value: number | Post;
+          }
+        | {
+            relationTo: 'forms';
+            value: number | Form;
+          }
+        | {
+            relationTo: 'exports';
+            value: number | Export;
+          }
+        | {
+            relationTo: 'imports';
+            value: number | Import;
+          }
+      )[]
+    | null;
   updatedAt: string;
   createdAt: string;
   deletedAt?: string | null;
@@ -559,84 +627,40 @@ export interface BuilderTemplate {
     };
     [k: string]: unknown;
   } | null;
+  /**
+   * Filled by the website builder from the layout on every save.
+   */
+  builderRefs?:
+    | (
+        | {
+            relationTo: 'media';
+            value: number | Media;
+          }
+        | {
+            relationTo: 'pages';
+            value: number | Page;
+          }
+        | {
+            relationTo: 'posts';
+            value: number | Post;
+          }
+        | {
+            relationTo: 'forms';
+            value: number | Form;
+          }
+        | {
+            relationTo: 'exports';
+            value: number | Export;
+          }
+        | {
+            relationTo: 'imports';
+            value: number | Import;
+          }
+      )[]
+    | null;
   updatedAt: string;
   createdAt: string;
   _status?: ('draft' | 'published') | null;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "template-parts".
- */
-export interface TemplatePart {
-  id: number;
-  title: string;
-  type: 'header' | 'footer' | 'custom';
-  displayCondition?: {
-    mode?: ('entireSite' | 'specificPages' | 'collectionType' | 'excludePages') | null;
-    pages?: (number | Page)[] | null;
-    collectionType?: ('pages' | 'posts') | null;
-  };
-  builder?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  builderCss?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  builderRichText?: {
-    root: {
-      type: string;
-      children: {
-        type: any;
-        version: number;
-        [k: string]: unknown;
-      }[];
-      direction: ('ltr' | 'rtl') | null;
-      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
-      indent: number;
-      version: number;
-    };
-    [k: string]: unknown;
-  } | null;
-  updatedAt: string;
-  createdAt: string;
-  deletedAt?: string | null;
-  _status?: ('draft' | 'published') | null;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "redirects".
- */
-export interface Redirect {
-  id: number;
-  from: string;
-  to?: {
-    type?: ('reference' | 'custom') | null;
-    reference?:
-      | ({
-          relationTo: 'pages';
-          value: number | Page;
-        } | null)
-      | ({
-          relationTo: 'posts';
-          value: number | Post;
-        } | null);
-    url?: string | null;
-  };
-  isRegex?: boolean | null;
-  updatedAt: string;
-  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -810,27 +834,6 @@ export interface Form {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "form-submissions".
- */
-export interface FormSubmission {
-  id: number;
-  form: number | Form;
-  submissionData?:
-    | {
-        field: string;
-        value: string;
-        id?: string | null;
-      }[]
-    | null;
-  /**
-   * Files uploaded with this submission
-   */
-  attachments?: (number | Media)[] | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "exports".
  */
 export interface Export {
@@ -902,6 +905,218 @@ export interface Import {
   height?: number | null;
   focalX?: number | null;
   focalY?: number | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "template-parts".
+ */
+export interface TemplatePart {
+  id: number;
+  title: string;
+  type: 'header' | 'footer' | 'custom';
+  displayCondition?: {
+    mode?: ('entireSite' | 'specificPages' | 'collectionType' | 'excludePages') | null;
+    pages?: (number | Page)[] | null;
+    collectionType?: ('pages' | 'posts') | null;
+  };
+  builder?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  builderCss?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  builderRichText?: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  } | null;
+  /**
+   * Filled by the website builder from the layout on every save.
+   */
+  builderRefs?:
+    | (
+        | {
+            relationTo: 'media';
+            value: number | Media;
+          }
+        | {
+            relationTo: 'pages';
+            value: number | Page;
+          }
+        | {
+            relationTo: 'posts';
+            value: number | Post;
+          }
+        | {
+            relationTo: 'forms';
+            value: number | Form;
+          }
+        | {
+            relationTo: 'exports';
+            value: number | Export;
+          }
+        | {
+            relationTo: 'imports';
+            value: number | Import;
+          }
+      )[]
+    | null;
+  updatedAt: string;
+  createdAt: string;
+  deletedAt?: string | null;
+  _status?: ('draft' | 'published') | null;
+}
+/**
+ * Sections saved from the page builder with "Save as section…". The builder lists them under "Saved" in Add > Sections.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "builder-sections".
+ */
+export interface BuilderSection {
+  id: number;
+  name: string;
+  /**
+   * Optional, e.g. "Heroes" or "Pricing". Search in the library finds it.
+   */
+  category?: string | null;
+  /**
+   * The section's blocks. To change them, insert the section on a page, edit it there and save it as a section again.
+   */
+  blocks:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  /**
+   * Filled by the website builder from the layout on every save.
+   */
+  builderRefs?:
+    | (
+        | {
+            relationTo: 'media';
+            value: number | Media;
+          }
+        | {
+            relationTo: 'pages';
+            value: number | Page;
+          }
+        | {
+            relationTo: 'posts';
+            value: number | Post;
+          }
+        | {
+            relationTo: 'forms';
+            value: number | Form;
+          }
+        | {
+            relationTo: 'exports';
+            value: number | Export;
+          }
+        | {
+            relationTo: 'imports';
+            value: number | Import;
+          }
+      )[]
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payload-folders".
+ */
+export interface FolderInterface {
+  id: number;
+  name: string;
+  folder?: (number | null) | FolderInterface;
+  documentsAndFolders?: {
+    docs?: (
+      | {
+          relationTo?: 'payload-folders';
+          value: number | FolderInterface;
+        }
+      | {
+          relationTo?: 'media';
+          value: number | Media;
+        }
+    )[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
+  folderType?: 'media'[] | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "redirects".
+ */
+export interface Redirect {
+  id: number;
+  from: string;
+  to?: {
+    type?: ('reference' | 'custom') | null;
+    reference?:
+      | ({
+          relationTo: 'pages';
+          value: number | Page;
+        } | null)
+      | ({
+          relationTo: 'posts';
+          value: number | Post;
+        } | null);
+    url?: string | null;
+  };
+  isRegex?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "form-submissions".
+ */
+export interface FormSubmission {
+  id: number;
+  form: number | Form;
+  submissionData?:
+    | {
+        field: string;
+        value: string;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Files uploaded with this submission
+   */
+  attachments?: (number | Media)[] | null;
+  updatedAt: string;
+  createdAt: string;
 }
 /**
  * API keys for MCP clients. Scopes control which collections and tools each key can access.
@@ -1058,34 +1273,6 @@ export interface Search {
       };
   excerpt?: string | null;
   slug?: string | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * Sections saved from the page builder with "Save as section…". The builder lists them under "Saved" in Add > Sections.
- *
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "builder-sections".
- */
-export interface BuilderSection {
-  id: number;
-  name: string;
-  /**
-   * Optional, e.g. "Heroes" or "Pricing". Search in the library finds it.
-   */
-  category?: string | null;
-  /**
-   * The section's blocks. To change them, insert the section on a page, edit it there and save it as a section again.
-   */
-  blocks:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -1397,6 +1584,11 @@ export interface UsersSelect<T extends boolean = true> {
 export interface MediaSelect<T extends boolean = true> {
   alt?: T;
   caption?: T;
+  usedInPages?: T;
+  usedInPosts?: T;
+  usedInTemplateParts?: T;
+  usedInBuilderTemplates?: T;
+  usedInBuilderSections?: T;
   folder?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -1502,6 +1694,7 @@ export interface PagesSelect<T extends boolean = true> {
   builder?: T;
   builderCss?: T;
   builderRichText?: T;
+  builderRefs?: T;
   updatedAt?: T;
   createdAt?: T;
   deletedAt?: T;
@@ -1532,6 +1725,7 @@ export interface PostsSelect<T extends boolean = true> {
   builder?: T;
   builderCss?: T;
   builderRichText?: T;
+  builderRefs?: T;
   updatedAt?: T;
   createdAt?: T;
   deletedAt?: T;
@@ -1583,6 +1777,7 @@ export interface TemplatePartsSelect<T extends boolean = true> {
   builder?: T;
   builderCss?: T;
   builderRichText?: T;
+  builderRefs?: T;
   updatedAt?: T;
   createdAt?: T;
   deletedAt?: T;
@@ -1864,6 +2059,7 @@ export interface BuilderTemplatesSelect<T extends boolean = true> {
   layout?: T;
   layoutCss?: T;
   layoutRichText?: T;
+  builderRefs?: T;
   updatedAt?: T;
   createdAt?: T;
   _status?: T;
@@ -1876,6 +2072,7 @@ export interface BuilderSectionsSelect<T extends boolean = true> {
   name?: T;
   category?: T;
   blocks?: T;
+  builderRefs?: T;
   updatedAt?: T;
   createdAt?: T;
 }

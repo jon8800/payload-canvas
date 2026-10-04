@@ -51,6 +51,8 @@ type HookOptions = {
   bindings?: BindingCheck
   /** Who changed which field last (the stale-save check). Default: the process-wide clock. */
   fieldClock?: FieldClock
+  /** More server-owned fields (e.g. the references field) the stale-save check leaves out. */
+  ownFields?: readonly string[]
 }
 
 /** `context` flag of the session's own draft saves. */
@@ -147,7 +149,7 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
   const { collection: slug, field, cssField, blocks, css, sessions, bindings } = options
   const clock = options.fieldClock ?? defaultFieldClock()
   // The layout and the plugin's own fields: the session protects them, not the stale-save check.
-  const pluginFields = new Set([field, cssField, richTextFieldName(field)])
+  const pluginFields = new Set([field, cssField, richTextFieldName(field), ...(options.ownFields ?? [])])
 
   return async ({ collection, context, data, operation, originalDoc, req }) => {
     if (!data) return data

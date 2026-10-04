@@ -3,6 +3,7 @@
 // "empty" value); the schema leaves that out to keep it simple for AI tools.
 
 import { getBlockDefinition } from './blocks'
+import { conditionMet, readCondition } from './conditions'
 import { formatProblem } from './formats'
 import { dataFields, fieldBlocks, optionValues, type DataField, type LooseField } from './fields'
 import { isPlainObject } from './tree'
@@ -148,6 +149,12 @@ function checkBlock(
 
 type Report = (path: string, message: string, code?: LayoutErrorCode) => void
 
+/** False when the field's `builderCondition` hides it in the editor. */
+function shown(field: DataField, siblings: Record<string, unknown>, siblingFields: readonly DataField[]): boolean {
+  const condition = readCondition(field)
+  return !condition || conditionMet(condition, siblings, siblingFields)
+}
+
 function isEmpty(value: unknown): boolean {
   return value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)
 }
@@ -163,13 +170,14 @@ function checkFields(fields: readonly unknown[], data: Record<string, unknown>, 
     const at = `${path}.${field.name}`
     if (isEmpty(value)) {
       if (field.required) {
-        report(at, `"${field.name}" is required`, 'required')
+        // A field its condition hides is not required (Payload skips hidden fields too).
+        if (shown(field, data, list)) report(at, `"${field.name}" is required`, 'required')
         continue
       }
       if (value === undefined || value === null) continue
     }
     checkValue(field, value, at, report)
-    checkFormat(field, value, data, at, report)
+    checkFormat(field, value, data, list, at, report)
   }
 }
 
@@ -178,14 +186,20 @@ function checkFields(fields: readonly unknown[], data: Record<string, unknown>, 
  * the editor hides (`builderCondition` not met by a sibling that has a value) is not checked,
  * because a leftover value there is never shown or rendered.
  */
-function checkFormat(field: DataField, value: unknown, siblings: Record<string, unknown>, path: string, report: Report): void {
+function checkFormat(
+  field: DataField,
+  value: unknown,
+  siblings: Record<string, unknown>,
+  siblingFields: readonly DataField[],
+  path: string,
+  report: Report,
+): void {
   const custom = field.admin?.custom
   if (field.type !== 'text' || field.hasMany || typeof value !== 'string' || !custom) return
-  const condition = custom.builderCondition
-  if (isPlainObject(condition) && typeof condition.field === 'string') {
-    const sibling = siblings[condition.field]
-    if (sibling !== undefined && sibling !== null && sibling !== condition.equals) return
-  }
+  // Skipped only when the sibling has a value that hides the prop; with no value it is checked.
+  const condition = readCondition(field)
+  const sibling = condition ? siblings[condition.field] : undefined
+  if (condition && sibling !== undefined && sibling !== null && !conditionMet(condition, siblings, siblingFields)) return
   const problem = formatProblem(custom.builderFormat, value)
   if (problem) report(path, problem, 'format')
 }

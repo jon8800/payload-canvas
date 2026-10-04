@@ -3,10 +3,11 @@
 
 import type { CollectionSlug, ValueWithRelation } from 'payload'
 
+import { conditionMet, readCondition } from '../../../core/conditions'
+import { dataFields } from '../../../core/fields'
 import { formatProblem as formatMessage } from '../../../core/formats'
 
-/** `admin.custom.builderCondition`: show the field only when a sibling field equals a value (or one of a list). */
-export type BuilderCondition = { field: string; equals: unknown }
+export { readCondition, type BuilderCondition } from '../../../core/conditions'
 
 type Id = number | string
 
@@ -32,29 +33,20 @@ export function asId(value: unknown): Id | null {
   return null
 }
 
-export function readCondition(field: FieldShape): BuilderCondition | null {
-  const condition = field.admin?.custom?.builderCondition
-  if (!isRecord(condition) || typeof condition.field !== 'string') return null
-  return { field: condition.field, equals: condition.equals }
-}
-
 /**
  * False when the field must not show in the inspector: hidden, disabled, virtual, or its
- * `builderCondition` does not match. A missing sibling value counts as that sibling's default.
+ * `builderCondition` does not hold. `siblingFields` are the fields that share the data object
+ * (rows, collapsibles and unnamed tabs are flattened), so a missing sibling value counts as that
+ * sibling's default even when the sibling sits in another row.
  */
 export function isFieldVisible(
   field: FieldShape,
   siblingData: Record<string, unknown>,
-  siblingFields: readonly FieldShape[],
+  siblingFields: readonly unknown[],
 ): boolean {
   if (field.admin?.hidden || field.admin?.disabled || field.virtual) return false
   const condition = readCondition(field)
-  if (!condition) return true
-  let current = siblingData[condition.field]
-  if (current === undefined || current === null) {
-    current = siblingFields.find((f) => f.name === condition.field)?.defaultValue
-  }
-  return Array.isArray(condition.equals) ? condition.equals.includes(current) : current === condition.equals
+  return !condition || conditionMet(condition, siblingData, dataFields(siblingFields))
 }
 
 /** True for values the inspector removes from the props instead of storing. */

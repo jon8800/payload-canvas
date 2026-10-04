@@ -139,9 +139,12 @@ function renderBlock(stored: Block, ctx: Context): ReactNode {
   const Component = ctx.components[block.type]
   if (!Component) {
     if (!editor) return null
+    // A known block without a component in this map, e.g. a server-only component the canvas
+    // cannot run: the editor still shows and selects it.
+    const definition = ctx.definitions.get(block.type)
     return (
       <div key={block.id} {...attributes} data-builder-unknown="" style={UNKNOWN_STYLE}>
-        Unknown block: {block.type}
+        {definition ? `${definition.label}: no preview in the editor` : `Unknown block: ${block.type}`}
       </div>
     )
   }

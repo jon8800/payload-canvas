@@ -1,10 +1,12 @@
 import type { CollectionSlug, Field, NamedGroupField } from 'payload'
 
+import type { BuilderCondition } from '../core/conditions'
+
 /**
- * Shows a field only when a sibling field has a value. JSON-safe (Payload's `admin.condition` is a
+ * Shows a field only when a sibling field matches. JSON-safe (Payload's `admin.condition` is a
  * function and does not reach the admin client). The inspector reads it from `admin.custom`.
  */
-export type BuilderCondition = { field: string; equals: unknown }
+export type { BuilderCondition }
 
 /** `admin.custom` for a field that shows only when `field` equals `equals`. */
 export const when = (field: string, equals: unknown) => ({

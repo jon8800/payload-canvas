@@ -3,6 +3,7 @@
 // Run with `pnpm seed:demo`.
 import { getPayload, type Payload } from 'payload'
 import config from '@payload-config'
+import { FORCE_DELETE_CONTEXT } from '@payload-toolkit/builder'
 import { validateLayout, withoutBoundRequired, type Block, type Layout } from '@payload-toolkit/builder/core'
 
 import { builderBlocks } from '@/builder'
@@ -73,7 +74,9 @@ async function clear(payload: Payload) {
   await payload.delete({ collection: 'pages', where: { slug: { in: PAGE_SLUGS } }, trash: true, context })
   await payload.delete({ collection: 'categories', where: { slug: { in: CATEGORIES.map((c) => c.slug) } } })
   const names = [...DEMO_IMAGES.map((i) => i.name), ...OLD_IMAGE_NAMES]
-  await payload.delete({ collection: 'media', where: { filename: { in: names } } })
+  // Other pages may still use the demo images. The seed replaces them anyway, so it skips the
+  // builder's "still used" check.
+  await payload.delete({ collection: 'media', where: { filename: { in: names } }, context: { [FORCE_DELETE_CONTEXT]: true } })
 }
 
 /**

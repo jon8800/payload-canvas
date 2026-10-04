@@ -164,6 +164,7 @@ test('loadLayoutData calls payload.find once per collection', async () => {
     draft: true,
     limit: 2,
     pagination: false,
+    joins: false,
   })
   assert.deepEqual(out.blocks[1]!.props, { image: { id: 'm2', collection: 'media' } })
 })
