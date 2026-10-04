@@ -4,74 +4,159 @@ import * as p from '@clack/prompts'
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { buildDatabaseUrl, createDatabase } from './database.js'
-import { resolveOptions } from './options.js'
-import { ensureMediaFolder, copyStarterFromRepo, downloadStarter, findRepoRoot } from './source.js'
-import { packBuilderPackages, updatePackageJson, writeEnv } from './project.js'
+import { BUILDER_PACKAGES } from './config.js'
+import { buildDatabaseUrl, checkDatabase, createDatabase, type DbState } from './database.js'
+import { resolveOptions, type Options } from './options.js'
+import {
+  builderPackagesArePublished,
+  checkProject,
+  hasBuilderPackages,
+  packBuilderPackages,
+  updatePackageJson,
+  writeEnv,
+  type Tarballs,
+} from './project.js'
 import { hasCommand, run } from './run.js'
+import { copyStarterFromRepo, downloadRepo, findRepoRoot, isRepoRoot } from './source.js'
+
+const PACKAGE_NAMES = BUILDER_PACKAGES.map((pkg) => pkg.name).join(' and ')
+
+/** Works out where the starter files and the builder packages come from. Stops early if the install cannot work. */
+async function resolveSource(options: Options) {
+  if (options.packages && !hasBuilderPackages(options.packages)) {
+    throw new Error(`--packages "${options.packages}" is not a payload-toolkit checkout (no packages/builder folder).`)
+  }
+  // A repo checkout also holds the matching starter, so use it unless --github says otherwise.
+  const checkout = options.packages && isRepoRoot(options.packages) ? options.packages : null
+  const localRepo = options.github ? null : (findRepoRoot() ?? checkout)
+  // Where `pnpm pack` finds the builder packages. Null means: use the version on npm.
+  const packagesRoot = options.packages ?? localRepo
+
+  if (!packagesRoot && options.install) {
+    const published = await builderPackagesArePublished()
+    if (published === false) {
+      throw new Error(
+        [
+          `${PACKAGE_NAMES} are not published to npm yet, so the install would fail.`,
+          'Pick one:',
+          '  --packages <path-to-a-payload-toolkit-checkout>   pack them from a local checkout',
+          '  --no-install                                      only create the files, install later',
+        ].join('\n'),
+      )
+    }
+  }
+  return { localRepo, packagesRoot }
+}
+
+const quote = (value: string) => (/\s/.test(value) ? `"${value}"` : value)
 
 async function main() {
   const options = await resolveOptions()
   if (!options) return
   const { targetDir, name, db } = options
 
-  // 1. Copy the starter.
-  const repoRoot = findRepoRoot()
-  const spinner = p.spinner()
-  spinner.start(repoRoot ? 'Copying the starter from the repo...' : 'Downloading the starter from GitHub...')
-  fs.mkdirSync(targetDir, { recursive: true })
-  if (repoRoot) copyStarterFromRepo(repoRoot, targetDir)
-  else await downloadStarter(targetDir)
-  ensureMediaFolder(targetDir)
-  spinner.stop('Starter files ready.')
+  // 0. Check everything that can fail before we write a single file.
+  const { localRepo, packagesRoot } = await resolveSource(options)
+  const manager = hasCommand('pnpm') ? 'pnpm' : 'npm'
+  let dbState: DbState = 'missing'
+  if (!options.skipDb) {
+    dbState = await checkDatabase(db)
+    if (dbState === 'exists' && !options.reuseDb) {
+      throw new Error(
+        `The database "${db.name}" already exists on ${db.host}:${db.port}. Pass --reuse-db to use it, or pick another --db-name.`,
+      )
+    }
+  }
 
-  // 2. Point the builder packages at local tarballs (repo) or the published version (download).
-  spinner.start('Writing package.json and .env...')
-  const tarballs = repoRoot ? packBuilderPackages(repoRoot, targetDir) : null
-  updatePackageJson(targetDir, name, tarballs)
-  writeEnv(targetDir, buildDatabaseUrl(db))
-  spinner.stop('package.json and .env written.')
+  // 1. Copy the starter. 2. Point the builder packages at local tarballs or at npm. Write .env.
+  // If this part fails, delete the half-made folder so the command can run again.
+  const spinner = p.spinner()
+  let tarballs: Tarballs | null = null
+  try {
+    fs.mkdirSync(targetDir, { recursive: true })
+    if (localRepo) {
+      spinner.start('Copying the starter from the repo...')
+      copyStarterFromRepo(localRepo, targetDir)
+    } else {
+      spinner.start(`Downloading the starter from GitHub (${options.ref})...`)
+      const downloaded = await downloadRepo(options.ref)
+      try {
+        copyStarterFromRepo(downloaded, targetDir)
+      } finally {
+        fs.rmSync(downloaded, { recursive: true, force: true })
+      }
+    }
+    spinner.stop('Starter files ready.')
+
+    spinner.start(packagesRoot ? 'Packing the builder packages...' : 'Writing package.json and .env...')
+    tarballs = packagesRoot ? packBuilderPackages(packagesRoot, targetDir) : null
+    updatePackageJson(targetDir, name, tarballs, manager)
+    writeEnv(targetDir, buildDatabaseUrl(db))
+    spinner.stop('package.json and .env written.')
+  } catch (error) {
+    spinner.error('Failed.')
+    fs.rmSync(targetDir, { recursive: true, force: true })
+    throw error
+  }  for (const problem of checkProject(targetDir)) p.log.warn(problem)
+  if (!tarballs && !options.install) {
+    p.log.warn(`${PACKAGE_NAMES} come from npm. They must be published before "${manager} install" works.`)
+  }
 
   // 3. Create the database.
-  let databaseReady = false
-  try {
-    const created = await createDatabase(db)
-    databaseReady = true
-    p.log.success(created ? `Created database "${db.name}".` : `Database "${db.name}" already exists.`)
-  } catch (error) {
-    p.log.warn(`Could not create the database: ${error instanceof Error ? error.message : String(error)}`)
-    p.log.warn(`Create "${db.name}" yourself, or fix DATABASE_URL in ${path.join(targetDir, '.env')}.`)
+  if (options.skipDb) {
+    p.log.info(`Skipped the database. Put your connection string in ${path.join(targetDir, '.env')}.`)
+  } else if (dbState === 'exists') {
+    p.log.success(`Using the existing database "${db.name}".`)
+  } else {
+    await createDatabase(db)
+    p.log.success(`Created database "${db.name}".`)
   }
 
   // 4. Install. The schema syncs on the first `dev` run (push: true), so there is no migrate step.
-  const manager = hasCommand('pnpm') ? 'pnpm' : 'npm'
   let installed = false
   if (options.install) {
     p.log.step(`Installing dependencies with ${manager}...`)
     installed = run(manager, ['install'], targetDir)
-    if (!installed) throw new Error(`"${manager} install" failed. Fix the error, then run it again in ${targetDir}.`)
-  }
-
-  // 5. Seed.
-  if (options.seed) {
-    if (!installed || !databaseReady) {
-      p.log.warn('Skipped seeding: it needs installed dependencies and a working database.')
-    } else {
-      p.log.step('Seeding demo content...')
-      const seeded = run(manager, ['run', 'seed:demo'], targetDir)
-      if (!seeded) p.log.warn(`Seeding failed. Run "${manager} run seed:demo" in ${targetDir} to try again.`)
+    if (!installed) {
+      throw new Error(`"${manager} install" failed. The project is in ${targetDir}. Fix the error above, then run "${manager} install" there.`)
     }
   }
 
-  const relative = path.relative(process.cwd(), targetDir) || '.'
-  const steps = [
-    `cd ${relative}`,
-    options.install ? null : `${manager} install`,
-    `${manager} run dev`,
-    'Open http://localhost:3000/admin and create the first user.',
-  ].filter(Boolean)
-  p.note(steps.join('\n'), 'Next steps')
-  p.outro('Done.')
+  // 5. Seed.
+  let seeded = false
+  if (options.seed) {
+    p.log.step('Seeding demo content...')
+    seeded = run(manager, ['run', 'seed:demo'], targetDir)
+    if (!seeded) p.log.warn(`Seeding failed. Run "${manager} run seed:demo" in ${targetDir} to try again.`)
+  }
+
+  // 6. Summary.
+  const relative = path.relative(process.cwd(), targetDir)
+  const cdTarget = !relative ? null : relative.startsWith('..') || path.isAbsolute(relative) ? targetDir : relative
+  const run_ = manager === 'pnpm' ? 'pnpm' : 'npm run'
+  const lines = [
+    `Project:   ${targetDir}`,
+    options.skipDb ? 'Database:  not set up (--skip-db)' : `Database:  ${db.name} on ${db.host}:${db.port}`,
+    `Demo data: ${seeded ? 'seeded' : 'not seeded'}`,
+    '',
+    'Next steps:',
+    ...[
+      cdTarget ? `cd ${quote(cdTarget)}` : null,
+      options.install ? null : `${manager} install`,
+      options.skipDb ? 'Set DATABASE_URL in .env' : null,
+      `${run_} dev`,
+    ]
+      .filter((step): step is string => step !== null)
+      .map((step) => `  ${step}`),
+    '  Open http://localhost:3000/admin and create the first user.',
+    '',
+    'Do not run "payload migrate" on the local database. "dev" syncs the schema.',
+    'Before your first production deploy, run this in the project:',
+    `  ${manager === 'pnpm' ? 'pnpm' : 'npx'} payload migrate:create`,
+    'Commit the new files in src/migrations. Migrations belong to your app, not the plugin.',
+  ]
+  p.note(lines.join('\n'), 'Done')
+  p.outro('Your project is ready.')
 }
 
 main().catch((error) => {
