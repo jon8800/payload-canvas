@@ -19,7 +19,7 @@ import { removeBlock } from './actions'
 import { createAssistant, type AssistantController } from './assistant/controller'
 import { createEditorStore, type EditorStore } from './store'
 import { createValueStore, type ValueStore } from './valueStore'
-import type { LiveState } from './live'
+import type { CollaboratorCursor, LiveState, Peer, PeerCursor } from './live'
 import { initialTemplateState, type TemplateState } from './templates/state'
 
 export const OUTLINE_INDENT = 16
@@ -44,6 +44,8 @@ export type DragState = {
   pointer: Point | null
 }
 
+export type Notice = { text: string; at: number; tone?: 'warning' }
+
 /** The canvas frame: its width in CSS pixels and the zoom that fits it into the stage. */
 export type FrameSize = { width: number; zoom: number }
 
@@ -64,12 +66,20 @@ export type Runtime = {
   collapsed: ValueStore<ReadonlySet<string>>
   /** The canvas frame size, set by the canvas. */
   frame: ValueStore<FrameSize>
-  /** Short feedback ("Copied Heading"), shown for a moment. */
-  notice: ValueStore<{ text: string; at: number } | null>
+  /** Short feedback ("Copied Heading"), shown for a moment. `warning` for conflicts with others. */
+  notice: ValueStore<Notice | null>
   /** True while the shortcut help is open. */
   help: ValueStore<boolean>
-  /** Live editing state (remote changes, presence). Null until the live stream starts. */
+  /** Live editing state (connection, collaborators, remote changes). Null when not connected. */
   live: ValueStore<LiveState | null>
+  /** Other editors' selection and canvas width, by clientId. */
+  peers: ValueStore<ReadonlyMap<string, Peer>>
+  /** Other editors' pointers, by clientId. Changes often: subscribe only where cursors draw. */
+  cursors: ValueStore<ReadonlyMap<string, PeerCursor>>
+  /** This editor's pointer on the canvas, relative to the block under it. Sent to others. */
+  pointer: ValueStore<CollaboratorCursor | null>
+  /** The collaborator this editor follows (selection follows theirs). Esc stops. */
+  follow: ValueStore<string | null>
   /** Template mode: the target collection and the sample document the canvas previews. */
   template: ValueStore<TemplateState>
   /** The inspector's top tab. Other parts open the Document tab (e.g. "choose a collection"). */
@@ -90,6 +100,8 @@ export type Runtime = {
   postToCanvas: (message: AdminToCanvas) => void
   runKey: (key: KeyAction) => void
   notify: (text: string) => void
+  /** A warning notice, e.g. an undo that conflicted with someone else's change. */
+  warn: (text: string) => void
   blockLabel: (type: string) => string
   /** Icon name of a block type: the definition's `icon`, else the type itself. */
   blockIcon: (type: string) => string
@@ -132,7 +144,7 @@ export function createRuntime(config: BuilderClientConfig, api: string): Runtime
       // Storage blocked: the state lasts for this session only.
     }
   })
-  const notice = createValueStore<{ text: string; at: number } | null>(null)
+  const notice = createValueStore<Notice | null>(null)
 
   const runtime: Runtime = {
     config,
@@ -147,6 +159,10 @@ export function createRuntime(config: BuilderClientConfig, api: string): Runtime
     notice,
     help: createValueStore(false),
     live: createValueStore<LiveState | null>(null),
+    peers: createValueStore<ReadonlyMap<string, Peer>>(new Map()),
+    cursors: createValueStore<ReadonlyMap<string, PeerCursor>>(new Map()),
+    pointer: createValueStore<CollaboratorCursor | null>(null),
+    follow: createValueStore<string | null>(null),
     template: createValueStore<TemplateState>(initialTemplateState(config)),
     inspectorTab: createValueStore<InspectorTab>('block'),
     assistant: null,
@@ -172,11 +188,13 @@ export function createRuntime(config: BuilderClientConfig, api: string): Runtime
       if (key === 'redo') store.redo()
       if (key === 'escape') {
         if (runtime.help.get()) runtime.help.set(false)
+        else if (runtime.follow.get()) runtime.follow.set(null)
         else store.select(null)
       }
       if (key === 'delete' && selectedId) removeBlock(runtime, selectedId)
     },
     notify: (text) => notice.set({ text, at: Date.now() }),
+    warn: (text) => notice.set({ text, at: Date.now(), tone: 'warning' }),
     blockLabel,
     blockIcon: (type) => getBlockDefinition(config.blocks, type)?.icon ?? type,
     createBlock(type) {
@@ -190,6 +208,7 @@ export function createRuntime(config: BuilderClientConfig, api: string): Runtime
       return block
     },
   }
+  store.onWarning((text) => runtime.warn(text))
   if (config.ai) runtime.assistant = createAssistant(runtime, config.ai.endpoint)
   return runtime
 }

@@ -20,7 +20,7 @@ function loadSdk(): Promise<Sdk | null> {
 }
 
 export const NO_KEY_MESSAGE =
-  'No Anthropic credentials found. Set ANTHROPIC_API_KEY in the server environment (for example in .env) and restart the server, or run `ant auth login` on the server.'
+  'No Anthropic credentials found. Set ANTHROPIC_API_KEY in the server environment (for example in .env) and restart the server, or run `ant auth login` on the server. Or set OPENROUTER_API_KEY instead to use OpenRouter.'
 
 export type LoadedClient = { client: AiClient; describeError: DescribeError } | { error: string }
 

@@ -1,12 +1,13 @@
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
-import { ValidationError, type CollectionBeforeChangeHook } from 'payload'
+import { ValidationError, type CollectionAfterChangeHook, type CollectionBeforeChangeHook } from 'payload'
 import { withoutBoundRequired } from '../core/bindings'
 import { collectClasses } from '../core/classes'
 import { normalizeLayout } from '../core/tree'
 import type { BlockDefinition, Layout } from '../core/types'
 import { validateLayout, type LayoutError } from '../core/validate'
 import { compileClasses, type CssOptions } from '../css'
+import type { SessionManager } from '../live/session'
 
 /** Value of the generated CSS field. */
 export type GeneratedCss = { hash: string; css: string }
@@ -17,7 +18,14 @@ type HookOptions = {
   cssField: string
   blocks: BlockDefinition[]
   css: CssOptions
+  /** The live document sessions. While one is open, it owns the layout (see the guard below). */
+  sessions?: SessionManager
 }
+
+/** `context` flag of the session's own draft saves. */
+export const SESSION_SAVE_CONTEXT = 'builderSession'
+/** `context` key where the guard records the session seq it wrote. */
+const GUARD_SEQ_CONTEXT = 'builderSessionSeq'
 
 function isGeneratedCss(value: unknown): value is GeneratedCss {
   if (!value || typeof value !== 'object') return false
@@ -66,10 +74,22 @@ function formatErrors(errors: LayoutError[]): string {
  * slot rules, wrong prop types) always block.
  */
 export function layoutBeforeChange(options: HookOptions): CollectionBeforeChangeHook {
-  const { collection: slug, field, cssField, blocks, css } = options
+  const { collection: slug, field, cssField, blocks, css, sessions } = options
 
-  return async ({ collection, data, originalDoc, req }) => {
+  return async ({ collection, context, data, operation, originalDoc, req }) => {
     if (!data) return data
+
+    // Session guard: while editors have the document open, the live session owns the layout.
+    // A save from anywhere else (a stale autosave, Publish, the REST API) gets the session's
+    // layout, so it can never overwrite collaborators. Publish therefore publishes the session.
+    const docId = originalDoc?.id as string | number | undefined
+    if (sessions && operation === 'update' && docId !== undefined && !context?.[SESSION_SAVE_CONTEXT]) {
+      const open = sessions.peek(slug, docId)
+      if (open) {
+        data[field] = structuredClone(open.layout)
+        if (context) context[GUARD_SEQ_CONTEXT] = open.seq
+      }
+    }
 
     const previous: unknown = originalDoc?.[cssField]
     // The generated field is server-owned. Ignore what the client sends.
@@ -125,5 +145,18 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
       if (isGeneratedCss(previous)) data[cssField] = previous
     }
     return data
+  }
+}
+
+/**
+ * After a guarded save stored the session's layout, the session does not need to save that
+ * state again. This matters after Publish: a later draft save of the same layout would mark the
+ * document as changed.
+ */
+export function layoutAfterChange(options: { collection: string; sessions: SessionManager }): CollectionAfterChangeHook {
+  return ({ context, doc }) => {
+    const seq = context?.[GUARD_SEQ_CONTEXT]
+    if (typeof seq === 'number' && doc?.id !== undefined) options.sessions.markSaved(options.collection, doc.id, seq)
+    return doc
   }
 }

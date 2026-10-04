@@ -7,6 +7,7 @@
 // grouped by turn, so one Ctrl+Z reverts a whole assistant turn. The layout field sync and
 // Payload's autosave persist them. The assistant never calls a save endpoint.
 
+import { clientIdentity } from '../../../ai/config'
 import type { AiChatRequest, AiMessage, AiStreamEvent } from '../../../ai/types'
 import type { Operation } from '../../../core/types'
 import { changedIds } from '../live'
@@ -18,6 +19,7 @@ import {
   closeTurn,
   EMPTY_HISTORY,
   historyKey,
+  historyMatches,
   loadHistory,
   saveHistory,
   toolUseIds,
@@ -67,6 +69,10 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
   let collection = ''
   let docId: string | number | null = null
   let abort: AbortController | null = null
+  const ai = runtime.config.ai
+  /** `${provider}:${model}` of the server. A chat written by another one starts over. */
+  const identity = ai ? clientIdentity(ai) : 'anthropic:unknown'
+  const emptyHistory = (): ChatHistory => ({ ...EMPTY_HISTORY, provider: identity })
 
   const patch = (next: Partial<AssistantState>) => state.set({ ...state.get(), ...next })
   const save = () => {
@@ -219,7 +225,7 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
     const text = input.trim()
     const current = state.get()
     if (!text || current.streaming || !current.key || docId === null) return
-    const history = capHistory(current.history)
+    const history = { ...capHistory(current.history), provider: identity }
     const messages: AiMessage[] = [...history.messages, { role: 'user', content: text }]
     state.set({
       ...current,
@@ -291,12 +297,14 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
       abort?.abort()
       collection = nextCollection
       docId = known ? id : null
+      const stored = key ? loadHistory(storage(), key) : EMPTY_HISTORY
+      const matches = historyMatches(stored, identity)
       state.set({
         key,
-        history: key ? loadHistory(storage(), key) : EMPTY_HISTORY,
+        history: matches ? stored : emptyHistory(),
         streaming: false,
         live: null,
-        notice: null,
+        notice: matches ? null : { kind: 'info', message: `New chat: the assistant now uses ${ai?.providerLabel ?? 'another provider'} (${ai?.model ?? 'another model'}).` },
         failed: null,
         draft: '',
       })
@@ -304,7 +312,7 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
     newChat() {
       abort?.abort()
       const { key, draft } = state.get()
-      state.set({ key, history: EMPTY_HISTORY, streaming: false, live: null, notice: null, failed: null, draft })
+      state.set({ key, history: emptyHistory(), streaming: false, live: null, notice: null, failed: null, draft })
       save()
     },
     retry() {

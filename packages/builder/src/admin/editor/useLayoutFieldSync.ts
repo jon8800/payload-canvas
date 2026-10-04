@@ -25,12 +25,15 @@ export function jsonEqual(a: unknown, b: unknown): boolean {
  *
  * - Load: reads the field once the form has initialized. "Last written" is set before the store
  *   loads, so the load never writes back.
- * - Write: every store layout change calls `setValue`, which marks the form modified, so autosave runs.
+ * - Write: every store layout change calls `setValue`. Own edits mark the form modified, so
+ *   autosave runs. Remote changes from the live session do not: the session saves them.
  * - Incoming values that deep-equal the store are ignored (the server echoing our own value).
  * - Incoming values that deep-equal one of our own recent writes are stale echoes: autosave
  *   returns the value it saved, which can be older than edits made while it ran. The store keeps
  *   its newer layout and writes it again, so no edit is lost.
  * - Any other incoming value loads as an external change. It does not enter the undo history.
+ *   While a live session is open the session's layout wins: the store refuses the value and the
+ *   form gets the store's layout back.
  */
 export function useLayoutFieldSync(store: EditorStore, path: string): { ready: boolean } {
   const { formInitializing, setValue, value } = useField<unknown>({ path })
@@ -67,18 +70,24 @@ export function useLayoutFieldSync(store: EditorStore, path: string): { ready: b
     }
 
     const layout = normalizeLayout(value)
-    lastWrittenRef.current = layout
-    store.load(layout)
+    if (store.load(layout)) {
+      lastWrittenRef.current = layout
+      return
+    }
+    // A live session owns the layout: put the session's layout back into the form.
+    lastWrittenRef.current = current
+    setValue(current)
   }, [formInitializing, setValue, store, value])
 
   useEffect(
     () =>
       store.subscribe(() => {
-        const { layout } = store.getState()
+        const { layout, origin } = store.getState()
         if (!readyRef.current || layout === lastWrittenRef.current) return
         lastWrittenRef.current = layout
         recentWritesRef.current = [...recentWritesRef.current, layout].slice(-RECENT_WRITES)
-        setValue(layout)
+        // Another editor's change: the live session saves it, so it must not trigger an autosave here.
+        setValue(layout, origin === 'remote')
       }),
     [setValue, store],
   )

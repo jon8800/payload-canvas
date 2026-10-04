@@ -7,6 +7,7 @@ import { findLocation, getBlockDefinition, slotNames, walkBlocks } from '../../c
 import type { Block, Layout } from '../../core/types'
 import { ancestors, duplicateBlock, removeBlock, toggleHidden } from './actions'
 import { BlockIcon, Icon, type IconName } from './icons'
+import { PeerDots } from './live/PresenceUI'
 import { OUTLINE_INDENT, useRuntime, type DragData, type Runtime } from './runtime'
 import { useEditor } from './store'
 import { FIELD_BLOCK, LIST_BLOCK } from './templates/binding'
@@ -316,6 +317,7 @@ function OutlineRow({ row }: { row: Row }) {
       </span>
       <span className="builder-editor__row-type">{label}</span>
       {text && <span className="builder-editor__row-text">{text}</span>}
+      <PeerDots blockId={block.id} />
       {bindingCount > 0 && (
         <span
           className="builder-editor__row-bound"

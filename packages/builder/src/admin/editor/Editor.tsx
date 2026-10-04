@@ -20,11 +20,12 @@ import { DragLayer } from './DragLayer'
 import { Inspector } from './Inspector'
 import { Library } from './Library'
 import { Outline } from './Outline'
-import { computeDrop, createRuntime, RuntimeContext, type DragData, type DragState, type Runtime } from './runtime'
+import { computeDrop, createRuntime, RuntimeContext, toCanvasPoint, type DragData, type DragState, type Runtime } from './runtime'
 import { bindShortcuts } from './shortcuts'
 import { Toolbar } from './Toolbar'
 import { useLayoutFieldSync } from './useLayoutFieldSync'
-import { useLiveOperations } from './live'
+import { cursorAt, useMultiplayer } from './live'
+import { useFollow } from './live/useFollow'
 import { useTemplateController } from './templates/useTemplate'
 
 const COLLISION_ID = 'builder-drop'
@@ -55,8 +56,8 @@ export function Editor({ config, path }: { config: BuilderClientConfig; path: st
   const [runtime] = useState(() => createRuntime(config, payloadConfig.routes.api))
   const { ready } = useLayoutFieldSync(runtime.store, path)
   const { id: docId } = useDocumentInfo()
-  const live = useLiveOperations({ config, docId, store: runtime.store, enabled: ready, highlightMs: 2500 })
-  useEffect(() => runtime.live.set(live), [runtime, live])
+  useMultiplayer(runtime, { docId, enabled: ready })
+  useFollow(runtime)
   useTemplateController(runtime)
   useEffect(() => runtime.assistant?.setDocument(config.collection, docId), [runtime, config.collection, docId])
   useEffect(() => () => runtime.assistant?.stop(), [runtime])
@@ -114,6 +115,11 @@ export function Editor({ config, path }: { config: BuilderClientConfig; path: st
     if (!current) return
     const data = collisions?.[0]?.data as Pick<DragState, 'zone' | 'target' | 'pointer'> | undefined
     runtime.drag.set({ ...current, zone: data?.zone ?? null, target: data?.target ?? null, pointer: data?.pointer ?? null })
+    // The iframe ignores the pointer while dragging: others see the cursor from the drag position.
+    const iframe = runtime.iframeRef.current
+    const measurement = runtime.measurement.get()
+    const local = iframe && data?.pointer ? toCanvasPoint(iframe, data.pointer) : null
+    runtime.pointer.set(local && measurement ? cursorAt(runtime.store.getState().layout, measurement, local) : null)
   }
 
   const endDrag = () => {

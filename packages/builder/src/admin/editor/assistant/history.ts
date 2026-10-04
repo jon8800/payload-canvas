@@ -1,5 +1,5 @@
-// Assistant chat history: the exact Anthropic messages per document, kept in local storage and
-// sent back on every request. Pure functions, so they are unit-tested.
+// Assistant chat history: the exact model messages per document, kept in local storage and sent
+// back on every request. Pure functions, so they are unit-tested.
 
 import type { AiMessage } from '../../../ai/types'
 
@@ -12,6 +12,12 @@ export type ChatHistory = {
   messages: AiMessage[]
   /** Tool chips by tool call id. The summaries come from `tool` events, not from the messages. */
   tools: Record<string, ToolInfo>
+  /**
+   * `${provider}:${model}` that wrote the messages. Another provider or model cannot replay them,
+   * so the panel starts a new chat when it changes. Missing in chats saved before providers existed
+   * (those were Anthropic).
+   */
+  provider?: string
 }
 
 export type ContentBlock = { type: string; [key: string]: unknown }
@@ -76,7 +82,7 @@ export function capHistory(history: ChatHistory, maxChars = MAX_HISTORY_CHARS): 
   }
   if (from === 0) return history
   const kept = messages.slice(from)
-  return { messages: kept, tools: pickTools(kept, history.tools) }
+  return { ...history, messages: kept, tools: pickTools(kept, history.tools) }
 }
 
 /** Ids of the tool_use blocks in assistant messages, in order. */
@@ -161,6 +167,16 @@ function isHistory(value: unknown): value is ChatHistory {
   if (!value || typeof value !== 'object') return false
   const v = value as ChatHistory
   return Array.isArray(v.messages) && Boolean(v.tools) && typeof v.tools === 'object'
+}
+
+/**
+ * True when a stored chat can be sent to the current provider and model. Chats saved before the
+ * history recorded a provider were written by Anthropic.
+ */
+export function historyMatches(history: ChatHistory, identity: string): boolean {
+  if (history.messages.length === 0) return true
+  if (history.provider) return history.provider === identity
+  return identity.startsWith('anthropic:')
 }
 
 export function loadHistory(storage: StorageLike | null, key: string): ChatHistory {

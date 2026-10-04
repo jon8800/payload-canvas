@@ -1,6 +1,7 @@
 import path from 'node:path'
 import type { CollectionConfig, Config, Field, JSONField, Plugin, RichTextField } from 'payload'
-import { AI_PATH, aiEndpoints, DEFAULT_AI_MODEL } from '../ai/endpoint'
+import { AI_PATH, aiEndpoints } from '../ai/endpoint'
+import { aiClientConfig } from '../ai/config'
 import type { AiOptions } from '../ai/types'
 import { defaultBlocks } from '../blocks'
 import { richTextFieldName } from '../core/blocks'
@@ -13,8 +14,8 @@ import {
   type TemplatesClientConfig,
 } from '../core/types'
 import { getCanvasCssInput, getStyleTokens, type CssOptions, type TailwindPlugins } from '../css'
-import { createLiveRuntime, LIVE_PATH, LIVE_RUNTIME_KEY, liveEndpoints, type LiveBus } from '../live'
-import { layoutBeforeChange } from './hook'
+import { defaultLiveRuntime, installShutdownFlush, LIVE_PATH, LIVE_RUNTIME_KEY, liveEndpoints, type SessionManager } from '../live'
+import { layoutAfterChange, layoutBeforeChange } from './hook'
 import { toJsonSafe } from './jsonSafe'
 import { listCollectionsOf } from './listCollections'
 import {
@@ -65,16 +66,23 @@ export type WebsiteBuilderOptions = {
   /** Ready-made sections shown in the editor's library and offered to AI tools. */
   sections?: SectionDefinition[]
   /**
-   * Live editing: open editors receive changes made by AI agents (MCP) and the operations
-   * endpoint. The default bus is in-process (one app server). With several servers, pass a bus
-   * built on Postgres LISTEN/NOTIFY (see `live/bus.ts`).
+   * Live editing: every open editor and every AI agent (MCP) edits one shared in-memory session
+   * per document, and the server saves its draft about a second after the last change. Sessions
+   * live in one app server process: with several servers, route each document to one server.
    */
-  live?: { bus?: LiveBus; heartbeatMs?: number }
+  live?: { heartbeatMs?: number }
+  /**
+   * Several people can edit the same document at once (default `true`). The plugin then turns
+   * off Payload's document locking on builder collections. `false` keeps the lock: one person
+   * edits a document at a time.
+   */
+  multiplayer?: boolean
   /** Options for the templates collection. It exists when a collection sets `templates: true`. */
   templates?: TemplatesOptions
   /**
-   * The AI assistant in the editor (Claude). Presence enables it. Needs the `@anthropic-ai/sdk`
-   * package and Anthropic credentials (ANTHROPIC_API_KEY). See the README, "AI assistant".
+   * The AI assistant in the editor. Presence enables it. Works with Anthropic, OpenRouter,
+   * Cloudflare AI Gateway or any OpenAI-compatible API; without `ai.provider` it reads
+   * BUILDER_AI_PROVIDER / OPENROUTER_API_KEY / ANTHROPIC_API_KEY. See docs/ai/providers.md.
    */
   ai?: AiOptions
 }
@@ -99,7 +107,8 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
     const apiRoute = config.routes?.api ?? '/api'
     const canvasPath = options.canvasPath ?? '/builder-canvas'
     const sourceCollections = config.collections ?? []
-    const live = createLiveRuntime(options.live?.bus)
+    const live = defaultLiveRuntime()
+    const multiplayer = options.multiplayer ?? true
 
     for (const slug of Object.keys(options.collections)) {
       if (!sourceCollections.some((c) => c.slug === slug)) {
@@ -189,9 +198,9 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           sections: options.sections ?? [],
           liveEndpoint: `${apiRoute}${LIVE_PATH}`,
           templates: clientTemplates,
-          ai: options.ai ? { endpoint: `${apiRoute}${AI_PATH}`, model: options.ai.model ?? DEFAULT_AI_MODEL } : null,
+          ai: options.ai ? aiClientConfig(options.ai, `${apiRoute}${AI_PATH}`) : null,
         }
-        return addBuilder(collection, { field, clientConfig, blocks, css })
+        return addBuilder(collection, { field, clientConfig, blocks, css, sessions: live.sessions, multiplayer })
       }),
       // Server-only: the MCP tools read the live runtime from here, so they share the bus and lock.
       custom: { ...config.custom, [LIVE_RUNTIME_KEY]: live, ...(templates ? { [TEMPLATES_CONFIG_KEY]: templates } : {}) },
@@ -229,6 +238,8 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       ],
       onInit: async (payload) => {
         await config.onInit?.(payload)
+        // Save unsaved live edits when the server stops.
+        installShutdownFlush(live.sessions)
         for (const [slug, field] of Object.entries(fieldNames)) {
           const collection = payload.config.collections.find((c) => c.slug === slug)
           const topLevel = collection?.fields.some((f) => 'name' in f && f.name === field)
@@ -254,10 +265,12 @@ type AddBuilderArgs = {
   clientConfig: BuilderClientConfig
   blocks: BlockDefinition[]
   css: CssOptions
+  sessions: SessionManager
+  multiplayer: boolean
 }
 
 function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): CollectionConfig {
-  const { field, clientConfig, blocks, css } = args
+  const { field, clientConfig, blocks, css, sessions, multiplayer } = args
   const cssField = cssFieldName(field)
 
   // An existing field with this name (also inside rows, collapsibles or unnamed tabs) is reused
@@ -313,12 +326,15 @@ function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): Collect
   return {
     ...collection,
     fields: [...fields, layoutField, generatedCssField, ...(richText ? [richText] : [])],
+    // Payload's document lock lets only one person open a document. Multiplayer needs it off.
+    ...(multiplayer ? { lockDocuments: false as const } : {}),
     hooks: {
       ...collection.hooks,
       beforeChange: [
         ...(collection.hooks?.beforeChange ?? []),
-        layoutBeforeChange({ collection: collection.slug, field, cssField, blocks, css }),
+        layoutBeforeChange({ collection: collection.slug, field, cssField, blocks, css, sessions }),
       ],
+      afterChange: [...(collection.hooks?.afterChange ?? []), layoutAfterChange({ collection: collection.slug, sessions })],
     },
     admin: {
       ...collection.admin,

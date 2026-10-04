@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 
 import { Icon, type IconName } from './icons'
+import { Presence } from './live/PresenceUI'
 import { useRuntime } from './runtime'
 import { shortcutList } from './shortcuts'
 import { useEditor } from './store'
@@ -88,7 +89,7 @@ export function Toolbar() {
             </button>
           </output>
         )}
-        <LivePresence />
+        <Presence widths={widths} />
         <AssistantButton />
         <ShortcutHelp />
       </div>
@@ -196,47 +197,4 @@ function ShortcutHelp() {
       )}
     </div>
   )
-}
-
-/** Who else has this document open, and the last change an AI agent or another person made. */
-function LivePresence() {
-  const runtime = useRuntime()
-  const live = useValue(runtime.live)
-  if (!live) return null
-  const others = live.members.filter((m) => !m.self)
-  const status = live.status === 'open' ? 'Live' : live.status === 'connecting' ? 'Connecting…' : 'Reconnecting…'
-  const recent = live.lastChange && live.recentlyChanged.size > 0 ? live.lastChange.actor : null
-  return (
-    <div className="builder-editor__live" data-status={live.status}>
-      {recent && (
-        <span className="builder-editor__live-activity">
-          <Icon name={recent.type === 'ai' ? 'sparkle' : 'user'} size={12} />
-          {recent.label} is editing
-        </span>
-      )}
-      {live.lastError && (
-        <span className="builder-editor__live-error" title={live.lastError}>
-          Sync issue
-        </span>
-      )}
-      <span className="builder-editor__live-members">
-        {others.slice(0, 4).map((m) => (
-          <span
-            key={`${m.type}:${m.name}`}
-            className={`builder-editor__avatar builder-editor__avatar--${m.type}`}
-            data-tooltip={`${m.name}${m.type === 'ai' ? ' (AI)' : ''} has this page open`}
-          >
-            {m.type === 'ai' ? <Icon name="sparkle" size={11} /> : initials(m.name)}
-          </span>
-        ))}
-        {others.length > 4 && <span className="builder-editor__avatar">+{others.length - 4}</span>}
-      </span>
-      <span className="builder-editor__live-dot" data-tooltip={`${status} · changes from AI agents and other editors appear here instantly`} />
-    </div>
-  )
-}
-
-function initials(name: string): string {
-  const parts = name.replace(/@.*/, '').split(/[\s._-]+/).filter(Boolean)
-  return (parts[0]?.[0] ?? '?').toUpperCase() + (parts[1]?.[0] ?? '').toUpperCase()
 }

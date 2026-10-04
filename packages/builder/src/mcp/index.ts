@@ -5,8 +5,8 @@
 //
 // Every tool takes a `collection` argument and declares `routing: { kind: 'collection' }`, so the
 // toolkit checks the API key's scope for that collection. Handlers run as the key's user with
-// `overrideAccess: false`. Writes go through `applyLiveOperations`, the same code path as the
-// live operations endpoint, so open editors show AI changes as they happen.
+// `overrideAccess: false`. Writes are commits to the document's live session, the same path as
+// the editor's own edits, so AI changes merge with people's edits as they happen.
 
 import type { PayloadRequest, SanitizedCollectionConfig } from 'payload'
 import { z, type ZodTypeAny } from 'zod'
@@ -26,8 +26,9 @@ import { blockJsonSchema } from '../core/schema'
 import { normalizeLayout, subtreeIds } from '../core/tree'
 import type { BlockDefinition, Layout, Operation, SectionDefinition } from '../core/types'
 import { validateLayout } from '../core/validate'
-import { actorFromUser, applyLiveOperations, splitLayoutErrors, userLabel, type LiveDocStore } from '../live/apply'
+import { actorFromUser, splitLayoutErrors, userLabel, type LiveDocStore } from '../live/apply'
 import { liveRuntimeOf } from '../live/runtime'
+import type { CommitResult } from '../live/session'
 import type { LiveActor } from '../live/types'
 import { listCollectionsOf } from '../plugin/listCollections'
 import { templatesConfigOf } from '../plugin/templates'
@@ -220,25 +221,39 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     return { type: 'ai', id: base.id, label: cached.name ?? fallback }
   }
 
+  /** Commits operations to the document's live session as the AI collaborator. */
   const apply = async (
     req: PayloadRequest,
     collection: string,
     id: string,
     ops: unknown[] | ((layout: Layout) => Operation[] | string),
-  ) =>
-    applyLiveOperations({
-      payload: req.payload as unknown as LiveDocStore,
-      req,
+  ): Promise<CommitResult> => {
+    const runtime = liveRuntimeOf(req.payload)
+    const drafts = collectionConfig(req, collection)?.versions?.drafts
+    if (!(await runtime.canUpdate(req, collection, id))) {
+      return { ok: false, status: 403, error: 'Not allowed to edit this document (or it does not exist).', seq: 0 }
+    }
+    return runtime.sessions.commit({
+      target: {
+        collection,
+        id,
+        field: fieldOf(collection),
+        drafts: Boolean(drafts),
+        autosave: typeof drafts === 'object' && Boolean(drafts.autosave),
+      },
+      store: req.payload as unknown as LiveDocStore,
       user: req.user,
-      collection,
-      id,
-      field: fieldOf(collection),
-      drafts: hasDrafts(req, collection),
-      blocks,
-      ops,
       actor: await aiActor(req),
-      runtime: liveRuntimeOf(req.payload),
+      ops,
+      blocks,
     })
+  }
+
+  /** The layout people see now: the open live session's, else the saved draft's. */
+  const currentLayout = (req: PayloadRequest, collection: string, doc: Record<string, unknown>) => {
+    const open = liveRuntimeOf(req.payload).sessions.peek(collection, String(doc.id))
+    return open ? { layout: open.layout, seq: open.seq } : { layout: normalizeLayout(doc[fieldOf(collection)]) }
+  }
 
   const listBlocks: BuilderMcpTool = {
     name: 'listBlocks',
@@ -304,7 +319,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     name: 'insertSection',
     routing: { kind: 'collection', action: 'update' },
     description: [
-      'Inserts a ready-made section (from listSections) into the draft of a document. All block ids are regenerated. Saves a draft (never publishes). People with the page open in the editor see the section appear live.',
+      'Inserts a ready-made section (from listSections) into the draft of a document. All block ids are regenerated. Saves a draft about a second later (never publishes). People with the page open in the editor see the section appear live.',
       'Default position: the end of the page. Set parentId/slot/index to insert elsewhere (index = final index in the target list).',
       'Returns the inserted blocks with their NEW ids. Then adjust their text and classes with applyOperations "update".',
     ].join('\n'),
@@ -332,7 +347,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       return text({
         ok: true,
         section: section.id,
-        version: result.version,
+        seq: result.seq,
         inserted,
         insertedIds: inserted.flatMap((b) => subtreeIds(b)),
         ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}),
@@ -344,7 +359,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     name: 'getLayout',
     routing: { kind: 'collection', action: 'read' },
     description:
-      'Returns the current DRAFT layout of a document with every block id, plus `version` (the draft\'s updatedAt). Call it before applyOperations to get the ids you target. A person may edit the page at the same time, so read it again before a large change.',
+      'Returns the current DRAFT layout of a document with every block id, including unsaved live edits by people who have the page open, plus `version` (the saved draft\'s updatedAt). Call it before applyOperations to get the ids you target. A person may edit the page at the same time, so read it again before a large change.',
     parameters: { collection: collectionArg, id: idArg },
     handler: async (args, req) => {
       const collection = String(args.collection)
@@ -361,7 +376,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
         ...(titleField && typeof doc[titleField] === 'string' ? { title: doc[titleField] } : {}),
         ...(doc._status ? { status: doc._status } : {}),
         version: doc.updatedAt,
-        layout: normalizeLayout(doc[fieldOf(collection)]),
+        ...currentLayout(req, collection, doc),
       })
     },
   }
@@ -370,7 +385,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     name: 'applyOperations',
     routing: { kind: 'collection', action: 'update' },
     description: [
-      'Edits the layout of a document with a list of operations, applied in order, all or nothing. Saves a draft (never publishes). People with the page open in the editor see each change live.',
+      'Edits the layout of a document with a list of operations, applied in order, all or nothing. Saves a draft about a second later (never publishes). People with the page open in the editor see each change live.',
       'Operations: insert { block, to }, move { id, to }, remove { id }, duplicate { id, newId? }, update { id, props?, unsetProps?, className?, hidden?, bindings? }. "update" merges props and bindings; className REPLACES all classes, so send the full list.',
       'Templates are edited the same way: collection = the templates collection, id = the template id from listTemplates.',
       'If any operation fails, nothing is saved and the error names the failing operation. Call getLayout for current ids first. The result is validated against the block schemas: missing required props are allowed in drafts (warnings), wrong types and slot rules are errors.',
@@ -395,7 +410,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       }
       return text({
         ok: true,
-        version: result.version,
+        seq: result.seq,
         applied: result.ops.length,
         changedIds: [...changed],
         ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}),
@@ -426,7 +441,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
         if (!args.id) return fail('Pass `layout` or `id`.')
         try {
           const doc = await loadDraft(req, String(args.collection), String(args.id))
-          layout = normalizeLayout(doc[fieldOf(String(args.collection))])
+          layout = currentLayout(req, String(args.collection), doc).layout
         } catch (error) {
           return fail(errorMessage(error))
         }

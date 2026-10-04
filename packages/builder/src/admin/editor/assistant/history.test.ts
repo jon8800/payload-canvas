@@ -6,6 +6,7 @@ import {
   capHistory,
   closeTurn,
   historyKey,
+  historyMatches,
   humanizeTool,
   isUserTurn,
   loadHistory,
@@ -152,4 +153,23 @@ test('saveHistory / loadHistory: round trip, removal, least recently used prunin
   storage.setItem(key, '{broken')
   assert.deepEqual(loadHistory(storage, key), { messages: [], tools: {} })
   assert.deepEqual(loadHistory(null, key), { messages: [], tools: {} })
+})
+
+test('historyMatches: a provider or model switch starts a new chat', () => {
+  const messages = [user('Hi')]
+  assert.equal(historyMatches({ messages, tools: {}, provider: 'openrouter:openai/gpt-6-luna' }, 'openrouter:openai/gpt-6-luna'), true)
+  assert.equal(historyMatches({ messages, tools: {}, provider: 'openrouter:openai/gpt-6-luna' }, 'openrouter:google/gemini-3.8-flash'), false)
+  assert.equal(historyMatches({ messages, tools: {}, provider: 'anthropic:claude-opus-5-5' }, 'openrouter:openai/gpt-6-luna'), false)
+  // Chats saved before providers existed were Anthropic.
+  assert.equal(historyMatches({ messages, tools: {} }, 'anthropic:claude-opus-5-5'), true)
+  assert.equal(historyMatches({ messages, tools: {} }, 'openrouter:openai/gpt-6-luna'), false)
+  assert.equal(historyMatches({ messages: [], tools: {} }, 'cloudflare:openai/gpt-5.2'), true)
+})
+
+test('capHistory keeps the provider', () => {
+  const big = 'x'.repeat(100)
+  const history: ChatHistory = { messages: [user(big), context(), user(big)], tools: {}, provider: 'openrouter:m' }
+  const capped = capHistory(history, 150)
+  assert.equal(capped.messages.length, 1)
+  assert.equal(capped.provider, 'openrouter:m')
 })

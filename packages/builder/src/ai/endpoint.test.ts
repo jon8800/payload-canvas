@@ -5,7 +5,7 @@ import type { PayloadRequest } from 'payload'
 import type { BlockDefinition, SectionDefinition } from '../core/types'
 import { loadClient, NO_KEY_MESSAGE } from './client'
 import { aiEndpoints, allowsUpdate, parseChatRequest, type AiEndpointOptions } from './endpoint'
-import { createFakeClient, demoScript } from './fake'
+import { createFakeChatFetch, createFakeClient, demoScript } from './fake'
 import type { AiStreamEvent } from './types'
 
 const blocks: BlockDefinition[] = [
@@ -36,6 +36,7 @@ function handler(overrides: Partial<AiEndpointOptions> = {}) {
     getTokens: async () => null,
     templates: null,
     canUpdate: async () => true,
+    env: {},
     loadClient: async () => ({ client: createFakeClient(demoScript([hero])).client, describeError: () => null }),
     ...overrides,
   })
@@ -62,6 +63,7 @@ function fakeReq(options: { user?: unknown; data?: unknown; docs?: Record<string
       async find() {
         return { docs: [] }
       },
+      config: { serverURL: 'https://site.test' },
     },
   } as unknown as PayloadRequest
   return { req, finds }
@@ -155,6 +157,72 @@ describe('chat endpoint', () => {
   })
 })
 
+const openrouter = (fetch?: typeof globalThis.fetch, env: Record<string, string> = { OPENROUTER_API_KEY: 'sk-or-test' }) =>
+  handler({ ai: { provider: { type: 'openrouter' }, model: 'openai/gpt-6-luna' }, env, fetch, loadClient: undefined })
+
+describe('chat endpoint with OpenRouter', () => {
+  it('streams the agent over Chat Completions, with OpenRouter URL and headers', async () => {
+    const fake = createFakeChatFetch(demoScript([hero]))
+    const { req } = fakeReq()
+    const events = await readEvents(await openrouter(fake.fetch)(req))
+    const ops = events.flatMap((e) => (e.type === 'operations' ? e.ops.map((op) => op.type) : []))
+    assert.deepEqual(ops, ['insert', 'update'])
+    assert.equal(events.at(-1)?.type, 'done')
+    const messages = events.flatMap((e) => (e.type === 'message' ? [e.message] : []))
+    assert.ok(messages.every((m) => m.provider === 'openrouter:openai/gpt-6-luna'))
+    const call = fake.calls[0]
+    assert.equal(call.url, 'https://openrouter.ai/api/v1/chat/completions')
+    assert.equal(call.headers.Authorization, 'Bearer sk-or-test')
+    assert.equal(call.headers['HTTP-Referer'], 'https://site.test')
+    assert.equal(call.headers['X-Title'], 'Payload Website Builder')
+    assert.equal(call.body.model, 'openai/gpt-6-luna')
+  })
+
+  it('reports a missing key as no_api_key before calling the API', async () => {
+    const fake = createFakeChatFetch([])
+    const { req } = fakeReq()
+    const [event] = await readEvents(await openrouter(fake.fetch, {})(req))
+    assert.ok(event.type === 'error' && event.code === 'no_api_key')
+    assert.match(event.message, /OPENROUTER_API_KEY/)
+    assert.equal(fake.calls.length, 0)
+  })
+
+  it('rejects history written by another provider', async () => {
+    const { req } = fakeReq({
+      data: {
+        ...body,
+        messages: [
+          { role: 'user', content: 'Hi' },
+          { role: 'assistant', content: [{ type: 'text', text: 'Hello' }], provider: 'anthropic:claude-opus-5-5' },
+          { role: 'user', content: 'Add a hero' },
+        ],
+      },
+    })
+    const response = await openrouter(createFakeChatFetch([]).fetch)(req)
+    assert.equal(response.status, 409)
+    const [event] = await readEvents(response)
+    assert.ok(event.type === 'error' && event.code === 'invalid_request')
+    assert.match(event.message, /Start a new chat/)
+  })
+
+  it('BUILDER_AI_FAKE=1 bypasses the network for OpenAI-compatible providers', async () => {
+    const saved = process.env.BUILDER_AI_FAKE
+    process.env.BUILDER_AI_FAKE = '1'
+    try {
+      const { req } = fakeReq()
+      const events = await readEvents(await openrouter(undefined, {})(req))
+      assert.deepEqual(
+        events.flatMap((e) => (e.type === 'operations' ? e.ops.map((op) => op.type) : [])),
+        ['insert', 'update'],
+      )
+      assert.equal(events.at(-1)?.type, 'done')
+    } finally {
+      if (saved === undefined) delete process.env.BUILDER_AI_FAKE
+      else process.env.BUILDER_AI_FAKE = saved
+    }
+  })
+})
+
 describe('loadClient without credentials', () => {
   it('maps the SDK failure to no_api_key', async () => {
     const saved = { key: process.env.ANTHROPIC_API_KEY, token: process.env.ANTHROPIC_AUTH_TOKEN }
@@ -173,7 +241,7 @@ describe('loadClient without credentials', () => {
 })
 
 describe('parseChatRequest', () => {
-  it('keeps role, content and kind only', () => {
+  it('keeps role, content, kind and provider only', () => {
     const parsed = parseChatRequest({
       ...body,
       messages: [

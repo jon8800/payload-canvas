@@ -5,13 +5,14 @@
 
 import type { Layout, Operation, TemplateContext } from '../core/types'
 
-/** Plugin option `ai`. Presence enables the assistant. */
 /**
  * Which API the assistant talks to.
- * - "anthropic": the Anthropic Messages API (official SDK). Default.
+ * - "anthropic": the Anthropic Messages API (official SDK, optional peer dependency).
  * - "openai-compatible": any OpenAI-compatible Chat Completions endpoint, called with fetch:
- *   OpenRouter, Cloudflare AI Gateway (compat endpoint), OpenAI, Groq, Ollama, LM Studio, …
- *   Presets fill `baseURL` and the key env var: "openrouter", "cloudflare".
+ *   OpenAI, Groq, Together, Ollama, LM Studio, vLLM, …
+ * - "openrouter", "cloudflare": presets of "openai-compatible" that fill the URL and headers.
+ * Without `provider`, the plugin reads the environment: BUILDER_AI_PROVIDER, else "openrouter"
+ * when only OPENROUTER_API_KEY is set, else "anthropic". See docs/ai/providers.md.
  */
 export type AiProvider =
   | { type: 'anthropic' }
@@ -21,37 +22,46 @@ export type AiProvider =
       baseURL: string
       /** Default: read from `apiKeyEnv`. */
       apiKey?: string
-      /** Env var with the key. Default "OPENAI_API_KEY". */
+      /** Env var with the key. Default: BUILDER_AI_API_KEY, then OPENAI_API_KEY. No key: no Authorization header (Ollama, LM Studio). */
       apiKeyEnv?: string
       /** Extra headers (e.g. OpenRouter's HTTP-Referer / X-Title, Cloudflare's cf-aig-authorization). */
       headers?: Record<string, string>
     }
+  /** https://openrouter.ai/api/v1. Key env default OPENROUTER_API_KEY. */
   | { type: 'openrouter'; apiKey?: string; apiKeyEnv?: string }
   | {
       type: 'cloudflare'
       /** Cloudflare account id and AI Gateway id. */
       accountId: string
       gatewayId: string
-      /** Provider key (e.g. an OpenAI/Anthropic key) unless the gateway stores it (BYOK). */
+      /**
+       * Provider key (e.g. an OpenAI key), sent as `Authorization`. Leave it out when the gateway
+       * stores the keys (BYOK) or uses unified billing. Default env: BUILDER_AI_API_KEY.
+       */
       apiKey?: string
       apiKeyEnv?: string
-      /** Gateway token for authenticated gateways (`cf-aig-authorization`). */
+      /** Gateway token for authenticated gateways (`cf-aig-authorization`). Default env: CF_AIG_TOKEN. */
       gatewayToken?: string
       gatewayTokenEnv?: string
     }
 
+/** Plugin option `ai`. Presence enables the assistant. */
 export type AiOptions = {
-  /** Default { type: 'anthropic' }. */
+  /** Default: from the environment (see AiProvider). */
   provider?: AiProvider
   /**
    * Model id in the provider's naming, e.g. "claude-opus-5-5" (anthropic),
-   * "anthropic/claude-haiku-4.5" (openrouter). Default "claude-opus-5-5" for anthropic; required
-   * for other providers.
+   * "openai/gpt-6-luna" (openrouter), "openai/gpt-5.2" (cloudflare). Default: BUILDER_AI_MODEL,
+   * else "claude-opus-5-5" (anthropic) or "openai/gpt-6-luna" (openrouter). Required for
+   * "cloudflare" and "openai-compatible".
    */
   model?: string
-  /** Effort for the agent loop. Default "medium". */
+  /**
+   * Effort for the agent loop. Anthropic: default "medium". OpenRouter: sent as
+   * `reasoning.effort` only when set. Other OpenAI-compatible APIs: ignored.
+   */
   effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max'
-  /** API key. Default: the Anthropic SDK's own resolution (ANTHROPIC_API_KEY, ant auth profile, …). */
+  /** Anthropic API key. Default: the Anthropic SDK's own resolution (ANTHROPIC_API_KEY, ant auth profile, …). */
   apiKey?: string
   /** Extra instructions appended to the system prompt (brand voice, rules). */
   instructions?: string
@@ -59,7 +69,7 @@ export type AiOptions = {
   maxSteps?: number
   /** Upload collection the assistant may pick images from. Default "media". */
   mediaCollection?: string
-  /** Output limit per model call, thinking included. Default 32000. */
+  /** Output limit per model call, thinking included. Default 32000 (anthropic); not sent to OpenAI-compatible APIs unless set. */
   maxTokens?: number
   /**
    * Server-side refusal fallback (`fallbacks: "default"`): when a safety classifier declines a
@@ -74,12 +84,23 @@ export type AiClientConfig = {
   /** Full API path prefix, e.g. "/api/builder/ai". The chat endpoint is `${endpoint}/chat`. */
   endpoint: string
   model: string
+  /** Provider type, e.g. "openrouter". Optional only for older configs; treat a missing value as "anthropic". */
+  provider?: AiProvider['type']
+  /** Display name, e.g. "OpenRouter", "Cloudflare AI Gateway", "api.openai.com". */
+  providerLabel?: string
+  /** The env var the server reads the key from, for the setup hint. Null when no key is needed. */
+  keyEnv?: string | null
 }
 
+/** Token usage of one turn (all model calls). `cost` in USD when the provider reports it (OpenRouter). */
+export type AiUsage = { inputTokens: number; outputTokens: number; cachedTokens?: number; cost?: number }
+
 /**
- * One turn of the conversation as the client stores it. `content` is the exact Anthropic message
- * content (text, thinking, tool_use, tool_result blocks) so history can be replayed append-only.
- * The client keeps the history per document (localStorage) and sends it back on every request.
+ * One turn of the conversation as the client stores it. `content` is a string or a list of
+ * content blocks. Both adapters use the block types "text", "tool_use" and "tool_result", so the
+ * panel can render any history. Provider-specific blocks ride along: Anthropic "thinking" /
+ * "fallback", OpenAI-compatible "reasoning". The client keeps the history per document
+ * (localStorage) and sends it back on every request, append-only.
  */
 export type AiMessage = {
   role: 'user' | 'assistant'
@@ -90,6 +111,11 @@ export type AiMessage = {
    * message; do not render them. The server never sends this field to the API.
    */
   kind?: 'context' | 'tool_results'
+  /**
+   * `${provider}:${model}` of the server that wrote this message. History from another provider
+   * or model cannot be replayed: the server rejects it and the panel starts a new chat.
+   */
+  provider?: string
 }
 
 /** POST `${endpoint}/chat` body. */
@@ -119,7 +145,8 @@ export type AiChatRequest = {
  * - operations: operations to apply to the editor layout now (already validated against the
  *   server's working copy). Apply in order; group all operations of one `turnId` into one undo step.
  * - message: the complete assistant (and tool_result user) messages to append to the history
- * - done: the turn finished; `stopReason` from the API
+ * - done: the turn finished; `stopReason` in Anthropic terms ("end_turn", "tool_use", "max_tokens",
+ *   "refusal", "max_steps"), `usage` summed over the turn's model calls when known
  * - error: a fatal error (missing API key, API error, access denied); `code` for the UI hint
  */
 export type AiStreamEvent =
@@ -127,5 +154,5 @@ export type AiStreamEvent =
   | { type: 'tool'; callId: string; name: string; status: 'running' | 'done' | 'error'; summary: string }
   | { type: 'operations'; turnId: string; ops: Operation[] }
   | { type: 'message'; message: AiMessage }
-  | { type: 'done'; turnId: string; stopReason: string | null }
+  | { type: 'done'; turnId: string; stopReason: string | null; usage?: AiUsage }
   | { type: 'error'; code: 'no_api_key' | 'forbidden' | 'api_error' | 'invalid_request' | 'aborted'; message: string }

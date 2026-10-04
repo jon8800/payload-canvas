@@ -83,13 +83,87 @@
     font-weight: 600;
   }
 
+  .builder-assistant__title {
+    min-width: 0;
+  }
+
   .builder-assistant__model {
+    overflow: hidden;
+    max-width: 180px;
     padding: 1px 6px;
     border-radius: 9px;
     background: var(--theme-elevation-100);
     color: var(--be-muted);
     font-size: 10.5px;
     font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .builder-assistant__head-actions {
+    display: inline-flex;
+    flex: none;
+    gap: 2px;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Use Claude Code or Codex
+  // ---------------------------------------------------------------------------
+
+  .builder-assistant__connect-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .builder-assistant__connect .builder-assistant__card-text {
+    display: block;
+  }
+
+  .builder-assistant__steps {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin: 0;
+    padding-left: 18px;
+    font-size: 12.5px;
+
+    li {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+    }
+
+    code {
+      padding: 1px 4px;
+      border-radius: 4px;
+      background: var(--theme-elevation-100);
+    }
+  }
+
+  .builder-assistant__step-title {
+    font-weight: 600;
+  }
+
+  .builder-assistant__step-text {
+    color: var(--theme-elevation-800);
+    line-height: 1.5;
+  }
+
+  .builder-assistant__copy-code {
+    display: flex;
+    align-items: flex-start;
+    align-self: stretch;
+    gap: 4px;
+
+    .builder-assistant__card-code {
+      flex: 1;
+      min-width: 0;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
   }
 
   .builder-assistant__badge {

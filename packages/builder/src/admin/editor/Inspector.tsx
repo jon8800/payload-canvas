@@ -8,6 +8,7 @@ import { findBlock, findLocation, getBlockDefinition } from '../../core'
 import type { Block } from '../../core/types'
 import { copySelection, duplicateBlock, removeBlock, toggleHidden } from './actions'
 import { BlockIcon, Icon, type IconName } from './icons'
+import { EditingBanner } from './live/PresenceUI'
 import { AssistantPanel } from './assistant/AssistantPanel'
 import { BlockContentFields } from './renderField'
 import { useRuntime, type InspectorTab } from './runtime'
@@ -121,6 +122,7 @@ function BlockPane() {
     // `key` remounts the inputs per block, so input state (loaded documents) never leaks between blocks.
     <div key={block.id} className="builder-editor__block-pane">
       <BlockHeader block={block} />
+      <EditingBanner blockId={block.id} />
       <Tabs
         value={tab}
         onChange={setTab}

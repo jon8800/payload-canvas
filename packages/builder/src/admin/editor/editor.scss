@@ -1763,44 +1763,22 @@
     gap: 5px;
     padding: 2px 8px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--be-remote) 16%, transparent);
+    background: color-mix(in srgb, var(--be-peer, var(--be-remote)) 16%, transparent);
     color: var(--theme-text);
     white-space: nowrap;
+    animation: builder-fade-in 160ms var(--be-ease);
   }
 
   .builder-editor__live-activity svg {
-    color: var(--be-remote);
+    color: var(--be-peer, var(--be-remote));
   }
 
   .builder-editor__live-error {
+    max-width: 220px;
+    overflow: hidden;
     color: var(--theme-error-500);
-  }
-
-  .builder-editor__live-members {
-    display: inline-flex;
-  }
-
-  .builder-editor__avatar {
-    display: inline-grid;
-    place-items: center;
-    width: 22px;
-    height: 22px;
-    margin-left: -6px;
-    border: 2px solid var(--theme-elevation-0);
-    border-radius: 50%;
-    background: var(--theme-elevation-200);
-    color: var(--theme-text);
-    font-size: 9px;
-    font-weight: 700;
-  }
-
-  .builder-editor__avatar:first-child {
-    margin-left: 0;
-  }
-
-  .builder-editor__avatar--ai {
-    background: var(--be-remote);
-    color: #fff;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .builder-editor__live-dot {
@@ -1813,5 +1791,264 @@
   .builder-editor__live[data-status="open"] .builder-editor__live-dot {
     background: var(--theme-success-500);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-success-500) 25%, transparent);
+  }
+
+  .builder-editor__live[data-pending] .builder-editor__live-dot {
+    background: var(--theme-warning-500, #f59e0b);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-warning-500, #f59e0b) 25%, transparent);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Multiplayer: avatars, cursors, others' selections, follow mode.
+  // `--be-peer` is the collaborator's color, set inline.
+  // ---------------------------------------------------------------------------
+
+  .builder-presence {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    margin: 0;
+    padding: 0 0 0 6px;
+    border: 0;
+  }
+
+  .builder-presence__avatar {
+    position: relative;
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    margin: 0 0 0 -6px;
+    padding: 0;
+    border: 2px solid var(--theme-bg);
+    border-radius: 50%;
+    background: var(--be-peer, var(--theme-elevation-300));
+    color: #fff;
+    font: 700 10px/1 var(--font-body);
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition:
+      transform 160ms var(--be-ease),
+      box-shadow 160ms var(--be-ease);
+
+    &:hover,
+    &:focus-visible {
+      z-index: 2;
+      transform: translateY(-1px);
+    }
+
+    &[aria-pressed='true'] {
+      z-index: 1;
+      box-shadow: 0 0 0 2px var(--be-peer);
+    }
+  }
+
+  .builder-presence__avatar--ai {
+    background: linear-gradient(135deg, var(--be-peer), color-mix(in srgb, var(--be-peer) 55%, #fff));
+  }
+
+  .builder-presence__avatar--more {
+    background: var(--theme-elevation-200);
+    color: var(--theme-text);
+    cursor: default;
+  }
+
+  @keyframes builder-cursor-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  .builder-cursor {
+    position: absolute;
+    z-index: 4;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    // Updates arrive about 20 times a second: easing between them makes the motion smooth.
+    transition: transform 120ms linear;
+    will-change: transform;
+    animation: builder-cursor-in 200ms ease-out;
+  }
+
+  .builder-cursor__inner {
+    position: absolute;
+    display: block;
+    transform-origin: 0 0;
+    transform: scale(var(--be-inv, 1));
+  }
+
+  .builder-cursor__arrow {
+    display: block;
+    overflow: visible;
+    filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.3));
+
+    path {
+      fill: var(--be-peer);
+      stroke: #fff;
+      stroke-width: 1.25;
+      stroke-linejoin: round;
+    }
+  }
+
+  .builder-cursor__name {
+    position: absolute;
+    top: 17px;
+    left: 11px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 3px 9px 9px;
+    background: var(--be-peer);
+    color: #fff;
+    font: 600 11px/1.2 var(--font-body);
+    white-space: nowrap;
+    box-shadow: 0 2px 6px rgb(0 0 0 / 0.2);
+  }
+
+  .builder-peer-selection {
+    position: absolute;
+    box-sizing: border-box;
+    pointer-events: none;
+    box-shadow: 0 0 0 calc(var(--be-px) * 2) var(--be-peer);
+  }
+
+  // Name tags at the bottom left: the own selection uses the top edge.
+  .builder-peer-selection__tags {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    display: flex;
+    gap: 2px;
+    transform-origin: 0 0;
+    transform: scale(var(--be-inv, 1)) translateY(2px);
+  }
+
+  .builder-peer-selection__tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    height: 18px;
+    padding: 0 6px;
+    border-radius: 0 0 4px 4px;
+    background: var(--be-peer);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .builder-peer-dots {
+    display: inline-flex;
+    flex: none;
+    gap: 3px;
+    margin-left: 6px;
+  }
+
+  .builder-peer-dots__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--be-peer);
+    box-shadow: 0 0 0 1.5px var(--theme-bg);
+  }
+
+  .builder-editing-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    padding: 7px 10px;
+    border: 1px solid color-mix(in srgb, var(--be-peer) 35%, transparent);
+    border-radius: var(--be-radius-m);
+    background: color-mix(in srgb, var(--be-peer) 10%, transparent);
+    color: var(--theme-text);
+    font-size: 12px;
+    line-height: 1.35;
+    animation: builder-fade-in 160ms var(--be-ease);
+
+    strong {
+      font-weight: 600;
+    }
+  }
+
+  .builder-editing-banner__avatars {
+    display: inline-flex;
+    flex: none;
+  }
+
+  .builder-editing-banner__avatar {
+    display: inline-grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    margin-left: -4px;
+    border: 1.5px solid var(--theme-bg);
+    border-radius: 50%;
+    background: var(--be-peer);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+
+    &:first-child {
+      margin-left: 0;
+    }
+  }
+
+  .builder-follow {
+    position: absolute;
+    z-index: 6;
+    inset: 0;
+    border: 2px solid var(--be-peer);
+    pointer-events: none;
+    animation: builder-tip-in 160ms ease-out;
+  }
+
+  .builder-follow__chip {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 4px 4px 12px;
+    border-radius: 999px;
+    background: var(--be-peer);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    pointer-events: auto;
+    transform: translateX(-50%);
+    box-shadow: var(--be-shadow);
+  }
+
+  .builder-follow__hint {
+    font-weight: 400;
+    opacity: 0.8;
+  }
+
+  .builder-follow__stop {
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: rgb(255 255 255 / 0.2);
+    color: inherit;
+    cursor: pointer;
+
+    &:hover {
+      background: rgb(255 255 255 / 0.35);
+    }
+  }
+
+  .builder-editor__notice--warning svg {
+    color: var(--theme-warning-500, #f59e0b);
   }
 }

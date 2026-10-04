@@ -9,17 +9,20 @@ import { TEMPLATE_TARGET_FIELD } from '../core/bindings'
 import { indexLayout, isPlainObject, normalizeLayout } from '../core/tree'
 import type { BindingField, BlockDefinition, Layout, SectionDefinition, StyleTokens, TemplateContext } from '../core/types'
 import { SSE_HEADERS, sseFrame } from '../live/endpoints'
-import { runAssistant, type AiClient, type DescribeError } from './agent'
+import { anthropicAdapter, type AiClient } from './agent'
 import { loadClient, type LoadedClient } from './client'
-import { demoClient } from './fake'
+import { DEFAULT_AI_MODEL, openAiTarget, resolveAi, type Env } from './config'
+import { demoClient, demoFetch } from './fake'
+import { runAgent, type DescribeError, type ModelAdapter } from './loop'
+import { openAiAdapter } from './openai'
 import { breakpointsPx, contextText, systemPrompt } from './prompt'
-import { toolDefinitions, Workspace, type MediaItem, type ToolEnv } from './tools'
+import { openAiTools, toolDefinitions, Workspace, type MediaItem, type ToolEnv } from './tools'
 import type { AiChatRequest, AiMessage, AiOptions, AiStreamEvent } from './types'
 
 /** Path of the assistant endpoints below the API route. */
 export const AI_PATH = '/builder/ai'
 
-export const DEFAULT_AI_MODEL = 'claude-opus-5-5'
+export { DEFAULT_AI_MODEL }
 const DEFAULT_EFFORT = 'medium'
 const DEFAULT_MAX_STEPS = 12
 const DEFAULT_MAX_TOKENS = 32_000
@@ -38,6 +41,10 @@ export type AiEndpointOptions = {
   templates: { slug: string; sources: Record<string, BindingField[]> } | null
   /** Tests: replaces the Anthropic client. */
   loadClient?: () => Promise<LoadedClient>
+  /** Tests: replaces fetch for OpenAI-compatible providers. */
+  fetch?: typeof fetch
+  /** Tests: replaces process.env when resolving the provider and keys. */
+  env?: Env
   /** Tests: replaces the update-access check (default: Payload's docAccessOperation). */
   canUpdate?: (req: PayloadRequest, collection: string, id: string | number, field: string) => Promise<boolean>
 }
@@ -91,7 +98,8 @@ export function parseChatRequest(body: unknown): AiChatRequest | string {
     messages: messages.map((m) => {
       const message = m as Record<string, unknown>
       const kind = message.kind === 'context' || message.kind === 'tool_results' ? message.kind : undefined
-      return { role: message.role as AiMessage['role'], content: message.content, ...(kind ? { kind } : {}) }
+      const provider = typeof message.provider === 'string' && message.provider ? message.provider : undefined
+      return { role: message.role as AiMessage['role'], content: message.content, ...(kind ? { kind } : {}), ...(provider ? { provider } : {}) }
     }),
     layout: layout as Layout,
     selectedId: (selectedId as string | null | undefined) ?? null,
@@ -190,9 +198,13 @@ export function fakeModelEnabled(): boolean {
 
 export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
   const { ai, collections, blocks, sections, templates } = options
-  const model = ai.model ?? DEFAULT_AI_MODEL
+  const processEnv = options.env ?? process.env
+  const resolved = resolveAi(ai, processEnv)
+  const { model, provider, identity } = resolved
   const env: Omit<ToolEnv, 'searchMedia'> = { blocks, sections, bindingSources: templates?.sources ?? null }
-  const tools = toolDefinitions({ ...env, searchMedia: async () => [] })
+  const toolEnv: ToolEnv = { ...env, searchMedia: async () => [] }
+  const tools = provider.type === 'anthropic' ? toolDefinitions(toolEnv) : []
+  const chatTools = provider.type === 'anthropic' ? [] : openAiTools(toolEnv)
 
   // The system prompt is built once (the theme is read once) and reused byte for byte.
   let prompt: Promise<{ system: string; breakpoints: Array<{ name: string; px: number }> }> | null = null
@@ -207,10 +219,49 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
     return prompt
   }
 
-  const getClient = async (): Promise<LoadedClient> => {
+  const getAnthropicClient = async (): Promise<LoadedClient> => {
     if (options.loadClient) return options.loadClient()
     if (fakeModelEnabled()) return { client: demoClient(sections), describeError: describeFakeError }
     return loadClient(ai.apiKey)
+  }
+
+  /** The model adapter for one request, or the setup problem (code no_api_key) / load error. */
+  const getAdapter = async (req: PayloadRequest, system: string): Promise<ModelAdapter | { code: 'no_api_key' | 'api_error'; message: string }> => {
+    if (resolved.problem) return { code: 'no_api_key', message: resolved.problem }
+    if (provider.type === 'anthropic') {
+      const loaded = await getAnthropicClient()
+      if ('error' in loaded) return { code: 'api_error', message: loaded.error }
+      return anthropicAdapter({
+        client: loaded.client as AiClient,
+        describeError: loaded.describeError,
+        model,
+        effort: ai.effort ?? DEFAULT_EFFORT,
+        maxTokens: ai.maxTokens ?? DEFAULT_MAX_TOKENS,
+        fallbacks: ai.fallbacks ?? model === DEFAULT_AI_MODEL,
+        system,
+        tools,
+        identity,
+      })
+    }
+    const fake = !options.fetch && fakeModelEnabled()
+    const siteUrl = req.payload.config.serverURL || processEnv.NEXT_PUBLIC_SERVER_URL || null
+    const target = openAiTarget(provider, { env: processEnv, siteUrl })
+    if (target.missingKey && !fake) return { code: 'no_api_key', message: target.missingKey }
+    const effort = ai.effort === 'max' ? 'xhigh' : ai.effort
+    return openAiAdapter({
+      url: target.url,
+      headers: target.headers,
+      label: target.label,
+      keyHint: target.keyHint,
+      model,
+      system,
+      tools: chatTools,
+      maxTokens: ai.maxTokens,
+      // OpenRouter normalizes reasoning effort across models; other APIs differ, so only there.
+      extraBody: provider.type === 'openrouter' && effort ? { reasoning: { effort } } : undefined,
+      identity,
+      fetch: options.fetch ?? (fake ? demoFetch(sections) : undefined),
+    })
   }
 
   const chat: Endpoint = {
@@ -258,9 +309,18 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
       }
       if (!allowed) return errorResponse(403, 'forbidden', 'You cannot edit this document, so the assistant cannot either.')
 
-      const loaded = await getClient()
-      if ('error' in loaded) return errorResponse(500, 'api_error', loaded.error)
+      // History from another provider or model cannot be replayed (different message formats).
+      const foreign = body.messages.find((m) => m.provider && m.provider !== identity)
+      if (foreign) {
+        return errorResponse(
+          409,
+          'invalid_request',
+          `This chat was started with another AI model (${foreign.provider}). The assistant now uses ${identity}. Start a new chat.`,
+        )
+      }
       const { system, breakpoints } = await getPrompt()
+      const adapter = await getAdapter(req, system)
+      if ('code' in adapter) return errorResponse(500, adapter.code, adapter.message)
 
       const layout = normalizeLayout(body.layout)
       const selectedId = body.selectedId && indexLayout(layout).has(body.selectedId) ? body.selectedId : null
@@ -313,16 +373,9 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
           }
           heartbeat = setInterval(() => write(': ping\n\n'), HEARTBEAT_MS)
           try {
-            await runAssistant({
-              client: loaded.client as AiClient,
-              describeError: loaded.describeError,
-              model,
-              effort: ai.effort ?? DEFAULT_EFFORT,
+            await runAgent({
+              adapter,
               maxSteps: ai.maxSteps ?? DEFAULT_MAX_STEPS,
-              maxTokens: ai.maxTokens ?? DEFAULT_MAX_TOKENS,
-              fallbacks: ai.fallbacks ?? model === DEFAULT_AI_MODEL,
-              system,
-              tools,
               messages: body.messages,
               context,
               workspace: new Workspace(layout, blocks),

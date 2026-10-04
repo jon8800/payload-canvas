@@ -250,6 +250,8 @@ export function toolDefinitions(env: ToolEnv): BetaTool[] {
         '- update { id, props?, unsetProps?, className?, hidden?, bindings? }: props and bindings are merged (shallow); className REPLACES all classes, so send the full list; null removes it; a null binding removes that binding.',
         'Position: { parentId (null = page root), slot? (default "children"), index (final index in the target list) }.',
         'On success the result lists the changed ids and any warnings (e.g. a required prop is empty). On error nothing changes and the error names the failing operation; fix it and call again.',
+        'Example (ids come from the layout; block types and props from the block catalog): change a heading, then add a text block after it in the same section:',
+        '{"operations":[{"type":"update","id":"b_head01","props":{"text":"Simple pricing"},"className":"text-4xl font-bold"},{"type":"insert","block":{"type":"text","props":{"text":"Pick a plan."}},"to":{"parentId":"b_sect01","slot":"children","index":1}}]}',
       ].join('\n'),
       input_schema: {
         type: 'object',
@@ -332,6 +334,84 @@ export function toolDefinitions(env: ToolEnv): BetaTool[] {
   return tools.map((tool) => ({ ...tool, eager_input_streaming: true }))
 }
 
+// ---------------------------------------------------------------------------
+// OpenAI-compatible function tools
+// ---------------------------------------------------------------------------
+
+export type OpenAiTool = { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }
+
+/**
+ * applyOperations for OpenAI-compatible models: one flat operation object instead of a union.
+ * Smaller models (and Gemini schema converters) handle it better. The tool validates and repairs
+ * the input either way.
+ */
+const FLAT_OPERATIONS_SCHEMA = {
+  type: 'object',
+  properties: {
+    operations: {
+      type: 'array',
+      description: 'One or more operations, applied in order.',
+      items: {
+        type: 'object',
+        properties: {
+          type: { type: 'string', enum: ['insert', 'move', 'remove', 'duplicate', 'update'] },
+          id: { type: 'string', description: 'The block to move, remove, duplicate or update.' },
+          block: { type: 'object', description: 'insert only: the new block { type, props?, className?, slots? }.' },
+          to: {
+            type: 'object',
+            description: 'insert and move: { parentId, slot?, index }. parentId null means the page root.',
+            properties: { parentId: { type: 'string' }, slot: { type: 'string' }, index: { type: 'integer' } },
+          },
+          props: { type: 'object', description: 'update: props to merge.' },
+          unsetProps: { type: 'array', items: { type: 'string' } },
+          className: { type: 'string', description: 'update: the FULL class list (replaces all classes).' },
+          hidden: { type: 'boolean' },
+          bindings: { type: 'object' },
+          newId: { type: 'string' },
+        },
+        required: ['type'],
+      },
+    },
+  },
+  required: ['operations'],
+}
+
+/**
+ * A JSON Schema that most OpenAI-compatible providers accept: no type arrays (["string","null"]
+ * becomes "string"), no `const` (becomes a one-value enum), no `additionalProperties`.
+ */
+export function portableSchema(schema: unknown): unknown {
+  if (Array.isArray(schema)) return schema.map(portableSchema)
+  if (!isPlainObject(schema)) return schema
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(schema)) {
+    if (key === 'additionalProperties') continue
+    if (key === 'type' && Array.isArray(value)) {
+      const types = value.filter((t) => t !== 'null')
+      out.type = types.length === 1 ? types[0] : types
+    } else if (key === 'const') {
+      out.enum = [value]
+    } else if (key === 'properties' && isPlainObject(value)) {
+      out.properties = Object.fromEntries(Object.entries(value).map(([name, item]) => [name, portableSchema(item)]))
+    } else {
+      out[key] = portableSchema(value)
+    }
+  }
+  return out
+}
+
+/** The same tools as Chat Completions function tools. */
+export function openAiTools(env: ToolEnv): OpenAiTool[] {
+  return toolDefinitions(env).map((tool) => ({
+    type: 'function',
+    function: {
+      name: tool.name,
+      description: tool.description ?? '',
+      parameters: portableSchema(tool.name === 'applyOperations' ? FLAT_OPERATIONS_SCHEMA : tool.input_schema) as Record<string, unknown>,
+    },
+  }))
+}
+
 /** Running summaries, shown while the tool input streams in. */
 export const RUNNING_SUMMARY: Record<string, string> = {
   getLayout: 'Reading the page',
@@ -374,6 +454,91 @@ function blockText(block: Block): string {
   }
   visit(block.props ?? {}, 0)
   return parts.join(' ').replace(/\s+/g, ' ').trim()
+}
+
+const OP_TYPES = new Set(['insert', 'move', 'remove', 'duplicate', 'update'])
+const ROOT_IDS = new Set(['', 'root', 'null', 'page'])
+
+function parseJson(value: unknown): unknown {
+  if (typeof value !== 'string') return value
+  try {
+    return JSON.parse(value)
+  } catch {
+    return value
+  }
+}
+
+/**
+ * Fixes the mistakes smaller models make in applyOperations input, and lists what it fixed so the
+ * model learns: operations sent as a JSON string or as one object, "op" or "action" instead of
+ * "type", position fields next to "to", a root parentId of "root" or "", a block sent as a JSON
+ * string, a class list sent as an array. Returns an error message when there is no operation list.
+ */
+export function repairOperations(input: Record<string, unknown>): { ops: unknown[]; notes: string[] } | string {
+  const notes: string[] = []
+  let list: unknown = input.operations ?? input.ops ?? input.operation
+  if (list === undefined && typeof input.type === 'string') {
+    list = [input]
+    notes.push('Wrap operations in { "operations": [ ... ] }.')
+  }
+  if (typeof list === 'string') {
+    list = parseJson(list)
+    if (typeof list !== 'string') notes.push('"operations" was a JSON string. Send a JSON array, not a string.')
+  }
+  if (isPlainObject(list)) {
+    list = [list]
+    notes.push('"operations" was one object. Send an array of operations.')
+  }
+  if (!Array.isArray(list) || list.length === 0) {
+    return '"operations" must be a non-empty array, e.g. {"operations":[{"type":"update","id":"b_abc123","props":{"text":"Hi"}}]}'
+  }
+  const ops = list.map((raw, i) => {
+    const value = parseJson(raw)
+    if (!isPlainObject(value)) return value
+    const op: Record<string, unknown> = { ...value }
+    const fix = (note: string) => notes.push(`Operation ${i}: ${note}`)
+    const alias = op.op ?? op.action
+    if (typeof op.type !== 'string' && typeof alias === 'string') {
+      op.type = alias
+      delete op.op
+      delete op.action
+      fix('use "type" for the operation name.')
+    }
+    if (typeof op.type === 'string' && !OP_TYPES.has(op.type) && OP_TYPES.has(op.type.toLowerCase())) op.type = op.type.toLowerCase()
+    if (op.type === 'insert' || op.type === 'move') {
+      if (op.to === undefined && ('parentId' in op || 'index' in op)) {
+        op.to = { parentId: op.parentId ?? null, ...(op.slot === undefined ? {} : { slot: op.slot }), index: op.index }
+        delete op.parentId
+        delete op.slot
+        delete op.index
+        fix('put parentId, slot and index inside "to".')
+      }
+      const to = parseJson(op.to)
+      if (isPlainObject(to)) {
+        const position: Record<string, unknown> = { ...to }
+        const parent = position.parentId
+        if (parent === undefined || (typeof parent === 'string' && ROOT_IDS.has(parent.toLowerCase()))) {
+          if (parent !== undefined) fix('use parentId null for the page root.')
+          position.parentId = null
+        }
+        if (typeof position.index === 'string' && /^\d+$/.test(position.index)) position.index = Number(position.index)
+        op.to = position
+      }
+    }
+    if (op.type === 'insert' && typeof op.block === 'string') {
+      op.block = parseJson(op.block)
+      fix('"block" was a JSON string. Send an object.')
+    }
+    if (op.type === 'update') {
+      if (Array.isArray(op.className)) {
+        op.className = op.className.filter((c) => typeof c === 'string').join(' ')
+        fix('"className" is one string of classes separated by spaces.')
+      }
+      if (typeof op.props === 'string') op.props = parseJson(op.props)
+    }
+    return op
+  })
+  return { ops, notes }
 }
 
 export async function runTool(name: string, rawInput: unknown, workspace: Workspace, env: ToolEnv): Promise<ToolOutcome> {
@@ -431,11 +596,11 @@ export async function runTool(name: string, rawInput: unknown, workspace: Worksp
     }
 
     case 'applyOperations': {
-      if (!Array.isArray(input.operations) || input.operations.length === 0) {
-        return fail('"operations" must be a non-empty array', 'Edit failed')
-      }
-      const result = workspace.apply(input.operations)
-      if (!result.ok) return fail(result.error, 'Edit failed', result.errors)
+      const repaired = repairOperations(input)
+      if (typeof repaired === 'string') return fail(repaired, 'Edit failed')
+      const notes = repaired.notes.length > 0 ? { repaired: repaired.notes } : {}
+      const result = workspace.apply(repaired.ops)
+      if (!result.ok) return fail(result.error, 'Edit failed', result.errors ?? (repaired.notes.length > 0 ? notes : undefined))
       return ok(
         {
           ok: true,
@@ -444,6 +609,7 @@ export async function runTool(name: string, rawInput: unknown, workspace: Worksp
           // Generated ids, so the model can target new blocks right away.
           inserted: result.ops.flatMap((op) => (op.type === 'insert' ? [{ id: op.block.id, type: op.block.type, to: op.to }] : [])),
           ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}),
+          ...notes,
         },
         describeOps(result.ops),
         result.ops,

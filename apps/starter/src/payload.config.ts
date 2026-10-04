@@ -207,7 +207,8 @@ export default buildConfig({
       blocks: builderBlocks,
       sections: sectionLibrary,
       templates: { hooks: { afterChange: [revalidateTemplate] } },
-      // AI assistant in the editor (Claude). Needs ANTHROPIC_API_KEY in .env; see the builder README.
+      // AI assistant in the editor. The provider comes from .env: OPENROUTER_API_KEY alone is enough;
+      // BUILDER_AI_PROVIDER / BUILDER_AI_MODEL pick another one. See docs/ai/providers.md.
       ai: {},
       css: {
         entry: 'src/app/(frontend)/globals.css',

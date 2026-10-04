@@ -5,7 +5,8 @@ A visual page builder for Payload CMS 3. It adds a **Builder** tab to the collec
 - Works in any Payload 3.90+ app on Next.js 16 and React 19.
 - The layout is one JSON field per document. Nothing changes in your other fields.
 - The site renders the layout with `@payload-toolkit/builder-react` (React Server Components), or with your own renderer.
-- Save, drafts, autosave, versions, locking and access control stay Payload's own.
+- Save, drafts, autosave, versions and access control stay Payload's own.
+- Several people (and AI agents) can edit one page at the same time. See [Multiplayer editing](#multiplayer-editing).
 
 Two packages:
 
@@ -26,8 +27,9 @@ Two packages:
 8. [Templates and binding](#templates-and-binding)
 9. [AI assistant](#ai-assistant)
 10. [AI editing over MCP](#ai-editing-over-mcp)
-11. [Production and Docker](#production-and-docker)
-12. [Troubleshooting](#troubleshooting)
+11. [Multiplayer editing](#multiplayer-editing)
+12. [Production and Docker](#production-and-docker)
+13. [Troubleshooting](#troubleshooting)
 
 ## Requirements
 
@@ -241,7 +243,8 @@ websiteBuilder({
   },
   canvasPath: '/builder-canvas',
   templates: { slug: 'builder-templates' },
-  live: { bus, heartbeatMs: 15000 },
+  live: { heartbeatMs: 15000 },
+  multiplayer: true,           // default; false keeps Payload's document lock
   ai: { effort: 'medium' },    // the AI assistant in the editor
 })
 ```
@@ -259,8 +262,8 @@ websiteBuilder({
 | `canvasPath` | `string` | The canvas route. Default `/builder-canvas`. |
 | `templates.slug` | `string` | Slug of the templates collection. Default `builder-templates`. |
 | `templates.hooks` | `CollectionConfig['hooks']` | Hooks for the templates collection, for example to revalidate pages. |
-| `live.bus` | `LiveBus` | The event bus for live edits. Default: in process. Use a shared bus (for example Postgres `LISTEN/NOTIFY`) when you run more than one app server. |
-| `live.heartbeatMs` | `number` | Interval of the keep-alive message on the live event stream. |
+| `live.heartbeatMs` | `number` | Interval of the keep-alive message on the live event stream. Default 20 s. |
+| `multiplayer` | `boolean` | Several people edit one document at the same time. Default `true`: the plugin turns off Payload's document locking (`lockDocuments: false`) on builder collections. `false` keeps the lock, so one person edits a document at a time. See [Multiplayer editing](#multiplayer-editing). |
 | `ai` | `AiOptions` | Turns on the AI assistant in the editor. See [AI assistant](#ai-assistant). |
 
 For each listed collection the plugin adds:
@@ -269,7 +272,9 @@ For each listed collection the plugin adds:
 - a hidden `<field>Css` field that stores `{ hash, css }`,
 - a hidden virtual rich text field, when a block has a rich text prop,
 - the **Builder** document tab at `/admin/collections/<slug>/<id>/builder`,
-- a `beforeChange` hook that validates the layout and compiles its CSS.
+- a `beforeChange` hook that validates the layout and compiles its CSS, and that takes the layout from the live session while one is open,
+- an `afterChange` hook for the live session,
+- `lockDocuments: false`, unless `multiplayer` is `false`.
 
 It also adds these endpoints (signed-in users only):
 
@@ -277,8 +282,10 @@ It also adds these endpoints (signed-in users only):
 |---|---|
 | `GET /api/builder/canvas-css` | The stylesheets the canvas compiles from. |
 | `GET /api/builder/style-tokens` | Theme tokens and class names for the Styles panel. |
-| `GET /api/builder/live/:collection/:id/events` | Server-Sent Events stream with live changes for one document. |
-| `POST /api/builder/live/:collection/:id/operations` | Applies layout operations to a document and sends them to open editors. |
+| `GET /api/builder/live/:collection/:id/events` | Server-Sent Events stream of one document's live session. |
+| `POST /api/builder/live/:collection/:id/commit` | Applies one batch of operations to the live session (editors). |
+| `POST /api/builder/live/:collection/:id/awareness` | Sends your selection and pointer to the other editors. |
+| `POST /api/builder/live/:collection/:id/operations` | Applies operations to the live session and returns the new layout (scripts and integrations). |
 | `POST /api/builder/ai/chat` | The AI assistant (only with the `ai` option). Streams Server-Sent Events. |
 
 ### Entry points
@@ -290,7 +297,7 @@ It also adds these endpoints (signed-in users only):
 | `@payload-toolkit/builder/core` | anywhere | layout types, `normalizeLayout`, `validateLayout`, `applyOperations`, tree helpers |
 | `@payload-toolkit/builder/css` | server | `compileClasses`, `getStyleTokens`, `tracingIncludes` |
 | `@payload-toolkit/builder/mcp` | server | `builderMcpTools` |
-| `@payload-toolkit/builder/live` | server | the live event bus and endpoints |
+| `@payload-toolkit/builder/live` | server | the live sessions and endpoints |
 | `@payload-toolkit/builder/client` | Payload import map only | admin components |
 
 ## Rendering
@@ -502,13 +509,13 @@ return <RenderLayout layout={layout} css={found.css} context={context} blocks={b
 
 ## AI assistant
 
-The editor gets an **Assistant** panel. The user types a request, for example "add a pricing section with three tiers", and Claude edits the open page. Each change appears on the canvas as it happens. One reply is one undo step. The assistant never saves or publishes: the editor saves the page as usual.
+The editor gets an **Assistant** panel. The user types a request, for example "add a pricing section with three tiers", and the model edits the open page. Each change appears on the canvas as it happens. One reply is one undo step. The assistant never saves or publishes: the editor saves the page as usual.
+
+It works with OpenRouter, Cloudflare AI Gateway, any OpenAI-compatible API (OpenAI, Groq, Ollama, …) and Anthropic. Full guide: [docs/ai/providers.md](https://github.com/jon8800/payload-toolkit/blob/main/docs/ai/providers.md).
+
+No API key? Claude Code and Codex can edit pages with your Claude or ChatGPT plan over MCP: [docs/ai/connect-claude-code-and-codex.md](https://github.com/jon8800/payload-toolkit/blob/main/docs/ai/connect-claude-code-and-codex.md). The panel shows the commands (link icon in its header).
 
 ### Turn it on
-
-```bash
-pnpm add @anthropic-ai/sdk
-```
 
 ```ts
 websiteBuilder({
@@ -520,26 +527,43 @@ websiteBuilder({
 })
 ```
 
-Then give the server Anthropic credentials. Put an API key from [console.anthropic.com](https://console.anthropic.com) in `.env` and restart the server:
+Then give the server a key. The quickest is an [OpenRouter](https://openrouter.ai/keys) key in `.env`; restart the server after:
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-...
+OPENROUTER_API_KEY=sk-or-v1-...
 ```
 
-Or run `ant auth login` on the server and leave the variable empty. Without credentials the panel shows an error that says what to set.
+With only that key set, the plugin uses OpenRouter and the cheap model `openai/gpt-6-luna`. Other setups:
+
+```bash
+BUILDER_AI_PROVIDER=openrouter          # anthropic | openrouter | cloudflare | openai-compatible
+BUILDER_AI_MODEL=google/gemini-3.8-flash
+```
+
+Or set the provider in code. Code wins over the environment:
+
+```ts
+ai: { provider: { type: 'openrouter' }, model: 'google/gemini-3.8-flash' }
+ai: { provider: { type: 'cloudflare', accountId: '…', gatewayId: 'my-gateway' }, model: 'openai/gpt-5.2' }
+ai: { provider: { type: 'openai-compatible', baseURL: 'http://localhost:11434/v1' }, model: 'llama3.3' }
+ai: { provider: { type: 'anthropic' } } // needs `pnpm add @anthropic-ai/sdk` and ANTHROPIC_API_KEY
+```
+
+Without a key the panel shows a setup card that names the variable to set.
 
 ### Options
 
 | Option | Default | What it does |
 |---|---|---|
-| `model` | `claude-opus-5-5` | The Claude model. |
-| `effort` | `medium` | How much the model thinks: `low`, `medium`, `high`, `xhigh`, `max`. Higher is slower and costs more. `low` answers fastest. |
-| `apiKey` | the SDK's own lookup | An explicit API key. Leave it out to use `ANTHROPIC_API_KEY` or an `ant auth login` profile. |
+| `provider` | from the environment | Which API: see above and [providers.md](https://github.com/jon8800/payload-toolkit/blob/main/docs/ai/providers.md). |
+| `model` | `BUILDER_AI_MODEL`, else `claude-opus-5-5` (Anthropic) or `openai/gpt-6-luna` (OpenRouter) | The model id in the provider's naming. Required for Cloudflare and OpenAI-compatible. |
+| `effort` | `medium` (Anthropic) | How much the model thinks: `low`, `medium`, `high`, `xhigh`, `max`. OpenRouter gets it as `reasoning.effort` when set. Others ignore it. |
+| `apiKey` | the SDK's own lookup | Anthropic only: an explicit API key. Other providers take `apiKey` inside `provider`. |
 | `instructions` | none | Extra rules for the assistant, for example your brand voice. Added to the end of the system prompt. |
 | `maxSteps` | `12` | Maximum tool rounds per user message. |
-| `maxTokens` | `32000` | Output limit per model call, thinking included. |
+| `maxTokens` | `32000` (Anthropic) | Output limit per model call. Sent to OpenAI-compatible APIs only when set. |
 | `mediaCollection` | `media` | The upload collection the assistant picks images from. |
-| `fallbacks` | on for `claude-opus-5-5` | When a safety classifier declines a request, the API retries it on Anthropic's recommended fallback model. |
+| `fallbacks` | on for `claude-opus-5-5` | Anthropic only: when a safety classifier declines a request, the API retries it on Anthropic's recommended fallback model. |
 
 ### What it can do
 
@@ -556,15 +580,20 @@ Every change goes through the same operations as the editor and is checked again
 
 ### Cost
 
-You pay Anthropic for each request. The fixed part of the prompt (blocks, sections, theme, tools; about 8,000 tokens in the starter) is cached, so repeat requests within 5 minutes read it at a tenth of the input price or less. Each request also sends the conversation and the current layout. A typical request ("add a pricing section") takes two to four model calls. With `claude-opus-5-5` at `medium` effort ($4 input / $20 output per million tokens) expect roughly 5 to 30 US cents per request; most of it is output (thinking and tool input). Long conversations and large pages cost more; start a new conversation when the topic changes.
+You pay the provider for each request. Each request sends the system prompt (blocks, sections, theme, tools; about 8,000 tokens in the starter), the conversation and the current layout. A typical request ("add a pricing section") takes two to four model calls.
+
+- OpenRouter `openai/gpt-6-luna` ($0.10 / $0.50 per million tokens): well under one US cent per request.
+- Anthropic `claude-opus-5-5` at `medium` effort ($4 / $20 per million tokens): roughly 5 to 30 US cents per request. The fixed prompt is cached, so repeat requests within 5 minutes read it at a tenth of the price or less.
+
+Long conversations and large pages cost more. Start a new conversation when the topic changes. Changing the provider or model starts a new chat.
 
 ### Privacy
 
-The page content goes to Anthropic: the layout JSON (all text, classes and media IDs), the conversation, media search results (alt text, file names, URLs), and for templates a summary of the sample document. Do not turn the assistant on for content that must not leave your servers. See Anthropic's commercial terms for data retention.
+The page content goes to the provider you pick (and through OpenRouter or Cloudflare when you use them): the layout JSON (all text, classes and media IDs), the conversation, media search results (alt text, file names, URLs), and for templates a summary of the sample document. Do not turn the assistant on for content that must not leave your servers. Check the provider's data policy.
 
 ### Testing without a key
 
-`BUILDER_AI_FAKE=1` (test only, ignored when `NODE_ENV=production`) replaces Claude with a scripted model. It inserts the first hero section at the top of the page, then changes its heading, and streams a few sentences. Use it to try the panel without an API key.
+`BUILDER_AI_FAKE=1` (test only, ignored when `NODE_ENV=production`) replaces the model with a scripted one, for every provider, with no network calls. It inserts the first hero section at the top of the page, then changes its heading, and streams a few sentences. Use it to try the panel without an API key.
 
 ## AI editing over MCP
 
@@ -588,12 +617,31 @@ plugins: [
 ]
 ```
 
-- Agents connect to `POST <your site>/api/mcp` with an API key from **Admin > MCP > API Keys**.
+- Agents connect to `POST <your site>/api/mcp` with an API key from **Admin > MCP > API Keys**. Claude Code and Codex setup: [docs/ai/connect-claude-code-and-codex.md](https://github.com/jon8800/payload-toolkit/blob/main/docs/ai/connect-claude-code-and-codex.md).
 - Tools: `listBlocks`, `getBlockSchema`, `listSections`, `insertSection`, `getLayout`, `applyOperations`, `validateLayout`, `getPreviewUrl`, plus `listTemplates` and `getBindingSources` for templates.
 - Every tool checks the key's access to the collection. Handlers run as the key's user with `overrideAccess: false`.
-- Writes go through the same code as `POST /api/builder/live/:collection/:id/operations`. Open editors receive them over the live event stream.
-- The default live bus runs in process. With more than one app server, pass a shared bus in `live.bus`.
+- Writes are commits to the document's live session, like an editor's own changes. Open editors show them at once, and the agent appears in the collaborator list while it works. The draft is saved about a second later. `getLayout` returns the session's layout, unsaved changes included.
 - `builderMcpTools` options: `blocks`, `sections`, `collections` (the same map as the plugin), `siteUrl` (default: Payload `serverURL`, then `NEXT_PUBLIC_SERVER_URL`), `apiKeyCollection`.
+
+## Multiplayer editing
+
+Several people can have the same page open in the Builder tab. Each change shows for the others at once, with their selections and pointers in their own color. AI agents over MCP join the same way.
+
+How it works:
+
+- The server keeps one live session per open document, in memory. The session holds the layout and a sequence number `seq`.
+- An editor applies its own change at once, then sends it to `commit`. The server applies changes in the order they arrive, raises `seq` by 1, and sends each change to every open editor. A change that no longer applies (for example, someone deleted its block) is rejected, and that editor drops it.
+- The server saves the session as a draft about 1 second after the last change (at the latest every 5 seconds). The save runs as the person who made the last change, with their access rules, and the normal save hook compiles the CSS.
+- While a session is open, the session owns the layout. Any other save of the document gets the session's layout: a stale autosave from another tab, a REST update, or **Publish**. Publish therefore publishes what everyone sees in the editor.
+- The session closes 60 seconds after the last editor leaves and its draft is saved.
+- Payload's document lock would let only one person open a document, so the plugin turns it off on builder collections. Set `multiplayer: false` to keep the lock.
+
+Limits:
+
+- Sessions live in the memory of one server process. With more than one app server, route all requests for a document to the same server (sticky routing), or keep one app server.
+- Two people who change the same prop at the same time: the later change wins.
+- On SIGINT/SIGTERM the plugin saves unsaved session edits before the process exits. To make that possible, it holds back `process.exit` for at most 3 seconds, and only while unsaved edits exist. A hard kill (`SIGKILL`, a crash) can still lose the last 1–5 seconds of edits.
+- Two people typing in the same text field at the same moment: the later value wins for the whole field.
 
 ## Production and Docker
 
