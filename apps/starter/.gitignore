@@ -5,3 +5,6 @@ dist/
 *.tsbuildinfo
 public/media/*
 !public/media/.gitkeep
+
+# Managed by Next.js (see Next docs: config/typescript)
+next-env.d.ts
