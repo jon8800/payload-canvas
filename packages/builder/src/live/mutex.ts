@@ -1,8 +1,7 @@
 /**
  * Runs async tasks one at a time per key, in call order. Different keys run in parallel.
- * The live channel uses it per document, so two AI calls never read the same draft and then
- * overwrite each other. In-process only: with more than one app server, use a database lock
- * (see bus.ts).
+ * The document sessions use it per document, so loads and commits apply in arrival order.
+ * In-process only, like the sessions themselves.
  */
 export type KeyedMutex = {
   run<T>(key: string, task: () => Promise<T>): Promise<T>

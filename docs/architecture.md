@@ -227,14 +227,17 @@ Blocks that need data (for example "latest posts") declare a `load()` function. 
 - The binding picker lists only compatible fields. It builds the list by walking the target collection's schema, including one relationship hop.
 - In the editor, a template previews against a sample document the designer picks.
 
-## 12. Operations, live AI edits and multiplayer
+## 12. Operations, multiplayer and live AI edits
 
-- **Operations:** every edit is a small JSON operation: `insert`, `move`, `update`, `remove`, `duplicate`, `setClassName`, `setBindings`. Operations target block ids.
-- **One operations module** applies operations to a layout. It is pure TypeScript with no React and no Payload. The editor, the MCP tools and the server all use it. It is the most tested code in the project.
-- **Server channel:** the plugin adds a Server-Sent Events endpoint per document. When an MCP tool changes a draft, the server publishes the operations. An open editor applies them through the same module and shows who made the change (for example a short highlight on the changed block).
-- **Conflicts in v1:** operations apply in order, and the last write wins per prop. The editor shows a notice when someone else is editing.
-- **Multi-server:** v1 uses an in-process event bus. With more than one app server, swap it for Postgres `LISTEN/NOTIFY`.
-- **Later, multiplayer:** add a CRDT (Yjs) on top of the same operations. Presence (cursors, selections) uses the same channel.
+- **Operations:** every edit is a small JSON operation (`insert`, `move`, `remove`, `duplicate`, `update`) that targets block ids. One pure module applies them and returns the inverse operations for undo. The editor, the server sessions, the MCP tools and the in-editor assistant all use it.
+- **Document sessions (server):** the server keeps one in-memory session per open document: the layout at sequence number `seq`. Editors and AI agents send batches of operations to `POST {live}/:collection/:id/commit`. The session applies a batch all-or-nothing, increments `seq` and broadcasts a `commit` event to every connection, the sender included (the echo is the acknowledgement). A batch that no longer applies (its block was deleted by someone else) is rejected with 409.
+- **Persistence:** the session saves the draft about 1 s after the last commit (at most every 5 s while edits continue) as the last committer, so access control and the CSS save hook still apply. While a session is open, every other save (form autosave, REST, Publish) gets the session layout, so nobody overwrites collaborators with a stale copy. Dirty sessions are flushed on shutdown.
+- **Editors:** each editor applies its own operations at once, sends them one batch at a time, and rebases unconfirmed operations on top of remote commits. Operations that no longer apply are dropped with a notice. Undo sends the inverse of the user's own operations as new edits, so it only reverts the user's own changes. The editor never sends `duplicate`: it sends an `insert` of the finished copy, so every client has the same ids.
+- **Events:** `GET {live}/:collection/:id/events` (Server-Sent Events): `session` (full state), `commit`, `collaborators`, `awareness`. A reconnect resumes from `<sessionId>:<seq>` when the commit log still covers it; otherwise the server sends a fresh `session`.
+- **Presence:** collaborators (people and AI agents) have stable colors. Awareness (selection, hover, cursor relative to a block, canvas width) goes through `POST {live}/:collection/:id/awareness` and is never stored. The editor shows avatars, live cursors, colored selections, outline dots and a follow mode.
+- **Conflicts:** operations apply in server order; the last write wins per prop.
+- **Payload locking** is off for builder collections while `multiplayer` is on (the default).
+- **Limits:** sessions live in one server process. With more than one app server, route each document to one instance (sticky routing), or move sessions to a shared store.
 
 ## 13. AI tools (MCP)
 

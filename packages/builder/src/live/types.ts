@@ -6,7 +6,10 @@ import type { Layout, Operation } from '../core/types'
 /** Who made a change. `label` is what the editor shows, e.g. "Claude Desktop" or "Ana". */
 export type LiveActor = { type: 'user' | 'ai'; id: string; label: string }
 
-/** Operations applied to a document's draft. Sent to every open editor of that document. */
+/**
+ * @deprecated The single-editor live channel. The server no longer sends it; it is replaced by
+ * the multiplayer events below. Kept until the editor switches over.
+ */
 export type LiveOperationsEvent = {
   type: 'operations'
   /** Event id, `${epoch}:${seq}`. Also the SSE `id:` line, so a reconnect can ask for missed events. */
@@ -45,7 +48,7 @@ export type LiveOperationsRequest = { ops: Operation[]; clientId?: string }
 
 /** Response of `POST {liveEndpoint}/:collection/:id/operations`. */
 export type LiveOperationsResponse =
-  | { ok: true; layout: Layout; ops: Operation[]; version?: string; warnings?: LiveError[] }
+  | { ok: true; layout: Layout; ops: Operation[]; seq?: number; version?: string; warnings?: LiveError[] }
   | { ok: false; error: string; errors?: LiveError[] }
 
 /** A layout problem, as returned to clients. Same shape as core `LayoutError`. */
@@ -102,6 +105,11 @@ export type LiveCommitEvent = {
 /** Full session state: the first event on connect, and the answer to a resync. */
 export type LiveSessionEvent = {
   type: 'session'
+  /**
+   * Id of this in-memory session. A new id means the server restarted the session (the old seqs
+   * no longer apply). The SSE id of session and commit frames is `${sessionId}:${seq}`.
+   */
+  sessionId?: string
   seq: number
   layout: Layout
   collaborators: Array<CollaboratorInfo & { awareness: Awareness | null }>

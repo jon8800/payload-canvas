@@ -6,6 +6,8 @@ import { deepestBlockAt } from '../../core'
 import { unwrap, type CanvasToAdmin } from '../../protocol'
 import { ancestors } from './actions'
 import { BlockIcon, Icon } from './icons'
+import { cursorAt } from './live'
+import { FollowFrame } from './live/PresenceUI'
 import { Overlay } from './Overlay'
 import { computeDrop, useRuntime } from './runtime'
 import { bindShortcuts } from './shortcuts'
@@ -17,6 +19,7 @@ import { useValue } from './valueStore'
 /** Space between the stage edge and the frame. */
 const STAGE_PADDING = 24
 const NOTICE_MS = 1800
+const WARNING_MS = 5000
 
 export function Canvas() {
   const runtime = useRuntime()
@@ -64,6 +67,12 @@ export function Canvas() {
           return
         }
         case 'pointer': {
+          // Others see this pointer, relative to the block under it.
+          if (message.kind === 'leave') runtime.pointer.set(null)
+          else {
+            const m = measurement.get()
+            if (m) runtime.pointer.set(cursorAt(store.getState().layout, m, message))
+          }
           if (drag.get()) return
           if (message.kind === 'leave') {
             store.hover(null)
@@ -182,6 +191,7 @@ export function Canvas() {
             <Overlay />
           </div>
         </div>
+        <FollowFrame />
         <Notice />
       </div>
       <StatusBar frameWidth={frameWidth} zoom={zoom} />
@@ -189,19 +199,20 @@ export function Canvas() {
   )
 }
 
-/** Short feedback at the bottom of the stage ("Copied Heading"). */
+/** Short feedback at the bottom of the stage ("Copied Heading"), or a warning about a conflict. */
 function Notice() {
   const runtime = useRuntime()
   const notice = useValue(runtime.notice)
   useEffect(() => {
     if (!notice) return
-    const timer = window.setTimeout(() => runtime.notice.set(null), NOTICE_MS)
+    const timer = window.setTimeout(() => runtime.notice.set(null), notice.tone === 'warning' ? WARNING_MS : NOTICE_MS)
     return () => window.clearTimeout(timer)
   }, [notice, runtime])
   if (!notice) return null
+  const warning = notice.tone === 'warning'
   return (
-    <output key={notice.at} className="builder-editor__notice">
-      <Icon name="check" size={14} /> {notice.text}
+    <output key={notice.at} className={`builder-editor__notice${warning ? ' builder-editor__notice--warning' : ''}`}>
+      <Icon name={warning ? 'warning' : 'check'} size={14} /> {notice.text}
     </output>
   )
 }

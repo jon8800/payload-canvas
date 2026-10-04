@@ -1184,24 +1184,12 @@ export interface PayloadLockedDocument {
         value: number | Media;
       } | null)
     | ({
-        relationTo: 'pages';
-        value: number | Page;
-      } | null)
-    | ({
-        relationTo: 'posts';
-        value: number | Post;
-      } | null)
-    | ({
         relationTo: 'categories';
         value: number | Category;
       } | null)
     | ({
         relationTo: 'tags';
         value: number | Tag;
-      } | null)
-    | ({
-        relationTo: 'template-parts';
-        value: number | TemplatePart;
       } | null)
     | ({
         relationTo: 'redirects';
@@ -1222,10 +1210,6 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'search';
         value: number | Search;
-      } | null)
-    | ({
-        relationTo: 'builder-templates';
-        value: number | BuilderTemplate;
       } | null)
     | ({
         relationTo: 'payload-folders';

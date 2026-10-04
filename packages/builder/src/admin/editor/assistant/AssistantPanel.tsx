@@ -11,14 +11,21 @@ import { useRuntime } from '../runtime'
 import { useEditor } from '../store'
 import { useCollectionLabel } from '../templates/useTemplate'
 import { useValue } from '../valueStore'
+import type { AiClientConfig } from '../../../ai/types'
+import { ConnectAgents, useCopy } from './ConnectAgents'
 import type { AssistantController, AssistantNotice, AssistantState } from './controller'
 import { humanizeTool, transcript, type ToolInfo, type TranscriptItem, type TranscriptPart } from './history'
 import { Markdown } from './MarkdownView'
 
 import './assistant.scss'
 
-const SETUP_DOCS = 'https://github.com/jon8800/payload-toolkit/tree/main/packages/builder#ai-assistant'
-const API_KEYS = 'https://console.anthropic.com/settings/keys'
+const PROVIDER_DOCS = 'https://github.com/jon8800/payload-toolkit/blob/main/docs/ai/providers.md'
+/** Where to get a key, per provider. */
+const KEY_PAGES: Record<string, string> = {
+  anthropic: 'https://console.anthropic.com/settings/keys',
+  openrouter: 'https://openrouter.ai/keys',
+  cloudflare: 'https://dash.cloudflare.com/?to=/:account/ai/ai-gateway',
+}
 /** Distance from the bottom (px) within which new content keeps the list scrolled to the end. */
 const STICK_DISTANCE = 48
 const MAX_INPUT_HEIGHT = 168
@@ -35,7 +42,10 @@ function Panel({ assistant, hidden }: { assistant: AssistantController; hidden: 
   const state = useValue(assistant.state)
   const { history, streaming, live, notice, failed } = state
   const items = buildItems(state)
-  const empty = items.length === 0 && !failed && !notice
+  // An info note (e.g. "New chat: the assistant now uses …") shows inside the welcome.
+  const empty = items.length === 0 && !failed && (!notice || notice.kind === 'info')
+  const [connect, setConnect] = useState(false)
+  const ai = runtime.config.ai
   const scrollRef = useRef<HTMLDivElement>(null)
   const stick = useRef(true)
   // Opening the tab, starting a chat or sending a message jumps to the end.
@@ -70,8 +80,23 @@ function Panel({ assistant, hidden }: { assistant: AssistantController; hidden: 
             <Icon name="sparkle" size={12} />
           </span>
           Assistant
-          {runtime.config.ai && <span className="builder-assistant__model">{modelLabel(runtime.config.ai.model)}</span>}
+          {ai && (
+            <span className="builder-assistant__model" title={`${ai.providerLabel ?? 'Anthropic'} · ${ai.model}`}>
+              {modelLabel(ai)}
+            </span>
+          )}
         </span>
+        <span className="builder-assistant__head-actions">
+          <button
+            type="button"
+            className="builder-editor__icon-button"
+            aria-label="Use Claude Code or Codex"
+            aria-pressed={connect}
+            data-tooltip="Use Claude Code or Codex"
+            onClick={() => setConnect((value) => !value)}
+          >
+            <Icon name="link" />
+          </button>
         <button
           type="button"
           className="builder-editor__icon-button"
@@ -85,6 +110,7 @@ function Panel({ assistant, hidden }: { assistant: AssistantController; hidden: 
         >
           <Icon name="compose" />
         </button>
+        </span>
       </header>
 
       <div
@@ -95,14 +121,18 @@ function Panel({ assistant, hidden }: { assistant: AssistantController; hidden: 
           stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_DISTANCE
         }}
       >
-        {!state.key ? (
+        {connect ? (
+          <div className="builder-assistant__log">
+            <ConnectAgents onClose={() => setConnect(false)} />
+          </div>
+        ) : !state.key ? (
           <div className="builder-assistant__empty">
             <EmptyMark />
             <p className="builder-assistant__empty-title">Save the document first</p>
             <p className="builder-editor__hint">The assistant works on saved documents. Save once, then ask it to build.</p>
           </div>
         ) : empty ? (
-          <Welcome assistant={assistant} />
+          <Welcome assistant={assistant} note={notice?.kind === 'info' ? notice.message : null} />
         ) : (
           <div className="builder-assistant__log" role="log" aria-live="polite" aria-busy={streaming} aria-label="Conversation">
             {items.map((item, i) =>
@@ -128,8 +158,13 @@ function Panel({ assistant, hidden }: { assistant: AssistantController; hidden: 
   )
 }
 
-/** "claude-opus-5-5" -> "Claude Opus 5.5". Other ids are shown as they are. */
-function modelLabel(model: string): string {
+/**
+ * The header badge. Anthropic: "claude-opus-5-5" -> "Claude Opus 5.5". Others: "OpenRouter ·
+ * openai/gpt-6-luna" (shortened by CSS; the title has the full text).
+ */
+function modelLabel(ai: AiClientConfig): string {
+  const model = ai.model
+  if (ai.provider && ai.provider !== 'anthropic') return `${ai.providerLabel ?? ai.provider} · ${model}`
   const match = /^claude-([a-z]+)-(\d+)(?:-(\d+))?$/.exec(model)
   if (!match) return model
   const [, family, major, minor] = match
@@ -259,19 +294,14 @@ function ToolChip({ name, info }: { name: string; info: ToolInfo | undefined }) 
 }
 
 function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false)
-  useEffect(() => {
-    if (!copied) return
-    const timer = window.setTimeout(() => setCopied(false), 1500)
-    return () => window.clearTimeout(timer)
-  }, [copied])
+  const { copied, copy } = useCopy()
   return (
     <button
       type="button"
       className="builder-editor__icon-button builder-editor__icon-button--small builder-assistant__copy"
       aria-label={copied ? 'Copied' : 'Copy reply'}
       data-tooltip={copied ? 'Copied' : 'Copy'}
-      onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true))}
+      onClick={() => copy(text)}
     >
       <Icon name={copied ? 'check' : 'copy'} size={13} />
     </button>
@@ -282,33 +312,7 @@ function Notice({ assistant, notice, canRetry }: { assistant: AssistantControlle
   if (notice.kind === 'info') {
     return <p className="builder-assistant__info">{notice.message}</p>
   }
-  if (notice.kind === 'setup') {
-    return (
-      <output className="builder-assistant__card builder-assistant__card--setup">
-        <span className="builder-assistant__card-icon" aria-hidden="true">
-          <Icon name="key" size={16} />
-        </span>
-        <p className="builder-assistant__card-title">Connect the assistant to Claude</p>
-        <p className="builder-assistant__card-text">
-          Add <code>ANTHROPIC_API_KEY</code> to your <code>.env</code> file and restart the server.
-        </p>
-        <pre className="builder-assistant__card-code">ANTHROPIC_API_KEY=sk-ant-…</pre>
-        <div className="builder-assistant__card-actions">
-          <a className="builder-assistant__link" href={API_KEYS} target="_blank" rel="noopener noreferrer">
-            Get an API key <Icon name="external" size={12} />
-          </a>
-          <a className="builder-assistant__link" href={SETUP_DOCS} target="_blank" rel="noopener noreferrer">
-            Setup guide <Icon name="external" size={12} />
-          </a>
-          {canRetry && (
-            <button type="button" className="builder-assistant__ghost" onClick={assistant.retry}>
-              <Icon name="retry" size={12} /> Try again
-            </button>
-          )}
-        </div>
-      </output>
-    )
-  }
+  if (notice.kind === 'setup') return <SetupCard assistant={assistant} message={notice.message} canRetry={canRetry} />
   return (
     <div className="builder-assistant__card builder-assistant__card--error" role="alert">
       <p className="builder-assistant__card-text">
@@ -328,8 +332,50 @@ function Notice({ assistant, notice, canRetry }: { assistant: AssistantControlle
   )
 }
 
+/** No key or no model on the server: what to set for the configured provider, and the CLI route. */
+function SetupCard({ assistant, message, canRetry }: { assistant: AssistantController; message: string; canRetry: boolean }) {
+  const runtime = useRuntime()
+  const ai = runtime.config.ai
+  const provider = ai?.provider ?? 'anthropic'
+  const label = ai?.providerLabel ?? 'Anthropic'
+  const keyEnv = ai?.keyEnv === undefined ? (provider === 'anthropic' ? 'ANTHROPIC_API_KEY' : null) : ai.keyEnv
+  const keyPage = KEY_PAGES[provider]
+  return (
+    <>
+      <output className="builder-assistant__card builder-assistant__card--setup">
+        <span className="builder-assistant__card-icon" aria-hidden="true">
+          <Icon name="key" size={16} />
+        </span>
+        <p className="builder-assistant__card-title">Connect the assistant to {label}</p>
+        <p className="builder-assistant__card-text">{message}</p>
+        {keyEnv && <pre className="builder-assistant__card-code">{keyEnv}=…</pre>}
+        <p className="builder-assistant__card-text">
+          Another provider: set <code>BUILDER_AI_PROVIDER</code> to <code>openrouter</code>, <code>cloudflare</code>,{' '}
+          <code>openai-compatible</code> or <code>anthropic</code>.
+        </p>
+        <div className="builder-assistant__card-actions">
+          {keyPage && (
+            <a className="builder-assistant__link" href={keyPage} target="_blank" rel="noopener noreferrer">
+              Get an API key <Icon name="external" size={12} />
+            </a>
+          )}
+          <a className="builder-assistant__link" href={PROVIDER_DOCS} target="_blank" rel="noopener noreferrer">
+            Provider guide <Icon name="external" size={12} />
+          </a>
+          {canRetry && (
+            <button type="button" className="builder-assistant__ghost" onClick={assistant.retry}>
+              <Icon name="retry" size={12} /> Try again
+            </button>
+          )}
+        </div>
+      </output>
+      <ConnectAgents />
+    </>
+  )
+}
+
 /** The empty chat: a short intro and suggestions that fit the page, the selection or the template. */
-function Welcome({ assistant }: { assistant: AssistantController }) {
+function Welcome({ assistant, note }: { assistant: AssistantController; note: string | null }) {
   const runtime = useRuntime()
   const template = useValue(runtime.template)
   const singular = useCollectionLabel(template.target, 'singular').toLowerCase()
@@ -366,6 +412,7 @@ function Welcome({ assistant }: { assistant: AssistantController }) {
 
   return (
     <div className="builder-assistant__welcome">
+      {note && <p className="builder-assistant__info">{note}</p>}
       <EmptyMark />
       <p className="builder-assistant__empty-title">
         {selectedType ? `What should change in this ${runtime.blockLabel(selectedType).toLowerCase()}?` : 'What should we build?'}

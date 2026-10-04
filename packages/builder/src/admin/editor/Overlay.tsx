@@ -7,6 +7,8 @@ import { findBlock, findLocation } from '../../core'
 import type { Layout, Rect } from '../../core/types'
 import { duplicateBlock, moveBy, removeBlock } from './actions'
 import { BlockIcon, Icon, type IconName } from './icons'
+import { PeerCursors, PeerSelections } from './live/PresenceUI'
+import { shortName } from './live/presence'
 import { useRuntime, type DragData } from './runtime'
 import { useEditor } from './store'
 import { useValue } from './valueStore'
@@ -47,6 +49,7 @@ export function Overlay() {
   const dropParent = indicator?.kind === 'box' && drag?.target?.to.parentId ? findBlock(layout, drag.target.to.parentId) : null
   /** A chip fits above a rect when the rect starts lower than the chip height (in iframe pixels). */
   const roomAbove = (rect: Rect) => rect.y * zoom >= BAR_HEIGHT
+  const taggedActors = new Set<string>()
 
   return (
     <div className="builder-editor__overlay">
@@ -88,6 +91,7 @@ export function Overlay() {
           />
         </>
       )}
+      <PeerCursors />
       {indicator && (
         <div className={`builder-editor__drop builder-editor__drop--${indicator.kind}`} style={box(indicator.rect)}>
           {dropParent && (
@@ -97,15 +101,23 @@ export function Overlay() {
           )}
         </div>
       )}
-      {[...(live?.recentlyChanged ?? [])].map((id, i) => {
+      <PeerSelections />
+      {[...(live?.changes ?? [])].map(([id, change]) => {
         const rect = rectOf(id)
         if (!rect) return null
+        // One name tag per author: on the first block of their change.
+        const tagged = !taggedActors.has(change.actor.label)
+        taggedActors.add(change.actor.label)
         return (
-          <div key={id} className="builder-editor__remote" style={box(rect)}>
-            {i === 0 && live?.lastChange && (
+          <div
+            key={`${id}:${change.at}`}
+            className="builder-editor__remote"
+            style={{ ...box(rect), '--be-remote': change.color } as CSSProperties}
+          >
+            {tagged && (
               <span className={`builder-editor__tag builder-editor__tag--remote${roomAbove(rect) ? '' : ' builder-editor__tag--inside'}`}>
-                <Icon name={live.lastChange.actor.type === 'ai' ? 'sparkle' : 'user'} size={12} />
-                {live.lastChange.actor.label}
+                <Icon name={change.actor.type === 'ai' ? 'sparkle' : 'user'} size={12} />
+                {shortName(change.actor.label)}
               </span>
             )}
           </div>

@@ -5,10 +5,10 @@ import { z } from 'zod'
 
 import { findBlock } from '../core/tree'
 import type { BlockDefinition, Layout, SectionDefinition } from '../core/types'
-import { channelKey, createMemoryBus, type BusMessage } from '../live/bus'
-import { createKeyedMutex } from '../live/mutex'
+import type { LiveDocStore } from '../live/apply'
 import { LIVE_RUNTIME_KEY, type LiveRuntime } from '../live/runtime'
-import type { LiveOperationsEvent } from '../live/types'
+import { createSessionManager } from '../live/session'
+import type { LiveCommitEvent, MultiplayerEvent } from '../live/types'
 import { builderMcpTools, sectionInsertOps, type BuilderMcpTool } from './index'
 
 const blocks: BlockDefinition[] = [
@@ -45,7 +45,7 @@ const args = (name: string, value: unknown) => z.object(tool(name).parameters).s
 
 /** A fake request: one page document, the API-key collection, and the live runtime on the config. */
 function fakeRequest(layout: Layout = { version: 1, blocks: [] }) {
-  const runtime: LiveRuntime = { bus: createMemoryBus(), mutex: createKeyedMutex() }
+  const runtime: LiveRuntime = { sessions: createSessionManager({ persistDebounceMs: 5 }), canUpdate: async () => true }
   let doc: Record<string, unknown> = { id: 'p1', title: 'Home', slug: 'home', _status: 'draft', updatedAt: 't0', layout }
   const calls: Record<string, unknown>[] = []
   const payload = {
@@ -200,10 +200,16 @@ describe('read tools', () => {
 })
 
 describe('write tools', () => {
-  it('applyOperations saves a draft and publishes to open editors as the AI key', async () => {
+  it('applyOperations commits to the live session as the AI key, then saves a draft', async () => {
     const { req, runtime, calls } = fakeRequest({ version: 1, blocks: [{ id: 'a', type: 'heading', props: { text: 'X' } }] })
-    const events: BusMessage[] = []
-    runtime.bus.subscribe(channelKey('pages', 'p1'), (m) => events.push(m))
+    const events: MultiplayerEvent[] = []
+    const editor = await runtime.sessions.connect({
+      target: { collection: 'pages', id: 'p1', field: 'layout', drafts: true },
+      store: req.payload as unknown as LiveDocStore,
+      clientId: 'tab-1',
+      user: { id: 2, email: 'ana@x.test' },
+      send: (event) => events.push(event),
+    })
 
     const result = await tool('applyOperations').handler(
       { collection: 'pages', id: 'p1', operations: [{ type: 'update', id: 'a', props: { text: 'Y' } }, { type: 'duplicate', id: 'a' }] },
@@ -212,22 +218,45 @@ describe('write tools', () => {
     )
     const body = json(result)
     assert.equal(body.ok, true)
+    assert.equal(body.seq, 1)
+    // getLayout sees the commit before the draft is saved.
+    const current = json(await tool('getLayout').handler({ collection: 'pages', id: 'p1' }, req, {}))
+    assert.equal(current.seq, 1)
+    assert.equal(findBlock(current.layout as Layout, 'a')?.props?.text, 'Y')
+    await runtime.sessions.flush('pages', 'p1')
     const update = calls.find((c) => c.op === 'update')
     assert.equal(update?.draft, true)
     assert.equal(update?.overrideAccess, false)
-    const event = events[0] as LiveOperationsEvent
+    assert.deepEqual(update?.context, { builderSession: true })
+    const event = events.find((e): e is LiveCommitEvent => e.type === 'commit')
+    assert.ok(event)
     assert.deepEqual(event.actor, { type: 'ai', id: 'mcp-key:7', label: 'Claude Desktop' })
+    // The AI joined the collaborators and points at the block it changed last.
+    const joined = events.find((e) => e.type === 'collaborators' && e.collaborators.some((c) => c.type === 'ai'))
+    assert.ok(joined)
+    const aware = events.find((e) => e.type === 'awareness')
+    assert.ok(aware && aware.type === 'awareness' && aware.clientId === 'ai:mcp-key:7')
+    editor.leave()
     // The duplicate (sent without newId) was given an id and broadcast as an insert.
     assert.deepEqual(event.ops.map((op) => op.type), ['update', 'insert'])
     assert.equal((body.changedIds as string[]).length, 2)
   })
 
   it('applyOperations reports a failing operation without saving', async () => {
-    const { req, calls } = fakeRequest()
+    const { req, calls, runtime } = fakeRequest()
     const result = await tool('applyOperations').handler({ collection: 'pages', id: 'p1', operations: [{ type: 'remove', id: 'x' }] }, req, {})
     assert.equal(result.isError, true)
     assert.match(result.content[0].text, /Operation 0 \(remove\): Block "x" not found/)
+    await runtime.sessions.flush('pages', 'p1')
     assert.equal(calls.filter((c) => c.op === 'update').length, 0)
+  })
+
+  it('applyOperations refuses a user without update access', async () => {
+    const { req, runtime } = fakeRequest({ version: 1, blocks: [{ id: 'a', type: 'heading', props: { text: 'X' } }] })
+    runtime.canUpdate = async () => false
+    const result = await tool('applyOperations').handler({ collection: 'pages', id: 'p1', operations: [{ type: 'remove', id: 'a' }] }, req, {})
+    assert.equal(result.isError, true)
+    assert.equal(runtime.sessions.peek('pages', 'p1'), null)
   })
 
   it('insertSection inserts the section with new ids at the end by default', async () => {

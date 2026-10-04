@@ -1,6 +1,7 @@
-// A scripted stand-in for the Anthropic client. Used by the tests and, with the TEST-ONLY env flag
-// BUILDER_AI_FAKE=1, by the chat endpoint, so the editor's Assistant panel can be tried without an
-// API key. It streams the same raw events the real API sends.
+// Scripted stand-ins for the model APIs: an Anthropic client and an OpenAI-compatible fetch. Used
+// by the tests and, with the TEST-ONLY env flag BUILDER_AI_FAKE=1, by the chat endpoint, so the
+// editor's Assistant panel can be tried without an API key. They stream the same raw events the
+// real APIs send.
 
 import type Anthropic from '@anthropic-ai/sdk'
 
@@ -154,18 +155,34 @@ export function createFakeClient(steps: FakeStep[] | ((params: StreamParams, cal
 // Demo script for BUILDER_AI_FAKE=1
 // ---------------------------------------------------------------------------
 
-function lastToolResult(params: StreamParams): { name: string | null; content: string } | null {
-  const last = params.messages.at(-1)
-  if (!last || last.role !== 'user' || !Array.isArray(last.content)) return null
-  const result = last.content.find((b) => b.type === 'tool_result')
-  if (!result || result.type !== 'tool_result') return null
+type AnyRecord = Record<string, unknown>
+const isRecord = (value: unknown): value is AnyRecord => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+
+/**
+ * The tool result the request ends with, and the name of its tool. Reads both formats: Anthropic
+ * (a user message with tool_result blocks) and Chat Completions (`role: "tool"` messages).
+ */
+function lastToolResult(params: { messages: unknown[] }): { name: string | null; content: string } | null {
+  const messages = params.messages.filter(isRecord)
+  const last = messages.at(-1)
+  if (!last) return null
+  if (last.role === 'tool') {
+    const assistant = messages.findLast((m) => m.role === 'assistant')
+    const calls = Array.isArray(assistant?.tool_calls) ? assistant.tool_calls.filter(isRecord) : []
+    const call = calls.find((c) => c.id === last.tool_call_id)
+    const name = isRecord(call?.function) && typeof call.function.name === 'string' ? call.function.name : null
+    return { name, content: typeof last.content === 'string' ? last.content : '' }
+  }
+  if (last.role !== 'user' || !Array.isArray(last.content)) return null
+  const result = last.content.filter(isRecord).find((b) => b.type === 'tool_result')
+  if (!result) return null
   // Find the tool name from the assistant message before it.
-  const previous = params.messages.at(-2)
+  const previous = messages.at(-2)
   const call = Array.isArray(previous?.content)
-    ? previous.content.find((b) => b.type === 'tool_use' && b.id === result.tool_use_id)
+    ? previous.content.filter(isRecord).find((b) => b.type === 'tool_use' && b.id === result.tool_use_id)
     : undefined
   const content = typeof result.content === 'string' ? result.content : ''
-  return { name: call && call.type === 'tool_use' ? call.name : null, content }
+  return { name: call && typeof call.name === 'string' ? call.name : null, content }
 }
 
 function firstOfType(blocks: Block[], types: string[]): Block | null {
@@ -189,7 +206,7 @@ export function demoScript(sections: SectionDefinition[]) {
   const id = () => `toolu_fake_${Date.now().toString(36)}_${++n}`
   const thinking: FakeBlock = { type: 'thinking', thinking: '', signature: 'fake-signature' }
 
-  return (params: StreamParams): FakeReply => {
+  return (params: { messages: unknown[] }): FakeReply => {
     const last = lastToolResult(params)
     if (!hero) {
       return {
@@ -241,4 +258,88 @@ export function demoScript(sections: SectionDefinition[]) {
 /** The fake client for BUILDER_AI_FAKE=1: the demo script, streamed with small delays. */
 export function demoClient(sections: SectionDefinition[]): AiClient {
   return createFakeClient(demoScript(sections), { delayMs: 25 }).client
+}
+
+// ---------------------------------------------------------------------------
+// OpenAI-compatible fake (a fetch function)
+// ---------------------------------------------------------------------------
+
+/** A Chat Completions request body as the fake sees it. */
+export type FakeChatBody = { model: string; messages: unknown[]; [key: string]: unknown }
+
+/**
+ * One scripted response of the fake fetch:
+ * - a FakeReply: streamed as Chat Completions chunks (text, reasoning, tool calls in fragments);
+ * - `{ status, body }`: an HTTP error with a JSON body;
+ * - `{ sse: [...] }`: raw body chunks, sent as they are;
+ * - an Error: fetch rejects with it (a network error).
+ */
+export type FakeChatStep =
+  | FakeReply
+  | { status: number; body?: unknown; headers?: Record<string, string> }
+  | { sse: string[] }
+  | Error
+  | ((body: FakeChatBody) => FakeChatStep)
+
+const FINISH: Record<string, string> = { tool_use: 'tool_calls', end_turn: 'stop', max_tokens: 'length', refusal: 'content_filter' }
+
+/** Chat Completions SSE frames for a scripted reply. Tool arguments arrive in 7-character fragments. */
+export function chatChunks(reply: FakeReply, model = 'fake-model'): string[] {
+  const frame = (delta: AnyRecord, finish: string | null = null, extra: AnyRecord = {}) =>
+    `data: ${JSON.stringify({ id: 'chatcmpl-fake', object: 'chat.completion.chunk', model, choices: [{ index: 0, delta, finish_reason: finish }], ...extra })}\n\n`
+  const out = [frame({ role: 'assistant', content: '' })]
+  let index = 0
+  for (const block of reply.content) {
+    if (block.type === 'text') for (const text of chunks(block.text)) out.push(frame({ content: text }))
+    else if (block.type === 'thinking' && block.thinking) out.push(frame({ reasoning: block.thinking }))
+    else if (block.type === 'tool_use') {
+      out.push(frame({ tool_calls: [{ index, id: block.id, type: 'function', function: { name: block.name, arguments: '' } }] }))
+      for (const part of chunks(JSON.stringify(block.input), 7)) out.push(frame({ tool_calls: [{ index, function: { arguments: part } }] }))
+      index++
+    }
+  }
+  out.push(frame({}, FINISH[reply.stop_reason ?? 'end_turn'] ?? 'stop'))
+  out.push(`data: ${JSON.stringify({ id: 'chatcmpl-fake', choices: [], usage: { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120 } })}\n\n`)
+  out.push('data: [DONE]\n\n')
+  return out
+}
+
+/** A fetch that answers each Chat Completions request with the next scripted step. `calls` records the bodies. */
+export function createFakeChatFetch(steps: FakeChatStep[] | ((body: FakeChatBody, call: number) => FakeChatStep), options: { delayMs?: number } = {}) {
+  const calls: Array<{ url: string; headers: Record<string, string>; body: FakeChatBody }> = []
+  const fakeFetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+    const body = JSON.parse(String(init?.body ?? '{}')) as FakeChatBody
+    calls.push({ url: String(input), headers: { ...(init?.headers as Record<string, string>) }, body })
+    const index = calls.length - 1
+    let step = typeof steps === 'function' ? steps(body, index) : steps[index]
+    while (typeof step === 'function') step = step(body)
+    if (!step) throw new Error(`Fake fetch: no scripted step for call ${index}`)
+    if (step instanceof Error) throw step
+    const signal = init?.signal ?? undefined
+    if (signal?.aborted) throw Object.assign(new Error('The operation was aborted.'), { name: 'AbortError' })
+    if ('status' in step) {
+      return new Response(step.body === undefined ? null : JSON.stringify(step.body), {
+        status: step.status,
+        headers: { 'content-type': 'application/json', ...step.headers },
+      })
+    }
+    const frames = 'sse' in step ? step.sse : chatChunks(step, body.model)
+    const encoder = new TextEncoder()
+    let i = 0
+    const stream = new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        if (options.delayMs) await wait(options.delayMs)
+        if (signal?.aborted) return controller.error(Object.assign(new Error('The operation was aborted.'), { name: 'AbortError' }))
+        if (i >= frames.length) return controller.close()
+        controller.enqueue(encoder.encode(frames[i++]))
+      },
+    })
+    return new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } })
+  }
+  return { fetch: fakeFetch as typeof fetch, calls }
+}
+
+/** The fake fetch for BUILDER_AI_FAKE=1 with an OpenAI-compatible provider: the same demo script. */
+export function demoFetch(sections: SectionDefinition[]): typeof fetch {
+  return createFakeChatFetch(demoScript(sections), { delayMs: 25 }).fetch
 }
