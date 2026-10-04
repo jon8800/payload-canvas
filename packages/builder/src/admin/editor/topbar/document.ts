@@ -7,7 +7,15 @@
 import { toast } from '@payloadcms/ui'
 
 import type { BuilderClientConfig } from '../../../core/types'
-import type { BuilderDocMeta, DocStatus, LivePublishedEvent, LiveSavedEvent, PublishAction, PublishResponse } from '../../../live/types'
+import type {
+  BuilderDocMeta,
+  DocStatus,
+  LiveFlushResponse,
+  LivePublishedEvent,
+  LiveSavedEvent,
+  PublishAction,
+  PublishResponse,
+} from '../../../live/types'
 import { createValueStore, type ValueStore } from '../valueStore'
 
 export type DocumentBusy = PublishAction | 'rename' | null
@@ -26,6 +34,11 @@ export type DocumentController = {
   refresh: () => Promise<void>
   /** Publish, unpublish or revert to the published version. Resolves true on success. */
   run: (action: PublishAction) => Promise<boolean>
+  /**
+   * "Retry now" after a failed save: the server saves the session at once. The `saved` or
+   * `saveFailed` event updates the top bar. Resolves true when the draft was saved.
+   */
+  retrySave: () => Promise<boolean>
   /** Saves a new title (a draft, when the collection has drafts). Resolves true on success. */
   rename: (title: string) => Promise<boolean>
   /** A `saved` or `published` event from the live stream. */
@@ -110,6 +123,19 @@ export function createDocumentController(
         return false
       } finally {
         busy.set(null)
+      }
+    },
+
+    async retrySave() {
+      try {
+        const response = await fetch(`${endpoint}/flush`, { method: 'POST', credentials: 'include' })
+        const body = (await response.json().catch(() => null)) as LiveFlushResponse | null
+        if (body?.ok) return true
+        toast.error(`Still not saved: ${body && !body.ok ? body.error : `the server answered ${response.status}`}`)
+        return false
+      } catch {
+        toast.error('Still not saved: the server cannot be reached. Check your connection.')
+        return false
       }
     },
 

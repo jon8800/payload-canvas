@@ -103,6 +103,17 @@ export function BuilderCanvas({ blocks, components, plugins, resolveLink }: Buil
     })
   }, [])
 
+  // In development, Next.js mounts its dev indicator (and error overlay) in every page, the canvas
+  // iframe included. The admin page around the canvas already shows it, so hide the second copy.
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production' || window.parent === window) return
+    const style = document.createElement('style')
+    style.dataset.builderCanvas = 'hide-next-devtools'
+    style.textContent = 'nextjs-portal { display: none !important; }'
+    document.head.append(style)
+    return () => style.remove()
+  }, [])
+
   // Messages, pointer, keys and the ready handshake.
   useEffect(() => {
     if (window.parent === window) return

@@ -17,7 +17,7 @@ import {
   type SessionManagerOptions,
   type SessionTarget,
 } from './session'
-import type { LiveActor, LiveCommitEvent, LiveSessionEvent, MultiplayerEvent } from './types'
+import type { LiveActor, LiveCommitEvent, LiveSaveFailedEvent, LiveSessionEvent, MultiplayerEvent } from './types'
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -49,11 +49,14 @@ const settle = async () => {
 }
 const target: SessionTarget = { collection: 'pages', id: 'p1', field: 'layout', drafts: true, autosave: true }
 
+const dbDown = () => new Error('DB down')
+
 /** A fake Payload Local API with one document. Reads and writes can be slowed down or fail. */
 function fakeStore(layout: Layout = base, timing: { read?: number; write?: number } = {}) {
   let doc: Record<string, unknown> = { id: 'p1', layout: structuredClone(layout) }
   const writes: Record<string, unknown>[] = []
   let failures = 0
+  let failure = dbDown
   const store: LiveDocStore = {
     async findByID(args) {
       if (timing.read) await delay(timing.read)
@@ -64,7 +67,7 @@ function fakeStore(layout: Layout = base, timing: { read?: number; write?: numbe
       if (timing.write) await delay(timing.write)
       if (failures > 0) {
         failures -= 1
-        throw new Error('DB down')
+        throw failure()
       }
       writes.push(structuredClone(args))
       doc = { ...doc, ...structuredClone(args.data as Record<string, unknown>) }
@@ -77,8 +80,9 @@ function fakeStore(layout: Layout = base, timing: { read?: number; write?: numbe
     get doc() {
       return doc
     },
-    failNext(n: number) {
+    failNext(n: number, error?: () => Error) {
       failures = n
+      if (error) failure = error
     },
   }
 }
@@ -295,14 +299,94 @@ describe('document session', () => {
     assert.equal((db.doc.layout as Layout).blocks.length, 13)
   })
 
-  it('retries a failed save and gives up after 3 tries until the next commit', async () => {
-    const { commit, clock, db, errors } = setup()
-    db.failNext(5)
+  it('retries a failed save with backoff, tells the editors, and reports the save that works', async () => {
+    const { connect, commit, clock, db, errors } = setup()
+    const a = await connect('tab-a')
+    db.failNext(3, () => Object.assign(new Error('Validation failed'), { status: 400, data: { errors: [{ message: 'Title is required' }] } }))
     await commit([insertAt('x1')])
-    await clock.advance(10_000)
+    await clock.advance(1000) // try 1 fails
+    const failed = a.events.filter((e): e is LiveSaveFailedEvent => e.type === 'saveFailed')
+    assert.equal(failed.length, 1)
+    assert.equal(failed[0].message, 'Title is required')
+    assert.equal(failed[0].retrying, true)
+    await clock.advance(1999)
+    assert.equal(errors.length, 1)
+    await clock.advance(1) // try 2 after 2 s
+    assert.equal(errors.length, 2)
+    await clock.advance(5000) // try 3 after 5 s
     assert.equal(errors.length, 3)
     assert.equal(db.writes.length, 0)
+    await clock.advance(14_999)
+    assert.equal(db.writes.length, 0)
+    await clock.advance(1) // try 4 after 15 s works
+    assert.equal(db.writes.length, 1)
+    assert.equal(a.events.filter((e) => e.type === 'saveFailed').length, 3)
+    assert.equal(a.events.at(-1)?.type, 'saved')
+    // Nothing more to save: no more tries.
+    await clock.advance(120_000)
+    assert.equal(db.writes.length, 1)
+    assert.equal(errors.length, 3)
+  })
+
+  it('keeps retrying every 30 s while the commits are unsaved', async () => {
+    const { commit, clock, db, errors } = setup()
+    db.failNext(100)
+    await commit([insertAt('x1')])
+    await clock.advance(1000 + 2000 + 5000 + 15_000) // tries 1-4
+    assert.equal(errors.length, 4)
+    await clock.advance(30_000)
+    assert.equal(errors.length, 5)
+    await clock.advance(30_000)
+    assert.equal(errors.length, 6)
+    // New commits do not reset the backoff (no burst of saves against a broken database).
+    await commit([insertAt('x2')])
+    await clock.advance(29_000)
+    assert.equal(errors.length, 6)
     db.failNext(0)
+    await clock.advance(1000)
+    assert.equal(db.writes.length, 1)
+    assert.deepEqual((db.writes[0].data as { layout: Layout }).layout.blocks.map((b) => b.id), ['x2', 'x1', 's1'])
+  })
+
+  it('sends the last save error to an editor that connects while saves fail', async () => {
+    const { connect, commit, clock, db } = setup()
+    db.failNext(100)
+    await commit([insertAt('x1')])
+    await clock.advance(1000)
+    const b = await connect('tab-b')
+    assert.deepEqual(
+      b.events.map((e) => e.type),
+      ['session', 'saveFailed'],
+    )
+  })
+
+  it('flush saves at once during a retry wait and returns the failure reason', async () => {
+    const { connect, commit, clock, db, sessions } = setup()
+    const a = await connect('tab-a')
+    db.failNext(2)
+    await commit([insertAt('x1')])
+    await clock.advance(1000) // try 1 fails, the next try waits 2 s
+    const failed = await sessions.flush('pages', 'p1')
+    assert.deepEqual(failed, { ok: false, error: 'DB down' })
+    const saved = await sessions.flush('pages', 'p1')
+    assert.deepEqual(saved, { ok: true })
+    assert.equal(db.writes.length, 1)
+    assert.equal(a.events.at(-1)?.type, 'saved')
+    // The retry timer is gone with the error.
+    await clock.advance(60_000)
+    assert.equal(db.writes.length, 1)
+  })
+
+  it('does not retry a save the user may not make, until the next commit', async () => {
+    const { connect, commit, clock, db, errors } = setup()
+    const a = await connect('tab-a')
+    db.failNext(1, () => Object.assign(new Error('Forbidden'), { status: 403 }))
+    await commit([insertAt('x1')])
+    await clock.advance(1000)
+    const failed = a.events.find((e): e is LiveSaveFailedEvent => e.type === 'saveFailed')
+    assert.equal(failed?.retrying, false)
+    await clock.advance(120_000)
+    assert.equal(errors.length, 1)
     await commit([insertAt('x2')])
     await clock.advance(1000)
     assert.equal(db.writes.length, 1)

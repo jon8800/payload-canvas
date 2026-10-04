@@ -2,6 +2,7 @@
 //   GET  {api}/builder/live/:collection/:id/events?clientId=&seq=&session=   Server-Sent Events
 //   POST {api}/builder/live/:collection/:id/commit      LiveCommitRequest -> LiveCommitResponse
 //   POST {api}/builder/live/:collection/:id/awareness   LiveAwarenessRequest -> { ok }
+//   POST {api}/builder/live/:collection/:id/flush       -> LiveFlushResponse (save the session now)
 //   POST {api}/builder/live/:collection/:id/operations  { ops, clientId? } -> LiveOperationsResponse
 // Payload passes the handler's Response body through unbuffered, so the stream works inside
 // Next's route handler. `no-transform` stops compression, `X-Accel-Buffering: no` stops nginx
@@ -13,7 +14,7 @@ import type { BlockDefinition } from '../core/types'
 import { actorFromUser, type LiveDocStore } from './apply'
 import type { LiveRuntime } from './runtime'
 import { collaboratorName, type CommitResult, type SessionTarget } from './session'
-import type { LiveActor, LiveCommitResponse, LiveError, LiveOperationsResponse, MultiplayerEvent } from './types'
+import type { LiveActor, LiveCommitResponse, LiveError, LiveFlushResponse, LiveOperationsResponse, MultiplayerEvent } from './types'
 
 /** Path of the live endpoints below the API route. */
 export const LIVE_PATH = '/builder/live'
@@ -235,6 +236,22 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
     },
   }
 
+  // "Retry now" after a failed save: saves the session's unsaved commits at once.
+  const flush: Endpoint = {
+    path: `${LIVE_PATH}/:collection/:id/flush`,
+    method: 'post',
+    handler: async (req) => {
+      if (!req.user) return json({ ok: false, error: 'Unauthorized' } satisfies LiveFlushResponse, 401)
+      const target = targetOf(req, collections)
+      if (target instanceof Response) return target
+      if (!(await runtime.canUpdate(req, target.collection, target.id))) {
+        return json({ ok: false, error: 'You are not allowed to edit this document' } satisfies LiveFlushResponse, 403)
+      }
+      const result = await runtime.sessions.flush(target.collection, target.id)
+      return json(result, result.ok ? 200 : 503)
+    },
+  }
+
   const operations: Endpoint = {
     path: `${LIVE_PATH}/:collection/:id/operations`,
     method: 'post',
@@ -260,7 +277,7 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
     },
   }
 
-  return [events, commitEndpoint, awareness, operations]
+  return [events, commitEndpoint, awareness, flush, operations]
 }
 
 // ---------------------------------------------------------------------------

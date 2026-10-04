@@ -238,18 +238,34 @@
 
   // ---- Right: save state, buttons, publish ---------------------------------------------------
 
+  .builder-bar__save-wrap {
+    display: inline-flex;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
   .builder-bar__save {
     display: inline-flex;
-    flex: none;
+    flex: 0 1 auto;
     align-items: center;
     justify-content: flex-start;
     gap: 6px;
-    // Wide enough for "Saved · 12:04 PM", so the bar does not move when the text changes.
-    width: 124px;
+    // Wide enough for "Saved · 12:04 PM", so the bar does not move between the normal states.
+    // Error texts are longer: the box grows, then truncates (the tooltip has the full text).
+    min-width: 124px;
+    max-width: 300px;
     color: var(--be-muted);
     font-size: 12px;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+  }
+
+  .builder-bar__save-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .builder-bar__save-dot {
@@ -266,11 +282,60 @@
     animation: builder-bar-pulse 1s ease-in-out infinite alternate;
   }
 
-  .builder-bar__save[data-state='offline'] {
+  .builder-bar__save[data-state='offline'],
+  .builder-bar__save[data-state='reconnecting'] {
     color: var(--theme-warning-600, #d97706);
 
     .builder-bar__save-dot {
       background: var(--theme-warning-500, #f59e0b);
+    }
+  }
+
+  .builder-bar__save[data-state='failed'] {
+    color: var(--theme-error-600, #dc2626);
+    font-weight: 500;
+
+    .builder-bar__save-dot {
+      background: var(--theme-error-500, #ef4444);
+    }
+  }
+
+  // The reasons can be long: wrap the tooltip, and keep its line breaks.
+  .builder-bar .builder-bar__save[data-state='failed'],
+  .builder-bar .builder-bar__save[data-state='offline'] {
+    &:hover::after {
+      width: max-content;
+      max-width: 320px;
+      white-space: pre-line;
+    }
+  }
+
+  .builder-bar__save-retry {
+    flex: none;
+    height: 24px;
+    padding: 0 8px;
+    border: 1px solid var(--theme-error-400, #f87171);
+    border-radius: var(--be-radius-m);
+    background: transparent;
+    color: var(--theme-error-600, #dc2626);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      background: var(--theme-error-50, #fef2f2);
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--theme-error-500, #ef4444);
+      outline-offset: 1px;
     }
   }
 

@@ -13,6 +13,7 @@ import type { Endpoint, PayloadRequest } from 'payload'
 import { TEMPLATE_PREVIEW_FIELD, TEMPLATE_TARGET_FIELD } from '../core/bindings'
 import { normalizeLayout } from '../core/tree'
 import { documentPath, draftPreviewPath } from '../plugin/links'
+import { payloadErrorMessage } from './apply'
 import { LIVE_PATH, requestActor, targetOf } from './endpoints'
 import type { LiveRuntime } from './runtime'
 import type { SessionTarget } from './session'
@@ -53,13 +54,7 @@ const api = (req: PayloadRequest) => req.payload as unknown as DocApi
 
 const text = (value: unknown): string | null => (typeof value === 'string' && value ? value : null)
 
-/** The error message of a failed Payload call, with the field messages of a ValidationError. */
-export function payloadErrorMessage(error: unknown): string {
-  const data = (error as { data?: { errors?: { message?: unknown }[] } })?.data
-  const details = (data?.errors ?? []).map((e) => e.message).filter((m): m is string => typeof m === 'string' && m !== '')
-  if (details.length > 0) return details.join('\n')
-  return error instanceof Error ? error.message : String(error)
-}
+export { payloadErrorMessage }
 
 function statusOf(error: unknown): number {
   const status = (error as { status?: unknown })?.status

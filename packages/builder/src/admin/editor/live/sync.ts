@@ -79,6 +79,8 @@ export type SyncSnapshot = {
   queued: PendingChange[]
   /** Local changes the server has not confirmed yet. */
   pending: number
+  /** Commit requests in a row that failed (network down, server error). 0 after any answer. */
+  sendFailures: number
 }
 
 export type SyncEngine = ReturnType<typeof createSyncEngine>
@@ -86,6 +88,11 @@ export type SyncEngine = ReturnType<typeof createSyncEngine>
 const defaultSchedule: Schedule = (fn, ms) => {
   const timer = setTimeout(fn, ms)
   return () => clearTimeout(timer)
+}
+
+/** Wait before resending after the 1st, 2nd, … failed send: 1 s, 2 s, 4 s, 8 s, then every 15 s. */
+export function sendRetryDelay(failures: number): number {
+  return Math.min(15_000, 1000 * 2 ** Math.max(0, failures - 1))
 }
 
 let batchCounter = 0
@@ -150,6 +157,7 @@ export function createSyncEngine(initial: Layout, options: SyncOptions) {
   let holdUntil: number | null = null
   /** A retry after a failed send: no flush before it fires. */
   let retryCancel: (() => void) | null = null
+  let sendFailures = 0
   let flushCancel: (() => void) | null = null
   let send: ((request: LiveCommitRequest) => void) | null = null
   const listeners = new Set<(update: SyncUpdate) => void>()
@@ -204,6 +212,12 @@ export function createSyncEngine(initial: Layout, options: SyncOptions) {
     flushCancel = schedule(flush, coalesceMs)
   }
 
+  /** The server is reachable again: send now instead of waiting for the retry timer. */
+  const cancelRetry = () => {
+    retryCancel?.()
+    retryCancel = null
+  }
+
   const releaseHold = () => {
     if (holdUntil !== null && seq >= holdUntil) holdUntil = null
   }
@@ -224,6 +238,7 @@ export function createSyncEngine(initial: Layout, options: SyncOptions) {
         inflight,
         queued,
         pending: queued.length + (inflight?.changes.length ?? 0),
+        sendFailures,
       }
     },
 
@@ -256,8 +271,8 @@ export function createSyncEngine(initial: Layout, options: SyncOptions) {
         holdUntil = null
         flushCancel?.()
         flushCancel = null
-        retryCancel?.()
-        retryCancel = null
+        cancelRetry()
+        sendFailures = 0
       }
     },
 
@@ -296,11 +311,11 @@ export function createSyncEngine(initial: Layout, options: SyncOptions) {
       mode = 'live'
       const newSession = id ? sessionId !== null && id !== sessionId : nextSeq < seq
       if (id) sessionId = id
+      // A session means the server is reachable: a send waiting for its retry goes out now.
+      cancelRetry()
       if (reset) {
         inflight = null
         queued = []
-        retryCancel?.()
-        retryCancel = null
       } else if (inflight) {
         if (newSession) {
           // The server lost its session (restart). Send the batch again on the new one.
@@ -340,6 +355,7 @@ export function createSyncEngine(initial: Layout, options: SyncOptions) {
       releaseHold()
       const own = inflight !== null && event.clientId === clientId && event.batchId === inflight.batchId
       if (own && inflight) {
+        sendFailures = 0
         const sentOps = inflight.changes.flatMap((c) => c.ops)
         inflight = null
         if (sameOps(sentOps, event.ops)) {
@@ -359,6 +375,8 @@ export function createSyncEngine(initial: Layout, options: SyncOptions) {
 
     /** The HTTP answer to a commit request. */
     response(batchId: string, response: LiveCommitResponse) {
+      // Any answer means the server is reachable, also for a batch the echo already confirmed.
+      sendFailures = 0
       if (!inflight || inflight.batchId !== batchId) return
       if (response.ok) {
         if (response.seq <= seq) {
@@ -394,16 +412,27 @@ export function createSyncEngine(initial: Layout, options: SyncOptions) {
       scheduleFlush()
     },
 
-    /** The request failed (network, server error). The batch is sent again after `retryMs`. */
-    sendFailed(batchId: string, retryMs: number) {
+    /**
+     * The request failed (network, server error). The changes stay queued, and the batch is sent
+     * again after `retryMs` (default: backoff by `sendRetryDelay`), or at once on `retryNow`.
+     */
+    sendFailed(batchId: string, retryMs?: number) {
       if (!inflight || inflight.batchId !== batchId) return
       queued = [...inflight.changes, ...queued]
       inflight = null
-      retryCancel?.()
+      sendFailures += 1
+      cancelRetry()
       retryCancel = schedule(() => {
         retryCancel = null
         scheduleFlush()
-      }, retryMs)
+      }, retryMs ?? sendRetryDelay(sendFailures))
+    },
+
+    /** The connection is back (the browser went online): send the queued changes now. */
+    retryNow() {
+      if (retryCancel === null) return
+      cancelRetry()
+      scheduleFlush()
     },
 
     /** The stream dropped. Nothing is sent until the next session or resumed stream. */
@@ -417,6 +446,7 @@ export function createSyncEngine(initial: Layout, options: SyncOptions) {
     resumed() {
       if (mode !== 'live') return
       synced = true
+      cancelRetry()
       scheduleFlush()
     },
   }

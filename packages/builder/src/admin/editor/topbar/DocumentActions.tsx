@@ -4,13 +4,14 @@
 
 import { ConfirmationModal, Link, useConfig, useDocumentDrawer, useModal } from '@payloadcms/ui'
 import type { DefaultDocumentIDType } from 'payload'
-import { useEffect, useEffectEvent } from 'react'
+import { useEffect, useEffectEvent, useState } from 'react'
 
 import { Icon, type IconName } from '../icons'
 import { useRuntime } from '../runtime'
 import { Popover, usePopover } from '../styles/popover'
 import { useCollectionLabel } from '../templates/useTemplate'
 import { useValue } from '../valueStore'
+import { SettingsDrawerSlug } from './settingsDrawer'
 
 function formatTime(iso: string | null): string {
   if (!iso) return ''
@@ -18,38 +19,66 @@ function formatTime(iso: string | null): string {
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
+type SaveStateName = 'connecting' | 'offline' | 'reconnecting' | 'failed' | 'saving' | 'saved'
+
 /**
  * "Saving…" while this editor has unconfirmed changes or the session has unsaved commits, then
- * "Saved · 12:04". The box has a fixed width, so the bar never shifts.
+ * "Saved · 12:04". Errors win: "Offline" while commits cannot reach the server, "Not saved" (with
+ * the reason in the tooltip and "Retry now") while the server cannot save the draft. The box has
+ * a minimum width, so the bar does not shift between the normal states.
  */
 export function SaveState() {
   const runtime = useRuntime()
   const live = useValue(runtime.live)
   const { updatedAt } = useValue(runtime.doc.meta)
+  const [retrying, setRetrying] = useState(false)
 
-  let state: 'connecting' | 'offline' | 'saving' | 'saved' = 'saved'
+  let state: SaveStateName = 'saved'
   if (!live || live.status === 'connecting') state = 'connecting'
-  else if (live.status === 'reconnecting') state = 'offline'
+  else if (live.offline) state = 'offline'
+  else if (live.status === 'reconnecting') state = 'reconnecting'
+  else if (live.saveError) state = 'failed'
   else if (live.pending || live.unsaved) state = 'saving'
   const time = formatTime(live?.savedAt ?? updatedAt)
+  const saveError = live?.saveError ?? null
   const text = {
     connecting: 'Connecting…',
-    offline: 'Reconnecting…',
+    offline: 'Offline — changes will sync when you’re back',
+    reconnecting: 'Reconnecting…',
+    failed: saveError?.retrying ? 'Not saved — retrying…' : 'Not saved',
     saving: 'Saving…',
     saved: time ? `Saved · ${time}` : 'Saved',
   }[state]
   const tooltip = {
     connecting: 'Connecting to the live session',
-    offline: 'Offline. Your changes are kept and sent when the connection is back.',
+    offline: 'Offline. Your changes are kept in this tab and sent when the connection is back. Do not close the tab.',
+    reconnecting: 'The live connection dropped. Reconnecting.',
+    failed: `The server could not save the draft: ${saveError?.message ?? 'unknown error'}
+${
+      saveError?.retrying ? 'It tries again automatically. ' : ''
+    }Your changes are kept on the server.`,
     saving: 'Your changes are being saved as a draft',
     saved: 'All changes are saved as a draft',
   }[state]
 
+  const retry = async () => {
+    setRetrying(true)
+    await runtime.doc.retrySave()
+    setRetrying(false)
+  }
+
   return (
-    <output className="builder-bar__save" data-state={state} data-tooltip={tooltip} aria-live="polite">
-      <span className="builder-bar__save-dot" aria-hidden="true" />
-      {text}
-    </output>
+    <div className="builder-bar__save-wrap">
+      <output className="builder-bar__save" data-state={state} data-tooltip={tooltip} aria-live="polite">
+        <span className="builder-bar__save-dot" aria-hidden="true" />
+        <span className="builder-bar__save-text">{text}</span>
+      </output>
+      {state === 'failed' && (
+        <button type="button" className="builder-bar__save-retry" disabled={retrying} onClick={() => void retry()}>
+          {retrying ? 'Retrying…' : 'Retry now'}
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -75,7 +104,8 @@ export function PreviewButton() {
 
 /**
  * Opens the document's own edit form (title, slug, SEO, …) in Payload's document drawer. After
- * a save the top bar loads the document again.
+ * a save the top bar loads the document again. The drawer has no Publish button (the top bar has
+ * one) and no "…" menu (duplicate, delete): it saves by autosave or Payload's "Save draft".
  */
 export function PageSettings() {
   const runtime = useRuntime()
@@ -84,7 +114,7 @@ export function PageSettings() {
   const singular = useCollectionLabel(collection, 'singular')
   // Numeric ids go to Payload as numbers (the app's ID type can be `number`).
   const docId = (/^\d+$/.test(id) ? Number(id) : id) as DefaultDocumentIDType
-  const [DocumentDrawer, , { openDrawer, isDrawerOpen }] = useDocumentDrawer({ collectionSlug: collection, id: docId })
+  const [DocumentDrawer, , { drawerSlug, openDrawer, isDrawerOpen }] = useDocumentDrawer({ collectionSlug: collection, id: docId })
   const open = useEffectEvent(() => openDrawer())
 
   useEffect(() => {
@@ -105,7 +135,9 @@ export function PageSettings() {
         <Icon name="settings" size={14} />
         <span className="builder-bar__label">{singular} settings</span>
       </button>
-      <DocumentDrawer onSave={() => void runtime.doc.refresh()} />
+      <SettingsDrawerSlug value={drawerSlug}>
+        <DocumentDrawer disableActions onSave={() => void runtime.doc.refresh()} />
+      </SettingsDrawerSlug>
     </>
   )
 }

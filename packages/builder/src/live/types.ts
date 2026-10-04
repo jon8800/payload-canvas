@@ -153,6 +153,21 @@ export type LiveSavedEvent = {
   status?: string
 }
 
+/**
+ * The session could not save the draft. The commits stay in the session (nothing is lost while the
+ * server runs). With `retrying`, the session tries again with backoff (2 s, 5 s, 15 s, then every
+ * 30 s); a `saved` event follows when a save works. Without it (no permission), the next commit or
+ * `POST …/flush` tries again. A new connection gets this event right after its first events.
+ */
+export type LiveSaveFailedEvent = {
+  type: 'saveFailed'
+  /** ISO time of the failed save. */
+  at: string
+  /** The reason, e.g. a validation message. */
+  message: string
+  retrying: boolean
+}
+
 /** Someone published, unpublished or reverted the document to its published version. */
 export type LivePublishedEvent = {
   type: 'published'
@@ -170,7 +185,11 @@ export type MultiplayerEvent =
   | LiveCollaboratorsEvent
   | LiveAwarenessEvent
   | LiveSavedEvent
+  | LiveSaveFailedEvent
   | LivePublishedEvent
+
+/** Response of `POST {liveEndpoint}/:collection/:id/flush`: save the session's unsaved commits now. */
+export type LiveFlushResponse = { ok: true } | { ok: false; error: string }
 
 /** `POST {liveEndpoint}/:collection/:id/commit` — one batch of local operations, sent in order. */
 export type LiveCommitRequest = {

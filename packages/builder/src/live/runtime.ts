@@ -14,9 +14,9 @@ export type LiveRuntime = { sessions: SessionManager; canUpdate: UpdateAccessChe
 /** Key under `config.custom` where the plugin stores its runtime. */
 export const LIVE_RUNTIME_KEY = 'websiteBuilderLive'
 
-// v3: sessions with `saved` events, `broadcast` and `reset`. A dev hot reload from an older
-// runtime must not reuse its object.
-const GLOBAL_KEY = Symbol.for('@payload-toolkit/builder/live-runtime-v3')
+// v4: sessions with `saveFailed` events, save retries with backoff and a `flush` result. A dev
+// hot reload from an older runtime must not reuse its object.
+const GLOBAL_KEY = Symbol.for('@payload-toolkit/builder/live-runtime-v4')
 
 const ACCESS_TTL_MS = 30_000
 
