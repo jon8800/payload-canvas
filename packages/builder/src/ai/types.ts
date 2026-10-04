@@ -6,8 +6,48 @@
 import type { Layout, Operation, TemplateContext } from '../core/types'
 
 /** Plugin option `ai`. Presence enables the assistant. */
+/**
+ * Which API the assistant talks to.
+ * - "anthropic": the Anthropic Messages API (official SDK). Default.
+ * - "openai-compatible": any OpenAI-compatible Chat Completions endpoint, called with fetch:
+ *   OpenRouter, Cloudflare AI Gateway (compat endpoint), OpenAI, Groq, Ollama, LM Studio, …
+ *   Presets fill `baseURL` and the key env var: "openrouter", "cloudflare".
+ */
+export type AiProvider =
+  | { type: 'anthropic' }
+  | {
+      type: 'openai-compatible'
+      /** e.g. "https://openrouter.ai/api/v1". */
+      baseURL: string
+      /** Default: read from `apiKeyEnv`. */
+      apiKey?: string
+      /** Env var with the key. Default "OPENAI_API_KEY". */
+      apiKeyEnv?: string
+      /** Extra headers (e.g. OpenRouter's HTTP-Referer / X-Title, Cloudflare's cf-aig-authorization). */
+      headers?: Record<string, string>
+    }
+  | { type: 'openrouter'; apiKey?: string; apiKeyEnv?: string }
+  | {
+      type: 'cloudflare'
+      /** Cloudflare account id and AI Gateway id. */
+      accountId: string
+      gatewayId: string
+      /** Provider key (e.g. an OpenAI/Anthropic key) unless the gateway stores it (BYOK). */
+      apiKey?: string
+      apiKeyEnv?: string
+      /** Gateway token for authenticated gateways (`cf-aig-authorization`). */
+      gatewayToken?: string
+      gatewayTokenEnv?: string
+    }
+
 export type AiOptions = {
-  /** Claude model id. Default "claude-opus-5-5". */
+  /** Default { type: 'anthropic' }. */
+  provider?: AiProvider
+  /**
+   * Model id in the provider's naming, e.g. "claude-opus-5-5" (anthropic),
+   * "anthropic/claude-haiku-4.5" (openrouter). Default "claude-opus-5-5" for anthropic; required
+   * for other providers.
+   */
   model?: string
   /** Effort for the agent loop. Default "medium". */
   effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max'
