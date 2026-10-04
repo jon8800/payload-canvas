@@ -11,7 +11,9 @@ export const formBlock = defineBlock({
   label: 'Form',
   icon: 'form',
   category: 'Interactive',
-  fields: [{ name: 'form', type: 'relationship', relationTo: 'forms', required: true }],
+  // Optional, so a ready-made contact section publishes before a form is chosen. Without a form the
+  // site renders nothing and the canvas shows a "choose a form" placeholder.
+  fields: [{ name: 'form', type: 'relationship', relationTo: 'forms' }],
   // The component's own Tailwind classes. The plugin adds them to the generated CSS.
   classes: formClassList,
   ai: {

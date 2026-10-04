@@ -5,10 +5,11 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 
-import { findBlock } from '../../../core'
+import { findBlock, getBlockDefinition } from '../../../core'
 import { Icon } from '../icons'
 import { useRuntime } from '../runtime'
 import { useEditor } from '../store'
+import { Popover, usePopover } from '../styles/popover'
 import { useCollectionLabel } from '../templates/useTemplate'
 import { useValue } from '../valueStore'
 import type { AiClientConfig } from '../../../ai/types'
@@ -38,14 +39,12 @@ export function AssistantPanel({ hidden }: { hidden: boolean }) {
 }
 
 function Panel({ assistant, hidden }: { assistant: AssistantController; hidden: boolean }) {
-  const runtime = useRuntime()
   const state = useValue(assistant.state)
   const { history, streaming, live, notice, failed } = state
   const items = buildItems(state)
   // An info note (e.g. "New chat: the assistant now uses …") shows inside the welcome.
   const empty = items.length === 0 && !failed && (!notice || notice.kind === 'info')
   const [connect, setConnect] = useState(false)
-  const ai = runtime.config.ai
   const scrollRef = useRef<HTMLDivElement>(null)
   const stick = useRef(true)
   // Opening the tab, starting a chat or sending a message jumps to the end.
@@ -74,45 +73,6 @@ function Panel({ assistant, hidden }: { assistant: AssistantController; hidden: 
 
   return (
     <section className="builder-assistant" hidden={hidden} aria-label="AI assistant">
-      <header className="builder-assistant__head">
-        <span className="builder-assistant__title">
-          <span className="builder-assistant__badge">
-            <Icon name="sparkle" size={12} />
-          </span>
-          Assistant
-          {ai && (
-            <span className="builder-assistant__model" title={`${ai.providerLabel ?? 'Anthropic'} · ${ai.model}`}>
-              {modelLabel(ai)}
-            </span>
-          )}
-        </span>
-        <span className="builder-assistant__head-actions">
-          <button
-            type="button"
-            className="builder-editor__icon-button"
-            aria-label="Use Claude Code or Codex"
-            aria-pressed={connect}
-            data-tooltip="Use Claude Code or Codex"
-            onClick={() => setConnect((value) => !value)}
-          >
-            <Icon name="link" />
-          </button>
-        <button
-          type="button"
-          className="builder-editor__icon-button"
-          aria-label="New chat"
-          data-tooltip="New chat"
-          disabled={history.messages.length === 0 && !failed && !notice && !streaming}
-          onClick={() => {
-            assistant.newChat()
-            runtime.assistantFocus.set(Date.now())
-          }}
-        >
-          <Icon name="compose" />
-        </button>
-        </span>
-      </header>
-
       <div
         ref={scrollRef}
         className="builder-assistant__scroll"
@@ -124,6 +84,10 @@ function Panel({ assistant, hidden }: { assistant: AssistantController; hidden: 
         {connect ? (
           <div className="builder-assistant__log">
             <ConnectAgents onClose={() => setConnect(false)} />
+          </div>
+        ) : state.setup ? (
+          <div className="builder-assistant__log">
+            <SetupState assistant={assistant} message={state.setup} />
           </div>
         ) : !state.key ? (
           <div className="builder-assistant__empty">
@@ -153,13 +117,15 @@ function Panel({ assistant, hidden }: { assistant: AssistantController; hidden: 
         )}
       </div>
 
-      <Composer assistant={assistant} state={state} />
+      {!state.setup && (
+        <Composer assistant={assistant} state={state} connect={connect} onToggleConnect={() => setConnect((value) => !value)} />
+      )}
     </section>
   )
 }
 
 /**
- * The header badge. Anthropic: "claude-opus-5-5" -> "Claude Opus 5.5". Others: "OpenRouter ·
+ * The model name in the menu. Anthropic: "claude-opus-5-5" -> "Claude Opus 5.5". Others: "OpenRouter ·
  * openai/gpt-6-luna" (shortened by CSS; the title has the full text).
  */
 function modelLabel(ai: AiClientConfig): string {
@@ -312,7 +278,8 @@ function Notice({ assistant, notice, canRetry }: { assistant: AssistantControlle
   if (notice.kind === 'info') {
     return <p className="builder-assistant__info">{notice.message}</p>
   }
-  if (notice.kind === 'setup') return <SetupCard assistant={assistant} message={notice.message} canRetry={canRetry} />
+  // A setup notice never stays in the state: the controller turns it into the setup state.
+  if (notice.kind === 'setup') return null
   return (
     <div className="builder-assistant__card builder-assistant__card--error" role="alert">
       <p className="builder-assistant__card-text">
@@ -332,8 +299,11 @@ function Notice({ assistant, notice, canRetry }: { assistant: AssistantControlle
   )
 }
 
-/** No key or no model on the server: what to set for the configured provider, and the CLI route. */
-function SetupCard({ assistant, message, canRetry }: { assistant: AssistantController; message: string; canRetry: boolean }) {
+/**
+ * No key on the server. Plain words for an editor first. The technical details sit behind a
+ * disclosure for the developer. The Claude Code and Codex card is the other way in.
+ */
+function SetupState({ assistant, message }: { assistant: AssistantController; message: string }) {
   const runtime = useRuntime()
   const ai = runtime.config.ai
   const provider = ai?.provider ?? 'anthropic'
@@ -343,35 +313,69 @@ function SetupCard({ assistant, message, canRetry }: { assistant: AssistantContr
   return (
     <>
       <output className="builder-assistant__card builder-assistant__card--setup">
-        <span className="builder-assistant__card-icon" aria-hidden="true">
-          <Icon name="key" size={16} />
-        </span>
-        <p className="builder-assistant__card-title">Connect the assistant to {label}</p>
-        <p className="builder-assistant__card-text">{message}</p>
-        {keyEnv && <pre className="builder-assistant__card-code">{keyEnv}=…</pre>}
+        <p className="builder-assistant__card-title">The AI assistant is not set up yet</p>
         <p className="builder-assistant__card-text">
-          Another provider: set <code>BUILDER_AI_PROVIDER</code> to <code>openrouter</code>, <code>cloudflare</code>,{' '}
-          <code>openai-compatible</code> or <code>anthropic</code>.
+          The AI assistant is not set up on this site yet. Ask your developer to add an API key.
         </p>
+        <details className="builder-assistant__details">
+          <summary>Details for developers</summary>
+          <div className="builder-assistant__details-body">
+            <p className="builder-assistant__card-text">{message}</p>
+            {keyEnv && <pre className="builder-assistant__card-code">{keyEnv}=…</pre>}
+            <p className="builder-assistant__card-text">
+              The provider is {label}. To use another one, set <code>BUILDER_AI_PROVIDER</code> to <code>openrouter</code>,{' '}
+              <code>cloudflare</code>, <code>openai-compatible</code> or <code>anthropic</code>.
+            </p>
+            <div className="builder-assistant__card-actions">
+              {keyPage && (
+                <a className="builder-assistant__link" href={keyPage} target="_blank" rel="noopener noreferrer">
+                  Get an API key <Icon name="external" size={12} />
+                </a>
+              )}
+              <a className="builder-assistant__link" href={PROVIDER_DOCS} target="_blank" rel="noopener noreferrer">
+                Provider guide <Icon name="external" size={12} />
+              </a>
+            </div>
+          </div>
+        </details>
         <div className="builder-assistant__card-actions">
-          {keyPage && (
-            <a className="builder-assistant__link" href={keyPage} target="_blank" rel="noopener noreferrer">
-              Get an API key <Icon name="external" size={12} />
-            </a>
-          )}
-          <a className="builder-assistant__link" href={PROVIDER_DOCS} target="_blank" rel="noopener noreferrer">
-            Provider guide <Icon name="external" size={12} />
-          </a>
-          {canRetry && (
-            <button type="button" className="builder-assistant__ghost" onClick={assistant.retry}>
-              <Icon name="retry" size={12} /> Try again
-            </button>
-          )}
+          <button type="button" className="builder-assistant__ghost" onClick={assistant.clearSetup}>
+            <Icon name="retry" size={12} /> Check again
+          </button>
         </div>
       </output>
+      <p className="builder-assistant__info">Or use your own Claude or ChatGPT plan.</p>
       <ConnectAgents />
     </>
   )
+}
+
+type BlockKind = 'text' | 'button' | 'image' | 'container' | 'other'
+
+const TEXT_BLOCKS = new Set(['heading', 'text', 'richText', 'quote'])
+const CONTAINER_BLOCKS = new Set(['stack', 'grid', 'section'])
+
+/** What kind of block is selected, so the suggestions fit it. */
+function blockKind(type: string, blocks: Parameters<typeof getBlockDefinition>[0]): BlockKind {
+  if (TEXT_BLOCKS.has(type)) return 'text'
+  if (type === 'button') return 'button'
+  if (type === 'image') return 'image'
+  if (CONTAINER_BLOCKS.has(type)) return 'container'
+  const slots = getBlockDefinition(blocks, type)?.slots
+  return slots && Object.keys(slots).length > 0 ? 'container' : 'other'
+}
+
+const BLOCK_SUGGESTIONS: Record<BlockKind, string[]> = {
+  text: ['Rewrite this text to be punchier', 'Make this text shorter', 'Make this stand out more', 'Make this look good on mobile'],
+  button: ['Make this button stand out more', 'Change the button text to be clearer', 'Add more space around this', 'Make this look good on mobile'],
+  image: ['Make this image fill the width', 'Round the corners of this image', 'Add more space around this', 'Make this look good on mobile'],
+  container: [
+    'Add a heading and a short intro',
+    'Make this section two columns',
+    'Add more space inside this section',
+    'Make this look good on mobile',
+  ],
+  other: ['Make this stand out more', 'Add more space around this', 'Make this look good on mobile'],
 }
 
 /** The empty chat: a short intro and suggestions that fit the page, the selection or the template. */
@@ -381,14 +385,10 @@ function Welcome({ assistant, note }: { assistant: AssistantController; note: st
   const singular = useCollectionLabel(template.target, 'singular').toLowerCase()
   const isEmptyPage = useEditor(runtime.store, (s) => s.layout.blocks.length === 0)
   const selectedType = useEditor(runtime.store, (s) => (s.selectedId ? (findBlock(s.layout, s.selectedId)?.type ?? null) : null))
+  const kind = selectedType ? blockKind(selectedType, runtime.config.blocks) : null
 
-  const suggestions = selectedType
-    ? [
-        'Rewrite this text to be punchier',
-        'Make this stand out more',
-        'Add more space around this',
-        'Make this look good on mobile',
-      ]
+  const suggestions = kind
+    ? BLOCK_SUGGESTIONS[kind]
     : template.isTemplate && template.target
       ? [
           `Bind the heading to the ${singular} title`,
@@ -424,7 +424,6 @@ function Welcome({ assistant, note }: { assistant: AssistantController; note: st
       <div className="builder-assistant__suggestions">
         {suggestions.map((text) => (
           <button key={text} type="button" className="builder-assistant__suggestion" onClick={() => void assistant.send(text)}>
-            <Icon name="sparkle" size={12} />
             {text}
           </button>
         ))}
@@ -469,7 +468,17 @@ function ContextChips() {
   )
 }
 
-function Composer({ assistant, state }: { assistant: AssistantController; state: AssistantState }) {
+function Composer({
+  assistant,
+  state,
+  connect,
+  onToggleConnect,
+}: {
+  assistant: AssistantController
+  state: AssistantState
+  connect: boolean
+  onToggleConnect: () => void
+}) {
   const runtime = useRuntime()
   const { draft, streaming, key } = state
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -588,9 +597,81 @@ function Composer({ assistant, state }: { assistant: AssistantController; state:
           </button>
         )}
       </div>
-      <p className="builder-assistant__footnote">
-        <kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line
-      </p>
+      <div className="builder-assistant__foot">
+        <p className="builder-assistant__footnote">
+          <kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line
+        </p>
+        <MoreMenu assistant={assistant} state={state} connect={connect} onToggleConnect={onToggleConnect} />
+      </div>
     </div>
+  )
+}
+
+/** The "⋯" menu in the footer: new chat, the Claude Code and Codex route, and the model name. */
+function MoreMenu({
+  assistant,
+  state,
+  connect,
+  onToggleConnect,
+}: {
+  assistant: AssistantController
+  state: AssistantState
+  connect: boolean
+  onToggleConnect: () => void
+}) {
+  const runtime = useRuntime()
+  const ai = runtime.config.ai
+  const menu = usePopover('auto')
+  const { history, streaming, failed, notice } = state
+  return (
+    <>
+      <button
+        type="button"
+        className="builder-editor__icon-button builder-editor__icon-button--small"
+        aria-label="Assistant options"
+        aria-haspopup="menu"
+        aria-expanded={menu.open}
+        data-tooltip="Options"
+        onClick={(e) => menu.toggle(e.currentTarget)}
+      >
+        <Icon name="more" size={14} />
+      </button>
+      <Popover {...menu.props} className="builder-editor__menu" label="Assistant options">
+        <div role="menu">
+          <button
+            type="button"
+            role="menuitem"
+            className="builder-editor__menu-item"
+            disabled={history.messages.length === 0 && !failed && !notice && !streaming}
+            onClick={() => {
+              menu.hide()
+              assistant.newChat()
+              runtime.assistantFocus.set(Date.now())
+            }}
+          >
+            <Icon name="compose" size={14} />
+            New chat
+          </button>
+          <button
+            type="button"
+            role="menuitemcheckbox"
+            aria-checked={connect}
+            className="builder-editor__menu-item"
+            onClick={() => {
+              menu.hide()
+              onToggleConnect()
+            }}
+          >
+            <Icon name="link" size={14} />
+            Use Claude Code or Codex
+          </button>
+          {ai && (
+            <p className="builder-editor__menu-meta" title={`${ai.providerLabel ?? 'Anthropic'} · ${ai.model}`}>
+              Model: {modelLabel(ai)}
+            </p>
+          )}
+        </div>
+      </Popover>
+    </>
   )
 }

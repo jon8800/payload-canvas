@@ -51,6 +51,7 @@ import { CollectionScopesMatrix as CollectionScopesMatrix_60f30f580e97936338e112
 import { GlobalScopesMatrix as GlobalScopesMatrix_60f30f580e97936338e112b8b2cc7161 } from 'payload-mcp-toolkit/client'
 import { LinkToDoc as LinkToDoc_aead06e4cbf6b2620c5c51c9ab283634 } from '@payloadcms/plugin-search/client'
 import { ReindexButton as ReindexButton_aead06e4cbf6b2620c5c51c9ab283634 } from '@payloadcms/plugin-search/client'
+import { TemplateDefaultCell as TemplateDefaultCell_4264ddaffcf8eeec506364d4835aed4d } from '@payload-toolkit/builder/client'
 import { FolderTypeField as FolderTypeField_2b8867833a34864a02ddf429b0728a40 } from '@payloadcms/next/client'
 import { QueryPresetsAccessCell as QueryPresetsAccessCell_2b8867833a34864a02ddf429b0728a40 } from '@payloadcms/next/client'
 import { QueryPresetsWhereCell as QueryPresetsWhereCell_2b8867833a34864a02ddf429b0728a40 } from '@payloadcms/next/client'
@@ -121,6 +122,7 @@ export const importMap = {
   "payload-mcp-toolkit/client#GlobalScopesMatrix": GlobalScopesMatrix_60f30f580e97936338e112b8b2cc7161,
   "@payloadcms/plugin-search/client#LinkToDoc": LinkToDoc_aead06e4cbf6b2620c5c51c9ab283634,
   "@payloadcms/plugin-search/client#ReindexButton": ReindexButton_aead06e4cbf6b2620c5c51c9ab283634,
+  "@payload-toolkit/builder/client#TemplateDefaultCell": TemplateDefaultCell_4264ddaffcf8eeec506364d4835aed4d,
   "@payloadcms/next/client#FolderTypeField": FolderTypeField_2b8867833a34864a02ddf429b0728a40,
   "@payloadcms/next/client#QueryPresetsAccessCell": QueryPresetsAccessCell_2b8867833a34864a02ddf429b0728a40,
   "@payloadcms/next/client#QueryPresetsWhereCell": QueryPresetsWhereCell_2b8867833a34864a02ddf429b0728a40,

@@ -59,10 +59,30 @@ export function propKind(field: PropField): PropKind | null {
   }
 }
 
-/** Field types a text prop can show. Rich text shows as plain text. */
-const TEXT_SOURCES = new Set(['text', 'textarea', 'email', 'number', 'date', 'select', 'radio', 'richText', 'code', '$url'])
-/** Field types a link group can take its URL from. */
-const LINK_SOURCES = new Set(['text', 'email', 'select', 'radio', 'code', '$url'])
+/** Field types a text prop can show. */
+const TEXT_SOURCES = new Set(['text', 'textarea', 'email', 'number', 'date', 'select', 'radio', 'code', '$url'])
+/** Text-like field types that can hold a URL. They count only when the field name says so. */
+const URL_TEXT_TYPES = new Set(['text', 'code'])
+/** Field names that hold a URL, e.g. `url`, `externalLink`, `link.href`. */
+const URL_NAME = /url|href|link/i
+
+/** Rich text is a whole document. Only multi-line text props (`textarea`) can show it, as plain text. */
+const isMultiLine = (prop?: PropField) => prop?.type === 'textarea'
+
+/** True when a field is a URL: the `$url` path, or a text field named like one. */
+function isUrlSource(source: BindingField): boolean {
+  if (source.type === '$url' || source.path === URL_PATH) return true
+  if (!URL_TEXT_TYPES.has(source.type)) return false
+  return URL_NAME.test(source.path.slice(source.path.lastIndexOf('.') + 1))
+}
+
+/** Container types. They hold fields but have no single value to show. */
+const CONTAINER_TYPES = new Set(['group', 'array', 'blocks', 'tabs', 'row', 'collapsible'])
+
+/** Field block: any field with a single value. Containers are offered as their leaf fields. */
+export function isFieldBlockSource(source: BindingField): boolean {
+  return !CONTAINER_TYPES.has(source.type)
+}
 
 const asList = (value: string | string[] | undefined): string[] => (value === undefined ? [] : Array.isArray(value) ? value : [value])
 
@@ -79,9 +99,10 @@ export function isCompatible(kind: PropKind, source: BindingField, prop?: PropFi
   if (source.hasMany && source.type !== 'select') return false
   switch (kind) {
     case 'text':
+      if (source.type === 'richText') return isMultiLine(prop)
       return TEXT_SOURCES.has(source.type) && !(source.type === 'select' && source.hasMany)
     case 'link':
-      return LINK_SOURCES.has(source.type) && !source.hasMany
+      return isUrlSource(source) && !source.hasMany
     case 'richText':
       return source.type === 'richText'
     case 'number':
@@ -95,8 +116,37 @@ export function isCompatible(kind: PropKind, source: BindingField, prop?: PropFi
   }
 }
 
-/** Fields of a related document that are bookkeeping, not content. Hidden after a relationship hop. */
-const HOP_NOISE = new Set(['id', 'createdAt', 'updatedAt', 'mimeType', 'filesize', 'focalX', 'focalY', 'thumbnailURL', 'sizes', '_status', 'hash', 'salt'])
+/** Fields of a related document that are bookkeeping or private, not content. Hidden after a relationship hop. */
+const HOP_NOISE = new Set([
+  'id',
+  'createdAt',
+  'updatedAt',
+  'filename',
+  'mimeType',
+  'filesize',
+  'width',
+  'height',
+  'focalX',
+  'focalY',
+  'url',
+  'thumbnailURL',
+  'sizes',
+  'email',
+  '_status',
+  'password',
+  'hash',
+  'salt',
+  'resetPasswordToken',
+  'resetPasswordExpiration',
+  'loginAttempts',
+  'lockUntil',
+  'apiKey',
+  'enableAPIKey',
+  'sessions',
+])
+
+/** Top-level fields of the document itself that are never useful to show. */
+const ROOT_NOISE = new Set(['id', '_status', 'password', 'hash', 'salt', 'resetPasswordToken', 'resetPasswordExpiration', 'loginAttempts', 'lockUntil', 'apiKey', 'enableAPIKey', 'sessions'])
 
 /** Children the picker can walk into: groups, and one relationship hop. Array rows have no single value. */
 function walkableChildren(field: BindingField): BindingField[] {
@@ -105,6 +155,13 @@ function walkableChildren(field: BindingField): BindingField[] {
   const hop = field.type === 'relationship' || field.type === 'upload'
   if (hop && field.hasMany) return []
   return hop ? field.children.filter((child) => !HOP_NOISE.has(child.path.slice(child.path.lastIndexOf('.') + 1))) : field.children
+}
+
+const flatName = (text: string) => text.toLowerCase().replace(/[^a-z0-9]/g, '')
+
+/** True when the path says nothing the label does not ("Featured image" and `featuredImage`). Then the path is not shown. */
+export function isObviousPath(label: string, path: string): boolean {
+  return !path.includes('.') && flatName(label) === flatName(path)
 }
 
 export type PickerRow = {
@@ -128,6 +185,7 @@ export function pickerRows(fields: BindingField[], accept: (field: BindingField)
   const visit = (list: BindingField[], depth: number, parents: string[]): PickerRow[] => {
     const out: PickerRow[] = []
     for (const field of list) {
+      if (depth === 0 && ROOT_NOISE.has(field.path)) continue
       const trail = [...parents, field.label]
       const children = visit(walkableChildren(field), depth + 1, trail)
       const own = accept(field) && matches(field, trail)

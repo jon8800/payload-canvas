@@ -28,6 +28,39 @@ function wordAt(text: string, caret: number) {
   return { start, end, prefix, query: typed.slice(prefix.length) }
 }
 
+type Known = { names: Set<string>; numericStems: Set<string> }
+const knownCache = new WeakMap<StyleTokens, Known>()
+const NUMERIC = /^(.*)-\d+(?:\.\d+)?$/
+
+function knownClasses(tokens: StyleTokens): Known {
+  let known = knownCache.get(tokens)
+  if (known) return known
+  const numericStems = new Set<string>()
+  for (const name of tokens.classList) {
+    const stem = NUMERIC.exec(name)?.[1]
+    if (stem) numericStems.add(stem)
+  }
+  known = { names: new Set(tokens.classList), numericStems }
+  knownCache.set(tokens, known)
+  return known
+}
+
+/**
+ * True when Tailwind has no utility with this name, so the class does nothing. Variant prefixes,
+ * "!" and "-" are ignored. Arbitrary values ("bg-[#fff]") and fractions count as known. Without a
+ * class list from the theme, every class counts as known.
+ */
+export function isUnknownClass(name: string, tokens: StyleTokens): boolean {
+  if (tokens.classList.length === 0) return false
+  const known = knownClasses(tokens)
+  const utility = name.replace(/^(?:[^\s:[\]]+:)*/, '').replace(/^!|!$/g, '').replace(/^-/, '')
+  if (!utility || utility.includes('[') || utility.includes('/')) return false
+  if (known.names.has(utility)) return false
+  // Any number on a numeric scale works in Tailwind 4 ("p-13"), even when the list stops earlier.
+  const stem = NUMERIC.exec(utility)?.[1]
+  return !(stem && known.numericStems.has(stem))
+}
+
 function safeUnmanaged(className: string, tokens: StyleTokens): string[] {
   try {
     return unmanagedClasses(className, tokens)
@@ -123,8 +156,15 @@ export function RawClasses() {
         <div className="builder-styles__others">
           <span className="builder-styles__raw-label">Other classes</span>
           <ul className="builder-styles__chips">
-            {others.map((name) => (
-              <li key={name} className="builder-styles__class-chip">
+            {others.map((name) => {
+              const unknown = isUnknownClass(name, tokens)
+              return (
+              <li
+                key={name}
+                className={`builder-styles__class-chip${unknown ? ' builder-styles__class-chip--unknown' : ''}`}
+                title={unknown ? `“${name}” is not in the theme’s class list, so it may have no effect. Check the spelling.` : undefined}
+              >
+                {unknown && <span className="builder-styles__visually-hidden">Unknown class: </span>}
                 <code>{name}</code>
                 <button
                   type="button"
@@ -143,7 +183,8 @@ export function RawClasses() {
                   <ResetIcon />
                 </button>
               </li>
-            ))}
+              )
+            })}
           </ul>
         </div>
       )}

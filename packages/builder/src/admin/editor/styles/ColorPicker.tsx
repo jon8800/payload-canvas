@@ -138,6 +138,46 @@ export function ColorField({ prop }: { prop: string }) {
   )
 }
 
+/**
+ * Theme colors for the app's own UI parts (sidebar, charts, focus ring, form inputs). They stay
+ * available, folded under "More theme colors", so the main list holds the colors a page uses.
+ */
+const DEVELOPER_COLOR = /^(?:sidebar|chart)(?:-|$)|^(?:ring|input)$/
+
+export function isDeveloperColor(name: string): boolean {
+  return DEVELOPER_COLOR.test(name)
+}
+
+function ThemeColors({
+  tokens,
+  current,
+  swatches,
+  onPick,
+}: {
+  tokens: ThemeToken[]
+  current: string
+  swatches: Map<string, string | null>
+  onPick: (color: string) => void
+}) {
+  return (
+    <div className="builder-styles__theme-colors">
+      {tokens.map((token) => (
+        <button
+          key={token.name}
+          type="button"
+          className="builder-styles__theme-color"
+          aria-pressed={current === token.name}
+          title={`${token.name}: ${token.value}`}
+          onClick={() => onPick(token.name)}
+        >
+          <Swatch color={swatches.get(token.name) ?? null} size="sm" />
+          <span>{token.name}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function ColorPicker({
   value,
   inherited,
@@ -149,6 +189,8 @@ function ColorPicker({
 }) {
   const { tokens } = useStyles()
   const groups = colorGroups(tokens.colors)
+  const main = groups.theme.filter((t) => !isDeveloperColor(t.name))
+  const more = groups.theme.filter((t) => isDeveloperColor(t.name))
   const swatches = useSwatchColors(tokens.colors)
   const current = splitColor(value ?? inherited ?? '')
   const alpha = current.alpha ?? 100
@@ -175,24 +217,16 @@ function ColorPicker({
         )}
       </div>
 
-      {groups.theme.length > 0 && (
+      {main.length > 0 && (
         <section>
           <p className="builder-styles__picker-title">Theme</p>
-          <div className="builder-styles__theme-colors">
-            {groups.theme.map((token) => (
-              <button
-                key={token.name}
-                type="button"
-                className="builder-styles__theme-color"
-                aria-pressed={current.color === token.name}
-                title={`${token.name}: ${token.value}`}
-                onClick={() => pick(token.name)}
-              >
-                <Swatch color={swatches.get(token.name) ?? null} size="sm" />
-                <span>{token.name}</span>
-              </button>
-            ))}
-          </div>
+          <ThemeColors tokens={main} current={current.color} swatches={swatches} onPick={pick} />
+          {more.length > 0 && (
+            <details className="builder-styles__more-colors" open={more.some((t) => t.name === current.color)}>
+              <summary>More theme colors ({more.length})</summary>
+              <ThemeColors tokens={more} current={current.color} swatches={swatches} onPick={pick} />
+            </details>
+          )}
         </section>
       )}
 

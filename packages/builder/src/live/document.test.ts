@@ -219,7 +219,37 @@ describe('publish endpoints', () => {
     }
     const { status, body } = await call('publish')
     assert.equal(status, 400)
-    assert.deepEqual(body, { ok: false, error: 'blocks.0.props.text: required' })
+    assert.deepEqual(body, {
+      ok: false,
+      error: 'blocks.0.props.text: required',
+      errors: [{ path: '', message: 'blocks.0.props.text: required', code: 'invalid' }],
+    })
+  })
+
+  it('names document fields once each, without blocks', async () => {
+    const { call, db } = setup()
+    db.payload.update = async () => {
+      throw Object.assign(new Error('The following fields are invalid: title, slug'), {
+        status: 400,
+        data: {
+          errors: [
+            { path: 'title', message: 'This field is required.' },
+            { path: 'slug', message: 'This field is required.' },
+            { path: 'title', message: 'This field is required.' },
+          ],
+        },
+      })
+    }
+    const { status, body } = await call('publish')
+    assert.equal(status, 400)
+    assert.deepEqual(body, {
+      ok: false,
+      error: 'Title and Slug need attention.',
+      errors: [
+        { path: 'title', message: 'Title: This field is required.', code: 'invalid' },
+        { path: 'slug', message: 'Slug: This field is required.', code: 'invalid' },
+      ],
+    })
   })
 })
 

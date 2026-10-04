@@ -1,22 +1,10 @@
 import type { Metadata } from 'next'
-import { getServerSideURL } from './getURL'
 
+// No default image: the starter ships none, and a broken og:image is worse than no image.
 const defaultOpenGraph: Metadata['openGraph'] = {
   type: 'website',
-  description: 'A website built with Payload CMS and Next.js.',
-  images: [
-    {
-      url: `${getServerSideURL()}/og-image.webp`,
-    },
-  ],
-  siteName: 'Payload Starter',
-  title: 'Payload Starter',
 }
 
 export const mergeOpenGraph = (og?: Metadata['openGraph']): Metadata['openGraph'] => {
-  return {
-    ...defaultOpenGraph,
-    ...og,
-    images: og?.images ? og.images : defaultOpenGraph.images,
-  }
+  return { ...defaultOpenGraph, ...og }
 }

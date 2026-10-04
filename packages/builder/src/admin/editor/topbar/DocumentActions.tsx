@@ -4,13 +4,17 @@
 
 import { ConfirmationModal, Link, useConfig, useDocumentDrawer, useModal } from '@payloadcms/ui'
 import type { DefaultDocumentIDType } from 'payload'
-import { useEffect, useEffectEvent, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 
-import { Icon, type IconName } from '../icons'
+import { findBlock } from '../../../core'
+import { BlockIcon, Icon, type IconName } from '../icons'
+import { blockSummary } from '../names'
+import { useEditor } from '../store'
 import { useRuntime } from '../runtime'
 import { Popover, usePopover } from '../styles/popover'
 import { useCollectionLabel } from '../templates/useTemplate'
 import { useValue } from '../valueStore'
+import type { PublishProblem } from './problems'
 import { SettingsDrawerSlug } from './settingsDrawer'
 
 function formatTime(iso: string | null): string {
@@ -43,7 +47,7 @@ export function SaveState() {
   const saveError = live?.saveError ?? null
   const text = {
     connecting: 'Connecting…',
-    offline: 'Offline — changes will sync when you’re back',
+    offline: 'Offline · changes kept',
     reconnecting: 'Reconnecting…',
     failed: saveError?.retrying ? 'Not saved — retrying…' : 'Not saved',
     saving: 'Saving…',
@@ -94,6 +98,7 @@ export function PreviewButton() {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
+      aria-label={previewUrl ? 'Preview the draft in a new tab' : 'Open the page in a new tab'}
       data-tooltip={previewUrl ? 'Preview the draft in a new tab' : 'Open the page in a new tab'}
     >
       <Icon name="external" size={14} />
@@ -131,7 +136,13 @@ export function PageSettings() {
 
   return (
     <>
-      <button type="button" className="builder-bar__button" data-tooltip={`${singular} settings: title, slug, SEO, …`} onClick={runtime.doc.openSettings}>
+      <button
+        type="button"
+        className="builder-bar__button"
+        aria-label={`${singular} settings`}
+        data-tooltip={`Title and other ${singular.toLowerCase()} settings`}
+        onClick={runtime.doc.openSettings}
+      >
         <Icon name="settings" size={14} />
         <span className="builder-bar__label">{singular} settings</span>
       </button>
@@ -172,24 +183,26 @@ export function PublishButton() {
   const changed = meta.status !== 'published' || Boolean(live?.unsaved)
   const canPublish = meta.drafts && meta.canUpdate && changed && !pending && busy === null
 
+  // Safe actions first; the ones that change what the site shows last, after a separator.
   const items: MenuItem[] = [
-    ...(meta.drafts
-      ? [
-          { icon: 'eyeOff' as const, label: 'Unpublish', disabled: !published || busy !== null, run: () => openModal(unpublishSlug) },
-          { icon: 'undo' as const, label: 'Revert to published', disabled: meta.status !== 'changed' || busy !== null, danger: true, run: () => openModal(revertSlug) },
-          'separator' as const,
-        ]
-      : []),
     ...(meta.url && (published || !meta.drafts) ? [{ icon: 'external' as const, label: 'View the live page', href: meta.url, external: true }] : []),
     { icon: 'compose', label: 'Open in edit view', href: docPath },
     { icon: 'layers', label: 'Versions', href: `${docPath}/versions` },
     { icon: 'hash', label: 'API', href: `${docPath}/api` },
+    ...(meta.drafts
+      ? [
+          'separator' as const,
+          { icon: 'undo' as const, label: 'Revert to published', disabled: meta.status !== 'changed' || busy !== null, danger: true, run: () => openModal(revertSlug) },
+          { icon: 'eyeOff' as const, label: 'Unpublish', disabled: !published || busy !== null, danger: true, run: () => openModal(unpublishSlug) },
+        ]
+      : []),
   ]
 
   const label = { publish: 'Publishing…', unpublish: 'Unpublishing…', revert: 'Reverting…', rename: 'Publish changes' }
 
   return (
     <div className="builder-bar__publish">
+      <PublishProblems />
       {meta.drafts && (
         <button
           type="button"
@@ -276,5 +289,82 @@ export function PublishButton() {
         }}
       />
     </div>
+  )
+}
+
+/**
+ * What stopped the last publish: a button with the count next to Publish, and a list under it.
+ * The list opens by itself after a failed publish. A click on a block problem selects the block;
+ * a document problem (title, slug) opens the settings drawer.
+ */
+function PublishProblems() {
+  const runtime = useRuntime()
+  const problems = useValue(runtime.problems)
+  const request = useValue(runtime.problemsRequest)
+  const layout = useEditor(runtime.store, (s) => s.layout)
+  const { collection } = useValue(runtime.doc.meta)
+  const singular = useCollectionLabel(collection, 'singular')
+  const list = usePopover('auto')
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const show = useEffectEvent(() => {
+    if (buttonRef.current) list.show(buttonRef.current)
+  })
+
+  useEffect(() => {
+    if (request > 0) show()
+  }, [request])
+
+  if (problems.length === 0) return null
+  const count = problems.length
+  const go = (problem: PublishProblem) => {
+    list.hide()
+    if (problem.blockId) {
+      runtime.inspectorTab.set('block')
+      runtime.store.select(problem.blockId)
+      return
+    }
+    runtime.doc.openSettings()
+  }
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        className="builder-bar__problems"
+        aria-haspopup="dialog"
+        aria-expanded={list.open}
+        aria-label={`${count} ${count === 1 ? 'problem stops' : 'problems stop'} publishing. Show the list.`}
+        data-tooltip="Fix these to publish"
+        onClick={(e) => list.toggle(e.currentTarget)}
+      >
+        <Icon name="warning" size={14} />
+        {count}
+      </button>
+      <Popover {...list.props} className="builder-bar__problems-popover" label="Fix these to publish">
+        <p className="builder-bar__problems-title">Fix these to publish</p>
+        <ul className="builder-bar__problems-list">
+          {problems.map((problem, index) => {
+            const block = problem.blockId ? findBlock(layout, problem.blockId) : null
+            const where = block ? blockSummary(block, runtime.blockLabel(block.type)) : `${singular} settings`
+            return (
+              // oxlint-disable-next-line react/no-array-index-key -- problems have no id; the list is replaced as a whole
+              <li key={index}>
+                <button type="button" className="builder-bar__problem" onClick={() => go(problem)}>
+                  <span className="builder-bar__problem-icon">
+                    {block ? <BlockIcon name={runtime.blockIcon(block.type)} size={14} /> : <Icon name="settings" size={14} />}
+                  </span>
+                  <span className="builder-bar__problem-text">
+                    <span className="builder-bar__problem-where">{where}</span>
+                    <span className="builder-bar__problem-message">{problem.message}</span>
+                  </span>
+                  <span className="builder-bar__problem-action">{block ? 'Show' : 'Open'}</span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      </Popover>
+    </>
   )
 }

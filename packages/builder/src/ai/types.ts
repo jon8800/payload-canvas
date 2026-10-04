@@ -90,6 +90,14 @@ export type AiClientConfig = {
   providerLabel?: string
   /** The env var the server reads the key from, for the setup hint. Null when no key is needed. */
   keyEnv?: string | null
+  /**
+   * False when the server found no credentials or config at startup, so the panel can show the
+   * setup card before the first message. Anthropic `ant auth login` credentials cannot be seen,
+   * so keep sending possible even when false.
+   */
+  ready?: boolean
+  /** One readable sentence for editors when `ready` is false. */
+  setupProblem?: string | null
 }
 
 /** Token usage of one turn (all model calls). `cost` in USD when the provider reports it (OpenRouter). */

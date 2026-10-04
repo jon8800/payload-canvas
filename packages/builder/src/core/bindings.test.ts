@@ -180,7 +180,7 @@ describe('resolveBindings', () => {
 describe('validation', () => {
   it('allows empty required props when they are bound', () => {
     const errors = validateLayout(layout, blocks)
-    assert.ok(errors.some((e) => e.blockId === 'img' && e.code === 'required'))
+    assert.ok(errors.some((e) => e.code === 'required' && (e.blockId === 'body' || e.blockId === 'item-h')))
     const left = withoutBoundRequired(errors, layout)
     assert.ok(!left.some((e) => e.blockId === 'img' || e.blockId === 'body' || e.blockId === 'item-h'))
   })

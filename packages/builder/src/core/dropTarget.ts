@@ -3,11 +3,12 @@
 // Coordinates are whatever space the rects are in (iframe viewport for the canvas,
 // admin client coordinates for the outline). No DOM, no React.
 //
-// Slot rules: a slot whose `allow` list rejects the dragged type is never a target.
+// Slot rules: a slot whose `allow` list rejects the dragged type, or whose `disallow` list (or an
+// ancestor slot's) refuses any type inside the dragged block, is never a target.
 // The functions then fall through to the next valid option (see each function).
 // The root list accepts every type.
 
-import { getBlockDefinition, slotAccepts, slotNames } from './blocks'
+import { getBlockDefinition, placementError, slotNames } from './blocks'
 import { DEFAULT_SLOT, indexLayout, subtreeIds, type IndexedBlock } from './tree'
 import type {
   Axis,
@@ -68,13 +69,14 @@ function context(layout: Layout, blocks: BlockDefinition[], source: DragSource) 
   const type = draggedType(index, source)
   const excluded = excludedIds(index, source)
   const slotsOf = (entry: IndexedBlock) => slotNames(getBlockDefinition(blocks, entry.block.type))
+  const dragged = source.kind === 'block' ? (index.get(source.id)?.block ?? type) : type
   const accepts = (ownerId: string | null, slot: string): boolean => {
-    if (type === null) return false
+    if (type === null || dragged === null) return false
     if (ownerId === null) return slot === DEFAULT_SLOT
     const owner = index.get(ownerId)
     const def = owner ? getBlockDefinition(blocks, owner.block.type) : undefined
-    const slotDef = def?.slots?.[slot]
-    return slotDef ? slotAccepts(slotDef, type) : false
+    if (!def?.slots?.[slot]) return false
+    return placementError(blocks, layout, ownerId, slot, dragged, index) === null
   }
   const parentOf = (entry: IndexedBlock) => (entry.parentId === null ? null : (index.get(entry.parentId) ?? null))
   return { index, type, excluded, slotsOf, accepts, parentOf }

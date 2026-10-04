@@ -6,7 +6,7 @@
 import type { ReactNode } from 'react'
 
 import { useStyles } from './context'
-import { ResetButton, spacingSuggestions, suggestionsFor, ValueInput } from './controls'
+import { OverrideFlag, ResetButton, spacingSuggestions, SubSection, suggestionsFor, ValueInput } from './controls'
 import type { Suggestion } from './popover'
 import { useProp } from './useProp'
 
@@ -43,6 +43,7 @@ export function MiniField({ prop, caption, suggestions }: { prop: string; captio
     <div className="builder-styles__mini">
       <span className="builder-styles__mini-caption">
         {caption}
+        <OverrideFlag prop={prop} />
         <ResetButton prop={prop} />
       </span>
       <ValueInput prop={prop} suggestions={suggestions ?? suggestionsFor(def, tokens)} />
@@ -78,8 +79,11 @@ export function BoxModel() {
           <span className="builder-styles__content-box" />
         </RingBox>
       </RingBox>
-      <Shortcuts ring="margin" />
-      <Shortcuts ring="padding" />
+      {/* The diagram sets each side. "All sides" and X / Y wait behind a toggle. */}
+      <SubSection title="All sides at once" props={['margin', 'margin-x', 'margin-y', 'padding', 'padding-x', 'padding-y']}>
+        <Shortcuts ring="margin" />
+        <Shortcuts ring="padding" />
+      </SubSection>
     </div>
   )
 }

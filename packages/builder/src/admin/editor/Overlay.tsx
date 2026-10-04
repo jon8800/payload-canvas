@@ -4,9 +4,11 @@ import { useDraggable } from '@dnd-kit/core'
 import type { CSSProperties } from 'react'
 
 import { findBlock, findLocation } from '../../core'
-import type { Layout, Rect } from '../../core/types'
-import { duplicateBlock, moveBy, removeBlock } from './actions'
+import type { CanvasMeasurement, Layout, Rect } from '../../core/types'
+import { copySelection, duplicateBlock, moveBy, removeBlock, toggleHidden } from './actions'
 import { BlockIcon, Icon, type IconName } from './icons'
+import { blockName } from './names'
+import { Popover, usePopover } from './styles/popover'
 import { PeerCursors, PeerSelections } from './live/PresenceUI'
 import { shortName } from './live/presence'
 import { useRuntime, type DragData } from './runtime'
@@ -15,6 +17,8 @@ import { useValue } from './valueStore'
 
 /** Height of the label chip and the action bar, in screen pixels. */
 const BAR_HEIGHT = 26
+/** Below this screen width the action bar would cover the name tag, so it goes under the block. */
+const NARROW_BLOCK = 190
 
 function box(rect: Rect): CSSProperties {
   return { left: rect.x, top: rect.y, width: rect.width, height: rect.height }
@@ -37,6 +41,7 @@ export function Overlay() {
   const layout = useEditor(runtime.store, (s) => s.layout)
 
   const rectOf = (id: string | null) => (id ? measurement?.blocks.find((b) => b.id === id)?.rect : undefined)
+  const problems = useValue(runtime.problems)
   const hovered = hoveredId && hoveredId !== selectedId && !drag ? findBlock(layout, hoveredId) : null
   const hoverRect = rectOf(hovered?.id ?? null)
   // Parent hint: the container around the hovered block, so nesting is easy to read.
@@ -53,12 +58,26 @@ export function Overlay() {
 
   return (
     <div className="builder-editor__overlay">
+      {!drag &&
+        problems.map((problem, i) => {
+          const rect = rectOf(problem.blockId)
+          if (!rect) return null
+          return (
+            // oxlint-disable-next-line react/no-array-index-key -- problems have no id; the list is replaced as a whole
+            <div key={`${problem.blockId}:${i}`} className="builder-editor__problem-box" style={box(rect)}>
+              <span className="builder-editor__problem-tag" title={problem.message}>
+                <Icon name="warning" size={12} />
+                {problem.message}
+              </span>
+            </div>
+          )
+        })}
       {parentRect && <div className="builder-editor__parent-hint" style={box(parentRect)} />}
       {hovered && hoverRect && (
         <div className="builder-editor__hover" style={box(hoverRect)}>
           <span className={`builder-editor__tag builder-editor__tag--hover${roomAbove(hoverRect) ? '' : ' builder-editor__tag--inside'}`}>
             <BlockIcon name={runtime.blockIcon(hovered.type)} size={12} />
-            {runtime.blockLabel(hovered.type)}
+            {blockName(hovered, runtime.blockLabel(hovered.type))}
           </span>
         </div>
       )}
@@ -69,7 +88,7 @@ export function Overlay() {
             {!drag && (
               <span className={`builder-editor__tag${roomAbove(selectedRect) ? '' : ' builder-editor__tag--inside'}`}>
                 <BlockIcon name={runtime.blockIcon(selected.type)} size={12} />
-                {runtime.blockLabel(selected.type)}
+                {blockName(selected, runtime.blockLabel(selected.type))}
                 {selected.bindings && Object.keys(selected.bindings).length > 0 && (
                   <span className="builder-editor__tag-bound" title="Shows data from a document">
                     <Icon name="bind" size={11} />
@@ -86,7 +105,9 @@ export function Overlay() {
             icon={runtime.blockIcon(selected.type)}
             layout={layout}
             rect={selectedRect}
+            measurement={measurement}
             inside={!roomAbove(selectedRect)}
+            below={selectedRect.width * zoom < NARROW_BLOCK}
             hidden={Boolean(drag)}
           />
         </>
@@ -154,41 +175,64 @@ type ActionBarProps = {
   icon: string
   layout: Layout
   rect: Rect
+  measurement: CanvasMeasurement | null
   /** Draw inside the selection (no room above it). */
   inside: boolean
+  /** Draw under the selection: the block is too narrow for the bar and the name tag side by side. */
+  below: boolean
   /** Hidden but mounted, e.g. while dragging. */
   hidden: boolean
 }
 
-function ActionBar({ id, label, icon, layout, rect, inside, hidden }: ActionBarProps) {
+/** True when the block's siblings sit side by side (a row), so "move" means left and right. */
+function inRow(layout: Layout, measurement: CanvasMeasurement | null, id: string): boolean {
+  const location = findLocation(layout, id)
+  if (!location || !measurement) return false
+  const list = location.parentId === null ? layout.blocks : (findBlock(layout, location.parentId)?.slots?.[location.slot] ?? [])
+  const neighbor = list[location.index + 1] ?? list[location.index - 1]
+  const rectOf = (blockId: string | undefined) => measurement.blocks.find((b) => b.id === blockId)?.rect
+  const a = rectOf(id)
+  const b = rectOf(neighbor?.id)
+  if (!a || !b) return false
+  return Math.abs(a.y - b.y) < Math.min(a.height, b.height) / 2 && Math.abs(a.x - b.x) > 1
+}
+
+type MenuEntry = { icon: IconName; label: string; keys?: string; disabled?: boolean; danger?: boolean; run: () => void } | 'separator'
+
+/** The bar on the selected block: drag, select parent, and a menu with the other actions. */
+function ActionBar({ id, label, icon, layout, rect, measurement, inside, below, hidden }: ActionBarProps) {
   const runtime = useRuntime()
+  const menu = usePopover('auto')
   const location = findLocation(layout, id)
   const siblings = location ? siblingCount(layout, location.parentId, location.slot) : 0
+  const block = findBlock(layout, id)
   const data: DragData = { source: { kind: 'block', id }, label, icon }
   const { setNodeRef, listeners, attributes } = useDraggable({ id: `canvas:${id}`, data })
+  const row = inRow(layout, measurement, id)
 
-  const style: CSSProperties = { left: rect.x + rect.width, top: rect.y, visibility: hidden ? 'hidden' : undefined }
+  const place = below ? 'below' : inside ? 'inside' : 'above'
+  const visibility = hidden ? 'hidden' : undefined
+  const style: CSSProperties =
+    place === 'below' ? { left: rect.x, top: rect.y + rect.height, visibility } : { left: rect.x + rect.width, top: rect.y, visibility }
 
-  const actions: { icon: IconName; tip: string; disabled?: boolean; run: () => void }[] = [
+  const items: MenuEntry[] = [
+    { icon: row ? 'left' : 'up', label: row ? 'Move left' : 'Move up', disabled: !location || location.index === 0, run: () => moveBy(runtime, id, -1) },
     {
-      icon: 'parent',
-      tip: 'Select parent',
-      disabled: !location?.parentId,
-      run: () => location?.parentId && runtime.store.select(location.parentId),
-    },
-    { icon: 'up', tip: 'Move up', disabled: !location || location.index === 0, run: () => moveBy(runtime, id, -1) },
-    {
-      icon: 'down',
-      tip: 'Move down',
+      icon: row ? 'right' : 'down',
+      label: row ? 'Move right' : 'Move down',
       disabled: !location || location.index >= siblings - 1,
       run: () => moveBy(runtime, id, 1),
     },
-    { icon: 'duplicate', tip: 'Duplicate · Ctrl+D', run: () => duplicateBlock(runtime, id) },
-    { icon: 'delete', tip: 'Delete · Del', run: () => removeBlock(runtime, id) },
+    'separator',
+    { icon: 'duplicate', label: 'Duplicate', keys: 'Ctrl+D', run: () => duplicateBlock(runtime, id) },
+    { icon: 'copy', label: 'Copy', keys: 'Ctrl+C', run: () => copySelection(runtime) },
+    { icon: block?.hidden ? 'eye' : 'eyeOff', label: block?.hidden ? 'Show on the site' : 'Hide on the site', run: () => toggleHidden(runtime, id) },
+    'separator',
+    { icon: 'delete', label: 'Delete', keys: 'Del', danger: true, run: () => removeBlock(runtime, id) },
   ]
 
   return (
-    <div className={`builder-editor__actions${inside ? ' builder-editor__actions--inside' : ''}`} style={style}>
+    <div className={`builder-editor__actions builder-editor__actions--${place}`} style={style}>
       <button
         ref={setNodeRef}
         type="button"
@@ -200,20 +244,53 @@ function ActionBar({ id, label, icon, layout, rect, inside, hidden }: ActionBarP
       >
         <Icon name="drag" size={14} />
       </button>
-      <span className="builder-editor__actions-sep" />
-      {actions.map((action) => (
-        <button
-          key={action.icon}
-          type="button"
-          className={`builder-editor__action${action.icon === 'delete' ? ' builder-editor__action--danger' : ''}`}
-          aria-label={action.tip}
-          data-tooltip={action.tip}
-          disabled={action.disabled}
-          onClick={action.run}
-        >
-          <Icon name={action.icon} size={14} />
-        </button>
-      ))}
+      <button
+        type="button"
+        className="builder-editor__action"
+        aria-label="Select the parent block"
+        data-tooltip="Select parent"
+        disabled={!location?.parentId}
+        onClick={() => location?.parentId && runtime.store.select(location.parentId)}
+      >
+        <Icon name="parent" size={14} />
+      </button>
+      <button
+        type="button"
+        className="builder-editor__action"
+        aria-label="More block actions"
+        aria-haspopup="menu"
+        aria-expanded={menu.open}
+        data-tooltip="More actions"
+        onClick={(e) => menu.toggle(e.currentTarget)}
+      >
+        <Icon name="more" size={14} />
+      </button>
+      <Popover {...menu.props} className="builder-editor__menu" label="Block actions">
+        <div role="menu">
+          {items.map((item, i) =>
+            item === 'separator' ? (
+              // oxlint-disable-next-line react/no-array-index-key -- separators have no identity
+              <hr key={`sep-${i}`} className="builder-bar__menu-sep" />
+            ) : (
+              <button
+                key={item.label}
+                type="button"
+                role="menuitem"
+                className={`builder-editor__menu-item${item.danger ? ' builder-editor__menu-item--danger' : ''}`}
+                disabled={item.disabled}
+                onClick={() => {
+                  menu.hide()
+                  item.run()
+                }}
+              >
+                <Icon name={item.icon} size={14} />
+                {item.label}
+                {item.keys && <kbd className="builder-editor__menu-keys">{item.keys}</kbd>}
+              </button>
+            ),
+          )}
+        </div>
+      </Popover>
     </div>
   )
 }

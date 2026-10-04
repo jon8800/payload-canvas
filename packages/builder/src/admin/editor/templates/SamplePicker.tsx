@@ -2,7 +2,7 @@
 
 /* oxlint-disable jsx-a11y/prefer-tag-over-role, jsx-a11y/no-noninteractive-element-to-interactive-role -- the document list is a listbox with option rows */
 
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 
 import { Icon } from '../icons'
 import { useRuntime } from '../runtime'
@@ -104,6 +104,8 @@ function SampleList({
   const { docs, loading, error } = useDocSearch(runtime.api, collection, titleField, query, true)
   const [active, setActive] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
+  const listId = useId()
+  const activeDoc = docs[Math.min(active, docs.length - 1)]
 
   useEffect(() => inputRef.current?.focus(), [])
 
@@ -135,6 +137,10 @@ function SampleList({
           type="search"
           placeholder={`Search ${plural.toLowerCase()}`}
           aria-label={`Search ${plural.toLowerCase()}`}
+          role="combobox"
+          aria-expanded
+          aria-controls={listId}
+          aria-activedescendant={activeDoc ? `${listId}-${activeDoc.id}` : undefined}
           value={query}
           onChange={(e) => {
             setQuery(e.target.value)
@@ -149,11 +155,12 @@ function SampleList({
           {loading ? 'Loading…' : query.trim() ? `Nothing matches “${query.trim()}”.` : `No ${plural.toLowerCase()} yet.`}
         </p>
       ) : (
-        <ul className="builder-bind__rows" role="listbox" aria-label={`${plural} to preview with`} aria-busy={loading}>
+        <ul id={listId} className="builder-bind__rows" role="listbox" aria-label={`${plural} to preview with`} aria-busy={loading}>
           {docs.map((doc, i) => (
             <SampleRow
               key={String(doc.id)}
               doc={doc}
+              id={`${listId}-${doc.id}`}
               active={i === active}
               current={doc.id === current}
               onPick={onPick}
@@ -171,24 +178,29 @@ const scrollIntoView = (el: HTMLElement | null) => el?.scrollIntoView({ block: '
 
 function SampleRow({
   doc,
+  id,
   active,
   current,
   onPick,
   onHover,
 }: {
   doc: DocOption
+  id: string
   active: boolean
   current: boolean
   onPick: (id: Id) => void
   onHover: () => void
 }) {
   const updated = doc.updatedAt ? new Date(doc.updatedAt) : null
+  const when = updated && !Number.isNaN(updated.getTime()) ? updated : null
   return (
     <li
+      id={id}
       ref={active ? scrollIntoView : undefined}
       className="builder-bind__row"
       role="option"
-      aria-selected={active}
+      aria-selected={current}
+      data-active={active || undefined}
       data-current={current || undefined}
       onMouseDown={(e) => {
         e.preventDefault()
@@ -198,8 +210,10 @@ function SampleRow({
     >
       <span className="builder-bind__row-text">
         <span className="builder-bind__row-label">{doc.title}</span>
-        {updated && !Number.isNaN(updated.getTime()) && (
-          <span className="builder-bind__row-path">Updated {updated.toLocaleDateString(undefined, { dateStyle: 'medium' })}</span>
+        {when && (
+          <span className="builder-bind__row-path" title={when.toLocaleString()}>
+            Updated {when.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+          </span>
         )}
       </span>
       {doc.status === 'draft' && <span className="builder-template__status">Draft</span>}

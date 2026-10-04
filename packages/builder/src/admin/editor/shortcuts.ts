@@ -4,10 +4,22 @@
 // script already forwards undo, redo, delete and escape; this module adds the rest there.
 
 import { keyAction, type KeyAction } from '../../protocol'
-import { copySelection, duplicateBlock, parseClipboard, pasteBlocks, storedClipboard } from './actions'
+import { findLocation } from '../../core'
+import { copySelection, duplicateBlock, moveBy, parseClipboard, pasteBlocks, removeBlock, storedClipboard, toggleHidden } from './actions'
 import type { Runtime } from './runtime'
 
-export type EditorAction = KeyAction | 'copy' | 'paste' | 'duplicate' | 'help' | 'assistant'
+export type EditorAction =
+  | KeyAction
+  | 'copy'
+  | 'cut'
+  | 'paste'
+  | 'duplicate'
+  | 'help'
+  | 'assistant'
+  | 'hide'
+  | 'moveUp'
+  | 'moveDown'
+  | 'parent'
 
 /** Elements where editor shortcuts must not fire: text inputs and Payload's modals and drawers. */
 export const SHORTCUT_EXCLUDED =
@@ -20,10 +32,17 @@ export function editorAction(e: KeyboardEvent): EditorAction | null {
   const letter = e.key.toLowerCase()
   if (mod && !e.shiftKey && !e.altKey) {
     if (letter === 'c') return 'copy'
+    if (letter === 'x') return 'cut'
     if (letter === 'v') return 'paste'
     if (letter === 'd') return 'duplicate'
     if (letter === 'i') return 'assistant'
   }
+  if (mod && e.shiftKey && !e.altKey && letter === 'h') return 'hide'
+  if (e.altKey && !mod && !e.shiftKey) {
+    if (e.key === 'ArrowUp') return 'moveUp'
+    if (e.key === 'ArrowDown') return 'moveDown'
+  }
+  if (e.shiftKey && !mod && !e.altKey && e.key === 'Enter') return 'parent'
   if (!mod && !e.altKey && e.key === '?') return 'help'
   return null
 }
@@ -38,13 +57,18 @@ export function shortcutList({ ai = false }: { ai?: boolean } = {}): { keys: str
     { keys: [mod, 'Z'], label: 'Undo' },
     { keys: [mod, 'Shift', 'Z'], label: 'Redo' },
     { keys: [mod, 'C'], label: 'Copy block' },
+    { keys: [mod, 'X'], label: 'Cut block' },
     { keys: [mod, 'V'], label: 'Paste into or after the selection' },
     { keys: [mod, 'D'], label: 'Duplicate block' },
     { keys: ['Delete'], label: 'Delete block' },
+    { keys: [mod, 'Shift', 'H'], label: 'Hide or show on the site' },
+    { keys: [isMac() ? '⌥' : 'Alt', '↑', '↓'], label: 'Move block up or down' },
+    { keys: ['Shift', 'Enter'], label: 'Select the parent block' },
     { keys: ['Esc'], label: 'Clear the selection' },
     { keys: ['↑', '↓'], label: 'Previous or next block (outline)' },
     { keys: ['←', '→'], label: 'Collapse or expand (outline)' },
-    { keys: ['Enter'], label: 'Edit the selected block' },
+    { keys: ['F2'], label: 'Rename block (outline)' },
+    { keys: ['Enter'], label: 'Edit the selected block (outline)' },
     { keys: ['?'], label: 'Show this list' },
   ]
 }
@@ -85,6 +109,21 @@ export function bindShortcuts(runtime: Runtime, doc: Document, { forwarded }: { 
       case 'duplicate':
         if (selectedId) duplicateBlock(runtime, selectedId)
         return
+      case 'cut':
+        if (selectedId && copySelection(runtime)) removeBlock(runtime, selectedId)
+        return
+      case 'hide':
+        if (selectedId) toggleHidden(runtime, selectedId)
+        return
+      case 'moveUp':
+      case 'moveDown':
+        if (selectedId) moveBy(runtime, selectedId, action === 'moveUp' ? -1 : 1)
+        return
+      case 'parent': {
+        const parentId = selectedId ? findLocation(runtime.store.getState().layout, selectedId)?.parentId : null
+        if (parentId) runtime.store.select(parentId)
+        return
+      }
       case 'help':
         runtime.help.set(!runtime.help.get())
         return
@@ -102,7 +141,12 @@ export function bindShortcuts(runtime: Runtime, doc: Document, { forwarded }: { 
     if (!action) return
     if (action === 'assistant' && !runtime.assistant) return
     if (forwarded && keyAction(e)) return
-    if (action === 'copy' && (hasTextSelection(doc) || !runtime.store.getState().selectedId)) return
+    // Escape closes an open menu or popover first; the selection stays.
+    if (action === 'escape' && document.querySelector(':popover-open')) return
+    const { selectedId } = runtime.store.getState()
+    if ((action === 'copy' || action === 'cut') && (hasTextSelection(doc) || !selectedId)) return
+    // Without a selection these keys keep their normal meaning (Alt+arrows, Shift+Enter).
+    if ((action === 'moveUp' || action === 'moveDown' || action === 'parent' || action === 'hide') && !selectedId) return
     // Copy and paste keep the browser default, so the native clipboard events still fire.
     if (action !== 'copy' && action !== 'paste') e.preventDefault()
     run(action)

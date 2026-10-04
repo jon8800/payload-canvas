@@ -8,7 +8,7 @@
 import { isLinkField } from '../blocks/link'
 import { dataFields, type DataField } from './fields'
 import { isPlainObject, walkBlocks } from './tree'
-import type { Block, BlockDefinition, BlockProps, Layout, TemplateContext } from './types'
+import type { Block, BindingField, BlockDefinition, BlockProps, Layout, TemplateContext } from './types'
 import type { LayoutError } from './validate'
 
 // ---------------------------------------------------------------------------
@@ -116,11 +116,14 @@ export function formatDate(value: string | Date): string {
   return Number.isNaN(date.getTime()) ? String(value) : dateFormat.format(date)
 }
 
-/** A readable name for a document: title, name, label, slug, filename, email, then id. */
+/**
+ * A readable name for a document: title, name, label, slug, filename, then id. Never the email:
+ * a user's email is private, also when the user is the document's author.
+ */
 export function titleOf(doc: unknown): string | undefined {
   if (isRelationPair(doc)) return titleOf(doc.value)
   if (!isPlainObject(doc)) return typeof doc === 'string' || typeof doc === 'number' ? String(doc) : undefined
-  for (const key of ['title', 'name', 'label', 'slug', 'filename', 'email']) {
+  for (const key of ['title', 'name', 'label', 'slug', 'filename']) {
     const value = doc[key]
     if (typeof value === 'string' && value) return value
   }
@@ -369,4 +372,95 @@ export function withoutBoundRequired(errors: LayoutError[], layout: unknown): La
     const keys = bound.get(error.blockId)
     return !keys?.some((key) => error.path.endsWith(`.props.${key}`))
   })
+}
+
+// ---------------------------------------------------------------------------
+// Checking bindings against the data model
+// ---------------------------------------------------------------------------
+
+/** Text-like field types that can hold a URL. They count only when the field name says so. */
+const URL_TEXT_TYPES = new Set(['text', 'code'])
+/** Field names that hold a URL, e.g. `url`, `externalLink`, `website`, `link.href`. */
+const URL_NAME = /url|href|link|website/i
+
+/** The binding source at `path` in a collection's bindable fields (children included). */
+export function findBindingField(fields: readonly BindingField[], path: string): BindingField | undefined {
+  for (const field of fields) {
+    if (field.path === path) return field
+    if (field.children && path.startsWith(`${field.path}.`)) {
+      const found = findBindingField(field.children, path)
+      if (found) return found
+    }
+  }
+  return undefined
+}
+
+/** True when a source can give a link its URL: `$url`, or a text field named like a URL. */
+export function isUrlSource(source: Pick<BindingField, 'path' | 'type' | 'hasMany'>): boolean {
+  if (source.hasMany) return false
+  if (source.path === URL_PATH || source.type === URL_PATH) return true
+  if (!URL_TEXT_TYPES.has(source.type)) return false
+  return URL_NAME.test(source.path.slice(source.path.lastIndexOf('.') + 1))
+}
+
+/** True when the prop at `propPath` is a link: a link group, or the `url` inside one. */
+function isLinkProp(fields: readonly unknown[], propPath: string): boolean {
+  if (isLinkField(propField(fields, propPath))) return true
+  const parts = propPath.split('.')
+  return parts.length > 1 && parts.at(-1) === 'url' && isLinkField(propField(fields, parts.slice(0, -1).join('.')))
+}
+
+/**
+ * Why a prop cannot take its value from `source`, or `null` when it can. Rules the save hook
+ * enforces on publish (the binding picker offers fewer):
+ * - a link (group or its `url`) takes only a URL: `$url` or a text field named like a URL;
+ * - a one-line text prop (`text`) cannot show rich text.
+ */
+export function bindingProblem(fields: readonly unknown[], propPath: string, source: BindingField): string | null {
+  if (isLinkProp(fields, propPath)) {
+    return isUrlSource(source) ? null : 'a link can use only the page URL or a URL field'
+  }
+  const field = propField(fields, propPath)
+  if (field?.type === 'text' && source.type === 'richText') return 'one-line text cannot show rich text'
+  return null
+}
+
+/**
+ * Checks every binding against the bindable fields of the document it reads: the template's
+ * target collection, or inside a collection list's `item` slot, the listed collection. Problems
+ * have the code `binding` (they block publishing only). Paths missing from `sources` are left
+ * alone: the renderer keeps the literal value.
+ */
+export function validateBindings(
+  layout: Layout,
+  blocks: readonly BlockDefinition[],
+  sources: Record<string, readonly BindingField[]>,
+  collection: string | null,
+): LayoutError[] {
+  const definitions = new Map(blocks.map((d) => [d.type, d]))
+  const errors: LayoutError[] = []
+  const visit = (list: Block[], path: string, scope: string | null) => {
+    list.forEach((block, i) => {
+      const at = `${path}[${i}]`
+      const definition = definitions.get(block.type)
+      const fields = scope ? sources[scope] : undefined
+      if (definition && fields) {
+        for (const [propPath, fieldPath] of Object.entries(block.bindings ?? {})) {
+          const source = fieldPath === URL_PATH ? { path: URL_PATH, label: 'Page URL', type: 'text' } : findBindingField(fields, fieldPath)
+          if (!source) continue
+          const problem = bindingProblem(definition.fields as unknown[], propPath, source)
+          if (problem) {
+            errors.push({ blockId: block.id, path: `${at}.bindings.${propPath}`, message: `Cannot bind "${propPath}" to "${fieldPath}": ${problem}`, code: 'binding' })
+          }
+        }
+      }
+      for (const [name, children] of Object.entries(block.slots ?? {})) {
+        const listed = block.type === COLLECTION_LIST_BLOCK && name === LIST_ITEM_SLOT
+        const next = listed ? (typeof block.props?.collection === 'string' ? block.props.collection : null) : scope
+        visit(children, `${at}.slots.${name}`, next)
+      }
+    })
+  }
+  visit(layout.blocks, 'blocks', collection)
+  return errors
 }

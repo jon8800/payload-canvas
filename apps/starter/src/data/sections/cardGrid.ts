@@ -1,4 +1,4 @@
-import { grid, heading, image, link, stack, styles, text, type LinkInput, type Section } from './build'
+import { grid, heading, image, link, sectionHeader, stack, styles, text, type LinkInput, defineSection } from './build'
 
 export type CardGridInput = {
   title: string
@@ -6,33 +6,29 @@ export type CardGridInput = {
   cards: Array<{ title: string; text: string; image?: { id: number | string; alt: string }; link?: LinkInput }>
 }
 
-const CARD = 'flex flex-col overflow-hidden rounded-lg border border-border bg-background'
-
-export const cardGrid: Section<CardGridInput> = {
+export const cardGrid = defineSection<CardGridInput>({
   name: 'Card grid',
   description:
-    'A title above a three-column grid of cards with an optional image, a title and text. A card with a link is clickable.',
+    'A title and intro above a grid of items with an optional image, a title and text: one column on phones, ' +
+    'two on tablets, three on laptops. An item with a link is clickable.',
   create: ({ title, intro, cards }) =>
     stack('section', styles.section, [
       stack('div', styles.container, [
-        stack('div', 'flex flex-col items-center gap-3 text-center', [
-          heading(title, '2', styles.sectionTitle),
-          ...(intro ? [text(intro, `max-w-2xl ${styles.lead}`)] : []),
-        ]),
+        sectionHeader(title, intro),
         grid(
-          'grid grid-cols-1 gap-6 md:grid-cols-3',
+          'grid grid-cols-1 gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-3',
           cards.map((card) => {
             const body = [
-              ...(card.image ? [image(card.image.id, card.image.alt, 'aspect-video w-full object-cover')] : []),
-              stack('div', 'flex flex-col gap-2 p-6', [
-                heading(card.title, '3', 'text-lg font-semibold'),
+              ...(card.image ? [image(card.image.id, card.image.alt, styles.image)] : []),
+              stack('div', 'flex flex-col gap-2', [
+                heading(card.title, '3', `${styles.cardTitle}${card.link ? ' group-hover:underline' : ''}`),
                 text(card.text, styles.muted),
               ]),
             ]
-            if (!card.link) return stack('article', CARD, body)
-            return link(card.link, `${CARD} transition-shadow hover:shadow-lg`, body)
+            if (!card.link) return stack('article', 'flex flex-col gap-5', body)
+            return link(card.link, 'group flex flex-col gap-5', body)
           }),
         ),
       ]),
     ]),
-}
+})

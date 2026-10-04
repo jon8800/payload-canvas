@@ -145,12 +145,19 @@ export type LoadLayoutOptions = {
   context?: TemplateContext | null
   /** The site's link resolver, for the `$url` binding path. `RenderLayout` resolves it otherwise. */
   resolveLink?: ResolveLink
+  /**
+   * The visitor (the signed-in user, or none). Collection lists load their documents with this
+   * user's access (`overrideAccess: false`), so a list never shows documents or populated fields
+   * the visitor may not read, such as a user's email. Pass the user in draft mode.
+   */
+  user?: unknown
 }
 
 /**
  * Server helper: prepares a layout for `RenderLayout` with Payload's Local API.
  * 1. Resolves bindings and Field blocks against `options.context` (when given).
- * 2. Loads every collection list's documents (`depth: 1`; published only unless `draft`).
+ * 2. Loads every collection list's documents (`depth: 1`; published only unless `draft`), with the
+ *    access of `options.user` (anonymous without it).
  * 3. Replaces upload/relationship IDs in block props with documents (one batched `find` per collection).
  */
 export async function loadLayoutData(
@@ -169,7 +176,7 @@ export async function loadLayoutData(
   const items = new Map<string, Array<Record<string, unknown>>>()
   await Promise.all(
     queries.map(async (query) => {
-      items.set(query.blockId, await findListItems(payload, query, draft))
+      items.set(query.blockId, await findListItems(payload, query, draft, options?.user ?? null))
     }),
   )
   const withItems = attachListItems(bound, items)
@@ -191,7 +198,7 @@ export async function loadLayoutData(
 }
 
 /** One collection list's documents. An unknown collection or a failed query gives an empty list. */
-async function findListItems(payload: Payload, query: ListQuery, draft: boolean): Promise<Array<Record<string, unknown>>> {
+async function findListItems(payload: Payload, query: ListQuery, draft: boolean, user: unknown): Promise<Array<Record<string, unknown>>> {
   const config = (payload.collections as Record<string, { config: { versions?: { drafts?: unknown } } } | undefined>)[query.collection]?.config
   if (!config) return []
   const where: Where[] = []
@@ -205,6 +212,9 @@ async function findListItems(payload: Payload, query: ListQuery, draft: boolean)
       limit: query.limit,
       depth: 1,
       draft,
+      // The visitor's access: unreadable documents and relationships stay out (or stay IDs).
+      overrideAccess: false,
+      user: user as never,
     })
     return result.docs as Array<Record<string, unknown>>
   } catch (error) {

@@ -135,6 +135,11 @@ export interface SessionManager {
    * when `owner` (the sender's actor id) is given and the connection belongs to someone else.
    */
   awareness(collection: string, id: string | number, clientId: string, awareness: unknown, owner?: string): boolean
+  /**
+   * Removes a connection at once (a tab that closes or reloads), instead of waiting for the
+   * heartbeat to notice. Same `owner` rule as `awareness`. False when the client is not connected.
+   */
+  disconnect(collection: string, id: string | number, clientId: string, owner?: string): boolean
   /** The open session of a document, or null. Never loads. */
   peek(collection: string, id: string | number): SessionSnapshot | null
   /**
@@ -485,7 +490,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
         session.saveError = {
           type: 'saveFailed',
           at: new Date(timers.now()).toISOString(),
-          message: payloadErrorMessage(error) || 'The draft could not be saved.',
+          message: payloadErrorMessage(error, target.field) || 'The draft could not be saved.',
           retrying: status !== 401 && status !== 403,
         }
         logger.error(`[websiteBuilder] Could not save the live session of ${session.key} (try ${session.failures}).`, error)
@@ -527,7 +532,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
       member = {
         token: ++tokens,
         owner: actor.id,
-        info: { clientId, name: actor.label, type: 'ai', color: collaboratorColor(actor.id) },
+        info: { clientId, userId: actor.id, name: actor.label, type: 'ai', color: collaboratorColor(actor.id) },
         awareness: null,
         send: null,
       }
@@ -558,7 +563,8 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
       // Everything below is synchronous, so no commit lands between the snapshot and the join.
       cancelEvict(session)
       const owner = actorFromUser(user).id
-      const info: CollaboratorInfo = { clientId, name: collaboratorName(user), type: 'user', color: collaboratorColor(owner) }
+      const userId = String((user as { id?: unknown } | null | undefined)?.id ?? owner)
+      const info: CollaboratorInfo = { clientId, userId, name: collaboratorName(user), type: 'user', color: collaboratorColor(owner) }
       const token = ++tokens
       // The same tab reconnecting (or a stream nobody closed): the new connection replaces the old.
       const previous = session.members.get(clientId)
@@ -636,7 +642,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
         } else {
           ops = args.ops
         }
-        const resolved = resolveOperations(session.layout, ops)
+        const resolved = resolveOperations(session.layout, ops, blocks)
         if (!resolved.ok) {
           maybeEvict(session)
           return reject(409, resolved.error)
@@ -683,6 +689,22 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
       if (!awareness) return false
       member.awareness = awareness
       deliver(session, { type: 'awareness', clientId, awareness }, undefined, clientId)
+      return true
+    },
+
+    disconnect(collection, id, clientId, owner) {
+      const session = sessions.get(channelKey(collection, id))
+      const member = session?.members.get(clientId)
+      if (!session || !member || !member.send) return false
+      if (owner !== undefined && member.owner !== owner) return false
+      session.members.delete(clientId)
+      try {
+        member.close?.()
+      } catch {
+        // Already closed.
+      }
+      deliver(session, collaboratorsEvent(session))
+      maybeEvict(session)
       return true
     },
 

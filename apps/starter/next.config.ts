@@ -4,6 +4,11 @@ import path from 'path'
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  experimental: {
+    // The app has several root layouts, so the site's 404 page is app/global-not-found.tsx.
+    // Without it a direct request for an unknown URL gets Next's blank error shell.
+    globalNotFound: true,
+  },
   transpilePackages: ['@payload-toolkit/builder', '@payload-toolkit/builder-react'],
   // The website builder compiles Tailwind classes on save. Standalone output must ship the CSS
   // entry and the stylesheets it imports.

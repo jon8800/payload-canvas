@@ -1,6 +1,8 @@
 'use client'
 
 // Canvas devices. A device only resizes the canvas. The Styles panel picks its breakpoint on its own.
+// "Desktop" fills the stage, but never narrower than DESKTOP_WIDTH: on a laptop the frame zooms
+// out to fit, so the canvas still shows the desktop layout and not the tablet one.
 
 import { MOBILE_WIDTH, TABLET_WIDTH } from './tokens'
 
@@ -14,6 +16,9 @@ export function deviceForWidth(width: number | null): Device | null {
   if (width === MOBILE_WIDTH) return 'mobile'
   return null
 }
+
+/** Narrowest width of the desktop frame (Tailwind's `xl`). */
+export const DESKTOP_WIDTH = 1280
 
 /** Narrowest and widest custom canvas widths. Wider frames zoom out to fit the stage. */
 export const MIN_CANVAS_WIDTH = 320

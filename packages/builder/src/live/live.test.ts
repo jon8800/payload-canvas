@@ -473,6 +473,28 @@ describe('document session', () => {
     assert.equal(state?.awareness?.selectedId, 'h1')
   })
 
+  it('names each collaborator by user id, so two tabs of one person can be told apart', async () => {
+    const { connect } = setup()
+    await connect('tab-a')
+    const b = await connect('tab-b', bob)
+    const second = b.events[0] as LiveSessionEvent
+    const ids = second.collaborators.map((c) => c.userId)
+    assert.equal(ids.length, 2)
+    assert.notEqual(ids[0], ids[1])
+    assert.equal(second.self.userId, ids[1])
+  })
+
+  it('drops a closing tab at once, only for its owner', async () => {
+    const { connect, sessions } = setup()
+    const a = await connect('tab-a')
+    await connect('tab-b', bob)
+    assert.equal(sessions.disconnect('pages', 'p1', 'tab-b', 'user:1'), false, 'not your tab')
+    assert.equal(sessions.disconnect('pages', 'p1', 'tab-b'), true)
+    const left = a.events.at(-1)
+    assert.ok(left?.type === 'collaborators' && left.collaborators.length === 1)
+    assert.equal(sessions.disconnect('pages', 'p1', 'tab-b'), false, 'already gone')
+  })
+
   it('shows an AI as a collaborator while it edits, then lets it leave', async () => {
     const { connect, commit, clock } = setup({ aiIdleMs: 30_000 })
     const a = await connect('tab-a')

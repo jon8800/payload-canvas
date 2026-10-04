@@ -17,7 +17,7 @@
 // In `solo` mode (no live connection) local edits apply to `confirmed` directly and nothing queues.
 
 import { applyOperation, findBlock, findLocation } from '../../../core'
-import type { Layout, Operation } from '../../../core/types'
+import type { BlockDefinition, Layout, Operation } from '../../../core/types'
 import type { LiveCommitEvent, LiveCommitRequest, LiveCommitResponse } from '../../../live/types'
 
 /** One local edit (one store `apply` call). Applied and dropped as a whole. */
@@ -64,6 +64,11 @@ export type SyncOptions = {
   /** Timer function. Tests pass a manual clock. Default `setTimeout`. */
   schedule?: Schedule
   newBatchId?: () => string
+  /**
+   * The block definitions. Local edits then pass the same nesting rules as the server (no form
+   * inside a link), so a refused edit fails here with a readable message, not later with a 409.
+   */
+  blocks?: readonly BlockDefinition[]
 }
 
 export type SyncSnapshot = {
@@ -99,13 +104,13 @@ let batchCounter = 0
 const defaultBatchId = () => `${Date.now().toString(36)}-${(++batchCounter).toString(36)}`
 
 /** Fails like core `applyOperations`, so callers can strip the same "Operation N (type):" prefix. */
-function applyLocal(layout: Layout, ops: Operation[]): LocalResult {
+function applyLocal(layout: Layout, ops: Operation[], blocks?: readonly BlockDefinition[]): LocalResult {
   let current = layout
   let inverse: Operation[] = []
   const sent: Operation[] = []
   for (let i = 0; i < ops.length; i++) {
     const op = ops[i]
-    const result = applyOperation(current, op)
+    const result = applyOperation(current, op, blocks ? { blocks } : undefined)
     if (!result.ok) return { ok: false, error: `Operation ${i} (${String(op?.type)}): ${result.error}` }
     current = result.layout
     inverse = [...result.inverse, ...inverse]
@@ -289,7 +294,7 @@ export function createSyncEngine(initial: Layout, options: SyncOptions) {
 
     /** Applies a local edit to `visible` at once. In live mode it also queues for the server. */
     local(ops: Operation[], tag: string): LocalResult {
-      const result = applyLocal(visible, ops)
+      const result = applyLocal(visible, ops, options.blocks)
       if (!result.ok) return result
       visible = result.layout
       if (mode === 'solo') {

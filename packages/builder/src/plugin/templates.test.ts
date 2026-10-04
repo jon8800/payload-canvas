@@ -59,7 +59,8 @@ describe('bindingSources', () => {
     const paths = image.children!.map((f) => f.path)
     for (const path of ['featuredImage.alt', 'featuredImage.url', 'featuredImage.width']) assert.ok(paths.includes(path), path)
     const author = find(list, 'author')!
-    assert.ok(author.children!.some((f) => f.path === 'author.email'))
+    // Auth fields (email) are private: never offered for binding.
+    assert.ok(!author.children!.some((f) => f.path === 'author.email'))
     assert.ok(author.children!.some((f) => f.path === 'author.name'))
     const cats = find(list, 'categories')!
     assert.equal(cats.hasMany, true)
@@ -93,7 +94,7 @@ describe('websiteBuilder with templates', () => {
       assert.ok(names.includes(name), name)
     }
     const target = templates.fields.find((f) => 'name' in f && f.name === 'targetCollection') as { options: string[] }
-    assert.deepEqual(target.options, ['posts'])
+    assert.deepEqual(target.options, [{ value: 'posts', label: 'Posts' }])
     assert.ok(templates.versions && typeof templates.versions === 'object' && templates.versions.drafts)
   })
   it('adds a template relationship to template-enabled collections only', () => {

@@ -76,7 +76,7 @@ export class Workspace {
   /** Applies operations. Returns the applied operations (duplicates as inserts) and warnings. */
   apply(ops: unknown[]): { ok: true; ops: Operation[]; warnings: LayoutError[] } | { ok: false; error: string; errors?: LayoutError[] } {
     const prepared = prepareOps(ops, this.layout)
-    const resolved = resolveOperations(this.layout, prepared)
+    const resolved = resolveOperations(this.layout, prepared, this.#blocks)
     if (!resolved.ok) return { ok: false, error: resolved.error }
     const { blocking, warnings } = this.#errors(resolved.layout)
     const added = blocking.filter((e) => !this.#baseline.has(errorKey(e)))
@@ -161,7 +161,7 @@ const POSITION_SCHEMA = {
 const BLOCK_SCHEMA = {
   type: 'object',
   description:
-    'A block: { id?, type, props?, className?, slots?, bindings?, hidden? }. Children in slots have the same shape. Ids you leave out are generated; the tool result lists them.',
+    'A block: { id?, type, props?, className?, slots?, bindings?, hidden?, label? }. Children in slots have the same shape. `label` names the block for editors (e.g. "Hero"); give each top-level section one. Ids you leave out are generated; the tool result lists them.',
   properties: {
     id: { type: 'string' },
     type: { type: 'string' },
@@ -170,6 +170,7 @@ const BLOCK_SCHEMA = {
     slots: { type: 'object', description: 'Slot name -> array of child blocks.' },
     bindings: { type: 'object' },
     hidden: { type: 'boolean' },
+    label: { type: 'string', description: 'Name for editors (outline). Never rendered.' },
   },
   required: ['type'],
 } as const
@@ -247,7 +248,7 @@ export function toolDefinitions(env: ToolEnv): BetaTool[] {
         '- move { id, to }: move a block (with children).',
         '- remove { id }: delete a block and its children.',
         '- duplicate { id, newId? }: copy a block right after itself.',
-        '- update { id, props?, unsetProps?, className?, hidden?, bindings? }: props and bindings are merged (shallow); className REPLACES all classes, so send the full list; null removes it; a null binding removes that binding.',
+        '- update { id, props?, unsetProps?, className?, hidden?, bindings?, label? }: props and bindings are merged (shallow); className REPLACES all classes, so send the full list; null removes it; a null binding removes that binding; label renames the block for editors (null removes it).',
         'Position: { parentId (null = page root), slot? (default "children"), index (final index in the target list) }.',
         'On success the result lists the changed ids and any warnings (e.g. a required prop is empty). On error nothing changes and the error names the failing operation; fix it and call again.',
         'Example (ids come from the layout; block types and props from the block catalog): change a heading, then add a text block after it in the same section:',
@@ -275,6 +276,7 @@ export function toolDefinitions(env: ToolEnv): BetaTool[] {
                     className: { type: ['string', 'null'], description: 'Replaces ALL classes.' },
                     hidden: { type: 'boolean' },
                     bindings: { type: 'object', description: 'Prop path -> document field path; null removes.' },
+                    label: { type: ['string', 'null'], description: 'Name for editors. null removes it.' },
                   },
                   required: ['type', 'id'],
                 },
@@ -367,6 +369,7 @@ const FLAT_OPERATIONS_SCHEMA = {
           className: { type: 'string', description: 'update: the FULL class list (replaces all classes).' },
           hidden: { type: 'boolean' },
           bindings: { type: 'object' },
+          label: { type: ['string', 'null'], description: 'update: name for editors (outline). null removes it.' },
           newId: { type: 'string' },
         },
         required: ['type'],

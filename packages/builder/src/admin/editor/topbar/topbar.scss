@@ -386,6 +386,11 @@
     .builder-bar__label {
       display: none;
     }
+
+    // The avatars already say who is here; the "is editing" chip would push the save state.
+    .builder-editor__live-activity {
+      display: none;
+    }
   }
 
   .builder-bar__publish {
@@ -445,6 +450,114 @@
     a.builder-editor__menu-item {
       text-decoration: none;
     }
+  }
+
+  // ---- Publish problems ---------------------------------------------------------------------------
+
+  .builder-bar__problems {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    height: 30px;
+    margin-right: 6px;
+    padding: 0 8px;
+    border: 1px solid color-mix(in srgb, var(--theme-error-500) 45%, transparent);
+    border-radius: var(--be-radius-m);
+    background: color-mix(in srgb, var(--theme-error-500) 10%, transparent);
+    color: var(--theme-error-500);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+
+    &:hover {
+      background: color-mix(in srgb, var(--theme-error-500) 16%, transparent);
+    }
+  }
+
+  .builder-styles__popover.builder-bar__problems-popover {
+    width: 340px;
+    padding: 6px;
+    border-color: var(--be-border);
+    box-shadow: var(--be-shadow);
+  }
+
+  .builder-bar__problems-title {
+    margin: 2px 6px 6px;
+    color: var(--theme-text);
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+
+  .builder-bar__problems-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .builder-bar__problem {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    width: 100%;
+    padding: 6px;
+    border: 0;
+    border-radius: var(--be-radius);
+    background: none;
+    color: var(--theme-text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      background: var(--be-hover);
+    }
+
+    &:hover .builder-bar__problem-action {
+      color: var(--theme-text);
+    }
+  }
+
+  .builder-bar__problem-icon {
+    display: inline-flex;
+    flex: none;
+    padding-top: 1px;
+    color: var(--theme-error-500);
+  }
+
+  .builder-bar__problem-text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .builder-bar__problem-where {
+    overflow: hidden;
+    font-size: 12.5px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .builder-bar__problem-message {
+    color: var(--theme-elevation-650, var(--theme-elevation-600));
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .builder-bar__problem-action {
+    flex: none;
+    padding-top: 1px;
+    color: var(--be-muted);
+    font-size: 12px;
   }
 
   .builder-bar__menu-sep {

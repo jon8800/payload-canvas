@@ -49,13 +49,6 @@ export function generateEnv(options: GenerateEnvOptions): void {
     `PAYLOAD_SECRET=${secret}`,
   )
 
-  // Replace PREVIEW_SECRET with random value
-  const previewSecret = crypto.randomBytes(16).toString('hex')
-  content = content.replace(
-    /^PREVIEW_SECRET=.*/m,
-    `PREVIEW_SECRET=${previewSecret}`,
-  )
-
   // Handle SMTP vars
   if (options.smtp) {
     // Uncomment and fill SMTP lines

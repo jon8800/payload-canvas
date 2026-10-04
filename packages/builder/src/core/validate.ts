@@ -2,17 +2,37 @@
 // the rules a schema cannot express (unique ids). Optional props may be `null` (Payload's own
 // "empty" value); the schema leaves that out to keep it simple for AI tools.
 
-import { getBlockDefinition, slotAccepts } from './blocks'
+import { getBlockDefinition } from './blocks'
 import { dataFields, fieldBlocks, optionValues, type DataField, type LooseField } from './fields'
 import { isPlainObject } from './tree'
 import type { BlockDefinition, SlotDefinition } from './types'
 
-/** `required` and the `unknown-*` codes are soft: the plugin lets drafts save with them. */
-export type LayoutErrorCode = 'invalid' | 'required' | 'unknown-prop' | 'unknown-key'
+/**
+ * - `invalid`: blocks every save.
+ * - `required` (a required prop is empty), `nesting` (a block in a slot that refuses it) and
+ *   `binding` (a binding the prop cannot use): block only publishing, so drafts can hold
+ *   unfinished work and older data stays editable.
+ * - `unknown-prop`, `unknown-key`: warnings, never blocking.
+ */
+export type LayoutErrorCode = 'invalid' | 'required' | 'nesting' | 'binding' | 'unknown-prop' | 'unknown-key'
 
 export type LayoutError = { blockId?: string; path: string; message: string; code: LayoutErrorCode }
 
-const BLOCK_KEYS = new Set(['id', 'type', 'props', 'className', 'slots', 'bindings', 'hidden'])
+/** Codes that block publishing but not draft saves. */
+export const PUBLISH_ONLY_CODES: ReadonlySet<LayoutErrorCode> = new Set(['required', 'nesting', 'binding'])
+
+/** True when the error never blocks a save (only logged or shown). */
+export function isLayoutWarning(error: Pick<LayoutError, 'code'>): boolean {
+  return error.code === 'unknown-prop' || error.code === 'unknown-key'
+}
+
+/** True when the error blocks this save: everything but warnings, and publish-only codes only when publishing. */
+export function isBlockingError(error: Pick<LayoutError, 'code'>, publishing: boolean): boolean {
+  if (isLayoutWarning(error)) return false
+  return publishing || !PUBLISH_ONLY_CODES.has(error.code)
+}
+
+const BLOCK_KEYS = new Set(['id', 'type', 'props', 'className', 'slots', 'bindings', 'hidden', 'label'])
 
 /** Checks structure, unique ids, known block types, slot rules and prop types. */
 export function validateLayout(layout: unknown, blocks: BlockDefinition[]): LayoutError[] {
@@ -24,16 +44,23 @@ export function validateLayout(layout: unknown, blocks: BlockDefinition[]): Layo
     return errors
   }
   const seen = new Set<string>()
-  layout.blocks.forEach((block, i) => checkBlock(block, `blocks[${i}]`, null, blocks, seen, errors))
+  layout.blocks.forEach((block, i) => checkBlock(block, `blocks[${i}]`, null, [], blocks, seen, errors))
   return errors
 }
 
-type Owner = { type: string; slot: string; def: SlotDefinition } | null
+/** `label`: the owner block's name for messages. */
+type Owner = { type: string; label: string; slot: string; def: SlotDefinition } | null
+/** Types refused by an ancestor slot's `disallow`, with that ancestor's name. */
+type Banned = Array<{ type: string; by: string }>
+
+const nameOf = (value: Record<string, unknown>, def: BlockDefinition | undefined, type: string) =>
+  (typeof value.label === 'string' && value.label.trim()) || def?.label || type
 
 function checkBlock(
   value: unknown,
   path: string,
   owner: Owner,
+  banned: Banned,
   blocks: BlockDefinition[],
   seen: Set<string>,
   errors: LayoutError[],
@@ -58,9 +85,15 @@ function checkBlock(
   const def = type ? getBlockDefinition(blocks, type) : undefined
   if (!type) report(`${path}.type`, 'type must be a non-empty string')
   else if (!def) report(`${path}.type`, `Unknown block type "${type}"`)
-  if (type && owner && !slotAccepts(owner.def, type)) {
-    report(path, `Slot "${owner.slot}" of "${owner.type}" does not accept "${type}"`)
+  const typeLabel = def?.label ?? type
+  if (type && owner) {
+    const allow = owner.def.allow
+    if (allow && !allow.includes('*') && !allow.includes(type)) {
+      report(path, `${typeLabel} cannot go inside ${owner.label}`, 'nesting')
+    }
   }
+  const refusedBy = type ? banned.find((b) => b.type === type) : undefined
+  if (refusedBy) report(path, `${typeLabel} cannot go inside ${refusedBy.by}`, 'nesting')
 
   if (value.props !== undefined && !isPlainObject(value.props)) {
     report(`${path}.props`, 'props must be an object')
@@ -74,6 +107,9 @@ function checkBlock(
   }
   if (value.hidden !== undefined && typeof value.hidden !== 'boolean') {
     report(`${path}.hidden`, 'hidden must be a boolean')
+  }
+  if (value.label !== undefined && typeof value.label !== 'string') {
+    report(`${path}.label`, 'label must be a string')
   }
   if (value.bindings !== undefined) {
     if (!isPlainObject(value.bindings)) report(`${path}.bindings`, 'bindings must be an object')
@@ -97,8 +133,10 @@ function checkBlock(
       report(slotPath, 'A slot must be an array of blocks')
       continue
     }
-    const childOwner: Owner = slotDef && type ? { type, slot: name, def: slotDef } : null
-    children.forEach((child, i) => checkBlock(child, `${slotPath}[${i}]`, childOwner, blocks, seen, errors))
+    const label = nameOf(value, def, type ?? '')
+    const childOwner: Owner = slotDef && type ? { type, label, slot: name, def: slotDef } : null
+    const childBanned = slotDef?.disallow?.length ? [...banned, ...slotDef.disallow.map((t) => ({ type: t, by: label }))] : banned
+    children.forEach((child, i) => checkBlock(child, `${slotPath}[${i}]`, childOwner, childBanned, blocks, seen, errors))
   }
 }
 

@@ -108,7 +108,12 @@ export default buildConfig({
       collections: ['pages', 'posts'],
       uploadsCollection: 'media',
       tabbedUI: true,
-      generateTitle: ({ doc }) => `${doc.title} | Site Name`,
+      // "Title | Site name" with the site name from Site Settings; the title alone without one.
+      generateTitle: async ({ doc, req }) => {
+        const settings = await req.payload.findGlobal({ slug: 'site-settings', depth: 0, req }).catch(() => null)
+        const siteName = settings?.siteName?.trim()
+        return siteName ? `${doc.title} | ${siteName}` : String(doc.title ?? '')
+      },
       generateDescription: ({ doc }) => doc.excerpt || '',
       generateURL: ({ doc, collectionConfig }) => {
         const prefix = collectionConfig?.slug === 'posts' ? '/blog' : ''
@@ -213,6 +218,13 @@ export default buildConfig({
       css: {
         entry: 'src/app/(frontend)/globals.css',
         plugins: { '@tailwindcss/typography': typography },
+        // The theme global sets `--font-*` at runtime (ThemeHead): show those families in the
+        // Styles panel's Font list, not the stack in globals.css.
+        fontFamilies: async (payload) => {
+          const theme = await payload.findGlobal({ slug: 'theme-settings', depth: 0 })
+          const { sans, heading, mono } = theme.fonts ?? {}
+          return { sans, heading, display: heading || sans, mono }
+        },
       },
     }),
   ],

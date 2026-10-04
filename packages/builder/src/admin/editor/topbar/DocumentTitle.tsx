@@ -35,6 +35,11 @@ function useAdminPath() {
   return routes.admin === '/' ? '' : routes.admin
 }
 
+/** The title to show. A new document has none: the server then sends its id, which is not a title. */
+export function documentTitle(meta: { title: string; id: string }): string {
+  return meta.title.trim() === '' || meta.title === meta.id ? '' : meta.title
+}
+
 /** "Pages › Title". The title is an input: Enter or leaving it saves, Escape cancels. */
 export function DocumentTitle() {
   const runtime = useRuntime()
@@ -45,6 +50,7 @@ export function DocumentTitle() {
   const [draft, setDraft] = useState<string | null>(null)
   const cancelled = useRef(false)
   const editable = meta.canUpdate && meta.titleField !== null
+  const title = documentTitle(meta)
 
   const commit = async () => {
     const value = draft
@@ -80,12 +86,13 @@ export function DocumentTitle() {
           className="builder-bar__title"
           aria-label={`Title (${meta.titleField})`}
           title="Rename · Enter to save"
-          value={draft ?? meta.title}
+          placeholder="Untitled"
+          value={draft ?? title}
           disabled={busy === 'rename'}
           maxLength={300}
-          size={Math.max(4, Math.min(48, (draft ?? meta.title).length + 1))}
+          size={Math.max(8, Math.min(48, (draft ?? title).length + 1))}
           onFocus={(e) => {
-            setDraft(meta.title)
+            setDraft(title)
             e.currentTarget.select()
           }}
           onChange={(e) => setDraft(e.target.value)}
@@ -93,7 +100,7 @@ export function DocumentTitle() {
           onKeyDown={onKeyDown}
         />
       ) : (
-        <span className="builder-bar__title builder-bar__title--static">{meta.title}</span>
+        <span className="builder-bar__title builder-bar__title--static">{title || 'Untitled'}</span>
       )}
     </nav>
   )

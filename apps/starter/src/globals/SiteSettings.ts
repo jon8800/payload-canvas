@@ -11,6 +11,22 @@ export const SiteSettings: GlobalConfig = {
   },
   fields: [
     {
+      name: 'siteName',
+      type: 'text',
+      label: 'Site name',
+      admin: {
+        description: 'Shown after each page title in the browser tab and in search results, for example "About | Northwind Studio".',
+      },
+    },
+    {
+      name: 'siteDescription',
+      type: 'textarea',
+      label: 'Site description',
+      admin: {
+        description: 'Used in search results for pages that have no description of their own.',
+      },
+    },
+    {
       name: 'homePage',
       type: 'relationship',
       relationTo: 'pages',

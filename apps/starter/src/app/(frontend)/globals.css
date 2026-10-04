@@ -24,6 +24,8 @@
   --breakpoint-2xl: 86rem;
   --font-mono: "GeistMono", ui-monospace, SFMono-Regular, "Roboto Mono", Menlo, Monaco, "Liberation Mono", "DejaVu Sans Mono", "Courier New", monospace;
   --font-sans: "GeistSans", "GeistSans Fallback", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* Headings: the theme's heading font (Theme Settings > Fonts > Heading), else the body font. */
+  --font-display: var(--font-heading, var(--font-sans));
 }
 
 :root {
@@ -128,6 +130,39 @@
   }
   html {
     @apply font-sans;
+    caret-color: var(--primary);
+    /* Anchors and focused fields stop below a sticky header. */
+    scroll-padding-top: 6rem;
+    scrollbar-color: color-mix(in oklch, var(--foreground) 30%, transparent) transparent;
+  }
+  /* Long words wrap instead of pushing the page sideways. Headings balance their lines. */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    overflow-wrap: break-word;
+    text-wrap: balance;
+  }
+  p,
+  li,
+  blockquote,
+  figcaption {
+    overflow-wrap: break-word;
+    text-wrap: pretty;
+  }
+  ::selection {
+    background-color: color-mix(in oklch, var(--primary) 24%, transparent);
+  }
+  /* A clear keyboard focus ring: 2px in the text color, offset from the element. */
+  :focus-visible {
+    outline: 2px solid var(--foreground);
+    outline-offset: 3px;
+  }
+  /* On primary-colored bands the ring uses the band's text color. */
+  .bg-primary :focus-visible {
+    outline-color: var(--primary-foreground);
   }
 }
 
@@ -212,4 +247,28 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* Rich text ("prose") uses the theme colors and the heading font, not the typography plugin's grays.
+   Unlayered, so it wins over the plugin's layered styles. */
+.prose {
+  --tw-prose-body: var(--foreground);
+  --tw-prose-headings: var(--foreground);
+  --tw-prose-lead: var(--muted-foreground);
+  --tw-prose-links: var(--foreground);
+  --tw-prose-bold: var(--foreground);
+  --tw-prose-counters: var(--muted-foreground);
+  --tw-prose-bullets: var(--muted-foreground);
+  --tw-prose-hr: var(--border);
+  --tw-prose-quotes: var(--foreground);
+  --tw-prose-quote-borders: var(--border);
+  --tw-prose-captions: var(--muted-foreground);
+  --tw-prose-code: var(--foreground);
+  --tw-prose-th-borders: var(--border);
+  --tw-prose-td-borders: var(--border);
+}
+.prose :where(h1, h2, h3):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: -0.01em;
 }

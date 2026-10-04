@@ -59,6 +59,57 @@ export function shortName(name: string): string {
   return name.includes('@') ? name.replace(/@.*/, '') : name
 }
 
+const allDifferent = (list: string[]) => new Set(list).size === list.length
+
+/**
+ * Initials that differ between people. Names that give the same two letters ("builder-dev" and
+ * "builder-dev2" are both "BD") get more: first the trailing digits ("BD" and "BD2"), then the
+ * first and last character ("BV" and "B2"), then a counter. Returns a map from each name to its
+ * initials. A name that appears twice (two tabs of one person) keeps one entry.
+ */
+export function distinctInitials(names: string[]): Map<string, string> {
+  const groups = new Map<string, string[]>()
+  for (const name of new Set(names)) {
+    const base = initials(name)
+    groups.set(base, [...(groups.get(base) ?? []), name])
+  }
+
+  const strategies: Array<(name: string, base: string) => string> = [
+    (name, base) => base + (/\d+$/.exec(shortName(name).trim())?.[0] ?? ''),
+    (name) => {
+      const flat = shortName(name).trim()
+      return ((flat[0] ?? '?') + (flat.length > 1 ? flat.at(-1)! : '')).toUpperCase()
+    },
+  ]
+
+  const result = new Map<string, string>()
+  for (const [base, group] of groups) {
+    if (group.length === 1) {
+      result.set(group[0]!, base)
+      continue
+    }
+    let chosen: string[] | null = null
+    for (const strategy of strategies) {
+      const candidates = group.map((name) => strategy(name, base))
+      if (!allDifferent(candidates)) continue
+      chosen = candidates
+      break
+    }
+    chosen ??= group.map((_, i) => `${base}${i + 1}`)
+    group.forEach((name, i) => result.set(name, chosen[i]!))
+  }
+
+  // Last guard: a generated value (like "BD2") may equal another person's plain initials.
+  const taken = new Set<string>()
+  for (const [name, value] of result) {
+    let next = value
+    for (let n = 2; taken.has(next); n++) next = `${value}${n}`
+    taken.add(next)
+    result.set(name, next)
+  }
+  return result
+}
+
 export const EMPTY_AWARENESS: Awareness = { selectedId: null, hoveredId: null, cursor: null, canvasWidth: null }
 
 function sameCursor(a: CollaboratorCursor | null, b: CollaboratorCursor | null): boolean {

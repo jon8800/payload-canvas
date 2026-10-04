@@ -18,7 +18,6 @@ export const ThemeSettings: GlobalConfig = {
           slug: 'style-guide',
           collection: '',
           path: '/style-guide',
-          previewSecret: process.env.PREVIEW_SECRET || '',
         })
         return `/next/preview?${params.toString()}`
       },
@@ -125,6 +124,16 @@ export const ThemeSettings: GlobalConfig = {
           type: 'text',
           admin: {
             description: 'Google Font family name',
+            components: {
+              Field: '@/fields/theme/FontSelector#FontSelectorField',
+            },
+          },
+        },
+        {
+          name: 'heading',
+          type: 'text',
+          admin: {
+            description: 'Google Font family for headings (the font-display class). Empty: the body font.',
             components: {
               Field: '@/fields/theme/FontSelector#FontSelectorField',
             },

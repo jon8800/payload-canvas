@@ -7,9 +7,13 @@ const collectionPrefixMap: Record<string, string> = {
 type Props = {
   collection: string
   slug: string
-  req?: any
+  req?: unknown
 }
 
+/**
+ * The draft preview URL of a document. The preview route checks the admin session, so the URL
+ * carries no secret.
+ */
 export function generatePreviewPath({ collection, slug }: Props): string {
   if (!slug) return ''
 
@@ -28,7 +32,6 @@ export function generatePreviewPath({ collection, slug }: Props): string {
     slug: encodedSlug,
     collection,
     path,
-    previewSecret: process.env.PREVIEW_SECRET || '',
   })
 
   return `/next/preview?${params.toString()}`

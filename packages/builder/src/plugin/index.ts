@@ -1,11 +1,11 @@
 import path from 'node:path'
-import type { CollectionConfig, Config, Field, JSONField, Plugin, RichTextField } from 'payload'
+import type { CollectionBeforeChangeHook, CollectionConfig, Config, Field, JSONField, Payload, Plugin, RichTextField } from 'payload'
 import { AI_PATH, aiEndpoints } from '../ai/endpoint'
 import { aiClientConfig } from '../ai/config'
 import type { AiOptions } from '../ai/types'
 import { defaultBlocks } from '../blocks'
 import { richTextFieldName } from '../core/blocks'
-import { DEFAULT_TEMPLATES_SLUG, DOCUMENT_TEMPLATE_FIELD } from '../core/bindings'
+import { DEFAULT_TEMPLATES_SLUG, DOCUMENT_TEMPLATE_FIELD, TEMPLATE_TARGET_FIELD } from '../core/bindings'
 import {
   EMPTY_LAYOUT,
   type BlockDefinition,
@@ -26,19 +26,47 @@ import {
   type BuilderServerConfig,
   type SessionManager,
 } from '../live'
-import { layoutAfterChange, layoutBeforeChange } from './hook'
+import { layoutAfterChange, layoutBeforeChange, type BindingCheck } from './hook'
 import { toJsonSafe } from './jsonSafe'
 import { listCollectionsOf } from './listCollections'
 import {
   bindingSources,
   documentTemplateField,
   hasFieldNamed,
+  requireBlocksForDefault,
   TEMPLATE_LAYOUT_FIELD,
   TEMPLATES_CONFIG_KEY,
   templatesCollection,
 } from './templates'
 
 export type { GeneratedCss } from './hook'
+
+/**
+ * Server-only key in `config.custom`: what the site needs to compile one stylesheet for every
+ * layout on a page (`compilePageCss` in `@payload-toolkit/builder-react/server`).
+ */
+export const SITE_CSS_KEY = 'websiteBuilderCss'
+
+/** The value under `SITE_CSS_KEY`. */
+export type SiteCssConfig = { css: CssOptions; blocks: BlockDefinition[] }
+
+/** Reads the site CSS config the plugin stored on the Payload config. `null` without the plugin. */
+export function siteCssConfigOf(payload: { config: { custom?: Record<string, unknown> } }): SiteCssConfig | null {
+  const value = payload.config.custom?.[SITE_CSS_KEY] as SiteCssConfig | undefined
+  return value?.css && Array.isArray(value.blocks) ? value : null
+}
+
+/** A collection's plural label as plain text (static labels only), else its slug in words ("blog-posts" -> "Blog posts"). */
+function collectionLabel(collection: CollectionConfig): string {
+  const label = collection.labels?.plural
+  if (typeof label === 'string') return label
+  if (label && typeof label === 'object') {
+    const first = (label as Record<string, unknown>).en ?? Object.values(label)[0]
+    if (typeof first === 'string') return first
+  }
+  const words = collection.slug.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').trim()
+  return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase()
+}
 
 export type BuilderCollectionOptions = {
   /** Name of the layout JSON field. Default "layout". */
@@ -63,6 +91,9 @@ export type TemplatesOptions = {
   hooks?: CollectionConfig['hooks']
 }
 
+/** Font family names by theme font name, e.g. `{ sans: 'Inter', heading: 'Fraunces' }`. */
+export type FontFamilies = Record<string, string | null | undefined>
+
 export type WebsiteBuilderOptions = {
   collections: Record<string, BuilderCollectionOptions>
   /** Default: defaultBlocks(). */
@@ -71,6 +102,13 @@ export type WebsiteBuilderOptions = {
     /** Path to the app's Tailwind entry CSS, absolute or relative to process.cwd(). */
     entry: string
     plugins?: TailwindPlugins
+    /**
+     * The font families the site really uses, by theme font name (`sans`, `heading`, `mono`, …).
+     * For apps that set `--font-*` at runtime (for example from a theme global): the Styles panel's
+     * Font list then shows "Inter", not the stack in the CSS entry. Names it leaves out keep
+     * `var(--font-<name>)`.
+     */
+    fontFamilies?: (payload: Payload) => FontFamilies | Promise<FontFamilies>
   }
   /** Frontend route that renders the canvas iframe. Default "/builder-canvas". */
   canvasPath?: string
@@ -162,7 +200,14 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
         ...sourceCollections.map((c) =>
           targets.includes(c.slug) ? { ...c, fields: [...c.fields, documentTemplateField(c.slug, templatesSlug)] } : c,
         ),
-        templatesCollection({ slug: templatesSlug, targets, hooks: options.templates?.hooks }),
+        templatesCollection({
+          slug: templatesSlug,
+          targets,
+          targetLabels: Object.fromEntries(
+            sourceCollections.filter((c) => targets.includes(c.slug)).map((c) => [c.slug, collectionLabel(c)]),
+          ),
+          hooks: options.templates?.hooks,
+        }),
       ]
       builderOptions[templatesSlug] = { field: TEMPLATE_LAYOUT_FIELD }
     }
@@ -202,6 +247,18 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           }
         : null
     const clientTemplates = templates ? toJsonSafe(templates) : null
+    // Bindings are checked against the data model: a template's root reads its target collection.
+    const bindingCheck = (slug: string): BindingCheck | undefined =>
+      templates
+        ? {
+            sources: templates.sources,
+            collectionOf: (doc) => {
+              if (slug !== templatesSlug) return null
+              const target = doc[TEMPLATE_TARGET_FIELD]
+              return typeof target === 'string' ? target : null
+            },
+          }
+        : undefined
 
     const fieldNames: Record<string, string> = {}
 
@@ -235,19 +292,36 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           templates: clientTemplates,
           ai: options.ai ? aiClientConfig(options.ai, `${apiRoute}${AI_PATH}`) : null,
         }
-        return addBuilder(collection, { field, clientConfig, blocks, css, sessions: live.sessions, multiplayer })
+        return addBuilder(collection, {
+          field,
+          clientConfig,
+          blocks,
+          css,
+          sessions: live.sessions,
+          multiplayer,
+          bindings: bindingCheck(collection.slug),
+          // Runs after the layout hook, so it sees the live session's layout.
+          afterLayout: collection.slug === templatesSlug && targets.length > 0 ? [requireBlocksForDefault] : [],
+        })
       }),
       // Server-only: the MCP tools read the live runtime from here, so they share the bus and lock.
       custom: {
         ...config.custom,
         [LIVE_RUNTIME_KEY]: live,
         [BUILDER_CONFIG_KEY]: serverConfig,
+        [SITE_CSS_KEY]: { css, blocks } satisfies SiteCssConfig,
         ...(templates ? { [TEMPLATES_CONFIG_KEY]: templates } : {}),
       },
       endpoints: [
         ...(config.endpoints ?? []),
         ...liveEndpoints({ collections: liveCollections, blocks, runtime: live, heartbeatMs: options.live?.heartbeatMs }),
-        ...documentEndpoints({ collections: liveCollections, templates: serverConfig.templates, runtime: live }),
+        ...documentEndpoints({
+          collections: liveCollections,
+          templates: serverConfig.templates,
+          runtime: live,
+          // The publish check uses the same binding rules as the save hook of each collection.
+          check: { blocks, bindings: bindingCheck(templatesSlug) },
+        }),
         ...(options.ai
           ? aiEndpoints({
               ai: options.ai,
@@ -273,7 +347,14 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           handler: async (req) => {
             if (!req.user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
             const tokens = await getStyleTokens(css)
-            return Response.json(tokens, { headers: { 'Cache-Control': 'private, max-age=60' } })
+            const families = await Promise.resolve(options.css.fontFamilies?.(req.payload)).catch(() => undefined)
+            const fonts = families
+              ? tokens.fonts.map((token) => {
+                  const family = families[token.name]?.trim()
+                  return family ? { ...token, value: family } : token
+                })
+              : tokens.fonts
+            return Response.json({ ...tokens, fonts }, { headers: { 'Cache-Control': 'private, max-age=60' } })
           },
         },
       ],
@@ -308,10 +389,13 @@ type AddBuilderArgs = {
   css: CssOptions
   sessions: SessionManager
   multiplayer: boolean
+  bindings?: BindingCheck
+  /** beforeChange hooks that run after the layout hook. */
+  afterLayout?: CollectionBeforeChangeHook[]
 }
 
 function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): CollectionConfig {
-  const { field, clientConfig, blocks, css, sessions, multiplayer } = args
+  const { field, clientConfig, blocks, css, sessions, multiplayer, bindings, afterLayout = [] } = args
   const cssField = cssFieldName(field)
 
   // An existing field with this name (also inside rows, collapsibles or unnamed tabs) is reused
@@ -374,12 +458,17 @@ function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): Collect
       ...collection.hooks,
       beforeChange: [
         ...(collection.hooks?.beforeChange ?? []),
-        layoutBeforeChange({ collection: collection.slug, field, cssField, blocks, css, sessions }),
+        layoutBeforeChange({ collection: collection.slug, field, cssField, blocks, css, sessions, bindings }),
+        ...afterLayout,
       ],
       afterChange: [...(collection.hooks?.afterChange ?? []), layoutAfterChange({ collection: collection.slug, sessions })],
     },
     admin: {
       ...collection.admin,
+      // A Status column (Draft / Published) in the list, unless the app chose its own columns.
+      ...(collection.versions && typeof collection.versions === 'object' && collection.versions.drafts && !collection.admin?.defaultColumns
+        ? { defaultColumns: [collection.admin?.useAsTitle ?? 'id', '_status', 'updatedAt'] }
+        : {}),
       components: {
         ...collection.admin?.components,
         // The builder's settings drawer must not show a second Publish (see settingsDrawer.tsx).

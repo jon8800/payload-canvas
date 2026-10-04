@@ -31,11 +31,12 @@ export {
   type LiveRuntime,
   type UpdateAccessCheck,
 } from './runtime'
-export { resolveOperations, splitLayoutErrors, actorFromUser, userLabel, type LiveDocStore } from './apply'
+export { resolveOperations, splitLayoutErrors, actorFromUser, userLabel, payloadFieldErrors, type LiveDocStore, type PayloadFieldError } from './apply'
 export { liveEndpoints, sessionStream, sseFrame, requestActor, sessionTargetOf, targetOf, LIVE_PATH, SSE_HEADERS, type LiveEndpointOptions } from './endpoints'
 export {
   builderConfigOf,
   documentEndpoints,
+  documentErrorsOf,
   loadDocMeta,
   payloadErrorMessage,
   runPublishAction,
@@ -44,4 +45,5 @@ export {
   type BuilderServerConfig,
   type DocMetaArgs,
   type DocumentEndpointOptions,
+  type PublishCheck,
 } from './document'

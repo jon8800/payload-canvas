@@ -1,6 +1,8 @@
 // Ready-made sections for the editor library and AI tools, built from the section factories.
 // Media and form IDs do not exist in a fresh database, so `withoutMedia` strips them and the
-// canvas shows placeholders. Links use plain URLs so they never point to a missing document.
+// canvas shows placeholders. The Image block's `image` and the Form block's `form` are optional
+// props, so every section publishes as inserted: the site shows nothing for an empty image or
+// form until an editor picks one. Links use plain URLs so they never point to a missing document.
 import type { Block, SectionDefinition } from '@payload-toolkit/builder'
 import { cardGrid } from './cardGrid'
 import { url } from './build'
@@ -15,6 +17,7 @@ import { hero } from './hero'
 import { imageText } from './imageText'
 import { postList } from './posts'
 import { testimonials } from './testimonials'
+import { work } from './work'
 
 /** Dummy ID for factories that need a media or form ID. `withoutMedia` removes it. */
 const NO_ID = 0
@@ -40,10 +43,10 @@ const toAbout = { label: 'Learn more', link: url('/about') }
 const toServices = { label: 'Our services', link: url('/services') }
 
 const nav = [
-  { label: 'Home', link: url('/') },
   { label: 'About', link: url('/about') },
   { label: 'Services', link: url('/services') },
   { label: 'Blog', link: url('/blog') },
+  { label: 'Contact', link: url('/contact') },
 ]
 
 export const sectionLibrary: SectionDefinition[] = [
@@ -58,6 +61,7 @@ export const sectionLibrary: SectionDefinition[] = [
         text: 'Northwind brings planning, files and chat into one calm workspace, so work moves forward without extra meetings.',
         primary: { label: 'Start free trial', link: url('/contact') },
         secondary: toServices,
+        variant: 'home',
       }),
     ],
   },
@@ -71,20 +75,41 @@ export const sectionLibrary: SectionDefinition[] = [
         title: 'Run your business with less busywork',
         text: 'Northwind automates the small tasks, so you can spend your day on customers.',
         primary: toContact,
+        variant: 'home',
       }),
     ],
   },
   {
     id: 'hero-title-only',
     label: 'Page header',
-    description: 'A simple centered title with one line of text, for inner pages.',
+    description: 'An inner page title with one line of text beside it, above a thin line.',
     category: 'Heroes',
     blocks: [hero.create({ title: 'About Northwind', text: 'A small team that builds tools people enjoy using.' })],
   },
   {
+    id: 'work-four',
+    label: 'Selected work',
+    description: 'Four projects in two staggered columns, each with an image, a name and one line about the work.',
+    category: 'Features',
+    blocks: [
+      withoutMedia(
+        work.create({
+          title: 'Selected work',
+          intro: 'A few recent projects.',
+          items: [
+            { title: 'Project one', meta: 'Website design and build', image: { id: NO_ID, alt: 'Home page of project one' } },
+            { title: 'Project two', meta: 'Design system', image: { id: NO_ID, alt: 'Home page of project two' } },
+            { title: 'Project three', meta: 'Online shop', image: { id: NO_ID, alt: 'Home page of project three' } },
+            { title: 'Project four', meta: 'Booking site', image: { id: NO_ID, alt: 'Home page of project four' } },
+          ],
+        }),
+      ),
+    ],
+  },
+  {
     id: 'features-three',
     label: 'Three features',
-    description: 'A title and intro above three short feature cards.',
+    description: 'A title and intro beside a list of three short points.',
     category: 'Features',
     blocks: [
       features.create({
@@ -258,7 +283,11 @@ export const sectionLibrary: SectionDefinition[] = [
           title: 'Get in touch',
           text: 'Fill in the form, or reach us directly.',
           formId: NO_ID,
-          details: ['hello@northwind.example', '+1 555 0100', 'Mon to Fri, 9:00 to 17:00'],
+          details: [
+            { label: 'Email', value: 'hello@northwind.example', href: 'mailto:hello@northwind.example' },
+            { label: 'Phone', value: '+1 555 0100', href: 'tel:+15550100' },
+            { label: 'Hours', value: 'Mon to Fri, 9:00 to 17:00' },
+          ],
         }),
       ),
     ],
@@ -273,20 +302,21 @@ export const sectionLibrary: SectionDefinition[] = [
   {
     id: 'header-simple',
     label: 'Header',
-    description: 'The site name, a row of links and a contact button.',
+    description: 'The site name, a menu (a "Menu" button on phones) and a button.',
     category: 'Navigation',
-    blocks: [header.create({ siteName: 'Northwind', home: url('/'), nav, cta: { label: 'Contact', link: url('/contact') } })],
+    blocks: [header.create({ siteName: 'Northwind', home: url('/'), nav, cta: { label: 'Get in touch', link: url('/contact') } })],
   },
   {
     id: 'footer-simple',
     label: 'Footer',
-    description: 'The site name, a short tagline, a row of links and a copyright line.',
+    description: 'The site name, a short tagline, a column of links, contact details and a copyright line.',
     category: 'Navigation',
     blocks: [
       footer.create({
         siteName: 'Northwind',
         tagline: 'Simple tools for busy teams.',
-        links: [...nav, { label: 'Contact', link: url('/contact') }],
+        links: [{ label: 'Home', link: url('/') }, ...nav],
+        contact: { email: 'hello@northwind.example', phone: '+1 555 0100' },
         copyright: '© 2026 Northwind. All rights reserved.',
       }),
     ],

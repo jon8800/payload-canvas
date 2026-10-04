@@ -2,17 +2,26 @@
 
 import { createContext, use } from 'react'
 
-import { findBlock, setStyleValue, type StyleTokens, type Variant } from '../../../core'
+import { findBlock, setStyleValue, type Breakpoint, type StyleTokens, type Variant } from '../../../core'
 import type { ValueStore } from '../valueStore'
 import type { Runtime } from '../runtime'
 import { variantKey, type StyleReader } from './model'
 
 export type StylesContextValue = {
   blockId: string
+  /** The block type: it picks the style groups that open by default. */
+  blockType: string
   className: string
   variant: Variant
   tokens: StyleTokens
   read: StyleReader
+  /**
+   * Reads values at the breakpoint the canvas shows, when that breakpoint is larger than the one
+   * being edited. Null otherwise. A value from a breakpoint above the edited one overrides the edit.
+   */
+  canvasRead: StyleReader | null
+  /** The breakpoint the canvas shows. */
+  canvasBreakpoint: Breakpoint
   /** Sets (or with `null` clears) one property at the current variant. */
   set: (property: string, value: string | null, options?: { negative?: boolean }) => void
   /** Replaces the whole className (raw classes field). */
@@ -35,7 +44,8 @@ function currentClassName(runtime: Runtime, blockId: string): string {
 }
 
 export function writeClassName(runtime: Runtime, blockId: string, next: string, mergeKey?: string) {
-  const normalized = next.trim()
+  // One space between classes: double spaces from typing never reach the stored value.
+  const normalized = next.trim().replace(/\s+/g, ' ')
   if (normalized === currentClassName(runtime, blockId)) return
   runtime.store.apply({ type: 'update', id: blockId, className: normalized || null }, { mergeKey })
 }

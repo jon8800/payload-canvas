@@ -73,6 +73,9 @@ const EDITOR_CSS = `
 }
 `
 
+/** Room kept above and below a block scrolled into view (the toolbar sits above it). */
+const SCROLL_MARGIN = 48
+
 function send(message: CanvasToAdmin) {
   post(window.parent, message)
 }
@@ -128,9 +131,17 @@ export function BuilderCanvas({ blocks, components, plugins, resolveLink }: Buil
       if (hasInit && hasLayout) window.clearInterval(readyTimer)
     }
 
+    // Scrolls a block into view with room around it, so it never stops flush at the edge
+    // (under the editor's floating toolbar). A block taller than the view shows its top.
     const scrollToBlock = (id: string) => {
       const el = document.querySelector(`[data-block-id="${CSS.escape(id)}"]`)
-      el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      const view = window.innerHeight
+      let delta = 0
+      if (rect.top < SCROLL_MARGIN || rect.height > view - 2 * SCROLL_MARGIN) delta = rect.top - SCROLL_MARGIN
+      else if (rect.bottom > view - SCROLL_MARGIN) delta = rect.bottom - (view - SCROLL_MARGIN)
+      if (delta !== 0) window.scrollBy({ top: delta, behavior: 'smooth' })
     }
 
     const onMessage = (event: MessageEvent) => {
@@ -292,7 +303,7 @@ export function BuilderCanvas({ blocks, components, plugins, resolveLink }: Buil
       <style data-builder-editor-css="">{EDITOR_CSS}</style>
       <div ref={rootRef} data-builder-root="">
         {visible && resolved.blocks.length === 0 && (
-          <p data-builder-empty-page="">Drag a block here from the library.</p>
+          <p data-builder-empty-page="">This page is empty. Add a section or a block from the Add panel.</p>
         )}
         {visible && (
           <RenderLayout

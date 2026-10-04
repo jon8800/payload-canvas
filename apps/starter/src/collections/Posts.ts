@@ -15,7 +15,7 @@ export const Posts: CollectionConfig = {
     update: authenticated,
   },
   admin: {
-    defaultColumns: ['title', 'slug', 'updatedAt'],
+    defaultColumns: ['title', 'slug', '_status', 'updatedAt'],
     useAsTitle: 'title',
     livePreview: {
       url: ({ data, req }) =>

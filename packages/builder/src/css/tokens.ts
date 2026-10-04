@@ -241,7 +241,10 @@ export function tokensFromTheme(entries: ThemeEntries, classList: string[] | nul
     spacing,
     fontSizes: strip(valid('fontSizes')),
     fontWeights: strip(valid('fontWeights')),
-    fonts: strip(valid('fonts')),
+    // The value is the variable, not the stack in the entry file: the site's theme may override
+    // `--font-sans` at runtime (for example with Inter), so a stack like "GeistSans, …" would
+    // name a font the page does not use (QA m5).
+    fonts: strip(valid('fonts')).map((token) => ({ name: token.name, value: `var(--font-${token.name})` })),
     leading: strip(valid('leading')),
     tracking: strip(valid('tracking')),
     radius: strip(valid('radius')),

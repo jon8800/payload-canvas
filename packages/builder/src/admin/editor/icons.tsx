@@ -170,7 +170,7 @@ const PATHS = {
   ),
   up: <path d="M8 13.5v-11M4 6.5l4-4 4 4" />,
   down: <path d="M8 2.5v11M4 9.5l4 4 4-4" />,
-  parent: <path d="M13 13.5V9a3 3 0 0 0-3-3H3M6 3 3 6l3 3" />,
+  parent: <path d="M3 9.5v3.5h10V9.5M8 10.5V2.5M5 5.5l3-3 3 3" />,
   eye: (
     <>
       <path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8Z" />
@@ -236,6 +236,11 @@ const PATHS = {
     </>
   ),
   plus: <path d="M8 3v10M3 8h10" />,
+  minus: <path d="M3 8h10" />,
+  menu: <path d="M2.5 4h11M2.5 8h11M2.5 12h11" />,
+  left: <path d="M13.5 8h-11M6.5 4l-4 4 4 4" />,
+  right: <path d="M2.5 8h11M9.5 4l4 4-4 4" />,
+  rename: <path d="M2.5 12.5h11M3.5 10.5 10 4l2 2-6.5 6.5h-2v-2Z" />,
   close: <path d="m4 4 8 8M12 4l-8 8" />,
   check: <path d="m3 8.5 3 3 7-7" />,
   hash: <path d="M3 6h10.5M2.5 10H13M6.75 2.5l-1 11M10.25 2.5l-1 11" />,

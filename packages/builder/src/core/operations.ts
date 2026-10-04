@@ -5,9 +5,16 @@
 // `hidden` only when true. Operations keep this form. When a slot list becomes empty, its key is
 // deleted. This is what makes every inverse restore the exact previous layout.
 
+import { placementError } from './blocks'
 import { createId } from './ids'
 import { DEFAULT_SLOT, indexLayout, isPlainObject, subtreeIds, type IndexedBlock } from './tree'
-import type { ApplyResult, Block, Layout, Operation, Position } from './types'
+import type { ApplyResult, Block, BlockDefinition, Layout, Operation, Position } from './types'
+
+/**
+ * With `blocks`, `insert` and `move` also check the slot rules (`allow`, and `disallow` of every
+ * ancestor slot, for the whole placed subtree). Without it they check only the tree shape.
+ */
+export type ApplyOptions = { blocks?: readonly BlockDefinition[] }
 
 type Ok = Extract<ApplyResult, { ok: true }>
 type Fail = Extract<ApplyResult, { ok: false }>
@@ -15,13 +22,13 @@ type Fail = Extract<ApplyResult, { ok: false }>
 const fail = (error: string): Fail => ({ ok: false, error })
 
 /** Applies one operation. Never mutates the input. Returns the inverse operations for undo. */
-export function applyOperation(layout: Layout, op: Operation): ApplyResult {
+export function applyOperation(layout: Layout, op: Operation, options?: ApplyOptions): ApplyResult {
   if (!isPlainObject(op)) return fail('Operation must be an object')
   switch (op.type) {
     case 'insert':
-      return insert(layout, op.block, op.to)
+      return insert(layout, op.block, op.to, options?.blocks)
     case 'move':
-      return move(layout, op.id, op.to)
+      return move(layout, op.id, op.to, options?.blocks)
     case 'remove':
       return remove(layout, op.id)
     case 'duplicate':
@@ -34,12 +41,12 @@ export function applyOperation(layout: Layout, op: Operation): ApplyResult {
 }
 
 /** Applies operations in order. Fails as a whole if any fails. `inverse` undoes all of them. */
-export function applyOperations(layout: Layout, ops: Operation[]): ApplyResult {
+export function applyOperations(layout: Layout, ops: Operation[], options?: ApplyOptions): ApplyResult {
   if (!Array.isArray(ops)) return fail('Operations must be an array')
   let current = layout
   let inverse: Operation[] = []
   for (let i = 0; i < ops.length; i++) {
-    const result = applyOperation(current, ops[i])
+    const result = applyOperation(current, ops[i], options)
     if (!result.ok) return fail(`Operation ${i} (${describe(ops[i])}): ${result.error}`)
     current = result.layout
     inverse = [...result.inverse, ...inverse]
@@ -55,7 +62,7 @@ function describe(op: unknown): string {
 // Operations
 // ---------------------------------------------------------------------------
 
-function insert(layout: Layout, rawBlock: unknown, rawTo: unknown): ApplyResult {
+function insert(layout: Layout, rawBlock: unknown, rawTo: unknown, blocks?: readonly BlockDefinition[]): ApplyResult {
   const index = indexLayout(layout)
   const checked = checkBlock(rawBlock, new Set(index.keys()))
   if (typeof checked === 'string') return fail(checked)
@@ -63,6 +70,8 @@ function insert(layout: Layout, rawBlock: unknown, rawTo: unknown): ApplyResult 
   if (typeof to === 'string') return fail(to)
   const length = listOf(layout, index, to.parentId, to.slot).length
   if (to.index > length) return fail(`Index ${to.index} is out of range (0-${length})`)
+  const refused = blocks ? placementError(blocks, layout, to.parentId, to.slot, checked, index) : null
+  if (refused) return fail(refused)
 
   const next = mapList(layout, to.parentId, to.slot, (list) => insertAt(list, to.index, checked))
   return ok(next, [{ type: 'remove', id: checked.id }])
@@ -76,7 +85,7 @@ function remove(layout: Layout, id: unknown): ApplyResult {
   return ok(next, [{ type: 'insert', block: entry.block, to: locationOf(entry) }])
 }
 
-function move(layout: Layout, id: unknown, rawTo: unknown): ApplyResult {
+function move(layout: Layout, id: unknown, rawTo: unknown, blocks?: readonly BlockDefinition[]): ApplyResult {
   const index = indexLayout(layout)
   const entry = getEntry(index, id)
   if (typeof entry === 'string') return fail(entry)
@@ -85,6 +94,8 @@ function move(layout: Layout, id: unknown, rawTo: unknown): ApplyResult {
   if (to.parentId !== null && subtreeIds(entry.block).includes(to.parentId)) {
     return fail('Cannot move a block into itself or its own descendants')
   }
+  const refused = blocks ? placementError(blocks, layout, to.parentId, to.slot, entry.block, index) : null
+  if (refused) return fail(refused)
 
   const sameList = to.parentId === entry.parentId && to.slot === entry.slot
   const targetLength = listOf(layout, index, to.parentId, to.slot).length - (sameList ? 1 : 0)
@@ -156,6 +167,14 @@ function update(layout: Layout, op: Extract<Operation, { type: 'update' }>): App
     inverse.hidden = before.hidden === true
     if (op.hidden) next.hidden = true
     else delete next.hidden
+  }
+
+  if (op.label !== undefined) {
+    if (op.label !== null && typeof op.label !== 'string') return fail('`label` must be a string or null')
+    inverse.label = before.label ?? null
+    const label = op.label?.trim() ?? ''
+    if (label) next.label = label
+    else delete next.label
   }
 
   if (op.bindings !== undefined) {
@@ -299,7 +318,7 @@ function freshId(used: Set<string>): string {
  */
 function checkBlock(value: unknown, used: Set<string>, path = 'block'): Block | string {
   if (!isPlainObject(value)) return `${path} must be an object`
-  const { id, type, props, className, slots, bindings, hidden } = value
+  const { id, type, props, className, slots, bindings, hidden, label } = value
   if (typeof id !== 'string' || id === '') return `${path}.id must be a non-empty string`
   if (used.has(id)) return `Block id "${id}" already exists`
   used.add(id)
@@ -339,6 +358,10 @@ function checkBlock(value: unknown, used: Set<string>, path = 'block'): Block | 
   if (hidden !== undefined) {
     if (typeof hidden !== 'boolean') return `${path}.hidden must be a boolean`
     if (hidden) block.hidden = true
+  }
+  if (label !== undefined && label !== null) {
+    if (typeof label !== 'string') return `${path}.label must be a string`
+    if (label.trim()) block.label = label.trim()
   }
   return block
 }

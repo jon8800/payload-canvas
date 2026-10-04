@@ -3,8 +3,12 @@
 // The interactive part of the form block: fields, validation and the submission request.
 // Inner elements use the Tailwind classes in formClasses.ts. The block definition lists them in
 // `classes`, so the generated CSS includes them on the site and in the canvas.
-import { useState, type FormEvent, type ReactNode } from 'react'
-import { formClasses } from './formClasses'
+//
+// Validation runs on submit, then on every change of a field that has an error. Errors show under
+// their field (aria-invalid + aria-describedby) and focus moves to the first invalid field.
+// Without JavaScript the browser's own required checks still apply (noValidate is set on hydration).
+import { useId, useRef, useState, useSyncExternalStore, type FormEvent, type ReactNode } from 'react'
+import { formClasses, widthClasses } from './formClasses'
 
 type FormField = {
   id?: string
@@ -27,8 +31,13 @@ export type FormDoc = {
   redirect?: { url?: string | null }
 }
 
-type Values = Record<string, string | boolean>
+type NamedField = FormField & { name: string }
+type Value = string | boolean
+type Values = Record<string, Value>
+type Errors = Record<string, string>
 type Status = 'idle' | 'submitting' | 'success' | 'error'
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function nodeText(node: unknown): string {
   const n = node as { text?: string; children?: unknown[] }
@@ -53,24 +62,66 @@ function initialValues(fields: FormField[]): Values {
   return values
 }
 
+const isNamed = (field: FormField): field is NamedField => Boolean(field.name) && field.blockType !== 'message'
+
+/** The error text for one field, or '' when the value is fine. */
+function validate(field: NamedField, value: Value | undefined): string {
+  const label = (field.label || field.name).toLowerCase()
+  const text = typeof value === 'string' ? value.trim() : ''
+  if (field.blockType === 'checkbox') return field.required && value !== true ? 'Tick this box to continue.' : ''
+  if (field.required && !text) return field.blockType === 'select' ? `Choose a ${label}.` : `Enter your ${label}.`
+  if (field.blockType === 'email' && text && !EMAIL.test(text)) return 'Enter an email address like name@example.com.'
+  if (field.blockType === 'number' && text && Number.isNaN(Number(text))) return `Enter a number for ${label}.`
+  return ''
+}
+
+function widthClass(width: number | undefined): string {
+  if (!width || width >= 100) return ''
+  return widthClasses.find(([max]) => width <= max)?.[1] ?? ''
+}
+
+const join = (...names: Array<string | false | undefined>) => names.filter(Boolean).join(' ')
+
+const noop = () => () => {}
+/** False during the server render and hydration, true after. */
+const useHydrated = () => useSyncExternalStore(noop, () => true, () => false)
+
 function FieldInput({
   field,
+  id,
   value,
+  error,
   onChange,
 }: {
-  field: FormField & { name: string }
-  value: string | boolean | undefined
-  onChange: (value: string | boolean) => void
+  field: NamedField
+  id: string
+  value: Value | undefined
+  error: string
+  onChange: (value: Value) => void
 }): ReactNode {
-  const common = { id: `form-field-${field.name}`, name: field.name, required: field.required }
+  const common = {
+    id,
+    name: field.name,
+    required: field.required,
+    'aria-invalid': error ? true : undefined,
+    'aria-describedby': error ? `${id}-error` : undefined,
+  }
   const text = typeof value === 'string' ? value : ''
   switch (field.blockType) {
     case 'textarea':
-      return <textarea {...common} rows={4} className={formClasses.input} value={text} onChange={(e) => onChange(e.target.value)} />
+      return (
+        <textarea
+          {...common}
+          rows={5}
+          className={join(formClasses.input, formClasses.textarea)}
+          value={text}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )
     case 'select':
       return (
-        <select {...common} className={formClasses.input} value={text} onChange={(e) => onChange(e.target.value)}>
-          <option value="">Select…</option>
+        <select {...common} className={join(formClasses.input, formClasses.select)} value={text} onChange={(e) => onChange(e.target.value)}>
+          <option value="">Choose one</option>
           {field.options?.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -79,26 +130,95 @@ function FieldInput({
         </select>
       )
     case 'checkbox':
-      return <input {...common} type="checkbox" className={formClasses.checkbox} checked={value === true} onChange={(e) => onChange(e.target.checked)} />
+      return (
+        <input {...common} type="checkbox" className={formClasses.checkbox} checked={value === true} onChange={(e) => onChange(e.target.checked)} />
+      )
     default: {
       const type = field.blockType === 'email' || field.blockType === 'number' ? field.blockType : 'text'
-      return <input {...common} type={type} className={formClasses.input} value={text} onChange={(e) => onChange(e.target.value)} />
+      const autoComplete = type === 'email' ? 'email' : field.name === 'name' ? 'name' : undefined
+      return (
+        <input
+          {...common}
+          type={type}
+          autoComplete={autoComplete}
+          inputMode={type === 'number' ? 'decimal' : undefined}
+          className={formClasses.input}
+          value={text}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )
     }
   }
 }
 
+function Spinner() {
+  return (
+    <svg className={formClasses.spinner} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.3" strokeWidth="3" />
+      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 export function FormView({ form, disabled }: { form: FormDoc; disabled: boolean }) {
   const fields = form.fields ?? []
+  const named = fields.filter(isNamed)
+  const idPrefix = useId()
+  const hydrated = useHydrated()
+  const formRef = useRef<HTMLFormElement>(null)
   const [values, setValues] = useState<Values>(() => initialValues(fields))
+  const [errors, setErrors] = useState<Errors>({})
   const [status, setStatus] = useState<Status>('idle')
+  const fieldId = (name: string) => `${idPrefix}-${name}`
 
   if (status === 'success') {
-    return <div className={formClasses.success}>{lexicalToText(form.confirmationMessage) || 'Thank you. Your message was sent.'}</div>
+    const message = lexicalToText(form.confirmationMessage) || 'Thank you. We will reply soon.'
+    return (
+      <div
+        className={formClasses.success}
+        aria-live="polite"
+        tabIndex={-1}
+        ref={(element) => {
+          element?.focus()
+        }}
+      >
+        <p className={formClasses.successTitle}>Message sent</p>
+        <p className={formClasses.successText}>{message}</p>
+        <button
+          type="button"
+          className={formClasses.again}
+          onClick={() => {
+            setValues(initialValues(fields))
+            setStatus('idle')
+          }}
+        >
+          Send another message
+        </button>
+      </div>
+    )
+  }
+
+  function change(field: NamedField, value: Value) {
+    setValues((prev) => ({ ...prev, [field.name]: value }))
+    // Re-check only a field that already shows an error, so typing never raises a new one.
+    if (errors[field.name]) setErrors((prev) => ({ ...prev, [field.name]: validate(field, value) }))
   }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
-    if (disabled) return
+    if (disabled || status === 'submitting') return
+    const nextErrors: Errors = {}
+    for (const field of named) {
+      const error = validate(field, values[field.name])
+      if (error) nextErrors[field.name] = error
+    }
+    setErrors(nextErrors)
+    const firstInvalid = named.find((field) => nextErrors[field.name])
+    if (firstInvalid) {
+      formRef.current?.querySelector<HTMLElement>(`#${CSS.escape(fieldId(firstInvalid.name))}`)?.focus()
+      return
+    }
+
     setStatus('submitting')
     const submissionData = Object.entries(values).map(([field, value]) => ({ field, value: String(value) }))
     try {
@@ -118,48 +238,70 @@ export function FormView({ form, disabled }: { form: FormDoc; disabled: boolean 
     }
   }
 
+  const submitting = status === 'submitting'
   return (
-    <form className={formClasses.form} onSubmit={handleSubmit} inert={disabled}>
+    <form
+      ref={formRef}
+      className={formClasses.form}
+      onSubmit={handleSubmit}
+      noValidate={hydrated}
+      aria-busy={submitting || undefined}
+      inert={disabled}
+    >
       {fields.map((field, index) => {
         const key = field.id ?? field.name ?? `field-${index}`
-        const style = field.width && field.width < 100 ? { width: `calc(${field.width}% - 0.5rem)` } : undefined
+        const width = widthClass(field.width)
         if (field.blockType === 'message') {
           return (
-            <p key={key} className={formClasses.message} style={style}>
+            <p key={key} className={join(formClasses.message, width)}>
               {lexicalToText(field.message)}
             </p>
           )
         }
-        if (!field.name) return null
-        const named = { ...field, name: field.name }
-        const input = (
-          <FieldInput field={named} value={values[field.name]} onChange={(value) => setValues((prev) => ({ ...prev, [named.name]: value }))} />
-        )
+        if (!isNamed(field)) return null
+        const id = fieldId(field.name)
+        const error = errors[field.name] ?? ''
+        const input = <FieldInput field={field} id={id} value={values[field.name]} error={error} onChange={(value) => change(field, value)} />
+        const errorText = error ? (
+          <p id={`${id}-error`} className={formClasses.fieldError}>
+            {error}
+          </p>
+        ) : null
         if (field.blockType === 'checkbox') {
           return (
-            <label key={key} className={formClasses.checkboxRow} style={style}>
-              {input}
-              {field.label}
-            </label>
+            <div key={key} className={join(formClasses.field, width)}>
+              <label className={formClasses.checkboxRow}>
+                {input}
+                <span>{field.label}</span>
+              </label>
+              {errorText}
+            </div>
           )
         }
         return (
-          <div key={key} className={formClasses.field} style={style}>
+          <div key={key} className={join(formClasses.field, width)}>
             {field.label ? (
-              <label htmlFor={`form-field-${field.name}`} className={formClasses.label}>
+              <label htmlFor={id} className={formClasses.label}>
                 {field.label}
-                {field.required ? <span className={formClasses.required}> *</span> : null}
+                {field.required ? null : <span className={formClasses.optional}> (optional)</span>}
               </label>
             ) : null}
             {input}
+            {errorText}
           </div>
         )
       })}
-      {status === 'error' ? <p className={formClasses.error}>Something went wrong. Please try again.</p> : null}
-      <button type="submit" className={formClasses.submit} disabled={status === 'submitting'}>
-        {status === 'submitting' ? 'Sending…' : form.submitButtonLabel || 'Submit'}
-      </button>
+      <div className={formClasses.footer}>
+        {status === 'error' ? (
+          <p className={formClasses.error} role="alert">
+            Your message was not sent. Check your connection and try again. Your text is still here.
+          </p>
+        ) : null}
+        <button type="submit" className={formClasses.submit} disabled={submitting}>
+          {submitting ? <Spinner /> : null}
+          {submitting ? 'Sending…' : form.submitButtonLabel || 'Submit'}
+        </button>
+      </div>
     </form>
   )
 }
-
