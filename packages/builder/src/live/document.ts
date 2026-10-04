@@ -7,8 +7,9 @@
 //   POST {api}/builder/live/:collection/:id/publish    -> PublishResponse
 //   POST {api}/builder/live/:collection/:id/unpublish  -> PublishResponse
 //   POST {api}/builder/live/:collection/:id/revert     -> PublishResponse
+//   POST {api}/builder/live/:collection/:id/restore    -> PublishResponse  (body: { versionId })
 
-import type { Endpoint, PayloadRequest } from 'payload'
+import { addDataAndFileToRequest, restoreVersionOperation, type Collection, type Endpoint, type PayloadRequest } from 'payload'
 
 import { TEMPLATE_DEFAULT_FIELD, TEMPLATE_PREVIEW_FIELD, TEMPLATE_TARGET_FIELD } from '../core/bindings'
 import { describeLayoutErrors, summarizeProblems } from '../core/issues'
@@ -52,6 +53,7 @@ type DocApi = {
   update(args: Record<string, unknown>): Promise<Record<string, unknown>>
   find?(args: Record<string, unknown>): Promise<{ docs: Record<string, unknown>[] }>
   countVersions?(args: Record<string, unknown>): Promise<{ totalDocs: number }>
+  findVersionByID?(args: Record<string, unknown>): Promise<{ parent?: unknown; version?: Record<string, unknown> }>
   collections: Record<string, { config: { admin?: { useAsTitle?: string }; versions?: unknown; fields?: unknown } } | undefined>
 }
 
@@ -243,6 +245,7 @@ export async function runPublishAction(
   req: PayloadRequest,
   { target, action, runtime, check }: { target: SessionTarget; action: PublishAction; runtime: LiveRuntime; check?: PublishCheck },
 ): Promise<ActionResult> {
+  if (action === 'restore') return { ok: false, status: 400, error: 'Restore needs a version: use restoreDocumentVersion.' }
   if (!target.drafts) return { ok: false, status: 400, error: 'This collection has no drafts, so there is nothing to publish.' }
   if (!(await runtime.canUpdate(req, target.collection, target.id))) {
     return { ok: false, status: 403, error: 'You are not allowed to change this document.' }
@@ -296,6 +299,72 @@ export async function runPublishAction(
   }
 }
 
+/** The id of a related document, whether Payload returned it populated or not. */
+const idOf = (value: unknown): string | null => {
+  const id = value && typeof value === 'object' ? (value as { id?: unknown }).id : value
+  return typeof id === 'string' || typeof id === 'number' ? String(id) : null
+}
+
+/**
+ * Restores an older version of the document, as the request's user. Payload's own Restore would
+ * be overwritten by the open live session (the session owns the layout), so this works like
+ * Revert: it resets the session to the version's layout (every editor reloads it), then restores
+ * the version through the Local API. With drafts, the version becomes the new draft: the site
+ * keeps its published version until someone publishes.
+ */
+export async function restoreDocumentVersion(
+  req: PayloadRequest,
+  { target, versionId, runtime }: { target: SessionTarget; versionId: string; runtime: LiveRuntime },
+): Promise<ActionResult> {
+  if (!(await runtime.canUpdate(req, target.collection, target.id))) {
+    return { ok: false, status: 403, error: 'You are not allowed to change this document.' }
+  }
+  const payload = api(req)
+  // The app's generated types narrow the slugs; the builder works with any collection.
+  const collection = (req.payload.collections as Record<string, Collection | undefined>)[target.collection]
+  if (!payload.findVersionByID || !collection) return { ok: false, status: 500, error: 'This collection cannot restore versions.' }
+  const common = { collection: target.collection, depth: 0, overrideAccess: false, user: req.user, req }
+  let version: Awaited<ReturnType<NonNullable<DocApi['findVersionByID']>>>
+  try {
+    version = await payload.findVersionByID({ ...common, id: versionId })
+  } catch (error) {
+    return { ok: false, status: statusOf(error) === 403 ? 403 : 404, error: 'This version was not found.' }
+  }
+  if (idOf(version.parent) !== String(target.id)) return { ok: false, status: 404, error: 'This version belongs to another document.' }
+
+  const before = runtime.sessions.peek(target.collection, target.id)?.layout
+  await runtime.sessions.reset(target.collection, target.id, normalizeLayout(version.version?.[target.field]))
+  try {
+    // A plugin save: keep the document lock of someone in the settings drawer (fieldsGuard.ts).
+    req.context = { ...req.context, [KEEP_LOCK_CONTEXT]: true }
+    // The operation, not `payload.restoreVersion`: the Local API drops the `draft` flag (Payload
+    // 3.90), and a restored published version would go live at once.
+    const doc: Record<string, unknown> = await restoreVersionOperation({
+      collection,
+      id: versionId,
+      depth: 0,
+      draft: target.drafts,
+      overrideAccess: false,
+      req,
+    })
+    const event: LivePublishedEvent = {
+      type: 'published',
+      action: 'restore',
+      status: doc._status === 'published' ? 'published' : 'draft',
+      at: new Date().toISOString(),
+      ...(typeof doc.updatedAt === 'string' ? { updatedAt: doc.updatedAt } : {}),
+      actor: requestActor(req.user),
+    }
+    runtime.sessions.broadcast(target.collection, target.id, event)
+    return { ok: true, doc }
+  } catch (error) {
+    // The document did not change: give the editors their layout back.
+    if (before) await runtime.sessions.reset(target.collection, target.id, before)
+    const status = statusOf(error)
+    return { ok: false, status: status >= 400 && status < 600 ? status : 500, error: payloadErrorMessage(error, target.field) }
+  }
+}
+
 export type DocumentEndpointOptions = {
   collections: Record<string, BuilderCollectionServer>
   /** Slug of the templates collection, when templates are on. */
@@ -346,5 +415,25 @@ export function documentEndpoints({ collections, templates, runtime, check }: Do
     },
   })
 
-  return [meta, action('publish'), action('unpublish'), action('revert')]
+  const restore: Endpoint = {
+    path: `${LIVE_PATH}/:collection/:id/restore`,
+    method: 'post',
+    handler: async (req) => {
+      if (!req.user) return json({ ok: false, error: 'Unauthorized' } satisfies PublishResponse, 401)
+      const target = targetOf(req, collections)
+      if (target instanceof Response) return target
+      try {
+        await addDataAndFileToRequest(req)
+      } catch {
+        return json({ ok: false, error: 'The body must be JSON' } satisfies PublishResponse, 400)
+      }
+      const versionId = idOf((req.data as { versionId?: unknown } | undefined)?.versionId)
+      if (!versionId) return json({ ok: false, error: '`versionId` is required.' } satisfies PublishResponse, 400)
+      const result = await restoreDocumentVersion(req, { target, versionId, runtime })
+      if (!result.ok) return json({ ok: false, error: result.error } satisfies PublishResponse, result.status)
+      return json({ ok: true, meta: await metaOf(req, target) } satisfies PublishResponse)
+    },
+  }
+
+  return [meta, action('publish'), action('unpublish'), action('revert'), restore]
 }

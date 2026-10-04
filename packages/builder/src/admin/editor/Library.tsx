@@ -6,10 +6,10 @@ import { memo, useDeferredValue, useEffect, useMemo, useRef, useState, type CSSP
 import type { Block, BlockDefinition, SectionDefinition } from '../../core/types'
 import { insertBlocks, insertNewBlock, sectionPosition } from './actions'
 import { BlockIcon, Icon } from './icons'
+import { MenuButton } from './menu/Menu'
 import { useRuntime, type DragData } from './runtime'
 import { requestDeleteSection, requestRenameSection } from './sections/SectionDialog'
 import { useSectionThumbnail } from './sections/useThumbnail'
-import { Popover, usePopover } from './styles/popover'
 import { useValue } from './valueStore'
 
 const BLOCK_CATEGORIES = ['Layout', 'Content', 'Media', 'Interactive', 'Dynamic']
@@ -134,7 +134,11 @@ const BlockList = memo(function BlockList({ query }: { query: string }) {
   const groups = useMemo(
     () =>
       groupBy(
-        config.blocks.filter((def) => matches(query, def.label, def.type, def.category, def.ai?.description)),
+        // Blocks with `parents` (e.g. a list item) only fit inside their parent: the "+" picker
+        // offers them there, so the library leaves them out.
+        config.blocks.filter(
+          (def) => !def.parents && matches(query, def.label, def.type, def.category, def.ai?.description),
+        ),
         BLOCK_CATEGORIES,
       ),
     [config.blocks, query],
@@ -164,7 +168,7 @@ function BlockTile({ def }: { def: BlockDefinition }) {
       ref={setNodeRef}
       type="button"
       className="builder-editor__tile"
-      title={def.ai?.description ?? `Add ${def.label}`}
+      data-tooltip={def.ai?.description ?? `Add ${def.label}`}
       onClick={insert}
       {...listeners}
       {...attributes}
@@ -235,7 +239,7 @@ function SectionCard({ section }: { section: SectionDefinition }) {
         ref={setNodeRef}
         type="button"
         className="builder-editor__card"
-        title={`Add ${section.label}`}
+        data-tooltip={`Add ${section.label}`}
         onClick={insert}
         {...listeners}
         {...attributes}
@@ -265,49 +269,19 @@ function SectionCard({ section }: { section: SectionDefinition }) {
 /** Rename and delete for a saved section. */
 function SavedSectionMenu({ section }: { section: SectionDefinition }) {
   const runtime = useRuntime()
-  const menu = usePopover('auto')
   return (
-    <>
-      <button
-        type="button"
-        className="builder-editor__icon-button builder-editor__icon-button--small builder-editor__card-more"
-        aria-label={`Actions for ${section.label}`}
-        aria-haspopup="menu"
-        aria-expanded={menu.open}
-        data-tooltip="Rename or delete"
-        onClick={(e) => menu.toggle(e.currentTarget)}
-      >
-        <Icon name="more" size={14} />
-      </button>
-      <Popover {...menu.props} className="builder-editor__menu" label="Saved section actions">
-        <div role="menu">
-          <button
-            type="button"
-            role="menuitem"
-            className="builder-editor__menu-item"
-            onClick={() => {
-              menu.hide()
-              requestRenameSection(runtime, section)
-            }}
-          >
-            <Icon name="rename" size={14} />
-            Rename…
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className="builder-editor__menu-item builder-editor__menu-item--danger"
-            onClick={() => {
-              menu.hide()
-              requestDeleteSection(runtime, section)
-            }}
-          >
-            <Icon name="delete" size={14} />
-            Delete…
-          </button>
-        </div>
-      </Popover>
-    </>
+    <MenuButton
+      className="builder-editor__icon-button builder-editor__icon-button--small builder-editor__card-more"
+      triggerLabel={`Actions for ${section.label}`}
+      tooltip="Rename or delete"
+      label="Saved section actions"
+      items={() => [
+        { icon: 'rename', label: 'Rename…', ownFocus: true, run: () => requestRenameSection(runtime, section) },
+        { icon: 'delete', label: 'Delete…', ownFocus: true, danger: true, run: () => requestDeleteSection(runtime, section) },
+      ]}
+    >
+      <Icon name="more" size={14} />
+    </MenuButton>
   )
 }
 

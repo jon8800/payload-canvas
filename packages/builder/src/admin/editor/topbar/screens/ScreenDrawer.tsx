@@ -1,0 +1,217 @@
+'use client'
+
+// Payload's Versions, Version (compare and restore) and API screens, in a drawer over the builder.
+//
+// Payload renders them on the server through its public `renderDocument` server function: the
+// same one its document drawer uses, with `paramsOverride` set to the screen's admin path. The
+// screens navigate inside the drawer (DrawerRouter.tsx). Back returns to the last screen.
+//
+// Restore goes through the builder, not through Payload's Restore button: the live session owns
+// the layout, so it must reset the session for every editor (live/document.ts). The drawer hides
+// Payload's button and shows its own in the header.
+
+import { ConfirmationModal, Drawer, Gutter, ShimmerEffect, useConfig, useDrawerSlug, useModal, useServerFunctions } from '@payloadcms/ui'
+import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from 'react'
+
+import { Icon } from '../../icons'
+import { useRuntime } from '../../runtime'
+import { useValue } from '../../valueStore'
+import type { DocumentScreen } from '../document'
+import { DrawerRouter, type DrawerNavigation } from './DrawerRouter'
+import './screens.scss'
+
+/** A screen below the document's admin path: `['versions']`, `['versions', id]` or `['api']`. */
+type Route = { path: string[]; search: string }
+
+const RESTORE_SLUG = 'builder-restore-version'
+
+function titleOf(route: Route | undefined): string {
+  if (!route) return ''
+  if (route.path[0] === 'api') return 'API'
+  if (route.path[0] === 'versions' && route.path[1]) return 'Version'
+  return 'Versions'
+}
+
+/** Opens on `runtime.doc.openScreen(…)`. Mounted once, in the top bar. */
+export function ScreenDrawer() {
+  const runtime = useRuntime()
+  const meta = useValue(runtime.doc.meta)
+  const busy = useValue(runtime.doc.busy)
+  const { collection, id } = meta
+  const slug = useDrawerSlug('builder-screen')
+  const { openModal, closeModal, modalState } = useModal()
+  const isOpen = Boolean(modalState[slug]?.isOpen)
+  const { renderDocument } = useServerFunctions()
+  const router = useRouter()
+  const {
+    config: { routes },
+  } = useConfig()
+  const admin = routes.admin === '/' ? '' : routes.admin
+  const docPath = `${admin}/collections/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`
+
+  // The screens visited since the drawer opened. The last one shows. A copy of the last route
+  // loads it again (router.refresh()).
+  const [history, setHistory] = useState<Route[]>([])
+  const current = history.at(-1)
+  const [shown, setShown] = useState<{ route: Route; node: ReactNode } | null>(null)
+  const [failedRoute, setFailedRoute] = useState<Route | null>(null)
+  const failed = current !== undefined && failedRoute === current
+  const loading = current !== undefined && !failed && shown?.route !== current
+  const reload = useCallback(() => setHistory((list) => [...list.slice(0, -1), ...list.slice(-1).map((route) => ({ ...route }))]), [])
+
+  // Payload's list writes its query into the page URL (history.replaceState, `?limit=10`). The
+  // builder's own URL comes back when the drawer closes.
+  const pageUrl = useRef<string | null>(null)
+  const open = useEffectEvent((screen: DocumentScreen) => {
+    pageUrl.current ??= `${window.location.pathname}${window.location.search}`
+    setHistory([{ path: [screen], search: '' }])
+    openModal(slug)
+  })
+  useEffect(() => {
+    const url = pageUrl.current
+    if (isOpen || url === null) return
+    pageUrl.current = null
+    if (`${window.location.pathname}${window.location.search}` !== url) window.history.replaceState(window.history.state, '', url)
+  }, [isOpen])
+  useEffect(() => runtime.doc.screenRequest.subscribe(() => {
+    const request = runtime.doc.screenRequest.get()
+    if (request) open(request.screen)
+  }), [runtime])
+
+  // Closed: forget the screens, so the next open starts fresh.
+  const [wasOpen, setWasOpen] = useState(isOpen)
+  if (wasOpen !== isOpen) {
+    setWasOpen(isOpen)
+    if (!isOpen) {
+      setHistory([])
+      setShown(null)
+    }
+  }
+
+  useEffect(() => {
+    if (!current) return
+    let stale = false
+    // Numeric ids go to Payload as numbers (the app's ID type can be `number`).
+    const docID = /^\d+$/.test(id) ? Number(id) : id
+    void renderDocument({
+      collectionSlug: collection,
+      docID,
+      drawerSlug: slug,
+      disableActions: true,
+      paramsOverride: { segments: ['collections', collection, id, ...current.path] },
+      searchParams: Object.fromEntries(new URLSearchParams(current.search)),
+      redirectAfterDelete: false,
+      redirectAfterDuplicate: false,
+      redirectAfterRestore: false,
+    }).then((result) => {
+      if (stale) return
+      if (!result?.Document) {
+        setFailedRoute(current)
+        return
+      }
+      setShown({ route: current, node: result.Document })
+    })
+    return () => {
+      stale = true
+    }
+  }, [current, collection, id, slug, renderDocument])
+
+  const shownRoute = shown?.route
+  const navigate = useCallback(
+    (navigation: DrawerNavigation) => {
+      if (navigation.kind === 'back') {
+        setHistory((list) => (list.length > 1 ? list.slice(0, -1) : list))
+        return
+      }
+      if (navigation.kind === 'refresh') {
+        reload()
+        return
+      }
+      const here = shownRoute ? `${docPath}/${shownRoute.path.join('/')}${shownRoute.search}` : docPath
+      const url = new URL(navigation.href, new URL(here, window.location.origin))
+      const prefix = `${docPath}/`
+      if (url.origin === window.location.origin && url.pathname.startsWith(prefix)) {
+        const route = { path: url.pathname.slice(prefix.length).split('/').filter(Boolean).map(decodeURIComponent), search: url.search }
+        setHistory((list) => (navigation.kind === 'push' ? [...list, route] : [...list.slice(0, -1), route]))
+        return
+      }
+      closeModal(slug)
+      // The document's edit view: the builder already is that view.
+      if (url.pathname === docPath) return
+      if (url.origin === window.location.origin) router.push(`${url.pathname}${url.search}`)
+      else window.location.assign(url.href)
+    },
+    [shownRoute, docPath, closeModal, slug, router, reload],
+  )
+
+  const versionId = current?.path[0] === 'versions' ? current.path[1] : undefined
+  const canRestore = Boolean(versionId) && meta.canUpdate
+  const segments = useMemo(() => ['collections', collection, id, ...(shownRoute?.path ?? [])], [collection, id, shownRoute])
+
+  return (
+    <Drawer slug={slug} className="builder-screen-drawer" gutter={false} Header={null}>
+      <Gutter className="builder-screen-drawer__header">
+        <div className="builder-screen-drawer__bar">
+          {history.length > 1 && (
+            <button type="button" className="builder-screen-drawer__icon-button" aria-label="Back" onClick={() => navigate({ kind: 'back' })}>
+              <Icon name="back" />
+            </button>
+          )}
+          <h2 className="builder-screen-drawer__title">{titleOf(current)}</h2>
+          {canRestore && (
+            <button type="button" className="builder-screen-drawer__restore" disabled={busy !== null} onClick={() => openModal(RESTORE_SLUG)}>
+              <Icon name="undo" size={14} />
+              {busy === 'restore' ? 'Restoring…' : meta.drafts ? 'Restore as draft' : 'Restore this version'}
+            </button>
+          )}
+          <button type="button" className="builder-screen-drawer__icon-button" aria-label="Close" onClick={() => closeModal(slug)}>
+            <Icon name="close" />
+          </button>
+        </div>
+      </Gutter>
+      <div className="builder-screen-drawer__body" aria-busy={loading}>
+        {failed ? (
+          <Gutter>
+            <p className="builder-screen-drawer__error">
+              This screen did not load.{' '}
+              <button type="button" className="builder-screen-drawer__link" onClick={reload}>
+                Try again
+              </button>
+            </p>
+          </Gutter>
+        ) : shown ? (
+          <DrawerRouter
+            pathname={`${docPath}/${shown.route.path.join('/')}`}
+            search={shown.route.search}
+            segments={segments}
+            onNavigate={navigate}
+          >
+            {shown.node}
+          </DrawerRouter>
+        ) : (
+          <Gutter className="builder-screen-drawer__loading">
+            <ShimmerEffect height="40px" />
+            <ShimmerEffect height="240px" />
+          </Gutter>
+        )}
+      </div>
+      {versionId && (
+        <ConfirmationModal
+          modalSlug={RESTORE_SLUG}
+          heading="Restore this version?"
+          body={
+            meta.drafts
+              ? 'The page goes back to this version for everyone editing it. It becomes the draft: the site keeps the published version until you publish.'
+              : 'The page goes back to this version for everyone editing it.'
+          }
+          confirmLabel="Restore"
+          confirmingLabel="Restoring…"
+          onConfirm={async () => {
+            if (await runtime.doc.restore(versionId)) closeModal(slug)
+          }}
+        />
+      )}
+    </Drawer>
+  )
+}

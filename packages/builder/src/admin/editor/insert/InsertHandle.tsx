@@ -54,12 +54,8 @@ export const InsertHandle = memo(function InsertHandle() {
             onPointerEnter={() => setHeld(spot ?? held)}
             onPointerLeave={() => setHeld(null)}
             onClick={(e) => {
-              if (picker.open) {
-                picker.hide()
-                return
-              }
-              setTarget(shown)
-              picker.show(e.currentTarget)
+              if (!picker.isOpen()) setTarget(shown)
+              picker.toggle(e.currentTarget)
             }}
           >
             <Icon name="plus" size={12} />

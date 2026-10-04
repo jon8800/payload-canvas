@@ -39,6 +39,7 @@ export {
   documentErrorsOf,
   loadDocMeta,
   payloadErrorMessage,
+  restoreDocumentVersion,
   runPublishAction,
   BUILDER_CONFIG_KEY,
   type BuilderCollectionServer,

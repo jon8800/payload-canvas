@@ -6,7 +6,7 @@
 import type { ReactNode } from 'react'
 
 import { useStyles } from './context'
-import { OverrideFlag, ResetButton, spacingSuggestions, SubSection, suggestionsFor, ValueInput } from './controls'
+import { OverrideMark, ResetButton, spacingSuggestions, SubSection, suggestionsFor, ValueInput } from './controls'
 import type { Suggestion } from './popover'
 import { useProp } from './useProp'
 
@@ -34,16 +34,19 @@ function RingBox({ ring, children }: { ring: Ring; children: ReactNode }) {
   )
 }
 
-/** Caption above a compact input, with a reset button when the value is set at this variant. */
+/**
+ * Caption above a compact input. The caption is colored like a row label (set here, inherited),
+ * with the override dot and a reset button when the value is set at this variant.
+ */
 export function MiniField({ prop, caption, suggestions }: { prop: string; caption: string; suggestions?: Suggestion[] }) {
   const { tokens } = useStyles()
-  const { def } = useProp(prop)
+  const { def, value } = useProp(prop)
   if (!def) return null
   return (
     <div className="builder-styles__mini">
-      <span className="builder-styles__mini-caption">
-        {caption}
-        <OverrideFlag prop={prop} />
+      <span className="builder-styles__mini-caption" data-source={value?.source ?? 'none'}>
+        <span className="builder-styles__mini-text">{caption}</span>
+        <OverrideMark prop={prop} />
         <ResetButton prop={prop} />
       </span>
       <ValueInput prop={prop} suggestions={suggestions ?? suggestionsFor(def, tokens)} />

@@ -94,6 +94,10 @@ function checkBlock(
       report(path, `${typeLabel} cannot go inside ${owner.label}`, 'nesting')
     }
   }
+  if (type && def?.parents && !(owner && def.parents.includes(owner.type))) {
+    const parents = def.parents.map((t) => getBlockDefinition(blocks, t)?.label ?? t).join(' or ')
+    report(path, `${typeLabel} can only go inside ${parents}`, 'nesting')
+  }
   const refusedBy = type ? banned.find((b) => b.type === type) : undefined
   if (refusedBy) report(path, `${typeLabel} cannot go inside ${refusedBy.by}`, 'nesting')
 

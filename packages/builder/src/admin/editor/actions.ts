@@ -1,10 +1,11 @@
 'use client'
 
-// Editor actions shared by the toolbar, the overlay, the outline, the inspector and the shortcuts:
-// insert, duplicate, remove, hide, copy and paste.
+// Editor actions shared by the toolbar, the overlay, the outline, the inspector, the menus and the
+// shortcuts: insert, duplicate, remove, hide, move, copy and paste (blocks and styles).
 
 import { createId, findBlock, findLocation, getBlockDefinition, slotAcceptsAt, slotNames } from '../../core'
-import type { Block, Layout, Operation, Position } from '../../core/types'
+import type { Block, CanvasMeasurement, Layout, Operation, Position } from '../../core/types'
+import { normalizeClasses, parseStyles, setStylesOps, stylesText } from './menu/styleClipboard'
 import type { Runtime } from './runtime'
 
 /**
@@ -127,6 +128,25 @@ export function renameBlock(runtime: Runtime, id: string, label: string) {
   runtime.store.apply({ type: 'update', id, label: next || null })
 }
 
+/** How many blocks are in the list `slot` of `parentId` (the page itself when `parentId` is null). */
+export function siblingCount(layout: Layout, parentId: string | null, slot: string): number {
+  if (parentId === null) return layout.blocks.length
+  return findBlock(layout, parentId)?.slots?.[slot]?.length ?? 0
+}
+
+/** True when the block's siblings sit side by side (a row), so "move" means left and right. */
+export function inRow(layout: Layout, measurement: CanvasMeasurement | null, id: string): boolean {
+  const location = findLocation(layout, id)
+  if (!location || !measurement) return false
+  const list = location.parentId === null ? layout.blocks : (findBlock(layout, location.parentId)?.slots?.[location.slot] ?? [])
+  const neighbor = list[location.index + 1] ?? list[location.index - 1]
+  const rectOf = (blockId: string | undefined) => measurement.blocks.find((b) => b.id === blockId)?.rect
+  const a = rectOf(id)
+  const b = rectOf(neighbor?.id)
+  if (!a || !b) return false
+  return Math.abs(a.y - b.y) < Math.min(a.height, b.height) / 2 && Math.abs(a.x - b.x) > 1
+}
+
 export function moveBy(runtime: Runtime, id: string, delta: number) {
   const location = findLocation(runtime.store.getState().layout, id)
   if (!location) return
@@ -165,13 +185,17 @@ export function parseClipboard(text: string | null | undefined): Block[] | null 
   }
 }
 
-/** The selected block as clipboard text, or null when nothing is selected. */
-export function selectionClipboardText(runtime: Runtime): string | null {
-  const { layout, selectedId } = runtime.store.getState()
-  const block = selectedId ? findBlock(layout, selectedId) : null
+/** The block as clipboard text, or null when it is not on the page. */
+function blockClipboardText(runtime: Runtime, id: string | null): string | null {
+  const block = id ? findBlock(runtime.store.getState().layout, id) : null
   if (!block) return null
   const payload: ClipboardPayload = { marker: CLIPBOARD_MARKER, blocks: [block] }
   return JSON.stringify(payload)
+}
+
+/** The selected block as clipboard text, or null when nothing is selected. */
+export function selectionClipboardText(runtime: Runtime): string | null {
+  return blockClipboardText(runtime, runtime.store.getState().selectedId)
 }
 
 export function rememberClipboard(text: string) {
@@ -190,17 +214,30 @@ export function storedClipboard(): string | null {
   }
 }
 
-/** Copies the selected block to the system clipboard (when `data` is given) and to local storage. */
-export function copySelection(runtime: Runtime, data?: DataTransfer | null): boolean {
-  const text = selectionClipboardText(runtime)
-  if (!text) return false
+/** Copies the block to the system clipboard (into `data` when given) and to local storage. */
+export function copyBlock(runtime: Runtime, id: string, data?: DataTransfer | null): boolean {
+  const text = blockClipboardText(runtime, id)
+  const block = findBlock(runtime.store.getState().layout, id)
+  if (!text || !block) return false
   rememberClipboard(text)
   if (data) data.setData('text/plain', text)
   else void navigator.clipboard?.writeText(text).catch(() => undefined)
-  const { layout, selectedId } = runtime.store.getState()
-  const block = selectedId ? findBlock(layout, selectedId) : null
-  if (block) runtime.notify(`Copied ${runtime.blockLabel(block.type)}`)
+  runtime.notify(`Copied ${runtime.blockLabel(block.type)}`)
   return true
+}
+
+/** Copies the selected block. See `copyBlock`. */
+export function copySelection(runtime: Runtime, data?: DataTransfer | null): boolean {
+  const { selectedId } = runtime.store.getState()
+  return selectedId ? copyBlock(runtime, selectedId, data) : false
+}
+
+/** Pastes the blocks in the clipboard copy in local storage, or says there is nothing to paste. */
+export function pasteStoredBlocks(runtime: Runtime): boolean {
+  const blocks = parseClipboard(storedClipboard())
+  if (blocks) return pasteBlocks(runtime, blocks)
+  runtime.notify('Nothing to paste. Copy a block first.')
+  return false
 }
 
 /**
@@ -213,4 +250,63 @@ export function pasteBlocks(runtime: Runtime, blocks: Block[]): boolean {
   const done = insertBlocks(runtime, blocks, insertPosition(runtime, first))
   if (done) runtime.notify(blocks.length === 1 ? `Pasted ${runtime.blockLabel(first.type)}` : `Pasted ${blocks.length} blocks`)
   return done
+}
+
+// ---------------------------------------------------------------------------
+// Styles clipboard: a block's classes, with every breakpoint and state
+// ---------------------------------------------------------------------------
+
+const STYLES_KEY = 'payload-builder:styles'
+/** Used when local storage is blocked. */
+let stylesFallback: string | null = null
+
+/** The copied classes ("" for a block without styles), or null when no styles were copied. */
+export function storedStyles(): string | null {
+  try {
+    return parseStyles(localStorage.getItem(STYLES_KEY)) ?? parseStyles(stylesFallback)
+  } catch {
+    return parseStyles(stylesFallback)
+  }
+}
+
+/** Copies the block's classes (all breakpoints and states). Other tabs and pages can paste them. */
+export function copyStyles(runtime: Runtime, id: string): boolean {
+  const block = findBlock(runtime.store.getState().layout, id)
+  if (!block) return false
+  const text = stylesText(block.className)
+  stylesFallback = text
+  try {
+    localStorage.setItem(STYLES_KEY, text)
+  } catch {
+    // Storage full or blocked: the copy in memory still works on this page.
+  }
+  const count = normalizeClasses(block.className).split(' ').filter(Boolean).length
+  runtime.notify(count === 0 ? 'Copied styles: this block has none' : `Copied styles (${count} ${count === 1 ? 'class' : 'classes'})`)
+  return true
+}
+
+/** Gives the blocks the copied classes, in place of their own. One undo step. */
+export function pasteStyles(runtime: Runtime, ids: readonly string[]): boolean {
+  const className = storedStyles()
+  if (className === null) {
+    runtime.notify('Nothing to paste. Copy the styles of a block first.')
+    return false
+  }
+  return applyStyles(runtime, ids, className, 'Styles pasted')
+}
+
+/** Removes every class of the blocks. One undo step. */
+export function resetStyles(runtime: Runtime, ids: readonly string[]): boolean {
+  return applyStyles(runtime, ids, '', 'Styles reset')
+}
+
+function applyStyles(runtime: Runtime, ids: readonly string[], className: string, notice: string): boolean {
+  const ops = setStylesOps(runtime.store.getState().layout, runtime.config.blocks, ids, className)
+  if (ops.length === 0) {
+    runtime.notify('The styles are the same already.')
+    return false
+  }
+  if (!runtime.store.apply(ops)) return false
+  runtime.notify(notice)
+  return true
 }

@@ -32,7 +32,7 @@ export function layoutJsonSchema(blocks: BlockDefinition[]): Record<string, unkn
     type: 'object',
     properties: {
       version: { const: 1 },
-      blocks: { type: 'array', items: blockRefs(blocks.map((b) => b.type)) },
+      blocks: { type: 'array', items: blockRefs(rootTypes(blocks)) },
     },
     required: ['version', 'blocks'],
     additionalProperties: false,
@@ -57,9 +57,13 @@ function blockRefs(types: string[]): Schema {
   return { oneOf: types.map(ref) }
 }
 
-function allowedTypes(slot: SlotDefinition, all: BlockDefinition[]): string[] {
-  return all.filter((b) => slotAccepts(slot, b.type)).map((b) => b.type)
+/** Types a slot of `owner` accepts as direct children: its `allow`/`disallow` and each type's `parents`. */
+function allowedTypes(owner: string, slot: SlotDefinition, all: BlockDefinition[]): string[] {
+  return all.filter((b) => slotAccepts(slot, b.type) && (!b.parents || b.parents.includes(owner))).map((b) => b.type)
 }
+
+/** Types the root list accepts: every type without a `parents` rule. */
+const rootTypes = (all: BlockDefinition[]) => all.filter((b) => !b.parents).map((b) => b.type)
 
 /** Every block type that can appear inside `def`, at any depth. May include `def` itself. */
 function reachableTypes(def: BlockDefinition, all: BlockDefinition[]): string[] {
@@ -68,7 +72,7 @@ function reachableTypes(def: BlockDefinition, all: BlockDefinition[]): string[] 
   while (queue.length > 0) {
     const current = queue.shift()
     for (const slot of Object.values(current?.slots ?? {})) {
-      for (const type of allowedTypes(slot, all)) {
+      for (const type of allowedTypes(current?.type ?? '', slot, all)) {
         if (found.has(type)) continue
         found.add(type)
         const next = all.find((b) => b.type === type)
@@ -103,7 +107,7 @@ function blockSchema(def: BlockDefinition, all: BlockDefinition[]): Schema {
   if (def.slots && Object.keys(def.slots).length > 0) {
     const slots: Schema = {}
     for (const [name, slot] of Object.entries(def.slots)) {
-      const types = allowedTypes(slot, all)
+      const types = allowedTypes(def.type, slot, all)
       const label = slot.label ? `${slot.label}. ` : ''
       const refused = slot.disallow?.length ? ` Never put these anywhere inside it, at any depth: ${slot.disallow.join(', ')}.` : ''
       slots[name] =

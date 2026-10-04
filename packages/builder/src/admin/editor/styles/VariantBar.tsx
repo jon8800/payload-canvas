@@ -55,7 +55,7 @@ export function VariantBar() {
             type="button"
             className="builder-styles__chip"
             aria-pressed={variant.breakpoint === bp}
-            title={bp === 'base' ? 'Styles for every screen size' : `Styles for screens ${widths[bp]} px and wider`}
+            data-tooltip={bp === 'base' ? 'Styles for every screen size' : `Styles for screens ${widths[bp]} px and wider`}
             onClick={() => store.setVariant({ ...variant, breakpoint: bp })}
           >
             <span className="builder-styles__chip-name">{bp === 'base' ? 'All' : bp}</span>

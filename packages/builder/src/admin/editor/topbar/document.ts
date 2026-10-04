@@ -21,6 +21,9 @@ import type { PublishFailure } from './problems'
 
 export type DocumentBusy = PublishAction | 'rename' | null
 
+/** Payload's document screens the builder opens in a drawer. */
+export type DocumentScreen = 'versions' | 'api'
+
 export type DocumentController = {
   meta: ValueStore<BuilderDocMeta>
   /** The action this editor is running. */
@@ -31,10 +34,18 @@ export type DocumentController = {
   openSettings: () => void
   /** True while the settings drawer is open: its saves (autosave too) reload the header. */
   settingsOpen: ValueStore<boolean>
+  /** The last request to open Payload's Versions or API screen in a drawer. */
+  screenRequest: ValueStore<{ screen: DocumentScreen; at: number } | null>
+  openScreen: (screen: DocumentScreen) => void
   /** Loads the header data again. */
   refresh: () => Promise<void>
   /** Publish, unpublish or revert to the published version. Resolves true on success. */
-  run: (action: PublishAction) => Promise<boolean>
+  run: (action: Exclude<PublishAction, 'restore'>) => Promise<boolean>
+  /**
+   * Restores an older version: it becomes the draft, for every editor (the server resets the
+   * live session). Resolves true on success.
+   */
+  restore: (versionId: string) => Promise<boolean>
   /**
    * "Retry now" after a failed save: the server saves the session at once. The `saved` or
    * `saveFailed` event updates the top bar. Resolves true when the draft was saved.
@@ -50,6 +61,7 @@ const DONE: Record<PublishAction, string> = {
   publish: 'published',
   unpublish: 'unpublished',
   revert: 'reverted to its published version',
+  restore: 'restored an older version of',
 }
 
 const REFRESH_DELAY_MS = 250
@@ -106,6 +118,7 @@ export function createDocumentController(context: DocumentContext, initial: Buil
   const busy = createValueStore<DocumentBusy>(null)
   const settingsRequest = createValueStore(0)
   const settingsOpen = createValueStore(false)
+  const screenRequest = createValueStore<{ screen: DocumentScreen; at: number } | null>(null)
   const path = `${encodeURIComponent(initial.collection)}/${encodeURIComponent(initial.id)}`
   const endpoint = `${config.liveEndpoint}/${path}`
   let refreshTimer: ReturnType<typeof setTimeout> | undefined
@@ -130,6 +143,8 @@ export function createDocumentController(context: DocumentContext, initial: Buil
     settingsRequest,
     openSettings: () => settingsRequest.set(Date.now()),
     settingsOpen,
+    screenRequest,
+    openScreen: (screen) => screenRequest.set({ screen, at: Date.now() }),
     refresh,
 
     async run(action) {
@@ -149,6 +164,34 @@ export function createDocumentController(context: DocumentContext, initial: Buil
         return true
       } catch {
         toast.error(`Could not ${action} the document. Check your connection.`)
+        return false
+      } finally {
+        busy.set(null)
+      }
+    },
+
+    async restore(versionId) {
+      busy.set('restore')
+      try {
+        const response = await fetch(`${endpoint}/restore`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ versionId }),
+        })
+        const body = (await response.json().catch(() => null)) as PublishResponse | null
+        if (!body?.ok) {
+          toast.error(body && !body.ok ? body.error : `Could not restore the version (${response.status}).`)
+          return false
+        }
+        meta.set(body.meta)
+        const message = body.meta.drafts ? 'The version was restored as the draft. Publish to put it on the site.' : 'The version was restored.'
+        toast.success(message)
+        // The live session's reset shows "reset to its published version" first: say what happened.
+        notify(body.meta.drafts ? 'Restored an older version as the draft.' : 'Restored an older version.')
+        return true
+      } catch {
+        toast.error('Could not restore the version. Check your connection.')
         return false
       } finally {
         busy.set(null)

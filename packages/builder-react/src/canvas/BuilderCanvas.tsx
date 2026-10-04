@@ -7,6 +7,8 @@ import {
   collectClasses,
   createId,
   findBlock,
+  joinListItem,
+  TEXT_LIST_ITEM_BLOCK,
   type BlockDefinition,
   type CanvasMeasurement,
   type Layout,
@@ -28,6 +30,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import { flushSync } from 'react-dom'
 
 import { defaultResolveLink, RenderLayout, type BlockComponents, type ResolveLink } from '../index'
+import { createCanvasDrag } from './drag'
 import { editableAt, firstEditable, type EditableTarget } from './inline/dom'
 import { bindingFor, inlineKind, valueAtPath, withPropValue } from './inline/model'
 import { startPlainSession, type InlineSession, type SessionOptions } from './inline/session'
@@ -89,6 +92,8 @@ const EDITOR_CSS = `
   user-select: none;
 }
 span[data-builder-passthrough] { display: inline-block; margin: 0 2px; padding: 0 6px; }
+/* Smooth drag mode: the dragged block hides while a lifted copy follows the pointer. */
+[data-builder-drag-source] { opacity: 0 !important; }
 `
 
 /** Room kept above and below a block scrolled into view (the toolbar sits above it). */
@@ -152,7 +157,11 @@ function EditorCanvas({ blocks, components, plugins, resolveLink }: BuilderCanva
   const [freeze, setFreeze] = useState<Freeze | null>(null)
   const activeRef = useRef<ActiveSession | null>(null)
   const startingRef = useRef(false)
+  // An `inlineStart` for a block that is not rendered yet (a list item the admin just added).
+  const pendingStartRef = useRef<{ id: string; offset?: number; until: number } | null>(null)
   const latest = useRef<Latest>({ layout: null, resolved: null, definitions: undefined })
+  // The admin's layout the current `resolved` was made from. The drop animation waits for a new one.
+  const resolvedFrom = useRef<Layout | null>(null)
 
   // Coalesce every trigger (render, resize, scroll) into one measurement per frame. An unchanged
   // measurement is not sent: the admin would redraw the overlay for nothing.
@@ -168,6 +177,11 @@ function EditorCanvas({ blocks, components, plugins, resolveLink }: BuilderCanva
       send({ type: 'measure', measurement })
     })
   }, [])
+
+  // Smooth drag mode: blocks move out of the way, a lifted copy follows the pointer (see ./drag).
+  const [drag] = useState(() =>
+    createCanvasDrag({ root: () => rootRef.current, layout: () => resolvedFrom.current, onSettled: scheduleMeasure }),
+  )
 
   /**
    * Ends inline editing: sends the last change, puts back the DOM React rendered and shows the
@@ -196,9 +210,12 @@ function EditorCanvas({ blocks, components, plugins, resolveLink }: BuilderCanva
     flushSync(() => setFreeze(settled || !final ? null : { id, key: final.key, value: final.value, release: current }))
   }, [])
 
-  /** Starts inline editing of one text prop. `point` places the caret (a double-click), else it goes to the end. */
+  /**
+   * Starts inline editing of one text prop. `offset` (characters) or `point` (a double-click)
+   * places the caret, else it goes to the end.
+   */
   const startInline = useCallback(
-    async (target: EditableTarget, point: { x: number; y: number } | null) => {
+    async (target: EditableTarget, point: { x: number; y: number } | null, offset?: number) => {
       if (activeRef.current || startingRef.current || !target.path) return
       const { blockId: id, path, element } = target
       const stored = latest.current.layout ? findBlock(latest.current.layout, id) : null
@@ -220,10 +237,25 @@ function EditorCanvas({ blocks, components, plugins, resolveLink }: BuilderCanva
         const session = createId()
         const options: SessionOptions = {
           point,
+          offset,
           onChange: (next) => send({ type: 'inlineChange', session, id, path, value: next }),
           onExit: () => stopInline(),
           onFormat: (format) => send({ type: 'inlineFormat', session, format }),
           onLinkRequest: () => send({ type: 'inlineLink', session }),
+        }
+        // List items: Enter adds the next item, Backspace at the start joins the item before.
+        if (stored.type === TEXT_LIST_ITEM_BLOCK && path === 'text') {
+          options.onSplit = (after) => {
+            stopInline()
+            send({ type: 'inlineSplit', id, after })
+          }
+          options.onJoin = (current) => {
+            const layoutNow = latest.current.layout
+            if (!layoutNow || !joinListItem(layoutNow, id, current)) return false
+            stopInline()
+            send({ type: 'inlineJoin', id, value: current })
+            return true
+          }
         }
         let inline: InlineSession | null = null
         if (kind === 'rich') {
@@ -320,7 +352,9 @@ function EditorCanvas({ blocks, components, plugins, resolveLink }: BuilderCanva
         case 'inlineStart': {
           const el = document.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(message.id)}"]`)
           const target = el ? firstEditable(el, shownBlock, definitionOf) : null
-          if (target) void startInline(target, null)
+          if (target) void startInline(target, null, message.offset)
+          // Not rendered yet (a list item the admin just added): start once it is.
+          else pendingStartRef.current = { id: message.id, offset: message.offset, until: Date.now() + 2000 }
           return
         }
         case 'inlineStop':
@@ -328,6 +362,18 @@ function EditorCanvas({ blocks, components, plugins, resolveLink }: BuilderCanva
           return
         case 'inlineCommand':
           activeRef.current?.inline.command?.(message.command)
+          return
+        case 'dragStart':
+          drag.start(message.drag)
+          return
+        case 'dragPreview':
+          drag.preview(message.offsets)
+          return
+        case 'dragPointer':
+          drag.pointer(message.x, message.y, message.inside)
+          return
+        case 'dragEnd':
+          drag.end(message.drop, message.ids, message.placeholder)
       }
     }
     const isEditing = (target: EventTarget | null) =>
@@ -340,9 +386,20 @@ function EditorCanvas({ blocks, components, plugins, resolveLink }: BuilderCanva
       e.preventDefault()
       void startInline(target, { x: e.clientX, y: e.clientY })
     }
-    // A press anywhere else ends editing (the click then selects as usual).
+    // A press anywhere else ends editing (the click then selects as usual). Every press also
+    // tells the editor, which closes its open menus (iframe events never reach the admin).
     const onPointerDown = (e: PointerEvent) => {
+      send({ type: 'pointerDown' })
       if (activeRef.current && !isEditing(e.target)) stopInline()
+    }
+    // A right-click on a block opens the editor's block menu instead of the browser's. Text being
+    // edited keeps the browser's menu (spelling, copy). `defaultPrevented`: the editor's shortcut
+    // handler already opened the menu from the keyboard (ContextMenu key, Shift+F10).
+    const onContextMenu = (e: MouseEvent) => {
+      if (e.defaultPrevented || isEditing(e.target)) return
+      if (!(e.target instanceof Element) || !e.target.closest('[data-block-id]')) return
+      e.preventDefault()
+      send({ type: 'contextMenu', x: e.clientX, y: e.clientY })
     }
     const onScroll = () => {
       scheduleMeasure()
@@ -384,6 +441,7 @@ function EditorCanvas({ blocks, components, plugins, resolveLink }: BuilderCanva
     document.addEventListener('keydown', onKeyDown)
     document.addEventListener('dblclick', onDoubleClick)
     document.addEventListener('pointerdown', onPointerDown, true)
+    document.addEventListener('contextmenu', onContextMenu)
     observer.current = new ResizeObserver(scheduleMeasure)
     send({ type: 'ready' })
 
@@ -400,11 +458,13 @@ function EditorCanvas({ blocks, components, plugins, resolveLink }: BuilderCanva
       document.removeEventListener('keydown', onKeyDown)
       document.removeEventListener('dblclick', onDoubleClick)
       document.removeEventListener('pointerdown', onPointerDown, true)
+      document.removeEventListener('contextmenu', onContextMenu)
       stopInline(false)
+      drag.dispose()
       observer.current?.disconnect()
       cancelAnimationFrame(frameRequest.current)
     }
-  }, [scheduleMeasure, startInline, stopInline])
+  }, [scheduleMeasure, startInline, stopInline, drag])
 
   // The CSS endpoint comes from the admin, or from `?cssEndpoint=` when the page is opened alone.
   const cssEndpoint = init?.cssEndpoint ?? null
@@ -440,10 +500,13 @@ function EditorCanvas({ blocks, components, plugins, resolveLink }: BuilderCanva
     const run = ++resolveRun.current
     resolveCanvasLayout(layout, context, init.api, definitions, linkResolver)
       .then((next) => {
-        if (run === resolveRun.current) setResolved((current) => shareStructure(current, next))
+        if (run !== resolveRun.current) return
+        resolvedFrom.current = layout
+        setResolved((current) => shareStructure(current, next))
       })
       .catch((error: unknown) => {
         if (run !== resolveRun.current) return
+        resolvedFrom.current = layout
         setResolved(layout)
         send({ type: 'error', message: `Canvas data failed to load: ${String(error)}` })
       })
@@ -470,6 +533,21 @@ function EditorCanvas({ blocks, components, plugins, resolveLink }: BuilderCanva
     latest.current = { layout, resolved, definitions }
     // The edited element left the page (a collaborator deleted the block): end the session.
     if (activeRef.current && !activeRef.current.inline.element.isConnected) stopInline(false)
+    // A pending `inlineStart` starts once its block has rendered.
+    const pending = pendingStartRef.current
+    if (!pending) return
+    if (Date.now() > pending.until) {
+      pendingStartRef.current = null
+      return
+    }
+    const el = document.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(pending.id)}"]`)
+    const shownBlock = (id: string) => shownBlockIn(latest.current, id)
+    const definitionOf = (type: string) => definitionIn(latest.current, type)
+    const target = el ? firstEditable(el, shownBlock, definitionOf) : null
+    if (!target) return
+    pendingStartRef.current = null
+    // After this commit: starting flushes a render, which React refuses inside a layout effect.
+    queueMicrotask(() => void startInline(target, null, pending.offset))
   })
 
   // A released freeze ends with the next layout from the admin (see `shown`), or after RELEASE_MS.
@@ -491,6 +569,9 @@ function EditorCanvas({ blocks, components, plugins, resolveLink }: BuilderCanva
     for (const el of root.querySelectorAll('[data-block-id], [data-slot-owner]')) ro.observe(el)
     scheduleMeasure()
   }, [visible, shown, css, scheduleMeasure])
+
+  // A drop in the smooth drag mode animates once its layout is on screen, before the browser paints.
+  useLayoutEffect(() => drag.rendered(resolvedFrom.current), [shown, drag])
 
   // A render for another reason (a new layout still loading its data) reuses the element.
   const rendered = useMemo(

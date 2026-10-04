@@ -5,8 +5,21 @@
 
 import { keyAction, type KeyAction } from '../../protocol'
 import { findLocation } from '../../core'
-import { copySelection, duplicateBlock, moveBy, parseClipboard, pasteBlocks, removeBlock, storedClipboard, toggleHidden } from './actions'
+import {
+  copySelection,
+  copyStyles,
+  duplicateBlock,
+  moveBy,
+  parseClipboard,
+  pasteBlocks,
+  pasteStyles,
+  removeBlock,
+  storedClipboard,
+  toggleHidden,
+} from './actions'
 import { startInlineEditing } from './inline'
+import { BLOCK_KEYS, isMac, keyCaps } from './menu/keys'
+import { openSelectionMenu, requestRename } from './menu/requests'
 import type { Runtime } from './runtime'
 import { publishState } from './topbar/document'
 
@@ -24,22 +37,31 @@ export type EditorAction =
   | 'parent'
   | 'editText'
   | 'publish'
+  | 'copyStyles'
+  | 'pasteStyles'
+  /** Opens the selected block's menu: the ContextMenu key or Shift+F10. */
+  | 'menu'
+  | 'rename'
 
 /**
  * Elements where editor shortcuts must not fire: text inputs, editable text (also text edited
  * on the canvas, which is `plaintext-only`), and Payload's modals and drawers.
  */
 export const SHORTCUT_EXCLUDED =
-  'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="dialog"], [role="listbox"], [popover], .drawer, .payload__modal-item, .rs__control'
+  'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="dialog"], [role="listbox"], [role="menu"], [popover], .drawer, .payload__modal-item, .rs__control'
+
+/** An open menu or popover (not a tooltip). Escape closes it first, and the selection stays. */
+const OPEN_MENU = ':popover-open:not(.builder-tooltip), .builder-menu[data-open]'
 
 /**
- * Publish: Ctrl+Alt+P (⌘⌥P on a Mac). Ctrl/⌘+Shift+P is taken (a private window in Firefox), and
- * Ctrl/⌘+P prints. On a Mac, Option changes `key` (⌥P types "π"), and some Windows layouts treat
- * Ctrl+Alt as AltGr, so a non-letter `key` falls back to the physical P key.
+ * Ctrl+Alt+<letter> (⌘⌥ on a Mac): Publish (P), copy styles (C), paste styles (V). Ctrl/⌘+Shift+P
+ * is taken (a private window in Firefox), Ctrl/⌘+P prints, Ctrl+Shift+C opens the developer tools.
+ * On a Mac, Option changes `key` (⌥P types "π"), and some Windows layouts treat Ctrl+Alt as AltGr,
+ * so a non-letter `key` falls back to the physical key.
  */
-function isPublishKey(e: KeyboardEvent, letter: string): boolean {
+function isModAltKey(e: KeyboardEvent, letter: string, wanted: string): boolean {
   if (!(e.ctrlKey || e.metaKey) || !e.altKey || e.shiftKey) return false
-  return letter === 'p' || (!/^[a-z]$/.test(letter) && e.code === 'KeyP')
+  return letter === wanted || (!/^[a-z]$/.test(letter) && e.code === `Key${wanted.toUpperCase()}`)
 }
 
 export function editorAction(e: KeyboardEvent): EditorAction | null {
@@ -47,7 +69,11 @@ export function editorAction(e: KeyboardEvent): EditorAction | null {
   if (key) return key
   const mod = e.ctrlKey || e.metaKey
   const letter = e.key.toLowerCase()
-  if (isPublishKey(e, letter)) return 'publish'
+  if (isModAltKey(e, letter, 'p')) return 'publish'
+  if (isModAltKey(e, letter, 'c')) return 'copyStyles'
+  if (isModAltKey(e, letter, 'v')) return 'pasteStyles'
+  if (!mod && !e.altKey && (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) return 'menu'
+  if (!mod && !e.altKey && !e.shiftKey && e.key === 'F2') return 'rename'
   if (mod && !e.shiftKey && !e.altKey) {
     if (letter === 'c') return 'copy'
     if (letter === 'x') return 'cut'
@@ -65,8 +91,6 @@ export function editorAction(e: KeyboardEvent): EditorAction | null {
   if (!mod && !e.altKey && e.key === '?') return 'help'
   return null
 }
-
-const isMac = () => typeof navigator !== 'undefined' && /mac|iphone|ipad/i.test(navigator.platform || navigator.userAgent)
 
 /** The Publish shortcut: key caps, the text for a tooltip ("Ctrl+Alt+P", "⌘⌥P") and `aria-keyshortcuts`. */
 export function publishShortcut(): { keys: string[]; text: string; aria: string } {
@@ -93,19 +117,28 @@ export function shortcutList({ ai = false, publish = false }: { ai?: boolean; pu
     { keys: [mod, 'X'], label: 'Cut block' },
     { keys: [mod, 'V'], label: 'Paste into or after the selection' },
     { keys: [mod, 'D'], label: 'Duplicate block' },
+    { keys: keyCaps(BLOCK_KEYS.copyStyles), label: 'Copy the styles of the block' },
+    { keys: keyCaps(BLOCK_KEYS.pasteStyles), label: 'Paste styles onto the block' },
     { keys: ['Delete'], label: 'Delete block' },
     { keys: [mod, 'Shift', 'H'], label: 'Hide or show on the site' },
     { keys: [isMac() ? '⌥' : 'Alt', '↑', '↓'], label: 'Move block up or down' },
     { keys: ['Enter'], label: 'Edit the text of the selected block (or double-click it)' },
     { keys: ['Shift', 'Enter'], label: 'Select the parent block' },
+    { keys: ['Shift', 'F10'], label: 'Block menu (or right-click the block)' },
     { keys: ['Esc'], label: 'Clear the selection' },
     { keys: ['↑', '↓'], label: 'Previous or next block (outline)' },
     { keys: ['←', '→'], label: 'Collapse or expand (outline)' },
-    { keys: ['F2'], label: 'Rename block (outline)' },
+    { keys: ['F2'], label: 'Rename block' },
     { keys: ['Enter'], label: 'Edit the selected block (outline)' },
     { keys: ['?'], label: 'Show this list' },
   ]
 }
+
+/** Keys that act on the selected block. Without a selection they keep their normal meaning. */
+const NEEDS_SELECTION = new Set<EditorAction>(['moveUp', 'moveDown', 'parent', 'hide', 'copyStyles', 'pasteStyles', 'menu', 'rename'])
+
+/** How long after the menu key its `contextmenu` event may arrive (Windows sends it on key up). */
+const MENU_KEY_MS = 1000
 
 function excluded(target: EventTarget | null): boolean {
   const el = target as Element | null
@@ -129,6 +162,8 @@ function hasTextSelection(doc: Document): boolean {
 export function bindShortcuts(runtime: Runtime, doc: Document, { forwarded }: { forwarded: boolean }): () => void {
   /** Set by Ctrl+V. A native `paste` event clears it; otherwise local storage is pasted. */
   let pasteFallback: number | null = null
+  /** Set when a key opened the block menu: the browser's own `contextmenu` event for that key is dropped. */
+  let menuKeyAt = 0
 
   const run = (action: EditorAction) => {
     const { selectedId } = runtime.store.getState()
@@ -172,6 +207,20 @@ export function bindShortcuts(runtime: Runtime, doc: Document, { forwarded }: { 
       case 'editText':
         if (selectedId) startInlineEditing(runtime, selectedId)
         return
+      case 'copyStyles':
+        if (selectedId) copyStyles(runtime, selectedId)
+        return
+      case 'pasteStyles':
+        if (selectedId) pasteStyles(runtime, [selectedId])
+        return
+      case 'menu':
+        menuKeyAt = performance.now()
+        openSelectionMenu(runtime)
+        return
+      case 'rename':
+        // Outside the outline (the outline renames in its row itself).
+        if (selectedId) requestRename(runtime, selectedId, 'inspector')
+        return
       case 'publish': {
         // The same checks as the Publish button; say why when it is disabled.
         const { changed, pending, canPublish } = publishState(runtime.doc.meta.get(), runtime.doc.busy.get(), runtime.live.get())
@@ -195,17 +244,27 @@ export function bindShortcuts(runtime: Runtime, doc: Document, { forwarded }: { 
     if (action === 'publish' && !runtime.doc.meta.get().drafts) return
     if (forwarded && keyAction(e)) return
     // Escape closes an open menu or popover first; the selection stays.
-    if (action === 'escape' && document.querySelector(':popover-open')) return
+    if (action === 'escape' && document.querySelector(OPEN_MENU)) return
     const { selectedId } = runtime.store.getState()
     if ((action === 'copy' || action === 'cut') && (hasTextSelection(doc) || !selectedId)) return
-    // Without a selection these keys keep their normal meaning (Alt+arrows, Shift+Enter).
-    if ((action === 'moveUp' || action === 'moveDown' || action === 'parent' || action === 'hide') && !selectedId) return
+    // Without a selection these keys keep their normal meaning (Alt+arrows, Shift+Enter, Shift+F10).
+    if (!selectedId && NEEDS_SELECTION.has(action)) return
     // Enter edits text only when nothing else has the focus (a focused button keeps its own Enter).
     // In the canvas, links and buttons inside blocks are not controls, so any target counts.
     if (action === 'editText' && (!selectedId || (!forwarded && !onPage(e.target, doc)))) return
     // Copy and paste keep the browser default, so the native clipboard events still fire.
     if (action !== 'copy' && action !== 'paste') e.preventDefault()
     run(action)
+  }
+
+  // The ContextMenu key and Shift+F10 also fire the browser's `contextmenu` event: the editor's
+  // menu is open already, so the browser's must not open too.
+  const onContextMenu = (e: MouseEvent) => {
+    // A right-click (button 2) is the mouse, never the key: it opens the menu as usual.
+    if (e.button === 2 || performance.now() - menuKeyAt > MENU_KEY_MS) return
+    menuKeyAt = 0
+    e.preventDefault()
+    e.stopPropagation()
   }
 
   const onCopy = (e: ClipboardEvent) => {
@@ -228,11 +287,13 @@ export function bindShortcuts(runtime: Runtime, doc: Document, { forwarded }: { 
   }
 
   doc.addEventListener('keydown', onKeyDown)
+  doc.addEventListener('contextmenu', onContextMenu, true)
   doc.addEventListener('copy', onCopy)
   doc.addEventListener('paste', onPaste)
   return () => {
     if (pasteFallback !== null) window.clearTimeout(pasteFallback)
     doc.removeEventListener('keydown', onKeyDown)
+    doc.removeEventListener('contextmenu', onContextMenu, true)
     doc.removeEventListener('copy', onCopy)
     doc.removeEventListener('paste', onPaste)
   }

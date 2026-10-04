@@ -4,20 +4,21 @@ import { useDraggable } from '@dnd-kit/core'
 import type { CSSProperties } from 'react'
 
 import { findBlock, findLocation } from '../../core'
-import type { CanvasMeasurement, Layout, Rect } from '../../core/types'
-import { copySelection, duplicateBlock, moveBy, removeBlock, toggleHidden } from './actions'
-import { requestSaveSection } from './sections/SectionDialog'
-import { BlockIcon, Icon, type IconName } from './icons'
+import type { DropIndicator, Rect } from '../../core/types'
+import { smoothView } from './dnd/smooth'
+import { BlockIcon, Icon } from './icons'
 import { inlineEditing } from './inline'
 import { InlineToolbar } from './InlineToolbar'
 import { InsertHandle } from './insert/InsertHandle'
+import { BlockContextMenu, blockMenuEntries } from './menu/blockMenu'
+import { MenuButton } from './menu/Menu'
 import { blockName } from './names'
-import { Popover, usePopover } from './styles/popover'
 import { PeerCursors, PeerSelections } from './live/PresenceUI'
 import { shortName } from './live/presence'
-import { toRect, useRuntime, type DragData } from './runtime'
+import { toRect, useRuntime, type DragData, type DragState } from './runtime'
 import { useEditor } from './store'
-import { useValue } from './valueStore'
+import { Tooltips } from './tooltip/Tooltips'
+import { useValue, useValueSelector } from './valueStore'
 
 /** Height of the label chip and the action bar, in screen pixels. */
 const BAR_HEIGHT = 26
@@ -37,6 +38,28 @@ function editedRect(iframe: HTMLIFrameElement | null): Rect | null {
   return el ? toRect(el.getBoundingClientRect()) : null
 }
 
+/** What the overlay draws of a drag. Changes only when the drop target changes, not on every pointer move. */
+type OverlayDrag = { sourceId: string | null; indicator: DropIndicator | null; parentId: string | null } | null
+
+function overlayDrag(drag: DragState | null): OverlayDrag {
+  if (!drag) return null
+  const indicator = drag.zone === 'canvas' && drag.target && !drag.target.noop ? drag.target.indicator : null
+  return {
+    sourceId: drag.source.kind === 'block' ? drag.source.id : null,
+    indicator,
+    parentId: indicator?.kind === 'box' ? (drag.target?.to.parentId ?? null) : null,
+  }
+}
+
+const sameRect = (a: Rect, b: Rect) => a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
+
+function sameOverlayDrag(a: OverlayDrag, b: OverlayDrag): boolean {
+  if (!a || !b) return a === b
+  if (a.sourceId !== b.sourceId || a.parentId !== b.parentId) return false
+  if (!a.indicator || !b.indicator) return a.indicator === b.indicator
+  return a.indicator.kind === b.indicator.kind && sameRect(a.indicator.rect, b.indicator.rect)
+}
+
 /**
  * Draws hover, selection, the action bar and the canvas drop indicator over the iframe.
  * Positions use iframe coordinates. The frame may be zoomed out, so chips and bars scale back
@@ -45,7 +68,9 @@ function editedRect(iframe: HTMLIFrameElement | null): Rect | null {
 export function Overlay() {
   const runtime = useRuntime()
   const measurement = useValue(runtime.measurement)
-  const drag = useValue(runtime.drag)
+  const drag = useValueSelector(runtime.drag, overlayDrag, sameOverlayDrag)
+  // Smooth drag mode: blocks move on the canvas, so the overlay draws the gap instead of a line.
+  const smooth = useValue(smoothView(runtime))
   const { zoom } = useValue(runtime.frame)
   const live = useValue(runtime.live)
   const assistantFlash = useValue(runtime.assistantFlash)
@@ -67,9 +92,11 @@ export function Overlay() {
   const editing = Boolean(inline && selected && inline.id === selected.id)
   // While editing, the outline and the toolbar go around the edited text only (one list item, not the list).
   const editRect = (editing ? editedRect(runtime.iframeRef.current) : null) ?? selectedRect
-  const sourceRect = drag?.source.kind === 'block' ? rectOf(drag.source.id) : undefined
-  const indicator = drag?.zone === 'canvas' && drag.target && !drag.target.noop ? drag.target.indicator : null
-  const dropParent = indicator?.kind === 'box' && drag?.target?.to.parentId ? findBlock(layout, drag.target.to.parentId) : null
+  const sourceRect = !smooth && drag?.sourceId ? rectOf(drag.sourceId) : undefined
+  const indicator = smooth ? null : (drag?.indicator ?? null)
+  const dropParent = drag?.parentId ? findBlock(layout, drag.parentId) : null
+  const scroll = measurement?.scroll
+  const gapShift = smooth && scroll ? { x: scroll.x - smooth.baseScroll.x, y: scroll.y - smooth.baseScroll.y } : { x: 0, y: 0 }
   /** A chip fits above a rect when the rect starts lower than the chip height (in iframe pixels). */
   const roomAbove = (rect: Rect) => rect.y * zoom >= BAR_HEIGHT
   const taggedActors = new Set<string>()
@@ -83,7 +110,7 @@ export function Overlay() {
           return (
             // oxlint-disable-next-line react/no-array-index-key -- problems have no id; the list is replaced as a whole
             <div key={`${problem.blockId}:${i}`} className="builder-editor__problem-box" style={box(rect)}>
-              <span className="builder-editor__problem-tag" title={problem.message}>
+              <span className="builder-editor__problem-tag" data-tooltip={problem.message}>
                 <Icon name="warning" size={12} />
                 {problem.message}
               </span>
@@ -91,6 +118,25 @@ export function Overlay() {
           )
         })}
       {parentRect && <div className="builder-editor__parent-hint" style={box(parentRect)} />}
+      {smooth?.placeholder && (
+        // The outer box follows the canvas scroll at once; the gap inside glides to each new place.
+        <div className="builder-dnd-scroll" style={{ transform: `translate3d(${-gapShift.x}px, ${-gapShift.y}px, 0)` }}>
+          <div
+            className="builder-dnd-gap"
+            data-settle={smooth.phase === 'settle' || undefined}
+            style={{
+              transform: `translate3d(${smooth.placeholder.x}px, ${smooth.placeholder.y}px, 0)`,
+              width: smooth.placeholder.width,
+              height: smooth.placeholder.height,
+            }}
+          >
+            {/* Always mounted: inserting nodes restyles the whole admin (Payload's `body:has(...)` rules). */}
+            <span className="builder-editor__drop-label builder-dnd-gap__label" hidden={!smooth.into} data-label={smooth.into ? `Into ${smooth.into}` : ''}>
+              <Icon name="plus" size={12} />
+            </span>
+          </div>
+        </div>
+      )}
       {hovered && hoverRect && (
         <div className="builder-editor__hover" style={box(hoverRect)}>
           <span className={`builder-editor__tag builder-editor__tag--hover${roomAbove(hoverRect) ? '' : ' builder-editor__tag--inside'}`}>
@@ -103,6 +149,7 @@ export function Overlay() {
       {selected && selectedRect && (
         <>
           <div
+            hidden={Boolean(smooth)}
             className={`builder-editor__selection${selected.hidden ? ' builder-editor__selection--hidden' : ''}${editing ? ' builder-editor__selection--editing' : ''}`}
             style={box(editing && editRect ? editRect : selectedRect)}
           >
@@ -117,7 +164,7 @@ export function Overlay() {
                 <BlockIcon name={runtime.blockIcon(selected.type)} size={12} />
                 {blockName(selected, runtime.blockLabel(selected.type))}
                 {selected.bindings && Object.keys(selected.bindings).length > 0 && (
-                  <span className="builder-editor__tag-bound" title="Shows data from a document">
+                  <span className="builder-editor__tag-bound" data-tooltip="Shows data from a document">
                     <Icon name="bind" size={11} />
                   </span>
                 )}
@@ -130,17 +177,18 @@ export function Overlay() {
             id={selected.id}
             label={runtime.blockLabel(selected.type)}
             icon={runtime.blockIcon(selected.type)}
-            layout={layout}
+            parentId={findLocation(layout, selected.id)?.parentId ?? null}
             rect={selectedRect}
-            measurement={measurement}
             inside={!roomAbove(selectedRect)}
             below={selectedRect.width * zoom < NARROW_BLOCK}
-            hidden={Boolean(drag) || editing}
+            hidden={Boolean(drag) || Boolean(smooth) || editing}
           />
           {editing && editRect && inline?.kind === 'rich' && <InlineToolbar inline={inline} rect={editRect} zoom={zoom} />}
         </>
       )}
       <InsertHandle />
+      <BlockContextMenu />
+      <Tooltips />
       <PeerCursors />
       {indicator && (
         <div className={`builder-editor__drop builder-editor__drop--${indicator.kind}`} style={box(indicator.rect)}>
@@ -193,18 +241,12 @@ export function Overlay() {
   )
 }
 
-function siblingCount(layout: Layout, parentId: string | null, slot: string): number {
-  if (parentId === null) return layout.blocks.length
-  return findBlock(layout, parentId)?.slots?.[slot]?.length ?? 0
-}
-
 type ActionBarProps = {
   id: string
   label: string
   icon: string
-  layout: Layout
+  parentId: string | null
   rect: Rect
-  measurement: CanvasMeasurement | null
   /** Draw inside the selection (no room above it). */
   inside: boolean
   /** Draw under the selection: the block is too narrow for the bar and the name tag side by side. */
@@ -213,55 +255,16 @@ type ActionBarProps = {
   hidden: boolean
 }
 
-/** True when the block's siblings sit side by side (a row), so "move" means left and right. */
-function inRow(layout: Layout, measurement: CanvasMeasurement | null, id: string): boolean {
-  const location = findLocation(layout, id)
-  if (!location || !measurement) return false
-  const list = location.parentId === null ? layout.blocks : (findBlock(layout, location.parentId)?.slots?.[location.slot] ?? [])
-  const neighbor = list[location.index + 1] ?? list[location.index - 1]
-  const rectOf = (blockId: string | undefined) => measurement.blocks.find((b) => b.id === blockId)?.rect
-  const a = rectOf(id)
-  const b = rectOf(neighbor?.id)
-  if (!a || !b) return false
-  return Math.abs(a.y - b.y) < Math.min(a.height, b.height) / 2 && Math.abs(a.x - b.x) > 1
-}
-
-type MenuEntry = { icon: IconName; label: string; keys?: string; disabled?: boolean; danger?: boolean; run: () => void } | 'separator'
-
 /** The bar on the selected block: drag, select parent, and a menu with the other actions. */
-function ActionBar({ id, label, icon, layout, rect, measurement, inside, below, hidden }: ActionBarProps) {
+function ActionBar({ id, label, icon, parentId, rect, inside, below, hidden }: ActionBarProps) {
   const runtime = useRuntime()
-  const menu = usePopover('auto')
-  const location = findLocation(layout, id)
-  const siblings = location ? siblingCount(layout, location.parentId, location.slot) : 0
-  const block = findBlock(layout, id)
   const data: DragData = { source: { kind: 'block', id }, label, icon }
   const { setNodeRef, listeners, attributes } = useDraggable({ id: `canvas:${id}`, data })
-  const row = inRow(layout, measurement, id)
 
   const place = below ? 'below' : inside ? 'inside' : 'above'
   const visibility = hidden ? 'hidden' : undefined
   const style: CSSProperties =
     place === 'below' ? { left: rect.x, top: rect.y + rect.height, visibility } : { left: rect.x + rect.width, top: rect.y, visibility }
-
-  const items: MenuEntry[] = [
-    { icon: row ? 'left' : 'up', label: row ? 'Move left' : 'Move up', disabled: !location || location.index === 0, run: () => moveBy(runtime, id, -1) },
-    {
-      icon: row ? 'right' : 'down',
-      label: row ? 'Move right' : 'Move down',
-      disabled: !location || location.index >= siblings - 1,
-      run: () => moveBy(runtime, id, 1),
-    },
-    'separator',
-    { icon: 'duplicate', label: 'Duplicate', keys: 'Ctrl+D', run: () => duplicateBlock(runtime, id) },
-    { icon: 'copy', label: 'Copy', keys: 'Ctrl+C', run: () => copySelection(runtime) },
-    { icon: block?.hidden ? 'eye' : 'eyeOff', label: block?.hidden ? 'Show on the site' : 'Hide on the site', run: () => toggleHidden(runtime, id) },
-    ...(runtime.sections.enabled && block
-      ? [{ icon: 'section' as const, label: 'Save as section…', run: () => requestSaveSection(runtime, block) }]
-      : []),
-    'separator',
-    { icon: 'delete', label: 'Delete', keys: 'Del', danger: true, run: () => removeBlock(runtime, id) },
-  ]
 
   return (
     <div className={`builder-editor__actions builder-editor__actions--${place}`} style={style}>
@@ -281,48 +284,20 @@ function ActionBar({ id, label, icon, layout, rect, measurement, inside, below, 
         className="builder-editor__action"
         aria-label="Select the parent block"
         data-tooltip="Select parent"
-        disabled={!location?.parentId}
-        onClick={() => location?.parentId && runtime.store.select(location.parentId)}
+        disabled={!parentId}
+        onClick={() => parentId && runtime.store.select(parentId)}
       >
         <Icon name="parent" size={14} />
       </button>
-      <button
-        type="button"
+      <MenuButton
         className="builder-editor__action"
-        aria-label="More block actions"
-        aria-haspopup="menu"
-        aria-expanded={menu.open}
-        data-tooltip="More actions"
-        onClick={(e) => menu.toggle(e.currentTarget)}
+        triggerLabel="More block actions"
+        tooltip="More actions"
+        label="Block actions"
+        items={() => blockMenuEntries(runtime, id, 'canvas')}
       >
         <Icon name="more" size={14} />
-      </button>
-      <Popover {...menu.props} className="builder-editor__menu" label="Block actions">
-        <div role="menu">
-          {items.map((item, i) =>
-            item === 'separator' ? (
-              // oxlint-disable-next-line react/no-array-index-key -- separators have no identity
-              <hr key={`sep-${i}`} className="builder-bar__menu-sep" />
-            ) : (
-              <button
-                key={item.label}
-                type="button"
-                role="menuitem"
-                className={`builder-editor__menu-item${item.danger ? ' builder-editor__menu-item--danger' : ''}`}
-                disabled={item.disabled}
-                onClick={() => {
-                  menu.hide()
-                  item.run()
-                }}
-              >
-                <Icon name={item.icon} size={14} />
-                {item.label}
-                {item.keys && <kbd className="builder-editor__menu-keys">{item.keys}</kbd>}
-              </button>
-            ),
-          )}
-        </div>
-      </Popover>
+      </MenuButton>
     </div>
   )
 }

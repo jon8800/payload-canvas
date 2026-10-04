@@ -18,10 +18,13 @@ import { DESKTOP_WIDTH, DEVICE_WIDTHS, deviceForWidth, MAX_CANVAS_WIDTH, MIN_CAN
 import { useValue } from '../valueStore'
 import { DocumentTitle, documentTitle, StatusChip } from './DocumentTitle'
 import { PageSettings, PreviewButton, PublishButton, SaveState } from './DocumentActions'
+import { ScreenDrawer } from './screens/ScreenDrawer'
+import { useDismiss } from './useDismiss'
 import './topbar.scss'
 
 const devices: { id: Device; label: string; icon: IconName }[] = [
-  { id: 'desktop', label: `Desktop · ${DESKTOP_WIDTH} px or wider`, icon: 'desktop' },
+  { id: 'fluid', label: 'Fluid · fills the free space', icon: 'width' },
+  { id: 'desktop', label: `Desktop · ${DESKTOP_WIDTH} px`, icon: 'desktop' },
   { id: 'tablet', label: 'Tablet · 768 px', icon: 'tablet' },
   { id: 'mobile', label: 'Mobile · 390 px', icon: 'mobile' },
 ]
@@ -89,6 +92,7 @@ export function TopBar({ icon }: { icon: ReactNode }) {
         <ShortcutHelp />
         <PublishButton />
       </div>
+      <ScreenDrawer />
     </header>
   )
 }
@@ -222,6 +226,8 @@ function ShortcutHelp() {
   const open = useValue(runtime.help)
   const { drafts } = useValue(runtime.doc.meta)
   const ref = useRef<HTMLDivElement>(null)
+  const close = () => runtime.help.set(false)
+  useDismiss(open, close, [ref])
 
   useEffect(() => {
     if (!open) return

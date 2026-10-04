@@ -91,8 +91,9 @@ function ownPreview(block: Block): string {
     case 'richText':
       return clip(lexicalText(props.content).trim())
     case 'list': {
-      const items = Array.isArray(props.items) ? (props.items as { text?: unknown }[]) : []
-      const first = items.find((item) => typeof item?.text === 'string')
+      // Items are listItem blocks; old lists kept them in `props.items`.
+      const items = Array.isArray(props.items) ? (props.items as { text?: unknown }[]) : (block.slots?.items ?? []).map((item) => item.props ?? {})
+      const first = items.find((item) => typeof item?.text === 'string' && item.text !== '')
       return first ? `${clip(String(first.text))}${items.length > 1 ? ` +${items.length - 1}` : ''}` : ''
     }
     case 'link':

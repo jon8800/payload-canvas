@@ -1,13 +1,25 @@
 'use client'
 
 import { useDraggable } from '@dnd-kit/core'
-import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 
 import { findLocation, getBlockDefinition, slotNames, walkBlocks } from '../../core'
 import type { Block, Layout } from '../../core/types'
 import { ancestors, duplicateBlock, removeBlock, renameBlock, toggleHidden } from './actions'
 import { BlockIcon, Icon, type IconName } from './icons'
 import { PeerDots } from './live/PresenceUI'
+import { BLOCK_KEYS, keyText } from './menu/keys'
+import { openBlockMenu, renameRequest } from './menu/requests'
 import { blockPreview, blockSummary, childrenOf, customLabel, typeName } from './names'
 import { OUTLINE_INDENT, useRuntime, type DragData, type Runtime } from './runtime'
 import { useEditor } from './store'
@@ -122,7 +134,17 @@ export function Outline() {
   const issues = useMemo(() => issuesByBlock(problems), [problems])
   const templateTarget = useValueSelector(runtime.template, (t) => (t.isTemplate ? t.target : null))
   const broken = useMemo(() => brokenBindingIds(runtime, layout, templateTarget), [runtime, layout, templateTarget])
-  const [renaming, setRenaming] = useState<string | null>(null)
+  const [renamingHere, setRenaming] = useState<string | null>(null)
+  // "Rename" in a block menu opened from a row renames in the row.
+  const requested = useValueSelector(renameRequest(runtime), (r) => (r?.where === 'outline' ? r.id : null))
+  const renaming = renamingHere ?? requested
+  const onRename = useCallback(
+    (id: string | null) => {
+      setRenaming(id)
+      if (id === null && renameRequest(runtime).get()?.where === 'outline') renameRequest(runtime).set(null)
+    },
+    [runtime],
+  )
   const firstId = rows[0]?.block.id ?? null
 
   // A block selected on the canvas opens its collapsed ancestors and scrolls into view.
@@ -273,7 +295,7 @@ export function Outline() {
               broken={broken.has(row.block.id)}
               focusable={noSelectedRow && row.block.id === firstId}
               renaming={renaming === row.block.id}
-              onRename={setRenaming}
+              onRename={onRename}
             />
           ))}
         </div>
@@ -284,6 +306,13 @@ export function Outline() {
 
 /** Inline actions must not start a drag or select the row. */
 const stop = (e: ReactPointerEvent) => e.stopPropagation()
+
+/** Right-click on a row: the block menu at the pointer. The rename input keeps the browser's menu. */
+function openRowMenu(runtime: Runtime, id: string, e: ReactMouseEvent) {
+  if (e.target instanceof HTMLInputElement) return
+  e.preventDefault()
+  openBlockMenu(runtime, id, { x: e.clientX, y: e.clientY }, 'outline')
+}
 
 /** Plain props, so `memo` skips rows whose block and state did not change. */
 type OutlineRowProps = Row & {
@@ -336,11 +365,16 @@ const OutlineRow = memo(function OutlineRow({
     .filter(Boolean)
     .join(' ')
 
-  const actions: { icon: IconName; tip: string; run: () => void; danger?: boolean }[] = [
-    { icon: 'rename', tip: 'Rename · F2', run: () => onRename(block.id) },
-    { icon: block.hidden ? 'eye' : 'eyeOff', tip: block.hidden ? 'Show on the site' : 'Hide on the site', run: () => toggleHidden(runtime, block.id) },
-    { icon: 'duplicate', tip: 'Duplicate', run: () => duplicateBlock(runtime, block.id) },
-    { icon: 'delete', tip: 'Delete', run: () => removeBlock(runtime, block.id), danger: true },
+  const actions: { icon: IconName; label: string; keys: readonly string[]; run: () => void; danger?: boolean }[] = [
+    { icon: 'rename', label: 'Rename', keys: BLOCK_KEYS.rename, run: () => onRename(block.id) },
+    {
+      icon: block.hidden ? 'eye' : 'eyeOff',
+      label: block.hidden ? 'Show on the site' : 'Hide on the site',
+      keys: BLOCK_KEYS.hide,
+      run: () => toggleHidden(runtime, block.id),
+    },
+    { icon: 'duplicate', label: 'Duplicate', keys: BLOCK_KEYS.duplicate, run: () => duplicateBlock(runtime, block.id) },
+    { icon: 'delete', label: 'Delete', keys: BLOCK_KEYS.delete, run: () => removeBlock(runtime, block.id), danger: true },
   ]
 
   return (
@@ -352,8 +386,11 @@ const OutlineRow = memo(function OutlineRow({
       className={className}
       onClick={() => runtime.store.select(block.id)}
       onDoubleClick={() => onRename(block.id)}
-      onPointerEnter={() => runtime.store.hover(block.id)}
-      onPointerLeave={() => runtime.store.hover(null)}
+      onContextMenu={(e) => openRowMenu(runtime, block.id, e)}
+      // Not while dragging: the row actions would mount and unmount under the pointer, and every
+      // DOM insert restyles the whole admin (Payload's `body:has(...)` rules).
+      onPointerEnter={() => !runtime.drag.get() && runtime.store.hover(block.id)}
+      onPointerLeave={() => !runtime.drag.get() && runtime.store.hover(null)}
       {...listeners}
       {...attributes}
       role="treeitem"
@@ -363,7 +400,8 @@ const OutlineRow = memo(function OutlineRow({
       aria-expanded={container && childCount > 0 ? open : undefined}
       aria-roledescription="block"
       tabIndex={selected || focusable ? 0 : -1}
-      title={`${typeLabel}${tag}${label ? '' : ' · double-click to rename'}`}
+      data-tooltip={`${typeLabel}${tag}${label ? '' : ' · double-click to rename'}`}
+      data-tooltip-side="right"
     >
       {Array.from({ length: depth }, (_, i) => (
         <span key={i} className="builder-editor__guide" style={{ left: 15 + i * OUTLINE_INDENT }} />
@@ -399,7 +437,7 @@ const OutlineRow = memo(function OutlineRow({
       )}
       <PeerDots blockId={block.id} />
       {issues.length > 0 && (
-        <span className="builder-editor__row-problem" title={issues.join('\n')}>
+        <span className="builder-editor__row-problem" data-tooltip={issues.join('\n')} data-tooltip-side="right">
           <Icon name="warning" size={13} />
         </span>
       )}
@@ -407,7 +445,8 @@ const OutlineRow = memo(function OutlineRow({
         <span
           className={`builder-editor__row-bound${broken ? ' builder-editor__row-bound--broken' : ''}`}
           aria-label={broken ? 'A bound field is missing' : `${bindingCount} bound ${bindingCount === 1 ? 'field' : 'fields'}`}
-          title={
+          data-tooltip-side="right"
+          data-tooltip={
             broken
               ? 'A bound field is missing from the collection. Select the block to fix it.'
               : `Shows data: ${Object.entries(block.bindings ?? {})
@@ -424,12 +463,12 @@ const OutlineRow = memo(function OutlineRow({
         <span className="builder-editor__row-actions">
           {actions.map((action) => (
             <button
-              key={action.tip}
+              key={action.icon}
               type="button"
               tabIndex={-1}
               className={`builder-editor__row-action${action.danger ? ' builder-editor__row-action--danger' : ''}`}
-              aria-label={action.tip}
-              title={action.tip}
+              aria-label={action.label}
+              data-tooltip={`${action.label} · ${keyText(action.keys)}`}
               onPointerDown={stop}
               onClick={(e) => {
                 e.stopPropagation()

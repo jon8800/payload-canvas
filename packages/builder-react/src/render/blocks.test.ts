@@ -62,7 +62,7 @@ describe('text-like blocks', () => {
       [{ type: 'text', props: { text: '' } }, /^<p [^>]+><span data-builder-placeholder="[^"]*" style="opacity:0.4">Text<\/span><\/p>$/],
       [{ type: 'quote' }, /^<blockquote [^>]+><p data-builder-text="quote"><span data-builder-placeholder[^>]*>Quote<\/span><\/p><\/blockquote>$/],
       [{ type: 'button', props: { link: { type: 'url', url: '/x' } } }, /^<a [^>]*href="\/x"[^>]*><span data-builder-placeholder[^>]*>Button<\/span><\/a>$/],
-      [{ type: 'list', props: { items: [] } }, /^<ul [^>]+ style="list-style-type:disc"><li><span data-builder-placeholder[^>]*>List item<\/span><\/li><\/ul>$/],
+      [{ type: 'listItem' }, /^<li data-block-id="b" data-block-type="listItem" data-builder-text="text"><span data-builder-placeholder[^>]*>List item<\/span><\/li>$/],
       [{ type: 'richText', props: { content: lexical(paragraph()) } }, /^<div [^>]+><p><span data-builder-placeholder[^>]*>Rich text<\/span><\/p><\/div>$/],
       [{ type: 'image', props: { image: 5 } }, /^<div data-block-id="b" data-block-type="image" data-builder-placeholder="" style="[^"]*min-height:96px[^"]*">Image<\/div>$/],
       [{ type: 'video', props: { source: 'upload' } }, /^<div [^>]*data-builder-placeholder="" style="[^"]*aspect-ratio:16 \/ 9[^"]*">Video<\/div>$/],
@@ -123,32 +123,49 @@ describe('links', () => {
   })
 })
 
-describe('list', () => {
-  const items = [{ id: 'r1', text: 'One' }, { text: '' }, { text: 'Two' }, 'bad']
+const listItem = (id: string, value: string, className?: string): Block => ({ id, type: 'listItem', props: { text: value }, ...(className ? { className } : {}) })
 
-  test('ul or ol, skips empty items, keys by row id', () => {
-    assert.equal(site({ type: 'list', props: { items }, className: 'list-disc' }), '<ul class="list-disc"><li>One</li><li>Two</li></ul>')
-    assert.match(site({ type: 'list', props: { items, ordered: true } }), /^<ol[^>]*><li>One<\/li><li>Two<\/li><\/ol>$/)
+describe('list', () => {
+  const slots = { items: [listItem('i1', 'One', 'font-bold'), listItem('i2', ''), listItem('i3', 'Two')] }
+  const legacy = [{ id: 'r1', text: 'One' }, { text: '' }, { text: 'Two' }, 'bad']
+
+  test('ul or ol of listItem blocks; empty items render nothing on the site', () => {
+    assert.equal(site({ type: 'list', slots, className: 'list-disc' }), '<ul class="list-disc"><li class="font-bold">One</li><li>Two</li></ul>')
+    assert.match(site({ type: 'list', props: { ordered: true }, slots }), /^<ol[^>]*><li class="font-bold">One<\/li><li>Two<\/li><\/ol>$/)
+    assert.equal(site({ type: 'list' }), '')
+  })
+
+  test('in the canvas, each item is a block with its own editable text, and the ul holds the slot', () => {
+    const out = canvas({ type: 'list', slots })
+    assert.match(out, /^<ul data-block-id="b" data-block-type="list" data-slot-owner="b" data-slot="items"/)
+    assert.match(out, /<li data-block-id="i1" data-block-type="listItem" class="font-bold" data-builder-text="text">One<\/li>/)
+    assert.match(out, /<li data-block-id="i2"[^>]*><span data-builder-placeholder[^>]*>List item<\/span><\/li>/)
+    assert.match(canvas({ type: 'list' }), /^<ul [^>]*><div data-slot-empty="" data-slot-owner="b" data-slot="items"/)
+  })
+
+  test('the old shape (props.items rows) still renders, skipping empty rows', () => {
+    assert.equal(site({ type: 'list', props: { items: legacy }, className: 'list-disc' }), '<ul class="list-disc"><li>One</li><li>Two</li></ul>')
+    assert.match(canvas({ type: 'list', props: { items: legacy } }), /<li data-builder-text="items.0.text">One<\/li><li data-builder-text="items.2.text">Two<\/li>/)
   })
 
   test('ordered lists show numbers, unordered bullets, when no list-style class is set', () => {
     const className = 'pl-6 space-y-1'
     assert.equal(
-      site({ type: 'list', props: { items, ordered: true }, className }),
-      '<ol class="pl-6 space-y-1" style="list-style-type:decimal"><li>One</li><li>Two</li></ol>',
+      site({ type: 'list', props: { ordered: true }, slots, className }),
+      '<ol class="pl-6 space-y-1" style="list-style-type:decimal"><li class="font-bold">One</li><li>Two</li></ol>',
     )
     assert.equal(
-      site({ type: 'list', props: { items }, className }),
+      site({ type: 'list', props: { items: legacy }, className }),
       '<ul class="pl-6 space-y-1" style="list-style-type:disc"><li>One</li><li>Two</li></ul>',
     )
   })
 
   test('a list-style-type class wins; position and image classes do not count', () => {
     for (const className of ['list-none', 'md:list-decimal', 'list-[square]', 'list-disc!']) {
-      assert.ok(!site({ type: 'list', props: { items, ordered: true }, className }).includes('style='), className)
+      assert.ok(!site({ type: 'list', props: { ordered: true }, slots, className }).includes('style='), className)
     }
     for (const className of ['list-inside', 'list-outside pl-4', 'list-image-none']) {
-      assert.match(site({ type: 'list', props: { items, ordered: true }, className }), /style="list-style-type:decimal"/, className)
+      assert.match(site({ type: 'list', props: { ordered: true }, slots, className }), /style="list-style-type:decimal"/, className)
     }
   })
 })

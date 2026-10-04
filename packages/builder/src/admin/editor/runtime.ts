@@ -2,7 +2,7 @@
 
 import { createContext, createRef, use, type RefObject } from 'react'
 
-import { canvasDropTarget, createId, EMPTY_LAYOUT, findBlock, getBlockDefinition, outlineDropTarget } from '../../core'
+import { canvasDropTarget, createId, EMPTY_LAYOUT, findBlock, getBlockDefinition, outlineDropTarget, starterSlots } from '../../core'
 import type {
   Block,
   BlockDefinition,
@@ -269,6 +269,9 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
       const props = defaultProps(def)
       if (Object.keys(props).length > 0) block.props = props
       if (def.defaultClassName) block.className = def.defaultClassName
+      // A new list starts with one list item (see `starterSlots`).
+      const slots = starterSlots(config.blocks, type, createId)
+      if (slots) block.slots = slots
       // No empty slot arrays: layouts are canonical. The canvas still shows placeholders for declared slots.
       return block
     },

@@ -12,6 +12,20 @@ export type SessionOptions = {
   onChange: (value: unknown) => void
   /** The user ended editing (Escape, or Enter in a one-line prop). */
   onExit: () => void
+  /** Caret position as a character offset into the text. Wins over `point`. */
+  offset?: number
+  /**
+   * One-line props: Enter splits the text. The text after the caret leaves the element and goes
+   * to `onSplit`; the element keeps the text before it (its final value). Without `onSplit`,
+   * Enter ends editing. Used by list items: Enter adds the next item.
+   */
+  onSplit?: (after: string) => void
+  /**
+   * Backspace with the caret at the very start and nothing selected. `value` is the whole text.
+   * Return true when it was handled (then the browser does nothing). Used by list items: the
+   * item joins the one before.
+   */
+  onJoin?: (value: string) => boolean
   /** Rich text: the toolbar state at the caret. */
   onFormat?: (format: RichFormatState) => void
   /** Rich text: Ctrl+K. */
@@ -37,7 +51,8 @@ const FORMAT_INPUT = /^format/
 
 /**
  * Edits a plain text prop in place: the element itself becomes editable. `line` props stay on one
- * line (Enter ends editing); `lines` props take line breaks (Enter adds one, Ctrl+Enter ends).
+ * line (Enter ends editing, or splits with `onSplit`); `lines` props take line breaks (Enter adds
+ * one, Ctrl+Enter ends).
  * Paste inserts plain text only. Nothing is sent while an IME composition is open.
  */
 export function startPlainSession(el: HTMLElement, kind: Exclude<InlineKind, 'rich'>, options: SessionOptions): InlineSession {
@@ -85,9 +100,48 @@ export function startPlainSession(el: HTMLElement, kind: Exclude<InlineKind, 'ri
     if (FORMAT_INPUT.test(e.inputType)) e.preventDefault()
     if (!multiline && (e.inputType === 'insertParagraph' || e.inputType === 'insertLineBreak')) e.preventDefault()
   }
+  /** The text after the caret, cut out of the element. A selection is deleted first, as typing would. */
+  const cutAfterCaret = (): string => {
+    const selection = doc.getSelection()
+    const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
+    if (!range || !el.contains(range.endContainer)) return ''
+    if (!range.collapsed) range.deleteContents()
+    const tail = doc.createRange()
+    tail.setStart(range.endContainer, range.endOffset)
+    tail.setEnd(el, el.childNodes.length)
+    const after = readText(tail.cloneContents(), false)
+    tail.deleteContents()
+    return after
+  }
+  /** True when the caret sits before all the text and nothing is selected. */
+  const caretAtStart = (): boolean => {
+    const selection = doc.getSelection()
+    if (!selection || selection.rangeCount === 0 || !selection.isCollapsed) return false
+    const range = selection.getRangeAt(0)
+    if (!el.contains(range.startContainer)) return false
+    const head = doc.createRange()
+    head.setStart(el, 0)
+    head.setEnd(range.startContainer, range.startOffset)
+    return readText(head.cloneContents(), true) === ''
+  }
+
   const onKeyDown = (e: KeyboardEvent) => {
     // Enter that confirms an IME candidate is not ours.
     if (e.isComposing || e.keyCode === 229) return
+    const plainKey = !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey
+    if (e.key === 'Enter' && !multiline && plainKey && options.onSplit) {
+      e.preventDefault()
+      e.stopPropagation()
+      const after = cutAfterCaret()
+      markBlank()
+      options.onSplit(after)
+      return
+    }
+    if (e.key === 'Backspace' && plainKey && options.onJoin && caretAtStart() && options.onJoin(read())) {
+      e.preventDefault()
+      e.stopPropagation()
+      return
+    }
     if (e.key === 'Escape' || (e.key === 'Enter' && (!multiline || e.ctrlKey || e.metaKey))) {
       e.preventDefault()
       e.stopPropagation()
@@ -116,7 +170,7 @@ export function startPlainSession(el: HTMLElement, kind: Exclude<InlineKind, 'ri
   el.addEventListener('drop', onDrop)
   markBlank()
   el.focus({ preventScroll: true })
-  placeCaret(el, options.point)
+  placeCaret(el, options.point, options.offset)
 
   return {
     element: el,

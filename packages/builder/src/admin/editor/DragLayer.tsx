@@ -1,14 +1,24 @@
 'use client'
 
+import { useCallback } from 'react'
+
+import { registerGhost, smoothView, type SmoothView } from './dnd/smooth'
 import { BlockIcon } from './icons'
 import { useRuntime } from './runtime'
 import { useValue } from './valueStore'
 
 /**
- * Admin-level drag visuals in client coordinates: the label that follows the pointer and the
- * outline drop indicator. The canvas drop indicator lives in the overlay (iframe coordinates).
+ * Admin-level drag visuals in client coordinates. Indicator mode: the label that follows the
+ * pointer and the outline drop indicator (the canvas indicator lives in the overlay). Smooth mode:
+ * a lifted copy of the row; the dnd controller moves it without React renders.
  */
 export function DragLayer() {
+  const runtime = useRuntime()
+  const smooth = useValue(smoothView(runtime))
+  return smooth ? <SmoothGhost view={smooth} /> : <IndicatorLayer />
+}
+
+function IndicatorLayer() {
   const runtime = useRuntime()
   const drag = useValue(runtime.drag)
   if (!drag?.pointer) return null
@@ -37,5 +47,21 @@ export function DragLayer() {
         />
       )}
     </>
+  )
+}
+
+/** The lifted row. Position, visibility and the refused state are set by `dnd/smooth.ts`. */
+function SmoothGhost({ view }: { view: SmoothView }) {
+  const runtime = useRuntime()
+  const ref = useCallback((el: HTMLDivElement | null) => registerGhost(runtime, el), [runtime])
+  const { ghost } = view
+  return (
+    <div ref={ref} className="builder-dnd-ghost" aria-hidden="true">
+      <div className="builder-dnd-ghost__card" style={{ width: ghost.width ?? undefined }}>
+        <BlockIcon name={ghost.icon} size={14} />
+        <span className="builder-dnd-ghost__label">{ghost.label}</span>
+        <span className="builder-dnd-ghost__note">Can’t drop here</span>
+      </div>
+    </div>
   )
 }

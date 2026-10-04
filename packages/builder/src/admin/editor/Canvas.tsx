@@ -5,19 +5,22 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { deepestBlockAt } from '../../core'
 import { unwrap, type CanvasToAdmin } from '../../protocol'
 import { ancestors } from './actions'
+import { dragModeChoice, prefersReducedMotion, useDragModeSetting } from './dnd/mode'
+import { dropAt } from './dnd/smooth'
 import { BlockIcon, Icon } from './icons'
-import { applyInlineChange, boundHint, inlineEditing, stopInlineEditing } from './inline'
+import { applyInlineChange, applyInlineJoin, applyInlineSplit, boundHint, inlineEditing, stopInlineEditing } from './inline'
 import { blockName } from './names'
+import { MenuButton } from './menu/Menu'
+import { useCanvasMenus } from './menu/useCanvasMenus'
 import { cursorAt } from './live'
 import { FollowFrame } from './live/PresenceUI'
 import { EDGE_BAND, insertSpotAt, sameSpot } from './insert/spots'
 import { Overlay } from './Overlay'
-import { computeDrop, useRuntime } from './runtime'
+import { useRuntime, type Runtime } from './runtime'
 import { bindShortcuts } from './shortcuts'
 import { useEditor } from './store'
 import { postContext, templateContext } from './templates/state'
 import { breakpointAt, breakpointWidths, useStyleTokens, withFallback } from './styles/tokens'
-import { DESKTOP_WIDTH } from './styles/viewport'
 import { sameItems, useValue } from './valueStore'
 
 const NO_PATH: never[] = []
@@ -36,6 +39,7 @@ const SPOT_BAND_PX = 10
 export function Canvas() {
   const runtime = useRuntime()
   const { iframeRef, pointerLock, config } = runtime
+  useCanvasMenus(runtime)
   const width = useEditor(runtime.store, (s) => s.canvasWidth)
   const locked = useValue(pointerLock)
   const error = useValue(runtime.canvasError)
@@ -57,11 +61,13 @@ export function Canvas() {
     return () => observer.disconnect()
   }, [])
 
-  // Desktop fills the stage, but is at least DESKTOP_WIDTH wide: a laptop shows the desktop
-  // layout zoomed out, not the tablet layout at full size.
-  const frameWidth = width ?? Math.max(DESKTOP_WIDTH, stage.width)
-  const fit = frameWidth > stage.width && stage.width > 0 ? stage.width / frameWidth : 1
+  // Fluid (no fixed width) fills the stage at 100 %, so the canvas shows the breakpoint of the free
+  // space. A fixed zoom below 100 % makes the fluid frame wider, so it still fills the stage.
+  // A fixed width wider than the stage zooms out to fit.
   const [zoomMode, setZoomMode] = useState<ZoomMode>('fit')
+  const fluid = width === null
+  const frameWidth = fluid ? Math.round(stage.width / (zoomMode === 'fit' ? 1 : zoomMode)) : width
+  const fit = !fluid && frameWidth > stage.width && stage.width > 0 ? stage.width / frameWidth : 1
   const zoom = zoomMode === 'fit' ? fit : zoomMode
   useEffect(() => runtime.frame.set({ width: frameWidth, zoom }), [runtime, frameWidth, zoom])
 
@@ -87,7 +93,7 @@ export function Canvas() {
           measurement.set(message.measurement)
           // Rects moved under a still pointer (scroll, resize): refresh the drop target.
           const current = drag.get()
-          if (current?.pointer) drag.set({ ...current, ...computeDrop(runtime, current.pointer, current.source) })
+          if (current?.pointer) drag.set({ ...current, ...dropAt(runtime, current.pointer, current.source) })
           return
         }
         case 'pointer': {
@@ -120,6 +126,11 @@ export function Canvas() {
           return
         }
         case 'key':
+          // Escape in the canvas during a drag cancels the drag: dnd-kit listens on the admin window.
+          if (message.key === 'escape' && drag.get()) {
+            window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }))
+            return
+          }
           runtime.runKey(message.key)
           return
         case 'error':
@@ -135,6 +146,12 @@ export function Canvas() {
           return
         case 'inlineEnd':
           if (inline.get()?.session === message.session) inline.set(null)
+          return
+        case 'inlineSplit':
+          applyInlineSplit(runtime, message)
+          return
+        case 'inlineJoin':
+          applyInlineJoin(runtime, message)
           return
         case 'inlineFormat': {
           const current = inline.get()
@@ -261,7 +278,7 @@ export function Canvas() {
       <div ref={viewportRef} className="builder-editor__viewport" style={{ padding: STAGE_PADDING }}>
         <div
           className="builder-editor__frame-wrap"
-          data-device={width === null ? 'fill' : 'fixed'}
+          data-device={fluid ? 'fluid' : 'fixed'}
           style={{ width: frameWidth * zoom || '100%', height: stage.height || '100%' }}
         >
           <div
@@ -407,8 +424,33 @@ function StatusBar({
             {px} px · {breakpointAt(widths, px)}
           </span>
           <ZoomControl zoom={zoom} fit={fit} mode={zoomMode} onZoom={onZoom} />
+          <DragModeMenu runtime={runtime} />
         </span>
       )}
     </footer>
+  )
+}
+
+/** Drag and drop style: the drop indicator or the smooth mode. The choice stays in this browser. */
+function DragModeMenu({ runtime }: { runtime: Runtime }) {
+  const mode = useDragModeSetting(runtime)
+  const reduced = prefersReducedMotion()
+  const choose = (next: 'indicator' | 'smooth') => dragModeChoice(runtime).set(next)
+  return (
+    <MenuButton
+      className="builder-editor__icon-button builder-editor__icon-button--small"
+      triggerLabel="Drag and drop style"
+      tooltip="Drag and drop style"
+      label="Drag and drop style"
+      side="top"
+      align="end"
+      footer={reduced ? 'Your system asks for less motion, so dragging shows the drop line.' : undefined}
+      items={() => [
+        { label: 'Show a drop line', icon: 'drag', checked: mode === 'indicator', run: () => choose('indicator') },
+        { label: 'Move blocks out of the way', icon: 'layers', checked: mode === 'smooth', disabled: reduced, run: () => choose('smooth') },
+      ]}
+    >
+      <Icon name="drag" size={14} />
+    </MenuButton>
   )
 }

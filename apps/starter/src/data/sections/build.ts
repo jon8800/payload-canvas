@@ -91,8 +91,12 @@ export const image = (id: number | string, alt: string, className?: string) => b
 export const button = (action: Action, className: string = styles.buttonPrimary) =>
   block('button', { label: action.label, link: action.link }, className)
 export const link = (target: LinkInput, className: string, children: Block[]) => block('link', { link: target }, className, children)
-export const list = (items: string[], ordered: boolean, className?: string) =>
-  block('list', { items: items.map((item) => ({ text: item })), ordered }, className)
+/** A bulleted (or numbered) list. Each item is a `listItem` block; `itemClassName` styles every item. */
+export function list(items: string[], ordered: boolean, className?: string, itemClassName?: string): Block {
+  const result = block('list', ordered ? { ordered } : undefined, className)
+  if (items.length > 0) result.slots = { items: items.map((item) => block('listItem', { text: item }, itemClassName)) }
+  return result
+}
 export const quote = (value: string, cite: string, className?: string) => block('quote', { quote: value, cite }, className)
 export const divider = (className?: string) => block('divider', undefined, className)
 export const spacer = (className?: string) => block('spacer', undefined, className)

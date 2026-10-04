@@ -11,6 +11,40 @@ export function slotAccepts(slot: SlotDefinition, type: string): boolean {
   return !slot.allow || slot.allow.includes('*') || slot.allow.includes(type)
 }
 
+/**
+ * True when a block of `type` may sit directly in a block of `parentType` (`null`: the root list),
+ * by the block's own `parents` rule. Slot rules are separate (`slotAccepts`).
+ */
+export function fitsParent(blocks: readonly BlockDefinition[], type: string, parentType: string | null): boolean {
+  const parents = getBlockDefinition(blocks, type)?.parents
+  return !parents || (parentType !== null && parents.includes(parentType))
+}
+
+/** "List item can only go inside List", or "… inside List or Menu". */
+function parentsMessage(blocks: readonly BlockDefinition[], type: string): string {
+  const label = (t: string) => getBlockDefinition(blocks, t)?.label ?? t
+  const parents = getBlockDefinition(blocks, type)?.parents ?? []
+  return `${label(type)} can only go inside ${parents.map(label).join(' or ')}`
+}
+
+/**
+ * The children a new block of `type` starts with: one child in each slot that accepts exactly one
+ * type made for this block (its `parents` names `type`). A new list starts with one list item.
+ * Null when there are none. The children get the child type's `defaultClassName`.
+ */
+export function starterSlots(blocks: readonly BlockDefinition[], type: string, makeId: () => string): Record<string, Block[]> | null {
+  const slots: Record<string, Block[]> = {}
+  for (const [name, slot] of Object.entries(getBlockDefinition(blocks, type)?.slots ?? {})) {
+    if (slot.allow?.length !== 1) continue
+    const child = getBlockDefinition(blocks, slot.allow[0])
+    if (!child?.parents?.includes(type)) continue
+    const block: Block = { id: makeId(), type: child.type }
+    if (child.defaultClassName) block.className = child.defaultClassName
+    slots[name] = [block]
+  }
+  return Object.keys(slots).length > 0 ? slots : null
+}
+
 export function defineBlock<T extends BlockDefinition>(def: T): T {
   return def
 }
@@ -39,8 +73,9 @@ function subtreeTypes(block: Block, out = new Set<string>()): Set<string> {
 /**
  * Why `block` (a type, or a whole block with its children) cannot go into `slot` of `parentId`,
  * or `null` when it can. Checks the direct slot's `allow` and `disallow`, and the `disallow` of
- * every ancestor slot up to the root, against every type in the placed subtree. The root list
- * accepts every type. The message is readable, e.g. `Button cannot go inside Link`.
+ * every ancestor slot up to the root, against every type in the placed subtree, and the placed
+ * block's own `parents` rule. The root list accepts every type without a `parents` rule. The
+ * message is readable, e.g. `Button cannot go inside Link`.
  */
 export function placementError(
   blocks: readonly BlockDefinition[],
@@ -50,8 +85,8 @@ export function placementError(
   block: string | Block,
   index: Map<string, IndexedBlock> = indexLayout(layout),
 ): string | null {
-  if (parentId === null) return null
   const rootType = typeof block === 'string' ? block : block.type
+  if (parentId === null) return fitsParent(blocks, rootType, null) ? null : parentsMessage(blocks, rootType)
   const types = typeof block === 'string' ? new Set([block]) : subtreeTypes(block)
   const label = (type: string) => getBlockDefinition(blocks, type)?.label ?? type
   const skip = typeof block === 'string' ? new Set<string>() : new Set(subtreeIds(block))
@@ -72,6 +107,7 @@ export function placementError(
       if (slotDef?.allow && !slotDef.allow.includes('*') && !slotDef.allow.includes(rootType)) {
         return `${label(rootType)} cannot go inside ${ownerLabel}`
       }
+      if (!fitsParent(blocks, rootType, owner.block.type)) return parentsMessage(blocks, rootType)
     }
     const refused = slotDef?.disallow?.find((type) => types.has(type))
     if (refused) {

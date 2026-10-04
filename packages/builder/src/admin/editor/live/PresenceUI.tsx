@@ -87,7 +87,7 @@ export function Presence({ widths }: { widths: Parameters<typeof breakpointAt>[0
         </span>
       )}
       {live.lastError && (
-        <span className="builder-editor__live-error" title={live.lastError}>
+        <span className="builder-editor__live-error" data-tooltip={live.lastError}>
           {live.lastError}
         </span>
       )}
@@ -248,7 +248,7 @@ export function PeerDots({ blockId }: { blockId: string }) {
   const on = usePeersOn(blockId)
   if (on.length === 0) return null
   return (
-    <span className="builder-peer-dots" title={`Selected by ${listNames(on.map((p) => nameOf(p)))}`}>
+    <span className="builder-peer-dots" data-tooltip-side="right" data-tooltip={`Selected by ${listNames(on.map((p) => nameOf(p)))}`}>
       {on.slice(0, 3).map((peer) => (
         <span key={peer.clientId} className="builder-peer-dots__dot" style={peerStyle(peer.color)} />
       ))}

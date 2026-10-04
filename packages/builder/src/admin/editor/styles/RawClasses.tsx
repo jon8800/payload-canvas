@@ -162,14 +162,13 @@ export function RawClasses() {
               <li
                 key={name}
                 className={`builder-styles__class-chip${unknown ? ' builder-styles__class-chip--unknown' : ''}`}
-                title={unknown ? `“${name}” is not in the theme’s class list, so it may have no effect. Check the spelling.` : undefined}
+                data-tooltip={unknown ? `“${name}” is not in the theme’s class list, so it may have no effect. Check the spelling.` : undefined}
               >
                 {unknown && <span className="builder-styles__visually-hidden">Unknown class: </span>}
                 <code>{name}</code>
                 <button
                   type="button"
                   className="builder-styles__reset"
-                  title={`Remove ${name}`}
                   aria-label={`Remove ${name}`}
                   onClick={() =>
                     setClassName(

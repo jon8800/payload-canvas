@@ -22,9 +22,9 @@ describe('inlineKind', () => {
   })
 
   test('array rows: the number segment steps into the row fields', () => {
-    assert.equal(inlineKind(def('list'), 'items.2.text', 'x'), 'line')
-    assert.equal(inlineKind(def('menu'), 'items.0.label', 'x'), 'line')
-    assert.equal(fieldAtPath(def('list')?.fields, 'items.x.text'), null)
+    assert.equal(inlineKind(def('menu'), 'items.2.label', 'x'), 'line')
+    assert.equal(fieldAtPath(def('menu')?.fields, 'items.x.label'), null)
+    assert.equal(inlineKind(def('listItem'), 'text', 'x'), 'line')
   })
 
   test('other field types and unknown paths cannot be edited inline', () => {
@@ -117,6 +117,7 @@ describe('editable text marks', () => {
     blocks: [
       { id: 'h', type: 'heading', props: { text: 'Hello', level: '2' } },
       { id: 'l', type: 'list', props: { items: [{ id: 'r1', text: '' }, { id: 'r2', text: 'Second' }] } },
+      { id: 'm', type: 'list', slots: { items: [{ id: 'i1', type: 'listItem', props: { text: 'Item' } }] } },
       { id: 'q', type: 'quote', props: { quote: 'Q', cite: 'C' } },
     ],
   }
@@ -126,6 +127,7 @@ describe('editable text marks', () => {
     const html = render('canvas')
     assert.match(html, /<h2 data-block-id="h"[^>]*data-builder-text="text"/)
     assert.match(html, /<li data-builder-text="items.1.text">Second<\/li>/)
+    assert.match(html, /<li data-block-id="i1" data-block-type="listItem" data-builder-text="text">Item<\/li>/)
     assert.match(html, /<p data-builder-text="quote">Q<\/p>/)
     assert.match(html, /<cite data-builder-text="cite">C<\/cite>/)
   })

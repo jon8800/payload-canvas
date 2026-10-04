@@ -38,13 +38,32 @@ export function restoreDom(el: HTMLElement, snapshot: DomSnapshot) {
   for (const [name, value] of keep) if (el.getAttribute(name) !== value) el.setAttribute(name, value)
 }
 
-/** Puts the caret at a viewport point inside `el`, else at the end of `el`. */
-export function placeCaret(el: HTMLElement, point: { x: number; y: number } | null) {
+/** A collapsed range `offset` characters into the text of `el` (text nodes only), or null past the end. */
+function rangeAtOffset(el: HTMLElement, offset: number): Range | null {
+  const doc = el.ownerDocument
+  const walker = doc.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+  let left = Math.max(0, offset)
+  for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+    if (left <= node.data.length) {
+      const range = doc.createRange()
+      range.setStart(node, left)
+      return range
+    }
+    left -= node.data.length
+  }
+  return null
+}
+
+/**
+ * Puts the caret `offset` characters into the text of `el`, else at a viewport point inside `el`,
+ * else at the end of `el`.
+ */
+export function placeCaret(el: HTMLElement, point: { x: number; y: number } | null, offset?: number) {
   const doc = el.ownerDocument
   const selection = doc.getSelection()
   if (!selection) return
-  let range: Range | null = null
-  if (point) {
+  let range: Range | null = offset === undefined ? null : rangeAtOffset(el, offset)
+  if (!range && point) {
     const position = doc.caretPositionFromPoint?.(point.x, point.y)
     if (position) {
       range = doc.createRange()

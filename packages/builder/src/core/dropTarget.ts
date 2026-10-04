@@ -6,7 +6,7 @@
 // Slot rules: a slot whose `allow` list rejects the dragged type, or whose `disallow` list (or an
 // ancestor slot's) refuses any type inside the dragged block, is never a target.
 // The functions then fall through to the next valid option (see each function).
-// The root list accepts every type.
+// The root list accepts every type without a `parents` rule (a list item goes only in a list).
 
 import { getBlockDefinition, placementError, slotNames } from './blocks'
 import { DEFAULT_SLOT, indexLayout, subtreeIds, type IndexedBlock } from './tree'
@@ -72,7 +72,7 @@ function context(layout: Layout, blocks: BlockDefinition[], source: DragSource) 
   const dragged = source.kind === 'block' ? (index.get(source.id)?.block ?? type) : type
   const accepts = (ownerId: string | null, slot: string): boolean => {
     if (type === null || dragged === null) return false
-    if (ownerId === null) return slot === DEFAULT_SLOT
+    if (ownerId === null) return slot === DEFAULT_SLOT && placementError(blocks, layout, null, slot, dragged, index) === null
     const owner = index.get(ownerId)
     const def = owner ? getBlockDefinition(blocks, owner.block.type) : undefined
     if (!def?.slots?.[slot]) return false
@@ -214,6 +214,7 @@ export function canvasDropTarget(
 
   const hit = deepestEntry(index, measurement, p, excluded)
   if (!hit) {
+    if (!accepts(null, DEFAULT_SLOT)) return null
     if (layout.blocks.length === 0) {
       return finalize(index, source, null, DEFAULT_SLOT, 0, {
         kind: 'box',
@@ -274,7 +275,7 @@ export function outlineDropTarget(
   const row = rows.find((r) => p.y >= r.rect.y && p.y <= r.rect.y + r.rect.height)
   if (!row) {
     const last = rows.at(-1)
-    if (!last || p.y < last.rect.y) return null
+    if (!last || p.y < last.rect.y || !accepts(null, DEFAULT_SLOT)) return null
     return finalize(index, source, null, DEFAULT_SLOT, layout.blocks.length, line(last, 'after', 0))
   }
   if (excluded.has(row.id)) return null

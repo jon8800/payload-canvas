@@ -65,5 +65,5 @@ export async function BuilderView({ initPageResult, params, searchParams }: Admi
     serverProps: { i18n: req.i18n, locale: req.locale, params, payload, permissions, searchParams, user: req.user },
   })
 
-  return <BuilderScreen meta={meta} icon={icon} />
+  return <BuilderScreen meta={meta} icon={icon} visibleEntities={initPageResult.visibleEntities} />
 }

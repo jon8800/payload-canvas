@@ -2,7 +2,9 @@
 // Both sides check `event.origin` and `event.source` before they trust a message.
 // Pure TypeScript: no React, no Payload runtime imports.
 
-import type { Block, BlockDefinition, CanvasMeasurement, Layout, Rect, TemplateContext } from '../core/types'
+import type { Block, BlockDefinition, CanvasMeasurement, Layout, Point, Rect, TemplateContext } from '../core/types'
+
+export * from './motion'
 
 export const CHANNEL = 'payload-builder' as const
 
@@ -75,6 +77,14 @@ export type CanvasToAdmin =
   /** Pointer position in iframe viewport coordinates. */
   | { type: 'pointer'; kind: PointerKind; x: number; y: number }
   | { type: 'key'; key: KeyAction }
+  /** A press anywhere in the canvas. The editor closes its open menus and popovers. */
+  | { type: 'pointerDown' }
+  /**
+   * A right-click on a block (not on text being edited, which keeps the browser's menu). The
+   * iframe stops the browser's menu; the editor opens the block menu at this point (iframe
+   * viewport coordinates).
+   */
+  | { type: 'contextMenu'; x: number; y: number }
   /** A problem the editor should show, e.g. the CSS input failed to load. */
   | { type: 'error'; message: string }
   /**
@@ -86,6 +96,16 @@ export type CanvasToAdmin =
   | { type: 'inlineChange'; session: string; id: string; path: string; value: unknown }
   /** Editing ended. Any last change was sent before this message. */
   | { type: 'inlineEnd'; session: string; id: string }
+  /**
+   * Enter in a list item. Editing of it has ended (with the text before the caret); `after` is the
+   * text after the caret. The admin adds the next item with it and edits that item.
+   */
+  | { type: 'inlineSplit'; id: string; after: string }
+  /**
+   * Backspace at the start of a list item. Editing of it has ended; `value` is its text. The admin
+   * joins it to the item before and edits that item.
+   */
+  | { type: 'inlineJoin'; id: string; value: string }
   /** Rich text: the toolbar state at the caret changed. */
   | { type: 'inlineFormat'; session: string; format: RichFormatState }
   /** Rich text: the user pressed Ctrl+K. The admin opens the link form. */
@@ -112,14 +132,44 @@ export type AdminToCanvas =
    * `null` clears it. May arrive before or after the layout.
    */
   | { type: 'context'; context: TemplateContext | null }
-  /** Starts inline editing of the block's first editable text, with the caret at the end. */
-  | { type: 'inlineStart'; id: string }
+  /**
+   * Starts inline editing of the block's first editable text, with the caret at the end, or
+   * `offset` characters into the text. A block not on the canvas yet starts once it renders.
+   */
+  | { type: 'inlineStart'; id: string; offset?: number }
   /** Ends inline editing (a click outside the canvas, another block selected). */
   | { type: 'inlineStop' }
   /** Rich text: a toolbar command for the current session. */
   | { type: 'inlineCommand'; command: RichCommand }
   /** Thumbnail mode: picture one section. Requests queue up in the iframe. */
   | { type: 'thumbnail'; request: ThumbnailRequest }
+  /** Smooth drag mode: a drag started. The canvas hides the dragged block and lifts a copy of it. */
+  | { type: 'dragStart'; drag: CanvasDragStart }
+  /**
+   * Smooth drag mode: blocks move out of the way. Each listed block slides by its offset (iframe
+   * pixels, relative to its parent's offset); blocks left out slide back. Sent when the drop target
+   * changes. The canvas never changes the layout for it.
+   */
+  | { type: 'dragPreview'; offsets: Record<string, Point> }
+  /** Smooth drag mode: the pointer, in iframe viewport coordinates. `inside` is false outside the canvas. */
+  | { type: 'dragPointer'; x: number; y: number; inside: boolean }
+  /**
+   * Smooth drag mode: the drag ended. `drop`: the layout that follows has the result; the canvas
+   * animates `ids` (the moved or inserted blocks) from the lifted copy, or from `placeholder` (the
+   * gap, iframe viewport coordinates), to their new place. Otherwise everything slides back.
+   * A `drop: false` right after a `drop: true` means the edit was refused.
+   */
+  | { type: 'dragEnd'; drop: boolean; ids: string[]; placeholder: Rect | null }
+
+/** Smooth drag mode: what the canvas needs when a drag starts. */
+export type CanvasDragStart = {
+  /** The dragged block, or null for a new block or section from the library (no copy to lift). */
+  sourceId: string | null
+  /** Where the pointer holds the lifted copy, as a fraction of its width and height. */
+  anchor: Point
+  /** The lifted copy shrinks to fit this box (iframe pixels). */
+  maxSize: { width: number; height: number }
+}
 
 type Envelope<T> = { channel: typeof CHANNEL; payload: T }
 
