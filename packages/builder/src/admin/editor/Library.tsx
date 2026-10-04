@@ -1,16 +1,22 @@
 'use client'
 
 import { useDraggable } from '@dnd-kit/core'
-import { memo, useDeferredValue, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { memo, useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 
 import type { Block, BlockDefinition, SectionDefinition } from '../../core/types'
 import { insertBlocks, insertNewBlock, sectionPosition } from './actions'
 import { BlockIcon, Icon } from './icons'
 import { useRuntime, type DragData } from './runtime'
+import { requestDeleteSection, requestRenameSection } from './sections/SectionDialog'
+import { useSectionThumbnail } from './sections/useThumbnail'
+import { Popover, usePopover } from './styles/popover'
+import { useValue } from './valueStore'
 
 const BLOCK_CATEGORIES = ['Layout', 'Content', 'Media', 'Interactive', 'Dynamic']
 const SECTION_CATEGORIES = ['Heroes', 'Features', 'Content', 'Social proof', 'Calls to action', 'Contact', 'Navigation']
 const OTHER = 'Other'
+/** Group of the sections people saved. Listed first. */
+const SAVED = 'Saved'
 
 /** Groups items by category: known categories in `order` first, then the rest A–Z, then "Other". */
 function groupBy<T extends { category?: string }>(items: T[], order: string[]): [string, T[]][] {
@@ -39,14 +45,19 @@ type Tab = 'blocks' | 'sections'
  * or click it to insert it at the selection.
  */
 export function Library() {
-  const { config, store } = useRuntime()
+  const { config, store, sections } = useRuntime()
+  const saved = useValue(sections.saved)
   const [tab, setTab] = useState<Tab>('blocks')
   const [query, setQuery] = useState('')
   // The input updates at once; the filtered lists follow in a deferred render.
   const listQuery = useDeferredValue(query)
   // Open on an empty page. Once the page has blocks the outline matters more: the panel starts closed.
   const [open, setOpen] = useState(() => store.getState().layout.blocks.length === 0)
-  const sectionCount = config.sections?.length ?? 0
+  const sectionCount = (config.sections?.length ?? 0) + (saved?.length ?? 0)
+  // Saved sections load once, in the background.
+  useEffect(() => {
+    void sections.load()
+  }, [sections])
 
   return (
     <div className={`builder-editor__insert${open ? '' : ' builder-editor__insert--closed'}`}>
@@ -167,19 +178,22 @@ function BlockTile({ def }: { def: BlockDefinition }) {
 }
 
 const SectionList = memo(function SectionList({ query }: { query: string }) {
-  const { config } = useRuntime()
-  const sections = useMemo(() => config.sections ?? [], [config.sections])
-  const groups = useMemo(
-    () => groupBy(sections.filter((s) => matches(query, s.label, s.description, s.category)), SECTION_CATEGORIES),
-    [sections, query],
-  )
-  if (sections.length === 0) {
+  const { config, sections: controller } = useRuntime()
+  const saved = useValue(controller.saved)
+  const builtIn = useMemo(() => config.sections ?? [], [config.sections])
+  const groups = useMemo(() => {
+    const own = (saved ?? []).filter((s) => matches(query, s.label, s.category, SAVED))
+    const rest = groupBy(builtIn.filter((s) => matches(query, s.label, s.description, s.category)), SECTION_CATEGORIES)
+    return own.length > 0 ? ([[SAVED, own], ...rest] as [string, SectionDefinition[]][]) : rest
+  }, [builtIn, saved, query])
+  if (builtIn.length === 0 && (saved?.length ?? 0) === 0) {
     return (
       <div className="builder-editor__empty">
         <Icon name="section" size={20} />
         <p>No sections yet.</p>
         <p className="builder-editor__hint">
-          Pass ready-made sections to the plugin with the <code>sections</code> option.
+          {controller.enabled ? 'Select a block on the canvas, open its menu and choose “Save as section…”. ' : ''}
+          Apps pass ready-made sections to the plugin with the <code>sections</code> option.
         </p>
       </div>
     )
@@ -199,6 +213,9 @@ const SectionList = memo(function SectionList({ query }: { query: string }) {
 function SectionCard({ section }: { section: SectionDefinition }) {
   const runtime = useRuntime()
   const root = section.blocks[0]
+  const thumbRef = useRef<HTMLSpanElement>(null)
+  const picture = useSectionThumbnail(section, thumbRef)
+  const isSaved = section.savedId !== undefined
   const data: DragData = {
     // Drop rules check the root block's type.
     source: { kind: 'new', blockType: root?.type ?? 'stack' },
@@ -213,27 +230,84 @@ function SectionCard({ section }: { section: SectionDefinition }) {
   }
 
   return (
-    <button
-      ref={setNodeRef}
-      type="button"
-      className="builder-editor__card"
-      title={`Add ${section.label}`}
-      onClick={insert}
-      {...listeners}
-      {...attributes}
-    >
-      <span className="builder-editor__thumb" aria-hidden="true">
-        <span className="builder-editor__thumb-inner">
-          {section.blocks.map((block) => (
-            <Wire key={block.id} block={block} />
-          ))}
+    <div className="builder-editor__card-wrap">
+      <button
+        ref={setNodeRef}
+        type="button"
+        className="builder-editor__card"
+        title={`Add ${section.label}`}
+        onClick={insert}
+        {...listeners}
+        {...attributes}
+      >
+        <span ref={thumbRef} className={`builder-editor__thumb${picture ? ' builder-editor__thumb--picture' : ''}`} aria-hidden="true">
+          {picture ? (
+            <img className="builder-editor__thumb-img" src={picture} alt="" draggable={false} />
+          ) : (
+            <span className="builder-editor__thumb-inner">
+              {section.blocks.map((block) => (
+                <Wire key={block.id} block={block} />
+              ))}
+            </span>
+          )}
         </span>
-      </span>
-      <span className="builder-editor__card-text">
-        <span className="builder-editor__card-label">{section.label}</span>
-        {section.description && <span className="builder-editor__card-desc">{section.description}</span>}
-      </span>
-    </button>
+        <span className="builder-editor__card-text">
+          <span className="builder-editor__card-label">{section.label}</span>
+          {isSaved && section.category && <span className="builder-editor__card-desc">{section.category}</span>}
+          {!isSaved && section.description && <span className="builder-editor__card-desc">{section.description}</span>}
+        </span>
+      </button>
+      {isSaved && <SavedSectionMenu section={section} />}
+    </div>
+  )
+}
+
+/** Rename and delete for a saved section. */
+function SavedSectionMenu({ section }: { section: SectionDefinition }) {
+  const runtime = useRuntime()
+  const menu = usePopover('auto')
+  return (
+    <>
+      <button
+        type="button"
+        className="builder-editor__icon-button builder-editor__icon-button--small builder-editor__card-more"
+        aria-label={`Actions for ${section.label}`}
+        aria-haspopup="menu"
+        aria-expanded={menu.open}
+        data-tooltip="Rename or delete"
+        onClick={(e) => menu.toggle(e.currentTarget)}
+      >
+        <Icon name="more" size={14} />
+      </button>
+      <Popover {...menu.props} className="builder-editor__menu" label="Saved section actions">
+        <div role="menu">
+          <button
+            type="button"
+            role="menuitem"
+            className="builder-editor__menu-item"
+            onClick={() => {
+              menu.hide()
+              requestRenameSection(runtime, section)
+            }}
+          >
+            <Icon name="rename" size={14} />
+            Rename…
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="builder-editor__menu-item builder-editor__menu-item--danger"
+            onClick={() => {
+              menu.hide()
+              requestDeleteSection(runtime, section)
+            }}
+          >
+            <Icon name="delete" size={14} />
+            Delete…
+          </button>
+        </div>
+      </Popover>
+    </>
   )
 }
 

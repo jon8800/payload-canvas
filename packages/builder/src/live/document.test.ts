@@ -116,6 +116,32 @@ describe('document meta', () => {
     assert.equal(meta.template, null)
   })
 
+  it('gives a template its target and the published default template of that target', async () => {
+    const { req, target, db } = setup()
+    const asked: Doc[] = []
+    Object.assign(db.payload, {
+      async find(args: Doc) {
+        asked.push(args)
+        return { docs: [{ id: 'tpl-default' }] }
+      },
+    })
+    db.payload.findByID = async () => ({ id: 'p1', title: 'Post template', targetCollection: 'posts', _status: 'published' })
+    const meta = await loadDocMeta(req() as never, { target, isTemplate: true, canUpdate: true })
+    assert.deepEqual(meta.template, { target: 'posts', preview: null, defaultId: 'tpl-default' })
+    assert.equal(asked.length, 1)
+    assert.equal(asked[0].draft, false)
+    assert.match(JSON.stringify(asked[0].where), /"targetCollection":\{"equals":"posts"\}.*"isDefault":\{"equals":true\}/)
+  })
+
+  it('leaves the default template empty when there is none or the lookup fails', async () => {
+    const { req, target, db } = setup()
+    db.payload.findByID = async () => ({ id: 'p1', title: 'Post template', targetCollection: 'posts', _status: 'published' })
+    Object.assign(db.payload, { find: async () => ({ docs: [] }) })
+    assert.equal((await loadDocMeta(req() as never, { target, isTemplate: true, canUpdate: true })).template?.defaultId, null)
+    Object.assign(db.payload, { find: async () => Promise.reject(new Error('Forbidden')) })
+    assert.equal((await loadDocMeta(req() as never, { target, isTemplate: true, canUpdate: true })).template?.defaultId, null)
+  })
+
   it('shows "changed" for a newer draft over a published version, and "draft" when nothing is published', async () => {
     const changed = setup()
     await changed.db.payload.update({ collection: 'pages', id: 'p1', data: { title: 'Home 2' }, draft: true })

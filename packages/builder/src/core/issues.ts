@@ -82,6 +82,7 @@ function propPathOf(path: string): string | null {
  * Rewrites validation errors as readable messages, one per problem, without duplicates:
  * - required: "Image: choose an image", "Video: fill in source URL"
  * - wrong values: "Collection list: Number of items must be at most 100"
+ * - format: "Video: this YouTube link does not point to a video"
  * - nesting: "Form cannot go inside Link"
  * - bindings: "Button: a link can use only the page URL or a URL field (bound to "title")"
  * Errors without a block (a damaged layout) keep their message. `path` and `code` stay as they are.
@@ -108,6 +109,9 @@ export function describeLayoutErrors(layout: Layout, errors: readonly LayoutErro
       const propPath = propPathOf(error.path)
       if (error.code === 'nesting') {
         message = error.message
+      } else if (error.code === 'format') {
+        // The format message is a full sentence for the editor: "Video: this YouTube link …".
+        message = `${name}: ${lowerFirst(error.message)}`
       } else if (error.code === 'binding') {
         const match = /^Cannot bind "[^"]*" to "([^"]*)": (.*)$/.exec(error.message)
         message = match ? `${name}: ${match[2]} (bound to "${match[1]}")` : `${name}: ${error.message}`

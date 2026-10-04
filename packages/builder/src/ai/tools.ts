@@ -13,6 +13,7 @@ import type { BindingField, Block, BlockDefinition, Layout, Operation, SectionDe
 import { validateLayout, type LayoutError } from '../core/validate'
 import { resolveOperations, splitLayoutErrors } from '../live/apply'
 import { sectionInsertOps } from '../mcp/shared'
+import { findSection } from '../plugin/sections'
 
 type BetaTool = Anthropic.Beta.BetaTool
 
@@ -28,7 +29,13 @@ export type MediaItem = {
 
 export type ToolEnv = {
   blocks: BlockDefinition[]
+  /** The app's sections. Per request, the saved sections the user can read follow them. */
   sections: SectionDefinition[]
+  /**
+   * Saved sections are on: the section tools exist even without built-in sections, and their
+   * schemas take any section id or name (the saved ones differ per request). Default false.
+   */
+  savedSections?: boolean
   /** Bindable fields per collection. Null when the site has no templates: no getBindingSources tool. */
   bindingSources: Record<string, BindingField[]> | null
   /** Searches the media collection as the request's user. */
@@ -178,8 +185,10 @@ const BLOCK_SCHEMA = {
 /** Tool definitions in a fixed order (the order is part of the cached prompt prefix). */
 export function toolDefinitions(env: ToolEnv): BetaTool[] {
   const types = env.blocks.map((b) => b.type)
+  const saved = env.savedSections === true
   const sectionIds = env.sections.map((s) => s.id)
-  const categories = [...new Set(env.sections.map((s) => s.category).filter((c): c is string => Boolean(c)))]
+  // With saved sections the ids and categories differ per request: no enums (the tools check the input).
+  const categories = saved ? [] : [...new Set(env.sections.map((s) => s.category).filter((c): c is string => Boolean(c)))]
   const tools: BetaTool[] = [
     {
       name: 'getLayout',
@@ -201,12 +210,13 @@ export function toolDefinitions(env: ToolEnv): BetaTool[] {
       strict: true,
     },
   ]
-  if (env.sections.length > 0) {
+  if (env.sections.length > 0 || saved) {
     tools.push(
       {
         name: 'listSections',
         description:
-          'Lists the ready-made sections. The system prompt already has their outlines; call this with full: true when you need the exact block JSON of sections before inserting or copying from them.',
+          'Lists the ready-made sections. The system prompt already has their outlines; call this with full: true when you need the exact block JSON of sections before inserting or copying from them.' +
+          (saved ? ' The list also has the sections people saved on this site (saved: true, id "saved:<id>").' : ''),
         input_schema: {
           type: 'object',
           properties: {
@@ -220,11 +230,13 @@ export function toolDefinitions(env: ToolEnv): BetaTool[] {
       {
         name: 'insertSection',
         description:
-          'Inserts a ready-made section into the open page. Use it to add whole page parts (hero, features, pricing, call to action, footer …). All ids are new; the result returns the inserted blocks with their ids, so you can adjust their text and classes with applyOperations "update" right away. Default position: the end of the page.',
+          'Inserts a ready-made or saved section into the open page. Use it to add whole page parts (hero, features, pricing, call to action, footer …). All ids are new; the result returns the inserted blocks with their ids, so you can adjust their text and classes with applyOperations "update" right away. Default position: the end of the page.',
         input_schema: {
           type: 'object',
           properties: {
-            sectionId: { type: 'string', enum: sectionIds, description: 'Section id from the section catalog.' },
+            sectionId: saved
+              ? { type: 'string', description: 'A section catalog id, a saved section id ("saved:<id>") or a section name.' }
+              : { type: 'string', enum: sectionIds, description: 'Section id from the section catalog.' },
             parentId: { type: 'string', description: 'Parent block id. Leave out for the page root.' },
             slot: { type: 'string', description: 'Slot of the parent. Default "children".' },
             index: { type: 'integer', description: 'Final index in the target list. Leave out to append.' },
@@ -566,6 +578,7 @@ export async function runTool(name: string, rawInput: unknown, workspace: Worksp
         list.map((s) => ({
           id: s.id,
           label: s.label,
+          ...(s.savedId !== undefined ? { saved: true } : {}),
           ...(s.category ? { category: s.category } : {}),
           ...(input.full === true ? { blocks: s.blocks } : {}),
         })),
@@ -574,8 +587,11 @@ export async function runTool(name: string, rawInput: unknown, workspace: Worksp
     }
 
     case 'insertSection': {
-      const section = env.sections.find((s) => s.id === input.sectionId)
-      if (!section) return fail(`Unknown section "${String(input.sectionId)}"`, 'Section not inserted', { known: env.sections.map((s) => s.id) })
+      const section = typeof input.sectionId === 'string' ? findSection(env.sections, input.sectionId) : undefined
+      if (!section) {
+        const known = env.sections.map((s) => (s.savedId !== undefined ? `${s.id} (${s.label})` : s.id))
+        return fail(`Unknown section "${String(input.sectionId)}"`, 'Section not inserted', { known })
+      }
       const parentId = optionalString(input, 'parentId')
       const slot = optionalString(input, 'slot')
       if (parentId instanceof Error || slot instanceof Error) return fail('parentId and slot must be strings', 'Section not inserted')

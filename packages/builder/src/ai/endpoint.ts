@@ -9,6 +9,7 @@ import { TEMPLATE_TARGET_FIELD } from '../core/bindings'
 import { indexLayout, isPlainObject, normalizeLayout } from '../core/tree'
 import type { BindingField, BlockDefinition, Layout, SectionDefinition, StyleTokens, TemplateContext } from '../core/types'
 import { SSE_HEADERS, sseFrame } from '../live/endpoints'
+import { loadSavedSections } from '../plugin/sections'
 import { anthropicAdapter, type AiClient } from './agent'
 import { loadClient, type LoadedClient } from './client'
 import { DEFAULT_AI_MODEL, openAiTarget, resolveAi, type Env } from './config'
@@ -39,6 +40,8 @@ export type AiEndpointOptions = {
   getTokens: () => Promise<StyleTokens | null>
   /** The templates collection and the bindable fields. Null when no collection uses templates. */
   templates: { slug: string; sources: Record<string, BindingField[]> } | null
+  /** The saved sections collection. Each request loads the ones the user can read. Null or left out: off. */
+  savedSections?: { slug: string } | null
   /** Tests: replaces the Anthropic client. */
   loadClient?: () => Promise<LoadedClient>
   /** Tests: replaces fetch for OpenAI-compatible providers. */
@@ -198,10 +201,16 @@ export function fakeModelEnabled(): boolean {
 
 export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
   const { ai, collections, blocks, sections, templates } = options
+  const savedSections = options.savedSections ?? null
   const processEnv = options.env ?? process.env
   const resolved = resolveAi(ai, processEnv)
   const { model, provider, identity } = resolved
-  const env: Omit<ToolEnv, 'searchMedia'> = { blocks, sections, bindingSources: templates?.sources ?? null }
+  const env: Omit<ToolEnv, 'searchMedia'> = {
+    blocks,
+    sections,
+    savedSections: savedSections !== null,
+    bindingSources: templates?.sources ?? null,
+  }
   const toolEnv: ToolEnv = { ...env, searchMedia: async () => [] }
   const tools = provider.type === 'anthropic' ? toolDefinitions(toolEnv) : []
   const chatTools = provider.type === 'anthropic' ? [] : openAiTools(toolEnv)
@@ -213,7 +222,14 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
       .getTokens()
       .catch(() => null)
       .then((tokens) => ({
-        system: systemPrompt({ blocks, sections, tokens, bindings: Boolean(templates), instructions: ai.instructions }),
+        system: systemPrompt({
+          blocks,
+          sections,
+          tokens,
+          bindings: Boolean(templates),
+          instructions: ai.instructions,
+          savedSections: savedSections !== null,
+        }),
         breakpoints: breakpointsPx(tokens),
       }))
     return prompt
@@ -326,6 +342,8 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
       const selectedId = body.selectedId && indexLayout(layout).has(body.selectedId) ? body.selectedId : null
       const titleField = config?.admin?.useAsTitle
       const title = titleField && typeof doc[titleField] === 'string' ? (doc[titleField] as string) : undefined
+      // Saved sections differ per user and change often: they go in the context, not the cached prompt.
+      const saved = savedSections ? await loadSavedSections(req, savedSections.slug) : []
       const isTemplate = templates !== null && body.collection === templates.slug
       const templateTarget = isTemplate
         ? (typeof doc[TEMPLATE_TARGET_FIELD] === 'string' ? (doc[TEMPLATE_TARGET_FIELD] as string) : (body.context?.collection ?? null))
@@ -347,6 +365,7 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
               breakpoints,
               templateTarget,
               sample: isTemplate ? body.context : null,
+              savedSections: saved,
             }),
           },
         ],
@@ -379,7 +398,7 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
               messages: body.messages,
               context,
               workspace: new Workspace(layout, blocks),
-              env: { ...env, searchMedia: mediaSearch(req, ai.mediaCollection ?? 'media') },
+              env: { ...env, sections: [...sections, ...saved], searchMedia: mediaSearch(req, ai.mediaCollection ?? 'media') },
               emit: (event) => write(sseFrame(event.type, event)),
               signal: controller.signal,
             })

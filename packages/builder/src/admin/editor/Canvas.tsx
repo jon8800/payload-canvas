@@ -10,6 +10,7 @@ import { applyInlineChange, boundHint, inlineEditing, stopInlineEditing } from '
 import { blockName } from './names'
 import { cursorAt } from './live'
 import { FollowFrame } from './live/PresenceUI'
+import { EDGE_BAND, insertSpotAt, sameSpot } from './insert/spots'
 import { Overlay } from './Overlay'
 import { computeDrop, useRuntime } from './runtime'
 import { bindShortcuts } from './shortcuts'
@@ -27,6 +28,10 @@ const NOTICE_MS = 1800
 const WARNING_MS = 5000
 /** Times for the canvas to render a new block before it scrolls to it. */
 const REVEAL_DELAYS_MS = [120, 600]
+/** The "+" stays this long after the pointer leaves the canvas, so the pointer can reach it. */
+const SPOT_LINGER_MS = 160
+/** Width of a container's edge band for the "+", in screen pixels. */
+const SPOT_BAND_PX = 10
 
 export function Canvas() {
   const runtime = useRuntime()
@@ -64,6 +69,11 @@ export function Canvas() {
   useEffect(() => {
     const { store, measurement, drag } = runtime
     const inline = inlineEditing(runtime)
+    let spotTimer = 0
+    const setSpot = (spot: ReturnType<typeof insertSpotAt>) => {
+      window.clearTimeout(spotTimer)
+      if (!sameSpot(spot, runtime.insertSpot.get())) runtime.insertSpot.set(spot)
+    }
     const onMessage = (event: MessageEvent) => {
       const message = unwrap<CanvasToAdmin>(event, iframeRef.current?.contentWindow)
       if (!message) return
@@ -87,15 +97,25 @@ export function Canvas() {
             const m = measurement.get()
             if (m) runtime.pointer.set(cursorAt(store.getState().layout, m, message))
           }
-          if (drag.get()) return
+          if (drag.get()) {
+            setSpot(null)
+            return
+          }
           if (message.kind === 'leave') {
             store.hover(null)
+            window.clearTimeout(spotTimer)
+            spotTimer = window.setTimeout(() => runtime.insertSpot.set(null), SPOT_LINGER_MS)
             return
           }
           const m = measurement.get()
           if (!m) return
-          const hit = deepestBlockAt(store.getState().layout, m, message)
-          if (message.kind === 'move') store.hover(hit)
+          const { layout } = store.getState()
+          const hit = deepestBlockAt(layout, m, message)
+          if (message.kind === 'move') {
+            store.hover(hit)
+            const band = Math.max(EDGE_BAND, SPOT_BAND_PX / (runtime.frame.get().zoom || 1))
+            setSpot(inline.get() ? null : insertSpotAt(layout, runtime.config.blocks, m, message, { band }))
+          }
           if (message.kind === 'click') store.select(hit)
           return
         }
@@ -150,6 +170,7 @@ export function Canvas() {
     // The iframe may already be listening (it loaded before this effect ran).
     sendAll()
     return () => {
+      window.clearTimeout(spotTimer)
       window.removeEventListener('message', onMessage)
       document.removeEventListener('pointerdown', onPointerDown, true)
     }
@@ -192,7 +213,11 @@ export function Canvas() {
     let reveal: number[] = []
     const unsubscribe = runtime.store.subscribe(() => {
       const next = runtime.store.getState()
-      if (next.layout !== last.layout) runtime.postToCanvas({ type: 'layout', layout: next.layout })
+      if (next.layout !== last.layout) {
+        runtime.postToCanvas({ type: 'layout', layout: next.layout })
+        // The "+" belongs to the old layout. The next pointer move places it again.
+        runtime.insertSpot.set(null)
+      }
       // Another block selected (or the edited block deleted): inline editing ends.
       const editing = inlineEditing(runtime).get()
       if (editing && next.selectedId !== editing.id && next.selectedId !== last.selectedId) stopInlineEditing(runtime)

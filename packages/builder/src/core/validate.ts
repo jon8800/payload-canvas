@@ -3,23 +3,25 @@
 // "empty" value); the schema leaves that out to keep it simple for AI tools.
 
 import { getBlockDefinition } from './blocks'
+import { formatProblem } from './formats'
 import { dataFields, fieldBlocks, optionValues, type DataField, type LooseField } from './fields'
 import { isPlainObject } from './tree'
 import type { BlockDefinition, SlotDefinition } from './types'
 
 /**
  * - `invalid`: blocks every save.
- * - `required` (a required prop is empty), `nesting` (a block in a slot that refuses it) and
- *   `binding` (a binding the prop cannot use): block only publishing, so drafts can hold
- *   unfinished work and older data stays editable.
+ * - `required` (a required prop is empty), `format` (a text prop does not match its
+ *   `admin.custom.builderFormat`, such as a half-typed video URL), `nesting` (a block in a slot
+ *   that refuses it) and `binding` (a binding the prop cannot use): block only publishing, so
+ *   drafts can hold unfinished work and older data stays editable.
  * - `unknown-prop`, `unknown-key`: warnings, never blocking.
  */
-export type LayoutErrorCode = 'invalid' | 'required' | 'nesting' | 'binding' | 'unknown-prop' | 'unknown-key'
+export type LayoutErrorCode = 'invalid' | 'required' | 'format' | 'nesting' | 'binding' | 'unknown-prop' | 'unknown-key'
 
 export type LayoutError = { blockId?: string; path: string; message: string; code: LayoutErrorCode }
 
 /** Codes that block publishing but not draft saves. */
-export const PUBLISH_ONLY_CODES: ReadonlySet<LayoutErrorCode> = new Set(['required', 'nesting', 'binding'])
+export const PUBLISH_ONLY_CODES: ReadonlySet<LayoutErrorCode> = new Set(['required', 'format', 'nesting', 'binding'])
 
 /** True when the error never blocks a save (only logged or shown). */
 export function isLayoutWarning(error: Pick<LayoutError, 'code'>): boolean {
@@ -163,7 +165,25 @@ function checkFields(fields: readonly unknown[], data: Record<string, unknown>, 
       if (value === undefined || value === null) continue
     }
     checkValue(field, value, at, report)
+    checkFormat(field, value, data, at, report)
   }
+}
+
+/**
+ * A text prop with `admin.custom.builderFormat` must match that format (publish only). A prop
+ * the editor hides (`builderCondition` not met by a sibling that has a value) is not checked,
+ * because a leftover value there is never shown or rendered.
+ */
+function checkFormat(field: DataField, value: unknown, siblings: Record<string, unknown>, path: string, report: Report): void {
+  const custom = field.admin?.custom
+  if (field.type !== 'text' || field.hasMany || typeof value !== 'string' || !custom) return
+  const condition = custom.builderCondition
+  if (isPlainObject(condition) && typeof condition.field === 'string') {
+    const sibling = siblings[condition.field]
+    if (sibling !== undefined && sibling !== null && sibling !== condition.equals) return
+  }
+  const problem = formatProblem(custom.builderFormat, value)
+  if (problem) report(path, problem, 'format')
 }
 
 function checkMany(field: LooseField, value: unknown, path: string, report: Report, item: (v: unknown, at: string) => void): void {

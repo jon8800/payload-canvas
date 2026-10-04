@@ -24,7 +24,7 @@ export type LooseField = {
   maxRows?: number
   defaultValue?: unknown
   jsonSchema?: { schema?: unknown }
-  admin?: { description?: unknown }
+  admin?: { description?: unknown; custom?: Record<string, unknown> }
   custom?: { ai?: { description?: unknown } }
   ai?: { description?: unknown }
 }

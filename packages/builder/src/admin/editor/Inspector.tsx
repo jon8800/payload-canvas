@@ -9,6 +9,7 @@ import { copySelection, duplicateBlock, parseClipboard, pasteBlocks, removeBlock
 import { BlockIcon, Icon, type IconName } from './icons'
 import { blockName, typeName } from './names'
 import { RenameInput } from './Outline'
+import { requestSaveSection } from './sections/SectionDialog'
 import { EditingBanner } from './live/PresenceUI'
 import { AssistantPanel } from './assistant/AssistantPanel'
 import { BlockContentFields } from './renderField'
@@ -218,6 +219,7 @@ function BlockHeader({ block }: { block: Block }) {
       label: block.hidden ? 'Show on the site' : 'Hide on the site',
       run: () => toggleHidden(runtime, block.id),
     },
+    ...(runtime.sections.enabled ? [{ icon: 'section' as const, label: 'Save as section…', run: () => requestSaveSection(runtime, block) }] : []),
     'separator',
     { icon: 'delete', label: 'Delete', keys: 'Del', danger: true, run: () => removeBlock(runtime, block.id) },
   ]

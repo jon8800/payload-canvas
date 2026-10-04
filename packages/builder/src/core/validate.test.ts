@@ -3,8 +3,9 @@ import { describe, it } from 'node:test'
 
 import type { Field } from 'payload'
 
+import { describeLayoutErrors } from './issues'
 import type { BlockDefinition } from './types'
-import { validateLayout } from './validate'
+import { isBlockingError, validateLayout } from './validate'
 
 const blocks: BlockDefinition[] = [
   { type: 'stack', label: 'Stack', fields: [], slots: { children: {} } },
@@ -199,5 +200,56 @@ describe('validateLayout', () => {
       blocks: [{ id: 'a', type: 'stack', slots: { children: [{ id: 'b', type: 'stack', slots: { children: [{ id: 'c', type: 'heading' }] } }] } }],
     })
     assert.deepEqual(result, ['blocks[0].slots.children[0].slots.children[0].props.text'])
+  })
+})
+
+describe('format checks', () => {
+  const video: BlockDefinition = {
+    type: 'video',
+    label: 'Video',
+    fields: [
+      { name: 'source', type: 'select', options: ['upload', 'url'] },
+      {
+        name: 'url',
+        type: 'text',
+        admin: { custom: { builderCondition: { field: 'source', equals: 'url' }, builderFormat: 'videoUrl' } },
+      },
+      { name: 'other', type: 'text', admin: { custom: { builderFormat: 'unknown-format' } } },
+    ] as Field[],
+  }
+  const check = (props: Record<string, unknown>) =>
+    validateLayout({ version: 1, blocks: [{ id: 'v', type: 'video', props }] }, [video])
+
+  it('reports a bad value with the soft "format" code and the block id', () => {
+    const errors = check({ source: 'url', url: 'https://www.youtube.com/watch?v=short' })
+    assert.equal(errors.length, 1)
+    assert.equal(errors[0].code, 'format')
+    assert.equal(errors[0].blockId, 'v')
+    assert.equal(errors[0].path, 'blocks[0].props.url')
+    assert.match(errors[0].message, /YouTube link/)
+  })
+
+  it('blocks only publishing', () => {
+    const [error] = check({ source: 'url', url: 'not a url' })
+    assert.equal(isBlockingError(error, false), false)
+    assert.equal(isBlockingError(error, true), true)
+  })
+
+  it('accepts good links, empty values and unknown formats', () => {
+    assert.deepEqual(check({ source: 'url', url: 'https://youtu.be/aqz-KE-bpKQ' }), [])
+    assert.deepEqual(check({ source: 'url', url: '' }), [])
+    assert.deepEqual(check({ source: 'url', other: 'anything' }), [])
+  })
+
+  it('skips a hidden prop but checks it when the source is not set', () => {
+    assert.deepEqual(check({ source: 'upload', url: 'not a url' }), [])
+    assert.equal(check({ url: 'not a url' }).length, 1)
+  })
+
+  it('reads as "Video: this Vimeo link ..." for editors', () => {
+    const layout = { version: 1, blocks: [{ id: 'v', type: 'video', props: { source: 'url', url: 'https://vimeo.com/channels/x' } }] } as never
+    const [issue] = describeLayoutErrors(layout, validateLayout(layout, [video]), [video])
+    assert.match(issue.message, /^Video: this Vimeo link does not point to a video/)
+    assert.equal(issue.blockId, 'v')
   })
 })

@@ -92,6 +92,17 @@ export type SectionDefinition = {
   category?: string
   /** The section's block tree. Block ids are regenerated on every insert. */
   blocks: Block[]
+  /**
+   * Set on sections people saved from the editor ("Save as section…"): the id of the document in
+   * the saved sections collection. The section's own `id` is then `saved:<savedId>`.
+   */
+  savedId?: string | number
+}
+
+/** The saved sections collection, for the editor. Null when `websiteBuilder({ savedSections: false })`. */
+export type SavedSectionsClientConfig = {
+  /** Slug of the collection, e.g. "builder-sections". */
+  collection: string
 }
 
 // ---------------------------------------------------------------------------
@@ -163,6 +174,13 @@ export type BuilderClientConfig = {
   templates: TemplatesClientConfig | null
   /** The AI assistant. Null when the plugin has no `ai` option. */
   ai: AiClientConfig | null
+  /** Sections people save from the editor. Null when turned off. */
+  savedSections: SavedSectionsClientConfig | null
+  /**
+   * Full API path that returns the theme as `{ css, fontsHref }`, e.g. "/api/builder/theme". The
+   * library's section thumbnails follow it. Null without the theme global.
+   */
+  themeEndpoint: string | null
 }
 
 // ---------------------------------------------------------------------------

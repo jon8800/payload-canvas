@@ -21,6 +21,7 @@ import { DragLayer } from './DragLayer'
 import { Inspector } from './Inspector'
 import { Library } from './Library'
 import { Outline } from './Outline'
+import { SectionDialog } from './sections/SectionDialog'
 import { computeDrop, createRuntime, RuntimeContext, toCanvasPoint, type DragData, type DragState, type Runtime } from './runtime'
 import { bindShortcuts } from './shortcuts'
 import { cursorAt, useMultiplayer } from './live'
@@ -76,6 +77,8 @@ export function Editor({ config, meta, icon }: EditorProps) {
   useTemplateController(runtime)
   useEffect(() => runtime.assistant?.setDocument(config.collection, docId), [runtime, config.collection, docId])
   useEffect(() => () => runtime.assistant?.stop(), [runtime])
+  // The hidden thumbnail iframe goes with the editor.
+  useEffect(() => () => runtime.thumbnails.dispose(), [runtime])
   const stopAutoScroll = useRef<(() => void) | null>(null)
   const dndId = useId()
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
@@ -109,6 +112,7 @@ export function Editor({ config, meta, icon }: EditorProps) {
     const data = active.data.current as DragData
     runtime.pointerLock.set(true)
     runtime.store.hover(null)
+    runtime.insertSpot.set(null)
     runtime.drag.set({ source: data.source, label: data.label, icon: data.icon, zone: null, target: null, pointer: null })
     stopAutoScroll.current = startAutoScroll(runtime)
   }
@@ -197,6 +201,7 @@ export function Editor({ config, meta, icon }: EditorProps) {
             </div>
           )}
           <DragLayer />
+          <SectionDialog />
         </div>
       </DndContext>
     </RuntimeContext>

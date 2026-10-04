@@ -40,6 +40,13 @@ import {
   type SessionManager,
 } from '../live'
 import { keepLockBeforeOperation, layoutAfterChange, layoutBeforeChange, type BindingCheck } from './hook'
+import {
+  DEFAULT_SAVED_SECTIONS_SLUG,
+  SAVED_SECTIONS_CONFIG_KEY,
+  savedSectionsCollection,
+  type SavedSectionsOptions,
+  type SavedSectionsServerConfig,
+} from './sections'
 import { toJsonSafe } from './jsonSafe'
 import { listCollectionsOf } from './listCollections'
 import {
@@ -53,6 +60,7 @@ import {
 } from './templates'
 
 export type { GeneratedCss } from './hook'
+export type { SavedSectionsOptions } from './sections'
 
 /**
  * Server-only key in `config.custom`: what the site needs to compile one stylesheet for every
@@ -125,6 +133,12 @@ export type WebsiteBuilderOptions = {
   canvasPath?: string
   /** Ready-made sections shown in the editor's library and offered to AI tools. */
   sections?: SectionDefinition[]
+  /**
+   * Sections people save from the editor ("Save as section…" in a block's menu). The plugin adds
+   * a collection for them (slug "builder-sections"); the library lists them under "Saved", and the
+   * MCP tools and the AI assistant can insert them. On by default; `false` turns it off.
+   */
+  savedSections?: SavedSectionsOptions | false
   /**
    * Live editing: every open editor and every AI agent (MCP) edits one shared in-memory session
    * per document, and the server saves its draft about a second after the last change. Sessions
@@ -250,6 +264,21 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
     }
 
     const blocks = listCollectionsOf(options.blocks ?? defaultBlocks(), [...withUrl])
+
+    // Saved sections: a collection of sections people saved from the editor.
+    const savedSections: SavedSectionsServerConfig | null =
+      options.savedSections === false ? null : { slug: options.savedSections?.slug ?? DEFAULT_SAVED_SECTIONS_SLUG }
+    if (savedSections) {
+      if (collections.some((c) => c.slug === savedSections.slug)) {
+        throw new Error(
+          `[websiteBuilder] A collection named "${savedSections.slug}" already exists. Set \`savedSections.slug\` to another name, or \`savedSections: false\`.`,
+        )
+      }
+      collections = [
+        ...collections,
+        savedSectionsCollection({ slug: savedSections.slug, blocks, options: options.savedSections || undefined }),
+      ]
+    }
     const clientBlocks = toJsonSafe(blocks)
     const css: CssOptions = {
       entry: path.resolve(process.cwd(), options.css.entry),
@@ -328,6 +357,8 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           liveEndpoint: `${apiRoute}${LIVE_PATH}`,
           templates: clientTemplates,
           ai: options.ai ? aiClientConfig(options.ai, `${apiRoute}${AI_PATH}`) : null,
+          savedSections: savedSections ? { collection: savedSections.slug } : null,
+          themeEndpoint: theme ? theme.endpoint : null,
         }
         return addBuilder(collection, {
           field,
@@ -348,6 +379,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
         [SITE_CSS_KEY]: { css, blocks } satisfies SiteCssConfig,
         ...(templates ? { [TEMPLATES_CONFIG_KEY]: templates } : {}),
         ...(theme ? { [THEME_CONFIG_KEY]: theme } : {}),
+        ...(savedSections ? { [SAVED_SECTIONS_CONFIG_KEY]: savedSections } : {}),
       },
       globals: themeOptions ? [...(config.globals ?? []), themeGlobal(themeOptions)] : config.globals,
       endpoints: [
@@ -366,6 +398,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
               collections: liveCollections,
               blocks,
               sections: options.sections ?? [],
+              savedSections,
               getTokens: () => getStyleTokens(css),
               templates: templates ? { slug: templatesSlug, sources: templates.sources } : null,
             })

@@ -83,6 +83,7 @@ export interface Config {
     'payload-mcp-api-keys': PayloadMcpApiKey;
     search: Search;
     'builder-templates': BuilderTemplate;
+    'builder-sections': BuilderSection;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-folders': FolderInterface;
@@ -112,6 +113,7 @@ export interface Config {
     'payload-mcp-api-keys': PayloadMcpApiKeysSelect<false> | PayloadMcpApiKeysSelect<true>;
     search: SearchSelect<false> | SearchSelect<true>;
     'builder-templates': BuilderTemplatesSelect<false> | BuilderTemplatesSelect<true>;
+    'builder-sections': BuilderSectionsSelect<false> | BuilderSectionsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-folders': PayloadFoldersSelect<false> | PayloadFoldersSelect<true>;
@@ -1060,6 +1062,34 @@ export interface Search {
   createdAt: string;
 }
 /**
+ * Sections saved from the page builder with "Save as section…". The builder lists them under "Saved" in Add > Sections.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "builder-sections".
+ */
+export interface BuilderSection {
+  id: number;
+  name: string;
+  /**
+   * Optional, e.g. "Heroes" or "Pricing". Search in the library finds it.
+   */
+  category?: string | null;
+  /**
+   * The section's blocks. To change them, insert the section on a page, edit it there and save it as a section again.
+   */
+  blocks:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
@@ -1226,6 +1256,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'builder-templates';
         value: number | BuilderTemplate;
+      } | null)
+    | ({
+        relationTo: 'builder-sections';
+        value: number | BuilderSection;
       } | null)
     | ({
         relationTo: 'payload-folders';
@@ -1833,6 +1867,17 @@ export interface BuilderTemplatesSelect<T extends boolean = true> {
   updatedAt?: T;
   createdAt?: T;
   _status?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "builder-sections_select".
+ */
+export interface BuilderSectionsSelect<T extends boolean = true> {
+  name?: T;
+  category?: T;
+  blocks?: T;
+  updatedAt?: T;
+  createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

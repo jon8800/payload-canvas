@@ -10,7 +10,7 @@
 
 import type { Endpoint, PayloadRequest } from 'payload'
 
-import { TEMPLATE_PREVIEW_FIELD, TEMPLATE_TARGET_FIELD } from '../core/bindings'
+import { TEMPLATE_DEFAULT_FIELD, TEMPLATE_PREVIEW_FIELD, TEMPLATE_TARGET_FIELD } from '../core/bindings'
 import { describeLayoutErrors, summarizeProblems } from '../core/issues'
 import { normalizeLayout } from '../core/tree'
 import type { BlockDefinition } from '../core/types'
@@ -50,6 +50,7 @@ export function builderConfigOf(payload: { config: { custom?: Record<string, unk
 type DocApi = {
   findByID(args: Record<string, unknown>): Promise<Record<string, unknown>>
   update(args: Record<string, unknown>): Promise<Record<string, unknown>>
+  find?(args: Record<string, unknown>): Promise<{ docs: Record<string, unknown>[] }>
   countVersions?(args: Record<string, unknown>): Promise<{ totalDocs: number }>
   collections: Record<string, { config: { admin?: { useAsTitle?: string }; versions?: unknown; fields?: unknown } } | undefined>
 }
@@ -109,6 +110,30 @@ export async function loadDocMeta(req: PayloadRequest, args: DocMetaArgs): Promi
     }
   }
 
+  // The published default template of the target collection: documents without a template of
+  // their own use it. The editor's sample picker marks documents that use another template.
+  let defaultId: string | number | null = null
+  const templateTarget = isTemplate ? text(draft[TEMPLATE_TARGET_FIELD]) : null
+  if (templateTarget && payload.find) {
+    try {
+      const found = await payload.find({
+        collection: target.collection,
+        where: { and: [{ [TEMPLATE_TARGET_FIELD]: { equals: templateTarget } }, { [TEMPLATE_DEFAULT_FIELD]: { equals: true } }] },
+        limit: 1,
+        depth: 0,
+        pagination: false,
+        draft: false,
+        overrideAccess: false,
+        user: req.user,
+        req,
+      })
+      const id = found.docs[0]?.id
+      defaultId = typeof id === 'string' || typeof id === 'number' ? id : null
+    } catch {
+      defaultId = null
+    }
+  }
+
   const useAsTitle = config?.admin?.useAsTitle
   const titleField = useAsTitle && useAsTitle !== 'id' ? useAsTitle : null
   return {
@@ -126,7 +151,7 @@ export async function loadDocMeta(req: PayloadRequest, args: DocMetaArgs): Promi
     previewUrl: await draftPreviewPath(req, target.collection, draft),
     canUpdate,
     template: isTemplate
-      ? { target: text(draft[TEMPLATE_TARGET_FIELD]), preview: draft[TEMPLATE_PREVIEW_FIELD] ?? null }
+      ? { target: text(draft[TEMPLATE_TARGET_FIELD]), preview: draft[TEMPLATE_PREVIEW_FIELD] ?? null, defaultId }
       : null,
   }
 }

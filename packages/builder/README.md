@@ -175,6 +175,8 @@ export default function CanvasPage() {
 }
 ```
 
+The same page also renders the library's section thumbnails: the editor loads it hidden, with `?mode=thumbnail`, when the **Sections** tab needs pictures. Nothing to add for that.
+
 The default path is `/builder-canvas`. Change it with the `canvasPath` option. If your app has a single root `app/layout.tsx`, move the site into a route group first, so the canvas can have its own root layout. Payload's templates already use `(frontend)` and `(payload)` groups.
 
 ### 7. Render pages on the site
@@ -262,6 +264,10 @@ The top bar, left to right:
 
 Publishing. All editors of a document share one live session (see [Multiplayer editing](#multiplayer-editing)). The session saves the layout as a draft about a second after each change. **Publish changes** saves what is still unsaved, then publishes with Payload's Local API as the signed-in user, so access control, hooks and versions work as usual. **Unpublish** sets the document back to draft. **Revert to published** loads the published version into the session, so every open editor reloads the canvas, and saves it again. Every open editor sees the new status at once.
 
+Save rules. Every save checks the layout. A broken layout (wrong shape, duplicate ids, unknown block types, wrong prop types) blocks every save. Unfinished blocks do not block drafts, autosave or live sessions: a missing required prop, a prop whose value does not match its `builderFormat` (for example a half-typed video URL), a block in a slot that refuses it, and a binding the prop cannot use. They block **Publish** only, and the problem list names the block ("Video: this YouTube link does not point to a video"). Click a problem to select the block.
+
+Adding blocks on the canvas. Hover the canvas: a small **+** shows on the edge between two blocks next to the pointer (above or below in a column, left or right in a row), and in the middle of an empty container. Click it to open a picker with the blocks and sections that fit there (slot rules apply). Type to search, use the arrow keys and Enter, or click. The new block goes in exactly that place and is selected. The **+** hides while you drag and while you edit text on the canvas.
+
 Access. The view sends signed-out visitors to the login page and back. Users without admin access go to Payload's "unauthorized" page. A document that does not exist, or a collection without the builder, shows "not found". A user who can read but not update the document gets the normal Edit view.
 
 ## Plugin options
@@ -274,6 +280,7 @@ websiteBuilder({
   },
   blocks,                      // default: defaultBlocks()
   sections,                    // ready-made sections for the library and AI tools
+  savedSections: { slug: 'builder-sections' }, // sections people save; `false` turns it off
   css: {
     entry: 'src/app/(frontend)/globals.css',
     plugins: { '@tailwindcss/typography': typography },
@@ -294,6 +301,7 @@ websiteBuilder({
 | `collections[slug].templates` | `boolean` | Documents render through templates. See [Templates](#templates-and-binding). |
 | `blocks` | `BlockDefinition[]` | The blocks editors can use. Default `defaultBlocks()`. |
 | `sections` | `SectionDefinition[]` | Ready-made sections. See [Sections](#sections). |
+| `savedSections` | `{ slug?, access?, admin?, hooks? } \| false` | The collection for sections people save in the editor. Default slug `builder-sections`; default access: every signed-in user. `false` turns it off. See [Saved sections](#saved-sections). |
 | `css.entry` | `string` | Your Tailwind entry CSS, absolute or relative to `process.cwd()`. Required. |
 | `css.plugins` | `Record<id, plugin>` | Tailwind plugins by the id your CSS uses in `@plugin "<id>"`. Pass the imported module, so Next bundles it. |
 | `canvasPath` | `string` | The canvas route. Default `/builder-canvas`. |
@@ -439,6 +447,7 @@ export const blocks = [...defaultBlocks({ linkCollections: ['pages'] }), pricing
 
 - `slots` declares where child blocks go. `allow` lists the accepted block types, or `['*']`.
 - `classes`: the save hook only sees the classes stored in the layout. List the classes your component hardcodes, so they are in the generated CSS too.
+- `admin.custom.builderFormat` on a `text` field names a value check, for example `custom: { builderFormat: 'videoUrl' }` (the Video block's URL). The inspector shows the message while the user types, and a bad value blocks **Publish** but not draft saves. `videoUrl` is the only built-in format. Formats live in a registry in `@payload-toolkit/builder/core` (`FORMATS`, `formatProblem`). The renderer can use the same parser (`parseVideoUrl`).
 - `linkField()` stores `{ type, url, reference, newTab }`. The component receives it resolved, with `href`, `target` and `rel`.
 - The default blocks are `stack`, `grid`, `heading`, `text`, `richText`, `image`, `video`, `button`, `link`, `list`, `quote`, `divider`, `spacer`, `collectionList` (documents from a collection) and `field` (a field of the document a template renders).
 
@@ -473,6 +482,14 @@ export const sections: SectionDefinition[] = [
 ```
 
 Pass them to `websiteBuilder({ sections })` and to `builderMcpTools({ sections })`. Block ids are regenerated on every insert.
+
+The library shows each section as a real picture: the hidden canvas page (`?mode=thumbnail`) renders one section at a time with your components and theme, at a desktop width of 1280 px, and the editor keeps the picture in IndexedDB. A picture changes when the section, the theme or the block definitions change. Cards show a wireframe until their picture is ready, or when it fails.
+
+### Saved sections
+
+Editors save their own sections: select a block (a whole section, or any block with its children), open **…** on the canvas or in the inspector, and choose **Save as section…**. Give it a name and, if you like, a category. It appears in **Add › Sections** under **Saved**, for everyone who edits pages. Insert it like any section; every insert gets new block ids. The card's **…** menu renames or deletes it. A deleted section stays on the pages that use it.
+
+The plugin stores them in the `builder-sections` collection (next to Templates in the admin nav). The MCP tools and the AI assistant see them too: `listSections` lists them with `saved: true`, and `insertSection` takes `saved:<id>`, the document id or the section's name.
 
 ## Styling
 
@@ -776,7 +793,7 @@ plugins: [
 ```
 
 - Agents connect to `POST <your site>/api/mcp` with an API key from **Admin > MCP > API Keys**. Claude Code and Codex setup: [docs/ai/connect-claude-code-and-codex.md](https://github.com/jon8800/payload-toolkit/blob/main/docs/ai/connect-claude-code-and-codex.md).
-- Tools: `listBlocks`, `getBlockSchema`, `listSections`, `insertSection`, `getLayout`, `applyOperations`, `validateLayout`, `getPreviewUrl`, plus `listTemplates` and `getBindingSources` for templates.
+- Tools (`listSections` and `insertSection` include [saved sections](#saved-sections)): `listBlocks`, `getBlockSchema`, `listSections`, `insertSection`, `getLayout`, `applyOperations`, `validateLayout`, `getPreviewUrl`, plus `listTemplates` and `getBindingSources` for templates.
 - Every tool checks the key's access to the collection. Handlers run as the key's user with `overrideAccess: false`.
 - Writes are commits to the document's live session, like an editor's own changes. Open editors show them at once, and the agent appears in the collaborator list while it works. The draft is saved about a second later. `getLayout` returns the session's layout, unsaved changes included.
 - `builderMcpTools` options: `blocks`, `sections`, `collections` (the same map as the plugin), `siteUrl` (default: Payload `serverURL`, then `NEXT_PUBLIC_SERVER_URL`), `apiKeyCollection`.

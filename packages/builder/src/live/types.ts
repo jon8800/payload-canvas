@@ -265,8 +265,12 @@ export type BuilderDocMeta = {
   previewUrl: string | null
   /** The user may change the document. */
   canUpdate: boolean
-  /** Template documents: the collection the template is for and its preview document. */
-  template: { target: string | null; preview: unknown } | null
+  /**
+   * Template documents: the collection the template is for, its preview document, and the id of
+   * the published default template for that collection (null when there is none). Documents
+   * without their own template show the default one.
+   */
+  template: { target: string | null; preview: unknown; defaultId: string | number | null } | null
 }
 
 /**

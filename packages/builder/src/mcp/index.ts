@@ -32,6 +32,7 @@ import type { CommitResult } from '../live/session'
 import type { LiveActor } from '../live/types'
 import { builderViewPath, documentPath, draftPreviewPath } from '../plugin/links'
 import { listCollectionsOf } from '../plugin/listCollections'
+import { findSection, loadSavedSections, savedSectionsConfigOf } from '../plugin/sections'
 import { templatesConfigOf } from '../plugin/templates'
 import { BINDINGS_GUIDE, describeBlock, layoutGuide, outline, sectionInsertOps, withNewIds } from './shared'
 
@@ -252,6 +253,12 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     })
   }
 
+  /** The app's sections, then the saved sections the request's user can read (when turned on). */
+  const allSections = async (req: PayloadRequest): Promise<SectionDefinition[]> => {
+    const saved = savedSectionsConfigOf(req.payload)
+    return saved ? [...sections, ...(await loadSavedSections(req, saved.slug))] : sections
+  }
+
   /** The layout people see now: the open live session's, else the saved draft's. */
   const currentLayout = (req: PayloadRequest, collection: string, doc: Record<string, unknown>) => {
     const open = liveRuntimeOf(req.payload).sessions.peek(collection, String(doc.id))
@@ -296,20 +303,24 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
   const listSections: BuilderMcpTool = {
     name: 'listSections',
     routing: { kind: 'collection', action: 'read' },
-    description:
+    description: [
       'Lists ready-made sections (heroes, features, testimonials, calls to action, contact, footers, …) with an outline of their blocks. Sections are the best way to build a page: insert them with insertSection, then change their text, images and classes with applyOperations "update". Set `full: true` to get the complete block JSON of each section.',
+      'The list also has the sections people saved on this site. They have `saved: true` and an id like "saved:12".',
+    ].join('\n'),
     parameters: {
       collection: collectionArg,
       category: z.string().optional().describe('Only sections of this category, e.g. "Heroes".'),
       full: z.boolean().optional().describe('Include the full block JSON. Default false.'),
     },
-    handler: async (args) => {
-      const list = sections.filter((s) => !args.category || s.category === args.category)
+    handler: async (args, req) => {
+      const all = await allSections(req)
+      const list = all.filter((s) => !args.category || s.category === args.category)
       return text({
-        categories: [...new Set(sections.map((s) => s.category).filter(Boolean))],
+        categories: [...new Set(all.map((s) => s.category).filter(Boolean))],
         sections: list.map((s) => ({
           id: s.id,
           label: s.label,
+          ...(s.savedId !== undefined ? { saved: true } : {}),
           ...(s.category ? { category: s.category } : {}),
           ...(s.description ? { description: s.description } : {}),
           ...(args.full ? { blocks: s.blocks } : { outline: outline(s.blocks).join('\n') }),
@@ -322,21 +333,28 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     name: 'insertSection',
     routing: { kind: 'collection', action: 'update' },
     description: [
-      'Inserts a ready-made section (from listSections) into the draft of a document. All block ids are regenerated. Saves a draft about a second later (never publishes). People with the page open in the editor see the section appear live.',
+      'Inserts a ready-made or saved section (from listSections) into the draft of a document. All block ids are regenerated. Saves a draft about a second later (never publishes). People with the page open in the editor see the section appear live.',
       'Default position: the end of the page. Set parentId/slot/index to insert elsewhere (index = final index in the target list).',
       'Returns the inserted blocks with their NEW ids. Then adjust their text and classes with applyOperations "update".',
     ].join('\n'),
     parameters: {
       collection: collectionArg,
       id: idArg,
-      sectionId: z.string().min(1).describe('Section id from listSections.'),
+      sectionId: z
+        .string()
+        .min(1)
+        .describe('The section from listSections: its id (e.g. "hero" or "saved:12") or its exact name.'),
       parentId: z.string().nullable().optional().describe('Parent block id. Default null (page root).'),
       slot: z.string().optional().describe('Slot of the parent. Default "children".'),
       index: z.number().int().min(0).optional().describe('Final index in the target list. Default: append.'),
     },
     handler: async (args, req) => {
-      const section = sections.find((s) => s.id === args.sectionId)
-      if (!section) return fail(`Unknown section "${String(args.sectionId)}". Known sections: ${sections.map((s) => s.id).join(', ')}.`)
+      const all = await allSections(req)
+      const section = findSection(all, String(args.sectionId))
+      if (!section) {
+        const known = all.map((s) => (s.savedId !== undefined ? `${s.id} ("${s.label}")` : s.id))
+        return fail(`Unknown section "${String(args.sectionId)}". Known sections: ${known.join(', ') || 'none'}.`)
+      }
       const collection = String(args.collection)
       const result = await apply(req, collection, String(args.id), (layout) =>
         sectionInsertOps(layout, section, {
