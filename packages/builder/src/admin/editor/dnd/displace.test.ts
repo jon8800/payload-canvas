@@ -7,6 +7,7 @@ import { flipFrom, isStill, springAt, springEasing } from '../../../protocol/mot
 import {
   canvasPreview,
   childRows,
+  copyScale,
   DROP_ROW,
   liftRows,
   outlinePreview,
@@ -221,5 +222,27 @@ describe('motion', () => {
     const flip = flipFrom(rect(100, 50, 200, 100), rect(0, 0, 400, 200), true)
     assert.deepEqual(flip, { x: 100, y: 50, scale: 0.5 })
     assert.ok(isStill(flipFrom(rect(0, 0, 10, 10), rect(0.2, 0, 10, 10))))
+  })
+})
+
+describe('lifted copy', () => {
+  const max = { width: 420, height: 300 }
+
+  it('lifts small blocks at full size', () => {
+    assert.equal(copyScale({ width: 300, height: 48 }, 1, max), 1)
+  })
+
+  it('shrinks a medium block to fit', () => {
+    assert.equal(copyScale({ width: 600, height: 48 }, 1, max), 0.7)
+  })
+
+  it('uses the compact card for a block that would shrink too much', () => {
+    assert.equal(copyScale({ width: 1200, height: 700 }, 1, max), null)
+    // The same block on a zoomed-out canvas is small enough on screen.
+    assert.equal(copyScale({ width: 1200, height: 700 }, 0.35, max), 1)
+  })
+
+  it('never lifts an empty block', () => {
+    assert.equal(copyScale({ width: 0, height: 40 }, 1, max), null)
   })
 })

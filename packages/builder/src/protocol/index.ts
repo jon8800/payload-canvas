@@ -157,9 +157,11 @@ export type AdminToCanvas =
    * Smooth drag mode: the drag ended. `drop`: the layout that follows has the result; the canvas
    * animates `ids` (the moved or inserted blocks) from the lifted copy, or from `placeholder` (the
    * gap, iframe viewport coordinates), to their new place. Otherwise everything slides back.
-   * A `drop: false` right after a `drop: true` means the edit was refused.
+   * A `drop: false` right after a `drop: true` means the edit was refused. `from`: where the
+   * dropped block animates from when the canvas lifted no copy (the admin's compact card, iframe
+   * viewport coordinates).
    */
-  | { type: 'dragEnd'; drop: boolean; ids: string[]; placeholder: Rect | null }
+  | { type: 'dragEnd'; drop: boolean; ids: string[]; placeholder: Rect | null; from?: Rect }
 
 /** Smooth drag mode: what the canvas needs when a drag starts. */
 export type CanvasDragStart = {
@@ -169,6 +171,8 @@ export type CanvasDragStart = {
   anchor: Point
   /** The lifted copy shrinks to fit this box (iframe pixels). */
   maxSize: { width: number; height: number }
+  /** False: hide the block but lift no copy. The block is too big to read shrunk; the admin shows a compact card. */
+  lift: boolean
 }
 
 type Envelope<T> = { channel: typeof CHANNEL; payload: T }

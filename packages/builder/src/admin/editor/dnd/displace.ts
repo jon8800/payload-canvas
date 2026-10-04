@@ -347,3 +347,23 @@ export function outlinePreview(rows: FlatRow[], order: RowOrder | null, sourceId
   }
   return { offsets, hidden, gap }
 }
+
+// ---------------------------------------------------------------------------
+// The lifted copy
+// ---------------------------------------------------------------------------
+
+/** A copy shrunk below this is hard to read: the drag shows the compact card instead. */
+export const MIN_COPY_SCALE = 0.6
+
+/**
+ * How much the canvas shrinks the lifted copy of a block of `size` (iframe pixels) at canvas
+ * `zoom` so it fits `max` (screen pixels). Null when it would shrink below `MIN_COPY_SCALE`: a
+ * large block (a full-width section) drags as the compact card, which the canvas edge cannot cut.
+ */
+export function copyScale(size: { width: number; height: number }, zoom: number, max: { width: number; height: number }): number | null {
+  const width = size.width * zoom
+  const height = size.height * zoom
+  if (!(width > 0) || !(height > 0)) return null
+  const scale = Math.min(1, max.width / width, max.height / height)
+  return scale < MIN_COPY_SCALE ? null : scale
+}

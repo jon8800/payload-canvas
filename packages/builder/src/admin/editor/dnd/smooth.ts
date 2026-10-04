@@ -25,10 +25,12 @@ import {
   springEasing,
 } from '../../../protocol'
 import { computeDrop, OUTLINE_INDENT, toRect, type DragData, type DragState, type Runtime } from '../runtime'
+import { blockName } from '../names'
 import { createValueStore, type ValueStore } from '../valueStore'
 import {
   canvasPreview,
   childRows,
+  copyScale,
   liftRows,
   outlinePreview,
   previewRowOrder,
@@ -86,6 +88,7 @@ type Session = {
   base: CanvasMeasurement | null
   scrolled: CanvasMeasurement | null
   frame: { rect: Rect; scale: number } | null
+  /** True when the canvas lifts a copy of the block. Otherwise the admin card shows over the canvas too. */
   canvasGhost: boolean
   outline: OutlineState | null
   targetKey: string
@@ -131,6 +134,12 @@ export function registerGhost(runtime: Runtime, el: HTMLElement | null) {
   }
 }
 
+/** The card's name, as the outline row shows it: "Card grid", "Section", "Heading". */
+function ghostLabel(layout: Layout, data: DragData): string {
+  const block = data.source.kind === 'block' ? findBlock(layout, data.source.id) : null
+  return block ? blockName(block, data.label) : data.label
+}
+
 const targetKey = (target: DropTarget | null) =>
   !target || target.noop ? 'none' : `${target.to.parentId ?? ''}\u0000${target.to.slot}\u0000${target.to.index}`
 
@@ -153,6 +162,9 @@ export function startSmoothDrag(
   const frame = iframe ? frameBox(iframe) : null
   const sourceRect = source.kind === 'block' ? base?.blocks.find((b) => b.id === source.id)?.rect : undefined
   const outline = measureOutline(runtime, source)
+  const zoom = frame?.scale || 1
+  // A block too big to read shrunk (a full-width section) drags as the compact card.
+  const liftCopy = Boolean(sourceRect && copyScale(sourceRect, zoom, CANVAS_GHOST_MAX) !== null)
   const fromRow = start.fromOutline && start.rect !== null
   const grab = fromRow && start.pointer && start.rect ? { x: start.pointer.x - start.rect.x, y: start.pointer.y - start.rect.y } : DEFAULT_GRAB
 
@@ -163,7 +175,7 @@ export function startSmoothDrag(
     base,
     scrolled: base,
     frame,
-    canvasGhost: Boolean(sourceRect),
+    canvasGhost: liftCopy,
     outline,
     targetKey: '',
     ghost: null,
@@ -185,13 +197,13 @@ export function startSmoothDrag(
       y: clamp01((local.y - sourceRect.y) / sourceRect.height),
     }
   }
-  const zoom = frame?.scale || 1
   runtime.postToCanvas({
     type: 'dragStart',
     drag: {
       sourceId: source.kind === 'block' ? source.id : null,
       anchor,
       maxSize: { width: CANVAS_GHOST_MAX.width / zoom, height: CANVAS_GHOST_MAX.height / zoom },
+      lift: liftCopy,
     },
   })
 
@@ -208,7 +220,7 @@ export function startSmoothDrag(
     placeholder: sourceRect ?? null,
     baseScroll: base?.scroll ?? { x: 0, y: 0 },
     into: null,
-    ghost: { label: data.label, icon: data.icon, width: fromRow && start.rect ? start.rect.width : null, grab },
+    ghost: { label: ghostLabel(layout, data), icon: data.icon, width: fromRow && start.rect ? start.rect.width : null, grab },
   })
 
   const unsubscribeDrag = runtime.drag.subscribe(() => {
@@ -288,7 +300,9 @@ export function endSmoothDrag(runtime: Runtime, commit: (() => boolean) | null, 
   if (outline) for (const [id, el] of outline.elements) first.set(id, toRect(el.getBoundingClientRect()))
   const ghostRect = session.ghost && !session.ghostHidden ? toRect(session.ghost.getBoundingClientRect()) : null
   const placeholder = smooth?.placeholder && session.base ? shiftRect(smooth.placeholder, scrollDelta(runtime, session)) : null
-  runtime.postToCanvas({ type: 'dragEnd', drop: true, ids: session.source.kind === 'block' ? [session.source.id] : [], placeholder })
+  // A moved block with no copy on the canvas grows out of the compact card.
+  const card = ghostRect && session.zone === 'canvas' && session.frame && session.source.kind === 'block' ? toFrameRect(session.frame, ghostRect) : undefined
+  runtime.postToCanvas({ type: 'dragEnd', drop: true, ids: session.source.kind === 'block' ? [session.source.id] : [], placeholder, from: card })
   controller.session = null
   session.stop()
 
@@ -611,6 +625,11 @@ function frameBox(iframe: HTMLIFrameElement): { rect: Rect; scale: number } {
 
 function toFrame(frame: { rect: Rect; scale: number }, p: Point): Point {
   return { x: (p.x - frame.rect.x) / frame.scale, y: (p.y - frame.rect.y) / frame.scale }
+}
+
+function toFrameRect(frame: { rect: Rect; scale: number }, r: Rect): Rect {
+  const p = toFrame(frame, r)
+  return { x: p.x, y: p.y, width: r.width / frame.scale, height: r.height / frame.scale }
 }
 
 function toScreen(frame: { rect: Rect; scale: number }, r: Rect): Rect {

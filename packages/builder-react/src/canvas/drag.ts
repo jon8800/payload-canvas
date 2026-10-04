@@ -1,7 +1,8 @@
 // Smooth drag mode inside the canvas iframe. The admin decides everything (drop target, offsets);
 // this module only moves elements on screen:
 //
-// - the dragged block is hidden and a lifted copy of it follows the pointer;
+// - the dragged block is hidden and a lifted copy of it follows the pointer (a block too big to
+//   read shrunk lifts no copy: the admin's compact card follows the pointer instead);
 // - blocks slide out of the way with CSS transitions on `transform` (the compositor runs them);
 // - on drop, once the new layout has rendered, every block that moved animates from where it was
 //   on screen to its new place (FLIP), the dropped block from the lifted copy;
@@ -41,7 +42,7 @@ export type CanvasDrag = {
   start(drag: CanvasDragStart): void
   preview(offsets: Record<string, Point>): void
   pointer(x: number, y: number, inside: boolean): void
-  end(drop: boolean, ids: string[], placeholder: Rect | null): void
+  end(drop: boolean, ids: string[], placeholder: Rect | null, from?: Rect): void
   /** Call after each commit with the layout the canvas rendered. Runs the drop animation once the drop result is on screen. */
   rendered(layout: unknown): void
   dispose(): void
@@ -386,7 +387,7 @@ export function createCanvasDrag({ root, layout, onSettled }: Options): CanvasDr
       const el = drag.sourceId ? elements.get(drag.sourceId) : undefined
       if (!el) return
       source = el
-      lift(drag, el)
+      if (drag.lift) lift(drag, el)
       el.setAttribute('data-builder-drag-source', '')
     },
 
@@ -408,7 +409,7 @@ export function createCanvasDrag({ root, layout, onSettled }: Options): CanvasDr
       showGhost(inside)
     },
 
-    end(drop, ids, placeholder) {
+    end(drop, ids, placeholder, card) {
       if (!drop) {
         if (active || pending) cancel()
         return
@@ -416,7 +417,7 @@ export function createCanvasDrag({ root, layout, onSettled }: Options): CanvasDr
       if (!active) return
       const first = new Map<string, Rect>()
       for (const [id, el] of elements) first.set(id, toRect(el.getBoundingClientRect()))
-      const from = ghost && ghost.box.style.opacity === '1' ? toRect(ghost.box.getBoundingClientRect()) : placeholder
+      const from = ghost && ghost.box.style.opacity === '1' ? toRect(ghost.box.getBoundingClientRect()) : (card ?? placeholder)
       cancelAnimationFrame(frame)
       frame = 0
       active = false

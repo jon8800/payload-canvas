@@ -373,7 +373,7 @@ function EditorCanvas({ blocks, components, plugins, resolveLink }: BuilderCanva
           drag.pointer(message.x, message.y, message.inside)
           return
         case 'dragEnd':
-          drag.end(message.drop, message.ids, message.placeholder)
+          drag.end(message.drop, message.ids, message.placeholder, message.from)
       }
     }
     const isEditing = (target: EventTarget | null) =>
