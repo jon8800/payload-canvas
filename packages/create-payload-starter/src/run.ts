@@ -5,10 +5,16 @@ export function run(command: string, args: string[], cwd: string): boolean {
   return spawn.sync(command, args, { cwd, stdio: 'inherit' }).status === 0
 }
 
-/** Runs a command and returns its output, or null if it fails. */
-export function capture(command: string, args: string[], cwd: string): string | null {
+/** Runs a command and returns its output. On failure it returns null and the error text. */
+export function capture(
+  command: string,
+  args: string[],
+  cwd: string,
+): { ok: true; stdout: string } | { ok: false; error: string } {
   const result = spawn.sync(command, args, { cwd, encoding: 'utf8' })
-  return result.status === 0 ? String(result.stdout) : null
+  if (result.status === 0) return { ok: true, stdout: String(result.stdout) }
+  const error = result.error?.message ?? (String(result.stderr).trim() || `exit code ${result.status}`)
+  return { ok: false, error }
 }
 
 export function hasCommand(command: string): boolean {

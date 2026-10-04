@@ -40,12 +40,30 @@ Then follow the [install guide](packages/builder/README.md#install): add the plu
 ### Or start a new project from the starter
 
 ```bash
-npx create-payload-toolkit my-website
+pnpm create payload-toolkit my-website
 cd my-website
 pnpm dev
 ```
 
-Open http://localhost:3000/admin and create the first user. See [`packages/create-payload-starter`](packages/create-payload-starter/README.md) for the flags.
+The CLI copies the starter app, creates a Postgres database, writes `.env`, installs, and can seed demo content. Open http://localhost:3000/admin and create the first user.
+
+Common flags (full list in [`packages/create-payload-starter`](packages/create-payload-starter/README.md)):
+
+| Flag | Meaning |
+|---|---|
+| `-y`, `--yes` | Ask nothing. Use defaults and seed demo content. |
+| `--db-url <url>` | Postgres URL. Or use `--db-host`, `--db-port`, `--db-user`, `--db-password`, `--db-name`. |
+| `--seed` / `--no-seed` | Seed demo content, or not. |
+| `--no-install` | Only create the files. |
+| `--reuse-db` / `--skip-db` | Use a database that already exists / do not touch Postgres. |
+| `--packages <path>` | Pack the builder packages from a checkout of this repo. Needed until they are on npm. |
+
+```bash
+# Non-interactive, for CI and agents
+npx create-payload-toolkit my-website --yes --db-url postgresql://postgres:postgres@localhost:5432/my_website
+```
+
+The CLI never runs `payload migrate`. Before your first production deploy, run `pnpm payload migrate:create` in your app and commit the files. Migrations belong to the app, not to the plugin.
 
 ## Repository layout
 
