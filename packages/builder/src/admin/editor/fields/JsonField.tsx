@@ -3,6 +3,7 @@
 import { TextareaInput } from '@payloadcms/ui'
 import { useState, type ChangeEvent } from 'react'
 
+import { InputError } from './CheckedInputs'
 import { parseJsonText, toJsonText } from './values'
 
 type Props = {
@@ -48,11 +49,7 @@ export function JsonField({ label, description, path, required, value, onChange 
         showError={draft.error !== null}
         value={draft.text}
       />
-      {draft.error && (
-        <p className="builder-field-json__error" role="alert">
-          Invalid JSON: {draft.error}
-        </p>
-      )}
+      {draft.error && <InputError>Invalid JSON: {draft.error}</InputError>}
     </div>
   )
 }

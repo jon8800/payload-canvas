@@ -4,7 +4,7 @@
 // details card.
 
 import { Link, useConfig } from '@payloadcms/ui'
-import { useRef, useState, type KeyboardEvent } from 'react'
+import { useOptimistic, useRef, useState, useTransition, type KeyboardEvent } from 'react'
 
 import type { DocStatus } from '../../../live/types'
 import { useRuntime } from '../runtime'
@@ -50,9 +50,11 @@ export function DocumentTitle() {
   const [draft, setDraft] = useState<string | null>(null)
   const cancelled = useRef(false)
   const editable = meta.canUpdate && meta.titleField !== null
-  const title = documentTitle(meta)
+  // While the rename request runs, the new title shows already. A failed rename goes back by itself.
+  const [title, showTitle] = useOptimistic(documentTitle(meta))
+  const [, startTransition] = useTransition()
 
-  const commit = async () => {
+  const commit = () => {
     const value = draft
     setDraft(null)
     if (cancelled.current || value === null) {
@@ -60,7 +62,10 @@ export function DocumentTitle() {
       return
     }
     if (!value.trim()) return
-    await runtime.doc.rename(value)
+    startTransition(async () => {
+      showTitle(value.trim())
+      await runtime.doc.rename(value)
+    })
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -96,7 +101,7 @@ export function DocumentTitle() {
             e.currentTarget.select()
           }}
           onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => void commit()}
+          onBlur={commit}
           onKeyDown={onKeyDown}
         />
       ) : (

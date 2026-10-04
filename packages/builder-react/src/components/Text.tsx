@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from 'react'
 import type { BlockComponentProps } from '../render/types'
+import { editableText } from '../render/editable'
 import { asText, PlaceholderText } from './placeholder'
 
 /** Text with its line breaks kept as <br>. */
@@ -17,7 +18,7 @@ export function Text({ props, className, attributes, mode }: BlockComponentProps
   const text = asText(props.text)
   if (!text && mode !== 'canvas') return null
   return (
-    <p {...attributes} className={className}>
+    <p {...attributes} {...editableText(mode, 'text')} className={className}>
       {text ? lines(text) : <PlaceholderText>Text</PlaceholderText>}
     </p>
   )

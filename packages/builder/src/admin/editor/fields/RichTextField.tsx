@@ -3,9 +3,10 @@
 import { DocumentInfoProvider, useAuth } from '@payloadcms/ui'
 import { RenderLexical } from '@payloadcms/richtext-lexical/client'
 import type { CollectionSlug, TypedUser } from 'payload'
-import type { KeyboardEvent } from 'react'
+import { useState, type KeyboardEvent } from 'react'
 
 import { richTextFieldName } from '../../../core/blocks'
+import { inlineEditing } from '../inline'
 import { useRuntime } from '../runtime'
 import { useValue } from '../valueStore'
 
@@ -36,10 +37,18 @@ function onKeyDownCapture(e: KeyboardEvent<HTMLDivElement>) {
  *
  * Lexical's drawers (Edit link, block fields) read the document's info and preferences. The
  * builder has no edit view around it, so a small DocumentInfoProvider supplies them.
+ *
+ * While the same prop is edited on the canvas, the field keeps the value it had when editing
+ * started (Lexical would re-mount on every change). It shows the final value once editing ends.
  */
 export function RichTextField({ label, path, value, onChange }: Props) {
-  const { config, doc } = useRuntime()
+  const runtime = useRuntime()
+  const { config, doc } = runtime
   const { id, collection, publishedAt } = useValue(doc.meta)
+  const inline = useValue(inlineEditing(runtime))
+  const editingOnCanvas = inline?.kind === 'rich' && path === `builder.${inline.id}.${inline.path}`
+  const [held, setHeld] = useState(value)
+  if (!editingOnCanvas && held !== value) setHeld(value)
   const { user } = useAuth()
   const name = richTextFieldName(config.field)
   return (
@@ -62,7 +71,7 @@ export function RichTextField({ label, path, value, onChange }: Props) {
           path={path}
           schemaPath={`collection.${config.collection}.${name}`}
           setValue={(next) => onChange(next ?? null)}
-          value={(value ?? undefined) as never}
+          value={((editingOnCanvas ? held : value) ?? undefined) as never}
         />
       </div>
     </DocumentInfoProvider>

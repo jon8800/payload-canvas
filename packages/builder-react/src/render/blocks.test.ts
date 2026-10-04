@@ -58,9 +58,9 @@ describe('text-like blocks', () => {
 
   test('empty blocks: nothing on the site, a muted placeholder in the canvas', () => {
     const cases: Array<[Omit<Block, 'id'>, RegExp]> = [
-      [{ type: 'heading', props: { level: '3' }, className: 'text-3xl' }, /^<h3 data-block-id="b" data-block-type="heading" class="text-3xl"><span data-builder-placeholder="" style="opacity:0.4">Heading<\/span><\/h3>$/],
+      [{ type: 'heading', props: { level: '3' }, className: 'text-3xl' }, /^<h3 data-block-id="b" data-block-type="heading" data-builder-text="text" class="text-3xl"><span data-builder-placeholder="" style="opacity:0.4">Heading<\/span><\/h3>$/],
       [{ type: 'text', props: { text: '' } }, /^<p [^>]+><span data-builder-placeholder="[^"]*" style="opacity:0.4">Text<\/span><\/p>$/],
-      [{ type: 'quote' }, /^<blockquote [^>]+><p><span data-builder-placeholder[^>]*>Quote<\/span><\/p><\/blockquote>$/],
+      [{ type: 'quote' }, /^<blockquote [^>]+><p data-builder-text="quote"><span data-builder-placeholder[^>]*>Quote<\/span><\/p><\/blockquote>$/],
       [{ type: 'button', props: { link: { type: 'url', url: '/x' } } }, /^<a [^>]*href="\/x"[^>]*><span data-builder-placeholder[^>]*>Button<\/span><\/a>$/],
       [{ type: 'list', props: { items: [] } }, /^<ul [^>]+ style="list-style-type:disc"><li><span data-builder-placeholder[^>]*>List item<\/span><\/li><\/ul>$/],
       [{ type: 'richText', props: { content: lexical(paragraph()) } }, /^<div [^>]+><p><span data-builder-placeholder[^>]*>Rich text<\/span><\/p><\/div>$/],
@@ -193,7 +193,7 @@ describe('rich text', () => {
   })
 
   test('canvas output has the block attributes', () => {
-    assert.match(canvas({ type: 'richText', props: { content } }), /^<div data-block-id="b" data-block-type="richText"><p>Hello/)
+    assert.match(canvas({ type: 'richText', props: { content } }), /^<div data-block-id="b" data-block-type="richText" data-builder-text="content"><p>Hello/)
   })
 })
 

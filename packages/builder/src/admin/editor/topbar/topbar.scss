@@ -581,4 +581,20 @@
       background: var(--theme-elevation-50);
     }
   }
+
+  // The settings drawer holds a few document fields, not a whole page: keep it narrow, on the right.
+  // Payload sets the drawer width inline, so this needs !important. The marker comes from
+  // settingsDrawer.tsx.
+  .drawer:has(.builder-settings-drawer-marker) > .drawer__content {
+    width: min(1040px, calc(100% - var(--gutter-h))) !important;
+  }
+
+  // Payload opens its lock dialogs ("Document locked", "taken over", "modified by another user")
+  // with z-index var(--z-modal) = 30, but drawers get 100 + depth. Inside the settings drawer the
+  // dialog would open hidden behind the drawer. Lift it above any drawer.
+  .payload__modal-item.document-locked,
+  .payload__modal-item.document-take-over,
+  .payload__modal-item.document-stale-data {
+    z-index: 200;
+  }
 }

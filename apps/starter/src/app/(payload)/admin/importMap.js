@@ -60,9 +60,10 @@ import { QueryPresetsColumnsCell as QueryPresetsColumnsCell_2b8867833a34864a02dd
 import { QueryPresetsColumnField as QueryPresetsColumnField_2b8867833a34864a02ddf429b0728a40 } from '@payloadcms/next/client'
 import { QueryPresetsGroupByCell as QueryPresetsGroupByCell_2b8867833a34864a02ddf429b0728a40 } from '@payloadcms/next/client'
 import { QueryPresetsGroupByField as QueryPresetsGroupByField_2b8867833a34864a02ddf429b0728a40 } from '@payloadcms/next/client'
-import { ColorPickerField as ColorPickerField_3a697eb9807b1dac9844b7f142d48771 } from '@/fields/theme/ColorPicker'
-import { FontSelectorField as FontSelectorField_3bc9b2a65b274027b3f1b24833bce35c } from '@/fields/theme/FontSelector'
-import { SliderField as SliderField_a7952546f2fa2bc5534ce2947e7c718b } from '@/fields/theme/SliderField'
+import { ThemeColorField as ThemeColorField_e0cfbbb020bf87f8280e724d96373a69 } from '@payload-toolkit/builder/theme-client'
+import { ThemeFontField as ThemeFontField_e0cfbbb020bf87f8280e724d96373a69 } from '@payload-toolkit/builder/theme-client'
+import { ThemeSliderField as ThemeSliderField_e0cfbbb020bf87f8280e724d96373a69 } from '@payload-toolkit/builder/theme-client'
+import { ThemeSaveSignal as ThemeSaveSignal_e0cfbbb020bf87f8280e724d96373a69 } from '@payload-toolkit/builder/theme-client'
 import { ImportExportProvider as ImportExportProvider_cdf7e044479f899a31f804427d568b36 } from '@payloadcms/plugin-import-export/rsc'
 import { BuilderView as BuilderView_c0c1af4cd1961baf9cba09efadb7433a } from '@payload-toolkit/builder/rsc'
 import { CollectionCards as CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1 } from '@payloadcms/next/rsc'
@@ -131,9 +132,10 @@ export const importMap = {
   "@payloadcms/next/client#QueryPresetsColumnField": QueryPresetsColumnField_2b8867833a34864a02ddf429b0728a40,
   "@payloadcms/next/client#QueryPresetsGroupByCell": QueryPresetsGroupByCell_2b8867833a34864a02ddf429b0728a40,
   "@payloadcms/next/client#QueryPresetsGroupByField": QueryPresetsGroupByField_2b8867833a34864a02ddf429b0728a40,
-  "@/fields/theme/ColorPicker#ColorPickerField": ColorPickerField_3a697eb9807b1dac9844b7f142d48771,
-  "@/fields/theme/FontSelector#FontSelectorField": FontSelectorField_3bc9b2a65b274027b3f1b24833bce35c,
-  "@/fields/theme/SliderField#SliderField": SliderField_a7952546f2fa2bc5534ce2947e7c718b,
+  "@payload-toolkit/builder/theme-client#ThemeColorField": ThemeColorField_e0cfbbb020bf87f8280e724d96373a69,
+  "@payload-toolkit/builder/theme-client#ThemeFontField": ThemeFontField_e0cfbbb020bf87f8280e724d96373a69,
+  "@payload-toolkit/builder/theme-client#ThemeSliderField": ThemeSliderField_e0cfbbb020bf87f8280e724d96373a69,
+  "@payload-toolkit/builder/theme-client#ThemeSaveSignal": ThemeSaveSignal_e0cfbbb020bf87f8280e724d96373a69,
   "@payloadcms/plugin-import-export/rsc#ImportExportProvider": ImportExportProvider_cdf7e044479f899a31f804427d568b36,
   "@payload-toolkit/builder/rsc#BuilderView": BuilderView_c0c1af4cd1961baf9cba09efadb7433a,
   "@payloadcms/next/rsc#CollectionCards": CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1

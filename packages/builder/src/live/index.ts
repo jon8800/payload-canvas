@@ -47,3 +47,13 @@ export {
   type DocumentEndpointOptions,
   type PublishCheck,
 } from './document'
+export {
+  changedFields,
+  createFieldClock,
+  defaultFieldClock,
+  KEEP_LOCK_CONTEXT,
+  LOCKED_DOCUMENTS_SLUG,
+  staleSaveMessage,
+  type FieldClock,
+  type FieldConflict,
+} from './fieldsGuard'

@@ -178,20 +178,21 @@ export function channelKey(collection: string, id: string | number): string {
 // ---------------------------------------------------------------------------
 
 /**
- * 10 distinct hues, none green (the editor uses green for its own selection). Each is dark enough
- * for white text (contrast 4.5:1 or more) and visible on light and dark canvases.
+ * 10 distinct colors with no blue, cyan, indigo or violet: the editor's own selection frame uses
+ * Payload's blue accent (about 200°), so collaborator colors stay away from 180–265°. Each is
+ * dark enough for white text (contrast 4.5:1 or more) and visible on light and dark canvases.
  */
 export const COLLABORATOR_COLORS = [
   '#dc2626', // red
   '#c2410c', // orange
   '#a16207', // amber
-  '#0e7490', // cyan
-  '#2563eb', // blue
-  '#4f46e5', // indigo
-  '#7c3aed', // violet
+  '#4d7c0f', // lime
+  '#15803d', // green
+  '#9333ea', // purple
   '#a21caf', // fuchsia
   '#be185d', // pink
   '#57534e', // stone
+  '#3f3f46', // zinc
 ] as const
 
 /** A stable color per user id (FNV-1a hash). */
@@ -479,6 +480,8 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
           context: { builderSession: true },
           user: session.user,
           overrideAccess: false,
+          // Never blocked by Payload's document lock; the save hook keeps the lock (fieldsGuard.ts).
+          overrideLock: true,
         })
         session.persistedSeq = Math.max(session.persistedSeq, seq)
         clearFailure(session)

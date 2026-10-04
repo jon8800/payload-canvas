@@ -2,10 +2,37 @@ import type { CSSProperties } from 'react'
 import type { BlockComponentProps } from '../render/types'
 import { isDoc } from './Image'
 import { PlaceholderBox } from './placeholder'
-import { parseVideoUrl } from './videoUrl'
+import { isPlayableVideoUrl, parseVideoUrl } from './videoUrl'
 
 /** Classes that already give the element a height. Without one, an embed gets a 16:9 ratio. */
 const SIZE_CLASS = /(^|\s|:)(aspect-|h-|size-|min-h-)/
+
+/** Canvas only, inline styles only (like `placeholder.tsx`): the site's CSS never sees it. */
+const INVALID_BOX: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 4,
+  aspectRatio: '16 / 9',
+  minHeight: 96,
+  padding: 12,
+  border: '1px dashed rgb(217 119 6 / 0.7)',
+  borderRadius: 4,
+  background: 'rgb(217 119 6 / 0.08)',
+  color: 'rgb(128 128 128)',
+  font: '12px/1.4 system-ui, sans-serif',
+  textAlign: 'center',
+}
+
+function InvalidUrl({ attributes, className }: { attributes: Record<string, string>; className?: string }) {
+  return (
+    <div {...attributes} data-builder-placeholder="" className={className} style={INVALID_BOX}>
+      Video
+      <span style={{ color: 'rgb(180 83 9)' }}>This link cannot play. Check the URL in the Content tab.</span>
+    </div>
+  )
+}
 
 /**
  * An uploaded video or a URL. YouTube and Vimeo URLs become an `<iframe>`; other URLs play in
@@ -24,7 +51,12 @@ export function Video({ props, className, attributes, mode }: BlockComponentProp
   const fromUrl = props.source === 'url' || (props.source == null && props.video == null && typeof props.url === 'string')
   let src: string | null = null
   if (fromUrl) {
-    const embed = parseVideoUrl(typeof props.url === 'string' ? props.url : '', options)
+    const url = typeof props.url === 'string' ? props.url : ''
+    // A URL that cannot play: nothing on the site, a message on the canvas.
+    if (url.trim() && !isPlayableVideoUrl(url)) {
+      return mode === 'canvas' ? <InvalidUrl attributes={attributes} className={className} /> : null
+    }
+    const embed = parseVideoUrl(url, options)
     if (embed && embed.kind !== 'file') {
       const style: CSSProperties = { border: 0 }
       if (!className || !SIZE_CLASS.test(className)) Object.assign(style, { aspectRatio: '16 / 9', height: 'auto' })

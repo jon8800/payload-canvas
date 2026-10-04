@@ -72,6 +72,21 @@ export function statusAfterSave(meta: BuilderDocMeta, savedStatus: string | unde
   return meta.publishedAt ? 'changed' : 'draft'
 }
 
+/**
+ * Whether Publish can run now. Shared by the Publish button and its shortcut. `changed` is false
+ * when nothing changed since the last publish; unsaved session commits count as changes (the
+ * server saves them before it publishes). `pending` local changes wait for the server first.
+ */
+export function publishState(
+  meta: BuilderDocMeta,
+  busy: DocumentBusy,
+  live: { pending: boolean; unsaved: boolean } | null,
+): { changed: boolean; pending: boolean; canPublish: boolean } {
+  const changed = meta.status !== 'published' || Boolean(live?.unsaved)
+  const pending = Boolean(live?.pending)
+  return { changed, pending, canPublish: meta.drafts && meta.canUpdate && changed && !pending && busy === null }
+}
+
 type DocumentContext = {
   config: BuilderClientConfig
   api: string
@@ -168,7 +183,12 @@ export function createDocumentController(context: DocumentContext, initial: Buil
         })
         const body: unknown = await response.json().catch(() => null)
         if (!response.ok) {
-          toast.error(restError(body, `Could not rename the document (${response.status}).`))
+          // 423: Payload's document lock. Someone has the Edit view or the settings drawer open.
+          const message =
+            response.status === 423
+              ? 'Not renamed. Someone else is editing this document’s settings right now. Try again when they finish.'
+              : restError(body, `Could not rename the document (${response.status}).`)
+          toast.error(message)
           return false
         }
         meta.set({ ...meta.get(), title: value })

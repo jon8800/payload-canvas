@@ -25,12 +25,14 @@ Two packages:
 6. [Custom blocks](#custom-blocks)
 7. [Sections](#sections)
 8. [Styling](#styling)
-9. [Templates and binding](#templates-and-binding)
-10. [AI assistant](#ai-assistant)
-11. [AI editing over MCP](#ai-editing-over-mcp)
-12. [Multiplayer editing](#multiplayer-editing)
-13. [Production and Docker](#production-and-docker)
-14. [Troubleshooting](#troubleshooting)
+9. [Theme](#theme)
+10. [Templates and binding](#templates-and-binding)
+11. [AI assistant](#ai-assistant)
+12. [AI editing over MCP](#ai-editing-over-mcp)
+13. [Multiplayer editing](#multiplayer-editing)
+14. [Production and Docker](#production-and-docker)
+15. [Deploying](#deploying)
+16. [Troubleshooting](#troubleshooting)
 
 ## Requirements
 
@@ -142,11 +144,19 @@ The editor shows the page in an iframe. The iframe loads a route in your app, so
 
 ```tsx
 // src/app/(builder-canvas)/layout.tsx
+import { ThemeStyle } from '@payload-toolkit/builder-react/server'
+import config from '@payload-config'
+import { getPayload } from 'payload'
 import type { ReactNode } from 'react'
 
-export default function CanvasLayout({ children }: { children: ReactNode }) {
+export default async function CanvasLayout({ children }: { children: ReactNode }) {
+  const payload = await getPayload({ config })
   return (
     <html lang="en">
+      <head>
+        {/* The Theme global's variables and fonts. `live` reloads them after a theme save. */}
+        <ThemeStyle payload={payload} live />
+      </head>
       <body>{children}</body>
     </html>
   )
@@ -196,6 +206,8 @@ export default async function Page({ params }: Props) {
   return <RenderLayout layout={layout} blocks={blocks} css={(page.layoutCss as GeneratedCss | null)?.css} />
 }
 ```
+
+Put `<ThemeStyle payload={payload} />` in the `<head>` of your site's root layout too. See [Theme](#theme).
 
 ### 8. Add the standalone tracing lines
 
@@ -269,8 +281,8 @@ websiteBuilder({
   canvasPath: '/builder-canvas',
   templates: { slug: 'builder-templates' },
   live: { heartbeatMs: 15000 },
-  multiplayer: true,           // default; false keeps Payload's document lock
   ai: { effort: 'medium' },    // the AI assistant in the editor
+  theme: { admin: { group: 'Settings' } }, // the Theme global; `false` leaves it out
 })
 ```
 
@@ -287,9 +299,11 @@ websiteBuilder({
 | `canvasPath` | `string` | The canvas route. Default `/builder-canvas`. |
 | `templates.slug` | `string` | Slug of the templates collection. Default `builder-templates`. |
 | `templates.hooks` | `CollectionConfig['hooks']` | Hooks for the templates collection, for example to revalidate pages. |
-| `live.heartbeatMs` | `number` | Interval of the keep-alive message on the live event stream. Default 20 s. |
-| `multiplayer` | `boolean` | Several people edit one document at the same time. Default `true`: the plugin turns off Payload's document locking (`lockDocuments: false`) on builder collections. `false` keeps the lock, so one person edits a document at a time. See [Multiplayer editing](#multiplayer-editing). |
+| `live.heartbeatMs` | `number` | Interval of the keep-alive message on the live event stream. Default 10 s. |
+| `multiplayer` | `boolean` | Deprecated, no effect. Several people can always edit a layout at once, and Payload's document lock stays on for the other fields. See [Multiplayer editing](#multiplayer-editing). |
 | `ai` | `AiOptions` | Turns on the AI assistant in the editor. See [AI assistant](#ai-assistant). |
+| `theme` | `ThemeOptions \| false` | The Theme global. On by default. `false` leaves it out. See [Theme](#theme). |
+| `css.fontFamilies` | `(payload) => Record<name, family>` | Font families set at runtime some other way than the Theme global, for the Styles panel's Font list. Its names win over the theme's. |
 
 For each listed collection the plugin adds:
 
@@ -297,9 +311,8 @@ For each listed collection the plugin adds:
 - a hidden `<field>Css` field that stores `{ hash, css }`,
 - a hidden virtual rich text field, when a block has a rich text prop,
 - the **Builder** document tab, a link to the full-screen view (`/admin/builder/<slug>/<id>`; the plugin adds this root view once for all collections),
-- a `beforeChange` hook that validates the layout and compiles its CSS, and that takes the layout from the live session while one is open,
-- an `afterChange` hook for the live session,
-- `lockDocuments: false`, unless `multiplayer` is `false`.
+- a `beforeChange` hook that validates the layout and compiles its CSS, takes the layout from the live session while one is open, and rejects a save from an out-of-date form (see [Multiplayer editing](#multiplayer-editing)),
+- a `beforeOperation` and an `afterChange` hook for the live session and Payload's document lock.
 
 It also adds these endpoints (signed-in users only):
 
@@ -316,6 +329,7 @@ It also adds these endpoints (signed-in users only):
 | `POST /api/builder/live/:collection/:id/unpublish` | Sets the document back to draft. |
 | `POST /api/builder/live/:collection/:id/revert` | Drops the draft changes: the live session and the draft get the published version. |
 | `POST /api/builder/ai/chat` | The AI assistant (only with the `ai` option). Streams Server-Sent Events. |
+| `GET /api/builder/theme` | The theme as `{ css, fontsHref }` (with the theme on). It uses the global's read access, so it is public by default. |
 
 ### Entry points
 
@@ -325,6 +339,8 @@ It also adds these endpoints (signed-in users only):
 | `@payload-toolkit/builder/blocks` | anywhere | `defaultBlocks`, `defineBlock`, `linkField` |
 | `@payload-toolkit/builder/core` | anywhere | layout types, `normalizeLayout`, `validateLayout`, `applyOperations`, tree helpers |
 | `@payload-toolkit/builder/css` | server | `compileClasses`, `getStyleTokens`, `tracingIncludes` |
+| `@payload-toolkit/builder/theme` | anywhere | `themeCss`, `themeVariables`, `themeOutput`, `deriveColors`, `googleFontsHref`, `themeConfigOf`, theme types |
+| `@payload-toolkit/builder/theme-client` | Payload import map, or your own fields | `ThemeColorField`, `ThemeFontField`, `ThemeSliderField` |
 | `@payload-toolkit/builder/mcp` | server | `builderMcpTools` |
 | `@payload-toolkit/builder/live` | server | the live sessions and endpoints |
 | `@payload-toolkit/builder/client` | Payload import map only | admin client components (layout field, Builder tab) |
@@ -482,8 +498,120 @@ export default function CanvasPage() {
 }
 ```
 
-- **Theme variables in the canvas.** If your theme variables come from somewhere other than the CSS entry (for example a theme global rendered as a `<style>` tag), render the same tag in the canvas layout's `<head>`.
+- **Theme variables in the canvas.** The canvas gets the Theme global from `<ThemeStyle live />` in its layout. If you set other variables at runtime, render the same tag in the canvas layout's `<head>`.
 - **Standalone output** needs `outputFileTracingIncludes`. See [step 8](#8-add-the-standalone-tracing-lines).
+
+## Theme
+
+The plugin adds a **Theme** global (slug `theme-settings`). Editors pick the site's colors, fonts, corner radius and spacing unit with Payload-native color, font and slider pickers. The site and the builder canvas get the theme as CSS variables. Your Tailwind `@theme` maps those variables to classes, so `bg-primary`, `font-heading` and `rounded-lg` follow the theme.
+
+**What editors set, and the variables it writes:**
+
+| Field | Variables |
+|---|---|
+| Colors: primary, secondary, accent, muted, destructive | `--primary`, `--primary-foreground`, `--secondary`, `--secondary-foreground`, `--accent`, `--accent-foreground`, `--muted`, `--muted-foreground`, `--destructive`, `--destructive-foreground` |
+| Colors: background, foreground | `--background`, `--foreground`, `--card`, `--card-foreground`, `--popover`, `--popover-foreground`, `--border`, `--input` |
+| Derived from the colors | `--ring`, `--chart-1` … `--chart-5`, `--sidebar`, `--sidebar-foreground`, `--sidebar-primary`, `--sidebar-primary-foreground`, `--sidebar-accent`, `--sidebar-accent-foreground`, `--sidebar-border`, `--sidebar-ring` |
+| Fonts: body text, headings, code (any Google Font) | `--font-sans`, `--font-heading`, `--font-mono` |
+| Corner radius (rem) | `--radius` |
+| Spacing unit (px) | `--spacing` (Tailwind's spacing unit: `p-4` is 4 units) |
+
+The names are the shadcn/ui names. Colors are stored as hex and written as `oklch(…)`. Each foreground color is dark or light, whichever reads on its color. Borders and secondary text are mixed from the background and the foreground. An empty field writes nothing, so your CSS default stays.
+
+**1. Map the variables in your CSS entry.** Your `globals.css` stays yours. Set defaults on `:root` and map them in `@theme inline`:
+
+```css
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --radius: 0.625rem;
+  /* …the other colors you use */
+}
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, sans-serif; /* the theme's body font replaces it */
+  --font-heading: var(--font-sans);                   /* `font-heading`; the theme's heading font replaces it */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  /* …one --color-* line per color you use */
+}
+```
+
+A shadcn/ui project already has all of this. Font aliases work too: with `--font-display: var(--font-heading, var(--font-sans))`, `font-display` uses the heading font, or the body font when the theme has no heading font.
+
+**2. Render the theme in the `<head>`** of the site's root layout, and of the canvas layout with `live` ([step 6](#6-add-the-canvas-route)):
+
+```tsx
+// src/app/(frontend)/layout.tsx
+import { ThemeStyle } from '@payload-toolkit/builder-react/server'
+import config from '@payload-config'
+import { getPayload } from 'payload'
+import type { ReactNode } from 'react'
+import './globals.css'
+
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const payload = await getPayload({ config })
+  return (
+    <html lang="en">
+      <head>
+        <ThemeStyle payload={payload} />
+      </head>
+      <body>{children}</body>
+    </html>
+  )
+}
+```
+
+`ThemeStyle` writes one `<style>` tag and one Google Fonts `<link>` for the chosen families. Both use React's `precedence`, so React places them in the `<head>` itself and they never cause a hydration mismatch. The rule uses `:root:root { … }`, so it wins over your `:root` defaults in any load order.
+
+| Prop | Default | What it does |
+|---|---|---|
+| `payload` | required | The Payload instance. |
+| `fonts` | `true` | `false` leaves the Google Fonts links out (for self-hosted fonts). |
+| `live` | `false` | Reloads the theme in the browser when the global is saved in another tab, or when the page becomes visible again. Use it in the canvas layout. |
+
+Other frontends: `loadTheme(payload)` from `@payload-toolkit/builder-react/server` returns `{ data, css, fontsHref }`. `themeOutput(doc)` from `@payload-toolkit/builder/theme` turns any theme document into the same output. `GET /api/builder/theme` returns it over HTTP.
+
+**Caching.** `ThemeStyle` reads the global once per request, never from Next's data cache. After each save the plugin calls `revalidateTag(<cacheTag>, { expire: 0 })` and `revalidatePath('/', 'layout')`, so statically rendered pages render again with the new theme. Tag your own cached theme reads with the cache tag. Saves with `context: { disableRevalidate: true }` (seed scripts) skip this.
+
+**Styles panel.** The color swatches read the canvas, so they show the theme's colors. The Font list shows the theme's families ("Inter", not `var(--font-sans)`).
+
+**Options:**
+
+```ts
+websiteBuilder({
+  // …
+  theme: {
+    slug: 'theme-settings',        // default
+    label: 'Theme',                // default
+    access: { update: isAdmin },   // default: anyone reads, signed-in users update
+    admin: { group: 'Settings' },  // merged into the global's admin config (group, livePreview, …)
+    hooks: { afterChange: [log] }, // run after the plugin's own hooks
+    cacheTag: 'theme-settings',    // default: the slug
+  },
+})
+```
+
+`theme: false` leaves out the global, the endpoint and the theme fonts in the Styles panel. The plugin throws an error if a global with the same slug exists already.
+
+**The pickers on other fields.** They work on any text field (the slider also on number fields):
+
+```ts
+{ name: 'brandColor', type: 'text', admin: { components: { Field: '@payload-toolkit/builder/theme-client#ThemeColorField' } } }
+{ name: 'titleFont', type: 'text', admin: { components: { Field: '@payload-toolkit/builder/theme-client#ThemeFontField' } } }
+{ name: 'gap', type: 'number', admin: { components: { Field: '@payload-toolkit/builder/theme-client#ThemeSliderField' }, custom: { min: 0, max: 64, step: 4, unit: 'px' } } }
+```
 
 ## Templates and binding
 
@@ -665,7 +793,13 @@ How it works:
 - While a session is open, the session owns the layout. Any other save of the document gets the session's layout: a stale autosave from another tab, a REST update, or **Publish**. Publish therefore publishes what everyone sees in the editor.
 - Every editor gets a `saved` event after each save and a `published` event after Publish, Unpublish or Revert, so the top bar shows the same status for everyone.
 - The session closes 60 seconds after the last editor leaves and its draft is saved.
-- Payload's document lock would let only one person open a document, so the plugin turns it off on builder collections. Set `multiplayer: false` to keep the lock.
+
+The other fields (title, slug, SEO, …) are edited in Payload's Edit view or in the builder's **Page settings** drawer. They are protected in two ways:
+
+- **Payload's document lock stays on.** The first person who changes a field in the Edit view or the settings drawer takes the lock. A second person who opens the form sees Payload's "locked by" dialog and can view it read-only or take over. The builder view itself never takes the lock, so layout editing, Publish, Unpublish, Revert and AI edits keep working while someone has the form open. These saves skip the lock and keep it.
+- **Out-of-date forms cannot undo newer changes.** Payload removes the lock after every save of the lock holder, autosave included, so on a collection with autosave the lock is often gone. The plugin therefore also checks each save from the Edit view or the drawer. If the form was loaded before someone else changed a field, and the save would put back the old value, the save fails with 409: "Not saved. Ana changed Title after you opened this form. Reload it to get their changes, then make your edit again." The record of who changed what lives in server memory, so it starts empty after a restart. Two tabs of the same person are not checked against each other.
+
+To turn the lock off for a collection, set `lockDocuments: false` on it. The out-of-date check still runs.
 
 Limits:
 
@@ -681,6 +815,39 @@ Limits:
 - **Media.** Keep `public/media` (or your upload directory) on a volume.
 - **Secrets.** `PAYLOAD_SECRET` and `DATABASE_URL` are read at runtime.
 - The starter app in this repository has a working `Dockerfile` for a pnpm monorepo.
+
+## Deploying
+
+Run **one server process** for the app. Live sessions, the event streams and the record that protects the other fields live in that process's memory. Several app servers, a cluster or a serverless platform would split one document's editors across processes, and they would not see each other's edits.
+
+Put a reverse proxy in front for TLS. This nginx config works:
+
+```nginx
+server {
+  listen 443 ssl;
+  http2 on;                      # recommended, see below
+  server_name example.com;
+  # ssl_certificate …; ssl_certificate_key …;
+
+  client_max_body_size 50m;      # media uploads
+
+  location / {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Connection '';   # HTTP/1.1 to the app, without "Connection: close"
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+}
+```
+
+Notes:
+
+- **The event stream must not be buffered.** The live endpoint (`/api/builder/live/…/events`) sends `X-Accel-Buffering: no` and `Cache-Control: no-cache, no-transform`, so nginx streams it and compression skips it. Behind nginx, an edit reaches the other editors in about 10 ms. With another proxy or a CDN, turn off response buffering and compression for `text/event-stream`.
+- **Idle streams stay open.** The server sends a heartbeat every 10 s (`live.heartbeatMs`). That is well inside nginx's default `proxy_read_timeout` of 60 s. If you raise the heartbeat interval, keep it below your proxy's read timeout.
+- **Use HTTP/2 to the browser.** Over HTTP/1.1 a browser opens at most 6 connections per site, and each open builder tab keeps one of them for its event stream. With several builder tabs open, the admin and the site in the same browser start to wait for connections. HTTP/2 sends everything over one connection.
+- **Database schema.** This version keeps Payload's document lock on for builder collections (earlier versions set `lockDocuments: false`). That adds one column per builder collection to `payload_locked_documents_rels`. Create a migration (`pnpm payload migrate:create`) and run it before you start the new version, or every save of a builder document fails with "column … does not exist".
 
 ## Troubleshooting
 

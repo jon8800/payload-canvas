@@ -4,6 +4,7 @@
 
 import { LinkJSXConverter, RichText as LexicalRichText } from '@payloadcms/richtext-lexical/react'
 import type { ComponentType, ReactNode } from 'react'
+import { editableText } from '../render/editable'
 import { defaultResolveLink } from '../render/link'
 import type { BlockComponentProps, ResolveLink } from '../render/types'
 import { PlaceholderText } from './placeholder'
@@ -68,7 +69,7 @@ function createRichText(resolveLink: ResolveLink): ComponentType<BlockComponentP
     if (isEmptyRichText(content)) {
       if (mode !== 'canvas') return null
       return (
-        <div {...attributes} className={className}>
+        <div {...attributes} {...editableText(mode, 'content')} className={className}>
           <p>
             <PlaceholderText>Rich text</PlaceholderText>
           </p>
@@ -76,7 +77,7 @@ function createRichText(resolveLink: ResolveLink): ComponentType<BlockComponentP
       )
     }
     return (
-      <div {...attributes} className={className}>
+      <div {...attributes} {...editableText(mode, 'content')} className={className}>
         {renderRichText(content, resolveLink)}
       </div>
     )

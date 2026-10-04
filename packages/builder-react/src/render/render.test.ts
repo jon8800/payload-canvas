@@ -47,8 +47,8 @@ test('site mode renders the nested tree with no data attributes', () => {
 test('canvas mode adds block and slot attributes', () => {
   const html = render({ layout: nested, mode: 'canvas' })
   assert.match(html, /<div data-block-id="root" data-block-type="stack" data-slot-owner="root" data-slot="children" class="flex flex-col gap-4">/)
-  assert.match(html, /<h3 data-block-id="h" data-block-type="heading" class="text-xl">Hello<\/h3>/)
-  assert.match(html, /<h2 data-block-id="h2" data-block-type="heading">Deep<\/h2>/)
+  assert.match(html, /<h3 data-block-id="h" data-block-type="heading" data-builder-text="text" class="text-xl">Hello<\/h3>/)
+  assert.match(html, /<h2 data-block-id="h2" data-block-type="heading" data-builder-text="text">Deep<\/h2>/)
   assert.ok(!html.includes('data-slot-empty'))
 })
 
@@ -75,7 +75,7 @@ test('hidden blocks: skipped on the site, marked in the canvas', () => {
   const site = render({ layout })
   assert.equal(site, '<h2>Shown</h2>')
   const canvas = render({ layout, mode: 'canvas' })
-  assert.match(canvas, /<h2 data-block-id="b" data-block-type="heading" data-builder-hidden="true">Hidden<\/h2>/)
+  assert.match(canvas, /<h2 data-block-id="b" data-block-type="heading" data-builder-hidden="true" data-builder-text="text">Hidden<\/h2>/)
   assert.ok(!canvas.includes('data-builder-hidden="true">Shown'))
 })
 

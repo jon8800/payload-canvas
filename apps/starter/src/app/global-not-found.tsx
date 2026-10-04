@@ -7,7 +7,9 @@ import { GeistMono } from 'geist/font/mono'
 import { GeistSans } from 'geist/font/sans'
 import { cn } from '@/lib/utils'
 import { NotFoundContent } from '@/components/NotFoundContent'
-import { ThemeHead } from '@/components/ThemeHead'
+import { ThemeStyle } from '@payload-toolkit/builder-react/server'
+import config from '@payload-config'
+import { getPayload } from 'payload'
 import { getSiteInfo } from '@/utilities/generateMeta'
 
 import './(frontend)/globals.css'
@@ -20,11 +22,12 @@ export async function generateMetadata(): Promise<Metadata> {
   }
 }
 
-export default function GlobalNotFound() {
+export default async function GlobalNotFound() {
+  const payload = await getPayload({ config })
   return (
     <html className={cn(GeistSans.variable, GeistMono.variable)} lang="en">
       <head>
-        <ThemeHead />
+        <ThemeStyle payload={payload} />
       </head>
       <body className="font-sans antialiased">
         <NotFoundContent />

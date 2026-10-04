@@ -3,7 +3,8 @@
 // The builder's "Page settings" drawer shows Payload's own edit form. Its Publish button would
 // duplicate the top bar's Publish, so the plugin sets this component as the builder collections'
 // `admin.components.edit.PublishButton`:
-// - inside the settings drawer it renders nothing. The drawer still saves: by Payload's autosave,
+// - inside the settings drawer it renders only a hidden marker (topbar.scss narrows that drawer).
+//   The drawer still saves: by Payload's autosave,
 //   or by Payload's "Save draft" button (collections with drafts and no autosave). Collections
 //   without drafts show Payload's "Save" button, which this slot does not touch.
 // - everywhere else (the edit view, other drawers) it renders Payload's own Publish button.
@@ -20,6 +21,7 @@ export const SettingsDrawerSlug = createContext<string | null>(null)
 export function PublishButton(props: PublishButtonClientProps & { label?: string }) {
   const settingsSlug = use(SettingsDrawerSlug)
   const { drawerSlug } = useDocumentDrawerContext()
-  if (settingsSlug !== null && drawerSlug === settingsSlug) return null
+  // In the settings drawer: no button, only the marker the narrow-drawer style looks for (topbar.scss).
+  if (settingsSlug !== null && drawerSlug === settingsSlug) return <span className="builder-settings-drawer-marker" hidden />
   return <PayloadPublishButton {...props} />
 }

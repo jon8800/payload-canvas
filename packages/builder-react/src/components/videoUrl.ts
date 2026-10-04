@@ -106,3 +106,18 @@ export function parseVideoUrl(raw: string, options: VideoOptions = {}): VideoEmb
 
   return { kind: 'file', src: url }
 }
+
+const PLATFORM_HOSTS = new Set(['youtube.com', 'youtube-nocookie.com', 'youtu.be', 'vimeo.com', 'player.vimeo.com'])
+
+/**
+ * True when a non-empty URL can play: `parseVideoUrl` accepts it, and a YouTube or Vimeo address
+ * names a video (a channel or search page would otherwise play as a broken file). The inspector
+ * says what is wrong (`videoUrlProblem` in `@payload-toolkit/builder`); keep the two in sync.
+ */
+export function isPlayableVideoUrl(raw: string): boolean {
+  const embed = parseVideoUrl(raw)
+  if (!embed) return false
+  if (embed.kind !== 'file') return true
+  const parsed = parseUrl(embed.src)
+  return !parsed || !PLATFORM_HOSTS.has(parsed.hostname.replace(/^(www\.|m\.|music\.)/, ''))
+}

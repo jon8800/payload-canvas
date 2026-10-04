@@ -8,7 +8,7 @@
 // Payload's autosave persist them. The assistant never calls a save endpoint.
 
 import { clientIdentity } from '../../../ai/config'
-import type { AiChatRequest, AiMessage, AiStreamEvent } from '../../../ai/types'
+import type { AiChatRequest, AiClientConfig, AiMessage, AiStreamEvent } from '../../../ai/types'
 import type { Operation } from '../../../core/types'
 import { changedIds } from '../live'
 import type { Runtime } from '../runtime'
@@ -48,9 +48,11 @@ export type AssistantState = {
   /** The input text. Kept here so it survives tab switches and comes back after Stop. */
   draft: string
   /**
-   * The server said it has no API key. The client cannot know this before the first request, so
-   * the panel shows a setup state from then on (not per message) until the user checks again.
-   * Holds the server's message, for the developer details.
+   * The server has no API key or config. Set at start from the client config (`ai.ready` /
+   * `setupProblem`, read when the server started), or when a request answers `no_api_key`. The
+   * panel shows the setup state until the user checks again: then the next send asks the server
+   * (Anthropic `ant auth login` credentials cannot be seen at startup). Holds the server's
+   * message, for the developer details.
    */
   setup: string | null
 }
@@ -63,6 +65,7 @@ export const FLASH_MS = 2500
 const storage = () => (typeof window === 'undefined' ? null : window.localStorage)
 
 export function createAssistant(runtime: Runtime, endpoint: string) {
+  const ai = runtime.config.ai
   const state: ValueStore<AssistantState> = createValueStore<AssistantState>({
     key: null,
     history: EMPTY_HISTORY,
@@ -71,12 +74,11 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
     notice: null,
     failed: null,
     draft: '',
-    setup: null,
+    setup: initialSetup(ai),
   })
   let collection = ''
   let docId: string | number | null = null
   let abort: AbortController | null = null
-  const ai = runtime.config.ai
   /** `${provider}:${model}` of the server. A chat written by another one starts over. */
   const identity = ai ? clientIdentity(ai) : 'anthropic:unknown'
   const emptyHistory = (): ChatHistory => ({ ...EMPTY_HISTORY, provider: identity })
@@ -345,6 +347,12 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
       patch({ notice: null })
     },
   }
+}
+
+/** The setup message when the server found no credentials or config at startup, else null. */
+export function initialSetup(ai: AiClientConfig | null | undefined): string | null {
+  if (!ai || ai.ready !== false) return null
+  return ai.setupProblem?.trim() || 'The AI assistant is not set up on the server.'
 }
 
 async function errorOf(response: Response): Promise<{ code: string | null; message: string }> {

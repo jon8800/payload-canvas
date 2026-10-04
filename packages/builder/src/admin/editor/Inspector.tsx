@@ -1,7 +1,7 @@
 'use client'
 
 import { CheckboxInput } from '@payloadcms/ui'
-import { useEffect, useState, type ChangeEvent } from 'react'
+import { useDeferredValue, useEffect, useState, type ChangeEvent } from 'react'
 
 import { findBlock, findLocation, getBlockDefinition } from '../../core'
 import type { Block } from '../../core/types'
@@ -17,7 +17,7 @@ import { shortcutList } from './shortcuts'
 import { useEditor } from './store'
 import { Popover, usePopover } from './styles/popover'
 import { StylesPanel } from './styles/StylesPanel'
-import { useValue } from './valueStore'
+import { useValue, useValueSelector } from './valueStore'
 
 type TabsProps<T extends string> = {
   value: T
@@ -76,6 +76,7 @@ export function Inspector() {
 }
 
 const TIP_LABELS: Record<string, string> = {
+  'Publish changes': 'Publish',
   'Open or close the AI assistant': 'AI assistant',
   'Copy block': 'Copy block',
   'Paste into or after the selection': 'Paste',
@@ -85,7 +86,8 @@ const TIP_LABELS: Record<string, string> = {
 
 function EmptyState() {
   const runtime = useRuntime()
-  const tips = shortcutList({ ai: Boolean(runtime.assistant) }).filter((s) => s.label in TIP_LABELS)
+  const drafts = useValueSelector(runtime.doc.meta, (meta) => meta.drafts)
+  const tips = shortcutList({ ai: Boolean(runtime.assistant), publish: drafts }).filter((s) => s.label in TIP_LABELS)
   return (
     <div className="builder-editor__empty builder-editor__empty--inspector">
       <Icon name="cursor" size={20} />
@@ -112,7 +114,12 @@ function EmptyState() {
 
 function BlockPane() {
   const runtime = useRuntime()
-  const block = useEditor(runtime.store, (s) => (s.selectedId ? findBlock(s.layout, s.selectedId) : null))
+  // Another block selected: the selection on the canvas and in the outline paints first, the
+  // inspector (Payload's inputs, the slowest part to mount) follows in a deferred render.
+  // Edits to the shown block stay synchronous, so a controlled input never lags behind typing.
+  const selectedId = useEditor(runtime.store, (s) => s.selectedId)
+  const shownId = useDeferredValue(selectedId)
+  const block = useEditor(runtime.store, (s) => (shownId ? findBlock(s.layout, shownId) : null))
   const [tab, setTab] = useState<'content' | 'styles'>('content')
   const [shownType, setShownType] = useState<string | null>(null)
   const focusRequest = useValue(runtime.focusRequest)

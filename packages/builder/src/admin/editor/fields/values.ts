@@ -3,6 +3,8 @@
 
 import type { CollectionSlug, ValueWithRelation } from 'payload'
 
+import { videoUrlProblem } from '../../../blocks/defaults'
+
 /** `admin.custom.builderCondition`: show the field only when a sibling field equals a value (or one of a list). */
 export type BuilderCondition = { field: string; equals: unknown }
 
@@ -142,4 +144,53 @@ export function parseJsonText(text: string): { ok: true; value: unknown } | { ok
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Checks the inspector shows while editing. Block field configs reach the editor as JSON, so a
+// Payload `validate` function is lost on the way. These checks are data instead.
+// ---------------------------------------------------------------------------
+
+/** Checks for `admin.custom.builderFormat`. Each returns a message, or null when the value is fine. */
+const FORMAT_CHECKS: Record<string, (value: unknown) => string | null> = {
+  videoUrl: videoUrlProblem,
+}
+
+/** The message for a text value that does not match the field's `admin.custom.builderFormat`, else null. */
+export function formatProblem(field: FieldShape, value: unknown): string | null {
+  const format = field.admin?.custom?.builderFormat
+  const check = typeof format === 'string' ? FORMAT_CHECKS[format] : undefined
+  return check ? check(value) : null
+}
+
+export type NumberLimits = { min?: number; max?: number; required?: boolean }
+
+/** "Enter a number from 1 to 100." The same text for a wrong number and for text that is not a number. */
+export function numberMessage({ min, max }: NumberLimits): string {
+  if (min !== undefined && max !== undefined) return `Enter a number from ${min} to ${max}.`
+  if (min !== undefined) return `Enter a number of ${min} or more.`
+  if (max !== undefined) return `Enter a number of ${max} or less.`
+  return 'Enter a number.'
+}
+
+const NUMBER_TEXT = /^[-+]?(?:\d+\.?\d*|\.\d+)$/
+
+/**
+ * Reads the text of a number input. Empty text means "no value" (the block default), unless the
+ * field is required. `partial` marks text that may still become a number while the user types
+ * ("", "-", "abc"): the inspector shows its message only after the input loses focus.
+ */
+export function parseNumberText(
+  text: string,
+  limits: NumberLimits,
+): { ok: true; value: number | null } | { ok: false; error: string; partial: boolean } {
+  const raw = text.trim()
+  if (!raw) return limits.required ? { ok: false, error: numberMessage(limits), partial: true } : { ok: true, value: null }
+  if (!NUMBER_TEXT.test(raw)) return { ok: false, error: numberMessage(limits), partial: true }
+  const value = Number(raw)
+  if (!Number.isFinite(value)) return { ok: false, error: numberMessage(limits), partial: false }
+  if ((limits.min !== undefined && value < limits.min) || (limits.max !== undefined && value > limits.max)) {
+    return { ok: false, error: numberMessage(limits), partial: false }
+  }
+  return { ok: true, value }
 }

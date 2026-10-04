@@ -6,6 +6,7 @@ import { deepestBlockAt } from '../../core'
 import { unwrap, type CanvasToAdmin } from '../../protocol'
 import { ancestors } from './actions'
 import { BlockIcon, Icon } from './icons'
+import { applyInlineChange, boundHint, inlineEditing, stopInlineEditing } from './inline'
 import { blockName } from './names'
 import { cursorAt } from './live'
 import { FollowFrame } from './live/PresenceUI'
@@ -16,7 +17,9 @@ import { useEditor } from './store'
 import { postContext, templateContext } from './templates/state'
 import { breakpointAt, breakpointWidths, useStyleTokens, withFallback } from './styles/tokens'
 import { DESKTOP_WIDTH } from './styles/viewport'
-import { useValue } from './valueStore'
+import { sameItems, useValue } from './valueStore'
+
+const NO_PATH: never[] = []
 
 /** Space between the stage edge and the frame. */
 const STAGE_PADDING = 24
@@ -60,11 +63,14 @@ export function Canvas() {
   // Iframe -> admin messages.
   useEffect(() => {
     const { store, measurement, drag } = runtime
+    const inline = inlineEditing(runtime)
     const onMessage = (event: MessageEvent) => {
       const message = unwrap<CanvasToAdmin>(event, iframeRef.current?.contentWindow)
       if (!message) return
       switch (message.type) {
         case 'ready':
+          // A reloaded canvas has no editing session.
+          inline.set(null)
           sendAll()
           return
         case 'measure': {
@@ -98,8 +104,40 @@ export function Canvas() {
           return
         case 'error':
           runtime.canvasError.set(message.message)
+          return
+        case 'inlineStart':
+          store.select(message.id)
+          inline.set({ session: message.session, id: message.id, path: message.path, kind: message.kind, format: null, linkRequest: 0 })
+          store.hover(null)
+          return
+        case 'inlineChange':
+          applyInlineChange(runtime, message)
+          return
+        case 'inlineEnd':
+          if (inline.get()?.session === message.session) inline.set(null)
+          return
+        case 'inlineFormat': {
+          const current = inline.get()
+          if (current?.session === message.session) inline.set({ ...current, format: message.format })
+          return
+        }
+        case 'inlineLink': {
+          const current = inline.get()
+          if (current?.session === message.session) inline.set({ ...current, linkRequest: Date.now() })
+          return
+        }
+        case 'inlineRefused':
+          if (message.reason === 'bound') runtime.notify(boundHint(message.field ?? ''))
+          else runtime.warn('This rich text has content the canvas cannot edit. Edit it in the inspector.')
       }
     }
+    // A press anywhere in the admin, outside the rich text toolbar, ends inline editing.
+    const onPointerDown = (e: PointerEvent) => {
+      if (!inline.get()) return
+      if (e.target instanceof Element && e.target.closest('[data-inline-toolbar]')) return
+      stopInlineEditing(runtime)
+    }
+    document.addEventListener('pointerdown', onPointerDown, true)
     const sendAll = () => {
       const { layout, selectedId, hoveredId } = store.getState()
       runtime.postToCanvas({ type: 'init', init: runtime.canvasInit })
@@ -111,7 +149,10 @@ export function Canvas() {
     window.addEventListener('message', onMessage)
     // The iframe may already be listening (it loaded before this effect ran).
     sendAll()
-    return () => window.removeEventListener('message', onMessage)
+    return () => {
+      window.removeEventListener('message', onMessage)
+      document.removeEventListener('pointerdown', onPointerDown, true)
+    }
   }, [runtime, iframeRef])
 
   // Shortcuts the canvas script does not forward (copy, paste, duplicate, help). Same origin, so
@@ -152,6 +193,9 @@ export function Canvas() {
     const unsubscribe = runtime.store.subscribe(() => {
       const next = runtime.store.getState()
       if (next.layout !== last.layout) runtime.postToCanvas({ type: 'layout', layout: next.layout })
+      // Another block selected (or the edited block deleted): inline editing ends.
+      const editing = inlineEditing(runtime).get()
+      if (editing && next.selectedId !== editing.id && next.selectedId !== last.selectedId) stopInlineEditing(runtime)
       if (next.selectedId !== last.selectedId || next.hoveredId !== last.hoveredId) {
         runtime.postToCanvas({ type: 'selection', selectedId: next.selectedId, hoveredId: next.hoveredId })
       }
@@ -300,9 +344,8 @@ function StatusBar({
   onZoom: (mode: ZoomMode) => void
 }) {
   const runtime = useRuntime()
-  const layout = useEditor(runtime.store, (s) => s.layout)
-  const selectedId = useEditor(runtime.store, (s) => s.selectedId)
-  const path = useMemo(() => (selectedId ? ancestors(layout, selectedId) : []), [layout, selectedId])
+  // Renders when a block on the path changes, not on every edit elsewhere on the page.
+  const path = useEditor(runtime.store, (s) => (s.selectedId ? ancestors(s.layout, s.selectedId) : NO_PATH), sameItems)
   const { tokens } = useStyleTokens(runtime.config.tokensEndpoint)
   const widths = useMemo(() => breakpointWidths(withFallback(tokens)), [tokens])
   const px = Math.round(frameWidth)

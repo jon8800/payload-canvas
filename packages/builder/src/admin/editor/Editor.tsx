@@ -27,7 +27,7 @@ import { cursorAt, useMultiplayer } from './live'
 import { useFollow } from './live/useFollow'
 import { useTemplateController } from './templates/useTemplate'
 import { TopBar } from './topbar/TopBar'
-import { useValue } from './valueStore'
+import { useValueSelector } from './valueStore'
 
 const COLLISION_ID = 'builder-drop'
 /** Distance from the canvas top or bottom edge where auto-scroll starts. */
@@ -70,7 +70,8 @@ export function Editor({ config, meta, icon }: EditorProps) {
   const docId = meta.id
   useMultiplayer(runtime, { docId })
   // Ready once the first session arrived. A reconnect keeps the editor open.
-  const ready = Boolean(useValue(runtime.live)?.self)
+  // A boolean: the editor (and dnd-kit's context with every draggable) must not render on each live update.
+  const ready = useValueSelector(runtime.live, (live) => Boolean(live?.self))
   useFollow(runtime)
   useTemplateController(runtime)
   useEffect(() => runtime.assistant?.setDocument(config.collection, docId), [runtime, config.collection, docId])

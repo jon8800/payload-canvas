@@ -1,0 +1,292 @@
+// Theme fields in Payload's admin. Payload CSS variables only, no Tailwind.
+@layer payload-default {
+  .theme-field {
+    margin-bottom: var(--spacing-field, calc(var(--base) * 1.5));
+  }
+
+  // Shared look of the text inputs, close to Payload's own inputs.
+  %theme-input {
+    height: calc(var(--base) * 2);
+    padding: 0 calc(var(--base) * 0.5);
+    border: 1px solid var(--theme-elevation-150);
+    border-radius: var(--style-radius-s, var(--border-radius-m));
+    background: var(--theme-input-bg);
+    color: var(--theme-text);
+    font: inherit;
+    font-size: var(--font-body-size-m, 13px);
+    box-sizing: border-box;
+    outline: none;
+
+    &:hover {
+      border-color: var(--theme-elevation-250);
+    }
+
+    &:focus {
+      border-color: var(--theme-elevation-400);
+    }
+
+    &:disabled {
+      background: var(--theme-elevation-50);
+      color: var(--theme-elevation-500);
+    }
+  }
+
+  %theme-quiet-button {
+    flex-shrink: 0;
+    padding: calc(var(--base) * 0.25) calc(var(--base) * 0.5);
+    border: none;
+    border-radius: var(--style-radius-s, var(--border-radius-m));
+    background: none;
+    color: var(--theme-elevation-600);
+    font: inherit;
+    font-size: var(--font-body-size-s, 12px);
+    cursor: pointer;
+
+    &:hover {
+      background: var(--theme-elevation-100);
+      color: var(--theme-text);
+    }
+  }
+
+  // Popups render in a portal at the end of <body>: above Payload's drawers and modals.
+  .theme-popover {
+    z-index: 10000;
+  }
+
+  %theme-popup {
+    border: 1px solid var(--theme-elevation-150);
+    border-radius: var(--style-radius-m, var(--border-radius-m));
+    background: var(--theme-elevation-0);
+    box-shadow: 0 6px 20px rgb(0 0 0 / 14%);
+  }
+
+  // Color ---------------------------------------------------------------------------------------
+
+  .theme-color {
+    &__controls {
+      display: flex;
+      align-items: center;
+      gap: calc(var(--base) * 0.5);
+    }
+
+    &__swatch {
+      flex-shrink: 0;
+      width: calc(var(--base) * 2);
+      height: calc(var(--base) * 2);
+      padding: 0;
+      border: 1px solid var(--theme-elevation-200);
+      border-radius: var(--style-radius-s, var(--border-radius-m));
+      cursor: pointer;
+
+      &:hover {
+        box-shadow: 0 0 0 2px var(--theme-elevation-150);
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--theme-elevation-500);
+        outline-offset: 2px;
+      }
+
+      // "Not set": a diagonal line over the input background.
+      &--empty {
+        background: linear-gradient(
+          to top right,
+          transparent calc(50% - 1px),
+          var(--theme-error-500) calc(50% - 1px),
+          var(--theme-error-500) calc(50% + 1px),
+          transparent calc(50% + 1px)
+        ),
+        var(--theme-input-bg);
+      }
+    }
+
+    &__hex {
+      @extend %theme-input;
+      width: calc(var(--base) * 6);
+      font-family: var(--font-mono, monospace);
+    }
+
+    &__popup {
+      @extend %theme-popup;
+      width: 224px;
+      padding: calc(var(--base) * 0.5);
+
+      .react-colorful {
+        width: 100%;
+        height: 150px;
+      }
+
+      .react-colorful__saturation {
+        border-radius: 4px 4px 0 0;
+      }
+
+      .react-colorful__hue {
+        height: 12px;
+        border-radius: 0 0 4px 4px;
+      }
+
+      .react-colorful__pointer {
+        width: 16px;
+        height: 16px;
+      }
+    }
+
+    &__presets {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 4px;
+      margin: calc(var(--base) * 0.5) 0;
+    }
+
+    &__preset {
+      width: 100%;
+      aspect-ratio: 1;
+      padding: 0;
+      border: 1px solid var(--theme-elevation-150);
+      border-radius: 4px;
+      cursor: pointer;
+
+      &:hover,
+      &:focus-visible {
+        border-color: var(--theme-elevation-500);
+        outline: none;
+      }
+    }
+
+    &__clear {
+      @extend %theme-quiet-button;
+      width: 100%;
+    }
+  }
+
+  // Font ----------------------------------------------------------------------------------------
+
+  .theme-font {
+    &__row {
+      display: flex;
+      align-items: center;
+      gap: calc(var(--base) * 0.5);
+    }
+
+    &__input {
+      @extend %theme-input;
+      flex: 1;
+      min-width: 0;
+    }
+
+    &__clear {
+      @extend %theme-quiet-button;
+    }
+
+    &__popup {
+      @extend %theme-popup;
+      width: var(--anchor-width);
+      min-width: 220px;
+      overflow: hidden;
+    }
+
+    &__list {
+      max-height: 280px;
+      overflow-y: auto;
+      padding: 4px 0;
+    }
+
+    &__option {
+      display: block;
+      padding: 6px 10px;
+      color: var(--theme-text);
+      font-size: 15px;
+      cursor: pointer;
+
+      &[data-highlighted] {
+        background: var(--theme-elevation-100);
+      }
+
+      &[data-selected] {
+        font-weight: 600;
+      }
+    }
+
+    &__empty:not(:empty) {
+      padding: 8px 10px;
+      color: var(--theme-elevation-500);
+      font-size: var(--font-body-size-s, 12px);
+    }
+
+    &__preview {
+      margin-top: calc(var(--base) * 0.5);
+      color: var(--theme-text);
+      font-size: 16px;
+    }
+  }
+
+  // Slider --------------------------------------------------------------------------------------
+
+  .theme-slider {
+    &__controls {
+      display: flex;
+      align-items: center;
+      gap: calc(var(--base) * 0.5);
+      max-width: 480px;
+
+      &--empty .theme-slider__indicator,
+      &--empty .theme-slider__thumb {
+        opacity: 0.45;
+      }
+    }
+
+    &__root {
+      flex: 1;
+    }
+
+    &__control {
+      display: flex;
+      align-items: center;
+      height: calc(var(--base) * 1.5);
+      cursor: pointer;
+    }
+
+    &__track {
+      position: relative;
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--theme-elevation-150);
+    }
+
+    &__indicator {
+      height: 100%;
+      border-radius: 2px;
+      background: var(--theme-elevation-800);
+    }
+
+    &__thumb {
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--theme-elevation-800);
+      border-radius: 50%;
+      background: var(--theme-elevation-0);
+      box-shadow: 0 1px 3px rgb(0 0 0 / 15%);
+
+      &:focus-visible {
+        outline: 2px solid var(--theme-elevation-500);
+        outline-offset: 2px;
+      }
+    }
+
+    &__number {
+      @extend %theme-input;
+      width: calc(var(--base) * 3.5);
+      text-align: right;
+    }
+
+    &__unit {
+      color: var(--theme-elevation-500);
+      font-size: var(--font-body-size-s, 12px);
+    }
+
+    &__reset {
+      @extend %theme-quiet-button;
+    }
+  }
+}

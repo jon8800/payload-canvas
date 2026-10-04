@@ -1,5 +1,15 @@
 import path from 'node:path'
-import type { CollectionBeforeChangeHook, CollectionConfig, Config, Field, JSONField, Payload, Plugin, RichTextField } from 'payload'
+import type {
+  CollectionBeforeChangeHook,
+  CollectionConfig,
+  Config,
+  Field,
+  JSONField,
+  Payload,
+  PayloadRequest,
+  Plugin,
+  RichTextField,
+} from 'payload'
 import { AI_PATH, aiEndpoints } from '../ai/endpoint'
 import { aiClientConfig } from '../ai/config'
 import type { AiOptions } from '../ai/types'
@@ -13,7 +23,10 @@ import {
   type SectionDefinition,
   type TemplatesClientConfig,
 } from '../core/types'
-import { getCanvasCssInput, getStyleTokens, type CssOptions, type TailwindPlugins } from '../css'
+import { applyFontFamilies, getCanvasCssInput, getStyleTokens, type CssOptions, type FontFamilies, type TailwindPlugins } from '../css'
+import { DEFAULT_THEME_SLUG, THEME_CONFIG_KEY, THEME_PATH, type ThemeOptions, type ThemeServerConfig } from '../theme/config'
+import { themeFontFamilies, themeOutput, type ThemeData } from '../theme/css'
+import { themeGlobal } from '../theme/global'
 import {
   BUILDER_CONFIG_KEY,
   defaultLiveRuntime,
@@ -26,7 +39,7 @@ import {
   type BuilderServerConfig,
   type SessionManager,
 } from '../live'
-import { layoutAfterChange, layoutBeforeChange, type BindingCheck } from './hook'
+import { keepLockBeforeOperation, layoutAfterChange, layoutBeforeChange, type BindingCheck } from './hook'
 import { toJsonSafe } from './jsonSafe'
 import { listCollectionsOf } from './listCollections'
 import {
@@ -91,8 +104,7 @@ export type TemplatesOptions = {
   hooks?: CollectionConfig['hooks']
 }
 
-/** Font family names by theme font name, e.g. `{ sans: 'Inter', heading: 'Fraunces' }`. */
-export type FontFamilies = Record<string, string | null | undefined>
+export type { FontFamilies }
 
 export type WebsiteBuilderOptions = {
   collections: Record<string, BuilderCollectionOptions>
@@ -103,10 +115,9 @@ export type WebsiteBuilderOptions = {
     entry: string
     plugins?: TailwindPlugins
     /**
-     * The font families the site really uses, by theme font name (`sans`, `heading`, `mono`, …).
-     * For apps that set `--font-*` at runtime (for example from a theme global): the Styles panel's
-     * Font list then shows "Inter", not the stack in the CSS entry. Names it leaves out keep
-     * `var(--font-<name>)`.
+     * The font families the site really uses, by font variable name (`sans`, `heading`, `mono`, …).
+     * The plugin's theme global already supplies its fonts; use this only for fonts set at runtime
+     * some other way. Its names win over the theme's. Names left out keep `var(--font-<name>)`.
      */
     fontFamilies?: (payload: Payload) => FontFamilies | Promise<FontFamilies>
   }
@@ -121,9 +132,9 @@ export type WebsiteBuilderOptions = {
    */
   live?: { heartbeatMs?: number }
   /**
-   * Several people can edit the same document at once (default `true`). The plugin then turns
-   * off Payload's document locking on builder collections. `false` keeps the lock: one person
-   * edits a document at a time.
+   * @deprecated Has no effect. Several people can always edit a layout at once. Payload's
+   * document locking stays on for the other fields (Edit view, settings drawer); the builder view
+   * never takes the lock. Set `lockDocuments: false` on a collection to turn the lock off.
    */
   multiplayer?: boolean
   /** Options for the templates collection. It exists when a collection sets `templates: true`. */
@@ -134,6 +145,12 @@ export type WebsiteBuilderOptions = {
    * BUILDER_AI_PROVIDER / OPENROUTER_API_KEY / ANTHROPIC_API_KEY. See docs/ai/providers.md.
    */
   ai?: AiOptions
+  /**
+   * The theme global (colors, fonts, radius, spacing) with color, font and slider pickers. On by
+   * default; `false` leaves it out. Render it on the site with `ThemeStyle` from
+   * `@payload-toolkit/builder-react/server`. See the README's "Theme" section.
+   */
+  theme?: ThemeOptions | false
 }
 
 const LAYOUT_FIELD_COMPONENT = '@payload-toolkit/builder/client#LayoutField'
@@ -166,7 +183,6 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
     const canvasPath = options.canvasPath ?? '/builder-canvas'
     const sourceCollections = config.collections ?? []
     const live = defaultLiveRuntime()
-    const multiplayer = options.multiplayer ?? true
 
     for (const slug of Object.keys(options.collections)) {
       if (!sourceCollections.some((c) => c.slug === slug)) {
@@ -174,6 +190,27 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           `[websiteBuilder] Collection "${slug}" does not exist. Known collections: ${sourceCollections.map((c) => c.slug).join(', ')}.`,
         )
       }
+    }
+
+    // Theme: a global with design tokens, rendered by ThemeStyle (builder-react) and the canvas.
+    const themeOptions = options.theme === false ? null : (options.theme ?? {})
+    const theme: ThemeServerConfig | null = themeOptions
+      ? {
+          slug: themeOptions.slug ?? DEFAULT_THEME_SLUG,
+          cacheTag: themeOptions.cacheTag ?? themeOptions.slug ?? DEFAULT_THEME_SLUG,
+          endpoint: `${apiRoute}${THEME_PATH}`,
+        }
+      : null
+    if (theme && (config.globals ?? []).some((g) => g.slug === theme.slug)) {
+      throw new Error(
+        `[websiteBuilder] A global named "${theme.slug}" already exists. Remove it (the plugin adds the theme global), set \`theme.slug\` to another name, or set \`theme: false\`.`,
+      )
+    }
+    /** The theme's font families for the Styles panel. Empty without a theme or when the read fails. */
+    const themeFamilies = async (payload: Payload): Promise<FontFamilies> => {
+      if (!theme) return {}
+      const doc = await payload.findGlobal({ slug: theme.slug as never, depth: 0 }).catch(() => null)
+      return themeFontFamilies(doc as ThemeData | null)
     }
 
     // Templates: a collection of layouts for the template-enabled collections.
@@ -298,7 +335,6 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           blocks,
           css,
           sessions: live.sessions,
-          multiplayer,
           bindings: bindingCheck(collection.slug),
           // Runs after the layout hook, so it sees the live session's layout.
           afterLayout: collection.slug === templatesSlug && targets.length > 0 ? [requireBlocksForDefault] : [],
@@ -311,7 +347,9 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
         [BUILDER_CONFIG_KEY]: serverConfig,
         [SITE_CSS_KEY]: { css, blocks } satisfies SiteCssConfig,
         ...(templates ? { [TEMPLATES_CONFIG_KEY]: templates } : {}),
+        ...(theme ? { [THEME_CONFIG_KEY]: theme } : {}),
       },
+      globals: themeOptions ? [...(config.globals ?? []), themeGlobal(themeOptions)] : config.globals,
       endpoints: [
         ...(config.endpoints ?? []),
         ...liveEndpoints({ collections: liveCollections, blocks, runtime: live, heartbeatMs: options.live?.heartbeatMs }),
@@ -347,16 +385,27 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           handler: async (req) => {
             if (!req.user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
             const tokens = await getStyleTokens(css)
-            const families = await Promise.resolve(options.css.fontFamilies?.(req.payload)).catch(() => undefined)
-            const fonts = families
-              ? tokens.fonts.map((token) => {
-                  const family = families[token.name]?.trim()
-                  return family ? { ...token, value: family } : token
-                })
-              : tokens.fonts
-            return Response.json({ ...tokens, fonts }, { headers: { 'Cache-Control': 'private, max-age=60' } })
+            const custom = await Promise.resolve(options.css.fontFamilies?.(req.payload)).catch(() => undefined)
+            const families = { ...(await themeFamilies(req.payload)), ...custom }
+            const fonts = applyFontFamilies(tokens.fonts, families)
+            // Not cached by the browser: the fonts follow the theme global.
+            return Response.json({ ...tokens, fonts }, { headers: { 'Cache-Control': 'private, no-cache' } })
           },
         },
+        ...(theme
+          ? [
+              {
+                // The theme as CSS and a Google Fonts URL, for ThemeLive in the canvas. Read access applies.
+                path: THEME_PATH,
+                method: 'get' as const,
+                handler: async (req: PayloadRequest) => {
+                  const doc = await req.payload.findGlobal({ slug: theme.slug as never, depth: 0, req, overrideAccess: false }).catch(() => null)
+                  if (!doc) return Response.json({ error: 'Not found' }, { status: 404 })
+                  return Response.json(themeOutput(doc as ThemeData), { headers: { 'Cache-Control': 'no-store' } })
+                },
+              },
+            ]
+          : []),
       ],
       onInit: async (payload) => {
         await config.onInit?.(payload)
@@ -388,14 +437,13 @@ type AddBuilderArgs = {
   blocks: BlockDefinition[]
   css: CssOptions
   sessions: SessionManager
-  multiplayer: boolean
   bindings?: BindingCheck
   /** beforeChange hooks that run after the layout hook. */
   afterLayout?: CollectionBeforeChangeHook[]
 }
 
 function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): CollectionConfig {
-  const { field, clientConfig, blocks, css, sessions, multiplayer, bindings, afterLayout = [] } = args
+  const { field, clientConfig, blocks, css, sessions, bindings, afterLayout = [] } = args
   const cssField = cssFieldName(field)
 
   // An existing field with this name (also inside rows, collapsibles or unnamed tabs) is reused
@@ -452,10 +500,11 @@ function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): Collect
   return {
     ...collection,
     fields: [...fields, layoutField, generatedCssField, ...(richText ? [richText] : [])],
-    // Payload's document lock lets only one person open a document. Multiplayer needs it off.
-    ...(multiplayer ? { lockDocuments: false as const } : {}),
+    // Payload's document lock stays on: it protects the other fields in the Edit view and the
+    // settings drawer. The builder view never takes it; the plugin's own saves keep it.
     hooks: {
       ...collection.hooks,
+      beforeOperation: [...(collection.hooks?.beforeOperation ?? []), keepLockBeforeOperation({ collection: collection.slug })],
       beforeChange: [
         ...(collection.hooks?.beforeChange ?? []),
         layoutBeforeChange({ collection: collection.slug, field, cssField, blocks, css, sessions, bindings }),

@@ -171,7 +171,7 @@ The editor is a full-screen root admin view at `{admin}/builder/:collection/:id`
 - The iframe repeats its "ready" message until it receives a layout. This avoids a race on reload.
 - `DndContext` gets `id={useId()}` to avoid a hydration mismatch.
 - Device sizes (desktop, tablet, mobile, custom width) resize the iframe. The breakpoint switch in the Styles panel follows the device size.
-- Later: inline text editing on the canvas (double-click a text block).
+- Inline text editing: double-click text on the canvas (or press Enter on a selected block) to edit it in place. Components mark text elements with `editableText(mode, path)`. Plain text is a `contenteditable` element. Rich text loads a small Lexical editor (the same version as Payload, with Payload-compatible link nodes) and a floating toolbar, only when editing starts. One editing session is one undo step (`mergeWithin`). Edits go through the normal operations, so collaborators see the typing live.
 
 **Inspector.**
 
@@ -206,6 +206,8 @@ These fix the old problems: compiling against bare Tailwind, overriding theme va
 
 The Theme global stores design tokens: colors, fonts, radius, spacing scale. The plugin outputs them as CSS variables in Tailwind's `@theme` format, so classes like `bg-primary`, `font-heading` and `rounded-lg` follow the theme. The same output feeds the save-time compile and the editor iframe.
 
+`websiteBuilder({ theme })` adds the global. It is on by default; `theme: false` turns it off. The site renders `<ThemeStyle payload />` from `@payload-toolkit/builder-react/server`. The canvas uses `<ThemeStyle payload live />`, which reloads the theme after a save. See the README section "Theme".
+
 ## 10. Rendering
 
 `builder-react` exports:
@@ -234,7 +236,7 @@ Blocks that need data (for example "latest posts") declare a `load()` function. 
 - **Events:** `GET {live}/:collection/:id/events` (Server-Sent Events): `session` (full state), `commit`, `collaborators`, `awareness`, `saved` (the draft holds the session up to a seq) and `published` (publish, unpublish, revert). A reconnect resumes from `<sessionId>:<seq>` when the commit log still covers it; otherwise the server sends a fresh `session`.
 - **Presence:** collaborators (people and AI agents) have stable colors. Awareness (selection, hover, cursor relative to a block, canvas width) goes through `POST {live}/:collection/:id/awareness` and is never stored. The editor shows avatars, live cursors, colored selections, outline dots and a follow mode.
 - **Conflicts:** operations apply in server order; the last write wins per prop.
-- **Payload locking** is off for builder collections while `multiplayer` is on (the default).
+- **Other fields:** Payload's document lock stays on for the Edit view and the settings drawer. The builder view never takes it. The plugin's own saves (session drafts, publish, unpublish, revert) skip the lock and put it back, because Payload deletes the lock on every update. Because autosave also releases the lock, the save hook rejects (409) a save from a form loaded before another person changed one of its fields (`live/fieldsGuard.ts`, an in-memory record per field).
 - **Limits:** sessions live in one server process. With more than one app server, route each document to one instance (sticky routing), or move sessions to a shared store.
 
 ## 13. AI tools (MCP)
@@ -285,5 +287,5 @@ The original prototype goals:
 3. ~~**All core blocks and the Styles panel.**~~ Done 2026-10-04: 15 default blocks, visual Styles panel over Tailwind classes, sections library, editor redesign.
 4. ~~**AI:**~~ Done 2026-10-04: `builderMcpTools()` for payload-mcp-toolkit, operations endpoint, SSE live events; AI edits flash in open editors without entering the undo history.
 5. ~~**Templates and binding.**~~ Done 2026-10-04: templates collection, bindings with one relationship hop and `$url`, Field and Collection list blocks, sample-document preview.
-6. **Starter app and CLI** on top of the plugin. Starter done; packaging, docs and the CLI in progress.
-7. **Later:** inline text editing, multiplayer, presence, an AI chat panel in the admin.
+6. ~~**Starter app and CLI**~~ Done 2026-10-04: starter, packaging, docs, the `create-payload-toolkit` CLI.
+7. ~~**Multiplayer, presence, AI chat panel, full-screen view, inline text editing, theme in the plugin.**~~ Done 2026-10-04.

@@ -19,6 +19,8 @@ import {
 } from './shared'
 import { buildStyleTokens } from './tokens'
 
+export { applyFontFamilies, resolveFontValue, type FontFamilies } from './tokens'
+
 /** Tailwind plugins by the id used in `@plugin "<id>"`, e.g. { '@tailwindcss/typography': typography }. */
 export type TailwindPlugins = Record<string, unknown>
 

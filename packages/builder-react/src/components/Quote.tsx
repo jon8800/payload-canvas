@@ -1,4 +1,5 @@
 import type { BlockComponentProps } from '../render/types'
+import { editableText } from '../render/editable'
 import { asText, PlaceholderText } from './placeholder'
 import { lines } from './Text'
 
@@ -9,10 +10,10 @@ export function Quote({ props, className, attributes, mode }: BlockComponentProp
   if (!quote && mode !== 'canvas') return null
   return (
     <blockquote {...attributes} className={className}>
-      <p>{quote ? lines(quote) : <PlaceholderText>Quote</PlaceholderText>}</p>
+      <p {...editableText(mode, 'quote')}>{quote ? lines(quote) : <PlaceholderText>Quote</PlaceholderText>}</p>
       {cite && (
         <footer>
-          <cite>{cite}</cite>
+          <cite {...editableText(mode, 'cite')}>{cite}</cite>
         </footer>
       )}
     </blockquote>

@@ -77,8 +77,9 @@ async function clear(payload: Payload) {
 }
 
 /**
- * The studio's theme: warm paper, ink text and a deep green, with Newsreader for headings and
- * Hanken Grotesk for body text. The theme hook derives borders and secondary text from these.
+ * The studio's theme (the builder plugin's Theme global): warm paper, ink text and a deep green,
+ * with Newsreader for headings and Hanken Grotesk for body text. The plugin derives borders and
+ * secondary text from these on save.
  */
 async function seedTheme(payload: Payload) {
   await payload.updateGlobal({

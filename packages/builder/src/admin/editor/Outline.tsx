@@ -1,7 +1,7 @@
 'use client'
 
 import { useDraggable } from '@dnd-kit/core'
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 
 import { findLocation, getBlockDefinition, slotNames, walkBlocks } from '../../core'
 import type { Block, Layout } from '../../core/types'
@@ -12,7 +12,7 @@ import { blockPreview, blockSummary, childrenOf, customLabel, typeName } from '.
 import { OUTLINE_INDENT, useRuntime, type DragData, type Runtime } from './runtime'
 import { useEditor } from './store'
 import { findBindingField, listAncestor, URL_PATH } from './templates/binding'
-import { useValue } from './valueStore'
+import { useValue, useValueSelector } from './valueStore'
 
 type Row = {
   block: Block
@@ -72,6 +72,24 @@ function selectRow(runtime: Runtime, row: Row | undefined) {
   focusRow(runtime, row.block.id)
 }
 
+/** Problem messages by block id. */
+function issuesByBlock(problems: readonly { blockId?: string | null; message: string }[]): Map<string, string[]> {
+  const out = new Map<string, string[]>()
+  for (const p of problems) if (p.blockId) out.set(p.blockId, [...(out.get(p.blockId) ?? []), p.message])
+  return out
+}
+
+/** Ids of the blocks with a binding that reads a field its collection does not have. */
+function brokenBindingIds(runtime: Runtime, layout: Layout, templateTarget: string | null): Set<string> {
+  const out = new Set<string>()
+  walkBlocks(layout, (block) => {
+    if (hasBrokenBinding(runtime, layout, block, templateTarget)) out.add(block.id)
+  })
+  return out
+}
+
+const NO_ISSUES: string[] = []
+
 /** True when a binding of the block reads a field its collection does not have (or there is no collection). */
 function hasBrokenBinding(runtime: Runtime, layout: Layout, block: Block, templateTarget: string | null): boolean {
   const paths = Object.values(block.bindings ?? {})
@@ -93,32 +111,55 @@ export function Outline() {
   const runtime = useRuntime()
   const { store, outlineRef } = runtime
   const layout = useEditor(store, (s) => s.layout)
-  const selectedId = useEditor(store, (s) => s.selectedId)
   const collapsed = useValue(runtime.collapsed)
   const rows = useMemo(() => visibleRows(runtime, layout, collapsed), [runtime, layout, collapsed])
+  const rowIds = useMemo(() => new Set(rows.map((r) => r.block.id)), [rows])
+  // Not the selected id itself: then a new selection renders only the two rows it changes, not the list.
+  // The selected row is in the tab order (each row knows); without a visible selection, the first row is.
+  const noSelectedRow = useEditor(store, (s) => !s.selectedId || !rowIds.has(s.selectedId))
   const total = useMemo(() => countBlocks(layout), [layout])
+  const problems = useValue(runtime.problems)
+  const issues = useMemo(() => issuesByBlock(problems), [problems])
+  const templateTarget = useValueSelector(runtime.template, (t) => (t.isTemplate ? t.target : null))
+  const broken = useMemo(() => brokenBindingIds(runtime, layout, templateTarget), [runtime, layout, templateTarget])
   const [renaming, setRenaming] = useState<string | null>(null)
-  const focusId = rows.some((r) => r.block.id === selectedId) ? selectedId : (rows[0]?.block.id ?? null)
+  const firstId = rows[0]?.block.id ?? null
 
   // A block selected on the canvas opens its collapsed ancestors and scrolls into view.
   useEffect(() => {
-    if (!selectedId) return
-    const closed = ancestors(store.getState().layout, selectedId)
-      .slice(0, -1)
-      .filter((b) => runtime.collapsed.get().has(b.id))
-    if (closed.length > 0) {
-      const next = new Set(runtime.collapsed.get())
-      for (const b of closed) next.delete(b.id)
-      runtime.collapsed.set(next)
+    let last = store.getState().selectedId
+    let frame = 0
+    const reveal = (selectedId: string) => {
+      const closed = ancestors(store.getState().layout, selectedId)
+        .slice(0, -1)
+        .filter((b) => runtime.collapsed.get().has(b.id))
+      if (closed.length > 0) {
+        const next = new Set(runtime.collapsed.get())
+        for (const b of closed) next.delete(b.id)
+        runtime.collapsed.set(next)
+      }
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        outlineRef.current?.querySelector(`[data-outline-row="${CSS.escape(selectedId)}"]`)?.scrollIntoView({ block: 'nearest' })
+      })
     }
-    const frame = requestAnimationFrame(() => {
-      outlineRef.current?.querySelector(`[data-outline-row="${CSS.escape(selectedId)}"]`)?.scrollIntoView({ block: 'nearest' })
+    if (last) reveal(last)
+    const unsubscribe = store.subscribe(() => {
+      const { selectedId } = store.getState()
+      if (selectedId === last) return
+      last = selectedId
+      if (selectedId) reveal(selectedId)
     })
-    return () => cancelAnimationFrame(frame)
-  }, [selectedId, runtime, store, outlineRef])
+    return () => {
+      unsubscribe()
+      cancelAnimationFrame(frame)
+    }
+  }, [runtime, store, outlineRef])
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (!(e.target as HTMLElement).dataset.outlineRow) return
+    const { selectedId } = store.getState()
+    const focusId = selectedId && rowIds.has(selectedId) ? selectedId : firstId
     const index = rows.findIndex((r) => r.block.id === focusId)
     const row = rows[index]
     switch (e.key) {
@@ -222,8 +263,15 @@ export function Outline() {
           {rows.map((row) => (
             <OutlineRow
               key={row.block.id}
-              row={row}
-              focusable={row.block.id === focusId}
+              block={row.block}
+              depth={row.depth}
+              container={row.container}
+              open={row.open}
+              childCount={row.childCount}
+              text={row.text}
+              issues={issues.get(row.block.id) ?? NO_ISSUES}
+              broken={broken.has(row.block.id)}
+              focusable={noSelectedRow && row.block.id === firstId}
               renaming={renaming === row.block.id}
               onRename={setRenaming}
             />
@@ -237,34 +285,44 @@ export function Outline() {
 /** Inline actions must not start a drag or select the row. */
 const stop = (e: ReactPointerEvent) => e.stopPropagation()
 
-type OutlineRowProps = {
-  row: Row
-  /** The one row in the tab order. */
+/** Plain props, so `memo` skips rows whose block and state did not change. */
+type OutlineRowProps = Row & {
+  /** Publish problems of this block. */
+  issues: string[]
+  /** A binding reads a field the collection does not have. */
+  broken: boolean
+  /** In the tab order although not selected: the first row while no visible row is selected. */
   focusable: boolean
   renaming: boolean
   /** Starts (an id) or ends (null) renaming. */
   onRename: (id: string | null) => void
 }
 
-function OutlineRow({ row, focusable, renaming, onRename }: OutlineRowProps) {
-  const { block, depth, container, open, childCount, text } = row
+const OutlineRow = memo(function OutlineRow({
+  block,
+  depth,
+  container,
+  open,
+  childCount,
+  text,
+  issues,
+  broken,
+  focusable,
+  renaming,
+  onRename,
+}: OutlineRowProps) {
   const runtime = useRuntime()
   const selected = useEditor(runtime.store, (s) => s.selectedId === block.id)
   const hovered = useEditor(runtime.store, (s) => s.hoveredId === block.id)
-  const layout = useEditor(runtime.store, (s) => s.layout)
-  const drag = useValue(runtime.drag)
-  const problems = useValue(runtime.problems)
-  const template = useValue(runtime.template)
+  // A boolean, so rows do not render on every pointer move of a drag.
+  const dragging = useValueSelector(runtime.drag, (drag) => drag?.source.kind === 'block' && drag.source.id === block.id)
   const typeLabel = runtime.blockLabel(block.type)
   const icon = runtime.blockIcon(block.type)
   const data: DragData = { source: { kind: 'block', id: block.id }, label: typeLabel, icon }
   const { setNodeRef, listeners, attributes } = useDraggable({ id: `outline:${block.id}`, data, disabled: renaming })
-  const dragging = drag?.source.kind === 'block' && drag.source.id === block.id
   const label = customLabel(block)
   const name = label ?? typeName(block, typeLabel)
   const bindingCount = Object.keys(block.bindings ?? {}).length
-  const broken = bindingCount > 0 && hasBrokenBinding(runtime, layout, block, template.isTemplate ? template.target : null)
-  const issues = problems.filter((p) => p.blockId === block.id).map((p) => p.message)
   const tag = typeof block.props?.as === 'string' && block.props.as !== 'div' ? ` <${block.props.as}>` : ''
 
   const className = [
@@ -304,7 +362,7 @@ function OutlineRow({ row, focusable, renaming, onRename }: OutlineRowProps) {
       aria-selected={selected}
       aria-expanded={container && childCount > 0 ? open : undefined}
       aria-roledescription="block"
-      tabIndex={focusable ? 0 : -1}
+      tabIndex={selected || focusable ? 0 : -1}
       title={`${typeLabel}${tag}${label ? '' : ' · double-click to rename'}`}
     >
       {Array.from({ length: depth }, (_, i) => (
@@ -361,7 +419,8 @@ function OutlineRow({ row, focusable, renaming, onRename }: OutlineRowProps) {
         </span>
       )}
       {!open && childCount > 0 && <span className="builder-editor__row-count">{childCount}</span>}
-      {!renaming && (
+      {/* CSS shows them on hover only. Rendered for the hovered row only: a large page has hundreds of rows. */}
+      {!renaming && hovered && (
         <span className="builder-editor__row-actions">
           {actions.map((action) => (
             <button
@@ -389,7 +448,7 @@ function OutlineRow({ row, focusable, renaming, onRename }: OutlineRowProps) {
       )}
     </div>
   )
-}
+})
 
 /**
  * Inline name input for a block. Enter or leaving it saves; Escape cancels. An empty name goes

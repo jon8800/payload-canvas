@@ -29,7 +29,6 @@ import { Categories } from '@/collections/Categories'
 import { Tags } from '@/collections/Tags'
 import { TemplateParts } from '@/collections/TemplateParts'
 import { SiteSettings } from '@/globals/SiteSettings'
-import { ThemeSettings } from '@/globals/ThemeSettings'
 
 /** Collections with the page builder. Shared by the builder plugin and its MCP tools. */
 const builderCollections: WebsiteBuilderOptions['collections'] = {
@@ -93,7 +92,7 @@ export default buildConfig({
     Tags,
     TemplateParts,
   ],
-  globals: [SiteSettings, ThemeSettings],
+  globals: [SiteSettings],
   jobs: {
     autoRun: [{ cron: '*/5 * * * *', queue: 'default' }],
   },
@@ -218,12 +217,14 @@ export default buildConfig({
       css: {
         entry: 'src/app/(frontend)/globals.css',
         plugins: { '@tailwindcss/typography': typography },
-        // The theme global sets `--font-*` at runtime (ThemeHead): show those families in the
-        // Styles panel's Font list, not the stack in globals.css.
-        fontFamilies: async (payload) => {
-          const theme = await payload.findGlobal({ slug: 'theme-settings', depth: 0 })
-          const { sans, heading, mono } = theme.fonts ?? {}
-          return { sans, heading, display: heading || sans, mono }
+      },
+      // The Theme global (colors, fonts, radius). Its variables feed the `@theme` in globals.css.
+      theme: {
+        admin: {
+          group: 'Settings',
+          livePreview: {
+            url: () => `/next/preview?${new URLSearchParams({ slug: 'style-guide', collection: '', path: '/style-guide' })}`,
+          },
         },
       },
     }),

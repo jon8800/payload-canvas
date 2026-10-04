@@ -11,7 +11,7 @@ import { Icon } from '../icons'
 import { useRuntime } from '../runtime'
 import { breakpointAt } from '../styles/tokens'
 import { useEditor } from '../store'
-import { useValue } from '../valueStore'
+import { sameItems, useValue, useValueSelector } from '../valueStore'
 import { cursorPoint, distinctInitials, shortName } from './presence'
 import type { Peer } from './useMultiplayer'
 
@@ -30,8 +30,7 @@ function listNames(names: string[]): string {
 /** Initials for the collaborators on this page. They differ between people, even for similar names. */
 function useInitialsOf(): (name: string) => string {
   const runtime = useRuntime()
-  const live = useValue(runtime.live)
-  const collaborators = live?.collaborators
+  const collaborators = useValueSelector(runtime.live, (live) => live?.collaborators)
   const map = useMemo(() => distinctInitials((collaborators ?? []).map((c) => c.name)), [collaborators])
   return (name) => map.get(name) ?? distinctInitials([name]).get(name) ?? '?'
 }
@@ -42,15 +41,15 @@ function useInitialsOf(): (name: string) => string {
  */
 function useNameOf(): (info: { userId?: string; name: string }) => string {
   const runtime = useRuntime()
-  const selfId = useValue(runtime.live)?.self?.userId
+  const selfId = useValueSelector(runtime.live, (live) => live?.self?.userId)
   return (info) => (selfId && info.userId === selfId ? 'You (another tab)' : shortName(info.name))
 }
 
 /** Collaborators (other than this editor) with `blockId` selected. */
 function usePeersOn(blockId: string): Peer[] {
   const runtime = useRuntime()
-  const peers = useValue(runtime.peers)
-  return useMemo(() => [...peers.values()].filter((p) => p.selectedId === blockId), [peers, blockId])
+  // Narrow: an outline row renders only when the peers on its own block change.
+  return useValueSelector(runtime.peers, (peers) => [...peers.values()].filter((p) => p.selectedId === blockId), sameItems)
 }
 
 // ---------------------------------------------------------------------------
@@ -173,7 +172,7 @@ export function PeerSelections() {
   )
 }
 
-/** Other editors' pointers: a colored arrow with a name tag. Moves are eased by CSS. */
+/** Other editors' pointers: a small colored arrowhead (no tail) with a name tag. Moves are eased by CSS. */
 export function PeerCursors() {
   const nameOf = useNameOf()
   const runtime = useRuntime()
@@ -203,8 +202,8 @@ export function PeerCursors() {
             aria-hidden
           >
             <span className="builder-cursor__inner">
-              <svg className="builder-cursor__arrow" width="16" height="18" viewBox="0 0 16 18">
-                <path d="M1.5 1.5v13.2l3.6-3.4 2.4 5.3 2.3-1-2.4-5.2h5L1.5 1.5Z" />
+              <svg className="builder-cursor__arrow" width="18" height="18" viewBox="0 0 18 18">
+                <path d="M2 2 17 8.4 10 10 8.4 17Z" />
               </svg>
               <span className="builder-cursor__name">
                 {info.type === 'ai' && <Icon name="sparkle" size={10} />}

@@ -7,11 +7,13 @@ import { findBlock, findLocation } from '../../core'
 import type { CanvasMeasurement, Layout, Rect } from '../../core/types'
 import { copySelection, duplicateBlock, moveBy, removeBlock, toggleHidden } from './actions'
 import { BlockIcon, Icon, type IconName } from './icons'
+import { inlineEditing } from './inline'
+import { InlineToolbar } from './InlineToolbar'
 import { blockName } from './names'
 import { Popover, usePopover } from './styles/popover'
 import { PeerCursors, PeerSelections } from './live/PresenceUI'
 import { shortName } from './live/presence'
-import { useRuntime, type DragData } from './runtime'
+import { toRect, useRuntime, type DragData } from './runtime'
 import { useEditor } from './store'
 import { useValue } from './valueStore'
 
@@ -22,6 +24,15 @@ const NARROW_BLOCK = 190
 
 function box(rect: Rect): CSSProperties {
   return { left: rect.x, top: rect.y, width: rect.width, height: rect.height }
+}
+
+/**
+ * The element being edited inline (one list item, a heading), in iframe viewport coordinates.
+ * The canvas is same-origin and marks it with `data-builder-editing`. One read per overlay render.
+ */
+function editedRect(iframe: HTMLIFrameElement | null): Rect | null {
+  const el = iframe?.contentDocument?.querySelector('[data-builder-editing]')
+  return el ? toRect(el.getBoundingClientRect()) : null
 }
 
 /**
@@ -39,16 +50,21 @@ export function Overlay() {
   const selectedId = useEditor(runtime.store, (s) => s.selectedId)
   const hoveredId = useEditor(runtime.store, (s) => s.hoveredId)
   const layout = useEditor(runtime.store, (s) => s.layout)
+  const inline = useValue(inlineEditing(runtime))
 
   const rectOf = (id: string | null) => (id ? measurement?.blocks.find((b) => b.id === id)?.rect : undefined)
   const problems = useValue(runtime.problems)
-  const hovered = hoveredId && hoveredId !== selectedId && !drag ? findBlock(layout, hoveredId) : null
+  const hovered = hoveredId && hoveredId !== selectedId && hoveredId !== inline?.id && !drag ? findBlock(layout, hoveredId) : null
   const hoverRect = rectOf(hovered?.id ?? null)
   // Parent hint: the container around the hovered block, so nesting is easy to read.
   const hoverParentId = hovered ? (findLocation(layout, hovered.id)?.parentId ?? null) : null
   const parentRect = hoverParentId && hoverParentId !== selectedId ? rectOf(hoverParentId) : undefined
   const selected = selectedId ? findBlock(layout, selectedId) : null
   const selectedRect = rectOf(selectedId)
+  // The selected block's text is being edited on the canvas: no action bar, an editing outline.
+  const editing = Boolean(inline && selected && inline.id === selected.id)
+  // While editing, the outline and the toolbar go around the edited text only (one list item, not the list).
+  const editRect = (editing ? editedRect(runtime.iframeRef.current) : null) ?? selectedRect
   const sourceRect = drag?.source.kind === 'block' ? rectOf(drag.source.id) : undefined
   const indicator = drag?.zone === 'canvas' && drag.target && !drag.target.noop ? drag.target.indicator : null
   const dropParent = indicator?.kind === 'box' && drag?.target?.to.parentId ? findBlock(layout, drag.target.to.parentId) : null
@@ -84,8 +100,17 @@ export function Overlay() {
       {sourceRect && <div className="builder-editor__source" style={box(sourceRect)} />}
       {selected && selectedRect && (
         <>
-          <div className={`builder-editor__selection${selected.hidden ? ' builder-editor__selection--hidden' : ''}`} style={box(selectedRect)}>
-            {!drag && (
+          <div
+            className={`builder-editor__selection${selected.hidden ? ' builder-editor__selection--hidden' : ''}${editing ? ' builder-editor__selection--editing' : ''}`}
+            style={box(editing && editRect ? editRect : selectedRect)}
+          >
+            {editing && editRect && inline?.kind !== 'rich' && (
+              <span className={`builder-editor__tag builder-editor__tag--editing${roomAbove(editRect) ? '' : ' builder-editor__tag--inside'}`}>
+                <Icon name="rename" size={12} />
+                Editing text · Esc to finish
+              </span>
+            )}
+            {!drag && !editing && (
               <span className={`builder-editor__tag${roomAbove(selectedRect) ? '' : ' builder-editor__tag--inside'}`}>
                 <BlockIcon name={runtime.blockIcon(selected.type)} size={12} />
                 {blockName(selected, runtime.blockLabel(selected.type))}
@@ -108,8 +133,9 @@ export function Overlay() {
             measurement={measurement}
             inside={!roomAbove(selectedRect)}
             below={selectedRect.width * zoom < NARROW_BLOCK}
-            hidden={Boolean(drag)}
+            hidden={Boolean(drag) || editing}
           />
+          {editing && editRect && inline?.kind === 'rich' && <InlineToolbar inline={inline} rect={editRect} zoom={zoom} />}
         </>
       )}
       <PeerCursors />
