@@ -1,0 +1,549 @@
+'use client'
+
+// The Assistant tab of the inspector: the chat with the AI that edits this layout.
+// State lives in the runtime's assistant controller; this file only renders it.
+
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
+
+import { findBlock } from '../../../core'
+import { Icon } from '../icons'
+import { useRuntime } from '../runtime'
+import { useEditor } from '../store'
+import { useCollectionLabel } from '../templates/useTemplate'
+import { useValue } from '../valueStore'
+import type { AssistantController, AssistantNotice, AssistantState } from './controller'
+import { humanizeTool, transcript, type ToolInfo, type TranscriptItem, type TranscriptPart } from './history'
+import { Markdown } from './MarkdownView'
+
+import './assistant.scss'
+
+const SETUP_DOCS = 'https://github.com/jon8800/payload-toolkit/tree/main/packages/builder#ai-assistant'
+const API_KEYS = 'https://console.anthropic.com/settings/keys'
+/** Distance from the bottom (px) within which new content keeps the list scrolled to the end. */
+const STICK_DISTANCE = 48
+const MAX_INPUT_HEIGHT = 168
+
+export function AssistantPanel({ hidden }: { hidden: boolean }) {
+  const runtime = useRuntime()
+  const assistant = runtime.assistant
+  if (!assistant) return null
+  return <Panel assistant={assistant} hidden={hidden} />
+}
+
+function Panel({ assistant, hidden }: { assistant: AssistantController; hidden: boolean }) {
+  const runtime = useRuntime()
+  const state = useValue(assistant.state)
+  const { history, streaming, live, notice, failed } = state
+  const items = buildItems(state)
+  const empty = items.length === 0 && !failed && !notice
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const stick = useRef(true)
+  // Opening the tab, starting a chat or sending a message jumps to the end.
+  const jumpKey = `${hidden}:${history.messages.length === 0}:${live?.turnStart ?? ''}`
+  const lastJump = useRef('')
+
+  // Follow new content while the user is at the bottom. Scrolling up pauses it.
+  useLayoutEffect(() => {
+    if (lastJump.current !== jumpKey) {
+      lastJump.current = jumpKey
+      stick.current = true
+    }
+    const el = scrollRef.current
+    if (el && stick.current) el.scrollTop = el.scrollHeight
+  })
+  // A resized panel (window, viewport) keeps the end in view.
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const observer = new ResizeObserver(() => {
+      if (stick.current) el.scrollTop = el.scrollHeight
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  return (
+    <section className="builder-assistant" hidden={hidden} aria-label="AI assistant">
+      <header className="builder-assistant__head">
+        <span className="builder-assistant__title">
+          <span className="builder-assistant__badge">
+            <Icon name="sparkle" size={12} />
+          </span>
+          Assistant
+          {runtime.config.ai && <span className="builder-assistant__model">{modelLabel(runtime.config.ai.model)}</span>}
+        </span>
+        <button
+          type="button"
+          className="builder-editor__icon-button"
+          aria-label="New chat"
+          data-tooltip="New chat"
+          disabled={history.messages.length === 0 && !failed && !notice && !streaming}
+          onClick={() => {
+            assistant.newChat()
+            runtime.assistantFocus.set(Date.now())
+          }}
+        >
+          <Icon name="compose" />
+        </button>
+      </header>
+
+      <div
+        ref={scrollRef}
+        className="builder-assistant__scroll"
+        onScroll={(e) => {
+          const el = e.currentTarget
+          stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_DISTANCE
+        }}
+      >
+        {!state.key ? (
+          <div className="builder-assistant__empty">
+            <EmptyMark />
+            <p className="builder-assistant__empty-title">Save the document first</p>
+            <p className="builder-editor__hint">The assistant works on saved documents. Save once, then ask it to build.</p>
+          </div>
+        ) : empty ? (
+          <Welcome assistant={assistant} />
+        ) : (
+          <div className="builder-assistant__log" role="log" aria-live="polite" aria-busy={streaming} aria-label="Conversation">
+            {items.map((item, i) =>
+              item.kind === 'user' ? (
+                <UserBubble key={item.key} text={item.text} />
+              ) : (
+                <AssistantTurn
+                  key={item.key}
+                  parts={item.parts}
+                  tools={history.tools}
+                  streaming={streaming && i === items.length - 1}
+                />
+              ),
+            )}
+            {failed && <UserBubble text={failed} failed />}
+            {notice && <Notice assistant={assistant} notice={notice} canRetry={Boolean(failed)} />}
+          </div>
+        )}
+      </div>
+
+      <Composer assistant={assistant} state={state} />
+    </section>
+  )
+}
+
+/** "claude-opus-5-5" -> "Claude Opus 5.5". Other ids are shown as they are. */
+function modelLabel(model: string): string {
+  const match = /^claude-([a-z]+)-(\d+)(?:-(\d+))?$/.exec(model)
+  if (!match) return model
+  const [, family, major, minor] = match
+  return `Claude ${family[0].toUpperCase()}${family.slice(1)} ${major}${minor ? `.${minor}` : ''}`
+}
+
+/** The history plus the reply streaming in. The live parts join the last assistant turn. */
+function buildItems(state: AssistantState): TranscriptItem[] {
+  const items = transcript(state.history.messages)
+  const { live } = state
+  if (!live) return items
+  const last = items.at(-1)
+  if (last?.kind === 'assistant') {
+    return [...items.slice(0, -1), { ...last, parts: [...last.parts, ...live.parts] }]
+  }
+  // The key matches the one `transcript` gives this reply once its first message is confirmed,
+  // so the turn does not remount (and animate in again) when the stream ends.
+  return [...items, { kind: 'assistant', key: `m${live.turnStart + 1}`, parts: live.parts }]
+}
+
+function EmptyMark() {
+  return (
+    <span className="builder-assistant__mark" aria-hidden="true">
+      <Icon name="sparkle" size={20} />
+    </span>
+  )
+}
+
+function UserBubble({ text, failed = false }: { text: string; failed?: boolean }) {
+  return (
+    <div className={`builder-assistant__user${failed ? ' builder-assistant__user--failed' : ''}`}>
+      <p className="builder-assistant__bubble">{text}</p>
+      {failed && <span className="builder-assistant__failed-label">Not sent</span>}
+    </div>
+  )
+}
+
+function AssistantTurn({
+  parts,
+  tools,
+  streaming,
+}: {
+  parts: TranscriptPart[]
+  tools: Record<string, ToolInfo>
+  /** The reply is streaming into this turn: thinking indicator, caret, no copy button yet. */
+  streaming: boolean
+}) {
+  const text = parts.flatMap((p) => (p.kind === 'text' ? [p.text] : [])).join('\n\n')
+  const last = parts.at(-1)
+  const toolRunning = parts.some((p) => p.kind === 'tool' && tools[p.callId]?.status === 'running')
+  const thinking = streaming && !toolRunning && last?.kind !== 'text'
+  const groups = groupParts(parts)
+
+  return (
+    <article className="builder-assistant__turn" aria-label="Assistant reply">
+      <div className="builder-assistant__turn-head">
+        <span className="builder-assistant__badge builder-assistant__badge--small">
+          <Icon name="sparkle" size={10} />
+        </span>
+        <span>Assistant</span>
+        {text && !streaming && <CopyButton text={text} />}
+      </div>
+      {groups.map((group, i) =>
+        group.kind === 'text' ? (
+          <div
+            key={i}
+            className={`builder-assistant__text${streaming && i === groups.length - 1 && last?.kind === 'text' ? ' builder-assistant__text--streaming' : ''}`}
+          >
+            <Markdown text={group.text} />
+          </div>
+        ) : (
+          <ul key={i} className="builder-assistant__tools" aria-label="Changes">
+            {group.calls.map((call) => (
+              <ToolChip key={call.callId} name={call.name} info={tools[call.callId]} />
+            ))}
+          </ul>
+        ),
+      )}
+      {thinking && (
+        <output className="builder-assistant__thinking">
+          <span className="builder-assistant__dots" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </span>
+          {parts.length === 0 ? 'Thinking…' : 'Working…'}
+        </output>
+      )}
+    </article>
+  )
+}
+
+type PartGroup = { kind: 'text'; text: string } | { kind: 'tools'; calls: { callId: string; name: string }[] }
+
+/** Consecutive tool calls form one compact list; text parts stay separate. */
+function groupParts(parts: TranscriptPart[]): PartGroup[] {
+  const groups: PartGroup[] = []
+  for (const part of parts) {
+    const last = groups.at(-1)
+    if (part.kind === 'text') groups.push({ kind: 'text', text: part.text })
+    else if (last?.kind === 'tools') last.calls.push(part)
+    else groups.push({ kind: 'tools', calls: [part] })
+  }
+  return groups
+}
+
+function ToolChip({ name, info }: { name: string; info: ToolInfo | undefined }) {
+  const status = info?.status ?? 'done'
+  const label = info?.summary || humanizeTool(name)
+  // A tool that ran but had changes that did not apply here is a warning, not a failure.
+  const problem = status === 'error' || Boolean(info?.note)
+  const tone = status === 'error' ? 'error' : info?.note ? 'warn' : status
+  return (
+    <li className={`builder-assistant__chip builder-assistant__chip--${tone}`}>
+      <span className="builder-assistant__chip-row">
+        <span className="builder-assistant__chip-icon" aria-hidden="true">
+          {status === 'running' ? <span className="builder-assistant__spinner" /> : <Icon name={problem ? 'warning' : 'check'} size={12} />}
+        </span>
+        <span className="builder-assistant__chip-label">{label}</span>
+        <span className="builder-assistant__sr-only">
+          {status === 'running' ? ' (running)' : problem ? ' (failed)' : ' (done)'}
+        </span>
+      </span>
+      {info?.note && <span className="builder-assistant__chip-note">{info.note}</span>}
+    </li>
+  )
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  useEffect(() => {
+    if (!copied) return
+    const timer = window.setTimeout(() => setCopied(false), 1500)
+    return () => window.clearTimeout(timer)
+  }, [copied])
+  return (
+    <button
+      type="button"
+      className="builder-editor__icon-button builder-editor__icon-button--small builder-assistant__copy"
+      aria-label={copied ? 'Copied' : 'Copy reply'}
+      data-tooltip={copied ? 'Copied' : 'Copy'}
+      onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true))}
+    >
+      <Icon name={copied ? 'check' : 'copy'} size={13} />
+    </button>
+  )
+}
+
+function Notice({ assistant, notice, canRetry }: { assistant: AssistantController; notice: AssistantNotice; canRetry: boolean }) {
+  if (notice.kind === 'info') {
+    return <p className="builder-assistant__info">{notice.message}</p>
+  }
+  if (notice.kind === 'setup') {
+    return (
+      <output className="builder-assistant__card builder-assistant__card--setup">
+        <span className="builder-assistant__card-icon" aria-hidden="true">
+          <Icon name="key" size={16} />
+        </span>
+        <p className="builder-assistant__card-title">Connect the assistant to Claude</p>
+        <p className="builder-assistant__card-text">
+          Add <code>ANTHROPIC_API_KEY</code> to your <code>.env</code> file and restart the server.
+        </p>
+        <pre className="builder-assistant__card-code">ANTHROPIC_API_KEY=sk-ant-…</pre>
+        <div className="builder-assistant__card-actions">
+          <a className="builder-assistant__link" href={API_KEYS} target="_blank" rel="noopener noreferrer">
+            Get an API key <Icon name="external" size={12} />
+          </a>
+          <a className="builder-assistant__link" href={SETUP_DOCS} target="_blank" rel="noopener noreferrer">
+            Setup guide <Icon name="external" size={12} />
+          </a>
+          {canRetry && (
+            <button type="button" className="builder-assistant__ghost" onClick={assistant.retry}>
+              <Icon name="retry" size={12} /> Try again
+            </button>
+          )}
+        </div>
+      </output>
+    )
+  }
+  return (
+    <div className="builder-assistant__card builder-assistant__card--error" role="alert">
+      <p className="builder-assistant__card-text">
+        <Icon name="warning" size={14} /> {notice.message}
+      </p>
+      <div className="builder-assistant__card-actions">
+        {canRetry && (
+          <button type="button" className="builder-assistant__ghost" onClick={assistant.retry}>
+            <Icon name="retry" size={12} /> Try again
+          </button>
+        )}
+        <button type="button" className="builder-assistant__ghost" onClick={assistant.dismissNotice}>
+          Dismiss
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** The empty chat: a short intro and suggestions that fit the page, the selection or the template. */
+function Welcome({ assistant }: { assistant: AssistantController }) {
+  const runtime = useRuntime()
+  const template = useValue(runtime.template)
+  const singular = useCollectionLabel(template.target, 'singular').toLowerCase()
+  const isEmptyPage = useEditor(runtime.store, (s) => s.layout.blocks.length === 0)
+  const selectedType = useEditor(runtime.store, (s) => (s.selectedId ? (findBlock(s.layout, s.selectedId)?.type ?? null) : null))
+
+  const suggestions = selectedType
+    ? [
+        'Rewrite this text to be punchier',
+        'Make this stand out more',
+        'Add more space around this',
+        'Make this look good on mobile',
+      ]
+    : template.isTemplate && template.target
+      ? [
+          `Bind the heading to the ${singular} title`,
+          `Build a layout for a ${singular}`,
+          'Show the featured image at the top',
+          'Add a related items list at the end',
+        ]
+      : isEmptyPage
+        ? [
+            'Build a landing page for a design studio',
+            'Add a hero section',
+            'Add a pricing section with three plans',
+            'Add a FAQ section',
+          ]
+        : [
+            'Add a testimonials section',
+            'Add a call to action at the end',
+            'Tighten the spacing across the page',
+            'Make the page look good on mobile',
+          ]
+
+  return (
+    <div className="builder-assistant__welcome">
+      <EmptyMark />
+      <p className="builder-assistant__empty-title">
+        {selectedType ? `What should change in this ${runtime.blockLabel(selectedType).toLowerCase()}?` : 'What should we build?'}
+      </p>
+      <p className="builder-editor__hint">
+        The assistant edits this {template.isTemplate ? 'template' : 'page'} on the canvas as you watch. One Ctrl+Z undoes a
+        whole reply.
+      </p>
+      <div className="builder-assistant__suggestions">
+        {suggestions.map((text) => (
+          <button key={text} type="button" className="builder-assistant__suggestion" onClick={() => void assistant.send(text)}>
+            <Icon name="sparkle" size={12} />
+            {text}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** What the assistant will target: the selected block, the template sample, or the whole page. */
+function ContextChips() {
+  const runtime = useRuntime()
+  const template = useValue(runtime.template)
+  const selectedType = useEditor(runtime.store, (s) => (s.selectedId ? (findBlock(s.layout, s.selectedId)?.type ?? null) : null))
+  return (
+    <div className="builder-assistant__context" aria-label="Context">
+      {selectedType ? (
+        <span className="builder-assistant__context-chip builder-assistant__context-chip--selected">
+          <Icon name="cursor" size={12} />
+          <span className="builder-assistant__context-text">Selected: {runtime.blockLabel(selectedType)}</span>
+          <button
+            type="button"
+            className="builder-assistant__context-clear"
+            aria-label="Clear the selection"
+            onClick={() => runtime.store.select(null)}
+          >
+            <Icon name="close" size={10} />
+          </button>
+        </span>
+      ) : (
+        <span className="builder-assistant__context-chip">
+          <Icon name="stack" size={12} />
+          <span className="builder-assistant__context-text">{template.isTemplate ? 'Whole template' : 'Whole page'}</span>
+        </span>
+      )}
+      {template.isTemplate && template.sample && (
+        <span className="builder-assistant__context-chip" title={template.sample.title}>
+          <Icon name="link" size={12} />
+          <span className="builder-assistant__context-text">Template · sample: {template.sample.title}</span>
+        </span>
+      )}
+    </div>
+  )
+}
+
+function Composer({ assistant, state }: { assistant: AssistantController; state: AssistantState }) {
+  const runtime = useRuntime()
+  const { draft, streaming, key } = state
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const stopRef = useRef<HTMLButtonElement>(null)
+  const wasStreaming = useRef(streaming)
+
+  // The panel opened (toolbar button, tab, Ctrl+I): focus the input, or Stop while a reply streams.
+  const focusAt = useValue(runtime.assistantFocus)
+  useEffect(() => {
+    if (!focusAt) return
+    if (inputRef.current?.disabled) stopRef.current?.focus()
+    else inputRef.current?.focus()
+  }, [focusAt])
+
+  // Grow with the text, up to a limit. Runs after every render: measuring is cheap.
+  useLayoutEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    const height = Math.min(MAX_INPUT_HEIGHT, el.scrollHeight)
+    el.style.height = `${height}px`
+    // A scrollbar only once the text is taller than the limit.
+    el.style.overflowY = el.scrollHeight > MAX_INPUT_HEIGHT ? 'auto' : 'hidden'
+  })
+
+  // Focus follows the reply: Stop while it streams (the input is disabled), the input when it ends.
+  useEffect(() => {
+    const active = document.activeElement
+    const idle = !active || active === document.body
+    if (streaming && !wasStreaming.current && (idle || active === inputRef.current)) stopRef.current?.focus()
+    // The Stop button was replaced by Send: focus inside the field goes back to the input.
+    const inField = Boolean(active && inputRef.current?.parentElement?.contains(active))
+    if (!streaming && wasStreaming.current && (idle || inField)) inputRef.current?.focus()
+    wasStreaming.current = streaming
+  }, [streaming])
+
+  // Escape stops the reply while focus is inside the panel.
+  useEffect(() => {
+    if (!streaming) return
+    const onKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      const panel = inputRef.current?.closest('.builder-assistant')
+      if (!panel?.contains(document.activeElement)) return
+      e.preventDefault()
+      assistant.stop()
+    }
+    document.addEventListener('keydown', onKeyDown, true)
+    return () => document.removeEventListener('keydown', onKeyDown, true)
+  }, [streaming, assistant])
+
+  const send = () => {
+    if (!draft.trim() || streaming) return
+    void assistant.send(draft)
+  }
+
+  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault()
+      send()
+      return
+    }
+    // With an empty input there is no text to undo: Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y undo and redo
+    // the page, so the assistant's last change can be reverted without leaving the panel.
+    const mod = e.ctrlKey || e.metaKey
+    const pressed = e.key.toLowerCase()
+    if (mod && !e.altKey && draft === '' && (pressed === 'z' || pressed === 'y')) {
+      e.preventDefault()
+      if (pressed === 'y' || e.shiftKey) runtime.store.redo()
+      else runtime.store.undo()
+      return
+    }
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'i') {
+      e.preventDefault()
+      runtime.toggleAssistant()
+    }
+  }
+
+  return (
+    <div className="builder-assistant__composer">
+      <ContextChips />
+      <div className="builder-assistant__field" data-disabled={streaming || !key || undefined}>
+        <textarea
+          ref={inputRef}
+          className="builder-assistant__input"
+          rows={1}
+          value={draft}
+          disabled={streaming || !key}
+          placeholder={streaming ? 'Working…' : 'Ask for a change…'}
+          aria-label="Message the assistant"
+          onChange={(e) => assistant.setDraft(e.target.value)}
+          onKeyDown={onKeyDown}
+        />
+        {streaming ? (
+          <button
+            key="stop"
+            ref={stopRef}
+            type="button"
+            className="builder-assistant__send builder-assistant__send--stop"
+            aria-label="Stop"
+            data-tooltip="Stop · Esc"
+            onClick={assistant.stop}
+          >
+            <Icon name="stop" size={14} />
+          </button>
+        ) : (
+          <button
+            key="send"
+            type="button"
+            className="builder-assistant__send"
+            aria-label="Send"
+            data-tooltip="Send · Enter"
+            disabled={!draft.trim() || !key}
+            onClick={send}
+          >
+            <Icon name="arrowUp" size={14} />
+          </button>
+        )}
+      </div>
+      <p className="builder-assistant__footnote">
+        <kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line
+      </p>
+    </div>
+  )
+}

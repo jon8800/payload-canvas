@@ -18,6 +18,8 @@ type HistoryEntry = {
   selectedId: string | null
   /** Consecutive edits with the same key merge into one entry (typing in a text input). */
   mergeKey?: string
+  /** Consecutive edits with the same group merge into one entry, with no time limit (one assistant turn). */
+  group?: string
   at: number
 }
 
@@ -40,6 +42,11 @@ export type ApplyOptions = {
   select?: string | null
   /** Edits with the same key within MERGE_WINDOW_MS become one undo step. */
   mergeKey?: string
+  /**
+   * Consecutive edits with the same group become one undo step, however far apart in time
+   * (all operations of one AI assistant turn). An edit with another group or none ends the group.
+   */
+  group?: string
 }
 
 const HISTORY_LIMIT = 200
@@ -101,14 +108,26 @@ export function createEditorStore(initial: Layout) {
       }
       const now = Date.now()
       const top = state.undoStack.at(-1)
-      const merge = options.mergeKey && top?.mergeKey === options.mergeKey && now - top.at < MERGE_WINDOW_MS
-      // When merging, keep the older inverse: it already restores the values before the first edit.
-      const undoStack = merge
-        ? [...state.undoStack.slice(0, -1), { ...top, at: now }]
-        : [
-            ...state.undoStack,
-            { ops: result.inverse, selectedId: state.selectedId, mergeKey: options.mergeKey, at: now },
-          ].slice(-HISTORY_LIMIT)
+      const grouped = Boolean(options.group) && top?.group === options.group
+      const merge =
+        !grouped && options.mergeKey && top?.mergeKey === options.mergeKey && now - top.at < MERGE_WINDOW_MS
+      const undoStack =
+        top && grouped
+          ? // Undo the newest edit first, then the older ones in the group.
+            [...state.undoStack.slice(0, -1), { ...top, ops: [...result.inverse, ...top.ops], at: now }]
+          : top && merge
+            ? // When merging, keep the older inverse: it already restores the values before the first edit.
+              [...state.undoStack.slice(0, -1), { ...top, at: now }]
+            : [
+                ...state.undoStack,
+                {
+                  ops: result.inverse,
+                  selectedId: state.selectedId,
+                  mergeKey: options.mergeKey,
+                  group: options.group,
+                  at: now,
+                },
+              ].slice(-HISTORY_LIMIT)
       set({
         layout: result.layout,
         undoStack,

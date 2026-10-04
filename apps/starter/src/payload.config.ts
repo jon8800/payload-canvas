@@ -207,6 +207,8 @@ export default buildConfig({
       blocks: builderBlocks,
       sections: sectionLibrary,
       templates: { hooks: { afterChange: [revalidateTemplate] } },
+      // AI assistant in the editor (Claude). Needs ANTHROPIC_API_KEY in .env; see the builder README.
+      ai: {},
       css: {
         entry: 'src/app/(frontend)/globals.css',
         plugins: { '@tailwindcss/typography': typography },

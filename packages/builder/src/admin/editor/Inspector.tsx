@@ -8,8 +8,9 @@ import { findBlock, findLocation, getBlockDefinition } from '../../core'
 import type { Block } from '../../core/types'
 import { copySelection, duplicateBlock, removeBlock, toggleHidden } from './actions'
 import { BlockIcon, Icon, type IconName } from './icons'
+import { AssistantPanel } from './assistant/AssistantPanel'
 import { BlockContentFields } from './renderField'
-import { useRuntime } from './runtime'
+import { useRuntime, type InspectorTab } from './runtime'
 import { shortcutList } from './shortcuts'
 import { useEditor } from './store'
 import { Popover, usePopover } from './styles/popover'
@@ -18,7 +19,7 @@ import { useValue } from './valueStore'
 
 type TabsProps<T extends string> = {
   value: T
-  options: { id: T; label: string }[]
+  options: { id: T; label: string; icon?: IconName }[]
   onChange: (id: T) => void
   variant?: 'segmented' | 'underline'
 }
@@ -35,6 +36,7 @@ function Tabs<T extends string>({ value, options, onChange, variant = 'underline
           className={variant === 'segmented' ? 'builder-editor__segment' : 'builder-editor__tab'}
           onClick={() => onChange(option.id)}
         >
+          {option.icon && <Icon name={option.icon} size={13} />}
           {option.label}
         </button>
       ))}
@@ -46,7 +48,7 @@ export function Inspector() {
   const runtime = useRuntime()
   const { inspectorRef } = runtime
   const tab = useValue(runtime.inspectorTab)
-  const setTab = runtime.inspectorTab.set
+  const setTab = (next: InspectorTab) => (next === 'assistant' ? runtime.toggleAssistant(true) : runtime.inspectorTab.set(next))
   return (
     <div ref={inspectorRef} className="builder-editor__inspector">
       <div className="builder-editor__inspector-head">
@@ -57,6 +59,7 @@ export function Inspector() {
           options={[
             { id: 'block', label: 'Block' },
             { id: 'document', label: 'Document' },
+            ...(runtime.assistant ? [{ id: 'assistant' as const, label: 'Assistant', icon: 'sparkle' as const }] : []),
           ]}
         />
       </div>
@@ -67,12 +70,22 @@ export function Inspector() {
       <div className="builder-editor__inspector-body builder-editor__document" hidden={tab !== 'document'}>
         <DocumentPane />
       </div>
+      <AssistantPanel hidden={tab !== 'assistant'} />
     </div>
   )
 }
 
+const TIP_LABELS: Record<string, string> = {
+  'Open or close the AI assistant': 'AI assistant',
+  'Copy block': 'Copy block',
+  'Paste into or after the selection': 'Paste',
+  Undo: 'Undo',
+  'Show this list': 'All shortcuts',
+}
+
 function EmptyState() {
-  const tips = shortcutList().filter((s) => ['Copy block', 'Paste into or after the selection', 'Undo', 'Show this list'].includes(s.label))
+  const runtime = useRuntime()
+  const tips = shortcutList({ ai: Boolean(runtime.assistant) }).filter((s) => s.label in TIP_LABELS)
   return (
     <div className="builder-editor__empty builder-editor__empty--inspector">
       <Icon name="cursor" size={20} />
@@ -84,7 +97,7 @@ function EmptyState() {
       <dl className="builder-editor__tips">
         {tips.map(({ keys, label }) => (
           <div key={label} className="builder-editor__help-row">
-            <dt>{label === 'Paste into or after the selection' ? 'Paste' : label === 'Show this list' ? 'All shortcuts' : label}</dt>
+            <dt>{TIP_LABELS[label]}</dt>
             <dd>
               {keys.map((k) => (
                 <kbd key={k}>{k}</kbd>

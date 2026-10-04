@@ -1,5 +1,7 @@
 import path from 'node:path'
 import type { CollectionConfig, Config, Field, JSONField, Plugin, RichTextField } from 'payload'
+import { AI_PATH, aiEndpoints, DEFAULT_AI_MODEL } from '../ai/endpoint'
+import type { AiOptions } from '../ai/types'
 import { defaultBlocks } from '../blocks'
 import { richTextFieldName } from '../core/blocks'
 import { DEFAULT_TEMPLATES_SLUG, DOCUMENT_TEMPLATE_FIELD, TEMPLATE_TARGET_FIELD } from '../core/bindings'
@@ -70,6 +72,11 @@ export type WebsiteBuilderOptions = {
   live?: { bus?: LiveBus; heartbeatMs?: number }
   /** Options for the templates collection. It exists when a collection sets `templates: true`. */
   templates?: TemplatesOptions
+  /**
+   * The AI assistant in the editor (Claude). Presence enables it. Needs the `@anthropic-ai/sdk`
+   * package and Anthropic credentials (ANTHROPIC_API_KEY). See the README, "AI assistant".
+   */
+  ai?: AiOptions
 }
 
 const LAYOUT_FIELD_COMPONENT = '@payload-toolkit/builder/client#LayoutField'
@@ -182,7 +189,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           sections: options.sections ?? [],
           liveEndpoint: `${apiRoute}${LIVE_PATH}`,
           templates: clientTemplates,
-          ai: null,
+          ai: options.ai ? { endpoint: `${apiRoute}${AI_PATH}`, model: options.ai.model ?? DEFAULT_AI_MODEL } : null,
         }
         return addBuilder(collection, { field, clientConfig, blocks, css })
       }),
@@ -191,6 +198,16 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       endpoints: [
         ...(config.endpoints ?? []),
         ...liveEndpoints({ collections: liveCollections, blocks, runtime: live, heartbeatMs: options.live?.heartbeatMs }),
+        ...(options.ai
+          ? aiEndpoints({
+              ai: options.ai,
+              collections: liveCollections,
+              blocks,
+              sections: options.sections ?? [],
+              getTokens: () => getStyleTokens(css),
+              templates: templates ? { slug: templatesSlug, sources: templates.sources } : null,
+            })
+          : []),
         {
           path: CANVAS_CSS_PATH,
           method: 'get',

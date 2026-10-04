@@ -100,8 +100,9 @@ Local DB: Postgres on `localhost:5432`, database `payload_toolkit_dev` (see `app
 
 ## Current status
 
-- **Done:** the plugin with 15 default blocks; the visual editor (outline, canvas with zoom and drag-drop, Payload-native inspector, Webflow-like Styles panel over Tailwind classes, sections library, copy/paste, undo); generated CSS; templates, data binding, Field and Collection list blocks; live editing over SSE; MCP tools for `payload-mcp-toolkit`; the starter app with a demo seed.
-- **Next:** multiplayer cursors (CRDT), inline text editing on the canvas, an AI chat panel in the admin, theme settings moved into the plugin.
+- **Done:** the plugin with 15 default blocks; the visual editor (outline, canvas with zoom and drag-drop, Payload-native inspector, Webflow-like Styles panel over Tailwind classes, sections library, copy/paste, undo); generated CSS; templates, data binding, Field and Collection list blocks; live editing over SSE; MCP tools for `payload-mcp-toolkit`; the AI assistant panel (`src/ai/` server loop with Claude, `src/admin/editor/assistant/` UI); the starter app with a demo seed.
+- **AI testing without a key:** set `BUILDER_AI_FAKE=1` in `apps/starter/.env` (dev only) for a scripted fake model. Remove it afterwards.
+- **Next:** multiplayer cursors (CRDT), inline text editing on the canvas, theme settings moved into the plugin.
 
 <!-- BEGIN:turborepo-agent-rules -->
 

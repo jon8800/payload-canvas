@@ -89,9 +89,30 @@ export function Toolbar() {
           </output>
         )}
         <LivePresence />
+        <AssistantButton />
         <ShortcutHelp />
       </div>
     </div>
+  )
+}
+
+/** Opens the AI assistant in the right panel. Hidden when the plugin has no `ai` option. */
+function AssistantButton() {
+  const runtime = useRuntime()
+  const tab = useValue(runtime.inspectorTab)
+  if (!runtime.assistant) return null
+  const open = tab === 'assistant'
+  return (
+    <button
+      type="button"
+      className="builder-editor__icon-button builder-assistant__toolbar-button"
+      aria-label={open ? 'Close the AI assistant' : 'Open the AI assistant'}
+      aria-pressed={open}
+      data-tooltip="AI assistant · Ctrl+I"
+      onClick={() => runtime.toggleAssistant()}
+    >
+      <Icon name="sparkle" />
+    </button>
   )
 }
 
@@ -160,7 +181,7 @@ function ShortcutHelp() {
         <section className="builder-editor__help-panel" aria-label="Keyboard shortcuts">
           <p className="builder-editor__help-title">Keyboard shortcuts</p>
           <dl>
-            {shortcutList().map(({ keys, label }) => (
+            {shortcutList({ ai: Boolean(runtime.config.ai) }).map(({ keys, label }) => (
               <div key={label} className="builder-editor__help-row">
                 <dt>{label}</dt>
                 <dd>

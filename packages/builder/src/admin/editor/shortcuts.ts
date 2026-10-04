@@ -7,7 +7,7 @@ import { keyAction, type KeyAction } from '../../protocol'
 import { copySelection, duplicateBlock, parseClipboard, pasteBlocks, storedClipboard } from './actions'
 import type { Runtime } from './runtime'
 
-export type EditorAction = KeyAction | 'copy' | 'paste' | 'duplicate' | 'help'
+export type EditorAction = KeyAction | 'copy' | 'paste' | 'duplicate' | 'help' | 'assistant'
 
 /** Elements where editor shortcuts must not fire: text inputs and Payload's modals and drawers. */
 export const SHORTCUT_EXCLUDED =
@@ -22,6 +22,7 @@ export function editorAction(e: KeyboardEvent): EditorAction | null {
     if (letter === 'c') return 'copy'
     if (letter === 'v') return 'paste'
     if (letter === 'd') return 'duplicate'
+    if (letter === 'i') return 'assistant'
   }
   if (!mod && !e.altKey && e.key === '?') return 'help'
   return null
@@ -29,10 +30,11 @@ export function editorAction(e: KeyboardEvent): EditorAction | null {
 
 const isMac = () => typeof navigator !== 'undefined' && /mac|iphone|ipad/i.test(navigator.platform || navigator.userAgent)
 
-/** Key caps for the shortcut help, with the platform's modifier key. */
-export function shortcutList(): { keys: string[]; label: string }[] {
+/** Key caps for the shortcut help, with the platform's modifier key. `ai` adds the assistant shortcut. */
+export function shortcutList({ ai = false }: { ai?: boolean } = {}): { keys: string[]; label: string }[] {
   const mod = isMac() ? '⌘' : 'Ctrl'
   return [
+    ...(ai ? [{ keys: [mod, 'I'], label: 'Open or close the AI assistant' }] : []),
     { keys: [mod, 'Z'], label: 'Undo' },
     { keys: [mod, 'Shift', 'Z'], label: 'Redo' },
     { keys: [mod, 'C'], label: 'Copy block' },
@@ -86,6 +88,9 @@ export function bindShortcuts(runtime: Runtime, doc: Document, { forwarded }: { 
       case 'help':
         runtime.help.set(!runtime.help.get())
         return
+      case 'assistant':
+        runtime.toggleAssistant()
+        return
       default:
         runtime.runKey(action)
     }
@@ -95,6 +100,7 @@ export function bindShortcuts(runtime: Runtime, doc: Document, { forwarded }: { 
     if (e.defaultPrevented || excluded(e.target)) return
     const action = editorAction(e)
     if (!action) return
+    if (action === 'assistant' && !runtime.assistant) return
     if (forwarded && keyAction(e)) return
     if (action === 'copy' && (hasTextSelection(doc) || !runtime.store.getState().selectedId)) return
     // Copy and paste keep the browser default, so the native clipboard events still fire.

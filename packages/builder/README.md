@@ -24,9 +24,10 @@ Two packages:
 6. [Sections](#sections)
 7. [Styling](#styling)
 8. [Templates and binding](#templates-and-binding)
-9. [AI editing over MCP](#ai-editing-over-mcp)
-10. [Production and Docker](#production-and-docker)
-11. [Troubleshooting](#troubleshooting)
+9. [AI assistant](#ai-assistant)
+10. [AI editing over MCP](#ai-editing-over-mcp)
+11. [Production and Docker](#production-and-docker)
+12. [Troubleshooting](#troubleshooting)
 
 ## Requirements
 
@@ -241,6 +242,7 @@ websiteBuilder({
   canvasPath: '/builder-canvas',
   templates: { slug: 'builder-templates' },
   live: { bus, heartbeatMs: 15000 },
+  ai: { effort: 'medium' },    // the AI assistant in the editor
 })
 ```
 
@@ -259,6 +261,7 @@ websiteBuilder({
 | `templates.hooks` | `CollectionConfig['hooks']` | Hooks for the templates collection, for example to revalidate pages. |
 | `live.bus` | `LiveBus` | The event bus for live edits. Default: in process. Use a shared bus (for example Postgres `LISTEN/NOTIFY`) when you run more than one app server. |
 | `live.heartbeatMs` | `number` | Interval of the keep-alive message on the live event stream. |
+| `ai` | `AiOptions` | Turns on the AI assistant in the editor. See [AI assistant](#ai-assistant). |
 
 For each listed collection the plugin adds:
 
@@ -276,6 +279,7 @@ It also adds these endpoints (signed-in users only):
 | `GET /api/builder/style-tokens` | Theme tokens and class names for the Styles panel. |
 | `GET /api/builder/live/:collection/:id/events` | Server-Sent Events stream with live changes for one document. |
 | `POST /api/builder/live/:collection/:id/operations` | Applies layout operations to a document and sends them to open editors. |
+| `POST /api/builder/ai/chat` | The AI assistant (only with the `ai` option). Streams Server-Sent Events. |
 
 ### Entry points
 
@@ -495,6 +499,72 @@ return <RenderLayout layout={layout} css={found.css} context={context} blocks={b
 - `loadTemplate(payload, { collection, doc, templatesSlug?, draft? })` returns `{ template, layout, css }` or `null`. Without `draft` it uses published templates only.
 - `loadLayoutData(layout, blocks, payload, { draft, context, resolveLink })` resolves bindings and Field blocks against `context`, loads collection lists, and loads upload and relationship props. Pass the same `context` to `RenderLayout`.
 - `getByPath(doc, path)` and `resolveBindings(layout, context, blocks)` from `@payload-toolkit/builder/core` do the same work for a custom renderer.
+
+## AI assistant
+
+The editor gets an **Assistant** panel. The user types a request, for example "add a pricing section with three tiers", and Claude edits the open page. Each change appears on the canvas as it happens. One reply is one undo step. The assistant never saves or publishes: the editor saves the page as usual.
+
+### Turn it on
+
+```bash
+pnpm add @anthropic-ai/sdk
+```
+
+```ts
+websiteBuilder({
+  collections,
+  blocks,
+  sections,
+  css: { entry: 'src/app/(frontend)/globals.css' },
+  ai: {},
+})
+```
+
+Then give the server Anthropic credentials. Put an API key from [console.anthropic.com](https://console.anthropic.com) in `.env` and restart the server:
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+Or run `ant auth login` on the server and leave the variable empty. Without credentials the panel shows an error that says what to set.
+
+### Options
+
+| Option | Default | What it does |
+|---|---|---|
+| `model` | `claude-opus-5-5` | The Claude model. |
+| `effort` | `medium` | How much the model thinks: `low`, `medium`, `high`, `xhigh`, `max`. Higher is slower and costs more. `low` answers fastest. |
+| `apiKey` | the SDK's own lookup | An explicit API key. Leave it out to use `ANTHROPIC_API_KEY` or an `ant auth login` profile. |
+| `instructions` | none | Extra rules for the assistant, for example your brand voice. Added to the end of the system prompt. |
+| `maxSteps` | `12` | Maximum tool rounds per user message. |
+| `maxTokens` | `32000` | Output limit per model call, thinking included. |
+| `mediaCollection` | `media` | The upload collection the assistant picks images from. |
+| `fallbacks` | on for `claude-opus-5-5` | When a safety classifier declines a request, the API retries it on Anthropic's recommended fallback model. |
+
+### What it can do
+
+- Insert ready-made sections and then change their text, images and classes. It prefers your sections over building from single blocks.
+- Add, move, duplicate, hide and remove blocks, and change props and Tailwind classes. It knows your theme colors, fonts and breakpoints, the selected block and the canvas width.
+- Pick images from the media library (it searches alt text and file names as the signed-in user).
+- In templates, bind block props to document fields.
+
+Every change goes through the same operations as the editor and is checked against the block schemas. A change that would make the layout invalid is rolled back, and the model gets the error and tries again.
+
+### Access
+
+`POST /api/builder/ai/chat` needs a signed-in user who may update the document (Payload access control, `overrideAccess: false`). Media searches run as that user too.
+
+### Cost
+
+You pay Anthropic for each request. The fixed part of the prompt (blocks, sections, theme, tools; about 8,000 tokens in the starter) is cached, so repeat requests within 5 minutes read it at a tenth of the input price or less. Each request also sends the conversation and the current layout. A typical request ("add a pricing section") takes two to four model calls. With `claude-opus-5-5` at `medium` effort ($4 input / $20 output per million tokens) expect roughly 5 to 30 US cents per request; most of it is output (thinking and tool input). Long conversations and large pages cost more; start a new conversation when the topic changes.
+
+### Privacy
+
+The page content goes to Anthropic: the layout JSON (all text, classes and media IDs), the conversation, media search results (alt text, file names, URLs), and for templates a summary of the sample document. Do not turn the assistant on for content that must not leave your servers. See Anthropic's commercial terms for data retention.
+
+### Testing without a key
+
+`BUILDER_AI_FAKE=1` (test only, ignored when `NODE_ENV=production`) replaces Claude with a scripted model. It inserts the first hero section at the top of the page, then changes its heading, and streams a few sentences. Use it to try the panel without an API key.
 
 ## AI editing over MCP
 
