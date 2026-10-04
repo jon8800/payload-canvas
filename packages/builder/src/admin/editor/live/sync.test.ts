@@ -111,12 +111,6 @@ describe('solo mode', () => {
     assert.equal(t.sent.length, 0)
   })
 
-  it('accepts external loads', () => {
-    const t = setup()
-    assert.equal(t.engine.load(layout(heading('z'))), true)
-    assert.deepEqual(ids(t.engine.getState().visible), ['z'])
-  })
-
   it('refuses an invalid op and leaves the layout alone', () => {
     const t = setup()
     const before = t.engine.getState().visible
@@ -271,11 +265,20 @@ describe('sending', () => {
     assert.equal(t.engine.getState().pending, 2)
   })
 
-  it('refuses loads from the form while live', () => {
+  it('discards unconfirmed changes on a reset session', () => {
     const t = setup()
     t.live()
-    assert.equal(t.engine.load(layout()), false)
-    assert.deepEqual(ids(t.engine.getState().visible), ['a', 'b'])
+    local(t.engine, setText('a', '1'), 't1')
+    t.clock.tick()
+    local(t.engine, setText('a', '2'), 't2')
+    assert.equal(t.engine.getState().pending, 2)
+    const updates: SyncUpdate[] = []
+    t.engine.subscribe((u) => updates.push(u))
+    t.engine.session(5, layout(heading('z')), 's2', true)
+    const s = t.engine.getState()
+    assert.equal(s.pending, 0)
+    assert.deepEqual(ids(s.visible), ['z'])
+    assert.equal(updates.at(-1)?.reset, true)
   })
 })
 
@@ -743,10 +746,15 @@ describe('store with sync', () => {
     assert.deepEqual(ids(t.store.getState().layout), ['a', 'r'])
   })
 
-  it('load from the form is ignored while live', () => {
+  it('a reset session replaces the layout and clears the undo history', () => {
     const t = liveStore(layout(heading('a')))
-    assert.equal(t.store.load(layout()), false)
-    assert.deepEqual(ids(t.store.getState().layout), ['a'])
+    t.store.apply(setText('a', 'A'))
+    t.ack()
+    assert.equal(t.store.getState().undoStack.length, 1)
+    t.store.sync.session(9, layout(heading('p')), 's2', true)
+    assert.deepEqual(ids(t.store.getState().layout), ['p'])
+    assert.equal(t.store.getState().undoStack.length, 0)
+    assert.equal(t.store.getState().redoStack.length, 0)
   })
 })
 

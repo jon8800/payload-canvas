@@ -259,6 +259,14 @@ const PATHS = {
   ),
   external: <path d="M9.5 2.5h4v4M13.5 2.5 8 8M12 9.5V12a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 12V5.5A1.5 1.5 0 0 1 4 4h2.5" />,
   retry: <path d="M13 3.5v3h-3M12.6 6.5A5 5 0 1 0 13 9.5" />,
+  back: <path d="M13 8H3.5M7.5 4 3.5 8l4 4" />,
+  settings: (
+    <>
+      <path d="M2.5 4.5h6M11.5 4.5h2M2.5 11.5h2M7.5 11.5h6" />
+      <circle cx="10" cy="4.5" r="1.5" />
+      <circle cx="6" cy="11.5" r="1.5" />
+    </>
+  ),
   user: (
     <>
       <circle cx="8" cy="5.5" r="2.75" />

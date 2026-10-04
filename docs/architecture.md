@@ -59,7 +59,7 @@ websiteBuilder({
 For each listed collection, the plugin:
 
 - Adds the layout field (a `json` field, name configurable), unless the developer placed it already with the exported `layoutField()` helper. The helper lets the field live inside tabs or groups.
-- Adds the editor as a document tab.
+- Adds the full-screen builder view (once) and a document tab that links to it.
 - Adds the hooks that validate the layout and generate CSS on save.
 - Sets live preview to the `url` function.
 
@@ -128,19 +128,24 @@ export const Heading = defineBlock({
 
 ## 7. The editor
 
-The editor is a tab inside Payload's document view. Payload keeps doing save, drafts, autosave, versions, locking and access control. We do not fork Payload's edit view and we do not import Payload internals.
+The editor is a full-screen root admin view at `{admin}/builder/:collection/:id`. Payload keeps doing access control, drafts, versions and hooks. We do not fork Payload's edit view and we do not import Payload internals.
 
-**How it mounts (proven in prototype 2).** A custom document tab gets no Payload `Form`, so `useField` has nothing to talk to. The working pattern:
+**How it mounts.**
 
-- The builder tab renders Payload's public `DefaultEditView`. That gives Payload's own form, save, drafts, autosave, locking and Publish button.
-- The editor is the layout field's own `Field` component. A React context makes it render the full editor in the builder tab and a compact read-only view in the normal Edit tab.
-- In the builder tab, scoped CSS hides the default fields and sidebar.
-- The plugin adds the layout field at the top level and runs last. Plugins like SEO with `tabbedUI` move fields into tabs, and Payload renders only the active tab.
+- `websiteBuilder()` registers one root view (`admin.components.views.websiteBuilder`, path `/builder/:collection/:id`). Payload renders root views with three path segments without its template, so there is no nav and no header. The view is a server component (`@payload-toolkit/builder/rsc#BuilderView`). Payload does not check the session for custom root views, so the view does: login redirect, admin access, 404 for unknown documents and non-builder collections, read-only users to the Edit view.
+- The editor needs no Payload `Form`. The document's live session (section 12) loads the draft and saves the layout. The editor never uses `useField`, `useDocumentInfo` or `RenderFields`.
+- The top bar shows the document from `GET {live}/:collection/:id/meta` (loaded on the server for the first render). The live stream's `saved` and `published` events keep it current for every editor.
+- The document's other fields (title, slug, SEO, a template's collection) open in Payload's document drawer (`useDocumentDrawer`, "Page settings"). The drawer's saves go through the save-hook guard, so they never overwrite the session's layout.
+- Publish, Unpublish and Revert are plugin endpoints (`{live}/:collection/:id/publish|unpublish|revert`). They call Payload's Local API as the user. Publish first saves the session's unsaved commits. Revert resets the session to the published layout and sends every editor a `session` event with `reset: true`; editors drop their unsent changes and their undo history.
+- The document's "Builder" tab is a link to the view. The tab's own path (`…/:id/builder`) redirects there. In the Edit view the layout field shows a block summary and an "Open builder" button.
+- The plugin adds the layout field at the top level and runs last. Plugins like SEO with `tabbedUI` move fields into tabs.
 
 ```
-┌──────────────┬───────────────────────────────┬──────────────────┐
+┌─────────────────────────────────────────────────────────────────┐
+│ Top bar: back · Collection › Title · status │ undo · width │ … │
+├──────────────┬───────────────────────────────┬──────────────────┤
 │ Outline      │ Canvas (iframe + overlay)     │ Inspector        │
-│ block tree   │                               │ Block | Document │
+│ block tree   │                               │ Block | Assistant│
 │ + block      │                               │ Content / Styles │
 │   library    │                               │                  │
 └──────────────┴───────────────────────────────┴──────────────────┘
@@ -150,14 +155,7 @@ The editor is a tab inside Payload's document view. Payload keeps doing save, dr
 
 **Undo.** Every operation returns its inverse operation. Undo applies the inverse of the user's own last operation. This way undo never reverts edits that came from an AI agent or another user. (The canvas prototype stored whole layouts. That is simpler, but it would undo other people's changes.)
 
-**Sync with Payload.** The store writes the layout to the JSON field with Payload's public `useField` hook (`setValue`). From there Payload's own autosave, drafts and versions take over. Rules proven in prototype 2:
-
-- On load, set a "last written" reference before filling the store, so the load never writes back.
-- Ignore incoming values that deep-equal the store. Compare without key order, because Postgres `jsonb` reorders keys.
-- Load any other incoming value as an external change.
-- Autosave does not send server hook changes back to the form. So layout hooks must not rewrite the layout on autosave. Generated data (like CSS) goes in a separate field.
-
-The document's other fields (title, SEO, …) appear in the Document tab through Payload's `RenderFields`. Hide fields with `admin.disabled`, not by removing them, so field paths stay valid.
+**Sync.** The store's edits go through the sync engine to the live session (section 12). There is no second copy of the layout in a Payload form, so there is nothing to keep in step.
 
 **Canvas.**
 
@@ -233,7 +231,7 @@ Blocks that need data (for example "latest posts") declare a `load()` function. 
 - **Document sessions (server):** the server keeps one in-memory session per open document: the layout at sequence number `seq`. Editors and AI agents send batches of operations to `POST {live}/:collection/:id/commit`. The session applies a batch all-or-nothing, increments `seq` and broadcasts a `commit` event to every connection, the sender included (the echo is the acknowledgement). A batch that no longer applies (its block was deleted by someone else) is rejected with 409.
 - **Persistence:** the session saves the draft about 1 s after the last commit (at most every 5 s while edits continue) as the last committer, so access control and the CSS save hook still apply. While a session is open, every other save (form autosave, REST, Publish) gets the session layout, so nobody overwrites collaborators with a stale copy. Dirty sessions are flushed on shutdown.
 - **Editors:** each editor applies its own operations at once, sends them one batch at a time, and rebases unconfirmed operations on top of remote commits. Operations that no longer apply are dropped with a notice. Undo sends the inverse of the user's own operations as new edits, so it only reverts the user's own changes. The editor never sends `duplicate`: it sends an `insert` of the finished copy, so every client has the same ids.
-- **Events:** `GET {live}/:collection/:id/events` (Server-Sent Events): `session` (full state), `commit`, `collaborators`, `awareness`. A reconnect resumes from `<sessionId>:<seq>` when the commit log still covers it; otherwise the server sends a fresh `session`.
+- **Events:** `GET {live}/:collection/:id/events` (Server-Sent Events): `session` (full state), `commit`, `collaborators`, `awareness`, `saved` (the draft holds the session up to a seq) and `published` (publish, unpublish, revert). A reconnect resumes from `<sessionId>:<seq>` when the commit log still covers it; otherwise the server sends a fresh `session`.
 - **Presence:** collaborators (people and AI agents) have stable colors. Awareness (selection, hover, cursor relative to a block, canvas width) goes through `POST {live}/:collection/:id/awareness` and is never stored. The editor shows avatars, live cursors, colored selections, outline dots and a follow mode.
 - **Conflicts:** operations apply in server order; the last write wins per prop.
 - **Payload locking** is off for builder collections while `multiplayer` is on (the default).

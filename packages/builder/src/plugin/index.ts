@@ -5,7 +5,7 @@ import { aiClientConfig } from '../ai/config'
 import type { AiOptions } from '../ai/types'
 import { defaultBlocks } from '../blocks'
 import { richTextFieldName } from '../core/blocks'
-import { DEFAULT_TEMPLATES_SLUG, DOCUMENT_TEMPLATE_FIELD, TEMPLATE_TARGET_FIELD } from '../core/bindings'
+import { DEFAULT_TEMPLATES_SLUG, DOCUMENT_TEMPLATE_FIELD } from '../core/bindings'
 import {
   EMPTY_LAYOUT,
   type BlockDefinition,
@@ -14,7 +14,18 @@ import {
   type TemplatesClientConfig,
 } from '../core/types'
 import { getCanvasCssInput, getStyleTokens, type CssOptions, type TailwindPlugins } from '../css'
-import { defaultLiveRuntime, installShutdownFlush, LIVE_PATH, LIVE_RUNTIME_KEY, liveEndpoints, type SessionManager } from '../live'
+import {
+  BUILDER_CONFIG_KEY,
+  defaultLiveRuntime,
+  documentEndpoints,
+  installShutdownFlush,
+  LIVE_PATH,
+  LIVE_RUNTIME_KEY,
+  liveEndpoints,
+  type BuilderCollectionServer,
+  type BuilderServerConfig,
+  type SessionManager,
+} from '../live'
 import { layoutAfterChange, layoutBeforeChange } from './hook'
 import { toJsonSafe } from './jsonSafe'
 import { listCollectionsOf } from './listCollections'
@@ -88,7 +99,13 @@ export type WebsiteBuilderOptions = {
 }
 
 const LAYOUT_FIELD_COMPONENT = '@payload-toolkit/builder/client#LayoutField'
-const TAB_VIEW_COMPONENT = '@payload-toolkit/builder/client#BuilderTabView'
+const BUILDER_TAB_COMPONENT = '@payload-toolkit/builder/client#BuilderTab'
+const BUILDER_VIEW_COMPONENT = '@payload-toolkit/builder/rsc#BuilderView'
+const BUILDER_REDIRECT_COMPONENT = '@payload-toolkit/builder/rsc#BuilderRedirect'
+/** Key of the full-screen builder view in `admin.components.views`. */
+export const BUILDER_VIEW_KEY = 'websiteBuilder'
+/** Path of the full-screen builder view below the admin route. */
+export const BUILDER_VIEW_PATH = '/builder/:collection/:id'
 const CANVAS_CSS_PATH = '/builder/canvas-css'
 const STYLE_TOKENS_PATH = '/builder/style-tokens'
 
@@ -99,8 +116,10 @@ export function cssFieldName(field: string): string {
 
 /**
  * The website builder plugin. Put it LAST in `plugins`: plugins such as SEO with `tabbedUI`
- * move all fields into tabs, and the layout field must stay a top-level field so the
- * Builder tab can always render it.
+ * move all fields into tabs, and the layout field must stay a top-level field.
+ *
+ * Editors open the builder full screen at `{admin}/builder/:collection/:id` (a root admin view
+ * without Payload's nav and header). The document's "Builder" tab and the layout field link there.
  */
 export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
   return (config: Config): Config => {
@@ -153,9 +172,14 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       entry: path.resolve(process.cwd(), options.css.entry),
       plugins: options.css.plugins,
     }
-    const liveCollections = Object.fromEntries(
-      Object.entries(builderOptions).map(([slug, o]) => [slug, { field: o.field ?? 'layout' }]),
+    const liveCollections: Record<string, BuilderCollectionServer> = Object.fromEntries(
+      Object.entries(builderOptions).map(([slug, o]) => [slug, { field: o.field ?? 'layout', ...(o.url ? { url: o.url } : {}) }]),
     )
+    const serverConfig: BuilderServerConfig = { collections: liveCollections, templates: targets.length > 0 ? templatesSlug : null }
+    const views = config.admin?.components?.views
+    if (views?.[BUILDER_VIEW_KEY]) {
+      throw new Error(`[websiteBuilder] An admin view named "${BUILDER_VIEW_KEY}" already exists. The plugin needs this name for the builder view.`)
+    }
 
     // Bindable fields of every template target and every collection the list block can show.
     // The plugin's own fields are left out.
@@ -163,7 +187,6 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       targets.length > 0
         ? {
             collection: templatesSlug,
-            targetField: TEMPLATE_TARGET_FIELD,
             sources: bindingSources({
               collections: collections.filter((c) => c.slug !== templatesSlug),
               slugs: [...new Set([...targets, ...withUrl])],
@@ -183,6 +206,17 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
 
     return {
       ...config,
+      admin: {
+        ...config.admin,
+        components: {
+          ...config.admin?.components,
+          views: {
+            ...views,
+            // Root views with three path segments render without Payload's nav and header.
+            [BUILDER_VIEW_KEY]: { Component: BUILDER_VIEW_COMPONENT, path: BUILDER_VIEW_PATH, meta: { title: 'Builder' } },
+          },
+        },
+      },
       collections: collections.map((collection) => {
         const collectionOptions = builderOptions[collection.slug]
         if (!collectionOptions) return collection
@@ -203,10 +237,16 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
         return addBuilder(collection, { field, clientConfig, blocks, css, sessions: live.sessions, multiplayer })
       }),
       // Server-only: the MCP tools read the live runtime from here, so they share the bus and lock.
-      custom: { ...config.custom, [LIVE_RUNTIME_KEY]: live, ...(templates ? { [TEMPLATES_CONFIG_KEY]: templates } : {}) },
+      custom: {
+        ...config.custom,
+        [LIVE_RUNTIME_KEY]: live,
+        [BUILDER_CONFIG_KEY]: serverConfig,
+        ...(templates ? { [TEMPLATES_CONFIG_KEY]: templates } : {}),
+      },
       endpoints: [
         ...(config.endpoints ?? []),
         ...liveEndpoints({ collections: liveCollections, blocks, runtime: live, heartbeatMs: options.live?.heartbeatMs }),
+        ...documentEndpoints({ collections: liveCollections, templates: serverConfig.templates, runtime: live }),
         ...(options.ai
           ? aiEndpoints({
               ai: options.ai,
@@ -314,13 +354,14 @@ function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): Collect
       `[websiteBuilder] Collection "${collection.slug}" replaces the whole document view (admin.components.views.edit.root). The Builder tab cannot be added.`,
     )
   }
+  // The "Builder" tab links to the full-screen view. Its own path (the old tab URL) redirects there.
   // Payload's edit view type mixes an index signature with known keys, so a literal never fits.
   const edit = {
     ...views?.edit,
     builder: {
-      Component: TAB_VIEW_COMPONENT,
+      Component: BUILDER_REDIRECT_COMPONENT,
       path: '/builder',
-      tab: { label: 'Builder', href: '/builder' },
+      tab: { Component: BUILDER_TAB_COMPONENT },
     },
   } as EditViews
   return {

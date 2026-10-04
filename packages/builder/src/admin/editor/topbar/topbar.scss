@@ -1,0 +1,406 @@
+// The full-screen builder's top bar. Payload CSS variables only, no Tailwind. Light and dark theme.
+// Uses the editor's variables (`--be-*`, set on `.builder-editor` in editor.scss).
+
+@layer payload-default {
+  .builder-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    flex: none;
+    height: 48px;
+    padding: 0 10px 0 8px;
+    border-bottom: 1px solid var(--be-border);
+    background: var(--theme-bg);
+  }
+
+  .builder-bar__start,
+  .builder-bar__center,
+  .builder-bar__end,
+  .builder-bar__group {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+  }
+
+  .builder-bar__start {
+    gap: 4px;
+  }
+
+  .builder-bar__center {
+    gap: 8px;
+  }
+
+  .builder-bar__group {
+    gap: 6px;
+  }
+
+  .builder-bar__end {
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+  .builder-bar__divider {
+    flex: none;
+    width: 1px;
+    height: 20px;
+    margin: 0 2px;
+    background: var(--be-border);
+  }
+
+  // Controls near the left edge open their tooltip to the right.
+  .builder-bar__start [data-tooltip]:hover::after {
+    left: 0;
+    transform: none;
+  }
+
+  // ---- Left: back, home, breadcrumb, status ------------------------------------------------
+
+  .builder-bar__home {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--be-radius);
+    color: var(--theme-text);
+
+    &:hover {
+      background: var(--be-hover);
+    }
+
+    svg,
+    img {
+      width: 20px;
+      height: 20px;
+    }
+  }
+
+  .builder-bar__crumbs {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+    margin-left: 4px;
+    font-size: 13px;
+  }
+
+  .builder-bar__crumb {
+    flex: none;
+    padding: 4px 4px;
+    border-radius: var(--be-radius);
+    color: var(--be-muted);
+    text-decoration: none;
+
+    &:hover {
+      color: var(--theme-text);
+    }
+  }
+
+  .builder-bar__crumb-sep {
+    flex: none;
+    color: var(--be-subtle);
+  }
+
+  .builder-bar__title {
+    min-width: 0;
+    max-width: min(28vw, 420px);
+    height: 30px;
+    margin: 0;
+    padding: 0 6px;
+    overflow: hidden;
+    border: 1px solid transparent;
+    border-radius: var(--be-radius);
+    background: transparent;
+    color: var(--theme-text);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  input.builder-bar__title {
+    field-sizing: content;
+
+    &:hover:not(:disabled) {
+      border-color: var(--be-border);
+    }
+
+    &:focus {
+      border-color: var(--be-accent);
+      outline: 0;
+      background: var(--theme-input-bg, var(--theme-elevation-0));
+      text-overflow: clip;
+    }
+
+    &:disabled {
+      opacity: 0.6;
+    }
+  }
+
+  .builder-bar__title--static {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .builder-bar__status {
+    --status: var(--theme-elevation-400);
+
+    position: relative;
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    height: 24px;
+    margin-left: 4px;
+    padding: 0 9px;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--status) 14%, transparent);
+    color: var(--theme-elevation-800);
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: default;
+
+    &[data-status='published'] {
+      --status: var(--theme-success-500);
+    }
+
+    &[data-status='changed'] {
+      --status: var(--theme-warning-500, #f59e0b);
+    }
+  }
+
+  .builder-bar__status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--status);
+  }
+
+  .builder-bar__card {
+    position: absolute;
+    z-index: 110;
+    top: 100%;
+    left: 0;
+    width: 270px;
+    // The padding bridges the gap, so the pointer can move into the card.
+    padding-top: 8px;
+    color: var(--theme-text);
+    font-size: 12px;
+    font-weight: 400;
+    cursor: auto;
+    animation: builder-fade-in 140ms var(--be-ease);
+
+    dl {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin: 0;
+    }
+
+    dl > div {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    dt {
+      color: var(--be-muted);
+    }
+
+    dd {
+      margin: 0;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+
+    a {
+      color: var(--theme-text);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+  }
+
+  .builder-bar__card-box {
+    padding: 12px 14px;
+    border: 1px solid var(--be-border);
+    border-radius: var(--be-radius-m);
+    background: var(--be-panel);
+    box-shadow: var(--be-shadow);
+  }
+
+  .builder-bar__card-title {
+    margin: 0 0 10px;
+    color: var(--theme-elevation-800);
+    font-weight: 600;
+  }
+
+  // ---- Right: save state, buttons, publish ---------------------------------------------------
+
+  .builder-bar__save {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+    // Wide enough for "Saved · 12:04 PM", so the bar does not move when the text changes.
+    width: 124px;
+    color: var(--be-muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .builder-bar__save-dot {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--theme-success-500);
+  }
+
+  .builder-bar__save[data-state='saving'] .builder-bar__save-dot,
+  .builder-bar__save[data-state='connecting'] .builder-bar__save-dot {
+    background: var(--theme-elevation-400);
+    animation: builder-bar-pulse 1s ease-in-out infinite alternate;
+  }
+
+  .builder-bar__save[data-state='offline'] {
+    color: var(--theme-warning-600, #d97706);
+
+    .builder-bar__save-dot {
+      background: var(--theme-warning-500, #f59e0b);
+    }
+  }
+
+  @keyframes builder-bar-pulse {
+    to {
+      opacity: 0.3;
+    }
+  }
+
+  .builder-bar__button {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding: 0 10px;
+    border: 1px solid var(--be-border);
+    border-radius: var(--be-radius-m);
+    background: transparent;
+    color: var(--theme-text);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease;
+
+    &:hover {
+      border-color: var(--theme-elevation-250);
+      background: var(--be-hover);
+    }
+
+    svg {
+      flex: none;
+      color: var(--theme-elevation-700);
+    }
+  }
+
+  // Laptop screens: icon-only buttons (the tooltip still names them).
+  @media (max-width: 1700px) {
+    .builder-bar__button {
+      width: 30px;
+      padding: 0;
+      justify-content: center;
+    }
+
+    .builder-bar__label {
+      display: none;
+    }
+  }
+
+  .builder-bar__publish {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    margin-left: 2px;
+  }
+
+  // Payload's primary button colors.
+  .builder-bar__publish-main,
+  .builder-bar__publish-more {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 30px;
+    border: 0;
+    background: var(--theme-elevation-800);
+    color: var(--theme-elevation-0);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 120ms ease;
+
+    &:hover:not(:disabled) {
+      background: var(--theme-elevation-1000);
+    }
+
+    &:disabled {
+      background: var(--theme-elevation-200);
+      color: var(--theme-elevation-500);
+      cursor: default;
+    }
+  }
+
+  .builder-bar__publish-main {
+    min-width: 128px;
+    padding: 0 14px;
+    border-radius: var(--be-radius-m) 0 0 var(--be-radius-m);
+  }
+
+  .builder-bar__publish-more {
+    width: 28px;
+    border-left: 1px solid color-mix(in srgb, var(--theme-elevation-0) 30%, transparent);
+    border-radius: 0 var(--be-radius-m) var(--be-radius-m) 0;
+
+    &[aria-expanded='true'] {
+      background: var(--theme-elevation-1000);
+    }
+  }
+
+  .builder-editor__menu.builder-bar__menu {
+    min-width: 220px;
+
+    a.builder-editor__menu-item {
+      text-decoration: none;
+    }
+  }
+
+  .builder-bar__menu-sep {
+    height: 0;
+    margin: 4px 0;
+    border: 0;
+    border-top: 1px solid var(--be-border-soft);
+  }
+
+  // ---- Loading skeleton below the bar ------------------------------------------------------------
+
+  .builder-editor__body--loading {
+    .builder-editor__left,
+    .builder-editor__right {
+      gap: 10px;
+      padding: 12px;
+    }
+
+    .builder-editor__stage {
+      padding: 24px;
+      background: var(--theme-elevation-50);
+    }
+  }
+}

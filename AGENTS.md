@@ -48,8 +48,8 @@ payload-toolkit/
       src/mcp/               #   builderMcpTools() for payload-mcp-toolkit
       src/css/               #   Tailwind compile: server (save hook) and browser (canvas)
       src/protocol/          #   postMessage protocol between editor and canvas iframe
-      src/admin/             #   editor UI (Payload-native, SCSS, no Tailwind)
-      src/plugin/            #   websiteBuilder(): fields, save hook, Builder tab, templates collection, endpoints
+      src/admin/             #   editor UI (Payload-native, SCSS, no Tailwind); server/ holds the full-screen view (RSC)
+      src/plugin/            #   websiteBuilder(): fields, save hook, builder view + tab, templates collection, endpoints
     builder-react/           # @payload-toolkit/builder-react — RenderLayout, block components, canvas runtime, /server loadTemplate
     create-payload-starter/  # CLI scaffolder
     shared/                  # DB creation and env helpers for the CLI
@@ -83,6 +83,8 @@ Key places in `apps/starter/src/`:
 - `fields/theme/`, `globals/` — ThemeSettings, ColorPicker, FontSelector, SliderField
 - `proxy.ts` — redirects and the `x-pathname` request header
 
+The editor opens full screen at `/admin/builder/:collection/:id` (a root admin view without Payload's nav; `packages/builder/src/admin/server/BuilderView.tsx`). The document's Builder tab and the layout field link there. Publish, unpublish and revert are live endpoints (`packages/builder/src/live/document.ts`); the top bar is `packages/builder/src/admin/editor/topbar/`.
+
 ## Commands
 
 In `packages/builder` and `packages/builder-react`: `pnpm test` (node --test), `pnpm typecheck`, `pnpm lint`.
@@ -100,7 +102,7 @@ Local DB: Postgres on `localhost:5432`, database `payload_toolkit_dev` (see `app
 
 ## Current status
 
-- **Done:** the plugin with 15 default blocks; the visual editor (outline, canvas with zoom and drag-drop, Payload-native inspector, Webflow-like Styles panel over Tailwind classes, sections library, copy/paste, undo); generated CSS; templates, data binding, Field and Collection list blocks; live editing over SSE; MCP tools for `payload-mcp-toolkit`; the AI assistant panel (`src/ai/` server loop with Claude, `src/admin/editor/assistant/` UI); the starter app with a demo seed.
+- **Done:** the plugin with 15 default blocks; the full-screen builder view with one top bar (title rename, status, save state, preview, page settings drawer, publish / unpublish / revert); the visual editor (outline, canvas with zoom and drag-drop, Payload-native inspector, Webflow-like Styles panel over Tailwind classes, sections library, copy/paste, undo); generated CSS; templates, data binding, Field and Collection list blocks; live editing over SSE; MCP tools for `payload-mcp-toolkit`; the AI assistant panel (`src/ai/` server loop with Claude, `src/admin/editor/assistant/` UI); the starter app with a demo seed.
 - **AI testing without a key:** set `BUILDER_AI_FAKE=1` in `apps/starter/.env` (dev only) for a scripted fake model. Remove it afterwards.
 - **Next:** multiplayer cursors (CRDT), inline text editing on the canvas, theme settings moved into the plugin.
 

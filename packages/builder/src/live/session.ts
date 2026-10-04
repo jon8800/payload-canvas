@@ -20,6 +20,7 @@ import type {
   LiveAwarenessEvent,
   LiveCollaboratorsEvent,
   LiveCommitEvent,
+  LiveSavedEvent,
   LiveSessionEvent,
   MultiplayerEvent,
 } from './types'
@@ -116,6 +117,9 @@ export type CommitResult =
 /** A read-only view of an open session. */
 export type SessionSnapshot = { sessionId: string; seq: number; layout: Layout }
 
+/** What a save outside the session stored: the saved document's `updatedAt` and `_status`. */
+export type SavedInfo = { updatedAt?: unknown; status?: unknown }
+
 export interface SessionManager {
   /** Opens the session (loading the draft) and adds a connection. Initial events go to `send` first. */
   connect(args: ConnectArgs): Promise<Connection>
@@ -127,8 +131,19 @@ export interface SessionManager {
   awareness(collection: string, id: string | number, clientId: string, awareness: unknown, owner?: string): boolean
   /** The open session of a document, or null. Never loads. */
   peek(collection: string, id: string | number): SessionSnapshot | null
-  /** Records that a save outside the session stored the layout at `seq` (the save-hook guard). */
-  markSaved(collection: string, id: string | number, seq: number): void
+  /**
+   * Records that a save outside the session stored the layout at `seq` (the save-hook guard),
+   * and tells the editors with a `saved` event.
+   */
+  markSaved(collection: string, id: string | number, seq: number, info?: SavedInfo): void
+  /** Sends an event to every editor of an open session. False when no session is open. */
+  broadcast(collection: string, id: string | number, event: MultiplayerEvent): boolean
+  /**
+   * Replaces the layout of an open session as a whole (Revert to published). Unsaved commits are
+   * dropped: the caller saves the new layout. The session gets a new id, and every editor gets a
+   * fresh `session` event with `reset: true`. False when no session is open.
+   */
+  reset(collection: string, id: string | number, layout: Layout): Promise<boolean>
   /** Saves now if the session has unsaved commits. Resolves when the draft is saved. */
   flush(collection: string, id: string | number): Promise<void>
   /** Saves every session with unsaved commits. */
@@ -361,6 +376,25 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
 
   const eventId = (session: Session) => `${session.sessionId}:${session.seq}`
 
+  const savedEvent = (seq: number, info: SavedInfo = {}): LiveSavedEvent => ({
+    type: 'saved',
+    seq,
+    at: new Date(timers.now()).toISOString(),
+    ...(typeof info.updatedAt === 'string' ? { updatedAt: info.updatedAt } : {}),
+    ...(typeof info.status === 'string' ? { status: info.status } : {}),
+  })
+
+  const sessionEvent = (session: Session, self: CollaboratorInfo, reset = false): LiveSessionEvent => ({
+    type: 'session',
+    sessionId: session.sessionId,
+    seq: session.seq,
+    layout: session.layout,
+    collaborators: [...session.members.values()].map((m) => ({ ...m.info, awareness: m.awareness })),
+    self,
+    savedSeq: session.persistedSeq,
+    ...(reset ? { reset: true } : {}),
+  })
+
   // ---- persistence ------------------------------------------------------
 
   const dirty = (session: Session) => session.seq > session.persistedSeq
@@ -401,7 +435,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     session.firstDirtyAt = null
     const run = (async () => {
       try {
-        await session.store.update({
+        const saved = await session.store.update({
           collection: target.collection,
           id: target.id,
           data: { [target.field]: layout },
@@ -414,6 +448,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
         })
         session.persistedSeq = Math.max(session.persistedSeq, seq)
         session.failures = 0
+        deliver(session, savedEvent(seq, { updatedAt: saved?.updatedAt, status: saved?._status }))
       } catch (error) {
         session.failures += 1
         logger.error(`[websiteBuilder] Could not save the live session of ${session.key} (try ${session.failures}).`, error)
@@ -508,15 +543,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
           if (otherId !== clientId && member.awareness) send({ type: 'awareness', clientId: otherId, awareness: member.awareness })
         }
       } else {
-        const event: LiveSessionEvent = {
-          type: 'session',
-          sessionId: session.sessionId,
-          seq: session.seq,
-          layout: session.layout,
-          collaborators: [...session.members.values()].map((m) => ({ ...m.info, awareness: m.awareness })),
-          self: info,
-        }
-        send(event, eventId(session))
+        send(sessionEvent(session, info), eventId(session))
       }
       deliver(session, collaboratorsEvent(session), undefined, clientId)
 
@@ -618,17 +645,54 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
       return session ? { sessionId: session.sessionId, seq: session.seq, layout: session.layout } : null
     },
 
-    markSaved(collection, id, seq) {
+    markSaved(collection, id, seq, info) {
       const session = sessions.get(channelKey(collection, id))
       // A session save in flight may finish after this save and store an older layout as the
       // newest version. Then the session must save again, so it stays dirty.
       if (!session || session.persisting) return
       session.persistedSeq = Math.max(session.persistedSeq, seq)
+      deliver(session, savedEvent(Math.min(seq, session.seq), info))
       if (dirty(session)) return
       if (session.persistTimer !== null) timers.clear(session.persistTimer)
       session.persistTimer = null
       session.firstDirtyAt = null
       maybeEvict(session)
+    },
+
+    broadcast(collection, id, event) {
+      const session = sessions.get(channelKey(collection, id))
+      if (!session) return false
+      deliver(session, event)
+      return true
+    },
+
+    async reset(collection, id, layout) {
+      const key = channelKey(collection, id)
+      return mutex.run(key, async () => {
+        const session = sessions.get(key)
+        if (!session) return false
+        // A save in flight must not land after the caller's save of the new layout.
+        if (session.persisting) await session.persisting
+        if (session.persistTimer !== null) timers.clear(session.persistTimer)
+        session.persistTimer = null
+        session.firstDirtyAt = null
+        session.layout = normalizeLayout(layout)
+        // A new id: commits made on the old layout can no longer be replayed or rebased.
+        session.sessionId = globalThis.crypto.randomUUID().slice(0, 8)
+        session.seq += 1
+        session.persistedSeq = session.seq
+        session.log = []
+        session.knownBlocking = null
+        for (const member of session.members.values()) {
+          if (!member.send) continue
+          try {
+            member.send(sessionEvent(session, member.info, true), eventId(session))
+          } catch {
+            // A closed stream must not stop the others.
+          }
+        }
+        return true
+      })
     },
 
     async flush(collection, id) {

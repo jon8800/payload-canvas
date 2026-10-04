@@ -30,6 +30,7 @@ import { actorFromUser, splitLayoutErrors, userLabel, type LiveDocStore } from '
 import { liveRuntimeOf } from '../live/runtime'
 import type { CommitResult } from '../live/session'
 import type { LiveActor } from '../live/types'
+import { builderViewPath, documentPath, draftPreviewPath } from '../plugin/links'
 import { listCollectionsOf } from '../plugin/listCollections'
 import { templatesConfigOf } from '../plugin/templates'
 import { BINDINGS_GUIDE, describeBlock, layoutGuide, outline, sectionInsertOps, withNewIds } from './shared'
@@ -455,7 +456,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     name: 'getPreviewUrl',
     routing: { kind: 'collection', action: 'read' },
     description:
-      'Returns the links of a document: `url` (the public page), `previewUrl` (the draft preview, when the site has one) and `editorUrl` (the admin Builder tab, where a person can watch your changes live). Give these links to the user.',
+      'Returns the links of a document: `url` (the public page), `previewUrl` (the draft preview, when the site has one) and `editorUrl` (the full-screen builder in the admin, where a person can watch your changes live). Give these links to the user.',
     parameters: { collection: collectionArg, id: idArg },
     handler: async (args, req) => {
       const collection = String(args.collection)
@@ -474,19 +475,13 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       const absolute = (path: string | null | undefined) =>
         !path ? undefined : /^https?:\/\//.test(path) ? path : `${site}${path.startsWith('/') ? '' : '/'}${path}`
 
-      const pathOf = options.collections[collection]?.url
-      let url: string | undefined
-      try {
-        url = absolute(pathOf?.(doc))
-      } catch {
-        url = undefined
-      }
+      const url = absolute(documentPath(options.collections[collection]?.url, doc))
       const previewUrl = absolute(await draftPreviewPath(req, collection, doc))
       const adminRoute = req.payload.config.routes?.admin ?? '/admin'
       return text({
         ...(url ? { url } : {}),
         ...(previewUrl ? { previewUrl } : {}),
-        editorUrl: `${site}${adminRoute}/collections/${collection}/${String(doc.id)}/builder`,
+        editorUrl: `${site}${builderViewPath(adminRoute, collection, String(doc.id))}`,
         ...(doc._status ? { status: doc._status } : {}),
         ...(doc._status === 'draft' ? { note: 'Changes are saved as a draft. The public url shows them after publishing.' } : {}),
       })
@@ -530,7 +525,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
             ...(doc[TEMPLATE_PREVIEW_FIELD] ? { previewDocument: doc[TEMPLATE_PREVIEW_FIELD] } : {}),
             ...(doc._status ? { status: doc._status } : {}),
             blocks: normalizeLayout(doc[TEMPLATE_LAYOUT_FIELD]).blocks.length,
-            editorPath: `${adminRoute}/collections/${templatesSlug}/${String(doc.id)}/builder`,
+            editorPath: builderViewPath(adminRoute, templatesSlug, String(doc.id)),
           })),
           next: 'getLayout to read a template. getBindingSources for the fields its blocks can bind to.',
         })
@@ -561,29 +556,6 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
   }
 
   return [...tools, listTemplates, getBindingSources]
-}
-
-/** The draft preview path from the collection's `admin.livePreview.url` or `admin.preview`. */
-async function draftPreviewPath(req: PayloadRequest, collection: string, doc: Record<string, unknown>): Promise<string | null> {
-  const config = collectionConfig(req, collection)
-  if (!config) return null
-  const admin = (config.admin ?? {}) as { livePreview?: { url?: unknown }; preview?: unknown }
-  const locale = (req as { locale?: string }).locale ?? 'en'
-  try {
-    const live = admin.livePreview?.url
-    if (typeof live === 'string') return live
-    if (typeof live === 'function') {
-      const value: unknown = await live({ data: doc, collectionConfig: config, locale: { code: locale, label: locale }, req, payload: req.payload })
-      if (typeof value === 'string' && value) return value
-    }
-    if (typeof admin.preview === 'function') {
-      const value: unknown = await admin.preview(doc, { locale, req, token: null })
-      if (typeof value === 'string' && value) return value
-    }
-  } catch {
-    return null
-  }
-  return null
 }
 
 export { LAYOUT_GUIDE, sectionInsertOps, withNewIds }

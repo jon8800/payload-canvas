@@ -27,7 +27,7 @@ export default async function BlogPost({ params }: Props) {
   const payload = await getPayload({ config: configPromise })
   const { docs } = await payload.find({
     collection: 'posts',
-    where: { slug: { equals: slug } },
+    where: { and: [{ slug: { equals: slug } }, ...(draft ? [] : [{ _status: { equals: 'published' as const } }])] },
     limit: 1,
     draft,
     // Depth 1: bound uploads and relationships (featured image, author, categories) arrive as documents.

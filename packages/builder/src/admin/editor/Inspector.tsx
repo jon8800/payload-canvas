@@ -1,8 +1,7 @@
 'use client'
 
-import { CheckboxInput, RenderFields, useConfig, useDocumentInfo } from '@payloadcms/ui'
-import { useMemo, useState, type ChangeEvent } from 'react'
-import type { ClientField } from 'payload'
+import { CheckboxInput } from '@payloadcms/ui'
+import { useState, type ChangeEvent } from 'react'
 
 import { findBlock, findLocation, getBlockDefinition } from '../../core'
 import type { Block } from '../../core/types'
@@ -50,28 +49,26 @@ export function Inspector() {
   const { inspectorRef } = runtime
   const tab = useValue(runtime.inspectorTab)
   const setTab = (next: InspectorTab) => (next === 'assistant' ? runtime.toggleAssistant(true) : runtime.inspectorTab.set(next))
+  // The document's own fields open in Payload's drawer from the top bar ("Page settings").
   return (
     <div ref={inspectorRef} className="builder-editor__inspector">
-      <div className="builder-editor__inspector-head">
-        <Tabs
-          value={tab}
-          onChange={setTab}
-          variant="segmented"
-          options={[
-            { id: 'block', label: 'Block' },
-            { id: 'document', label: 'Document' },
-            ...(runtime.assistant ? [{ id: 'assistant' as const, label: 'Assistant', icon: 'sparkle' as const }] : []),
-          ]}
-        />
-      </div>
-      {/* The Document pane stays mounted so its form fields keep their state. */}
+      {runtime.assistant && (
+        <div className="builder-editor__inspector-head">
+          <Tabs
+            value={tab}
+            onChange={setTab}
+            variant="segmented"
+            options={[
+              { id: 'block', label: 'Block' },
+              { id: 'assistant', label: 'Assistant', icon: 'sparkle' },
+            ]}
+          />
+        </div>
+      )}
       <div className="builder-editor__inspector-body" hidden={tab !== 'block'}>
         <BlockPane />
       </div>
-      <div className="builder-editor__inspector-body builder-editor__document" hidden={tab !== 'document'}>
-        <DocumentPane />
-      </div>
-      <AssistantPanel hidden={tab !== 'assistant'} />
+      {runtime.assistant && <AssistantPanel hidden={tab !== 'assistant'} />}
     </div>
   )
 }
@@ -237,52 +234,5 @@ function StyleFields({ block }: { block: Block }) {
         }
       />
     </div>
-  )
-}
-
-/** Marks the layout field as `admin.disabled`. Keeps array positions, so index paths stay valid. */
-function disableField(fields: ClientField[], name: string): ClientField[] {
-  return fields.map((field) => {
-    if ('name' in field && field.name === name) {
-      return { ...field, admin: { ...field.admin, disabled: true } } as ClientField
-    }
-    if (field.type === 'tabs') {
-      return { ...field, tabs: field.tabs.map((tab) => ('name' in tab ? tab : { ...tab, fields: disableField(tab.fields, name) })) }
-    }
-    if ('fields' in field && Array.isArray(field.fields) && !('name' in field)) {
-      return { ...field, fields: disableField(field.fields, name) } as ClientField
-    }
-    return field
-  })
-}
-
-/** The document's other fields (title, SEO, …), bound to Payload's own form. */
-function DocumentPane() {
-  const runtime = useRuntime()
-  const { config } = runtime
-  const { isTemplate } = useValue(runtime.template)
-  const { collectionSlug, docPermissions } = useDocumentInfo()
-  const { getEntityConfig } = useConfig()
-  const fields = useMemo(
-    () => disableField(getEntityConfig({ collectionSlug })?.fields ?? [], config.field),
-    [collectionSlug, getEntityConfig, config.field],
-  )
-
-  return (
-    <>
-      <p className="builder-editor__hint builder-editor__document-intro">
-        {isTemplate
-          ? 'Template settings: the collection it is for and the default preview document. Changes save with the template.'
-          : 'Page settings. Changes save with the page, like in the Edit tab.'}
-      </p>
-      <RenderFields
-        fields={fields}
-        forceRender
-        parentIndexPath=""
-        parentPath=""
-        parentSchemaPath={collectionSlug ?? ''}
-        permissions={docPermissions?.fields ?? {}}
-      />
-    </>
   )
 }

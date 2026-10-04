@@ -190,7 +190,7 @@ describe('read tools', () => {
         {
           url: 'http://site.test/home',
           previewUrl: 'http://site.test/preview/home',
-          editorUrl: 'http://site.test/admin/collections/pages/p1/builder',
+          editorUrl: 'http://site.test/admin/builder/pages/p1',
         },
       )
     } finally {
@@ -316,7 +316,7 @@ describe('template tools', () => {
   it('getBindingSources reads the fields the plugin stored on the config', async () => {
     const fields = [{ path: 'title', label: 'Title', type: 'text' }]
     const req = {
-      payload: { config: { custom: { websiteBuilderTemplates: { collection: 'builder-templates', targetField: 'targetCollection', sources: { posts: fields } } } } },
+      payload: { config: { custom: { websiteBuilderTemplates: { collection: 'builder-templates', sources: { posts: fields } } } } },
     } as unknown as PayloadRequest
     const result = await named('getBindingSources')!.handler({ collection: 'posts' }, req, {})
     assert.deepEqual(JSON.parse(result.content[0].text).fields, fields)
@@ -342,7 +342,7 @@ describe('template tools', () => {
       isDefault: true,
       status: 'published',
       blocks: 1,
-      editorPath: '/admin/collections/builder-templates/5/builder',
+      editorPath: '/admin/builder/builder-templates/5',
     })
   })
 })
