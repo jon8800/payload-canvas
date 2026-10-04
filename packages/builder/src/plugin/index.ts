@@ -182,6 +182,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           sections: options.sections ?? [],
           liveEndpoint: `${apiRoute}${LIVE_PATH}`,
           templates: clientTemplates,
+          ai: null,
         }
         return addBuilder(collection, { field, clientConfig, blocks, css })
       }),
