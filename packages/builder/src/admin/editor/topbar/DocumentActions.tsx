@@ -2,12 +2,14 @@
 
 // The right side of the top bar: the save state, Preview, the settings drawer and Publish.
 
-import { ConfirmationModal, Link, useConfig, useDocumentDrawer, useModal } from '@payloadcms/ui'
+import { ConfirmationModal, useConfig, useDocumentDrawer, useModal, useRouteTransition } from '@payloadcms/ui'
+import { useRouter } from 'next/navigation'
 import type { DefaultDocumentIDType } from 'payload'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 
 import { findBlock } from '../../../core'
-import { BlockIcon, Icon, type IconName } from '../icons'
+import { BlockIcon, Icon } from '../icons'
+import { MenuButton, type MenuEntry } from '../menu/Menu'
 import { blockSummary } from '../names'
 import { useEditor } from '../store'
 import { useRuntime } from '../runtime'
@@ -17,6 +19,7 @@ import { useCollectionLabel } from '../templates/useTemplate'
 import { useValue } from '../valueStore'
 import { publishState } from './document'
 import type { PublishProblem } from './problems'
+import { DrawerWidth } from './screens/DrawerWidth'
 import { SettingsDrawerSlug } from './settingsDrawer'
 
 function formatTime(iso: string | null): string {
@@ -148,6 +151,8 @@ export function PageSettings() {
         <Icon name="settings" size={14} />
         <span className="builder-bar__label">{singular} settings</span>
       </button>
+      {/* The settings drawer holds a few document fields, not a whole page: narrow, on the right. */}
+      <DrawerWidth slug={drawerSlug} width="min(1040px, calc(100% - var(--gutter-h)))" />
       <SettingsDrawerSlug value={drawerSlug}>
         <DocumentDrawer disableActions onSave={() => void runtime.doc.refresh()} />
       </SettingsDrawerSlug>
@@ -155,22 +160,19 @@ export function PageSettings() {
   )
 }
 
-type MenuItem =
-  | { icon: IconName; label: string; href?: string; external?: boolean; run?: () => void; disabled?: boolean; danger?: boolean }
-  | 'separator'
-
 /**
  * "Publish changes" (disabled when nothing changed since the last publish) with a menu: Unpublish,
- * Revert to published, and links to the edit view, versions, the API view and the live page.
- * Collections without drafts get the menu only.
+ * Revert to published, the versions and the API screen (in a drawer), and links to the edit view
+ * and the live page. Collections without drafts get the menu only.
  */
 export function PublishButton() {
   const runtime = useRuntime()
   const meta = useValue(runtime.doc.meta)
   const busy = useValue(runtime.doc.busy)
   const live = useValue(runtime.live)
-  const menu = usePopover('auto')
   const { openModal } = useModal()
+  const router = useRouter()
+  const { startRouteTransition } = useRouteTransition()
   const {
     config: { routes },
   } = useConfig()
@@ -184,21 +186,31 @@ export function PublishButton() {
   const shortcut = publishShortcut()
 
   // Safe actions first; the ones that change what the site shows last, after a separator.
-  const items: MenuItem[] = [
-    ...(meta.url && (published || !meta.drafts) ? [{ icon: 'external' as const, label: 'View the live page', href: meta.url, external: true }] : []),
-    { icon: 'compose', label: 'Open in edit view', href: docPath },
-    { icon: 'layers', label: 'Versions', href: `${docPath}/versions` },
-    { icon: 'hash', label: 'API', href: `${docPath}/api` },
+  // Versions and API open Payload's screens in a drawer, so the builder stays open.
+  const items = (): MenuEntry[] => [
+    ...(meta.url && (published || !meta.drafts) ? [{ icon: 'external' as const, label: 'View the live page', href: meta.url, newTab: true }] : []),
+    { icon: 'compose', label: 'Open in edit view', run: () => startRouteTransition(() => router.push(docPath)) },
+    ...(meta.versions !== null
+      ? [{ icon: 'layers' as const, label: meta.versions > 0 ? `Versions (${meta.versions})` : 'Versions', ownFocus: true, run: () => runtime.doc.openScreen('versions') }]
+      : []),
+    { icon: 'hash', label: 'API', ownFocus: true, run: () => runtime.doc.openScreen('api') },
     ...(meta.drafts
       ? [
           'separator' as const,
-          { icon: 'undo' as const, label: 'Revert to published', disabled: meta.status !== 'changed' || busy !== null, danger: true, run: () => openModal(revertSlug) },
-          { icon: 'eyeOff' as const, label: 'Unpublish', disabled: !published || busy !== null, danger: true, run: () => openModal(unpublishSlug) },
+          {
+            icon: 'undo' as const,
+            label: 'Revert to published',
+            disabled: meta.status !== 'changed' || busy !== null,
+            danger: true,
+            ownFocus: true,
+            run: () => openModal(revertSlug),
+          },
+          { icon: 'eyeOff' as const, label: 'Unpublish', disabled: !published || busy !== null, danger: true, ownFocus: true, run: () => openModal(unpublishSlug) },
         ]
       : []),
   ]
 
-  const label = { publish: 'Publishing…', unpublish: 'Unpublishing…', revert: 'Reverting…', rename: 'Publish changes' }
+  const label = { publish: 'Publishing…', unpublish: 'Unpublishing…', revert: 'Reverting…', restore: 'Restoring…', rename: 'Publish changes' }
 
   return (
     <div className="builder-bar__publish">
@@ -215,60 +227,15 @@ export function PublishButton() {
           {busy && busy !== 'rename' ? label[busy] : 'Publish changes'}
         </button>
       )}
-      <button
-        type="button"
+      <MenuButton
         className={meta.drafts ? 'builder-bar__publish-more' : 'builder-editor__icon-button'}
-        aria-label="More document actions"
-        aria-haspopup="menu"
-        aria-expanded={menu.open}
-        data-tooltip="More document actions"
-        onClick={(e) => menu.toggle(e.currentTarget)}
+        triggerLabel="More document actions"
+        tooltip="More document actions"
+        label="Document actions"
+        items={items}
       >
         <Icon name={meta.drafts ? 'chevronDown' : 'more'} size={meta.drafts ? 14 : 16} />
-      </button>
-      <Popover {...menu.props} className="builder-editor__menu builder-bar__menu" label="Document actions">
-        <div role="menu">
-          {items.map((item, index) => {
-            if (item === 'separator') return <hr key={`separator-${index}`} className="builder-bar__menu-sep" />
-            const className = `builder-editor__menu-item${item.danger ? ' builder-editor__menu-item--danger' : ''}`
-            const content = (
-              <>
-                <Icon name={item.icon} size={14} />
-                {item.label}
-              </>
-            )
-            if (item.href && item.external) {
-              return (
-                <a key={item.label} role="menuitem" className={className} href={item.href} target="_blank" rel="noopener noreferrer" onClick={menu.hide}>
-                  {content}
-                </a>
-              )
-            }
-            if (item.href) {
-              return (
-                <Link key={item.label} role="menuitem" className={className} href={item.href} onClick={menu.hide}>
-                  {content}
-                </Link>
-              )
-            }
-            return (
-              <button
-                key={item.label}
-                type="button"
-                role="menuitem"
-                className={className}
-                disabled={item.disabled}
-                onClick={() => {
-                  menu.hide()
-                  item.run?.()
-                }}
-              >
-                {content}
-              </button>
-            )
-          })}
-        </div>
-      </Popover>
+      </MenuButton>
       <ConfirmationModal
         modalSlug={revertSlug}
         heading="Revert to published?"

@@ -3,20 +3,20 @@
 import { CheckboxInput } from '@payloadcms/ui'
 import { useDeferredValue, useEffect, useState, type ChangeEvent } from 'react'
 
-import { findBlock, findLocation, getBlockDefinition } from '../../core'
+import { findBlock, getBlockDefinition } from '../../core'
 import type { Block } from '../../core/types'
-import { copySelection, duplicateBlock, parseClipboard, pasteBlocks, removeBlock, storedClipboard, toggleHidden } from './actions'
 import { BlockIcon, Icon, type IconName } from './icons'
+import { blockMenuEntries } from './menu/blockMenu'
+import { MenuButton } from './menu/Menu'
+import { renameRequest } from './menu/requests'
 import { blockName, typeName } from './names'
 import { RenameInput } from './Outline'
-import { requestSaveSection } from './sections/SectionDialog'
 import { EditingBanner } from './live/PresenceUI'
 import { AssistantPanel } from './assistant/AssistantPanel'
 import { BlockContentFields } from './renderField'
 import { useRuntime, type InspectorTab } from './runtime'
 import { shortcutList } from './shortcuts'
 import { useEditor } from './store'
-import { Popover, usePopover } from './styles/popover'
 import { StylesPanel } from './styles/StylesPanel'
 import { useValue, useValueSelector } from './valueStore'
 
@@ -191,38 +191,20 @@ function BlockProblems({ blockId }: { blockId: string }) {
 function BlockHeader({ block }: { block: Block }) {
   const runtime = useRuntime()
   const def = getBlockDefinition(runtime.config.blocks, block.type)
-  const menu = usePopover('auto')
-  const [renaming, setRenaming] = useState(false)
-  const parentId = useEditor(runtime.store, (s) => findLocation(s.layout, block.id)?.parentId ?? null)
+  const [renamingHere, setRenaming] = useState(false)
+  // "Rename" in a block menu (or F2 outside the outline) renames here.
+  const requested = useValueSelector(renameRequest(runtime), (r) => r?.where === 'inspector' && r.id === block.id)
+  const renaming = renamingHere || requested
+  const endRename = () => {
+    setRenaming(false)
+    if (requested) renameRequest(runtime).set(null)
+  }
   const typeLabel = runtime.blockLabel(block.type)
   const name = blockName(block, typeLabel)
   const kind = typeName(block, typeLabel)
   // The type shows under a custom name; else the category does.
   const sub = block.label ? kind : def?.category
   const tag = typeof block.props?.as === 'string' && block.props.as !== 'div' ? `<${block.props.as}>` : null
-
-  const paste = () => {
-    const blocks = parseClipboard(storedClipboard())
-    if (blocks) pasteBlocks(runtime, blocks)
-    else runtime.notify('Nothing to paste. Copy a block first.')
-  }
-
-  const items: ({ icon: IconName; label: string; keys?: string; run: () => void; disabled?: boolean; danger?: boolean } | 'separator')[] = [
-    { icon: 'parent', label: 'Select parent', disabled: !parentId, run: () => parentId && runtime.store.select(parentId) },
-    { icon: 'rename', label: 'Rename', keys: 'F2', run: () => setRenaming(true) },
-    'separator',
-    { icon: 'duplicate', label: 'Duplicate', keys: 'Ctrl+D', run: () => duplicateBlock(runtime, block.id) },
-    { icon: 'copy', label: 'Copy', keys: 'Ctrl+C', run: () => copySelection(runtime) },
-    { icon: 'paste', label: 'Paste inside or after', keys: 'Ctrl+V', run: paste },
-    {
-      icon: block.hidden ? 'eye' : 'eyeOff',
-      label: block.hidden ? 'Show on the site' : 'Hide on the site',
-      run: () => toggleHidden(runtime, block.id),
-    },
-    ...(runtime.sections.enabled ? [{ icon: 'section' as const, label: 'Save as section…', run: () => requestSaveSection(runtime, block) }] : []),
-    'separator',
-    { icon: 'delete', label: 'Delete', keys: 'Del', danger: true, run: () => removeBlock(runtime, block.id) },
-  ]
 
   return (
     <div className="builder-editor__block-head">
@@ -231,7 +213,7 @@ function BlockHeader({ block }: { block: Block }) {
       </span>
       <span className="builder-editor__block-name">
         {renaming ? (
-          <RenameInput block={block} placeholder={kind} onDone={() => setRenaming(false)} />
+          <RenameInput block={block} placeholder={kind} onDone={endRename} />
         ) : (
           <button
             type="button"
@@ -252,50 +234,24 @@ function BlockHeader({ block }: { block: Block }) {
         )}
       </span>
       {block.hidden && (
-        <span className="builder-editor__pill" title="Hidden on the site">
+        <span className="builder-editor__pill" data-tooltip="Hidden on the site">
           <Icon name="eyeOff" size={12} /> Hidden
         </span>
       )}
-      <button
-        type="button"
+      <MenuButton
         className="builder-editor__icon-button"
-        aria-label="More actions"
-        aria-haspopup="menu"
-        aria-expanded={menu.open}
-        data-tooltip="More actions"
-        onClick={(e) => menu.toggle(e.currentTarget)}
+        triggerLabel="More actions"
+        tooltip="More actions"
+        label="Block actions"
+        items={() => blockMenuEntries(runtime, block.id, 'inspector')}
+        footer={
+          <>
+            Block ID <code>{block.id}</code>
+          </>
+        }
       >
         <Icon name="more" />
-      </button>
-      <Popover {...menu.props} className="builder-editor__menu" label="Block actions">
-        <div role="menu">
-          {items.map((item, i) =>
-            item === 'separator' ? (
-              // oxlint-disable-next-line react/no-array-index-key -- separators have no identity
-              <hr key={`sep-${i}`} className="builder-bar__menu-sep" />
-            ) : (
-              <button
-                key={item.label}
-                type="button"
-                role="menuitem"
-                className={`builder-editor__menu-item${item.danger ? ' builder-editor__menu-item--danger' : ''}`}
-                disabled={item.disabled}
-                onClick={() => {
-                  menu.hide()
-                  item.run()
-                }}
-              >
-                <Icon name={item.icon} size={14} />
-                {item.label}
-                {item.keys && <kbd className="builder-editor__menu-keys">{item.keys}</kbd>}
-              </button>
-            ),
-          )}
-          <p className="builder-editor__menu-meta">
-            Block ID <code>{block.id}</code>
-          </p>
-        </div>
-      </Popover>
+      </MenuButton>
     </div>
   )
 }

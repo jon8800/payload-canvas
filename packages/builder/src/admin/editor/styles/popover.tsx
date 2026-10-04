@@ -2,13 +2,20 @@
 
 // Popovers in the browser's top layer (the `popover` attribute), so the scrolling inspector
 // never clips them. Placed under (or above) their anchor with fixed coordinates.
+//
+// For a list of actions, use `MenuButton` from `../menu/Menu` instead: it adds keyboard
+// navigation. This hook is for popovers with their own content (pickers, forms, combobox lists).
 
 /* oxlint-disable jsx-a11y/prefer-tag-over-role, jsx-a11y/no-noninteractive-element-to-interactive-role -- a native select cannot be a combobox popup, so the list uses listbox/option roles */
 
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
 
+import { onDismissMenus } from '../menu/dismiss'
+
 const GAP = 4
 const MARGIN = 8
+/** A click on the anchor this soon after a press on it closed the popover keeps it closed. */
+const REOPEN_MS = 600
 
 function place(el: HTMLElement, anchor: HTMLElement, matchWidth: boolean) {
   const rect = anchor.getBoundingClientRect()
@@ -23,17 +30,28 @@ function place(el: HTMLElement, anchor: HTMLElement, matchWidth: boolean) {
 
 export type PopoverHandle = {
   ref: RefObject<HTMLDivElement | null>
+  /** React state: follows the popover's `toggle` event, so it can lag one event behind. */
   open: boolean
+  /** The popover is open right now (reads the DOM). */
+  isOpen: () => boolean
   show: (anchor: HTMLElement) => void
   hide: () => void
   toggle: (anchor: HTMLElement) => void
 }
 
-/** `manual` popovers stay open until `hide` (comboboxes). `auto` ones close on outside click and Escape. */
+/**
+ * `manual` popovers stay open until `hide` (comboboxes). `auto` ones close on a press outside
+ * (also in the canvas iframe), on Escape (the focus goes back to the anchor), when the focus
+ * moves elsewhere and when the selection changes (the dismiss signal in `../menu/dismiss`).
+ * A second click on the anchor closes them.
+ */
 export function usePopover(mode: 'auto' | 'manual', matchWidth = false): PopoverHandle & { props: PopoverProps } {
   const ref = useRef<HTMLDivElement | null>(null)
   const anchor = useRef<HTMLElement | null>(null)
   const [open, setOpen] = useState(false)
+  // When a press on the anchor closed the popover (the browser closes it on pointerdown, before
+  // the click that would open it again).
+  const anchorPressedAt = useRef(0)
 
   const reposition = useCallback(() => {
     if (ref.current && anchor.current) place(ref.current, anchor.current, matchWidth)
@@ -53,26 +71,64 @@ export function usePopover(mode: 'auto' | 'manual', matchWidth = false): Popover
     }
   }, [open, reposition])
 
-  const show = useCallback((el: HTMLElement) => {
-    anchor.current = el
-    const popover = ref.current
-    if (!popover || popover.matches(':popover-open')) return
-    popover.showPopover()
-    place(popover, el, matchWidth)
-  }, [matchWidth])
+  const isOpen = useCallback(() => Boolean(ref.current?.matches(':popover-open')), [])
+
+  const show = useCallback(
+    (el: HTMLElement) => {
+      const popover = ref.current
+      if (!popover || popover.matches(':popover-open')) return
+      // The press on this anchor just closed it: the click that follows must not open it again.
+      if (el === anchor.current && performance.now() - anchorPressedAt.current < REOPEN_MS) {
+        anchorPressedAt.current = 0
+        return
+      }
+      anchor.current = el
+      popover.showPopover()
+      place(popover, el, matchWidth)
+    },
+    [matchWidth],
+  )
 
   const hide = useCallback(() => {
     if (ref.current?.matches(':popover-open')) ref.current.hidePopover()
   }, [])
 
-  const toggle = useCallback(
-    (el: HTMLElement) => (ref.current?.matches(':popover-open') ? hide() : show(el)),
-    [hide, show],
-  )
+  const toggle = useCallback((el: HTMLElement) => (isOpen() ? hide() : show(el)), [hide, isOpen, show])
+
+  useEffect(() => {
+    if (!open || mode !== 'auto') return
+    const popover = ref.current
+    const inside = (node: EventTarget | null) =>
+      node instanceof Node && Boolean(popover?.contains(node) || anchor.current?.contains(node))
+    const onPointerDown = (e: PointerEvent) => {
+      if (anchor.current?.contains(e.target as Node)) anchorPressedAt.current = performance.now()
+    }
+    // Focus moved to another control (Tab, a click on a field): close.
+    const onFocusIn = (e: FocusEvent) => {
+      if (!inside(e.target)) hide()
+    }
+    // The browser closes the popover on Escape. Focus inside it would fall to the page: give it back to the anchor.
+    const onKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Escape' || !popover?.contains(document.activeElement)) return
+      const target = anchor.current
+      requestAnimationFrame(() => target?.isConnected && target.focus())
+    }
+    const offDismiss = onDismissMenus(hide)
+    document.addEventListener('pointerdown', onPointerDown, true)
+    document.addEventListener('focusin', onFocusIn)
+    document.addEventListener('keydown', onKeyDown, true)
+    return () => {
+      offDismiss()
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      document.removeEventListener('focusin', onFocusIn)
+      document.removeEventListener('keydown', onKeyDown, true)
+    }
+  }, [open, mode, hide])
 
   return {
     ref,
     open,
+    isOpen,
     show,
     hide,
     toggle,

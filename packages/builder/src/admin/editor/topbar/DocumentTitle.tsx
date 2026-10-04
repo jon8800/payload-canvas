@@ -90,7 +90,7 @@ export function DocumentTitle() {
         <input
           className="builder-bar__title"
           aria-label={`Title (${meta.titleField})`}
-          title="Rename · Enter to save"
+          data-tooltip="Rename · Enter to save"
           placeholder="Untitled"
           value={draft ?? title}
           disabled={busy === 'rename'}
@@ -115,11 +115,9 @@ export function DocumentTitle() {
 export function StatusChip() {
   const runtime = useRuntime()
   const meta = useValue(runtime.doc.meta)
-  const admin = useAdminPath()
   const lastRefresh = useRef(0)
   // The card renders only while open: dates format in the browser's locale, never on the server.
   const [open, setOpen] = useState(false)
-  const docPath = `${admin}/collections/${encodeURIComponent(meta.collection)}/${encodeURIComponent(meta.id)}`
 
   const show = () => {
     setOpen(true)
@@ -166,9 +164,17 @@ export function StatusChip() {
                 <div>
                   <dt>Versions</dt>
                   <dd>
-                    <Link href={`${docPath}/versions`}>
+                    {/* Payload's Versions screen, in a drawer over the builder. */}
+                    <button
+                      type="button"
+                      className="builder-bar__card-link"
+                      onClick={() => {
+                        setOpen(false)
+                        runtime.doc.openScreen('versions')
+                      }}
+                    >
                       {meta.versions} {meta.versions === 1 ? 'version' : 'versions'}
-                    </Link>
+                    </button>
                   </dd>
                 </div>
               )}

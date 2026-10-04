@@ -5,7 +5,7 @@
 // the store, so it syncs to collaborators like any edit. All updates of one editing session merge
 // into one undo step.
 
-import { findBlock } from '../../core'
+import { createId, findBlock, joinListItem, splitListItem, type ListItemEdit } from '../../core'
 import type { Block, Operation } from '../../core/types'
 import { setPropPath, type InlineKind, type RichCommand, type RichFormatState } from '../../protocol'
 import type { Runtime } from './runtime'
@@ -54,10 +54,26 @@ export function applyInlineChange(runtime: Runtime, change: { session: string; i
   runtime.store.apply(op, { mergeKey: `inline:${change.session}`, mergeWithin: Number.POSITIVE_INFINITY })
 }
 
-/** Starts inline editing of a block's text (Enter on a selected block). */
-export function startInlineEditing(runtime: Runtime, id: string) {
+/** Starts inline editing of a block's text (Enter on a selected block), optionally `offset` characters in. */
+export function startInlineEditing(runtime: Runtime, id: string, offset?: number) {
   runtime.iframeRef.current?.focus()
-  runtime.postToCanvas({ type: 'inlineStart', id })
+  runtime.postToCanvas({ type: 'inlineStart', id, ...(offset === undefined ? {} : { offset }) })
+}
+
+/** Applies a list item key press as one undo step, selects the item to edit and edits it. */
+function applyListItemEdit(runtime: Runtime, edit: ListItemEdit | null) {
+  if (!edit || !runtime.store.apply(edit.ops, { select: edit.editId })) return
+  startInlineEditing(runtime, edit.editId, edit.offset)
+}
+
+/** Enter in a list item on the canvas: the next item gets the text after the caret. */
+export function applyInlineSplit(runtime: Runtime, message: { id: string; after: string }) {
+  applyListItemEdit(runtime, splitListItem(runtime.store.getState().layout, message.id, message.after, createId()))
+}
+
+/** Backspace at the start of a list item on the canvas: it joins the item before. */
+export function applyInlineJoin(runtime: Runtime, message: { id: string; value: string }) {
+  applyListItemEdit(runtime, joinListItem(runtime.store.getState().layout, message.id, message.value))
 }
 
 /** Ends inline editing, if a session is open. */

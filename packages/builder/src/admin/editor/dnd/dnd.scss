@@ -1,0 +1,218 @@
+// Smooth drag mode: outline rows that make room, the gap on the canvas and the lifted row.
+// Payload CSS variables only, no Tailwind. `--be-make-room` and `--be-settle` are spring easings
+// (CSS `linear()`) that the editor sets on its root from `protocol/motion.ts`.
+
+@layer payload-default {
+  @keyframes builder-dnd-lift {
+    from {
+      transform: scale(1);
+      box-shadow: 0 0 0 1px var(--be-border);
+    }
+  }
+
+  .builder-editor__outline {
+    position: relative;
+  }
+
+  .builder-dnd-outline--active {
+    // A row moving to a deeper level must not add a sideways scrollbar.
+    overflow-x: hidden;
+
+    .builder-editor__row {
+      transition:
+        transform 340ms var(--be-make-room, cubic-bezier(0.2, 0.8, 0.2, 1)),
+        opacity 160ms ease-out;
+    }
+
+    .builder-editor__row .builder-editor__row-actions {
+      display: none;
+    }
+  }
+
+  // The dragged row stays as the gap: an empty dashed slot where the block will land.
+  // Its indent shows the depth it lands at.
+  .builder-editor__row[data-dnd-source] {
+    opacity: 1;
+    background: transparent;
+
+    > * {
+      visibility: hidden;
+    }
+
+    &::after {
+      content: '';
+      position: absolute;
+      top: 1px;
+      right: 0;
+      bottom: 1px;
+      left: 4px;
+      border-radius: var(--be-radius);
+      background: color-mix(in srgb, var(--be-accent) 8%, transparent);
+      outline: 1px dashed color-mix(in srgb, var(--be-accent) 60%, transparent);
+      outline-offset: -1px;
+      transform: translateX(var(--dnd-indent, 0px));
+      transition: transform 340ms var(--be-make-room, ease-out);
+    }
+  }
+
+  // It goes into a collapsed block: no gap in this list.
+  .builder-editor__row[data-dnd-source][data-dnd-gone] {
+    opacity: 0;
+  }
+
+  // Children of the dragged row travel inside it.
+  .builder-editor__row[data-dnd-hidden] {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  // The drop goes into this collapsed block.
+  .builder-editor__row[data-dnd-into] {
+    background: var(--be-accent-soft);
+    box-shadow: inset 0 0 0 2px var(--be-accent);
+  }
+
+  // The gap for a new block from the library.
+  .builder-dnd-gap-row {
+    position: absolute;
+    top: 0;
+    right: 6px;
+    left: 6px;
+    box-sizing: border-box;
+    border-radius: var(--be-radius);
+    background: color-mix(in srgb, var(--be-accent) 8%, transparent);
+    outline: 1px dashed color-mix(in srgb, var(--be-accent) 60%, transparent);
+    outline-offset: -1px;
+    pointer-events: none;
+    transition: transform 340ms var(--be-make-room, ease-out);
+
+    @starting-style {
+      opacity: 0;
+    }
+  }
+
+  // The gap on the canvas (overlay, iframe coordinates).
+  .builder-dnd-scroll {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .builder-dnd-gap {
+    position: absolute;
+    top: 0;
+    left: 0;
+    box-sizing: border-box;
+    border-radius: calc(var(--be-px, 1px) * 6);
+    background: color-mix(in srgb, var(--be-accent) 9%, transparent);
+    outline: calc(var(--be-px, 1px) * 1.5) dashed color-mix(in srgb, var(--be-accent) 60%, transparent);
+    outline-offset: calc(var(--be-px, 1px) * -1.5);
+    pointer-events: none;
+    // Only transform and opacity animate: they run on the compositor.
+    transition:
+      transform 340ms var(--be-make-room, ease-out),
+      opacity 160ms ease-out;
+
+    @starting-style {
+      opacity: 0;
+    }
+
+    &[data-settle] {
+      opacity: 0;
+      transition-duration: 340ms, 120ms;
+    }
+  }
+
+  .builder-dnd-gap__label {
+    &::after {
+      content: attr(data-label);
+    }
+
+    &[hidden] {
+      display: none;
+    }
+  }
+
+  // The lifted row that follows the pointer outside the canvas.
+  .builder-dnd-ghost {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1001;
+    pointer-events: none;
+    will-change: transform;
+    transition: opacity 140ms ease-out;
+
+    &[data-hidden] {
+      opacity: 0;
+    }
+  }
+
+  .builder-dnd-ghost__card {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    box-sizing: border-box;
+    min-width: 140px;
+    max-width: 320px;
+    height: 28px;
+    padding: 0 10px 0 8px;
+    border-radius: var(--be-radius-m);
+    background: var(--be-panel);
+    color: var(--theme-text);
+    font-family: var(--font-body);
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    transform: scale(1.03);
+    transform-origin: 18px 14px;
+    box-shadow:
+      0 14px 30px -8px rgb(0 0 0 / 0.32),
+      0 3px 8px rgb(0 0 0 / 0.12),
+      0 0 0 1px var(--be-border);
+    animation: builder-dnd-lift 220ms var(--be-settle, ease-out) both;
+
+    svg {
+      flex: none;
+      color: var(--be-accent);
+    }
+  }
+
+  .builder-dnd-ghost__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .builder-dnd-ghost__note {
+    display: none;
+    color: var(--be-muted);
+    font-weight: 400;
+
+    &::before {
+      content: '·';
+      margin-right: 6px;
+    }
+  }
+
+  .builder-dnd-ghost[data-refused] {
+    .builder-dnd-ghost__note {
+      display: inline;
+    }
+
+    .builder-dnd-ghost__card svg {
+      color: var(--be-muted);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .builder-dnd-outline--active .builder-editor__row,
+    .builder-dnd-gap,
+    .builder-dnd-gap-row,
+    .builder-dnd-ghost__card {
+      transition: none;
+      animation: none;
+    }
+  }
+}

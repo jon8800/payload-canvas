@@ -35,6 +35,8 @@
     gap: calc(var(--base) * 0.75);
   }
 
+  // Array field: Payload's look (Collapsible rows, drag handle, "..." row menu), sized for the
+  // narrow inspector.
   .builder-field-array {
     display: flex;
     flex-direction: column;
@@ -50,91 +52,151 @@
     }
   }
 
+  .builder-field-array__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 2px 8px;
+
+    > .field-label {
+      margin: 0;
+    }
+  }
+
+  .builder-field-array__head-actions {
+    display: flex;
+    gap: 8px;
+
+    button {
+      padding: 0;
+      border: 0;
+      background: none;
+      color: var(--theme-elevation-800);
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+
+      &:hover,
+      &:focus-visible {
+        color: var(--theme-elevation-600);
+        text-decoration: underline;
+      }
+    }
+  }
+
   .builder-field-array__rows {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
   }
 
   .builder-field-array__row {
-    border: 1px solid var(--theme-elevation-150);
+    position: relative;
+
+    &[data-dragging] .builder-field-array__collapsible {
+      box-shadow: 0 4px 12px rgb(0 0 0 / 0.18);
+    }
+  }
+
+  .builder-field-array .builder-field-array__collapsible {
     border-radius: var(--style-radius-s, 4px);
     background: var(--theme-elevation-0);
-  }
 
-  .builder-field-array__header {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 2px 4px 2px 0;
-  }
+    > .collapsible__toggle-wrap {
+      gap: 2px;
+      padding: 2px 4px;
+      border-top-left-radius: var(--style-radius-s, 4px);
+      border-top-right-radius: var(--style-radius-s, 4px);
+      line-height: 24px;
 
-  .builder-field-array__toggle {
-    display: flex;
-    flex: 1;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-    padding: 6px 8px;
-    border: 0;
-    background: none;
-    color: var(--theme-text);
-    font: inherit;
-    font-size: 13px;
-    text-align: left;
-    cursor: pointer;
-  }
+      > .collapsible__toggle {
+        border-radius: var(--style-radius-s, 4px);
+      }
+    }
 
-  .builder-field-array__chevron {
-    flex: none;
-    width: 6px;
-    height: 6px;
-    border-right: 1.5px solid currentColor;
-    border-bottom: 1.5px solid currentColor;
-    transform: rotate(45deg);
-    transition: transform 120ms ease;
+    &.collapsible--collapsed > .collapsible__toggle-wrap {
+      border-bottom-left-radius: var(--style-radius-s, 4px);
+      border-bottom-right-radius: var(--style-radius-s, 4px);
+    }
 
-    &[data-collapsed='true'] {
-      transform: rotate(-45deg);
+    // The toggle button covers the whole header. The handle sits above it, so a drag starts there.
+    .collapsible__drag {
+      position: relative;
+      // Payload sets `top` for its own layout; with `position: relative` it would push the handle down.
+      top: 0;
+      z-index: 1;
+      flex: none;
+      width: 20px;
+      height: 20px;
+      padding: 2px;
+      border-radius: var(--style-radius-s, 4px);
+      color: var(--theme-elevation-800);
+
+      &:hover {
+        opacity: 1;
+      }
+
+      &:focus-visible {
+        opacity: 1;
+        outline: 2px solid var(--theme-elevation-400);
+      }
+    }
+
+    .collapsible__header-wrap {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .collapsible__actions-wrap {
+      margin: 0;
+    }
+
+    .collapsible__indicator {
+      width: 20px;
+      height: 20px;
+    }
+
+    .collapsible__content {
+      padding: 0;
+      border-bottom-left-radius: var(--style-radius-s, 4px);
+      border-bottom-right-radius: var(--style-radius-s, 4px);
     }
   }
 
   .builder-field-array__title {
+    display: block;
     overflow: hidden;
+    color: var(--theme-text);
+    font-size: 13px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .builder-field-array__actions {
-    display: flex;
-    flex: none;
-    gap: 2px;
+  // Nested under the field: wins over the editor's `.builder-editor [data-tooltip]` rules.
+  .builder-field-array .builder-field-array__menu-button {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: var(--theme-elevation-800);
+    cursor: pointer;
 
-    button {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 24px;
-      height: 24px;
-      padding: 0;
-      border: 0;
-      border-radius: var(--style-radius-s, 4px);
-      background: none;
-      color: var(--theme-elevation-500);
-      cursor: pointer;
+    &:hover,
+    &[aria-expanded='true'] {
+      background: var(--theme-elevation-0);
+    }
 
-      &:hover:not(:disabled) {
-        background: var(--theme-elevation-100);
-        color: var(--theme-text);
-      }
-
-      &:disabled {
-        opacity: 0.35;
-        cursor: default;
-      }
+    // Near the inspector's right edge: the tooltip opens to the left.
+    &[data-tooltip]:hover::after {
+      left: auto;
+      right: 0;
+      transform: none;
     }
   }
 
@@ -142,7 +204,7 @@
     display: flex;
     flex-direction: column;
     gap: calc(var(--base) * 0.75);
-    padding: 4px 10px 10px;
+    padding: 10px;
   }
 
   // The message under an input (`InputError`).

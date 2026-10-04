@@ -1,7 +1,7 @@
 'use client'
 
-import { EditDepthProvider, useConfig } from '@payloadcms/ui'
-import type { ClientField } from 'payload'
+import { EditDepthProvider, EntityVisibilityProvider, useConfig } from '@payloadcms/ui'
+import type { ClientField, VisibleEntities } from 'payload'
 import type { ReactNode } from 'react'
 
 import type { BuilderClientConfig } from '../../core/types'
@@ -23,16 +23,20 @@ function builderConfigOf(fields: ClientField[]): BuilderClientConfig | null {
  * the editor. The builder stands in for the document's edit view, so it sets edit depth 1 like
  * Payload's own document view. Drawers opened from it ("Create new" upload, relationship) then get
  * depth 2 and stay drawers: at depth 1 they act as the main document and navigate after a create.
+ * Payload's admin template is not around a root view, so the builder provides the entity
+ * visibility it would provide (Payload's Versions screen in the builder's drawer reads it).
  */
-export function BuilderScreen({ meta, icon }: { meta: BuilderDocMeta; icon: ReactNode }) {
+export function BuilderScreen({ meta, icon, visibleEntities }: { meta: BuilderDocMeta; icon: ReactNode; visibleEntities?: VisibleEntities }) {
   const { getEntityConfig } = useConfig()
   const config = builderConfigOf(getEntityConfig({ collectionSlug: meta.collection })?.fields ?? [])
   if (!config) {
     return <p className="builder-summary__error">The builder config is missing on the “{meta.collection}” collection.</p>
   }
   return (
-    <EditDepthProvider>
-      <Editor config={config} meta={meta} icon={icon} />
-    </EditDepthProvider>
+    <EntityVisibilityProvider visibleEntities={visibleEntities}>
+      <EditDepthProvider>
+        <Editor config={config} meta={meta} icon={icon} />
+      </EditDepthProvider>
+    </EntityVisibilityProvider>
   )
 }

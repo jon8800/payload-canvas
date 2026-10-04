@@ -7,9 +7,9 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from
 
 import { findBlock, getBlockDefinition } from '../../../core'
 import { Icon } from '../icons'
+import { MenuButton } from '../menu/Menu'
 import { useRuntime } from '../runtime'
 import { useEditor } from '../store'
-import { Popover, usePopover } from '../styles/popover'
 import { useCollectionLabel } from '../templates/useTemplate'
 import { useValue } from '../valueStore'
 import type { AiClientConfig } from '../../../ai/types'
@@ -459,7 +459,7 @@ function ContextChips() {
         </span>
       )}
       {template.isTemplate && template.sample && (
-        <span className="builder-assistant__context-chip" title={template.sample.title}>
+        <span className="builder-assistant__context-chip" data-tooltip={template.sample.title}>
           <Icon name="link" size={12} />
           <span className="builder-assistant__context-text">Template · sample: {template.sample.title}</span>
         </span>
@@ -621,57 +621,30 @@ function MoreMenu({
 }) {
   const runtime = useRuntime()
   const ai = runtime.config.ai
-  const menu = usePopover('auto')
   const { history, streaming, failed, notice } = state
   return (
-    <>
-      <button
-        type="button"
-        className="builder-editor__icon-button builder-editor__icon-button--small"
-        aria-label="Assistant options"
-        aria-haspopup="menu"
-        aria-expanded={menu.open}
-        data-tooltip="Options"
-        onClick={(e) => menu.toggle(e.currentTarget)}
-      >
-        <Icon name="more" size={14} />
-      </button>
-      <Popover {...menu.props} className="builder-editor__menu" label="Assistant options">
-        <div role="menu">
-          <button
-            type="button"
-            role="menuitem"
-            className="builder-editor__menu-item"
-            disabled={history.messages.length === 0 && !failed && !notice && !streaming}
-            onClick={() => {
-              menu.hide()
-              assistant.newChat()
-              runtime.assistantFocus.set(Date.now())
-            }}
-          >
-            <Icon name="compose" size={14} />
-            New chat
-          </button>
-          <button
-            type="button"
-            role="menuitemcheckbox"
-            aria-checked={connect}
-            className="builder-editor__menu-item"
-            onClick={() => {
-              menu.hide()
-              onToggleConnect()
-            }}
-          >
-            <Icon name="link" size={14} />
-            Use Claude Code or Codex
-          </button>
-          {ai && (
-            <p className="builder-editor__menu-meta" title={`${ai.providerLabel ?? 'Anthropic'} · ${ai.model}`}>
-              Model: {modelLabel(ai)}
-            </p>
-          )}
-        </div>
-      </Popover>
-    </>
+    <MenuButton
+      className="builder-editor__icon-button builder-editor__icon-button--small"
+      triggerLabel="Assistant options"
+      tooltip="Options"
+      label="Assistant options"
+      side="top"
+      items={() => [
+        {
+          icon: 'compose',
+          label: 'New chat',
+          ownFocus: true,
+          disabled: history.messages.length === 0 && !failed && !notice && !streaming,
+          run: () => {
+            assistant.newChat()
+            runtime.assistantFocus.set(Date.now())
+          },
+        },
+        { icon: 'link', label: 'Use Claude Code or Codex', checked: connect, run: onToggleConnect },
+      ]}
+      footer={ai && <span data-tooltip={`${ai.providerLabel ?? 'Anthropic'} · ${ai.model}`}>Model: {modelLabel(ai)}</span>}
+    >
+      <Icon name="more" size={14} />
+    </MenuButton>
   )
 }

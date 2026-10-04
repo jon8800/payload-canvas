@@ -19,6 +19,7 @@ const TYPES = [
   'link',
   'menu',
   'list',
+  'listItem',
   'quote',
   'divider',
   'spacer',
@@ -92,7 +93,12 @@ describe('defaultBlocks', () => {
       for (const def of blocks) {
         assert.ok(def.ai?.description, `${def.type} has no AI description`)
         assert.ok(def.ai?.example, `${def.type} has no AI example`)
-        const layout = { version: 1, blocks: [{ id: 'b_example', type: def.type, ...def.ai?.example }] }
+        const example = { id: 'b_example', type: def.type, ...def.ai?.example }
+        // A block with `parents` is checked inside its first parent type.
+        const parent = def.parents?.[0]
+        const parentSlot = parent ? Object.keys(blocks.find((b) => b.type === parent)?.slots ?? {})[0] : undefined
+        const root = parent && parentSlot ? { id: 'b_parent', type: parent, slots: { [parentSlot]: [example] } } : example
+        const layout = { version: 1, blocks: [root] }
         // Bound props may stay empty: the document fills them.
         assert.deepEqual(withoutBoundRequired(validateLayout(layout, blocks), layout), [], def.type)
       }
@@ -123,6 +129,7 @@ describe('defaultBlocks', () => {
       link: ['link', 'Interactive'],
       menu: ['menu', 'Interactive'],
       list: ['list', 'Content'],
+      listItem: ['text', 'Content'],
       quote: ['quote', 'Content'],
       divider: ['divider', 'Layout'],
       spacer: ['spacer', 'Layout'],

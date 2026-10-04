@@ -18,6 +18,7 @@ import { getBlockDefinition } from '../../core'
 import type { Block } from '../../core/types'
 
 import { ArrayField } from './fields/ArrayField'
+import { isStructuralChange } from './fields/arrayState'
 import { CheckedTextField, NumberField } from './fields/CheckedInputs'
 import { GroupField } from './fields/GroupField'
 import { JsonField } from './fields/JsonField'
@@ -262,6 +263,7 @@ export function RenderBlockField({ field, onChange, path, value }: Props) {
           maxRows={field.maxRows}
           onChange={onChange}
           path={path}
+          singular={text(field.labels?.singular)}
           value={value}
         />
       )
@@ -363,7 +365,8 @@ export function BlockContentFields({ block }: { readonly block: Block }) {
         ...(changed.length > 0 ? { props: Object.fromEntries(changed.map((key) => [key, after[key]])) } : {}),
         ...(removed.length > 0 ? { unsetProps: removed } : {}),
       },
-      keys.length === 1 ? { mergeKey: `props:${block.id}:${keys[0]}` } : {},
+      // Typing in a burst merges into one undo step; moving, adding or removing array rows does not.
+      keys.length === 1 && !isStructuralChange() ? { mergeKey: `props:${block.id}:${keys[0]}` } : {},
     )
   }
 

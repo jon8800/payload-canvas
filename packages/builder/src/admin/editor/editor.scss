@@ -77,52 +77,13 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Tooltips: `data-tooltip` on any control. Shown below, after a short delay.
+  // Tooltips: `data-tooltip="Text"` on any element. `tooltip/Tooltips.tsx` shows them in the
+  // top layer (never clipped) and documents the standard. No `title` attributes in the editor.
   // ---------------------------------------------------------------------------
 
-  .builder-editor [data-tooltip],
-  .builder-editor__menu [data-tooltip] {
+  // Kept from the old CSS-only tooltips: some controls place badges and buttons against it.
+  .builder-editor [data-tooltip] {
     position: relative;
-
-    &:hover::after {
-      content: attr(data-tooltip);
-      position: absolute;
-      z-index: 60;
-      top: calc(100% + 6px);
-      left: 50%;
-      padding: 4px 8px;
-      border-radius: var(--be-radius);
-      background: var(--theme-elevation-900);
-      color: var(--theme-elevation-0);
-      font-size: 11px;
-      font-weight: 500;
-      line-height: 16px;
-      white-space: nowrap;
-      pointer-events: none;
-      transform: translateX(-50%);
-      box-shadow: 0 2px 8px rgb(0 0 0 / 0.2);
-      animation: builder-tip-in 120ms ease 350ms both;
-    }
-  }
-
-  // An open menu or popover covers its own trigger's tooltip.
-  .builder-editor [data-tooltip][aria-expanded='true']:hover::after {
-    content: none;
-  }
-
-  // Controls near the right edge open their tooltip to the left.
-  .builder-bar__end [data-tooltip],
-  .builder-editor__block-head [data-tooltip],
-  .builder-editor__panel-tools [data-tooltip]:last-child,
-  .builder-editor__actions [aria-haspopup='menu'],
-  .builder-assistant__head [data-tooltip],
-  .builder-assistant__turn-head [data-tooltip],
-  .builder-assistant__field [data-tooltip] {
-    &:hover::after {
-      left: auto;
-      right: 0;
-      transform: none;
-    }
   }
 
   // ---------------------------------------------------------------------------
@@ -430,24 +391,29 @@
     background: var(--be-panel);
   }
 
+  // The sidebars are resizable (layout/Splitter.tsx). A stored size is a CSS variable on the
+  // editor root; without one, these defaults apply. A sidebar never takes more than a third of
+  // the window, so a size stored on a large screen still fits a laptop.
   .builder-editor__left {
-    width: 288px;
+    width: var(--be-left-width, 288px);
+    max-width: 33vw;
     border-right: 1px solid var(--be-border);
   }
 
   .builder-editor__right {
-    width: 360px;
+    width: var(--be-right-width, 360px);
+    max-width: 38vw;
     border-left: 1px solid var(--be-border);
   }
 
   // Laptop screens: give the canvas more room.
   @media (max-width: 1600px) {
     .builder-editor__left {
-      width: 252px;
+      width: var(--be-left-width, 252px);
     }
 
     .builder-editor__right {
-      width: 320px;
+      width: var(--be-right-width, 320px);
     }
 
     .builder-editor__tile {
@@ -520,16 +486,13 @@
   // Insert panel (blocks and sections)
   // ---------------------------------------------------------------------------
 
+  // The Add panel fills its resizable wrapper (layout/layout.scss).
   .builder-editor__insert {
     display: flex;
+    flex: 1;
     flex-direction: column;
-    flex: none;
-    max-height: 56%;
+    min-height: 0;
     border-bottom: 1px solid var(--be-border);
-  }
-
-  .builder-editor__insert--closed {
-    max-height: none;
   }
 
   .builder-editor__search {
@@ -2515,12 +2478,6 @@
     box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
     opacity: 0;
     transition: opacity 120ms ease, background-color 120ms ease;
-
-    &:hover::after {
-      left: auto;
-      right: 0;
-      transform: none;
-    }
   }
 
   // A picture of the section: the top of it, full width. Short sections give short cards.

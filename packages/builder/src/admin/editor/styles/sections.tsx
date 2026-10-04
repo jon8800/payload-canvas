@@ -18,7 +18,7 @@ import { propertiesIn, propertyDef } from './model'
 // user's own open and close choices last while the block stays selected.
 // ---------------------------------------------------------------------------
 
-const TEXT_TYPES = new Set(['heading', 'text', 'richText', 'quote', 'button', 'list', 'link', 'field'])
+const TEXT_TYPES = new Set(['heading', 'text', 'richText', 'quote', 'button', 'list', 'listItem', 'link', 'field'])
 const CONTAINER_TYPES = new Set(['stack', 'grid', 'collectionList'])
 
 function mainGroup(blockType: string): StyleGroup | null {
@@ -42,7 +42,7 @@ function Section({ group, title, children }: { group: StyleGroup; title: string;
           <I.ChevronIcon />
         </span>
         {title}
-        {hasSet && <span className="builder-styles__dot" title="Has values at this breakpoint and state" />}
+        {hasSet && <span className="builder-styles__dot" data-tooltip="Has values at this breakpoint and state" />}
       </button>
       {open && <div className="builder-styles__section-body">{children}</div>}
     </section>
@@ -62,7 +62,7 @@ function useSplit(props: string[]): [boolean, () => void] {
 
 function SplitToggle({ open, onToggle, label, icon }: { open: boolean; onToggle: () => void; label: string; icon: ReactNode }) {
   return (
-    <button type="button" className="builder-styles__icon-button" aria-pressed={open} title={label} aria-label={label} onClick={onToggle}>
+    <button type="button" className="builder-styles__icon-button" aria-pressed={open} data-tooltip={label} aria-label={label} onClick={onToggle}>
       {icon}
     </button>
   )

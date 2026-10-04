@@ -1,0 +1,132 @@
+// Menus (`Menu.tsx`). Payload CSS variables only. The editor variables (`--be-*`) have fallbacks,
+// so a menu still looks right if it renders outside the editor root.
+
+@layer payload-default {
+  .builder-menu__positioner {
+    z-index: 1000;
+    outline: 0;
+  }
+
+  .builder-menu {
+    box-sizing: border-box;
+    min-width: 220px;
+    max-width: 320px;
+    max-height: var(--available-height, 480px);
+    overflow: auto;
+    padding: 4px;
+    border: 1px solid var(--be-border, var(--theme-elevation-150));
+    border-radius: var(--be-radius-m, var(--style-radius-m, 6px));
+    background: var(--theme-bg);
+    color: var(--theme-text);
+    font-family: var(--font-body);
+    font-size: 12.5px;
+    line-height: 1.3;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.18), 0 1px 3px rgb(0 0 0 / 0.12);
+    outline: 0;
+    transform-origin: var(--transform-origin);
+
+    @media (prefers-reduced-motion: no-preference) {
+      transition:
+        opacity 90ms ease,
+        transform 90ms ease;
+    }
+
+    &[data-starting-style],
+    &[data-ending-style] {
+      opacity: 0;
+      transform: scale(0.98);
+    }
+  }
+
+  .builder-menu__item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 30px;
+    padding: 0 8px;
+    border-radius: var(--be-radius, var(--style-radius-s, 4px));
+    color: var(--theme-text);
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: default;
+    outline: 0;
+    user-select: none;
+
+    svg {
+      flex: none;
+      color: var(--be-muted, var(--theme-elevation-500));
+    }
+
+    &[data-highlighted] {
+      background: var(--be-hover, var(--theme-elevation-100));
+    }
+
+    &[data-disabled] {
+      opacity: 0.4;
+    }
+  }
+
+  // A disabled destructive item is neutral: red says "this acts", and it cannot act.
+  .builder-menu__item--danger:not([data-disabled]) {
+    color: var(--theme-error-500);
+
+    svg {
+      color: currentColor;
+    }
+
+    &[data-highlighted] {
+      background: color-mix(in srgb, var(--theme-error-500) 12%, transparent);
+    }
+  }
+
+  .builder-menu__icon {
+    flex: none;
+    width: 14px;
+  }
+
+  .builder-menu__label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  // `.builder-menu` in front: beats the editor's general `kbd` style.
+  .builder-menu .builder-menu__keys {
+    flex: none;
+    min-width: 0;
+    height: auto;
+    margin-left: auto;
+    padding: 0 0 0 16px;
+    border: 0;
+    background: none;
+    color: var(--be-subtle, var(--theme-elevation-400));
+    font: inherit;
+    font-size: 11px;
+  }
+
+  .builder-menu .builder-menu__check {
+    color: var(--be-accent, var(--theme-success-500));
+  }
+
+  .builder-menu__sep {
+    height: 1px;
+    margin: 4px 0;
+    border: 0;
+    background: var(--be-border-soft, var(--theme-elevation-100));
+  }
+
+  .builder-menu__note {
+    margin: 4px 0 0;
+    padding: 6px 8px 4px;
+    border-top: 1px solid var(--be-border-soft, var(--theme-elevation-100));
+    color: var(--be-muted, var(--theme-elevation-500));
+    font-size: 11px;
+  }
+
+  // The highlight shows the keyboard position; no focus ring inside the menu.
+  .builder-editor .builder-menu:focus-visible,
+  .builder-editor .builder-menu__item:focus-visible {
+    outline: 0;
+  }
+}

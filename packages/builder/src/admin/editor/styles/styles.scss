@@ -7,12 +7,18 @@
     --bs-muted: var(--theme-elevation-500);
     --bs-dim: var(--theme-elevation-400);
     --bs-h: 26px;
+    /* One column grid for every row: label, control, reset button. */
+    --bs-label: 84px;
+    --bs-gutter: 18px;
+    --bs-gap: 6px;
+    --bs-override: var(--theme-warning-500, #d97706);
 
     display: flex;
     flex-direction: column;
     font-size: 12px;
 
-    fieldset {
+    // :where() keeps this reset weaker than the components' own borders (the segmented control).
+    :where(fieldset) {
       min-width: 0;
       margin: 0;
       padding: 0;
@@ -46,6 +52,7 @@
   }
 
   .builder-styles__button {
+    flex: none;
     height: var(--bs-h);
     padding: 0 10px;
     border: 1px solid var(--bs-border);
@@ -57,6 +64,17 @@
 
     &:hover {
       border-color: var(--theme-elevation-300);
+    }
+  }
+
+  .builder-styles__button--primary {
+    border-color: var(--theme-elevation-800);
+    background: var(--theme-elevation-800);
+    color: var(--theme-elevation-0);
+
+    &:hover {
+      border-color: var(--theme-elevation-1000);
+      background: var(--theme-elevation-1000);
     }
   }
 
@@ -278,11 +296,17 @@
     padding: 0 0 10px;
   }
 
+  // Rows in a sub-section keep the panel's columns; only the label text steps in.
   .builder-styles__sub-body {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    padding-left: 18px;
+    padding-bottom: 4px;
+
+    .builder-styles__label-cell,
+    .builder-styles__mini-row > .builder-styles__label {
+      padding-left: 18px;
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -291,13 +315,22 @@
 
   .builder-styles__row {
     display: grid;
-    grid-template-columns: 84px minmax(0, 1fr) 18px;
+    grid-template-columns: var(--bs-label) minmax(0, 1fr) var(--bs-gutter);
     align-items: center;
-    gap: 6px;
+    gap: var(--bs-gap);
     min-height: 28px;
   }
 
+  // The label and, after it, the override dot.
+  .builder-styles__label-cell {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+  }
+
   .builder-styles__label {
+    min-width: 0;
     overflow: hidden;
     color: var(--bs-muted);
     font-size: 12px;
@@ -305,13 +338,17 @@
     white-space: nowrap;
   }
 
-  // A value set at exactly this variant: the label turns blue (like Webflow).
-  .builder-styles__row[data-source='set'] > .builder-styles__label {
+  // A value set at exactly this variant: the label turns blue (like Webflow). From a smaller
+  // breakpoint or a shorthand: amber.
+  [data-source='set'] > .builder-styles__label,
+  .builder-styles__mini-caption[data-source='set'] > .builder-styles__mini-text {
     color: var(--bs-accent);
   }
 
-  .builder-styles__row[data-source='inherited'] > .builder-styles__label,
-  .builder-styles__row[data-source='shorthand'] > .builder-styles__label {
+  [data-source='inherited'] > .builder-styles__label,
+  [data-source='shorthand'] > .builder-styles__label,
+  .builder-styles__mini-caption[data-source='inherited'] > .builder-styles__mini-text,
+  .builder-styles__mini-caption[data-source='shorthand'] > .builder-styles__mini-text {
     color: var(--theme-warning-600, #b7791f);
   }
 
@@ -320,66 +357,79 @@
     min-width: 0;
   }
 
-  // A larger breakpoint wins on the canvas: the value here is not what the user sees.
-  .builder-styles__override {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 4px 6px;
-    margin: -2px 0 4px 90px;
-    color: var(--theme-warning-700, var(--theme-text));
-    font-size: 11.5px;
-    line-height: 1.35;
-
-    > svg {
-      flex: none;
-      color: var(--theme-warning-500, #b7791f);
-    }
-
-    > span {
-      flex: 1 1 140px;
-      min-width: 0;
-      color: var(--theme-elevation-700);
-    }
-  }
-
-  .builder-styles__override-action {
-    flex: none;
-    height: 22px;
-    padding: 0 8px;
-    border: 1px solid color-mix(in srgb, var(--theme-warning-500, #b7791f) 55%, transparent);
-    border-radius: var(--style-radius-s, 4px);
-    background: color-mix(in srgb, var(--theme-warning-500, #b7791f) 12%, var(--theme-elevation-0));
-    color: var(--theme-text);
-    font: inherit;
-    font-size: 11.5px;
-    font-weight: 600;
-    cursor: pointer;
-
-    &:hover {
-      border-color: var(--theme-warning-500, #b7791f);
-    }
-  }
-
-  .builder-styles__override-flag {
+  // A larger breakpoint wins on the canvas: a 6px dot after the label. The button is 14px for
+  // the pointer; the dot is drawn inside it.
+  .builder-styles__override-mark {
     display: grid;
+    flex: none;
     place-items: center;
     width: 14px;
     height: 14px;
-    margin-left: auto;
+    margin: 0 -4px 0 -2px;
     padding: 0;
     border: 0;
+    border-radius: 50%;
     background: none;
-    color: var(--theme-warning-500, #b7791f);
     cursor: pointer;
+
+    &::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--bs-override);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--bs-override) 22%, transparent);
+    }
+
+    &:hover::before,
+    &[aria-expanded='true']::before {
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--bs-override) 32%, transparent);
+    }
+
+    &:focus-visible {
+      outline: 1px solid var(--bs-accent);
+    }
   }
 
-  .builder-styles__row[data-overridden] .builder-styles__input,
-  .builder-styles__row[data-overridden] .builder-styles__select,
-  .builder-styles__input[data-overridden],
+  // Only while open: `display` would otherwise beat the browser's rule that hides a closed popover.
+  .builder-styles__popover--override:popover-open {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 248px;
+    padding: 10px;
+  }
+
+  .builder-styles__override-text {
+    margin: 0;
+    color: var(--theme-elevation-800);
+    font-size: 12px;
+    line-height: 1.45;
+
+    code {
+      padding: 0 3px;
+      border-radius: 3px;
+      background: var(--theme-elevation-100);
+      color: var(--theme-text);
+    }
+  }
+
+  .builder-styles__override-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+
+    .builder-styles__button {
+      height: 24px;
+      padding: 0 8px;
+      font-size: 11.5px;
+      font-weight: 500;
+    }
+  }
+
+  // A box model side the canvas does not show: a small amber dot in its top-right corner.
   .builder-styles__cell[data-overridden] {
-    text-decoration: line-through;
-    text-decoration-color: var(--theme-warning-500, #b7791f);
+    background-image: radial-gradient(circle at calc(100% - 4px) 4px, var(--bs-override) 2px, transparent 2.5px);
   }
 
   .builder-styles__input,
@@ -594,9 +644,9 @@
   // Compact fields with a caption (gap, size, sides, corners)
   .builder-styles__mini-row {
     display: grid;
-    grid-template-columns: 84px minmax(0, 1fr);
+    grid-template-columns: var(--bs-label) minmax(0, 1fr) var(--bs-gutter);
     align-items: end;
-    gap: 6px;
+    gap: var(--bs-gap);
   }
 
   .builder-styles__mini-row > .builder-styles__label {
@@ -619,11 +669,20 @@
   .builder-styles__mini-caption {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 4px;
     height: 16px;
+    padding-left: 1px;
     color: var(--bs-muted);
     font-size: 10px;
 
+    .builder-styles__mini-text {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    // Right after its caption, so it never reads as part of the next field's caption.
     .builder-styles__reset {
       width: 14px;
       height: 14px;
@@ -703,14 +762,15 @@
     width: 100%;
   }
 
+  // The element itself: a shape, so it never reads as an input.
   .builder-styles__content-box {
     width: 100%;
-    max-width: 120px;
-    height: 20px;
-    margin: 2px 0;
-    border: 1px solid var(--theme-elevation-250);
+    max-width: 96px;
+    height: 16px;
+    margin: 4px 0;
+    border: 1px dashed var(--theme-elevation-300);
     border-radius: 2px;
-    background: var(--theme-elevation-0);
+    background: var(--theme-elevation-50);
   }
 
   .builder-styles__cell {

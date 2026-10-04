@@ -236,6 +236,22 @@
     font-weight: 600;
   }
 
+  // Looks like a link; opens the Versions drawer.
+  .builder-bar__card-link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+
+    &:hover {
+      color: var(--theme-text);
+    }
+  }
+
   // ---- Right: save state, buttons, publish ---------------------------------------------------
 
   .builder-bar__save-wrap {
@@ -444,14 +460,6 @@
     }
   }
 
-  .builder-editor__menu.builder-bar__menu {
-    min-width: 220px;
-
-    a.builder-editor__menu-item {
-      text-decoration: none;
-    }
-  }
-
   // ---- Publish problems ---------------------------------------------------------------------------
 
   .builder-bar__problems {
@@ -560,13 +568,6 @@
     font-size: 12px;
   }
 
-  .builder-bar__menu-sep {
-    height: 0;
-    margin: 4px 0;
-    border: 0;
-    border-top: 1px solid var(--be-border-soft);
-  }
-
   // ---- Loading skeleton below the bar ------------------------------------------------------------
 
   .builder-editor__body--loading {
@@ -580,13 +581,6 @@
       padding: 24px;
       background: var(--theme-elevation-50);
     }
-  }
-
-  // The settings drawer holds a few document fields, not a whole page: keep it narrow, on the right.
-  // Payload sets the drawer width inline, so this needs !important. The marker comes from
-  // settingsDrawer.tsx.
-  .drawer:has(.builder-settings-drawer-marker) > .drawer__content {
-    width: min(1040px, calc(100% - var(--gutter-h))) !important;
   }
 
   // Payload opens its lock dialogs ("Document locked", "taken over", "modified by another user")

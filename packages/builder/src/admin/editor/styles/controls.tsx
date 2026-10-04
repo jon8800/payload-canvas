@@ -6,10 +6,9 @@
 import { useId, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode } from 'react'
 
 import type { Breakpoint, StylePropertyDef, StyleTokens } from '../../../core'
-import { Icon } from '../icons'
 import { useRuntime } from '../runtime'
 import { ColorField } from './ColorPicker'
-import { useStyles } from './context'
+import { useStyles, writeStyle } from './context'
 import { ChevronIcon, ResetIcon } from './icons'
 import { displayValue, parseTyped } from './model'
 import { filterSuggestions, Popover, SuggestList, usePopover, type Suggestion } from './popover'
@@ -33,7 +32,7 @@ export function useUndoKeys(): (e: KeyboardEvent<HTMLElement>) => boolean {
   }
 }
 
-/** The breakpoint button of an override note: switches the panel to the breakpoint that wins. */
+/** Switches the panel to another breakpoint (same state). */
 function useEditBreakpoint(): (breakpoint: Breakpoint) => void {
   const { store } = useRuntime()
   const { variant } = useStyles()
@@ -41,40 +40,58 @@ function useEditBreakpoint(): (breakpoint: Breakpoint) => void {
 }
 
 /**
- * Says that a larger breakpoint overrides this value on the canvas ("Overridden at md and wider
- * by md:text-6xl."), with a button that switches the panel to that breakpoint.
+ * A small dot after a label: a larger breakpoint overrides this value on the canvas. Hover says
+ * which class wins. A click opens a small popover to edit that breakpoint or remove the class.
  */
-export function OverrideNote({ prop }: { prop: string }) {
-  const { override } = useProp(prop)
+export function OverrideMark({ prop }: { prop: string }) {
+  const runtime = useRuntime()
+  const { blockId, tokens, error } = useStyles()
+  const { def, override } = useProp(prop)
   const edit = useEditBreakpoint()
+  const pop = usePopover('auto')
   if (!override) return null
+  const breakpoint = override.variant.breakpoint
+  const hint = overrideHint(override)
   return (
-    <p className="builder-styles__override">
-      <Icon name="warning" size={12} />
-      <span>{overrideHint(override)}</span>
-      <button type="button" className="builder-styles__override-action" onClick={() => edit(override.variant.breakpoint)}>
-        Edit {override.variant.breakpoint}
-      </button>
-    </p>
-  )
-}
-
-/** The compact form of OverrideNote for small fields: an icon button. */
-export function OverrideFlag({ prop }: { prop: string }) {
-  const { override } = useProp(prop)
-  const edit = useEditBreakpoint()
-  if (!override) return null
-  const hint = `${overrideHint(override)} Edit ${override.variant.breakpoint}.`
-  return (
-    <button
-      type="button"
-      className="builder-styles__override-flag"
-      title={hint}
-      aria-label={hint}
-      onClick={() => edit(override.variant.breakpoint)}
-    >
-      <Icon name="warning" size={11} />
-    </button>
+    <>
+      <button
+        type="button"
+        className="builder-styles__override-mark"
+        data-tooltip={`${hint}\nClick to edit ${breakpoint} or remove it.`}
+        data-tooltip-side="top"
+        aria-label={hint}
+        aria-haspopup="dialog"
+        aria-expanded={pop.open}
+        onClick={(e) => pop.toggle(e.currentTarget)}
+      />
+      <Popover {...pop.props} label={`${def?.label ?? prop} override`} className="builder-styles__popover--override">
+        <p className="builder-styles__override-text">
+          <code>{override.className}</code> wins at {breakpoint} and wider, so the canvas does not show the value set here.
+        </p>
+        <div className="builder-styles__override-actions">
+          <button
+            type="button"
+            className="builder-styles__button builder-styles__button--primary"
+            onClick={() => {
+              pop.hide()
+              edit(breakpoint)
+            }}
+          >
+            Edit {breakpoint}
+          </button>
+          <button
+            type="button"
+            className="builder-styles__button"
+            onClick={() => {
+              pop.hide()
+              error.set(writeStyle(runtime, blockId, override.variant, tokens, prop, null))
+            }}
+          >
+            Remove {override.className}
+          </button>
+        </div>
+      </Popover>
+    </>
   )
 }
 
@@ -105,14 +122,14 @@ export function SubSection({ title, props, children }: { title: string; props: s
 }
 
 export function ResetButton({ prop }: { prop: string }) {
-  const { isSet, set, def } = useProp(prop)
+  const { isSet, set, def, value } = useProp(prop)
   return (
     <button
       type="button"
       className="builder-styles__reset"
       hidden={!isSet}
       onClick={() => set(null)}
-      title={`Reset ${def?.label ?? prop}`}
+      data-tooltip={isSet && value ? `Remove ${value.className}` : undefined}
       aria-label={`Reset ${def?.label ?? prop}`}
     >
       <ResetIcon />
@@ -120,21 +137,33 @@ export function ResetButton({ prop }: { prop: string }) {
   )
 }
 
+/**
+ * A property label. Blue when a class sets it at this breakpoint and state, amber when the value
+ * comes from a smaller breakpoint or a shorthand; hover says which class. A dot follows it when a
+ * larger breakpoint overrides the value on the canvas.
+ */
+export function PropLabel({ prop, label, className = 'builder-styles__label' }: { prop: string; label: string; className?: string }) {
+  const { value } = useProp(prop)
+  return (
+    <span className="builder-styles__label-cell" data-source={value?.source ?? 'none'}>
+      <span className={className} data-tooltip={sourceHint(value)} data-tooltip-side="top">
+        {label}
+      </span>
+      <OverrideMark prop={prop} />
+    </span>
+  )
+}
+
 /** Label, control and reset button in one line. Hidden when the class model has no such property. */
 export function Row({ prop, label, children }: { prop: string; label?: string; children?: ReactNode }) {
-  const { def, value, override } = useProp(prop)
+  const { def } = useProp(prop)
   if (!def) return null
   return (
-    <>
-      <div className="builder-styles__row" data-source={value?.source ?? 'none'} data-overridden={override ? true : undefined}>
-        <span className="builder-styles__label" title={sourceHint(value)}>
-          {label ?? def.label}
-        </span>
-        <div className="builder-styles__control">{children ?? <AutoControl prop={prop} />}</div>
-        <ResetButton prop={prop} />
-      </div>
-      <OverrideNote prop={prop} />
-    </>
+    <div className="builder-styles__row">
+      <PropLabel prop={prop} label={label ?? def.label} />
+      <div className="builder-styles__control">{children ?? <AutoControl prop={prop} />}</div>
+      <ResetButton prop={prop} />
+    </div>
   )
 }
 
@@ -300,6 +329,8 @@ export function ValueInput({
 
   if (!def) return null
   const inheritedText = !isSet ? displayValue(value) : ''
+  // Box model cells have no label: the tooltip names the side and where its value comes from.
+  const cellHint = [def.label, override ? overrideHint(override) : sourceHint(value)].filter(Boolean).join('\n')
 
   return (
     <>
@@ -309,7 +340,7 @@ export function ValueInput({
         data-overridden={override ? true : undefined}
         value={draft ?? shown}
         placeholder={inheritedText || placeholder || (cell ? '–' : '')}
-        title={override ? overrideHint(override) : (sourceHint(value) ?? def.label)}
+        data-tooltip={cell ? cellHint : undefined}
         aria-label={def.label}
         role="combobox"
         aria-expanded={pop.open}
@@ -375,7 +406,6 @@ export function EnumSelect({ prop }: { prop: string }) {
       className="builder-styles__select"
       data-source={value?.source ?? 'none'}
       aria-label={def.label}
-      title={sourceHint(value)}
       value={isSet ? value?.value : ''}
       onChange={(e) => set(e.target.value || null)}
       onKeyDown={undoKeys}
@@ -420,7 +450,7 @@ export function Segmented({ prop, items, rotate }: { prop: string; items: Segmen
               className="builder-styles__segment"
               aria-pressed={active}
               data-source={active ? value?.source : undefined}
-              title={label}
+              data-tooltip={label}
               aria-label={label}
               onClick={() => set(active && isSet ? null : option.value)}
             >
@@ -440,7 +470,7 @@ export function Segmented({ prop, items, rotate }: { prop: string; items: Segmen
           className="builder-styles__select builder-styles__select--more"
           data-source={extraActive ? value?.source : 'none'}
           aria-label={`More ${def.label} options`}
-          title="More options"
+          data-tooltip="More options"
           value={extraActive ? value.value : ''}
           onChange={(e) => set(e.target.value || null)}
         >
@@ -475,7 +505,6 @@ export function SliderControl({ prop, min, max, step, unit = '' }: { prop: strin
         value={n}
         data-source={value?.source ?? 'none'}
         aria-label={def.label}
-        title={sourceHint(value)}
         onChange={(e) => set(e.target.value)}
       />
       <span className="builder-styles__slider-value" data-source={value?.source ?? 'none'}>

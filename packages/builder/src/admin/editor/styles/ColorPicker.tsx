@@ -8,7 +8,7 @@ import { useState, type CSSProperties, type RefObject } from 'react'
 import type { ThemeToken } from '../../../core'
 import { useRuntime } from '../runtime'
 import { useStyles } from './context'
-import { sourceHint, useProp } from './useProp'
+import { useProp } from './useProp'
 import { arbitraryText, displayValue } from './model'
 import { Popover, usePopover } from './popover'
 import { colorGroups } from './tokens'
@@ -118,7 +118,6 @@ export function ColorField({ prop }: { prop: string }) {
         type="button"
         className="builder-styles__color"
         data-source={value?.source ?? 'none'}
-        title={sourceHint(value) ?? def.label}
         aria-label={`${def.label}: ${text || 'not set'}`}
         onClick={(e) => pop.toggle(e.currentTarget)}
       >
@@ -167,7 +166,7 @@ function ThemeColors({
           type="button"
           className="builder-styles__theme-color"
           aria-pressed={current === token.name}
-          title={`${token.name}: ${token.value}`}
+          data-tooltip={`${token.name}: ${token.value}`}
           onClick={() => onPick(token.name)}
         >
           <Swatch color={swatches.get(token.name) ?? null} size="sm" />
@@ -242,7 +241,7 @@ function ColorPicker({
                   className="builder-styles__palette-cell"
                   aria-pressed={current.color === token.name}
                   aria-label={token.name}
-                  title={token.name}
+                  data-tooltip={token.name}
                   data-hue={hue}
                   style={{ background: token.value }}
                   onClick={() => pick(token.name)}

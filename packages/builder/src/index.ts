@@ -32,6 +32,8 @@ export type {
   Block,
   BlockDefinition,
   BuilderClientConfig,
+  DragMode,
+  EditorOptions,
   Layout,
   SectionDefinition,
   TemplateContext,

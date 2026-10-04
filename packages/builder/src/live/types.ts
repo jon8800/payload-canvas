@@ -229,10 +229,14 @@ export type LiveAwarenessRequest = { clientId: string; awareness: Awareness }
 //   POST {liveEndpoint}/:collection/:id/publish    -> PublishResponse
 //   POST {liveEndpoint}/:collection/:id/unpublish  -> PublishResponse
 //   POST {liveEndpoint}/:collection/:id/revert     -> PublishResponse
+//   POST {liveEndpoint}/:collection/:id/restore    -> PublishResponse  (body: { versionId })
 // ---------------------------------------------------------------------------
 
-/** `publish`: publish the draft. `unpublish`: back to draft. `revert`: drop the draft changes. */
-export type PublishAction = 'publish' | 'unpublish' | 'revert'
+/**
+ * `publish`: publish the draft. `unpublish`: back to draft. `revert`: drop the draft changes.
+ * `restore`: an older version becomes the draft (its own endpoint, with the version id).
+ */
+export type PublishAction = 'publish' | 'unpublish' | 'revert' | 'restore'
 
 /**
  * Status of a document in a collection with drafts, as Payload's own header shows it:

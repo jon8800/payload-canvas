@@ -1,4 +1,5 @@
 import { createId } from './ids'
+import { migrateTextList } from './textList'
 import type { Block, Layout } from './types'
 
 /** Slot name used when a position or a location does not name one. The root list uses it too. */
@@ -80,6 +81,7 @@ export function subtreeIds(block: Block, out: string[] = []): string[] {
 // - no empty `props`, `bindings` or `slots` objects, and no empty slot lists
 // - `hidden` is stored only when true, `label` only when non-empty (trimmed)
 // - every id is a non-empty string, unique in the layout
+// - old list blocks (`props.items` rows) hold `listItem` blocks in their `items` slot (textList.ts)
 // The operations module relies on this form for exact undo.
 
 const BLOCK_KEYS = new Set(['id', 'type', 'blockType', 'blockName', 'props', 'className', 'slots', 'children', 'bindings', 'hidden', 'label'])
@@ -159,6 +161,8 @@ function normalizeBlock(value: unknown, seen: Set<string>): Block | null {
 
   if (value.hidden === true) block.hidden = true
   if (typeof value.label === 'string' && value.label.trim() !== '') block.label = value.label.trim()
+  // Old shapes of built-in blocks (see textList.ts).
+  migrateTextList(block, (raw) => uniqueId(raw, seen))
   return block
 }
 

@@ -20,6 +20,7 @@ import {
   EMPTY_LAYOUT,
   type BlockDefinition,
   type BuilderClientConfig,
+  type EditorOptions,
   type SectionDefinition,
   type TemplatesClientConfig,
 } from '../core/types'
@@ -165,6 +166,8 @@ export type WebsiteBuilderOptions = {
    * `@payload-toolkit/builder-react/server`. See the README's "Theme" section.
    */
   theme?: ThemeOptions | false
+  /** Editor behaviour, e.g. `{ dragMode: 'smooth' }`. See the README's "Drag and drop" section. */
+  editor?: EditorOptions
 }
 
 const LAYOUT_FIELD_COMPONENT = '@payload-toolkit/builder/client#LayoutField'
@@ -359,6 +362,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           ai: options.ai ? aiClientConfig(options.ai, `${apiRoute}${AI_PATH}`) : null,
           savedSections: savedSections ? { collection: savedSections.slug } : null,
           themeEndpoint: theme ? theme.endpoint : null,
+          editor: { dragMode: options.editor?.dragMode ?? 'indicator' },
         }
         return addBuilder(collection, {
           field,

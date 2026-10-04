@@ -18,7 +18,7 @@ LAYOUT MODEL. A layout is JSON: { "version": 1, "blocks": Block[] }. A Block is 
 - type: a block type from ${blocksFrom}.
 - props: the block's own values. Get the exact shape with getBlockSchema. Upload and relationship props hold document IDs.
 - className: Tailwind CSS v4 utility classes, with variants such as md:, lg:, hover:, dark:. Theme classes work (bg-primary, text-primary-foreground, text-muted-foreground, font-heading). CSS is generated on save, so any valid class works.
-- slots: child blocks by slot name, e.g. { "children": [ ...blocks ] }. Only block types with slots take children. ${blocksFrom} shows which types each slot accepts.
+- slots: child blocks by slot name, e.g. { "children": [ ...blocks ] }. Only block types with slots take children. ${blocksFrom} shows which types each slot accepts. A type with "onlyInside" goes only directly inside those types (e.g. "listItem" only in a "list").
 - bindings: (templates and collection list items only) prop path -> document field path, e.g. { "text": "title" }, { "image": "featuredImage" }, { "link": "$url" }. At render time the prop takes the document's value; when the document has no value the literal prop stays. Get field paths from getBindingSources.
 - Canonical form: leave out empty props, slots and bindings objects and empty slot lists. Set hidden only when true.
 POSITION = { parentId, slot?, index }. parentId null means the page root, whose only slot is "children". slot defaults to "children". index is the block's FINAL index in the target list (0 = first; the list length = append). For a move inside the same list, count positions after the block is taken out.`.trim()
@@ -68,7 +68,7 @@ export function sectionInsertOps(
   }))
 }
 
-/** A block type as plain data for AI models: props, slots, description and example. */
+/** A block type as plain data for AI models: props, slots, where it may go, description and example. */
 export function describeBlock(def: BlockDefinition) {
   const props = dataFields(def.fields as unknown[]).map((f) => {
     const options = f.type === 'select' || f.type === 'radio' ? optionValues(f) : undefined
@@ -96,6 +96,7 @@ export function describeBlock(def: BlockDefinition) {
     ...(def.ai?.description ? { description: def.ai.description } : {}),
     props,
     ...(slots ? { slots } : { slots: 'none (cannot have children)' }),
+    ...(def.parents ? { onlyInside: def.parents } : {}),
     ...(def.styles === false ? { className: 'not supported' } : {}),
     ...(def.defaultClassName ? { defaultClassName: def.defaultClassName } : {}),
     ...(def.ai?.example ? { example: def.ai.example } : {}),

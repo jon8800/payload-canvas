@@ -1,6 +1,7 @@
 import type { CollectionSlug } from 'payload'
 import { defineBlock } from '../core/blocks'
 import { COLLECTION_LIST_BLOCK, FIELD_BLOCK, LIST_ITEM_SLOT } from '../core/bindings'
+import { TEXT_LIST_BLOCK, TEXT_LIST_ITEM_BLOCK, TEXT_LIST_SLOT } from '../core/textList'
 import type { BlockDefinition } from '../core/types'
 import { linkField, when } from './link'
 
@@ -64,8 +65,8 @@ const MENU_CLASSES = [
 ]
 
 /**
- * The built-in blocks: stack, grid, heading, text, richText, image, button, link, list, quote,
- * divider, spacer, video, and the dynamic blocks field and collectionList.
+ * The built-in blocks: stack, grid, heading, text, richText, image, button, link, menu, list (with
+ * its listItem blocks), quote, divider, spacer, video, and the dynamic blocks field and collectionList.
  */
 export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[] {
   const mediaCollection = (options?.mediaCollection ?? 'media') as CollectionSlug
@@ -352,29 +353,41 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
   })
 
   const list = defineBlock({
-    type: 'list',
+    type: TEXT_LIST_BLOCK,
     label: 'List',
     icon: 'list',
     category: 'Content',
-    fields: [
-      {
-        name: 'items',
-        type: 'array',
-        label: 'Items',
-        fields: [{ name: 'text', type: 'text', label: 'Text', required: true }],
-      },
-      { name: 'ordered', type: 'checkbox', label: 'Numbered list' },
-    ],
+    fields: [{ name: 'ordered', type: 'checkbox', label: 'Numbered list' }],
+    slots: { [TEXT_LIST_SLOT]: { label: 'Items', allow: [TEXT_LIST_ITEM_BLOCK] } },
     defaultClassName: 'pl-6 space-y-1',
     ai: {
       description:
-        'A bulleted list (or numbered with "ordered": true) of short text items. Bullets or numbers show ' +
-        'by default; a list-* class such as "list-none" replaces them.',
+        `A bulleted list (or numbered with "ordered": true). Each item is a "${TEXT_LIST_ITEM_BLOCK}" block in the ` +
+        `"${TEXT_LIST_SLOT}" slot. Bullets or numbers show by default; a list-* class such as "list-none" replaces them.`,
       example: {
-        type: 'list',
-        props: { items: [{ text: 'Fast' }, { text: 'Simple' }, { text: 'Secure' }] },
+        type: TEXT_LIST_BLOCK,
         className: 'pl-6 space-y-1',
+        slots: {
+          [TEXT_LIST_SLOT]: [
+            { id: 'b_example_1', type: TEXT_LIST_ITEM_BLOCK, props: { text: 'Fast' } },
+            { id: 'b_example_2', type: TEXT_LIST_ITEM_BLOCK, props: { text: 'Simple' } },
+            { id: 'b_example_3', type: TEXT_LIST_ITEM_BLOCK, props: { text: 'Secure' } },
+          ],
+        },
       },
+    },
+  })
+
+  const listItem = defineBlock({
+    type: TEXT_LIST_ITEM_BLOCK,
+    label: 'List item',
+    icon: 'text',
+    category: 'Content',
+    fields: [{ name: 'text', type: 'text', label: 'Text', required: true }],
+    parents: [TEXT_LIST_BLOCK],
+    ai: {
+      description: `One item (<li>) of a "${TEXT_LIST_BLOCK}" block. It goes only in a list's "${TEXT_LIST_SLOT}" slot.`,
+      example: { type: TEXT_LIST_ITEM_BLOCK, props: { text: 'Fast' } },
     },
   })
 
@@ -558,5 +571,5 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     },
   })
 
-  return [stack, grid, heading, text, richText, image, button, link, menu, list, quote, divider, spacer, video, field, collectionList]
+  return [stack, grid, heading, text, richText, image, button, link, menu, list, listItem, quote, divider, spacer, video, field, collectionList]
 }

@@ -62,6 +62,11 @@ export type BlockDefinition = {
   /** Block props, declared with Payload field configs. */
   fields: Field[]
   slots?: Record<string, SlotDefinition>
+  /**
+   * Block types this block may sit in directly (in any of their slots). Undefined means anywhere,
+   * the root list included. Example: a list item goes only inside a list.
+   */
+  parents?: string[]
   /** Adds `className` and the style controls. Default true. */
   styles?: boolean
   /** Classes a newly inserted block starts with (e.g. "flex flex-col gap-4" for a stack). */
@@ -181,7 +186,24 @@ export type BuilderClientConfig = {
    * library's section thumbnails follow it. Null without the theme global.
    */
   themeEndpoint: string | null
+  /** Editor behaviour from `websiteBuilder({ editor })`. */
+  editor: EditorClientConfig
 }
+
+/**
+ * How drag and drop looks in the editor. `indicator`: a line shows where the block lands, and
+ * blocks move on drop. `smooth`: the block lifts and follows the pointer, and the other blocks
+ * move out of the way as it moves.
+ */
+export type DragMode = 'indicator' | 'smooth'
+
+/** `websiteBuilder({ editor })`: editor behaviour. */
+export type EditorOptions = {
+  /** The default drag and drop style. Each user can change it in the editor. Default 'indicator'. */
+  dragMode?: DragMode
+}
+
+export type EditorClientConfig = { dragMode: DragMode }
 
 // ---------------------------------------------------------------------------
 // Design tokens from the app's Tailwind theme (for the Styles panel)

@@ -4,6 +4,10 @@ import path from 'path'
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  // Compression belongs to the reverse proxy (see "Deploying" in packages/builder/README.md).
+  // Next's built-in gzip leaks one 'drain' listener per backpressure event on streamed HTML
+  // (the large admin and builder pages), which logs MaxListenersExceededWarning in production.
+  compress: false,
   experimental: {
     // The app has several root layouts, so the site's 404 page is app/global-not-found.tsx.
     // Without it a direct request for an unknown URL gets Next's blank error shell.
