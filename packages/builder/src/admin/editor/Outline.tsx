@@ -13,7 +13,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 
-import { findLocation, getBlockDefinition, slotNames, walkBlocks } from '../../core'
+import { describeMotion, findLocation, getBlockDefinition, slotNames, walkBlocks } from '../../core'
 import type { Block, Layout } from '../../core/types'
 import { ancestors, duplicateBlock, removeBlock, renameBlock, toggleHidden } from './actions'
 import { BlockIcon, Icon, type IconName } from './icons'
@@ -408,6 +408,7 @@ const OutlineRow = memo(function OutlineRow({
       aria-label={[
         blockSummary(block, typeLabel),
         block.hidden && 'hidden on the site',
+        block.motion && 'animated',
         untranslated > 0 && `${untranslated} ${missing}`,
         ...issues,
       ]
@@ -465,6 +466,11 @@ const OutlineRow = memo(function OutlineRow({
       {issues.length > 0 && (
         <span className="builder-editor__row-problem" data-tooltip={issues.join('\n')} data-tooltip-side="right">
           <Icon name="warning" size={13} />
+        </span>
+      )}
+      {block.motion && (
+        <span className="builder-editor__row-motion" data-tooltip={`Animation: ${describeMotion(block.motion)}`} data-tooltip-side="right">
+          <Icon name="motion" size={12} />
         </span>
       )}
       {bindingCount > 0 && (

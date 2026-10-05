@@ -66,6 +66,18 @@ function stylingGuide(tokens: StyleTokens | null): string {
   return lines.join('\n')
 }
 
+/** When and how to use animations. The presets and options are in the layout guide (MOTION), generated from the core list. */
+const ANIMATIONS_GUIDE = [
+  'ANIMATIONS',
+  '- Blocks can animate through "motion" (kinds, presets and options: see MOTION in the layout model). Add animations only when the user asks for them or for a lively page. Keep them subtle: short distances, 400-900 ms.',
+  '- One entrance per section: put "enter" on the section block (or on one block of it), not on every block inside. "fade-up" is the safe default.',
+  '- The first section on the page (the hero) uses enter { trigger: "load" }, so it plays at once. Sections further down use the default trigger "view".',
+  '- Grids and lists of cards: "enter" with stagger 60-120 on the grid or list block. The card blocks then play in turn, so give the cards no motion of their own.',
+  '- Cards that link, and buttons: hover { preset: "lift" } and press { preset: "shrink" }.',
+  '- scroll "parallax" only on decorative images. "loop" (float, pulse) rarely, on one small decorative block.',
+  '- In "update", `motion` merges per kind: a kind you send replaces that kind, null removes a kind, kinds you leave out stay. motion: null removes all animations. To remove an animation the user dislikes, send null for its kind.',
+].join('\n')
+
 const SAVED_SECTIONS_NOTE =
   'Sections people saved on this site are not in this catalog. When there are any, <editor_context> lists them. Insert them with insertSection { sectionId: "saved:<id>" } like catalog sections.'
 
@@ -119,6 +131,7 @@ RICH TEXT
 - Rich text props hold Lexical JSON. Call getBlockSchema for the block before you write one.`,
     stylingGuide(catalog.tokens),
     layoutGuide('the block catalog'),
+    ANIMATIONS_GUIDE,
     ...(catalog.bindings ? [BINDINGS_GUIDE] : []),
     `BLOCK CATALOG (JSON). Every block type you can use, with its props, slots, description and an example. getBlockSchema returns the exact JSON Schema of one type.\n${JSON.stringify(catalog.blocks.map(describeBlock))}`,
     sectionCatalog(catalog.sections, catalog.savedSections === true),

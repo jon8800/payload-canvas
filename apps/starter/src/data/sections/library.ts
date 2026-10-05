@@ -157,6 +157,7 @@ export const sectionLibrary: SectionDefinition[] = [
           ],
           image: { id: NO_ID, alt: 'The Northwind team at work' },
           action: toAbout,
+          parallax: true,
         }),
       ),
     ],

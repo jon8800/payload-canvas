@@ -4,8 +4,37 @@
 import { COLLECTION_LIST_BLOCK, FIELD_BLOCK, URL_PATH } from '../core/bindings'
 import { dataFields, optionValues } from '../core/fields'
 import { createId } from '../core/ids'
+import { MOTION_EASING_INFO, MOTION_KINDS, MOTION_PRESET_INFO, MOTION_SPECS } from '../core/motion'
 import { DEFAULT_SLOT, indexLayout } from '../core/tree'
 import type { Block, BlockDefinition, Layout, Operation, SectionDefinition } from '../core/types'
+
+/** The keys of a motion kind with their limits, e.g. "duration 50-5000, easing: ease-out | ..., repeat". */
+function motionKeys(kind: (typeof MOTION_KINDS)[number]): string {
+  const spec = MOTION_SPECS[kind]
+  const numbers = Object.entries(spec.numbers).map(([key, range]) => `${key} ${range.min} to ${range.max}`)
+  const words = Object.entries(spec.words ?? {}).map(([key, list]) => `${key} ${(list ?? []).join('|')}`)
+  const booleans = (spec.booleans ?? []).map((key) => `${key} true|false`)
+  return [...numbers, ...words, ...booleans].join(', ')
+}
+
+/**
+ * How block animations ("motion") are written, for AI models. The preset lists come from
+ * MOTION_PRESET_INFO, so they cannot drift from the editor and the checks.
+ */
+export function motionGuide(): string {
+  const kinds = MOTION_KINDS.map((kind) => {
+    const presets = MOTION_PRESET_INFO[kind].map((p) => `${p.value} (${p.description.replace(/\.$/, '').replace(/^./, (c) => c.toLowerCase())})`).join('; ')
+    return `  - ${kind}: ${presets}. Options: ${motionKeys(kind)}.`
+  })
+  return [
+    'MOTION (animations). A block can have "motion": { enter?, hover?, press?, scroll?, loop? }. Each kind is { preset, ...options }. Times are milliseconds, distances pixels. Out-of-range values and unknown keys are errors.',
+    ...kinds,
+    `  - easing values: ${MOTION_EASING_INFO.map((e) => e.value).join(', ')}.`,
+    '- enter plays when the block scrolls into view (trigger "view", the default) or when the page loads (trigger "load"). With enter.stagger, the direct child blocks play the entrance one after another and the block itself stays still.',
+    '- Insert a block with "motion" to add it at once. In "update", `motion` merges per kind: each kind you send replaces that kind, null removes a kind, kinds you leave out stay, and motion: null removes all motion.',
+    '- Example: "motion": { "enter": { "preset": "fade-up", "stagger": 80 } } on a grid of cards. Update: "motion": { "hover": { "preset": "lift" }, "press": { "preset": "shrink" } }. getBlockSchema has the full schema (properties.motion).',
+  ].join('\n')
+}
 
 /**
  * The layout format, for AI models. `blocksFrom` names where the model finds the block types
@@ -13,15 +42,17 @@ import type { Block, BlockDefinition, Layout, Operation, SectionDefinition } fro
  */
 export function layoutGuide(blocksFrom: string): string {
   return `
-LAYOUT MODEL. A layout is JSON: { "version": 1, "blocks": Block[] }. A Block is { id, type, props?, className?, slots?, bindings?, hidden? }.
+LAYOUT MODEL. A layout is JSON: { "version": 1, "blocks": Block[] }. A Block is { id, type, props?, className?, slots?, bindings?, hidden?, motion? }.
 - id: a string, unique in the whole layout. Operations target blocks by id, never by array index. New blocks need new ids: use "b_" plus 6 lowercase letters or digits (e.g. "b_k3x9qa").
 - type: a block type from ${blocksFrom}.
 - props: the block's own values. Get the exact shape with getBlockSchema. Upload and relationship props hold document IDs.
 - className: Tailwind CSS v4 utility classes, with variants such as md:, lg:, hover:, dark:. Theme classes work (bg-primary, text-primary-foreground, text-muted-foreground, font-heading). CSS is generated on save, so any valid class works.
 - slots: child blocks by slot name, e.g. { "children": [ ...blocks ] }. Only block types with slots take children. ${blocksFrom} shows which types each slot accepts. A type with "onlyInside" goes only directly inside those types (e.g. "listItem" only in a "list"). A slot with "maxBlocks" holds at most that many direct children: inserting into a full slot fails, so replace (update or remove) the block there instead. A slot with "minBlocks" needs that many before the page can be published.
 - bindings: (templates and collection list items only) prop path -> document field path, e.g. { "text": "title" }, { "image": "featuredImage" }, { "link": "$url" }. At render time the prop takes the document's value; when the document has no value the literal prop stays. Get field paths from getBindingSources.
-- Canonical form: leave out empty props, slots and bindings objects and empty slot lists. Set hidden only when true.
-POSITION = { parentId, slot?, index }. parentId null means the page root, whose only slot is "children". slot defaults to "children". index is the block's FINAL index in the target list (0 = first; the list length = append). For a move inside the same list, count positions after the block is taken out.`.trim()
+- motion: animations of the block (see MOTION below). Leave it out when the block has none.
+- Canonical form: leave out empty props, slots, bindings and motion objects and empty slot lists. Set hidden only when true.
+POSITION = { parentId, slot?, index }. parentId null means the page root, whose only slot is "children". slot defaults to "children". index is the block's FINAL index in the target list (0 = first; the list length = append). For a move inside the same list, count positions after the block is taken out.
+${motionGuide()}`.trim()
 }
 
 export const BINDINGS_GUIDE = [

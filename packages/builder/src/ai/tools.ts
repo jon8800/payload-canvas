@@ -5,6 +5,7 @@
 
 import { isRichText, richTextToPlain, withoutBoundRequired } from '../core/bindings'
 import { createId } from '../core/ids'
+import { MOTION_KINDS, MOTION_SPECS, type MotionKind } from '../core/motion'
 import { blockJsonSchema } from '../core/schema'
 import { indexLayout, isPlainObject, subtreeIds } from '../core/tree'
 import { resolveLayoutLocale, stampLocale, untranslatedKeys } from '../core/locale'
@@ -202,10 +203,16 @@ const POSITION_SCHEMA = {
   required: ['parentId', 'index'],
 } as const
 
+/** One short text for every tool schema: the shape and the preset names. The system prompt has the details. */
+const MOTION_TEXT =
+  'Animations: { enter?, hover?, press?, scroll?, loop? }, each kind { preset, ...options }. Presets: ' +
+  MOTION_KINDS.map((kind) => `${kind} ${MOTION_SPECS[kind].presets.join('|')}`).join('; ') +
+  '. Example: { "enter": { "preset": "fade-up", "stagger": 80 } }.'
+
 const BLOCK_SCHEMA = {
   type: 'object',
   description:
-    'A block: { id?, type, props?, className?, slots?, bindings?, hidden?, label? }. Children in slots have the same shape. `label` names the block for editors (e.g. "Hero"); give each top-level section one. Ids you leave out are generated; the tool result lists them.',
+    'A block: { id?, type, props?, className?, slots?, bindings?, hidden?, label?, motion? }. Children in slots have the same shape. `label` names the block for editors (e.g. "Hero"); give each top-level section one. Ids you leave out are generated; the tool result lists them.',
   properties: {
     id: { type: 'string' },
     type: { type: 'string' },
@@ -215,6 +222,7 @@ const BLOCK_SCHEMA = {
     bindings: { type: 'object' },
     hidden: { type: 'boolean' },
     label: { type: 'string', description: 'Name for editors (outline). Never rendered.' },
+    motion: { type: 'object', description: MOTION_TEXT },
   },
   required: ['type'],
 } as const
@@ -247,6 +255,10 @@ const FLAT_OPERATIONS_SCHEMA: Record<string, unknown> = {
           hidden: { type: 'boolean' },
           bindings: { type: 'object' },
           label: { type: ['string', 'null'], description: 'update: name for editors (outline). null removes it.' },
+          motion: {
+            type: ['object', 'null'],
+            description: `insert (inside block) and update: ${MOTION_TEXT} update merges per kind: a kind replaces that kind, null removes it, kinds left out stay. null removes all.`,
+          },
           newId: { type: 'string' },
         },
         required: ['type'],
@@ -334,7 +346,7 @@ export function toolDefinitions(env: ToolEnv): AiToolDefinition[] {
         '- move { id, to }: move a block (with children).',
         '- remove { id }: delete a block and its children.',
         '- duplicate { id, newId? }: copy a block right after itself.',
-        '- update { id, props?, unsetProps?, className?, hidden?, bindings?, label? }: props and bindings are merged (shallow); className REPLACES all classes, so send the full list; null removes it; a null binding removes that binding; label renames the block for editors (null removes it).',
+        '- update { id, props?, unsetProps?, className?, hidden?, bindings?, label?, motion? }: props and bindings are merged (shallow); className REPLACES all classes, so send the full list; null removes it; a null binding removes that binding; label renames the block for editors (null removes it); motion merges per kind (a kind you send replaces that kind, null removes a kind, null alone removes all animations).',
         'Position: { parentId (null = page root), slot? (default "children"), index (final index in the target list) }.',
         'On success the result lists the changed ids and any warnings (e.g. a required prop is empty). On error nothing changes and the error names the failing operation; fix it and call again.',
         'Example (ids come from the layout; block types and props from the block catalog): change a heading, then add a text block after it in the same section:',
@@ -363,6 +375,10 @@ export function toolDefinitions(env: ToolEnv): AiToolDefinition[] {
                     hidden: { type: 'boolean' },
                     bindings: { type: 'object', description: 'Prop path -> document field path; null removes.' },
                     label: { type: ['string', 'null'], description: 'Name for editors. null removes it.' },
+                    motion: {
+                      type: ['object', 'null'],
+                      description: `${MOTION_TEXT} Merges per kind: a kind replaces that kind, null removes it, kinds left out stay. null removes all.`,
+                    },
                   },
                   required: ['type', 'id'],
                 },
@@ -499,11 +515,76 @@ function parseJson(value: unknown): unknown {
   }
 }
 
+const MOTION_KIND_SET = new Set<string>(MOTION_KINDS)
+
+/** The kind whose presets include this name. "fade" and "zoom" exist in more than one kind: enter comes first. */
+function kindOfPreset(preset: unknown): MotionKind | undefined {
+  if (typeof preset !== 'string') return undefined
+  return MOTION_KINDS.find((kind) => MOTION_SPECS[kind].presets.includes(preset))
+}
+
+/**
+ * Fixes the shapes models send for `motion`: a preset name ("fade-up"), a kind without its kind
+ * key ({ preset: "fade-up" }), a kind given as a preset name ({ hover: "lift" }) and a JSON
+ * string. Returns the value as it was, and no note, when it needs no fix or cannot be fixed (the
+ * operations then give the exact error).
+ */
+export function repairMotion(value: unknown): { value: unknown; note?: string } {
+  const parsed = typeof value === 'string' && value.trim().startsWith('{') ? parseJson(value) : value
+  if (typeof parsed === 'string') {
+    const preset = parsed.trim()
+    const kind = kindOfPreset(preset)
+    if (!kind) return { value }
+    return { value: { [kind]: { preset } }, note: `"motion" is an object of kinds, e.g. { "${kind}": { "preset": "${preset}" } }.` }
+  }
+  if (!isPlainObject(parsed)) return { value }
+  let changed = parsed !== value
+  let out: Record<string, unknown> = { ...parsed }
+  if (typeof out.preset === 'string') {
+    // A kind without its key. A "kind" or "type" field names it; else the preset name decides.
+    const named = [out.kind, out.type].find((k) => typeof k === 'string' && MOTION_KIND_SET.has(k)) as MotionKind | undefined
+    const kind = named ?? kindOfPreset(out.preset)
+    if (kind) {
+      const { kind: _kind, type: _type, ...rest } = out
+      out = { [kind]: rest }
+      changed = true
+    }
+  }
+  for (const [key, item] of Object.entries(out)) {
+    if (!MOTION_KIND_SET.has(key) || typeof item !== 'string') continue
+    if (!MOTION_SPECS[key as MotionKind].presets.includes(item)) continue
+    out[key] = { preset: item }
+    changed = true
+  }
+  if (!changed) return { value }
+  return { value: out, note: '"motion" is an object of kinds, each { "preset": ..., ...options }, e.g. { "enter": { "preset": "fade-up" } }.' }
+}
+
+/** Repairs `motion` of a block and of its children. Returns the block (a copy when something changed). */
+function repairBlockMotion(block: unknown, fix: (note: string) => void): unknown {
+  if (!isPlainObject(block)) return block
+  let next: Record<string, unknown> = block
+  if (block.motion !== undefined && block.motion !== null) {
+    const repaired = repairMotion(block.motion)
+    if (repaired.note) {
+      fix(repaired.note)
+      next = { ...next, motion: repaired.value }
+    }
+  }
+  if (isPlainObject(block.slots)) {
+    const slots = Object.fromEntries(
+      Object.entries(block.slots).map(([name, list]) => [name, Array.isArray(list) ? list.map((child) => repairBlockMotion(child, fix)) : list]),
+    )
+    next = { ...next, slots }
+  }
+  return next
+}
+
 /**
  * Fixes the mistakes smaller models make in applyOperations input, and lists what it fixed so the
  * model learns: operations sent as a JSON string or as one object, "op" or "action" instead of
  * "type", position fields next to "to", a root parentId of "root" or "", a block sent as a JSON
- * string, a class list sent as an array. Returns an error message when there is no operation list.
+ * string, a class list sent as an array, `motion` in a wrong shape (see repairMotion). Returns an error message when there is no operation list.
  */
 export function repairOperations(input: Record<string, unknown>): { ops: unknown[]; notes: string[] } | string {
   const notes: string[] = []
@@ -560,12 +641,28 @@ export function repairOperations(input: Record<string, unknown>): { ops: unknown
       op.block = parseJson(op.block)
       fix('"block" was a JSON string. Send an object.')
     }
+    if (op.type === 'insert') {
+      // Say each fix once per operation.
+      const seen = new Set<string>()
+      op.block = repairBlockMotion(op.block, (note) => {
+        if (seen.has(note)) return
+        seen.add(note)
+        fix(note)
+      })
+    }
     if (op.type === 'update') {
       if (Array.isArray(op.className)) {
         op.className = op.className.filter((c) => typeof c === 'string').join(' ')
         fix('"className" is one string of classes separated by spaces.')
       }
       if (typeof op.props === 'string') op.props = parseJson(op.props)
+      if (op.motion !== undefined && op.motion !== null) {
+        const repaired = repairMotion(op.motion)
+        if (repaired.note) {
+          op.motion = repaired.value
+          fix(repaired.note)
+        }
+      }
     }
     return op
   })
@@ -669,6 +766,7 @@ export async function runTool(name: string, rawInput: unknown, workspace: Worksp
           index: entry.index,
           ...(text ? { text: text.slice(0, 80) } : {}),
           ...(entry.block.className ? { className: entry.block.className } : {}),
+          ...(entry.block.motion ? { motion: entry.block.motion } : {}),
         })
         if (matches.length >= 30) break
       }

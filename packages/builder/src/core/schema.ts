@@ -4,12 +4,15 @@
 import { slotAccepts } from './blocks'
 import { dataFields, fieldBlocks, optionValues, textOf, type DataField, type LooseField } from './fields'
 import { isPlainObject } from './tree'
+import { motionJsonSchema } from './motion'
 import type { BlockDefinition, SlotDefinition } from './types'
 
 type Schema = Record<string, unknown>
 
 const DRAFT = 'https://json-schema.org/draft/2020-12/schema'
 const ID: Schema = { type: ['string', 'number'] }
+/** `$defs` key of the shared motion schema. Block types never start with "$". */
+const MOTION_DEF = '$motion'
 
 /** JSON Schema (draft 2020-12) for one block, generated from its Payload field configs. */
 export function blockJsonSchema(def: BlockDefinition, all: BlockDefinition[]): Record<string, unknown> {
@@ -17,7 +20,7 @@ export function blockJsonSchema(def: BlockDefinition, all: BlockDefinition[]): R
   return {
     $schema: DRAFT,
     ...blockSchema(def, all),
-    ...(Object.keys(defs).length > 0 ? { $defs: defs } : {}),
+    $defs: { ...defs, [MOTION_DEF]: motionJsonSchema() },
   }
 }
 
@@ -36,10 +39,13 @@ export function layoutJsonSchema(blocks: BlockDefinition[]): Record<string, unkn
     },
     required: ['version', 'blocks'],
     additionalProperties: false,
-    $defs: defsFor(
-      blocks.map((b) => b.type),
-      blocks,
-    ),
+    $defs: {
+      ...defsFor(
+        blocks.map((b) => b.type),
+        blocks,
+      ),
+      [MOTION_DEF]: motionJsonSchema(),
+    },
   }
 }
 
@@ -134,6 +140,7 @@ function blockSchema(def: BlockDefinition, all: BlockDefinition[]): Schema {
     additionalProperties: { type: 'string' },
   }
   properties.hidden = { type: 'boolean', description: 'Hidden blocks stay in the data but do not render.' }
+  properties.motion = { $ref: `#/$defs/${encodeURIComponent(MOTION_DEF)}` }
   properties.label = {
     type: 'string',
     description: 'Optional name for editors, shown in the outline (e.g. "Hero", "Pricing"). Never rendered on the site.',

@@ -1,6 +1,6 @@
 // Small helpers that build canonical layout blocks (new ids, no empty props or slots).
 // The ready-made sections in this folder use them.
-import { createId, type Block } from '@payload-toolkit/builder/core'
+import { createId, type Block, type BlockMotion } from '@payload-toolkit/builder/core'
 
 /** A link group value as stored in block props. */
 export type LinkInput =
@@ -104,6 +104,26 @@ export const form = (id: number | string, className?: string) => block('form', {
 /** Site navigation. `collapse`: the width below which links fold into a "Menu" button ("never" for footers). */
 export const menu = (items: Action[], label: string, collapse: 'md' | 'lg' | 'never', className: string) =>
   block('menu', { label, collapse, items: items.map((item) => ({ label: item.label, link: item.link })) }, className)
+
+/** Adds animations to a block. Merges with motion the block already has. */
+export const withMotion = (target: Block, motion: BlockMotion): Block => ({ ...target, motion: { ...target.motion, ...motion } })
+
+/**
+ * The animations the sections share. Subtle on purpose: short distances, one entrance per group.
+ * Never used on the header or the footer.
+ */
+export const motions = {
+  /** The first content of a page: plays on load, not on scroll. */
+  heroEnter: { enter: { preset: 'fade-up', trigger: 'load', duration: 700, distance: 20 } },
+  /** One block appears as it scrolls into view. */
+  reveal: { enter: { preset: 'fade-up', distance: 16 } },
+  /** The children of a grid or list appear one after another. */
+  staggerChildren: { enter: { preset: 'fade-up', distance: 16, stagger: 80 } },
+  /** A card or button that links. */
+  interactive: { hover: { preset: 'lift' }, press: { preset: 'shrink' } },
+  /** A button. */
+  pressable: { press: { preset: 'shrink' } },
+} satisfies Record<string, BlockMotion>
 
 /** Binds props to document fields (templates and collection list items), e.g. { text: 'title' }. */
 export const bind = (target: Block, bindings: Record<string, string>): Block => ({ ...target, bindings: { ...target.bindings, ...bindings } })

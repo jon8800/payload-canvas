@@ -113,7 +113,7 @@ describe('defaultBlocks', () => {
 
   it('produces a serializable layout schema', () => {
     const schema = layoutJsonSchema(defaultBlocks())
-    assert.deepEqual(Object.keys(schema.$defs as object), TYPES)
+    assert.deepEqual(Object.keys(schema.$defs as object), [...TYPES, '$motion'])
   })
 
   it('has an icon (the type name) and a library category for every block', () => {

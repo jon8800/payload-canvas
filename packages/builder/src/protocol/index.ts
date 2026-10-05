@@ -173,6 +173,18 @@ export type AdminToCanvas =
    * viewport coordinates).
    */
   | { type: 'dragEnd'; drop: boolean; ids: string[]; placeholder: Rect | null; from?: Rect }
+  /**
+   * Block animations (`block.motion`). `on`: the canvas plays them as visitors see them (entrances
+   * on scroll, hover, parallax, loops). Off (the default): every block shows its final state. Sent
+   * with `init` on every `ready` and when the editor's "Play animations" toggle changes.
+   */
+  | { type: 'motionPlay'; on: boolean }
+  /**
+   * Plays the block's animation once from the start, then shows the final state again: its
+   * entrance (or its children's, with stagger), else its hover and press effect. Sent by the
+   * Preview button and after a preset is picked. A block not rendered yet plays once it renders.
+   */
+  | { type: 'motionPreview'; id: string }
 
 /** Smooth drag mode: what the canvas needs when a drag starts. */
 export type CanvasDragStart = {

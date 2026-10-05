@@ -36,6 +36,7 @@ import { editableAt, firstEditable, type EditableTarget } from './inline/dom'
 import { bindingFor, inlineKind, valueAtPath, withPropValue } from './inline/model'
 import { startPlainSession, type InlineSession, type SessionOptions } from './inline/session'
 import { measure, sameMeasurement } from './measure'
+import { createCanvasMotion } from './motion'
 import { resolveCanvasLayout } from './resolveLayout'
 import { ServerBlocksContext } from './ServerBlock'
 import { createServerBlocks } from './serverBlocks'
@@ -344,6 +345,12 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     return () => style.remove()
   }, [])
 
+  // Block animations: only while the editor's "Play animations" is on, or for one Preview.
+  const [motion] = useState(() =>
+    createCanvasMotion((id) => (latest.current.layout ? (findBlock(latest.current.layout, id)?.motion ?? undefined) : undefined)),
+  )
+  useEffect(() => () => motion.dispose(), [motion])
+
   // Messages, pointer, keys and the ready handshake.
   useEffect(() => {
     if (window.parent === window) return
@@ -429,6 +436,12 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
           return
         case 'dragEnd':
           drag.end(message.drop, message.ids, message.placeholder, message.from)
+          return
+        case 'motionPlay':
+          motion.play(message.on)
+          return
+        case 'motionPreview':
+          motion.preview(message.id)
       }
     }
     const isEditing = (target: EventTarget | null) =>
@@ -519,7 +532,7 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
       observer.current?.disconnect()
       cancelAnimationFrame(frameRequest.current)
     }
-  }, [scheduleMeasure, startInline, stopInline, drag])
+  }, [scheduleMeasure, startInline, stopInline, drag, motion])
 
   // The CSS endpoint comes from the admin, or from `?cssEndpoint=` when the page is opened alone.
   const cssEndpoint = init?.cssEndpoint ?? null

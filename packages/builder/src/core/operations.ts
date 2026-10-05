@@ -7,6 +7,7 @@
 
 import { placementError, slotFullError } from './blocks'
 import { createId } from './ids'
+import { checkMotion, motionInverse, patchMotion } from './motion'
 import { DEFAULT_SLOT, indexLayout, isPlainObject, subtreeIds, type IndexedBlock } from './tree'
 import type { ApplyResult, Block, BlockDefinition, Layout, Operation, Position } from './types'
 
@@ -209,6 +210,14 @@ function update(layout: Layout, op: Extract<Operation, { type: 'update' }>): App
     else delete next.bindings
   }
 
+  if (op.motion !== undefined) {
+    const motion = patchMotion(before.motion, op.motion)
+    if (typeof motion === 'string') return fail(motion)
+    inverse.motion = motionInverse(before.motion, op.motion as Record<string, unknown> | null)
+    if (motion) next.motion = motion
+    else delete next.motion
+  }
+
   const result = mapList(layout, entry.parentId, entry.slot, (list) => replaceAt(list, entry.index, next))
   return ok(result, [inverse])
 }
@@ -335,7 +344,7 @@ function freshId(used: Set<string>): string {
  */
 function checkBlock(value: unknown, used: Set<string>, path = 'block'): Block | string {
   if (!isPlainObject(value)) return `${path} must be an object`
-  const { id, type, props, className, slots, bindings, hidden, label, locales } = value
+  const { id, type, props, className, slots, bindings, hidden, label, locales, motion } = value
   if (typeof id !== 'string' || id === '') return `${path}.id must be a non-empty string`
   if (used.has(id)) return `Block id "${id}" already exists`
   used.add(id)
@@ -389,6 +398,11 @@ function checkBlock(value: unknown, used: Set<string>, path = 'block'): Block | 
       if (Object.keys(kept).length > 0) setOwn(clean, code, kept)
     }
     if (Object.keys(clean).length > 0) block.locales = clean
+  }
+  if (motion !== undefined && motion !== null) {
+    const checked = checkMotion(motion)
+    if (typeof checked === 'string') return `${path}.${checked}`
+    if (checked) block.motion = checked
   }
   return block
 }

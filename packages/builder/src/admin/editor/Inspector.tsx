@@ -13,6 +13,7 @@ import { blockName, typeName } from './names'
 import { RenameInput } from './Outline'
 import { EditingBanner } from './live/PresenceUI'
 import { LocaleNote } from './locale/LocaleField'
+import { MotionPanel } from './motion/MotionPanel'
 import { AssistantPanel } from './assistant/AssistantPanel'
 import { useAccessRefresh } from './fields/access'
 import { BlockContentFields } from './renderField'
@@ -117,6 +118,8 @@ function EmptyState() {
   )
 }
 
+type BlockTab = 'content' | 'styles' | 'motion'
+
 function BlockPane() {
   const runtime = useRuntime()
   // Another block selected: the selection on the canvas and in the outline paints first, the
@@ -126,11 +129,11 @@ function BlockPane() {
   const shownId = useDeferredValue(selectedId)
   // The block in the editor's locale: the inspector shows and edits that locale's values.
   const block = useEditor(runtime.store, (s) => (shownId ? findBlock(s.view, shownId) : null))
-  const [tab, setTab] = useState<'content' | 'styles'>('content')
+  const [tab, setTab] = useState<BlockTab>('content')
   const [shownType, setShownType] = useState<string | null>(null)
   const focusRequest = useValue(runtime.focusRequest)
 
-  // Styles stays open while the user styles blocks of one type. Another type opens its content,
+  // Styles and Motion stay open while the user edits blocks of one type. Another type opens its content,
   // so its fields never seem to vanish.
   if (block && block.type !== shownType) {
     setShownType(block.type)
@@ -167,9 +170,12 @@ function BlockPane() {
         options={[
           { id: 'content', label: 'Content' },
           { id: 'styles', label: 'Styles' },
+          { id: 'motion', label: 'Motion' },
         ]}
       />
-      {tab === 'content' ? <BlockContentFields block={block} /> : <StyleFields block={block} />}
+      {tab === 'content' && <BlockContentFields block={block} />}
+      {tab === 'styles' && <StyleFields block={block} />}
+      {tab === 'motion' && <MotionPanel blockId={block.id} blockType={block.type} motion={block.motion} />}
     </div>
   )
 }

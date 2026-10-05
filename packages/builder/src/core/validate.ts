@@ -7,6 +7,7 @@ import { conditionMet, readCondition } from './conditions'
 import { formatProblem } from './formats'
 import { dataFields, fieldBlocks, optionValues, type DataField, type LooseField } from './fields'
 import { isPlainObject } from './tree'
+import { motionProblems } from './motion'
 import { fallbackChain, localizedKeys } from './locale'
 import type { BlockDefinition, LocaleSettings, SlotDefinition } from './types'
 
@@ -60,7 +61,7 @@ export function isBlockingError(error: Pick<LayoutError, 'code'>, publishing: bo
   return publishing || !PUBLISH_ONLY_CODES.has(error.code)
 }
 
-const BLOCK_KEYS = new Set(['id', 'type', 'props', 'className', 'slots', 'bindings', 'hidden', 'label', 'locales'])
+const BLOCK_KEYS = new Set(['id', 'type', 'props', 'className', 'slots', 'bindings', 'hidden', 'label', 'locales', 'motion'])
 
 /** Checks structure, unique ids, known block types, slot rules and prop types. */
 export function validateLayout(layout: unknown, blocks: BlockDefinition[], options: ValidateOptions = {}): LayoutError[] {
@@ -152,6 +153,9 @@ function checkBlock(
   }
   if (value.label !== undefined && typeof value.label !== 'string') {
     report(`${path}.label`, 'label must be a string')
+  }
+  for (const problem of motionProblems(value.motion)) {
+    report(`${path}.${problem.path}`, problem.message, problem.unknown ? 'unknown-key' : 'invalid')
   }
   if (value.bindings !== undefined) {
     if (!isPlainObject(value.bindings)) report(`${path}.bindings`, 'bindings must be an object')

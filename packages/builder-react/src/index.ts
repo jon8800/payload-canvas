@@ -24,6 +24,9 @@ export { parseVideoUrl, type VideoEmbed } from './components/videoUrl'
 export { editableText, EDITABLE_TEXT_ATTRIBUTE } from './render/editable'
 export { defaultComponents } from './components'
 export { BuilderStyle, RenderLayout } from './render/RenderLayout'
+export { MotionRuntime } from './motion/MotionRuntime'
+export { MotionStyle, MOTION_CSS } from './motion/style'
+export { previewMotion, startMotion, type MotionOptions } from './motion/runtime'
 export {
   fromPayloadComponent,
   fromPayloadComponents,

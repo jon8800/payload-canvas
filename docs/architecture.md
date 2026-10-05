@@ -93,7 +93,7 @@ One `json` field holds the whole layout tree:
 }
 ```
 
-A block is `{ id, type, props?, className?, slots?, bindings?, hidden? }`.
+A block is `{ id, type, props?, className?, slots?, bindings?, hidden?, label?, locales?, motion? }`. `motion` holds the block's animations (section 8, "Motion").
 
 - `id` is stable. Selection, AI edits and bindings use the `id`, never an array index.
 - `props` holds the block's own field values. `slots` holds child blocks by slot name, with no depth limit. Keeping them apart makes the tree easy to walk.
@@ -241,6 +241,7 @@ The editor is a full-screen root admin view at `{admin}/builder/:collection/:id`
 - Input adapters (proven in prototype 2): `UploadInput` needs `api={config.routes.api}`. `RelationshipInput` takes and returns `{ relationTo, value }`, so we store only the ID. `SelectInput` returns the option object. `DatePicker` returns a `Date`, stored as an ISO string.
 - **Rich text** uses Payload's own Lexical editor through `RenderLexical` from `@payloadcms/richtext-lexical/client`. It takes `value` and `setValue`, needs no `Form`, and points at a richText field config. The plugin adds a hidden `virtual: true` richText field for that. `RenderLexical` is marked experimental. The fallback is a small editor built from the Lexical packages Payload already re-exports. Both store the same Lexical JSON, which Payload's `RichText` component renders.
 - The Styles tab holds the Tailwind controls (section 8).
+- The Motion tab edits `block.motion` (section 8, "Motion"): Entrance, Hover and press, Scroll and Loop sections, and a Preview button (`admin/editor/motion/`). It sends whole kinds through `update.motion`, with one merge key per slider, so a drag is one undo step.
 
 **Ideas worth borrowing from other editors (Puck, Webflow, Shopify):** permissions per block (can delete, can drag, can edit), an action bar on the selected block, a separate outline tree, viewports, and "slots" as named child lists.
 
@@ -269,6 +270,17 @@ The editor is a full-screen root admin view at `{admin}/builder/:collection/:id`
 - On the frontend: the renderer outputs the stored CSS in a `<style>` tag. Any frontend can use it, with or without its own Tailwind build.
 
 These fix the old problems: compiling against bare Tailwind, overriding theme values, missing classes from component code, and failing in Docker.
+
+**Motion (animations).** README: "Animations".
+
+- **Data, not classes.** `block.motion = { enter?, hover?, press?, scroll?, loop? }`; each kind is `{ preset, ...numbers }` (ms, px). `core/motion.ts` (pure, tested) holds the presets, limits and defaults (`MOTION_SPECS`), checking (`checkMotion` for operations and inserts, `motionProblems` for `validateLayout`, `normalizeMotion` for `normalizeLayout`), the JSON Schema (`$defs.$motion`) and the plan the runtime plays (`enterFrom`, `enterTiming`, `interactTransform`, `scrollPlan`, `loopPlan`, reduced-motion variants). `update.motion` is a patch per kind (a kind replaces that kind, `null` removes it); its inverse names the old kinds, so undo is exact and two people editing different kinds of one block do not overwrite each other.
+- Why not Tailwind classes: entrances need a start state, a trigger and timing that classes cannot express without per-block CSS, and a runtime has to play them anyway. Classes stay for static styling.
+- **Rendering.** `RenderLayout` adds `data-motion` (the JSON), `data-motion-item` (direct children of a block whose entrance has `stagger`) and `data-motion-reveal` (starts hidden) to a block's `attributes`. With motion in the layout it renders `<MotionStyle>` (a hoisted, de-duplicated `<style>`) and `<MotionRuntime>`. `fromPayloadComponent` puts the attributes on its class wrapper on the site, else on the first element through `PayloadRoot`.
+- **Runtime** (`builder-react/src/motion/runtime.ts`). One per document (`startMotion` counts users). `MotionRuntime` loads it with a dynamic import, because bundlers put a route's client components in shared chunks: a static import shipped Motion to pages without motion (measured in dev). It finds the elements (a `MutationObserver` covers navigation and new content), hides entrance targets in one batch (set `data-motion-ready`, read the own styles, write the start values: no paint in between), and plays them with `animate` from `motion/mini` (WAAPI) when an `IntersectionObserver` reports `amount` in view. The end values are the element's own computed style; at the end the inline styles go, so classes own the element again. Hover and press use Motion's `hover`/`press` with springs (after the entrance ends; `press` must not add a `tabindex`). Scroll effects use Motion's `scroll` (a native `ViewTimeline` when no ancestor is a scroll box: `overflow: hidden` makes one that never scrolls, so the runtime then follows the page scroll in JS). Loops pause out of view. Entrances, hover and press animate `opacity`/`transform`/`filter`/`clip-path`; scroll and loop effects use the separate `translate`/`scale` properties, so they add up.
+- **No flash, visible without JavaScript.** `MOTION_CSS` hides `[data-motion-reveal]:not([data-motion-ready])` only under `@media (scripting: enabled)`, with a failsafe animation that shows it after 2.5 s. A block the failsafe showed skips its entrance. No attribute on `<html>` and no inline script, so there is no hydration mismatch.
+- **Reduced motion:** entrances become fades of at most 300 ms; hover, press, parallax, zoom and loops do not run.
+- **Canvas.** The canvas never animates by itself. `motionPreview` plays one block (`previewMotion`); `motionPlay` runs `startMotion` on the canvas document (the "Play animations" toggle, kept in local storage and sent again on `ready`). `builder-react/src/canvas/motion.ts` waits until the block renders with the newest settings before a preview.
+- **Size:** the runtime chunk is about 36 KB minified, 13.8 KB gzipped (Motion's `animate` mini, `inView`, `scroll`, `hover`, `press`, `spring`, `stagger`: 9.7 KB of it), measured with esbuild on the entry. Pages without motion load none of it.
 
 ## 9. Theme
 
@@ -327,6 +339,8 @@ Added to `payload-mcp-toolkit` through `customTools`:
 
 Ready-made sections are the main unit the AI should use. AI models build better pages from well-designed sections than from single blocks.
 
+**Motion for the AI.** Blocks in `insert` and `update` take `motion` (section 8). The layout guide lists the presets and settings, generated from `MOTION_PRESET_INFO` and `MOTION_SPECS`; the assistant's prompt adds when to use them (subtle, one entrance per section, `trigger: 'load'` on the first section, `stagger` on card grids, `lift`/`shrink` on linking cards). The assistant's repair step turns common near misses (`motion: 'fade-up'`, a kind without its key) into the real shape; anything else gets the operations' error. The starter's sections carry motion, so `insertSection` brings it along.
+
 **Image generation.** An `AiImageAdapter` (`ai.images`, `src/ai/images/`) is separate from the chat `AiAdapter`: chat APIs return no images unless the model is an image-output model, and MCP clients bring their own chat model. One `ImageService` (on `config.custom`) serves the assistant tool, the inspector's Generate action (`POST {api}/builder/ai/image`) and the MCP tool. It checks create access before the paid call, uploads as the user (`overrideAccess: false`), and keeps one hourly count per user in Payload's key-value store (`payload.kv`, by default the hidden `payload-kv` collection), so the count survives a restart. See docs/ai/images.md.
 
 **Saved sections.** Editors save any block (with its children) as a section ("Save as section…"). The plugin owns a `builder-sections` collection (`plugin/sections.ts`; signed-in users by default; `savedSections: false` turns it off). The library lists them under "Saved"; `listSections` / `insertSection` (MCP and the assistant) load them per request, as the user, and accept `saved:<id>`, the document id or the name. The assistant's system prompt stays stable: saved sections go into the per-request context message. The `blocks` field's `beforeValidate` hook runs the props' `beforeValidate` and `beforeChange` hooks (as the layout save does), then logs `validate` messages and publish-only problems as warnings (`runSectionFieldLogic`).
@@ -375,3 +389,4 @@ The original prototype goals:
 11. ~~**Server components and site CSS in the canvas.**~~ Done 2026-10-05: `createCanvasServer`, `ServerBlock` with slot outlets, page data and the adapter's `props` option (sections 6, 7, 10); the canvas layout imports the site's CSS (section 8).
 12. ~~**Field logic of block props.**~~ Done 2026-10-05: `validate`, field hooks and field `access` with Payload's arguments, the inspector's `validate` endpoint, hook changes to every editor, `legacyFields` for Publish (sections 6 and 12).
 13. ~~**Localization.**~~ Done 2026-10-05: one shared structure with translated props (`block.locales`), locale switcher and translation marks in the editor, per-locale validation and field logic, locale-aware API, renderer, MCP and assistant (section 5).
+14. ~~**Animations.**~~ Done 2026-10-05: `block.motion` (entrance with stagger, hover, press, scroll, loop), the Motion tab with Preview and "Play animations", the motion runtime on the `motion` package, MCP and assistant support, motion in the starter's sections (section 8, "Motion").

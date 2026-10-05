@@ -95,6 +95,14 @@ const NO_DIRECT_EDIT =
 // Zod schemas for arguments
 // ---------------------------------------------------------------------------
 
+/**
+ * `motion` is a loose object here: the operations check it (kinds, presets, ranges) and return the
+ * exact error, so the spec lives in core/motion.ts only. Layout guide: MOTION.
+ */
+const motionArg = z.record(z.string(), z.unknown())
+const MOTION_HINT =
+  'Animations: { enter?, hover?, press?, scroll?, loop? }, each kind { preset, ...options }, e.g. { "enter": { "preset": "fade-up" } } (see MOTION in the layout guide).'
+
 const positionSchema = z
   .object({
     parentId: z.string().nullable().describe('Id of the parent block, or null for the page root.'),
@@ -113,6 +121,7 @@ const blockSchema = z
     slots: z.record(z.string(), z.array(z.record(z.string(), z.unknown()))).optional().describe('Child blocks by slot name. Children have the same shape.'),
     hidden: z.boolean().optional(),
     label: z.string().optional().describe('Name for editors, shown in the outline (e.g. "Hero"). Never rendered. Give each top-level section one.'),
+    motion: motionArg.optional().describe(MOTION_HINT),
   })
   .passthrough()
 
@@ -140,6 +149,10 @@ const operationSchema = z.discriminatedUnion('type', [
         .record(z.string(), z.string().nullable())
         .optional()
         .describe('Merged into the existing bindings: prop path -> document field path. null removes a binding.'),
+      motion: motionArg
+        .nullable()
+        .optional()
+        .describe(`${MOTION_HINT} Merges per kind: a kind you send replaces that kind, null removes a kind, kinds you leave out stay. null removes all motion.`),
       locale: z
         .string()
         .optional()
@@ -357,7 +370,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     name: 'getBlockSchema',
     routing: { kind: 'collection', action: 'read' },
     description:
-      'Returns the JSON Schema (draft 2020-12) of one block type: its props, className and slots, with nested child block schemas under $defs. Use it to write valid props.',
+      'Returns the JSON Schema (draft 2020-12) of one block type: its props, className, slots and motion (animations, under $defs.$motion), with nested child block schemas under $defs. Use it to write valid props.',
     parameters: { collection: collectionArg, type: z.string().min(1).describe('Block type from listBlocks.') },
     handler: async (args) => {
       const def = blocks.find((b) => b.type === args.type)
@@ -498,7 +511,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     routing: { kind: 'collection', action: 'update' },
     description: [
       'Edits the layout of a document with a list of operations, applied in order, all or nothing. Saves a draft about a second later (never publishes). People with the page open in the editor see each change live.',
-      'Operations: insert { block, to }, move { id, to }, remove { id }, duplicate { id, newId? }, update { id, props?, unsetProps?, className?, hidden?, bindings?, label? }. "update" merges props and bindings; className REPLACES all classes, so send the full list.',
+      'Operations: insert { block, to }, move { id, to }, remove { id }, duplicate { id, newId? }, update { id, props?, unsetProps?, className?, hidden?, bindings?, label?, motion? }. "update" merges props and bindings; className REPLACES all classes, so send the full list. `motion` (animations, see MOTION below) merges per kind: a kind replaces that kind, null removes it, null alone removes all.',
       'Templates are edited the same way: collection = the templates collection, id = the template id from listTemplates.',
       'If any operation fails, nothing is saved and the error names the failing operation. Call getLayout for current ids first. The result is validated against the block schemas: missing required props are allowed in drafts (warnings), wrong types are errors. insert and move refuse a block that a slot does not accept, also deeper inside (for example no button or form anywhere inside a link). insert, move and duplicate refuse to add a block to a slot that already holds its maxBlocks (listBlocks).',
       'Localized sites: with `locale`, "update" props change that locale\'s values of localized props (a translation); other props and everything else (insert, move, remove, classes) change every locale. Blocks you insert with `locale` hold their localized props in that locale only: the default locale stays empty until someone writes it (required props then block publishing). Without `locale` they hold the default locale\'s values. Sections (insertSection) keep their own text.',

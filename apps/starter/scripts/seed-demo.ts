@@ -274,6 +274,7 @@ async function seed() {
         ],
         image: media['studio-desk'],
         action: { label: 'About us', link: pageLink(pages.about) },
+        parallax: true,
       }),
       testimonials.create({
         title: 'What clients say',

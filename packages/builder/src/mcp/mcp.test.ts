@@ -294,6 +294,104 @@ describe('write tools', () => {
   })
 })
 
+describe('motion', () => {
+  const motionHero: SectionDefinition = {
+    id: 'motion-hero',
+    label: 'Motion hero',
+    blocks: [{ id: 'm1', type: 'stack', motion: { enter: { preset: 'fade-up', trigger: 'load' } }, slots: { children: [{ id: 'm2', type: 'heading', props: { text: 'Hi' }, motion: { hover: { preset: 'lift' } } }] } }],
+  }
+  const motionTools = builderMcpTools({ blocks, sections: [motionHero], collections: { pages: { field: 'layout' } } })
+  const motionTool = (name: string): BuilderMcpTool => motionTools.find((t) => t.name === name) as BuilderMcpTool
+  const parse = (name: string, value: unknown) => z.object(motionTool(name).parameters).safeParse(value)
+
+  it('the zod schemas keep motion on insert and update', () => {
+    const parsed = parse('applyOperations', {
+      collection: 'pages',
+      id: 'p1',
+      operations: [
+        { type: 'insert', block: { id: 'b_1', type: 'heading', props: { text: 'A' }, motion: { enter: { preset: 'fade-up' } } }, to: { parentId: null, index: 0 } },
+        { type: 'update', id: 'b_1', motion: { hover: { preset: 'lift' }, press: null } },
+        { type: 'update', id: 'b_1', motion: null },
+      ],
+    })
+    assert.ok(parsed.success, parsed.success ? '' : parsed.error.message)
+    const ops = (parsed.data.operations as Array<Record<string, unknown>>)
+    assert.deepEqual((ops[0].block as Record<string, unknown>).motion, { enter: { preset: 'fade-up' } })
+    assert.deepEqual(ops[1].motion, { hover: { preset: 'lift' }, press: null })
+    assert.equal(ops[2].motion, null)
+  })
+
+  it('the descriptions mention motion and the guide lists the presets', () => {
+    const description = motionTool('applyOperations').description
+    assert.match(description, /motion\?/)
+    assert.match(description, /MOTION \(animations\)/)
+    for (const preset of ['fade-up', 'wipe-left', 'lift', 'shrink', 'parallax', 'float', 'bouncy']) assert.match(description, new RegExp(preset))
+    assert.match(motionTool('listBlocks').description, /MOTION \(animations\)/)
+    assert.match(motionTool('getBlockSchema').description, /motion/)
+  })
+
+  it('applyOperations inserts and updates motion, merging per kind', async () => {
+    const { req } = fakeRequest({ version: 1, blocks: [{ id: 'a', type: 'heading', props: { text: 'X' } }] })
+    const run = (operations: unknown[]) => motionTool('applyOperations').handler({ collection: 'pages', id: 'p1', operations }, req, {})
+    const layoutOf = async () => json(await motionTool('getLayout').handler({ collection: 'pages', id: 'p1' }, req, {})).layout as Layout
+    const added = await run([{ type: 'insert', block: { id: 'b_new', type: 'heading', props: { text: 'N' }, motion: { enter: { preset: 'fade-up', stagger: 80 } } }, to: { parentId: null, index: 1 } }])
+    assert.equal(json(added).ok, true)
+    assert.deepEqual(findBlock(await layoutOf(), 'b_new')?.motion, { enter: { preset: 'fade-up', stagger: 80 } })
+
+    await run([{ type: 'update', id: 'b_new', motion: { hover: { preset: 'lift' } } }])
+    assert.deepEqual(findBlock(await layoutOf(), 'b_new')?.motion, { enter: { preset: 'fade-up', stagger: 80 }, hover: { preset: 'lift' } })
+    await run([{ type: 'update', id: 'b_new', motion: { enter: null } }])
+    assert.deepEqual(findBlock(await layoutOf(), 'b_new')?.motion, { hover: { preset: 'lift' } })
+    await run([{ type: 'update', id: 'b_new', motion: null }])
+    assert.equal(findBlock(await layoutOf(), 'b_new')?.motion, undefined)
+  })
+
+  it('applyOperations returns the operations error for bad motion', async () => {
+    const { req } = fakeRequest({ version: 1, blocks: [{ id: 'a', type: 'heading', props: { text: 'X' } }] })
+    const result = await motionTool('applyOperations').handler(
+      { collection: 'pages', id: 'p1', operations: [{ type: 'update', id: 'a', motion: { enter: { preset: 'spin' } } }] },
+      req,
+      {},
+    )
+    assert.equal(result.isError, true)
+    assert.match(result.content[0].text, /motion\.enter\.preset must be one of: fade, fade-up/)
+  })
+
+  it('getLayout, validateLayout and insertSection keep motion', async () => {
+    const { req } = fakeRequest({ version: 1, blocks: [{ id: 'a', type: 'heading', props: { text: 'X' }, motion: { loop: { preset: 'pulse' } } }] })
+    const layout = json(await motionTool('getLayout').handler({ collection: 'pages', id: 'p1' }, req, {})).layout as Layout
+    assert.deepEqual(findBlock(layout, 'a')?.motion, { loop: { preset: 'pulse' } })
+
+    const inserted = json(await motionTool('insertSection').handler({ collection: 'pages', id: 'p1', sectionId: 'motion-hero' }, req, {}))
+    const [root] = inserted.inserted as Layout['blocks']
+    assert.deepEqual(root.motion, { enter: { preset: 'fade-up', trigger: 'load' } })
+    assert.deepEqual(root.slots?.children?.[0].motion, { hover: { preset: 'lift' } })
+    const after = json(await motionTool('getLayout').handler({ collection: 'pages', id: 'p1' }, req, {})).layout as Layout
+    assert.deepEqual(findBlock(after, root.id)?.motion, { enter: { preset: 'fade-up', trigger: 'load' } })
+
+    const bad = json(
+      await motionTool('validateLayout').handler(
+        { collection: 'pages', layout: { version: 1, blocks: [{ id: 'a', type: 'heading', props: { text: 'X' }, motion: { enter: { preset: 'nope' } } }] } },
+        req,
+        {},
+      ),
+    )
+    assert.equal(bad.valid, false)
+    const good = json(await motionTool('validateLayout').handler({ collection: 'pages', id: 'p1' }, req, {}))
+    assert.equal(good.valid, true)
+  })
+
+  it('getBlockSchema has the shared motion schema', async () => {
+    const { req } = fakeRequest()
+    const schema = json(await motionTool('getBlockSchema').handler({ collection: 'pages', type: 'heading' }, req, {})) as {
+      properties: Record<string, unknown>
+      $defs: Record<string, unknown>
+    }
+    assert.deepEqual(schema.properties.motion, { $ref: '#/$defs/%24motion' })
+    assert.ok(schema.$defs.$motion)
+  })
+})
+
 describe('saved sections', () => {
   const savedDocs = [
     {

@@ -4,6 +4,7 @@
 
 import type { Field } from 'payload'
 import type { AiClientConfig } from '../ai/types'
+import type { BlockMotion, MotionPatch } from './motion'
 
 // ---------------------------------------------------------------------------
 // Layout data (stored in one JSON field)
@@ -37,6 +38,12 @@ export type Block = {
    * A prop missing here falls back as Payload's `fallback` says. Stored only when non-empty.
    */
   locales?: Record<string, BlockProps>
+  /**
+   * Animations (docs/architecture.md, "Motion"; `core/motion.ts`): an entrance, hover and press
+   * effects, a scroll-linked effect and a loop. Not classes: the motion runtime plays them.
+   * Stored only when it holds a kind.
+   */
+  motion?: BlockMotion
 }
 
 export type Layout = {
@@ -337,6 +344,11 @@ export type Operation =
       bindings?: Record<string, string | null>
       /** The editor's name for the block. `null` or "" removes it. */
       label?: string | null
+      /**
+       * Animations. Each kind listed replaces that kind (`{ enter: {...} }`), `null` removes it;
+       * kinds left out stay. `motion: null` removes all motion.
+       */
+      motion?: MotionPatch | null
     }
 
 /** `inverse` undoes this operation when applied in order to the resulting layout. */

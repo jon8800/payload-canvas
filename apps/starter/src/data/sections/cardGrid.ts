@@ -1,4 +1,4 @@
-import { grid, heading, image, link, sectionHeader, stack, styles, text, type LinkInput, defineSection } from './build'
+import { grid, heading, image, link, motions, sectionHeader, stack, styles, text, withMotion, type LinkInput, defineSection } from './build'
 
 export type CardGridInput = {
   title: string
@@ -15,19 +15,22 @@ export const cardGrid = defineSection<CardGridInput>({
     stack('section', styles.section, [
       stack('div', styles.container, [
         sectionHeader(title, intro),
-        grid(
-          'grid grid-cols-1 gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-3',
-          cards.map((card) => {
-            const body = [
-              ...(card.image ? [image(card.image.id, card.image.alt, styles.image)] : []),
-              stack('div', 'flex flex-col gap-2', [
-                heading(card.title, '3', `${styles.cardTitle}${card.link ? ' group-hover:underline' : ''}`),
-                text(card.text, styles.muted),
-              ]),
-            ]
-            if (!card.link) return stack('article', 'flex flex-col gap-5', body)
-            return link(card.link, 'group flex flex-col gap-5', body)
-          }),
+        withMotion(
+          grid(
+            'grid grid-cols-1 gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-3',
+            cards.map((card) => {
+              const body = [
+                ...(card.image ? [image(card.image.id, card.image.alt, styles.image)] : []),
+                stack('div', 'flex flex-col gap-2', [
+                  heading(card.title, '3', `${styles.cardTitle}${card.link ? ' group-hover:underline' : ''}`),
+                  text(card.text, styles.muted),
+                ]),
+              ]
+              if (!card.link) return stack('article', 'flex flex-col gap-5', body)
+              return withMotion(link(card.link, 'group flex flex-col gap-5', body), motions.interactive)
+            }),
+          ),
+          motions.staggerChildren,
         ),
       ]),
     ]),
