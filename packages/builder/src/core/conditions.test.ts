@@ -51,6 +51,12 @@ describe('conditionMet', () => {
     assert.equal(conditionMet({ field: 'type', equals: 'reference' }, {}, fields), true)
     assert.equal(conditionMet({ field: 'type', equals: 'custom' }, { type: null }, fields), false)
   })
+
+  it('tests a cleared sibling as it is, not as its default (as Payload does)', () => {
+    const fields = [{ name: 'type', defaultValue: 'reference' }]
+    assert.equal(conditionMet({ field: 'type', equals: 'reference' }, { type: null }, fields), false)
+    assert.equal(conditionMet({ field: 'type', truthy: false }, { type: '' }, fields), true)
+  })
 })
 
 describe('readCondition', () => {

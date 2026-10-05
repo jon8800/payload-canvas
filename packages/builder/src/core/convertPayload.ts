@@ -9,10 +9,12 @@
 
 import { getBlockDefinition } from './blocks'
 import { sameJson } from './fieldSemantics'
-import { dataFields, fieldBlocks, type DataField, type LooseBlock } from './fields'
+import { dataFields, fieldBlocks, hasStaticDefault, type DataField, type LooseBlock } from './fields'
 import { fallbackChain, localizedKeys } from './locale'
 import { isPlainObject, normalizeLayout } from './tree'
 import type { Block, BlockDefinition, Layout, LocaleSettings } from './types'
+
+export { hasStaticDefault } from './fields'
 
 /** A block in Payload's shape: `{ id, blockType, blockName?, ...fieldValues }`. */
 export type PayloadBlockData = Record<string, unknown> & { id: string; blockType: string; blockName?: string }
@@ -69,9 +71,14 @@ const PAYLOAD_KEYS = new Set(['id', 'blockType', 'blockName'])
 /**
  * Converts a Payload `blocks` field value into a builder layout. Nested blocks fields that the
  * definition declares as slots become slots (recursively). `blockName` becomes the block's
- * `label`. Ids are kept when they are valid and unique. Empty values (`null`, Payload's "empty")
- * are left out, and upload and relationship values are reduced to IDs, so populated data
- * (`depth > 0`) converts too. Blocks without a definition are left out and counted in the report.
+ * `label`. Ids are kept when they are valid and unique. Upload and relationship values are reduced
+ * to IDs, so populated data (`depth > 0`) converts too. Blocks without a definition are left out
+ * and counted in the report.
+ *
+ * Empty values: `null` (Payload's "no value") is kept for a field with a `defaultValue`, because
+ * there it means "cleared" and the default must not come back at render time (see
+ * `withFieldDefaults`). For other fields `null` and a missing key mean the same, so it is left out.
+ * Missing keys stay missing; `withLayoutDefaults` fills their defaults.
  *
  * A value that is already a builder layout is only normalized, so the conversion is idempotent.
  */
@@ -134,8 +141,13 @@ function convertItem(
       slots[key] = value.map((child) => convertItem(child, blocks, report, options)).filter((b): b is Block => b !== null)
       continue
     }
-    if (isEmpty(value)) continue
+    if (value === undefined) continue
     const field = known.get(key)
+    if (value === null) {
+      // A cleared field with a default stays cleared.
+      if (field && hasStaticDefault(field)) props[key] = null
+      continue
+    }
     if (!field) {
       const dropped = (report.droppedFields[blockType] ??= [])
       if (!dropped.includes(key)) dropped.push(key)
@@ -482,15 +494,17 @@ export function toPayloadBlock(block: Block, blocks: readonly BlockDefinition[])
 /**
  * Props with each missing field's `defaultValue` filled in (JSON values only, not functions),
  * inside named groups too. Returns the same object when nothing is missing.
+ *
+ * Only keys that are not there (`undefined`) get their default. A stored `null` or `''` is a
+ * value someone cleared, and stays empty, as in Payload (defaults apply only when a block is made).
  */
 export function withFieldDefaults(props: Record<string, unknown>, fields: readonly unknown[]): Record<string, unknown> {
   let result = props
   for (const field of dataFields(fields)) {
     const current = result[field.name]
     let next: unknown = current
-    if (current === undefined || current === null) {
-      const fallback = field.defaultValue
-      if (fallback !== undefined && typeof fallback !== 'function') next = structuredClone(fallback)
+    if (current === undefined) {
+      if (hasStaticDefault(field)) next = structuredClone(field.defaultValue)
       else if (field.type === 'group') {
         const group = withFieldDefaults({}, field.fields ?? [])
         if (Object.keys(group).length > 0) next = group
@@ -504,4 +518,36 @@ export function withFieldDefaults(props: Record<string, unknown>, fields: readon
     }
   }
   return result
+}
+
+/**
+ * The layout with `withFieldDefaults` applied to every block's props (at every depth), as if each
+ * block was just made in the editor. Translations (`block.locales`) are not filled: a missing
+ * translation falls back to another locale. Returns the same layout when nothing is missing.
+ */
+export function withLayoutDefaults(layout: Layout, blocks: readonly BlockDefinition[]): Layout {
+  const fill = (list: Block[]): Block[] => {
+    let changed = false
+    const out = list.map((block) => {
+      const def = getBlockDefinition(blocks, block.type)
+      let next = block
+      const before = block.props ?? {}
+      const props = def ? withFieldDefaults(before, def.fields) : before
+      if (props !== before) next = { ...next, props }
+      if (block.slots) {
+        let slotsChanged = false
+        const slots: Record<string, Block[]> = {}
+        for (const [name, children] of Object.entries(block.slots)) {
+          slots[name] = fill(children)
+          if (slots[name] !== children) slotsChanged = true
+        }
+        if (slotsChanged) next = { ...next, slots }
+      }
+      if (next !== block) changed = true
+      return next
+    })
+    return changed ? out : list
+  }
+  const filled = fill(layout.blocks)
+  return filled === layout.blocks ? layout : { ...layout, blocks: filled }
 }

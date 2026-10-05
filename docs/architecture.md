@@ -98,6 +98,7 @@ A block is `{ id, type, props?, className?, slots?, bindings?, hidden?, label?, 
 - `id` is stable. Selection, AI edits and bindings use the `id`, never an array index.
 - `props` holds the block's own field values. `slots` holds child blocks by slot name, with no depth limit. Keeping them apart makes the tree easy to walk.
 - Relationship and upload props store IDs. The renderer loads them (section 10).
+- Field defaults work as in Payload: a field gets its `defaultValue` when the block is made (the editor's insert, the migration of a missing key). A missing key also renders as its default (`withFieldDefaults`), and the validation counts it as the default. A cleared field keeps its empty value: the inspector stores `null` when the field has a default (and removes the key when it has none), and inline editing stores `''`. A stored `null` or `''` never gets the default back. Conditions test a cleared sibling as it is, and a missing one as its default.
 - `version` lets us migrate the format later. Small shape changes of built-in blocks are migrated by `normalizeLayout` on load instead (for example old lists with a `props.items` array become `listItem` blocks; see `core/textList.ts`).
 - A block type may name its `parents`: it then goes only directly inside those types. A list item goes only in a list.
 - The layout is validated on save against the JSON Schema of each block (section 6).

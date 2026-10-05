@@ -753,7 +753,7 @@ import { HeadingLeaf } from '@/blocks/leaves/heading/component'
 export const components = fromPayloadComponents({ fullWidth: FullWidthComponent, heading: HeadingLeaf /* … */ }, blocks)
 ```
 
-Each component gets the props it always got: `{ id, blockType, blockName, ...fields }`. `loadLayoutData` loads uploads and relationships (one level deep), and missing fields get their `defaultValue`. Each slot arrives under its field name as an array of Payload-shaped blocks, so `<RenderLeaves blocks={content} />` keeps working. The component also gets a `builder` prop (see below).
+Each component gets the props it always got: `{ id, blockType, blockName, ...fields }`. `loadLayoutData` loads uploads and relationships (one level deep), and missing fields get their `defaultValue`. A field someone cleared (`null` or `''`) stays empty, as in Payload. Each slot arrives under its field name as an array of Payload-shaped blocks, so `<RenderLeaves blocks={content} />` keeps working. The component also gets a `builder` prop (see below).
 
 - **Components that take `{ block, context }`** instead of the fields as props: add `{ props: (block, context) => ({ block, context }) }` as the third argument. `context` is the page data. See [Page data](#page-data-and--block-context--components).
 - **Components that load data** (async server components, or components that import Payload): leave them out of this client-safe map and put them in the server map. The canvas renders them on the server. See [Server components in the canvas](#server-components-in-the-canvas). A section whose file imports such a component (through its own `RenderLeaves`) goes in the server map too.
@@ -791,7 +791,8 @@ pnpm payload run scripts/migrate-blocks.ts write   # convert
 
 Close every builder tab while it runs. An open builder keeps its own copy of the layout and saves it again.
 
-- Every document, every draft and every version is converted in place. No new versions are made, `updatedAt` stays, and the old field never changes.
+- Every document, every draft and every version is converted in place. No new versions are made, `updatedAt` and `createdAt` stay (the writes pass `updatedAt: null`, which every Payload adapter reads as "keep"), and the old field never changes.
+- Field values: a stored `null` of a field with a `defaultValue` stays `null` (the field was cleared, so the default does not come back). A field with no key in the old data gets its default, as a new block does.
 - A second run skips documents whose builder field has content. `overwrite: true` converts them again (unchanged results are skipped).
 - After a real run it refreshes the documents' "Used in" records (`backfillReferences`), because its writes skip the save hook.
 - It writes through the database adapter (`updateOne`, `updateVersion`), so no hooks run. It compiles the CSS itself. Tested on Postgres. On MongoDB it converts the documents but not the versions.

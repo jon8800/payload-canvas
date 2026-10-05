@@ -34,8 +34,8 @@ export function ConnectAgents({ onClose }: { onClose?: () => void }) {
   // The server URL when configured, else this browser's origin. The card renders only after a click
   // or a failed request, so never during server rendering.
   const origin = config.serverURL || (typeof window === 'undefined' ? '' : window.location.origin)
-  const hasMcp = config.collections.some((c) => c.slug === MCP_KEYS_SLUG)
-  const hasOAuth = config.collections.some((c) => c.slug === MCP_OAUTH_SLUG)
+  const hasMcp = config.collections.some((c) => (c.slug as string) === MCP_KEYS_SLUG)
+  const hasOAuth = config.collections.some((c) => (c.slug as string) === MCP_OAUTH_SLUG)
   const url = `${origin}${api}/mcp`
   const [agent, setAgent] = useState<Agent>('claude')
   const baseId = useId()

@@ -4,12 +4,23 @@ import type { Block as PayloadBlock, Payload } from 'payload'
 
 import { fromPayloadBlocks } from '../blocks/payload'
 import { twoLevelConfigBlocks } from '../blocks/payloadFixtures.test-data'
+import { BUILDER_CONFIG_KEY } from '../live/document'
 import { formatMigrationReport, migrateBlocksField } from './index'
 
 const blocks = fromPayloadBlocks(twoLevelConfigBlocks, { onWarning: false, root: ['fullWidth', 'twoColumn'] })
 
 type Row = { id: number | string; [key: string]: unknown }
-type VersionRow = { id: string; parent: number | string; version: Record<string, unknown> }
+type VersionRow = { id: string; parent: number | string; version: Record<string, unknown>; updatedAt?: string; createdAt?: string }
+
+const NOW = '2099-01-01T00:00:00.000Z'
+
+/** Payload's adapters: `updatedAt: null` keeps the stored value; a write without it sets the current time. */
+function touch(row: Record<string, unknown>, data: Record<string, unknown>): void {
+  const { updatedAt, ...rest } = data
+  Object.assign(row, rest)
+  if (updatedAt === undefined) row.updatedAt = NOW
+  else if (updatedAt !== null) row.updatedAt = updatedAt
+}
 
 const page = <T,>(list: T[], n: number, size: number) => ({ docs: list.slice((n - 1) * size, n * size), hasNextPage: n * size < list.length })
 
@@ -33,14 +44,24 @@ function inDefaultLocale(value: unknown, localization: Localization): unknown {
 }
 
 /** A fake Payload with the Local API reads and the adapter writes the migration uses. */
-function fakePayload(options: { docs: Row[]; versions: VersionRow[]; adapter?: string; localization?: Localization; layoutField?: Record<string, unknown> }) {
+function fakePayload(options: {
+  docs: Row[]
+  versions: VersionRow[]
+  adapter?: string
+  localization?: Localization
+  layoutField?: Record<string, unknown>
+  legacyFields?: string[]
+}) {
   const writes: Array<{ kind: 'doc' | 'version'; id: unknown; data: unknown }> = []
   const reads: Array<string | undefined> = []
   const { localization } = options
   // Without `locale: 'all'` a read gives the default locale (Payload's default `locale`).
   const read = <T,>(row: T, locale: string | undefined): T => (localization && locale !== 'all' ? (inDefaultLocale(row, localization) as T) : row)
   const payload = {
-    config: { custom: {}, ...(localization ? { localization } : {}) },
+    config: {
+      custom: options.legacyFields ? { [BUILDER_CONFIG_KEY]: { collections: { pages: { field: 'builderLayout', legacyFields: options.legacyFields } } } } : {},
+      ...(localization ? { localization } : {}),
+    },
     collections: {
       pages: {
         config: {
@@ -76,12 +97,15 @@ function fakePayload(options: { docs: Row[]; versions: VersionRow[]; adapter?: s
       updateOne: async ({ id, data }: { id: unknown; data: Record<string, unknown> }) => {
         writes.push({ kind: 'doc', id, data })
         const doc = options.docs.find((d) => d.id === id)
-        if (doc) Object.assign(doc, data)
+        if (doc) touch(doc, data)
       },
-      updateVersion: async ({ id, versionData }: { id: unknown; versionData: { version: Record<string, unknown> } }) => {
+      updateVersion: async ({ id, versionData }: { id: unknown; versionData: { version: Record<string, unknown> } & Record<string, unknown> }) => {
         writes.push({ kind: 'version', id, data: versionData })
         const version = options.versions.find((v) => v.id === id)
-        if (version) Object.assign(version.version, versionData.version)
+        if (!version) return
+        const { version: data, ...rest } = versionData
+        Object.assign(version.version, data)
+        touch(version, rest)
       },
     },
   }
@@ -131,6 +155,20 @@ describe('migrateBlocksField', () => {
     assert.equal(writes.length, 106)
   })
 
+  it('keeps updatedAt and createdAt of documents and versions', async () => {
+    const data = fixture()
+    for (const doc of data.docs) Object.assign(doc, { createdAt: '2025-01-01T00:00:00.000Z', updatedAt: '2025-02-01T00:00:00.000Z' })
+    for (const v of data.versions) Object.assign(v, { createdAt: '2025-03-01T00:00:00.000Z', updatedAt: '2025-04-01T00:00:00.000Z' })
+    const { payload, writes } = fakePayload(data)
+    await migrateBlocksField(payload, { collection: 'pages', from: 'layout', to: 'builderLayout', blocks, dryRun: false })
+    await migrateBlocksField(payload, { collection: 'pages', from: 'layout', to: 'builderLayout', blocks, dryRun: false, overwrite: true })
+    assert.ok(writes.length > 100)
+    for (const write of writes) assert.equal((write.data as Record<string, unknown>).updatedAt, null, 'every write asks the adapter to keep updatedAt')
+    for (const doc of data.docs) assert.deepEqual([doc.createdAt, doc.updatedAt], ['2025-01-01T00:00:00.000Z', '2025-02-01T00:00:00.000Z'])
+    for (const v of data.versions) assert.deepEqual([v.createdAt, v.updatedAt], ['2025-03-01T00:00:00.000Z', '2025-04-01T00:00:00.000Z'])
+    assert.equal(data.versions[0].version.updatedAt, undefined, 'the version data gets no updatedAt either')
+  })
+
   it('overwrites only changed layouts with `overwrite`', async () => {
     const data = fixture()
     const { payload } = fakePayload(data)
@@ -139,6 +177,16 @@ describe('migrateBlocksField', () => {
     // Unchanged conversions are skipped; the document whose builder field holds other content converts.
     assert.equal(report.documents.converted, 1)
     assert.equal(report.documents.skipped, 105)
+  })
+
+  it('reminds about legacyFields only when the old field is not listed', async () => {
+    const reminder = /legacyFields: \['layout'\]/
+    const without = await migrateBlocksField(fakePayload(fixture()).payload, { collection: 'pages', from: 'layout', to: 'builderLayout', blocks })
+    assert.match(formatMigrationReport(without), reminder)
+    const listed = fakePayload({ ...fixture(), legacyFields: ['layout'] }).payload
+    const report = await migrateBlocksField(listed, { collection: 'pages', from: 'layout', to: 'builderLayout', blocks })
+    assert.deepEqual(report.legacyFields, ['layout'])
+    assert.doesNotMatch(formatMigrationReport(report), reminder)
   })
 
   it('reports layouts that need a fix', async () => {

@@ -5,7 +5,7 @@
 import { getBlockDefinition, slotLabel, slotLimitText } from './blocks'
 import { conditionMet, readCondition } from './conditions'
 import { formatProblem } from './formats'
-import { dataFields, fieldBlocks, optionValues, type DataField, type LooseField } from './fields'
+import { dataFields, fieldBlocks, hasStaticDefault, optionValues, type DataField, type LooseField } from './fields'
 import { isPlainObject } from './tree'
 import { motionProblems } from './motion'
 import { fallbackChain, localizedKeys } from './locale'
@@ -299,7 +299,10 @@ function checkFields(fields: readonly unknown[], data: Record<string, unknown>, 
     if (!known.has(key) && value !== undefined) report(`${path}.${key}`, `Unknown prop "${key}"`, 'unknown-prop')
   }
   for (const field of list) {
-    const value = data[field.name]
+    const stored = data[field.name]
+    // A field that is not there renders its default (`withFieldDefaults`), so it is checked as that.
+    // A cleared value (`null`, `''`) stays empty.
+    const value = stored === undefined && hasStaticDefault(field) ? field.defaultValue : stored
     const at = `${path}.${field.name}`
     if (isEmpty(value)) {
       if (field.required) {

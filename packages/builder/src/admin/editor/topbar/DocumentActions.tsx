@@ -20,21 +20,16 @@ import { useModalA11y } from '../ui/modalA11y'
 import { useValue } from '../valueStore'
 import { publishState } from './document'
 import type { PublishProblem } from './problems'
+import { formatSaveTime } from './saveTime'
 import { RouterIntercept } from './screens/DrawerRouter'
 import { DrawerWidth } from './screens/DrawerWidth'
 import { SettingsDrawerReload, SettingsDrawerSlug } from './settingsDrawer'
-
-function formatTime(iso: string | null): string {
-  if (!iso) return ''
-  const date = new Date(iso)
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
 
 type SaveStateName = 'connecting' | 'offline' | 'reconnecting' | 'failed' | 'saving' | 'saved'
 
 /**
  * "Saving…" while this editor has unconfirmed changes or the session has unsaved commits, then
- * "Saved · 12:04". Errors win: "Offline" while commits cannot reach the server, "Not saved" (with
+ * "Saved · 12:04" (with the day when it is not today). Errors win: "Offline" while commits cannot reach the server, "Not saved" (with
  * the reason in the tooltip and "Retry now") while the server cannot save the draft. The box has
  * a minimum width, so the bar does not shift between the normal states.
  */
@@ -52,7 +47,7 @@ export function SaveState() {
   else if (live.status === 'reconnecting') state = 'reconnecting'
   else if (live.saveError) state = 'failed'
   else if (live.pending || live.unsaved) state = 'saving'
-  const time = formatTime(live?.savedAt ?? updatedAt)
+  const time = formatSaveTime(live?.savedAt ?? updatedAt)
   const saveError = live?.saveError ?? null
   const text = {
     connecting: 'Connecting…',

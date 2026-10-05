@@ -71,6 +71,11 @@ export function dataFields(fields: readonly unknown[] | undefined): DataField[] 
   return out
 }
 
+/** A `defaultValue` that is plain data (function defaults run only in Payload's own operations). */
+export function hasStaticDefault(field: { defaultValue?: unknown }): boolean {
+  return field.defaultValue !== undefined && typeof field.defaultValue !== 'function'
+}
+
 /** Allowed values of a select or radio field. Options are strings or `{ label, value }`. */
 export function optionValues(field: LooseField): string[] {
   const values: string[] = []
