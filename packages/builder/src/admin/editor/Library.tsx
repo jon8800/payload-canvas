@@ -177,11 +177,28 @@ const SectionList = memo(function SectionList({ query }: { query: string }) {
   ))
 })
 
+/** A section's real thumbnail, made once it scrolls into view. A wireframe shows until then (or when it fails). */
+export function SectionThumb({ section }: { section: SectionDefinition }) {
+  const thumbRef = useRef<HTMLSpanElement>(null)
+  const picture = useSectionThumbnail(section, thumbRef)
+  return (
+    <span ref={thumbRef} className={`builder-editor__thumb${picture ? ' builder-editor__thumb--picture' : ''}`} aria-hidden="true">
+      {picture ? (
+        <img className="builder-editor__thumb-img" src={picture} alt="" draggable={false} />
+      ) : (
+        <span className="builder-editor__thumb-inner">
+          {section.blocks.map((block) => (
+            <Wire key={block.id} block={block} />
+          ))}
+        </span>
+      )}
+    </span>
+  )
+}
+
 function SectionCard({ section }: { section: SectionDefinition }) {
   const runtime = useRuntime()
   const root = section.blocks[0]
-  const thumbRef = useRef<HTMLSpanElement>(null)
-  const picture = useSectionThumbnail(section, thumbRef)
   const isSaved = section.savedId !== undefined
   const data: DragData = {
     // Drop rules check the root block's type.
@@ -207,17 +224,7 @@ function SectionCard({ section }: { section: SectionDefinition }) {
         {...listeners}
         {...attributes}
       >
-        <span ref={thumbRef} className={`builder-editor__thumb${picture ? ' builder-editor__thumb--picture' : ''}`} aria-hidden="true">
-          {picture ? (
-            <img className="builder-editor__thumb-img" src={picture} alt="" draggable={false} />
-          ) : (
-            <span className="builder-editor__thumb-inner">
-              {section.blocks.map((block) => (
-                <Wire key={block.id} block={block} />
-              ))}
-            </span>
-          )}
-        </span>
+        <SectionThumb section={section} />
         <span className="builder-editor__card-text">
           <span className="builder-editor__card-label">{section.label}</span>
           {isSaved && section.category && <span className="builder-editor__card-desc">{section.category}</span>}

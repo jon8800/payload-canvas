@@ -70,8 +70,8 @@
     background: var(--theme-elevation-800);
     color: var(--theme-elevation-0);
     font: inherit;
-    font-size: 13px;
-    font-weight: 500;
+    font-size: var(--be-text-m);
+    font-weight: var(--be-weight-medium);
     cursor: pointer;
 
     &:hover:not(:disabled) {

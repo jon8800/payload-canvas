@@ -162,12 +162,14 @@ export default async function CanvasLayout({ children }: { children: ReactNode }
   const payload = await getPayload({ config })
   return (
     <html lang="en">
-      <head>
-        {/* The Theme global's variables and fonts. `live` reloads them after a theme save. */}
-        <ThemeStyle payload={payload} live />
-      </head>
       {/* The same body classes as your site layout. */}
-      <body className="font-sans antialiased">{children}</body>
+      <body className="font-sans antialiased">
+        {/* The Theme global's variables and fonts (React moves them into the head). `live` reloads
+            them after a theme save. Not in a <head> element: `live` adds a client component, and
+            Next's metadata then fails to hydrate on some loads. */}
+        <ThemeStyle payload={payload} live />
+        {children}
+      </body>
     </html>
   )
 }
@@ -629,6 +631,8 @@ export const blocks = [...defaultBlocks({ linkCollections: ['pages'] }), pricing
 - `admin.custom.builderFormat` on a `text` field names a value check, for example `custom: { builderFormat: 'videoUrl' }` (the Video block's URL). The inspector shows the message while the user types, and a bad value blocks **Publish** but not draft saves. `videoUrl` is the only built-in format. Formats live in a registry in `@payload-toolkit/builder/core` (`FORMATS`, `formatProblem`). The renderer can use the same parser (`parseVideoUrl`).
 - `linkField()` stores `{ type, url, reference, newTab }`. The component receives it resolved, with `href`, `target` and `rel`.
 - The default blocks are `stack`, `grid`, `heading`, `text`, `richText`, `image`, `video`, `button`, `link`, `menu`, `list` with its `listItem` blocks, `quote`, `divider`, `spacer`, `collectionList` (documents from a collection) and `field` (a field of the document a template renders).
+- The `menu` block folds its links into a "Menu" button and a panel on small screens. Set `ctaLabel` and `cta` (a link) to add a button as the last row of that panel, for example the header's call to action, which a header hides on phones. The inline links, and so the wide-screen header, do not change.
+- The `field` block renders rich text with the `prose` typography (and `max-w-none`) when its own `className` has no `prose` class. Add `prose prose-lg` or another `prose` class to take control.
 - A list holds its items as `listItem` blocks in its `items` slot, so each item can be selected, dragged, styled and edited on the canvas. Enter at the end of an item adds the next one; Backspace at the start of an item joins it to the one before. Older layouts stored the items as a prop (`props.items: [{ text }]`). `normalizeLayout` turns them into `listItem` blocks when a layout loads, and the List component still renders the old prop until the layout is saved again. A list whose `items` prop is bound to document data keeps the old form.
 
 ### Validation, hooks and access on block fields
@@ -912,7 +916,7 @@ export default function CanvasPage() {
 }
 ```
 
-- **Theme variables in the canvas.** The canvas gets the Theme global from `<ThemeStyle live />` in its layout. If you set other variables at runtime, render the same tag in the canvas layout's `<head>`.
+- **Theme variables in the canvas.** The canvas gets the Theme global from `<ThemeStyle live />` in its layout. If you set other variables at runtime, render the same tag in the canvas layout too.
 - **Standalone output** needs `outputFileTracingIncludes`. See [step 8](#8-add-the-standalone-tracing-lines).
 
 ## Animations
@@ -960,20 +964,22 @@ A block stores its animations in `motion`. Every kind is optional. Times are mil
 ### On the site
 
 - `RenderLayout` puts each animated block's settings on its root element: `data-motion` (JSON), plus `data-motion-item` on the children of a staggering block. Block components need nothing: the attributes come in `attributes`, which every component spreads on its root element.
-- When a layout has motion, `RenderLayout` also renders `<MotionStyle />` (a small `<style>` in the head, once per page) and `<MotionRuntime />` (a client component that renders nothing). Pages without motion get neither, and load no motion code.
+- When a layout has motion, `RenderLayout` also renders `<MotionStyle blocks={layout.blocks} />` (a small `<style>` in the head, once per page) and `<MotionRuntime />` (a client component that renders nothing). Pages without motion get neither, and load no motion code.
 - `MotionRuntime` loads the runtime as its own chunk (about 14 KB gzipped, Motion included) and starts it once per page, however many layouts render it. The runtime finds the elements, watches for new ones (client navigation, streaming), and drives them:
   - Entrances run on the Web Animations API (`animate` from `motion/mini`), so the browser runs them off the main thread. They animate only `opacity`, `transform`, `filter` and `clip-path`, then hand the element back to its classes. Nothing changes layout, so there is no layout shift.
   - Hover and press use Motion's `hover` and `press` gestures with short springs. Hover runs only on devices with a fine pointer. Press does not make a block focusable.
   - Scroll effects use Motion's `scroll`, which uses a native `ViewTimeline` where the browser has one. Scroll and loop effects use the separate `translate`, `scale` and `opacity` properties, so they add to the other effects.
   - Loops pause while the block is out of view.
-- **No flash, and nothing hidden without JavaScript.** The style hides blocks with an entrance only under `@media (scripting: enabled)`, until the runtime takes them over. Visitors and crawlers without JavaScript see every block. If the runtime never starts (a script error), a CSS failsafe shows the blocks after 2.5 seconds.
-- **Reduced motion.** When the visitor's system asks for less motion (`prefers-reduced-motion: reduce`), every entrance becomes a short fade. Hover, press, parallax, zoom and loops do not run. The scroll fade stays.
+- **Entrances on load start at first paint.** An entrance with `trigger: "load"` plays in plain CSS: `MotionStyle` writes one rule per such block (it matches the block's `data-motion` value) with keyframes from the same preset data. It does not wait for JavaScript, so the block paints with the page. The runtime sees the CSS animation and leaves the block alone.
+- **Entrances on scroll: no flash, and nothing hidden without JavaScript.** The style hides these blocks until the runtime takes them over, only under `@media (scripting: enabled) and (prefers-reduced-motion: no-preference)`. Visitors and crawlers without JavaScript see every block. The hiding is a 1.2-second CSS animation, so if the runtime never starts (a script error), the blocks show after 1.2 seconds.
+- **Keep the largest element still.** Do not put an entrance on the page's main title or hero image: it is the page's Largest Contentful Paint. Animate the text and buttons around it. The starter's hero sections do this.
+- **Reduced motion.** When the visitor's system asks for less motion (`prefers-reduced-motion: reduce`), nothing is hidden and blocks in the window at load show at once. Blocks further down fade in briefly as they scroll into view. Hover, press, parallax, zoom and loops do not run. The scroll fade stays.
 
 ### Custom components and renderers
 
 - A custom block component spreads `attributes` on its root element, as before. That is all it needs.
 - A component made with `fromPayloadComponent` gets the attributes on its class wrapper (`className: 'wrap'`, the default, for blocks with styles). Without a wrapper, they go on the component's first element after hydration, so an entrance above the fold can flash once on load. Keep the wrapper for animated blocks.
-- Your own renderer: put `motionAttributes(block.motion, isStaggerChild)` (from `@payload-toolkit/builder/core`) on each block's root element, and render `<MotionStyle />` and `<MotionRuntime />` from `@payload-toolkit/builder-react` once on pages with motion. `startMotion()` and `previewMotion(element)` are exported for other setups.
+- Your own renderer: put `motionAttributes(block.motion, isStaggerChild)` (from `@payload-toolkit/builder/core`) on each block's root element, and render `<MotionStyle blocks={layout.blocks} />` and `<MotionRuntime />` from `@payload-toolkit/builder-react` once on pages with motion. Without `blocks`, entrances on load wait for the runtime like entrances on scroll. `startMotion()` and `previewMotion(element)` are exported for other setups.
 - Parallax on an image inside a frame: give the frame `overflow-hidden` and a fixed height, and make the image taller than the frame (for example `h-[120%]`), so the moving image never shows an edge.
 
 ## Theme
@@ -1025,7 +1031,7 @@ The names are the shadcn/ui names. Colors are stored as hex and written as `oklc
 
 A shadcn/ui project already has all of this. Font aliases work too: with `--font-display: var(--font-heading, var(--font-sans))`, `font-display` uses the heading font, or the body font when the theme has no heading font.
 
-**2. Render the theme in the `<head>`** of the site's root layout, and of the canvas layout with `live` ([step 6](#6-add-the-canvas-route)):
+**2. Render the theme in the `<head>`** of the site's root layout, and in the `<body>` of the canvas layout with `live` ([step 6](#6-add-the-canvas-route); React moves its tags into the head):
 
 ```tsx
 // src/app/(frontend)/layout.tsx
@@ -1049,6 +1055,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
 ```
 
 `ThemeStyle` writes one `<style>` tag and one Google Fonts `<link>` for the chosen families. Both use React's `precedence`, so React places them in the `<head>` itself and they never cause a hydration mismatch. The rule uses `:root:root { … }`, so it wins over your `:root` defaults in any load order.
+
+For about 90 popular families (Inter, Roboto, Newsreader, Hanken Grotesk and others in `theme/fallbacks.ts`) the `<style>` tag also holds a fallback `@font-face` (`'Inter Fallback'`: Arial or Times New Roman, scaled with `size-adjust` and the ascent, descent and line-gap overrides), and `--font-sans` lists it after the family. The text then keeps its size and line height when the web font loads, so the swap moves nothing (on the demo home page, CLS fell from 0.0007 to 0.00004). Other families keep the plain `sans-serif` or `serif` fallback.
 
 | Prop | Default | What it does |
 |---|---|---|

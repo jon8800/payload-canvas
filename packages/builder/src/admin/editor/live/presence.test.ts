@@ -96,5 +96,7 @@ describe('presence helpers', () => {
     assert.equal(sameAwareness(a, { ...a, cursor: { blockId: 'h', x: 0.5004, y: 0.5 } }), true)
     assert.equal(sameAwareness(a, { ...a, cursor: { blockId: 'h', x: 0.52, y: 0.5 } }), false)
     assert.equal(sameAwareness(a, { ...a, selectedId: 'y' }), false)
+    assert.equal(sameAwareness(a, { ...a, field: 'text' }), false)
+    assert.equal(sameAwareness({ ...a, field: 'text' }, { ...a, field: 'text' }), true)
   })
 })

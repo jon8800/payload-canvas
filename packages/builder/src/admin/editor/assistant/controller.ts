@@ -9,6 +9,7 @@
 
 import { clientIdentity } from '../../../ai/config'
 import type { AiChatRequest, AiClientConfig, AiMessage, AiStreamEvent } from '../../../ai/types'
+import { findBlock } from '../../../core'
 import type { Operation } from '../../../core/types'
 import { changedIds } from '../live'
 import type { Runtime } from '../runtime'
@@ -34,7 +35,10 @@ export type AssistantNotice =
   | { kind: 'setup'; message: string }
   | { kind: 'error'; message: string }
   /** Quiet notes: the user stopped the reply, or the stream ended without `done`. */
-  | { kind: 'info'; message: string }
+  | { kind: 'info'; message: string; /** The user's message that got no reply: shown dimmed above the note. */ echo?: string }
+
+/** The note after Stop. `finish` tells it from other info notes by this text. */
+export const STOPPED_NOTE = 'Stopped.'
 
 export type AssistantState = {
   /** Local storage key of this document's chat. Null until the document has an id. */
@@ -49,6 +53,11 @@ export type AssistantState = {
   /** The input text. Kept here so it survives tab switches and comes back after Stop. */
   draft: string
   /**
+   * The messages came back from storage (a reload, or another document and back). The editor's
+   * undo history did not, so Ctrl+Z cannot revert those replies. The panel says so.
+   */
+  restored: boolean
+  /**
    * The server has no API key or config. Set at start from the client config (`ai.ready` /
    * `setupProblem`, read when the server started), or when a request answers `no_api_key`. The
    * panel shows the setup state until the user checks again: then the next send asks the server
@@ -62,6 +71,10 @@ export type AssistantController = ReturnType<typeof createAssistant>
 
 /** How long blocks changed by the assistant stay highlighted on the canvas. */
 export const FLASH_MS = 2500
+/** The canvas scrolls to the assistant's changes at most this often. */
+export const REVEAL_EVERY_MS = 1000
+/** Times for the canvas to render a new block before it scrolls to it (as when a block is inserted by hand). */
+const REVEAL_DELAYS_MS = [120, 600]
 
 const storage = () => (typeof window === 'undefined' ? null : window.localStorage)
 
@@ -75,6 +88,7 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
     notice: null,
     failed: null,
     draft: '',
+    restored: false,
     setup: initialSetup(ai),
   })
   let collection = ''
@@ -104,6 +118,46 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
     }, FLASH_MS)
   }
 
+  /** The first of these blocks that is in the layout. */
+  const firstExisting = (ids: string[]): string | null => {
+    const { layout } = runtime.store.getState()
+    return ids.find((id) => findBlock(layout, id)) ?? null
+  }
+
+  let lastReveal = 0
+  let revealTimers: number[] = []
+  const stopReveal = () => {
+    for (const timer of revealTimers) window.clearTimeout(timer)
+    revealTimers = []
+  }
+  /** Scrolls the canvas to a block. Asks again once the canvas has rendered a block that is new. */
+  const scrollTo = (id: string) => {
+    stopReveal()
+    revealTimers = REVEAL_DELAYS_MS.map((delay) => window.setTimeout(() => runtime.postToCanvas({ type: 'scrollIntoView', id }), delay))
+  }
+  /**
+   * After a batch of operations: scrolls the canvas to the first changed block that still exists,
+   * so the change does not happen off screen. At most once per REVEAL_EVERY_MS: a reply that sends
+   * many batches does not make the canvas jump around.
+   */
+  const reveal = (ids: string[]) => {
+    const now = Date.now()
+    if (now - lastReveal < REVEAL_EVERY_MS) return
+    const id = firstExisting(ids)
+    if (!id) return
+    lastReveal = now
+    scrollTo(id)
+  }
+
+  /** Remembers the first changed block on the tool chip, for its "Show" button. */
+  const markShow = (ids: string[], callId: string | null) => {
+    const id = firstExisting(ids)
+    const { history } = state.get()
+    const tool = callId ? history.tools[callId] : undefined
+    if (!id || !callId || !tool || tool.showId) return
+    patch({ history: { ...history, tools: { ...history.tools, [callId]: { ...tool, showId: id } } } })
+  }
+
   /** The tool call that operations belong to: the last one of this turn. */
   const lastCallId = (): string | null => {
     const { live, history } = state.get()
@@ -112,8 +166,10 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
     return toolUseIds(history.messages.slice(live?.turnStart ?? 0)).at(-1) ?? null
   }
 
-  const applyOperations = (turnId: string, ops: Operation[]) => {
+  /** `callId`: the tool call that made the operations (older servers send none: then the last call). */
+  const applyOperations = (turnId: string, ops: Operation[], toolCallId?: string) => {
     const { store } = runtime
+    const callId = toolCallId ?? lastCallId()
     const group = `ai:${turnId}`
     const applied: Operation[] = []
     const errors: string[] = []
@@ -126,7 +182,6 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
     if (errors.length > 0) {
       // Shown on the chip, not as a toolbar error.
       store.clearError()
-      const callId = lastCallId()
       const what = ops.length === 1 ? 'The change' : `${errors.length} of ${ops.length} changes`
       const note = `${what} did not apply, because the page changed meanwhile (${errors[0]}).`
       const { history } = state.get()
@@ -136,7 +191,10 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
         patch({ notice: { kind: 'error', message: note } })
       }
     }
-    flash(changedIds(applied))
+    const changed = changedIds(applied)
+    flash(changed)
+    reveal(changed)
+    markShow(changed, callId)
   }
 
   const onEvent = (event: AiStreamEvent, turn: { ended: boolean }) => {
@@ -160,6 +218,7 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
             status: event.status,
             summary: event.summary,
             note: history.tools[event.callId]?.note,
+            ...(history.tools[event.callId]?.showId ? { showId: history.tools[event.callId].showId } : {}),
             ...(event.image ? { image: event.image } : {}),
           },
         }
@@ -172,7 +231,7 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
         return
       }
       case 'operations':
-        applyOperations(event.turnId, event.ops)
+        applyOperations(event.turnId, event.ops, event.callId)
         return
       case 'message': {
         const { history } = current
@@ -192,7 +251,7 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
         return
       case 'error':
         turn.ended = true
-        if (event.code === 'aborted') finish({ kind: 'info', message: 'Stopped.' })
+        if (event.code === 'aborted') finish({ kind: 'info', message: STOPPED_NOTE })
         else if (event.code === 'no_api_key') finish({ kind: 'setup', message: event.message })
         else finish({ kind: 'error', message: event.message || 'The assistant failed.' })
     }
@@ -223,9 +282,12 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
       messages = history.messages.slice(0, live.turnStart)
       const text = typeof prompt?.content === 'string' ? prompt.content : ''
       if (notice?.kind === 'info') {
-        // Stopped before any reply, or no key: give the prompt back to edit.
-        if (!draft.trim()) draft = text
-        notice = null
+        // Stopped before any reply, or no key: give the prompt back to edit. The conversation keeps
+        // a dimmed copy of it and a note, so Stop shows that it did something.
+        const back = !draft.trim()
+        if (back) draft = text
+        const message = notice.message === STOPPED_NOTE && back ? `${STOPPED_NOTE} Your message is back in the box.` : notice.message
+        notice = message && text ? { kind: 'info', message, echo: text } : null
       } else {
         failed = text
         notice ??= { kind: 'error', message: 'The assistant sent no reply.' }
@@ -234,7 +296,8 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
     // Chips of this reply that still run (in the history, or live only) will never finish.
     const replyCalls = [...toolUseIds(history.messages.slice(live.turnStart)), ...live.parts.flatMap((p) => (p.kind === 'tool' ? [p.callId] : []))]
     const tools = settleTools(history.tools, replyCalls)
-    state.set({ ...state.get(), history: { messages, tools }, live: null, streaming: false, notice, failed, draft, setup })
+    // Keep `provider`: without it, a reload sees a chat from another adapter and starts over.
+    state.set({ ...state.get(), history: { ...history, messages, tools }, live: null, streaming: false, notice, failed, draft, setup })
     save()
   }
 
@@ -297,7 +360,7 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
       finish(error.code === 'no_api_key' ? { kind: 'setup', message: error.message } : { kind: 'error', message: error.message })
     } catch (error) {
       if (turn.ended) return
-      if (controller.signal.aborted) finish({ kind: 'info', message: 'Stopped.' })
+      if (controller.signal.aborted) finish({ kind: 'info', message: STOPPED_NOTE })
       else finish({ kind: 'error', message: error instanceof Error ? `Network error: ${error.message}` : 'Network error.' })
     }
   }
@@ -314,6 +377,7 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
       const key = known ? historyKey(nextCollection, id) : null
       if (key === state.get().key) return
       abort?.abort()
+      stopReveal()
       collection = nextCollection
       docId = known ? id : null
       const stored = key ? loadHistory(storage(), key) : EMPTY_HISTORY
@@ -326,14 +390,23 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
         notice: matches ? null : { kind: 'info', message: `New chat: the assistant now uses ${ai?.label ?? 'another adapter'} (${ai?.model || 'another model'}).` },
         failed: null,
         draft: '',
+        restored: matches && stored.messages.length > 0,
         setup: state.get().setup,
       })
     },
     newChat() {
       abort?.abort()
       const { key, draft } = state.get()
-      state.set({ key, history: emptyHistory(), streaming: false, live: null, notice: null, failed: null, draft, setup: state.get().setup })
+      state.set({ key, history: emptyHistory(), streaming: false, live: null, notice: null, failed: null, draft, restored: false, setup: state.get().setup })
       save()
+    },
+    /** "Show" on a change: selects the block and scrolls the canvas to it. False when the block is gone. */
+    show(id: string): boolean {
+      if (!firstExisting([id])) return false
+      runtime.store.select(id)
+      flash([id])
+      scrollTo(id)
+      return true
     },
     retry() {
       const { failed } = state.get()

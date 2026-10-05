@@ -36,6 +36,7 @@ import type {
   LiveSessionEvent,
 } from '../../../live/types'
 import type { Runtime } from '../runtime'
+import { editingField, subscribeEditingField } from './field'
 import { changedIds, FALLBACK_COLOR, sameAwareness } from './presence'
 import type { SyncUpdate } from './sync'
 
@@ -71,7 +72,13 @@ export type LiveState = {
 }
 
 /** Another editor's selection and canvas width (changes rarely). */
-export type Peer = CollaboratorInfo & { selectedId: string | null; canvasWidth: number | null; locale: string | null }
+export type Peer = CollaboratorInfo & {
+  selectedId: string | null
+  canvasWidth: number | null
+  locale: string | null
+  /** The prop path of the selected block they type in (inspector or canvas), or null. */
+  field: string | null
+}
 
 /** Another editor's pointer (changes up to 20 times a second). `at` is when it last moved. */
 export type PeerCursor = { info: CollaboratorInfo; cursor: Awareness['cursor']; at: number }
@@ -130,7 +137,13 @@ export function useMultiplayer(
         new Map(
           [...others.values()].map(({ awareness, ...info }) => [
             info.clientId,
-            { ...info, selectedId: awareness?.selectedId ?? null, canvasWidth: awareness?.canvasWidth ?? null, locale: awareness?.locale ?? null },
+            {
+              ...info,
+              selectedId: awareness?.selectedId ?? null,
+              canvasWidth: awareness?.canvasWidth ?? null,
+              locale: awareness?.locale ?? null,
+              field: awareness?.field ?? null,
+            },
           ]),
         ),
       )
@@ -149,7 +162,14 @@ export function useMultiplayer(
       if (!entry) return
       const before = entry.awareness
       others.set(clientId, { ...entry, awareness })
-      if (before?.selectedId !== awareness.selectedId || before?.canvasWidth !== awareness.canvasWidth || before?.locale !== awareness.locale) publishPeers()
+      if (
+        before?.selectedId !== awareness.selectedId ||
+        before?.canvasWidth !== awareness.canvasWidth ||
+        before?.locale !== awareness.locale ||
+        (before?.field ?? null) !== (awareness.field ?? null)
+      ) {
+        publishPeers()
+      }
       const { awareness: _a, ...info } = entry
       const cursors = new Map(runtime.cursors.get())
       const moved = !before || before.cursor?.blockId !== awareness.cursor?.blockId || before.cursor?.x !== awareness.cursor?.x || before.cursor?.y !== awareness.cursor?.y
@@ -236,6 +256,7 @@ export function useMultiplayer(
       const s = store.getState()
       const hidden = document.visibilityState === 'hidden'
       const width = Math.round(runtime.frame.get().width)
+      const field = editingField(runtime)
       return {
         selectedId: s.selectedId,
         hoveredId: hidden ? null : s.hoveredId,
@@ -243,6 +264,8 @@ export function useMultiplayer(
         canvasWidth: width > 0 ? width : null,
         // Others see which language this editor works in.
         ...(s.locale ? { locale: s.locale } : {}),
+        // Others see the field this editor types in.
+        ...(field ? { field } : {}),
       }
     }
     const sendAwareness = () => {
@@ -289,6 +312,7 @@ export function useMultiplayer(
       if (pending !== state.pending) publish({ pending })
     })
     const offPointer = runtime.pointer.subscribe(throttledAwareness)
+    const offField = subscribeEditingField(runtime, sendAwareness)
     const offFrame = runtime.frame.subscribe(throttledAwareness)
     const onVisibility = () => sendAwareness()
     document.addEventListener('visibilitychange', onVisibility)
@@ -459,6 +483,7 @@ export function useMultiplayer(
       offResync()
       offStore()
       offPointer()
+      offField()
       offFrame()
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('online', onOnline)

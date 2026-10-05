@@ -245,6 +245,7 @@ async function seed() {
         text: `${SITE_NAME} is a small design and development studio. We build fast websites on Payload CMS, and your team edits every page with blocks.`,
         primary: toContact,
         secondary: toServices,
+        notesLabel: 'What we do',
         notes: ['Website design', 'Payload development', 'Launch and editor training'],
       }),
       work.create({
@@ -279,8 +280,8 @@ async function seed() {
       testimonials.create({
         title: 'What clients say',
         items: [
-          { quote: 'Our marketing team builds landing pages on their own now.', cite: 'Maria Lopez, Head of Marketing' },
-          { quote: 'The new site loads twice as fast as the old one.', cite: 'Tom Becker, CTO' },
+          { quote: 'Our marketing team builds landing pages on their own now.', cite: 'Maria Lopez, Head of Marketing, Linden Bakery' },
+          { quote: 'The new site loads twice as fast as the old one.', cite: 'Tom Becker, CTO, Oakmoor Clinic' },
         ],
       }),
       cta.create({
@@ -318,9 +319,9 @@ async function seed() {
         title: 'What we do',
         intro: 'Pick one service or combine them.',
         cards: [
-          { title: 'Website design', text: 'A clear design system built from theme tokens and blocks.', image: media['post-tokens'] },
-          { title: 'Payload development', text: 'Collections, custom blocks and integrations.', image: media['post-blocks'] },
-          { title: 'Launch and training', text: 'We launch the site and train your editors.', image: media['post-launch'] },
+          { title: 'Website design', text: 'A clear design system built from theme tokens and blocks.', image: media['service-design'] },
+          { title: 'Payload development', text: 'Collections, custom blocks and integrations.', image: media['service-development'] },
+          { title: 'Launch and training', text: 'We launch the site and train your editors.', image: media['service-training'] },
         ],
       }),
       faq.create({

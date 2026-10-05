@@ -261,7 +261,7 @@ export async function runAgent(args: RunAgentArgs): Promise<void> {
         summary: 'The tool failed',
       }))
       results.push({ type: 'tool_result', tool_use_id: call.id, content: outcome.content, ...(outcome.ok ? {} : { is_error: true }) })
-      if (outcome.ops && outcome.ops.length > 0) events.push({ type: 'operations', turnId, ops: outcome.ops })
+      if (outcome.ops && outcome.ops.length > 0) events.push({ type: 'operations', turnId, ops: outcome.ops, callId: call.id })
       events.push({
         type: 'tool',
         callId: call.id,

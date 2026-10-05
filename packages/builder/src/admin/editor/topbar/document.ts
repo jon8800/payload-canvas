@@ -35,6 +35,11 @@ export type DocumentController = {
   openSettings: () => void
   /** True while the settings drawer is open: its saves (autosave too) reload the header. */
   settingsOpen: ValueStore<boolean>
+  /**
+   * The settings drawer opens (`true`) or closes: takes or gives back Payload's document lock, so
+   * a second person in the drawer gets Payload's "Document locked" dialog. Never throws.
+   */
+  settingsLock: (take: boolean) => Promise<void>
   /** The last request to open Payload's Versions or API screen in a drawer. */
   screenRequest: ValueStore<{ screen: DocumentScreen; at: number } | null>
   openScreen: (screen: DocumentScreen) => void
@@ -179,6 +184,14 @@ export function createDocumentController(context: DocumentContext, initial: Buil
     settingsRequest,
     openSettings: () => settingsRequest.set(Date.now()),
     settingsOpen,
+    async settingsLock(take) {
+      try {
+        // `keepalive`: the release also reaches the server when the tab closes.
+        await fetch(`${endpoint}/settings-lock`, { method: take ? 'POST' : 'DELETE', credentials: 'include', keepalive: !take })
+      } catch {
+        // Offline: the lock expires by itself (Payload's lock duration).
+      }
+    },
     screenRequest,
     openScreen: (screen) => screenRequest.set({ screen, at: Date.now() }),
     refresh,

@@ -8,17 +8,22 @@ import {
   changedFields,
   checkStaleSave,
   createFieldClock,
+  createSettingsLocks,
   KEEP_LOCK_CONTEXT,
   LOCKED_DOCUMENTS_SLUG,
   recordFieldChanges,
+  releaseSettingsLock,
   restoreLocks,
   rememberLocks,
   staleSaveMessage,
+  takeSettingsLock,
   topFieldLabel,
-  type LockPayload,
   type LockRow,
+  type LockWritePayload,
+  type SettingsLocks,
 } from './fieldsGuard'
 import { createSessionManager } from './session'
+import { staleFieldAuthor } from './staleMessages'
 
 type Doc = Record<string, unknown>
 
@@ -126,10 +131,11 @@ describe('stale-save check', () => {
   })
 })
 
-function matches(row: LockRow, where: { and: Array<Record<string, { equals: unknown }>> }): boolean {
+function matches(row: LockRow, where: { and: Array<Record<string, { equals?: unknown; in?: unknown[] }>> }): boolean {
   const doc = row.document as { relationTo: string; value: unknown }
   return where.and.every((clause) => {
     const [key, cond] = Object.entries(clause)[0]
+    if (key === 'id') return (cond.in ?? []).includes(row.id)
     return key === 'document.relationTo' ? doc.relationTo === cond.equals : String(doc.value) === String(cond.equals)
   })
 }
@@ -139,7 +145,7 @@ function fakeLocks(options: { locking?: boolean } = {}) {
   let rows: LockRow[] = []
   let nextId = 1
   const created: Doc[] = []
-  const payload: LockPayload = {
+  const payload: LockWritePayload = {
     collections: {
       [LOCKED_DOCUMENTS_SLUG]: { config: {} },
       pages: { config: options.locking === false ? { lockDocuments: false } : {} },
@@ -150,7 +156,11 @@ function fakeLocks(options: { locking?: boolean } = {}) {
       },
       async create({ data }) {
         created.push(structuredClone(data as Doc))
-        rows.push({ id: nextId++, ...(data as Doc) })
+        rows.push({ id: nextId++, updatedAt: new Date().toISOString(), ...(data as Doc) })
+        return null
+      },
+      async deleteMany({ where }) {
+        rows = rows.filter((row) => !matches(row, where as never))
         return null
       },
     },
@@ -218,12 +228,12 @@ describe('keeping the lock', () => {
  * 423 for another user's lock when `overrideLock` is false, then deletes the document's locks),
  * beforeChange, the write, afterChange.
  */
-function fakeCollection() {
+function fakeCollection(settingsLocks: SettingsLocks = createSettingsLocks()) {
   const locks = fakeLocks()
   const clock = createFieldClock()
   const sessions = createSessionManager()
   const options = { collection: 'pages', field: 'layout', cssField: 'layoutCss', blocks: [], css: { entry: 'missing.css' }, fieldClock: clock }
-  const beforeOperation = keepLockBeforeOperation({ collection: 'pages' })
+  const beforeOperation = keepLockBeforeOperation({ collection: 'pages', settingsLocks })
   const beforeChange = layoutBeforeChange(options)
   const afterChange = layoutAfterChange({ collection: 'pages', sessions, fieldClock: clock })
   const collection = { slug: 'pages', fields: [{ name: 'title', type: 'text', label: 'Title' }], versions: { drafts: true } }
@@ -271,18 +281,82 @@ describe('the plugin hooks', () => {
     assert.equal(locks.rows().length, 0)
   })
 
-  it('rejects a stale settings save with 409 and a readable message', async () => {
+  it("the settings drawer owner's own saves keep their lock, so others stay locked out", async () => {
+    const holders = createSettingsLocks()
+    const { locks, update } = fakeCollection(holders)
+    locks.lock(ana, 1, '2026-10-04T12:00:30.000Z')
+    holders.add('pages', 1, ana.id)
+    await update({ data: { title: 'Start', updatedAt: '2026-10-04T12:00:00.000Z' }, user: ana, overrideLock: false })
+    const rows = locks.rows() as Array<{ user: { value: unknown } }>
+    assert.equal(rows.length, 1)
+    assert.equal(rows[0].user.value, ana.id)
+    await assert.rejects(update({ data: { title: 'Ben' }, user: ben, overrideLock: false }), (error: { status?: number }) => error.status === 423)
+    // A save by someone else in the drawer list does not keep another person's lock.
+    holders.add('pages', 1, ben.id)
+    await update({ data: { title: 'Ben' }, user: ben })
+    assert.equal(locks.rows().length, 0)
+  })
+
+  it('rejects a stale settings save with 409, a readable message and an error on each field', async () => {
     const { update, doc } = fakeCollection()
     await update({ data: { title: 'Start', slug: 'home', updatedAt: '2026-10-04T12:00:00.000Z' }, user: ana, overrideLock: false })
     await assert.rejects(
       update({ data: { title: 'Home', slug: 'start', updatedAt: '2026-10-04T12:00:00.000Z' }, user: ben, overrideLock: false }),
-      (error: { status?: number; message?: string }) => {
+      (error: { status?: number; message?: string; data?: { errors: { path: string; message: string }[] } }) => {
         assert.equal(error.status, 409)
         assert.match(error.message ?? '', /ana@example\.test changed Title after you opened this form/)
+        const errors = error.data?.errors ?? []
+        assert.deepEqual(errors.map((e) => e.path), ['title'])
+        assert.equal(staleFieldAuthor(errors[0]?.message), 'ana@example.test')
         return true
       },
     )
     assert.equal(doc().title, 'Start')
     assert.equal(doc().slug, 'home')
+  })
+})
+
+describe('the settings drawer lock', () => {
+  const now = Date.parse('2026-10-04T12:10:00.000Z')
+
+  it('takes a free lock, keeps its own, and leaves a live lock of someone else', async () => {
+    const locks = fakeLocks()
+    const holders = createSettingsLocks()
+    const args = { payload: locks.payload, req: {}, collection: 'pages', id: 1, holders }
+    assert.equal(await takeSettingsLock({ ...args, user: ana }), 'taken')
+    assert.equal(locks.rows().length, 1)
+    assert.equal(holders.has('pages', 1, ana.id), true)
+    assert.equal(await takeSettingsLock({ ...args, user: ana }), 'taken')
+    assert.equal(locks.rows().length, 1)
+    assert.equal(await takeSettingsLock({ ...args, user: ben }), 'other')
+    // Ben is listed: after "Take over" his saves keep his lock.
+    assert.equal(holders.has('pages', 1, ben.id), true)
+  })
+
+  it('replaces an expired lock, and does nothing when locking is off', async () => {
+    const locks = fakeLocks()
+    locks.lock(ben, 1, '2026-10-04T12:00:00.000Z')
+    const holders = createSettingsLocks()
+    assert.equal(await takeSettingsLock({ payload: locks.payload, req: {}, collection: 'pages', id: 1, user: ana, holders, now }), 'taken')
+    const rows = locks.rows() as Array<{ user: { value: unknown } }>
+    assert.equal(rows.length, 1)
+    assert.equal(rows[0].user.value, ana.id)
+
+    const off = fakeLocks({ locking: false })
+    assert.equal(await takeSettingsLock({ payload: off.payload, req: {}, collection: 'pages', id: 1, user: ana, holders, now }), 'off')
+    assert.equal(off.rows().length, 0)
+  })
+
+  it("releases only the user's own lock", async () => {
+    const locks = fakeLocks()
+    const holders = createSettingsLocks()
+    locks.lock(ben, 1, '2026-10-04T12:09:00.000Z')
+    holders.add('pages', 1, ana.id)
+    const args = { payload: locks.payload, req: {}, collection: 'pages', id: 1, holders }
+    assert.equal(await releaseSettingsLock({ ...args, user: ana }), 0)
+    assert.equal(holders.has('pages', 1, ana.id), false)
+    assert.equal(locks.rows().length, 1)
+    assert.equal(await releaseSettingsLock({ ...args, user: ben }), 1)
+    assert.equal(locks.rows().length, 0)
   })
 })

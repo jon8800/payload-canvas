@@ -15,29 +15,27 @@ export const contact = defineSection<ContactInput>({
   name: 'Contact',
   description:
     'Two columns: a title, text and contact details (email and phone as links) beside a form from the Forms collection. ' +
-    'Stacks on small screens.',
+    'On small screens the form comes right after the title and text, and the details follow it.',
   create: ({ title, text: body, formId, details }) =>
     stack('section', styles.section, [
-      stack('div', 'mx-auto grid w-full max-w-6xl grid-cols-1 gap-12 md:grid-cols-12 md:gap-16', [
-        stack('div', 'flex flex-col gap-5 md:col-span-5', [
-          heading(title, '2', styles.sectionTitle),
-          text(body, styles.body),
-          ...(details && details.length > 0
-            ? [
-                stack(
-                  'div',
-                  'mt-4 flex flex-col border-b border-border',
-                  details.map((detail) =>
-                    stack('div', 'flex flex-col gap-1 border-t border-border py-5', [
-                      text(detail.label, 'text-sm text-muted-foreground'),
-                      detail.href ? link(url(detail.href), DETAIL_LINK, [text(detail.value)]) : text(detail.value, 'text-lg'),
-                    ]),
-                  ),
+      // Phones: intro, form, details. Wide screens: intro and details on the left, the form on the right.
+      stack('div', 'mx-auto grid w-full max-w-6xl grid-cols-1 gap-10 md:grid-cols-12 md:grid-rows-[auto_1fr] md:gap-x-16 md:gap-y-8', [
+        stack('div', 'flex flex-col gap-5 md:col-span-5', [heading(title, '2', styles.sectionTitle), text(body, styles.body)]),
+        form(formId, 'rounded-lg border border-border bg-card p-6 sm:p-8 md:col-span-7 md:row-span-2 md:p-10'),
+        ...(details && details.length > 0
+          ? [
+              stack(
+                'div',
+                'flex flex-col self-start border-b border-border md:col-span-5',
+                details.map((detail) =>
+                  stack('div', 'flex flex-col gap-1 border-t border-border py-5', [
+                    text(detail.label, 'text-sm text-muted-foreground'),
+                    detail.href ? link(url(detail.href), DETAIL_LINK, [text(detail.value)]) : text(detail.value, 'text-lg'),
+                  ]),
                 ),
-              ]
-            : []),
-        ]),
-        form(formId, 'rounded-lg border border-border bg-card p-6 sm:p-8 md:col-span-7 md:p-10'),
+              ),
+            ]
+          : []),
       ]),
     ]),
 })

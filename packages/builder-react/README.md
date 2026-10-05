@@ -62,7 +62,7 @@ export default function CanvasPage() {
 }
 ```
 
-Give the route its own root layout with `<html>` and `<body>`, without your site header, with your site's CSS imported (`import '../(frontend)/globals.css'`) and `<ThemeStyle payload={payload} live />` in its `<head>`. `BuilderCanvas` takes the same `blocks`, `components` and `resolveLink` as `RenderLayout`, plus `plugins` (your Tailwind plugins map) and `server`: a server action made with `createCanvasServer` (`/server`) that renders the blocks the canvas cannot (server components that load data) and loads the page data. See [Server components in the canvas](https://github.com/jon8800/payload-toolkit/tree/main/packages/builder#server-components-in-the-canvas).
+Give the route its own root layout with `<html>` and `<body>`, without your site header, with your site's CSS imported (`import '../(frontend)/globals.css'`) and `<ThemeStyle payload={payload} live />` at the start of its `<body>` (React moves the tags into the head; `live` adds a client component, which inside a `<head>` element makes Next's metadata fail to hydrate on some loads). `BuilderCanvas` takes the same `blocks`, `components` and `resolveLink` as `RenderLayout`, plus `plugins` (your Tailwind plugins map) and `server`: a server action made with `createCanvasServer` (`/server`) that renders the blocks the canvas cannot (server components that load data) and loads the page data. See [Server components in the canvas](https://github.com/jon8800/payload-toolkit/tree/main/packages/builder#server-components-in-the-canvas).
 
 ## Block components
 

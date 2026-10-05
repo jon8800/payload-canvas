@@ -31,6 +31,12 @@ const EMPTY_PAGE_HEIGHT = 120
 export type InsertSpotOptions = {
   /** Width of a container's edge band, in iframe pixels. Default EDGE_BAND. */
   band?: number
+  /**
+   * The selected block. Its frame, name tag and action bar sit on its edges, so the "+" is not
+   * offered on its own top and bottom edges (left and right in a row) when the line would lie
+   * within `tolerance` iframe pixels of the edge. A neighbour's edge still offers that spot.
+   */
+  selected?: { id: string; tolerance: number }
 }
 
 export function spotPosition(spot: Pick<InsertSpot, 'parentId' | 'slot' | 'index'>): Position {
@@ -91,6 +97,10 @@ export function insertSpotAt(
   options: InsertSpotOptions = {},
 ): InsertSpot | null {
   const band = options.band ?? EDGE_BAND
+  const selected = options.selected
+  // Set when the spot under the pointer is on the selected block's edge: no "+" at all then, not
+  // one further away (the parent's edge).
+  let onSelectedEdge = false
   const index = indexOf(layout)
   const rects = new Map(measurement.blocks.map((b) => [b.id, b.rect]))
   const slotRect = (ownerId: string, slot: string) => measurement.slots.find((s) => s.ownerId === ownerId && s.slot === slot)
@@ -114,6 +124,13 @@ export function insertSpotAt(
     // On the list's axis: the middle of the gap, or the edge when there is no neighbor.
     let pos = side === 'before' ? start(own, axis) : end(own, axis)
     if (prev && next) pos = (end(prev, axis) + start(next, axis)) / 2
+    if (selected && list[i]?.id === selected.id) {
+      const edge = side === 'before' ? start(own, axis) : end(own, axis)
+      if (Math.abs(pos - edge) <= selected.tolerance) {
+        onSelectedEdge = true
+        return null
+      }
+    }
     // Across the axis: the extent of the block(s) the line touches.
     const cross = [prev, next].filter((r): r is Rect => Boolean(r))
     const lo = Math.min(...cross.map((r) => (axis === 'y' ? r.x : r.y)))
@@ -140,7 +157,7 @@ export function insertSpotAt(
       if (!rect) continue
       const axis = axisOf(e.parentId, e.slot)
       const spot = between(e.parentId, e.slot, e.index, p[axis] < center(rect, axis) ? 'before' : 'after')
-      if (spot) return spot
+      if (spot || onSelectedEdge) return spot
     }
     return null
   }
@@ -179,7 +196,7 @@ export function insertSpotAt(
     const offset = p[axis] - start(hitRect, axis)
     if (offset < zone || offset > size - zone) {
       const spot = around(hit)
-      if (spot) return spot
+      if (spot || onSelectedEdge) return spot
     }
     for (const name of names) {
       const slot = slotRect(hit.block.id, name)
@@ -200,7 +217,7 @@ export function insertSpotAt(
       // 4. A filled slot under the pointer: between its children.
       if (children.length > 0 && slot && contains(slot.rect, p)) {
         const spot = nearestChild(hit.block.id, name)
-        if (spot) return spot
+        if (spot || onSelectedEdge) return spot
       }
     }
   }

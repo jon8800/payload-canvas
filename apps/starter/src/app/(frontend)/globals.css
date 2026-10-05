@@ -253,9 +253,10 @@
 }
 
 /* Rich text ("prose") uses the theme colors and the heading font, not the typography plugin's grays.
-   Unlayered, so it wins over the plugin's layered styles. */
+   Unlayered, so it wins over the plugin's layered styles. Body text is the muted color, like the
+   Text blocks of the sections (`styles.body`), so all running text on a page has one color. */
 .prose {
-  --tw-prose-body: var(--foreground);
+  --tw-prose-body: var(--muted-foreground);
   --tw-prose-headings: var(--foreground);
   --tw-prose-lead: var(--muted-foreground);
   --tw-prose-links: var(--foreground);

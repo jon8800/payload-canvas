@@ -8,6 +8,8 @@
 //   POST {api}/builder/live/:collection/:id/unpublish  -> PublishResponse
 //   POST {api}/builder/live/:collection/:id/revert     -> PublishResponse
 //   POST {api}/builder/live/:collection/:id/restore    -> PublishResponse  (body: { versionId })
+//   POST   {api}/builder/live/:collection/:id/settings-lock -> SettingsLockResponse (the drawer opens)
+//   DELETE {api}/builder/live/:collection/:id/settings-lock -> SettingsLockResponse (the drawer closes)
 
 import { addDataAndFileToRequest, restoreVersionOperation, type Collection, type Endpoint, type PayloadRequest } from 'payload'
 
@@ -21,11 +23,20 @@ import { checkLayout, RAW_LAYOUT_CONTEXT, STORED_LAYOUT_CONTEXT, type BindingChe
 import { documentPath, draftPreviewPath } from '../plugin/links'
 import { payloadErrorMessage, payloadFieldErrors } from './apply'
 import { propAccessFor } from './fieldChecks'
-import { KEEP_LOCK_CONTEXT } from './fieldsGuard'
+import { defaultSettingsLocks, KEEP_LOCK_CONTEXT, releaseSettingsLock, takeSettingsLock, type LockWritePayload } from './fieldsGuard'
 import { LIVE_PATH, requestActor, targetOf } from './endpoints'
 import type { LiveRuntime } from './runtime'
 import type { SessionTarget } from './session'
-import type { BuilderDocMeta, DocStatus, LiveAccessResponse, LiveError, LivePublishedEvent, PublishAction, PublishResponse } from './types'
+import type {
+  BuilderDocMeta,
+  DocStatus,
+  LiveAccessResponse,
+  LiveError,
+  LivePublishedEvent,
+  PublishAction,
+  PublishResponse,
+  SettingsLockResponse,
+} from './types'
 
 /** One builder collection as the server sees it. */
 export type BuilderCollectionServer = {
@@ -579,5 +590,39 @@ export function documentEndpoints({ collections, templates, sections, runtime, c
     },
   }
 
-  return [meta, accessEndpoint, action('publish'), action('unpublish'), action('revert'), restore]
+  // The settings drawer takes Payload's document lock when it opens and gives it back when it
+  // closes (see fieldsGuard.ts). The builder view itself never holds the lock.
+  const holders = defaultSettingsLocks()
+  const settingsLock = (method: 'post' | 'delete'): Endpoint => ({
+    path: `${LIVE_PATH}/:collection/:id/settings-lock`,
+    method,
+    handler: async (req) => {
+      const user = req.user as { id?: unknown; collection?: unknown } | null
+      if (!user || (typeof user.id !== 'string' && typeof user.id !== 'number')) {
+        return json({ ok: false, error: 'Unauthorized' } satisfies SettingsLockResponse, 401)
+      }
+      const target = targetOf(req, collections)
+      if (target instanceof Response) return target
+      const payload = req.payload as unknown as LockWritePayload & { db: { defaultIDType?: string } }
+      // The lock row stores the id in the collection's id type.
+      const id = payload.db.defaultIDType === 'number' && /^\d+$/.test(target.id) ? Number(target.id) : target.id
+      const args = { payload, req, collection: target.collection, id, holders }
+      try {
+        if (method === 'delete') {
+          await releaseSettingsLock({ ...args, user: { id: user.id } })
+          return json({ ok: true, lock: 'released' } satisfies SettingsLockResponse)
+        }
+        if (!(await runtime.canUpdate(req, target.collection, target.id))) {
+          return json({ ok: true, lock: 'off' } satisfies SettingsLockResponse)
+        }
+        const lock = await takeSettingsLock({ ...args, user: { id: user.id, collection: String(user.collection ?? 'users') } })
+        return json({ ok: true, lock } satisfies SettingsLockResponse)
+      } catch (error) {
+        req.payload.logger.error({ err: error, msg: '[websiteBuilder] settings lock failed' })
+        return json({ ok: false, error: 'The document lock could not be changed.' } satisfies SettingsLockResponse, 500)
+      }
+    },
+  })
+
+  return [meta, accessEndpoint, action('publish'), action('unpublish'), action('revert'), restore, settingsLock('post'), settingsLock('delete')]
 }

@@ -120,14 +120,20 @@ function FieldInput({
       )
     case 'select':
       return (
-        <select {...common} className={join(formClasses.input, formClasses.select)} value={text} onChange={(e) => onChange(e.target.value)}>
-          <option value="">Choose one</option>
-          {field.options?.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        // A native select (keyboard, screen readers and phone pickers work as usual), drawn like the inputs.
+        <div className={formClasses.selectWrap}>
+          <select {...common} className={join(formClasses.input, formClasses.select)} value={text} onChange={(e) => onChange(e.target.value)}>
+            <option value="">Choose one</option>
+            {field.options?.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <svg className={formClasses.selectIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M4 6l4 4 4-4" />
+          </svg>
+        </div>
       )
     case 'checkbox':
       return (

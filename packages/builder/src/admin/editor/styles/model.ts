@@ -51,10 +51,14 @@ export function createReader(className: string, variant: Variant, tokens: StyleT
   }
 }
 
-/** Text an input shows for a value: "-4" for a negative 4. */
+/**
+ * Text an input shows for a value: "-4" for a negative 4. An arbitrary value shows without its
+ * brackets ("[1.02]" -> "1.02", "[1fr_auto]" -> "1fr auto"); the Classes box keeps the class as is.
+ */
 export function displayValue(value: StyleValue | null): string {
   if (!value) return ''
-  return value.negative ? `-${value.value}` : value.value
+  const text = arbitraryText(value.value) ?? value.value
+  return value.negative ? `-${text}` : text
 }
 
 const KEYWORD = /^[a-z0-9][a-z0-9.-]*$/i

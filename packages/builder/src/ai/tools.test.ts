@@ -101,6 +101,29 @@ describe('section tools with saved sections', () => {
     })
   }
 
+  it('insertSection and applyOperations take "__PAGE_ROOT__" as the page root', async () => {
+    const workspace = new Workspace(emptyLayout(), blocks)
+    const section = await runTool('insertSection', { sectionId: 'hero', parentId: '__PAGE_ROOT__' }, workspace, withSaved)
+    assert.equal(section.ok, true, section.content)
+    const insert = await runTool(
+      'applyOperations',
+      { operations: [{ type: 'insert', block: { type: 'heading', props: { text: 'Hi' } }, to: { parentId: '__PAGE_ROOT__', index: 1 } }] },
+      workspace,
+      withSaved,
+    )
+    assert.equal(insert.ok, true, insert.content)
+    assert.equal(workspace.layout.blocks.length, 2)
+  })
+
+  it('applyOperations keeps a real block called "page" as a parent', () => {
+    const repaired = repairOperations(
+      { operations: [{ type: 'insert', block: { type: 'heading' }, to: { parentId: 'page', index: 0 } }] },
+      (id) => id === 'page',
+    )
+    assert.ok(typeof repaired !== 'string')
+    assert.equal((repaired.ops[0] as { to: { parentId: unknown } }).to.parentId, 'page')
+  })
+
   it('insertSection lists the known sections for an unknown id', async () => {
     const outcome = await runTool('insertSection', { sectionId: 'saved:99' }, new Workspace(emptyLayout(), blocks), withSaved)
     assert.equal(outcome.ok, false)

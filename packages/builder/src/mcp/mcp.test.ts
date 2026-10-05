@@ -3,6 +3,7 @@ import { describe, it } from 'node:test'
 import type { PayloadRequest } from 'payload'
 import { z } from 'zod'
 
+import { createId } from '../core/ids'
 import { findBlock } from '../core/tree'
 import type { BlockDefinition, Layout, SectionDefinition } from '../core/types'
 import type { LiveDocStore } from '../live/apply'
@@ -11,6 +12,7 @@ import { createSessionManager } from '../live/session'
 import type { LiveCommitEvent, MultiplayerEvent } from '../live/types'
 import { SAVED_SECTIONS_CONFIG_KEY } from '../plugin/sections'
 import { builderMcpTools, sectionInsertOps, type BuilderMcpTool } from './index'
+import { isRootParentId, repairRootParents } from './shared'
 
 const blocks: BlockDefinition[] = [
   { type: 'stack', label: 'Stack', fields: [], slots: { children: {} }, ai: { description: 'A container.' } },
@@ -472,6 +474,64 @@ describe('sectionInsertOps', () => {
       assert.ok(Array.isArray(ops), `parentId ${JSON.stringify(parentId)}`)
       assert.deepEqual(ops[0].type === 'insert' && ops[0].to, { parentId: null, slot: 'children', index: 0 })
     }
+  })
+
+  it('reads "__PAGE_ROOT__" and other spellings of the root as the page root', () => {
+    const layout: Layout = { version: 1, blocks: [] }
+    for (const parentId of ['__PAGE_ROOT__', '__root__', '$root', '<root>', 'page_root', 'root_page', 'page-root', 'Page Root', 'page.root', '#page:root', 'pageRoot', 'PAGEROOT', 'document root', 'None', 'undefined', 'top-level']) {
+      assert.equal(isRootParentId(parentId), true, JSON.stringify(parentId))
+      const ops = sectionInsertOps(layout, hero, { parentId })
+      assert.ok(Array.isArray(ops), `parentId ${JSON.stringify(parentId)}`)
+    }
+  })
+
+  it('never reads a real block id as the page root', () => {
+    for (const parentId of ['b_k3x9qa', 'b_root00', 'b_page12', 'sec', 'hero-1', 'root2', 'main-nav', '0']) {
+      assert.equal(isRootParentId(parentId), false, parentId)
+    }
+    for (let i = 0; i < 500; i++) assert.equal(isRootParentId(createId()), false)
+    // A layout with a block called "page" keeps it as a parent.
+    const layout: Layout = { version: 1, blocks: [{ id: 'page', type: 'stack' }] }
+    const ops = sectionInsertOps(layout, hero, { parentId: 'page' })
+    assert.ok(Array.isArray(ops))
+    assert.deepEqual(ops[0].type === 'insert' && ops[0].to.parentId, 'page')
+    assert.equal(isRootParentId('page', (id) => id === 'page'), false)
+  })
+
+  it('repairRootParents fixes the parentId of insert and move operations only', () => {
+    const layout: Layout = { version: 1, blocks: [{ id: 'a', type: 'stack' }] }
+    const insert = { type: 'insert', block: { id: 'b_1', type: 'heading' }, to: { parentId: '__PAGE_ROOT__', index: 0 } }
+    const move = { type: 'move', id: 'a', to: { parentId: 'Root', slot: 'children', index: 0 } }
+    const keep = { type: 'insert', block: { id: 'b_2', type: 'heading' }, to: { parentId: 'a', index: 0 } }
+    const update = { type: 'update', id: 'a', props: {} }
+    const { ops, fixed } = repairRootParents(layout, [insert, move, keep, update, 'junk'])
+    assert.equal(fixed, 2)
+    assert.deepEqual((ops[0] as typeof insert).to, { parentId: null, index: 0 })
+    assert.deepEqual((ops[1] as typeof move).to, { parentId: null, slot: 'children', index: 0 })
+    assert.equal(ops[2], keep)
+    assert.equal(ops[3], update)
+    assert.equal(ops[4], 'junk')
+    // The input is not changed.
+    assert.equal(insert.to.parentId, '__PAGE_ROOT__')
+  })
+
+  it('applyOperations and insertSection accept "__PAGE_ROOT__" as the page root', async () => {
+    const { req } = fakeRequest({ version: 1, blocks: [{ id: 'a', type: 'heading', props: { text: 'X' } }] })
+    const applied = await tool('applyOperations').handler(
+      {
+        collection: 'pages',
+        id: 'p1',
+        operations: [{ type: 'insert', block: { id: 'b_new', type: 'heading', props: { text: 'N' } }, to: { parentId: '__PAGE_ROOT__', index: 1 } }],
+      },
+      req,
+      {},
+    )
+    assert.equal(json(applied).ok, true)
+    const section = await tool('insertSection').handler({ collection: 'pages', id: 'p1', sectionId: 'hero', parentId: '__PAGE_ROOT__' }, req, {})
+    assert.equal(json(section).ok, true)
+    const layout = json(await tool('getLayout').handler({ collection: 'pages', id: 'p1' }, req, {})).layout as Layout
+    assert.equal(layout.blocks.length, 3)
+    assert.equal(layout.blocks[1].id, 'b_new')
   })
 })
 

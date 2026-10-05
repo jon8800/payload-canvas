@@ -9,6 +9,7 @@ import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent, type
 import type { Block, SectionDefinition } from '../../../core/types'
 import { blockName } from '../names'
 import { useRuntime, type Runtime } from '../runtime'
+import { useModalA11y } from '../ui/modalA11y'
 import { useValue } from '../valueStore'
 import type { SectionDialog as Dialog } from './controller'
 
@@ -54,6 +55,8 @@ function DialogContent({ dialog }: { dialog: Dialog }) {
   const [category, setCategory] = useState(dialog.kind === 'save' ? '' : (dialog.section.category ?? ''))
   const nameRef = useRef<HTMLInputElement>(null)
   const busy = useRef(false)
+  // Named by its heading; Delete is an alert dialog.
+  useModalA11y(MODAL_SLUG, { alert: dialog.kind === 'delete' })
 
   useEffect(() => {
     // After the modal's open animation starts.
@@ -73,7 +76,7 @@ function DialogContent({ dialog }: { dialog: Dialog }) {
       if (dialog.kind === 'save') {
         const result = await runtime.sections.save(dialog.block, name, category)
         if (typeof result === 'string') runtime.warn(`The section was not saved: ${result}`)
-        else runtime.notify(`Saved “${result.label}” in Add › Sections › Saved`)
+        else runtime.notify(`Saved “${result.label}”. It is in the Sections tab, under Saved.`)
       } else if (dialog.kind === 'rename') {
         const result = await runtime.sections.rename(dialog.section, name, category)
         if (typeof result === 'string') runtime.warn(`The section was not renamed: ${result}`)
@@ -119,7 +122,7 @@ function DialogContent({ dialog }: { dialog: Dialog }) {
         <div className="builder-section-dialog__fields">
           {saving && (
             <p className="builder-section-dialog__intro">
-              Saves a copy of this block and everything inside it. Everyone who edits pages finds it under Add › Sections › Saved.
+              Saves a copy of this block and everything inside it. Everyone who edits pages finds it in the Sections tab, under Saved.
             </p>
           )}
           <TextInput

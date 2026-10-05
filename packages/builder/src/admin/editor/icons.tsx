@@ -170,7 +170,8 @@ const PATHS = {
   ),
   up: <path d="M8 13.5v-11M4 6.5l4-4 4 4" />,
   down: <path d="M8 2.5v11M4 9.5l4 4 4-4" />,
-  parent: <path d="M3 9.5v3.5h10V9.5M8 10.5V2.5M5 5.5l3-3 3 3" />,
+  // Select parent: a corner-up-left arrow (out of this block, up to the one around it).
+  parent: <path d="M6 9.5 2.5 6 6 2.5M2.5 6h7.75a2.75 2.75 0 0 1 2.75 2.75v4.75" />,
   eye: (
     <>
       <path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8Z" />
@@ -284,11 +285,11 @@ const PATHS = {
       <path d="M2.75 14c.6-2.6 2.75-4.25 5.25-4.25S12.65 11.4 13.25 14" />
     </>
   ),
-  // Animations: a ball with speed lines (blocks with motion, "Play animations"), and play (Preview).
+  // Animations: a ball with a trail of fading echoes (blocks with motion, "Play animations"), and play (Preview).
   motion: (
     <>
-      <circle cx="10" cy="8" r="3.5" />
-      <path d="M1.5 8h3M2.5 5h2.5M2.5 11h2.5" />
+      <circle cx="10.5" cy="8" r="3.5" />
+      <path d="M5.6 4.9a4.25 4.25 0 0 0 0 6.2M2.6 5.9a3 3 0 0 0 0 4.2" />
     </>
   ),
   play: <path d="M5 3.25v9.5L12.75 8 5 3.25Z" />,

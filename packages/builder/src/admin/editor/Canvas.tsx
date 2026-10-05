@@ -8,7 +8,7 @@ import { ancestors } from './actions'
 import { dragModeChoice, prefersReducedMotion, useDragModeSetting } from './dnd/mode'
 import { dropAt } from './dnd/smooth'
 import { BlockIcon, Icon } from './icons'
-import { applyInlineChange, applyInlineJoin, applyInlineSplit, boundHint, inlineEditing, refuseLockedInline, stopInlineEditing } from './inline'
+import { applyInlineChange, applyInlineJoin, applyInlineSplit, boundHint, inlineEditing, noteInlineStart, refuseLockedInline, stopInlineEditing } from './inline'
 import { blockName } from './names'
 import { MenuButton } from './menu/Menu'
 import { playMotion } from './motion/play'
@@ -16,6 +16,7 @@ import { useCanvasMenus } from './menu/useCanvasMenus'
 import { cursorAt } from './live'
 import { FollowFrame } from './live/PresenceUI'
 import { FrameResize } from './layout/FrameResize'
+import { EmptyStart } from './empty/EmptyStart'
 import { EDGE_BAND, insertSpotAt, sameSpot } from './insert/spots'
 import { Overlay } from './Overlay'
 import { useRuntime, type Runtime } from './runtime'
@@ -23,6 +24,7 @@ import { bindShortcuts } from './shortcuts'
 import { useEditor } from './store'
 import { postContext, templateContext } from './templates/state'
 import { breakpointAt, breakpointWidths, useStyleTokens, withFallback } from './styles/tokens'
+import { deviceForWidth } from './styles/viewport'
 import { sameItems, useValue } from './valueStore'
 
 const NO_PATH: never[] = []
@@ -37,6 +39,8 @@ const REVEAL_DELAYS_MS = [120, 600]
 const SPOT_LINGER_MS = 160
 /** Width of a container's edge band for the "+", in screen pixels. */
 const SPOT_BAND_PX = 10
+/** No "+" this close to the selected block's own edge, in screen pixels. */
+const SELECTED_EDGE_PX = 4
 
 export function Canvas() {
   const runtime = useRuntime()
@@ -70,14 +74,20 @@ export function Canvas() {
     return () => observer.disconnect()
   }, [])
 
-  // Fluid (no fixed width) fills the stage at 100 %, so the canvas shows the breakpoint of the free
-  // space. A fixed zoom below 100 % makes the fluid frame wider, so it still fills the stage.
-  // A fixed width wider than the stage zooms out to fit.
+  // Fluid (no fixed width) always fills the stage at 100 %, so the canvas shows the breakpoint of
+  // the free space. A fixed width wider than the stage zooms out to fit.
   const [zoomMode, setZoomMode] = useState<ZoomMode>('fit')
+  // Another device (or Fluid) starts at Fit: a manual zoom belongs to the frame it was set for.
+  // A custom width (resize handles, the width box) keeps it.
+  const [zoomWidth, setZoomWidth] = useState(width)
+  if (zoomWidth !== width) {
+    setZoomWidth(width)
+    if (deviceForWidth(width) !== null && zoomMode !== 'fit') setZoomMode('fit')
+  }
   const fluid = width === null
-  const frameWidth = fluid ? Math.round(stage.width / (zoomMode === 'fit' ? 1 : zoomMode)) : width
+  const frameWidth = fluid ? stage.width : width
   const fit = !fluid && frameWidth > stage.width && stage.width > 0 ? stage.width / frameWidth : 1
-  const zoom = zoomMode === 'fit' ? fit : zoomMode
+  const zoom = fluid ? 1 : zoomMode === 'fit' ? fit : zoomMode
   useEffect(() => runtime.frame.set({ width: frameWidth, zoom }), [runtime, frameWidth, zoom])
   // The stage scrolls sideways only when the zoomed frame is wider than the stage (a fixed zoom).
   // Otherwise it clips: while the zoom eases to a new value, the scaled frame is wider for a moment.
@@ -132,7 +142,10 @@ export function Canvas() {
           if (message.kind === 'move') {
             store.hover(hit)
             const band = Math.max(EDGE_BAND, SPOT_BAND_PX / (runtime.frame.get().zoom || 1))
-            setSpot(inline.get() ? null : insertSpotAt(layout, runtime.config.blocks, m, message, { band }))
+            // Not on the selected block's own edges, where its frame, name tag and action bar are.
+            const { selectedId } = store.getState()
+            const selected = selectedId ? { id: selectedId, tolerance: SELECTED_EDGE_PX / (runtime.frame.get().zoom || 1) } : undefined
+            setSpot(inline.get() ? null : insertSpotAt(layout, runtime.config.blocks, m, message, { band, selected }))
           }
           if (message.kind === 'click') store.select(hit)
           return
@@ -151,6 +164,7 @@ export function Canvas() {
         case 'inlineStart':
           store.select(message.id)
           if (refuseLockedInline(runtime, message)) return
+          noteInlineStart(runtime, message)
           inline.set({ session: message.session, id: message.id, path: message.path, kind: message.kind, format: null, linkRequest: 0 })
           store.hover(null)
           return
@@ -319,11 +333,12 @@ export function Canvas() {
             <Overlay />
           </div>
           <FrameResize wrapRef={wrapRef} frameRef={frameRef} frameWidth={frameWidth} zoom={zoom} space={stage.width} />
+          <EmptyStart />
         </div>
         <FollowFrame />
         <Notice />
       </div>
-      <StatusBar frameWidth={frameWidth} zoom={zoom} fit={fit} zoomMode={zoomMode} onZoom={setZoomMode} />
+      <StatusBar frameWidth={frameWidth} zoom={zoom} fit={fit} zoomMode={fluid ? 'fit' : zoomMode} fluid={fluid} onZoom={setZoomMode} />
     </section>
   )
 }
@@ -332,11 +347,23 @@ export function Canvas() {
 type ZoomMode = 'fit' | number
 const ZOOM_STEPS = [0.25, 0.33, 0.5, 0.67, 0.75, 1]
 
-/** Zoom out, the current zoom (click to fit), zoom in. */
-function ZoomControl({ zoom, fit, mode, onZoom }: { zoom: number; fit: number; mode: ZoomMode; onZoom: (mode: ZoomMode) => void }) {
+/** Zoom out, the current zoom (click to fit), zoom in. Fluid always shows 100 %: no zoom there. */
+function ZoomControl({
+  zoom,
+  fit,
+  mode,
+  fluid,
+  onZoom,
+}: {
+  zoom: number
+  fit: number
+  mode: ZoomMode
+  fluid: boolean
+  onZoom: (mode: ZoomMode) => void
+}) {
   const percent = Math.round(zoom * 100)
-  const smaller = ZOOM_STEPS.toReversed().find((step) => step < zoom - 0.005)
-  const larger = ZOOM_STEPS.find((step) => step > zoom + 0.005)
+  const smaller = fluid ? undefined : ZOOM_STEPS.toReversed().find((step) => step < zoom - 0.005)
+  const larger = fluid ? undefined : ZOOM_STEPS.find((step) => step > zoom + 0.005)
   // A fixed zoom that equals the fit zoom goes back to "fit", so the frame follows the stage again.
   const pick = (step: number | undefined) => step !== undefined && onZoom(Math.abs(step - fit) < 0.005 ? 'fit' : step)
   return (
@@ -356,7 +383,7 @@ function ZoomControl({ zoom, fit, mode, onZoom }: { zoom: number; fit: number; m
         className="builder-editor__zoom"
         aria-pressed={mode === 'fit'}
         aria-label={`Zoom ${percent}%. ${mode === 'fit' ? 'Fits the stage.' : 'Click to fit the stage.'}`}
-        data-tooltip={mode === 'fit' ? 'Zoom fits the stage' : 'Fit to the stage'}
+        data-tooltip={fluid ? 'Fluid fills the stage at 100 %. Pick a device to zoom.' : mode === 'fit' ? 'Zoom fits the stage' : 'Fit to the stage'}
         onClick={() => onZoom('fit')}
       >
         {mode === 'fit' ? `Fit · ${percent}%` : `${percent}%`}
@@ -399,12 +426,14 @@ function StatusBar({
   zoom,
   fit,
   zoomMode,
+  fluid,
   onZoom,
 }: {
   frameWidth: number
   zoom: number
   fit: number
   zoomMode: ZoomMode
+  fluid: boolean
   onZoom: (mode: ZoomMode) => void
 }) {
   const runtime = useRuntime()
@@ -445,7 +474,7 @@ function StatusBar({
           <span data-tooltip="Canvas width and the breakpoint it shows">
             {px} px · {breakpointAt(widths, px)}
           </span>
-          <ZoomControl zoom={zoom} fit={fit} mode={zoomMode} onZoom={onZoom} />
+          <ZoomControl zoom={zoom} fit={fit} mode={zoomMode} fluid={fluid} onZoom={onZoom} />
           <PlayMotionToggle runtime={runtime} />
           <DragModeMenu runtime={runtime} />
         </span>
@@ -480,8 +509,9 @@ function DragModeMenu({ runtime }: { runtime: Runtime }) {
   return (
     <MenuButton
       className="builder-editor__icon-button builder-editor__icon-button--small"
-      triggerLabel="Drag and drop style"
-      tooltip="Drag and drop style"
+      // The tooltip says which style is on, so nobody has to open the menu to see it.
+      triggerLabel={`Drag and drop style: ${mode === 'smooth' ? 'move blocks out of the way' : 'show a drop line'}`}
+      tooltip={`Drag and drop: ${mode === 'smooth' ? 'blocks move out of the way' : 'a drop line shows'}`}
       label="Drag and drop style"
       side="top"
       align="end"

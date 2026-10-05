@@ -15,6 +15,23 @@
     }
   }
 
+  // Type scale and the floating-surface shadow. Three sizes and three weights for all editor
+  // text, derived from Payload's base size (1rem: 13px, 12px on narrow screens). On :root,
+  // because Payload's drawers and modals render outside the editor element.
+  //   s: captions, counts, badges, keyboard keys, tooltips, small group titles
+  //   m: labels, inputs, tree rows, tabs, menu items, buttons, help text
+  //   l: the block name and panel titles
+  :root {
+    --be-text-s: calc(1rem - 2px);
+    --be-text-m: 1rem;
+    --be-text-l: calc(1rem + 1px);
+    --be-weight-regular: 400;
+    --be-weight-medium: 500;
+    --be-weight-strong: 600;
+    // One shadow for every floating surface: menus, popovers, select lists, tooltips.
+    --be-shadow: 0 8px 24px rgb(0 0 0 / 0.18), 0 1px 3px rgb(0 0 0 / 0.12);
+  }
+
   .builder-editor {
     --be-accent: var(--theme-success-500);
     --be-accent-strong: var(--theme-success-600);
@@ -22,14 +39,17 @@
     --be-accent-fg: #fff;
     --be-border: var(--theme-elevation-150);
     --be-border-soft: var(--theme-elevation-100);
-    --be-muted: var(--theme-elevation-500);
+    // Text colors that pass WCAG AA (4.5:1) on the panel, a selected row and a raised surface.
+    --be-muted: var(--theme-elevation-600);
+    --be-accent-text: var(--theme-success-600);
+    // The selection tag's fill: white text on it passes AA in both themes.
+    --be-accent-solid: var(--color-success-600);
     --be-subtle: var(--theme-elevation-400);
     --be-panel: var(--theme-bg);
     --be-raised: var(--theme-elevation-50);
     --be-hover: var(--theme-elevation-100);
     --be-radius: var(--style-radius-s, 4px);
     --be-radius-m: var(--style-radius-m, 6px);
-    --be-shadow: 0 8px 24px rgb(0 0 0 / 0.18), 0 1px 3px rgb(0 0 0 / 0.12);
     --be-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 
     display: flex;
@@ -40,7 +60,7 @@
     overflow: hidden;
     color: var(--theme-text);
     font-family: var(--font-body);
-    font-size: 13px;
+    font-size: var(--be-text-m);
     background: var(--be-panel);
 
     button {
@@ -65,14 +85,14 @@
       background: var(--be-raised);
       color: var(--theme-elevation-800);
       font-family: inherit;
-      font-size: 11px;
-      font-weight: 500;
+      font-size: var(--be-text-s);
+      font-weight: var(--be-weight-medium);
       line-height: 1;
     }
 
     code {
       font-family: var(--font-mono, ui-monospace, monospace);
-      font-size: 11px;
+      font-size: var(--be-text-s);
     }
   }
 
@@ -161,8 +181,8 @@
     border-radius: var(--be-radius);
     background: transparent;
     color: var(--theme-elevation-600);
-    font-size: 12px;
-    font-weight: 500;
+    font-size: var(--be-text-m);
+    font-weight: var(--be-weight-medium);
     cursor: pointer;
     transition: background-color 120ms ease, color 120ms ease;
 
@@ -181,19 +201,19 @@
   .builder-editor__segmented--small .builder-editor__segment {
     height: 22px;
     padding: 0 8px;
-    font-size: 11.5px;
+    font-size: var(--be-text-s);
   }
 
   .builder-editor__segment-count {
     color: var(--be-muted);
-    font-size: 10.5px;
+    font-size: var(--be-text-s);
     font-variant-numeric: tabular-nums;
   }
 
   .builder-editor__hint {
     margin: 0;
     color: var(--be-muted);
-    font-size: 12px;
+    font-size: var(--be-text-m);
     line-height: 1.5;
   }
 
@@ -214,8 +234,8 @@
     > p:not(.builder-editor__hint) {
       margin: 4px 0 0;
       color: var(--theme-text);
-      font-size: 13px;
-      font-weight: 600;
+      font-size: var(--be-text-m);
+      font-weight: var(--be-weight-strong);
     }
 
     .builder-editor__hint {
@@ -232,8 +252,8 @@
     border-radius: 10px;
     background: var(--theme-elevation-100);
     color: var(--be-muted);
-    font-size: 11px;
-    font-weight: 500;
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-medium);
   }
 
   .builder-editor__count {
@@ -242,8 +262,8 @@
     border-radius: 9px;
     background: var(--theme-elevation-100);
     color: var(--be-muted);
-    font-size: 10.5px;
-    font-weight: 600;
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-strong);
     text-align: center;
     font-variant-numeric: tabular-nums;
   }
@@ -262,7 +282,7 @@
     border-radius: var(--be-radius-m);
     background: var(--theme-input-bg, var(--theme-elevation-0));
     color: var(--be-muted);
-    font-size: 12px;
+    font-size: var(--be-text-m);
     cursor: text;
 
     &:focus-within {
@@ -287,9 +307,9 @@
     padding: 3px 7px;
     border-radius: var(--be-radius);
     background: var(--be-accent-soft);
-    color: var(--be-accent);
-    font-size: 11px;
-    font-weight: 600;
+    color: var(--be-accent-text);
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-strong);
     text-align: center;
   }
 
@@ -303,7 +323,7 @@
     border-radius: var(--be-radius-m);
     background: color-mix(in srgb, var(--theme-error-500) 12%, transparent);
     color: var(--theme-error-500);
-    font-size: 12px;
+    font-size: var(--be-text-m);
 
     button {
       color: inherit;
@@ -354,8 +374,8 @@
 
   .builder-editor__help-title {
     margin: 0 0 10px;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--be-text-m);
+    font-weight: var(--be-weight-strong);
   }
 
   .builder-editor__help-row {
@@ -366,7 +386,7 @@
 
     dt {
       color: var(--theme-elevation-700);
-      font-size: 12px;
+      font-size: var(--be-text-m);
     }
 
     dd {
@@ -422,7 +442,7 @@
     }
 
     .builder-editor__tile {
-      height: 58px;
+      min-height: 58px;
     }
   }
 
@@ -451,8 +471,8 @@
     gap: 6px;
     margin: 0;
     color: var(--theme-text);
-    font-size: 12px;
-    font-weight: 600;
+    font-size: var(--be-text-m);
+    font-weight: var(--be-weight-strong);
     letter-spacing: 0.01em;
 
     svg {
@@ -527,7 +547,7 @@
       background: transparent;
       color: var(--theme-text);
       font: inherit;
-      font-size: 12.5px;
+      font-size: var(--be-text-m);
 
       &::placeholder {
         color: var(--be-subtle);
@@ -550,8 +570,8 @@
   .builder-editor__group-title {
     margin: 4px 0 6px;
     color: var(--be-muted);
-    font-size: 10.5px;
-    font-weight: 600;
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-strong);
     letter-spacing: 0.06em;
     text-transform: uppercase;
   }
@@ -569,7 +589,7 @@
     justify-content: center;
     gap: 6px;
     min-width: 0;
-    height: 62px;
+    min-height: 62px;
     padding: 6px 4px;
     border: 1px solid var(--be-border-soft);
     border-radius: var(--be-radius-m);
@@ -601,13 +621,18 @@
     transition: color 120ms ease;
   }
 
+  // Two lines at most, so a long name ("Collection list") wraps instead of "Collectio…".
   .builder-editor__tile-label {
+    display: -webkit-box;
     max-width: 100%;
     overflow: hidden;
-    font-size: 11.5px;
-    font-weight: 500;
-    white-space: nowrap;
-    text-overflow: ellipsis;
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-medium);
+    line-height: 1.2;
+    text-align: center;
+    overflow-wrap: break-word;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
 
   .builder-editor__cards {
@@ -651,15 +676,15 @@
   }
 
   .builder-editor__card-label {
-    font-size: 12.5px;
-    font-weight: 600;
+    font-size: var(--be-text-m);
+    font-weight: var(--be-weight-strong);
   }
 
   .builder-editor__card-desc {
     display: -webkit-box;
     overflow: hidden;
     color: var(--be-muted);
-    font-size: 11.5px;
+    font-size: var(--be-text-s);
     line-height: 1.4;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
@@ -904,7 +929,7 @@
     padding: 0 6px 0 4px;
     border-radius: var(--be-radius);
     color: var(--theme-elevation-800);
-    font-size: 12.5px;
+    font-size: var(--be-text-m);
     white-space: nowrap;
     cursor: pointer;
     user-select: none;
@@ -954,7 +979,7 @@
     }
 
     .builder-editor__row-type {
-      font-weight: 600;
+      font-weight: var(--be-weight-strong);
     }
   }
 
@@ -1002,7 +1027,7 @@
 
   .builder-editor__row-type {
     flex: none;
-    font-weight: 500;
+    font-weight: var(--be-weight-medium);
   }
 
   .builder-editor__row-text {
@@ -1020,7 +1045,7 @@
     border-radius: 8px;
     background: var(--theme-elevation-100);
     color: var(--be-muted);
-    font-size: 10.5px;
+    font-size: var(--be-text-s);
     line-height: 16px;
   }
 
@@ -1048,10 +1073,6 @@
       background: var(--theme-elevation-150);
       color: var(--theme-text);
     }
-  }
-
-  .builder-editor__row-action--danger:hover {
-    color: var(--theme-error-500);
   }
 
   .builder-editor__row-hidden {
@@ -1119,7 +1140,7 @@
     background: var(--theme-input-bg, var(--theme-bg));
     color: var(--theme-text);
     font: inherit;
-    font-size: 12.5px;
+    font-size: var(--be-text-m);
 
     &::placeholder {
       color: var(--be-subtle);
@@ -1193,8 +1214,8 @@
     background: none;
     color: var(--theme-text);
     font: inherit;
-    font-size: 14px;
-    font-weight: 600;
+    font-size: var(--be-text-l);
+    font-weight: var(--be-weight-strong);
     line-height: 1.3;
     text-align: left;
     text-overflow: ellipsis;
@@ -1209,7 +1230,7 @@
   .builder-editor__block-name .builder-editor__rename {
     flex: none;
     height: 22px;
-    font-size: 13px;
+    font-size: var(--be-text-l);
   }
 
   .builder-editor__block-problems {
@@ -1221,7 +1242,7 @@
     border-radius: var(--be-radius-m);
     background: color-mix(in srgb, var(--theme-error-500) 8%, transparent);
     color: var(--theme-text);
-    font-size: 12.5px;
+    font-size: var(--be-text-m);
 
     > svg {
       flex: none;
@@ -1238,12 +1259,12 @@
 
   .builder-editor__block-problems-title {
     margin: 0;
-    font-weight: 600;
+    font-weight: var(--be-weight-strong);
   }
 
   .builder-editor__block-sub {
     color: var(--be-muted);
-    font-size: 11.5px;
+    font-size: var(--be-text-s);
   }
 
   .builder-editor__tabs {
@@ -1261,8 +1282,8 @@
     border-bottom: 2px solid transparent;
     background: none;
     color: var(--be-muted);
-    font-size: 12.5px;
-    font-weight: 500;
+    font-size: var(--be-text-m);
+    font-weight: var(--be-weight-medium);
     cursor: pointer;
 
     &:hover {
@@ -1328,7 +1349,7 @@
     background: none;
     color: var(--theme-text);
     font: inherit;
-    font-size: 12.5px;
+    font-size: var(--be-text-m);
     text-align: left;
     cursor: pointer;
 
@@ -1360,7 +1381,7 @@
     padding: 6px 8px 4px;
     border-top: 1px solid var(--be-border-soft);
     color: var(--be-muted);
-    font-size: 11px;
+    font-size: var(--be-text-s);
   }
 
   // ---------------------------------------------------------------------------
@@ -1433,8 +1454,8 @@
     border-radius: 16px;
     background: var(--theme-elevation-900);
     color: var(--theme-elevation-0);
-    font-size: 12px;
-    font-weight: 500;
+    font-size: var(--be-text-m);
+    font-weight: var(--be-weight-medium);
     pointer-events: none;
     transform: translateX(-50%);
     box-shadow: var(--be-shadow);
@@ -1451,7 +1472,7 @@
     padding: 0 8px 0 10px;
     border-top: 1px solid var(--be-border);
     background: var(--be-panel);
-    font-size: 12px;
+    font-size: var(--be-text-s);
   }
 
   .builder-editor__breadcrumb {
@@ -1492,7 +1513,7 @@
     border-radius: var(--be-radius);
     background: none;
     color: var(--be-muted);
-    font-size: 12px;
+    font-size: var(--be-text-s);
     text-overflow: ellipsis;
     cursor: pointer;
 
@@ -1503,7 +1524,7 @@
 
     &[aria-current='true'] {
       color: var(--theme-text);
-      font-weight: 600;
+      font-weight: var(--be-weight-strong);
 
       svg {
         color: var(--be-accent);
@@ -1516,7 +1537,7 @@
     align-items: center;
     gap: 6px;
     padding: 0 6px;
-    color: var(--be-subtle);
+    color: var(--be-muted);
   }
 
   .builder-editor__frame-info {
@@ -1543,8 +1564,8 @@
     background: var(--theme-elevation-100);
     color: var(--theme-elevation-800);
     font: inherit;
-    font-size: 11px;
-    font-weight: 600;
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-strong);
     font-variant-numeric: tabular-nums;
     cursor: pointer;
 
@@ -1608,20 +1629,23 @@
     );
   }
 
+  // The name tag and the action bar draw over the insert "+" and its line (z-index 3), so an
+  // insert spot on the selected block's edge never cuts through them.
   .builder-editor__tag {
     position: absolute;
     top: 0;
     left: 0;
+    z-index: 4;
     display: inline-flex;
     align-items: center;
     gap: 4px;
     height: 20px;
     padding: 0 7px 0 5px;
     border-radius: 4px 4px 0 0;
-    background: var(--be-accent);
+    background: var(--be-accent-solid);
     color: var(--be-accent-fg);
-    font-size: 11px;
-    font-weight: 600;
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-strong);
     line-height: 1;
     white-space: nowrap;
     transform-origin: 0 0;
@@ -1630,7 +1654,7 @@
 
   .builder-editor__tag--hover {
     background: color-mix(in srgb, var(--be-accent) 82%, #000);
-    font-weight: 500;
+    font-weight: var(--be-weight-medium);
   }
 
   .builder-editor__tag--inside {
@@ -1638,8 +1662,17 @@
     transform: scale(var(--be-inv, 1));
   }
 
+  // Outside, under the block: used when there is no room above, so the tag does not cover the
+  // block's first line.
+  .builder-editor__tag--below {
+    top: 100%;
+    border-radius: 0 0 4px 4px;
+    transform: scale(var(--be-inv, 1));
+  }
+
   .builder-editor__actions {
     position: absolute;
+    z-index: 4;
     display: flex;
     align-items: center;
     gap: 1px;
@@ -1671,8 +1704,8 @@
     padding-left: 12px;
     border: 0;
     background: none;
-    color: var(--be-subtle);
-    font-size: 11px;
+    color: var(--be-muted);
+    font-size: var(--be-text-s);
   }
 
   // Blocks that stopped the last publish.
@@ -1698,8 +1731,8 @@
     border-radius: 4px 0 0;
     background: var(--theme-error-500);
     color: #fff;
-    font-size: 11px;
-    font-weight: 600;
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-strong);
     line-height: 1;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1757,7 +1790,7 @@
   }
 
   .builder-editor__tag--editing {
-    font-weight: 500;
+    font-weight: var(--be-weight-medium);
   }
 
   .builder-editor__inline-toolbar {
@@ -1800,7 +1833,7 @@
     border-radius: 4px;
     background: transparent;
     color: inherit;
-    font-size: 12px;
+    font-size: var(--be-text-m);
     line-height: 1;
     cursor: pointer;
 
@@ -1813,13 +1846,13 @@
     }
 
     code {
-      font-size: 11px;
+      font-size: var(--be-text-s);
     }
   }
 
   .builder-editor__inline-glyph {
-    font-size: 12px;
-    font-weight: 600;
+    font-size: var(--be-text-m);
+    font-weight: var(--be-weight-strong);
   }
 
   .builder-editor__inline-link {
@@ -1833,7 +1866,7 @@
     background: var(--theme-elevation-0);
     color: var(--theme-text);
     box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
-    font-size: 13px;
+    font-size: var(--be-text-m);
   }
 
   .builder-editor__inline-url {
@@ -1913,8 +1946,8 @@
     border-radius: 0 0 4px;
     background: var(--be-accent);
     color: var(--be-accent-fg);
-    font-size: 11px;
-    font-weight: 600;
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-strong);
     white-space: nowrap;
     transform-origin: 0 0;
     transform: scale(var(--be-inv, 1));
@@ -1958,8 +1991,8 @@
     background: var(--theme-success-500);
     color: #fff;
     font-family: var(--font-body);
-    font-size: 12px;
-    font-weight: 600;
+    font-size: var(--be-text-m);
+    font-weight: var(--be-weight-strong);
     pointer-events: none;
     box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
   }
@@ -1969,7 +2002,7 @@
   }
 
   .builder-editor__ghost-note {
-    font-weight: 400;
+    font-weight: var(--be-weight-regular);
     opacity: 0.85;
 
     &::before {
@@ -2023,7 +2056,7 @@
   }
 
   .builder-summary__more {
-    color: var(--theme-elevation-500);
+    color: var(--theme-elevation-600);
   }
 
   .builder-summary__error {
@@ -2058,7 +2091,7 @@
     align-items: center;
     gap: 8px;
     margin-right: 4px;
-    font-size: 12px;
+    font-size: var(--be-text-m);
   }
 
   .builder-editor__live-activity {
@@ -2230,8 +2263,8 @@
     border-radius: 0 0 4px 4px;
     background: var(--be-peer);
     color: #fff;
-    font-size: 10px;
-    font-weight: 600;
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-strong);
     line-height: 1;
     white-space: nowrap;
   }
@@ -2261,12 +2294,12 @@
     border-radius: var(--be-radius-m);
     background: color-mix(in srgb, var(--be-peer) 10%, transparent);
     color: var(--theme-text);
-    font-size: 12px;
+    font-size: var(--be-text-m);
     line-height: 1.35;
     animation: builder-fade-in 160ms var(--be-ease);
 
     strong {
-      font-weight: 600;
+      font-weight: var(--be-weight-strong);
     }
   }
 
@@ -2313,8 +2346,8 @@
     border-radius: 999px;
     background: var(--be-peer);
     color: #fff;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: var(--be-text-m);
+    font-weight: var(--be-weight-strong);
     white-space: nowrap;
     pointer-events: auto;
     transform: translateX(-50%);
@@ -2322,7 +2355,7 @@
   }
 
   .builder-follow__hint {
-    font-weight: 400;
+    font-weight: var(--be-weight-regular);
     opacity: 0.8;
   }
 
@@ -2396,6 +2429,7 @@
 
   .builder-editor__insert-mark {
     position: absolute;
+    z-index: 3;
     box-sizing: border-box;
     pointer-events: none;
   }
@@ -2449,8 +2483,8 @@
   .builder-editor__picker-heading {
     margin: 8px 8px 4px;
     color: var(--be-muted);
-    font-size: 10.5px;
-    font-weight: 600;
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-strong);
     letter-spacing: 0.06em;
     text-transform: uppercase;
   }
@@ -2463,7 +2497,7 @@
     padding: 0 8px;
     border-radius: var(--be-radius);
     color: var(--theme-text);
-    font-size: 12.5px;
+    font-size: var(--be-text-m);
     cursor: pointer;
 
     &[aria-selected='true'] {
@@ -2493,8 +2527,8 @@
     flex: none;
     margin-left: auto;
     padding-left: 8px;
-    color: var(--be-subtle);
-    font-size: 11px;
+    color: var(--be-muted);
+    font-size: var(--be-text-s);
   }
 
   // ---------------------------------------------------------------------------

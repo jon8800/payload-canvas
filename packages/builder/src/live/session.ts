@@ -258,12 +258,14 @@ export function sanitizeAwareness(value: unknown): Awareness | null {
   const y = unit(c?.y)
   const width = unit(v.canvasWidth)
   const locale = typeof v.locale === 'string' && /^[\w-]{1,20}$/.test(v.locale) ? v.locale : null
+  const field = typeof v.field === 'string' && /^[\w.-]{1,200}$/.test(v.field) ? v.field : null
   return {
     selectedId: nullableId(v.selectedId),
     hoveredId: nullableId(v.hoveredId),
     cursor: c && typeof c === 'object' && x !== null && y !== null ? { blockId: nullableId(c.blockId), x, y } : null,
     canvasWidth: width !== null && width > 0 ? Math.round(width) : null,
     ...(locale ? { locale } : {}),
+    ...(field ? { field } : {}),
   }
 }
 

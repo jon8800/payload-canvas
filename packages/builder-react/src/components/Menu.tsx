@@ -4,7 +4,7 @@
 // (small screens). CSS shows one of them, and `display: none` hides the other from screen readers.
 // <details> opens and closes without JavaScript, so the menu works before (and without) hydration.
 // JavaScript adds: Escape closes, a click outside closes, and the current page link gets
-// aria-current. Inner classes come from MENU_CLASS_MAP, which the block definition lists in `classes`.
+// aria-current. An optional button (`ctaLabel` and `cta`) is the last row of the panel. Inner classes come from MENU_CLASS_MAP, which the block definition lists in `classes`.
 import { useEffect, useRef, useSyncExternalStore } from 'react'
 import { MENU_CLASS_MAP as C } from '@payload-toolkit/builder/blocks'
 import { editableText } from '../render/editable'
@@ -83,6 +83,10 @@ export function Menu({ props, className, attributes, mode }: BlockComponentProps
   const items = toItems(props.items)
   const collapse: Collapse = props.collapse === 'lg' || props.collapse === 'never' ? props.collapse : 'md'
   const label = asText(props.label) || 'Main'
+  // The panel button needs a label and a link; without both it is not shown.
+  const ctaLink = linkAttributes(props.cta)
+  const ctaLabel = asText(props.ctaLabel)
+  const cta = ctaLink && ctaLabel ? { link: ctaLink, label: ctaLabel } : null
   const pathname = useSyncExternalStore(subscribe, clientPath, serverPath)
   const origin = pathname === null ? undefined : window.location.origin
   const details = useRef<HTMLDetailsElement>(null)
@@ -113,7 +117,7 @@ export function Menu({ props, className, attributes, mode }: BlockComponentProps
     if (mode !== 'canvas') return null
     return (
       <nav {...attributes} aria-label={label} className={className}>
-        <PlaceholderText>Menu: add links in the block settings</PlaceholderText>
+        <PlaceholderText>Menu: add links in the Content tab</PlaceholderText>
       </nav>
     )
   }
@@ -147,6 +151,13 @@ export function Menu({ props, className, attributes, mode }: BlockComponentProps
                   <MenuLink item={item} className={C.panelLink} current={current(item)} mode={mode} />
                 </li>
               ))}
+              {cta ? (
+                <li>
+                  <a {...cta.link} {...editableText(mode, 'ctaLabel')} className={C.panelCta}>
+                    {cta.label}
+                  </a>
+                </li>
+              ) : null}
             </ul>
           </div>
         </details>

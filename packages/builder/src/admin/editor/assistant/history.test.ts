@@ -6,12 +6,15 @@ import {
   capHistory,
   closeTurn,
   ENDED_SUMMARY,
+  failedAction,
+  failureParts,
   historyKey,
   historyMatches,
   humanizeTool,
   isUserTurn,
   loadHistory,
   MAX_STORED_CHATS,
+  retriedCalls,
   saveHistory,
   settleTools,
   transcript,
@@ -190,4 +193,36 @@ test('settleTools: when a reply ends, its running chips become cancelled', () =>
   assert.equal(settled.other.status, 'running', 'chips of other replies stay as they are')
   assert.equal(tools.a.status, 'running', 'the input is not changed')
   assert.equal(settleTools(tools, ['b', 'c']), tools, 'nothing to settle: same object')
+})
+
+test('failureParts splits a failed summary into a short line and the raw details', () => {
+  const raw = 'Could not insert FAQ: Parent block "__PAGE_ROOT__" not found. Use parentId null for the page root.'
+  assert.deepEqual(failureParts(raw), {
+    short: 'Could not insert FAQ',
+    detail: 'Parent block "__PAGE_ROOT__" not found. Use parentId null for the page root.',
+  })
+  assert.deepEqual(failureParts('The tool failed'), { short: 'The tool failed', detail: null })
+  assert.deepEqual(failureParts('Edit failed: '), { short: 'Edit failed', detail: null })
+})
+
+test('failedAction names the failed action for a "Retried" chip', () => {
+  assert.equal(failedAction('Could not insert FAQ', 'insertSection'), 'Insert FAQ')
+  assert.equal(failedAction('Edit failed', 'applyOperations'), 'Edit')
+  assert.equal(failedAction('The tool failed', 'insert_section'), 'Insert section')
+})
+
+const info = (status: 'done' | 'error' | 'cancelled') => ({ name: '', status, summary: '' })
+
+test('retriedCalls marks a failed call when a later call of the same tool succeeded', () => {
+  const calls = [
+    { callId: 'a', name: 'insertSection' },
+    { callId: 'b', name: 'insertSection' },
+    { callId: 'c', name: 'applyOperations' },
+    { callId: 'd', name: 'generateImage' },
+  ]
+  const tools ={ a: info('error'), b: info('done'), c: info('error'), d: info('error') }
+  assert.deepEqual([...retriedCalls(calls, tools)], ['a'])
+  // The same tool fails again, or the success came first: not a retry.
+  assert.deepEqual([...retriedCalls(calls, { ...tools, b: info('error') })], [])
+  assert.deepEqual([...retriedCalls([calls[1], calls[0]], tools)], [])
 })

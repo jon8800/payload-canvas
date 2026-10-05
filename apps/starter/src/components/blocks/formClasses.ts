@@ -12,7 +12,9 @@ export const formClasses = {
     'outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground ' +
     'focus-visible:border-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 ' +
     'aria-invalid:border-destructive aria-invalid:focus-visible:ring-destructive/30 disabled:opacity-60',
-  select: 'appearance-auto pr-2',
+  selectWrap: 'relative',
+  select: 'cursor-pointer appearance-none pr-11',
+  selectIcon: 'pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-muted-foreground',
   textarea: 'min-h-32 resize-y',
   fieldError: 'm-0 text-sm text-destructive',
   checkboxRow: 'flex w-full items-start gap-3 text-base',
@@ -20,8 +22,8 @@ export const formClasses = {
   message: 'm-0 w-full text-muted-foreground',
   footer: 'flex w-full flex-col items-start gap-3 pt-1',
   submit:
-    'inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-md bg-primary px-6 text-base ' +
-    'font-medium text-primary-foreground transition-opacity hover:opacity-90 sm:w-auto ' +
+    'inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-primary px-6 text-base ' +
+    'font-medium text-primary-foreground transition-colors hover:bg-[color-mix(in_oklch,var(--color-primary),black_14%)] sm:w-auto ' +
     'disabled:cursor-progress disabled:opacity-70',
   spinner: 'size-4 animate-spin motion-reduce:animate-none',
   error: 'm-0 w-full rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-foreground',

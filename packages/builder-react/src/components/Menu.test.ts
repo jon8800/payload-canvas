@@ -59,6 +59,18 @@ describe('Menu', () => {
     assert.doesNotMatch(html, /<details/)
   })
 
+  test('adds the panel button as the last row of the panel only, with a label and a link', () => {
+    const cta = { ctaLabel: 'Start a project', cta: { href: '/contact' } }
+    const html = renderToStaticMarkup(createElement(Menu, props(cta)))
+    const panel = html.slice(html.indexOf('<details'))
+    assert.match(panel, /<li><a href="\/contact" class="[^"]*rounded-full[^"]*builder-css">Start a project<\/a><\/li><\/ul>/)
+    // Not in the inline list, so the wide-screen header is unchanged.
+    assert.equal(html.match(/Start a project/g)?.length, 1)
+    assert.doesNotMatch(renderToStaticMarkup(createElement(Menu, props({ ctaLabel: 'Start a project' }))), /Start a project/)
+    assert.doesNotMatch(renderToStaticMarkup(createElement(Menu, props({ cta: { href: '/contact' } }))), /\/contact/)
+    assert.doesNotMatch(renderToStaticMarkup(createElement(Menu, props({ ...cta, collapse: 'never' }))), /Start a project/)
+  })
+
   test('renders nothing on the site without links', () => {
     assert.equal(renderToStaticMarkup(createElement(Menu, props({ items: [] }))), '')
   })

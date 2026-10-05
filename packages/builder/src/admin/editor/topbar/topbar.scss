@@ -82,7 +82,7 @@
     gap: 2px;
     min-width: 0;
     margin-left: 4px;
-    font-size: 13px;
+    font-size: var(--be-text-m);
   }
 
   .builder-bar__crumb {
@@ -97,23 +97,19 @@
     }
   }
 
-  // A saved section: "Section:" before its name, and its category after it.
-  .builder-bar__crumb--section {
-    font-weight: 600;
-  }
-
+  // A saved section's category after its name ("· Hero"): plain muted text, editable in place.
   .builder-bar__category {
     min-width: 0;
     max-width: 200px;
-    height: 24px;
-    margin: 0 0 0 4px;
-    padding: 0 8px;
-    border: 1px dashed var(--be-border);
-    border-radius: 12px;
+    height: 26px;
+    margin: 0;
+    padding: 0 6px;
+    border: 1px solid transparent;
+    border-radius: var(--be-radius);
     background: transparent;
     color: var(--be-muted);
     font: inherit;
-    font-size: 12px;
+    font-size: var(--be-text-s);
     field-sizing: content;
 
     &::placeholder {
@@ -121,11 +117,10 @@
     }
 
     &:hover:not(:disabled) {
-      border-style: solid;
+      border-color: var(--be-border);
     }
 
     &:focus {
-      border-style: solid;
       border-color: var(--be-accent);
       outline: 0;
       color: var(--theme-text);
@@ -136,19 +131,59 @@
   .builder-bar__category--static {
     display: inline-flex;
     align-items: center;
-    border-style: solid;
   }
 
-  // "Pages keep their copy" next to a saved section's status.
+  // A saved section's info icon: its tooltip says that pages keep their own copy. The right
+  // margin keeps it clear of Undo.
   .builder-bar__note {
+    display: inline-grid;
     flex: none;
-    margin-left: 6px;
-    color: var(--be-subtle);
-    font-size: 11.5px;
-    white-space: nowrap;
-    text-decoration: underline dotted;
-    text-underline-offset: 3px;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    margin: 0 4px 0 2px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--be-radius);
+    background: none;
+    color: var(--be-muted);
     cursor: help;
+
+    &:hover,
+    &:focus-visible {
+      color: var(--theme-text);
+    }
+  }
+
+  // "Details" (dates, versions) of a document without a status, e.g. a saved section.
+  .builder-bar__details {
+    position: relative;
+    display: inline-flex;
+    flex: none;
+    margin-left: 4px;
+  }
+
+  // Always with its text: an icon alone does not say that it opens the dates.
+  .builder-bar__details-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 26px;
+    padding: 0 8px;
+    border: 1px solid var(--be-border);
+    border-radius: var(--be-radius);
+    background: transparent;
+    color: var(--be-muted);
+    font: inherit;
+    font-size: var(--be-text-s);
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:hover,
+    &[aria-expanded='true'] {
+      color: var(--theme-text);
+      background: var(--be-hover);
+    }
   }
 
   .builder-bar__crumb-sep {
@@ -168,8 +203,8 @@
     background: transparent;
     color: var(--theme-text);
     font: inherit;
-    font-size: 14px;
-    font-weight: 600;
+    font-size: var(--be-text-l);
+    font-weight: var(--be-weight-strong);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -212,8 +247,8 @@
     border-radius: 12px;
     background: color-mix(in srgb, var(--status) 14%, transparent);
     color: var(--theme-elevation-800);
-    font-size: 11.5px;
-    font-weight: 600;
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-strong);
     cursor: default;
 
     &[data-status='published'] {
@@ -241,8 +276,8 @@
     // The padding bridges the gap, so the pointer can move into the card.
     padding-top: 8px;
     color: var(--theme-text);
-    font-size: 12px;
-    font-weight: 400;
+    font-size: var(--be-text-m);
+    font-weight: var(--be-weight-regular);
     cursor: auto;
     animation: builder-fade-in 140ms var(--be-ease);
 
@@ -287,7 +322,7 @@
   .builder-bar__card-title {
     margin: 0 0 10px;
     color: var(--theme-elevation-800);
-    font-weight: 600;
+    font-weight: var(--be-weight-strong);
   }
 
   // Looks like a link; opens the Versions drawer.
@@ -327,7 +362,7 @@
     min-width: 124px;
     max-width: 300px;
     color: var(--be-muted);
-    font-size: 12px;
+    font-size: var(--be-text-m);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
@@ -363,7 +398,7 @@
 
   .builder-bar__save[data-state='failed'] {
     color: var(--theme-error-600, #dc2626);
-    font-weight: 500;
+    font-weight: var(--be-weight-medium);
 
     .builder-bar__save-dot {
       background: var(--theme-error-500, #ef4444);
@@ -389,8 +424,8 @@
     background: transparent;
     color: var(--theme-error-600, #dc2626);
     font: inherit;
-    font-size: 12px;
-    font-weight: 500;
+    font-size: var(--be-text-m);
+    font-weight: var(--be-weight-medium);
     white-space: nowrap;
     cursor: pointer;
 
@@ -427,8 +462,8 @@
     background: transparent;
     color: var(--theme-text);
     font: inherit;
-    font-size: 12.5px;
-    font-weight: 500;
+    font-size: var(--be-text-m);
+    font-weight: var(--be-weight-medium);
     text-decoration: none;
     white-space: nowrap;
     cursor: pointer;
@@ -481,8 +516,8 @@
     background: var(--theme-elevation-800);
     color: var(--theme-elevation-0);
     font: inherit;
-    font-size: 12.5px;
-    font-weight: 500;
+    font-size: var(--be-text-m);
+    font-weight: var(--be-weight-medium);
     white-space: nowrap;
     cursor: pointer;
     transition: background-color 120ms ease;
@@ -493,7 +528,7 @@
 
     &:disabled {
       background: var(--theme-elevation-200);
-      color: var(--theme-elevation-500);
+      color: var(--theme-elevation-600);
       cursor: default;
     }
   }
@@ -529,8 +564,8 @@
     background: color-mix(in srgb, var(--theme-error-500) 10%, transparent);
     color: var(--theme-error-500);
     font: inherit;
-    font-size: 12.5px;
-    font-weight: 600;
+    font-size: var(--be-text-m);
+    font-weight: var(--be-weight-strong);
     font-variant-numeric: tabular-nums;
     cursor: pointer;
 
@@ -549,8 +584,8 @@
   .builder-bar__problems-title {
     margin: 2px 6px 6px;
     color: var(--theme-text);
-    font-size: 12.5px;
-    font-weight: 600;
+    font-size: var(--be-text-m);
+    font-weight: var(--be-weight-strong);
   }
 
   .builder-bar__problems-list {
@@ -603,15 +638,15 @@
 
   .builder-bar__problem-where {
     overflow: hidden;
-    font-size: 12.5px;
-    font-weight: 500;
+    font-size: var(--be-text-m);
+    font-weight: var(--be-weight-medium);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .builder-bar__problem-message {
     color: var(--theme-elevation-650, var(--theme-elevation-600));
-    font-size: 12px;
+    font-size: var(--be-text-m);
     line-height: 1.4;
   }
 
@@ -619,7 +654,7 @@
     flex: none;
     padding-top: 1px;
     color: var(--be-muted);
-    font-size: 12px;
+    font-size: var(--be-text-m);
   }
 
   // ---- Loading skeleton below the bar ------------------------------------------------------------

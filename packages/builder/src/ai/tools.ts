@@ -586,7 +586,11 @@ function repairBlockMotion(block: unknown, fix: (note: string) => void): unknown
  * "type", position fields next to "to", a root parentId of "root" or "", a block sent as a JSON
  * string, a class list sent as an array, `motion` in a wrong shape (see repairMotion). Returns an error message when there is no operation list.
  */
-export function repairOperations(input: Record<string, unknown>): { ops: unknown[]; notes: string[] } | string {
+export function repairOperations(
+  input: Record<string, unknown>,
+  /** True when the layout has a block with this id: such an id is never the page root. */
+  hasBlock?: (id: string) => boolean,
+): { ops: unknown[]; notes: string[] } | string {
   const notes: string[] = []
   let list: unknown = input.operations ?? input.ops ?? input.operation
   if (list === undefined && typeof input.type === 'string') {
@@ -629,7 +633,7 @@ export function repairOperations(input: Record<string, unknown>): { ops: unknown
       if (isPlainObject(to)) {
         const position: Record<string, unknown> = { ...to }
         const parent = position.parentId
-        if (parent === undefined || (typeof parent === 'string' && isRootParentId(parent))) {
+        if (parent === undefined || (typeof parent === 'string' && isRootParentId(parent, hasBlock))) {
           if (parent !== undefined) fix('use parentId null for the page root.')
           position.parentId = null
         }
@@ -728,7 +732,8 @@ export async function runTool(name: string, rawInput: unknown, workspace: Worksp
     }
 
     case 'applyOperations': {
-      const repaired = repairOperations(input)
+      const known = indexLayout(workspace.layout)
+      const repaired = repairOperations(input, (id) => known.has(id))
       if (typeof repaired === 'string') return fail(repaired, 'Edit failed')
       const notes = repaired.notes.length > 0 ? { repaired: repaired.notes } : {}
       const result = workspace.apply(repaired.ops)

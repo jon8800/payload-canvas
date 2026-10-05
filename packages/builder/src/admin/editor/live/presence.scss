@@ -1,0 +1,24 @@
+// "Anna is editing this field" under an inspector field. Payload CSS variables only, inside
+// Payload's own layer. The rest of the presence styles are in editor.scss ("Multiplayer").
+
+@layer payload-default {
+  .builder-peer-field {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 4px 0 0;
+    color: var(--theme-elevation-800);
+    font-size: var(--be-text-s, 11px);
+    line-height: 1.35;
+    animation: builder-fade-in 160ms var(--be-ease, ease-out);
+  }
+
+  .builder-peer-field__dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--be-peer);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--be-peer) 25%, transparent);
+  }
+}

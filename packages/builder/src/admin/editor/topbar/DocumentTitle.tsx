@@ -6,7 +6,8 @@
 import { Link, useConfig } from '@payloadcms/ui'
 import { useOptimistic, useRef, useState, useTransition, type KeyboardEvent, type RefObject } from 'react'
 
-import type { DocStatus } from '../../../live/types'
+import type { BuilderDocMeta, DocStatus } from '../../../live/types'
+import { Icon } from '../icons'
 import { useRuntime } from '../runtime'
 import { useCollectionLabel } from '../templates/useTemplate'
 import { useValue } from '../valueStore'
@@ -55,7 +56,7 @@ function inlineInputKeys(e: KeyboardEvent<HTMLInputElement>, cancelled: RefObjec
 
 /**
  * "Pages › Title". The title is an input: Enter or leaving it saves, Escape cancels. A saved
- * section shows "Section: Name" and its category, both editable.
+ * section shows "Saved sections › Name · Category", the name and the category editable.
  */
 export function DocumentTitle() {
   const runtime = useRuntime()
@@ -88,24 +89,12 @@ export function DocumentTitle() {
 
   return (
     <nav className="builder-bar__crumbs" aria-label="Breadcrumb">
-      {meta.section ? (
-        <Link
-          href={`${admin}/collections/${encodeURIComponent(meta.collection)}`}
-          className="builder-bar__crumb builder-bar__crumb--section"
-          data-tooltip={`All ${plural.toLowerCase()}`}
-        >
-          Section:
-        </Link>
-      ) : (
-        <>
-          <Link href={`${admin}/collections/${encodeURIComponent(meta.collection)}`} className="builder-bar__crumb">
-            {plural}
-          </Link>
-          <span className="builder-bar__crumb-sep" aria-hidden="true">
-            ›
-          </span>
-        </>
-      )}
+      <Link href={`${admin}/collections/${encodeURIComponent(meta.collection)}`} className="builder-bar__crumb">
+        {plural}
+      </Link>
+      <span className="builder-bar__crumb-sep" aria-hidden="true">
+        ›
+      </span>
       {editable ? (
         <input
           className="builder-bar__title"
@@ -159,25 +148,40 @@ function SectionCategory() {
     })
   }
 
-  if (!meta.canUpdate) return category ? <span className="builder-bar__category builder-bar__category--static">{category}</span> : null
+  if (!meta.canUpdate) {
+    if (!category) return null
+    return (
+      <>
+        <span className="builder-bar__crumb-sep" aria-hidden="true">
+          ·
+        </span>
+        <span className="builder-bar__category builder-bar__category--static">{category}</span>
+      </>
+    )
+  }
   return (
-    <input
-      className="builder-bar__category"
-      aria-label="Category"
-      data-tooltip="Category in the Sections library · Enter to save"
-      placeholder="Add a category"
-      value={draft ?? category}
-      disabled={busy === 'rename'}
-      maxLength={60}
-      size={Math.max(10, Math.min(24, (draft ?? category).length + 1))}
-      onFocus={(e) => {
-        setDraft(category)
-        e.currentTarget.select()
-      }}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => inlineInputKeys(e, cancelled)}
-    />
+    <>
+      <span className="builder-bar__crumb-sep" aria-hidden="true">
+        ·
+      </span>
+      <input
+        className="builder-bar__category"
+        aria-label="Category"
+        data-tooltip="Category in the Sections library · Enter to save"
+        placeholder="Add a category"
+        value={draft ?? category}
+        disabled={busy === 'rename'}
+        maxLength={60}
+        size={Math.max(10, Math.min(24, (draft ?? category).length + 1))}
+        onFocus={(e) => {
+          setDraft(category)
+          e.currentTarget.select()
+        }}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => inlineInputKeys(e, cancelled)}
+      />
+    </>
   )
 }
 
@@ -189,19 +193,24 @@ export function SectionNote() {
   const runtime = useRuntime()
   const isSection = useValue(runtime.doc.meta).section !== null
   if (!isSection) return null
+  const note = 'Changes here apply to new inserts only. Pages that already use this section keep their own copy.'
   return (
-    <span
+    // A button, so keyboard users reach it and its tooltip.
+    <button
+      type="button"
       className="builder-bar__note"
-      // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- focus shows the tooltip for keyboard users
-      tabIndex={0}
+      aria-label={note}
       data-tooltip={'Changes here apply to new inserts only.\nPages that already use this section keep their own copy.'}
     >
-      Pages keep their copy
-    </span>
+      <Icon name="help" size={14} />
+    </button>
   )
 }
 
-/** Draft / Published / Changed, with a card of dates and the versions count on hover or focus. */
+/**
+ * Draft / Published / Changed, with a card of dates and the versions count on hover or focus.
+ * Documents without drafts (saved sections) have no status: a "Details" button opens the card.
+ */
 export function StatusChip() {
   const runtime = useRuntime()
   const meta = useValue(runtime.doc.meta)
@@ -215,63 +224,89 @@ export function StatusChip() {
     lastRefresh.current = Date.now()
     void runtime.doc.refresh()
   }
+  const card = open && <DetailsCard meta={meta} onVersions={() => setOpen(false)} />
+  const onBlur = (e: { currentTarget: HTMLElement; relatedTarget: EventTarget | null }) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false)
+  }
+
+  if (!meta.status) {
+    return (
+      <div className="builder-bar__details" onPointerEnter={show} onPointerLeave={() => setOpen(false)} onBlur={onBlur}>
+        <button
+          type="button"
+          className="builder-bar__details-button"
+          aria-label={meta.section ? 'Section details' : 'Details'}
+          aria-expanded={open}
+          onFocus={show}
+          onClick={() => (open ? setOpen(false) : show())}
+        >
+          <Icon name="calendar" size={14} />
+          Details
+        </button>
+        {card}
+      </div>
+    )
+  }
 
   return (
     <div
       className="builder-bar__status"
-      data-status={meta.status ?? 'none'}
+      data-status={meta.status}
       // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- focus shows the details card for keyboard users
       tabIndex={0}
       onPointerEnter={show}
       onPointerLeave={() => setOpen(false)}
       onFocus={show}
-      onBlur={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false)
-      }}
+      onBlur={onBlur}
     >
       <span className="builder-bar__status-dot" aria-hidden="true" />
-      {meta.status ? STATUS_LABELS[meta.status] : 'Details'}
-      {open && (
-        <div className="builder-bar__card" role="tooltip">
-          <div className="builder-bar__card-box">
-            {meta.status && <p className="builder-bar__card-title">{STATUS_HINTS[meta.status]}</p>}
-            <dl>
-              <div>
-                <dt>Last modified</dt>
-                <dd>{formatDateTime(meta.updatedAt)}</dd>
-              </div>
-              <div>
-                <dt>Created</dt>
-                <dd>{formatDateTime(meta.createdAt)}</dd>
-              </div>
-              {meta.drafts && (
-                <div>
-                  <dt>Last published</dt>
-                  <dd>{meta.publishedAt ? formatDateTime(meta.publishedAt) : 'Never'}</dd>
-                </div>
-              )}
-              {meta.versions !== null && (
-                <div>
-                  <dt>Versions</dt>
-                  <dd>
-                    {/* Payload's Versions screen, in a drawer over the builder. */}
-                    <button
-                      type="button"
-                      className="builder-bar__card-link"
-                      onClick={() => {
-                        setOpen(false)
-                        runtime.doc.openScreen('versions')
-                      }}
-                    >
-                      {meta.versions} {meta.versions === 1 ? 'version' : 'versions'}
-                    </button>
-                  </dd>
-                </div>
-              )}
-            </dl>
+      {STATUS_LABELS[meta.status]}
+      {card}
+    </div>
+  )
+}
+
+/** The dates and the versions count. "Versions" opens Payload's Versions screen in a drawer. */
+function DetailsCard({ meta, onVersions }: { meta: BuilderDocMeta; onVersions: () => void }) {
+  const runtime = useRuntime()
+  return (
+    <div className="builder-bar__card" role="tooltip">
+      <div className="builder-bar__card-box">
+        {meta.status && <p className="builder-bar__card-title">{STATUS_HINTS[meta.status]}</p>}
+        <dl>
+          <div>
+            <dt>Last modified</dt>
+            <dd>{formatDateTime(meta.updatedAt)}</dd>
           </div>
-        </div>
-      )}
+          <div>
+            <dt>Created</dt>
+            <dd>{formatDateTime(meta.createdAt)}</dd>
+          </div>
+          {meta.drafts && (
+            <div>
+              <dt>Last published</dt>
+              <dd>{meta.publishedAt ? formatDateTime(meta.publishedAt) : 'Never'}</dd>
+            </div>
+          )}
+          {meta.versions !== null && (
+            <div>
+              <dt>Versions</dt>
+              <dd>
+                <button
+                  type="button"
+                  className="builder-bar__card-link"
+                  onClick={() => {
+                    onVersions()
+                    runtime.doc.openScreen('versions')
+                  }}
+                >
+                  {meta.versions} {meta.versions === 1 ? 'version' : 'versions'}
+                </button>
+              </dd>
+            </div>
+          )}
+        </dl>
+      </div>
     </div>
   )
 }

@@ -42,7 +42,7 @@ import { findSection, loadSavedSections, savedSectionsConfigOf } from '../plugin
 import { templatesConfigOf } from '../plugin/templates'
 import { generateImageToMedia, imageServiceOf } from '../ai/images/service'
 import { IMAGE_ASPECT_RATIOS } from '../ai/images/ratios'
-import { BINDINGS_GUIDE, describeBlock, layoutGuide, outline, sectionInsertOps, withNewIds } from './shared'
+import { BINDINGS_GUIDE, describeBlock, layoutGuide, outline, repairRootParents, sectionInsertOps, withNewIds } from './shared'
 
 // ---------------------------------------------------------------------------
 // Types (structurally compatible with payload-mcp-toolkit's ToolFactoryOutput)
@@ -533,7 +533,10 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
         op.type === 'duplicate' && !op.newId ? { ...op, newId: createId() } : op,
       )
       // New blocks are written in the locale too: an AI that works in German writes German.
-      const result = await apply(req, collection, String(args.id), stampLocale(ops as Operation[], at.locale, at.settings, { inserts: true }))
+      // A root parentId models send as text ("__PAGE_ROOT__", "root") becomes null, as in insertSection.
+      const result = await apply(req, collection, String(args.id), (layout) =>
+        stampLocale(repairRootParents(layout, ops as Operation[]).ops, at.locale, at.settings, { inserts: true }),
+      )
       if (!result.ok) return fail(result.error, result.errors)
       const changed = new Set<string>()
       for (const op of result.ops) {

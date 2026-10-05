@@ -104,7 +104,7 @@
     background: transparent;
     color: inherit;
     font: inherit;
-    font-size: 13px;
+    font-size: var(--be-text-m);
     text-align: left;
     cursor: pointer;
 
@@ -138,7 +138,7 @@
   .builder-bind__chip-label {
     min-width: 0;
     overflow: hidden;
-    font-weight: 500;
+    font-weight: var(--be-weight-medium);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -149,22 +149,22 @@
     margin-left: auto;
     overflow: hidden;
     padding: 1px 0;
-    color: var(--theme-elevation-500);
+    color: var(--theme-elevation-600);
     font-family: var(--font-mono, monospace);
-    font-size: 10.5px;
+    font-size: var(--be-text-s);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .builder-bind__placeholder {
     flex: 1;
-    color: var(--theme-elevation-400);
+    color: var(--theme-elevation-600);
   }
 
   .builder-bind__select-caret {
     flex: none;
     margin-left: 4px;
-    color: var(--theme-elevation-500);
+    color: var(--theme-elevation-600);
   }
 
   .builder-bind__chip-x {
@@ -178,7 +178,7 @@
     border: 0;
     border-radius: var(--style-radius-s, 4px);
     background: none;
-    color: var(--theme-elevation-500);
+    color: var(--theme-elevation-600);
     cursor: pointer;
 
     &:hover {
@@ -189,8 +189,8 @@
 
   .builder-bind__note {
     margin: 0;
-    color: var(--theme-elevation-500);
-    font-size: 12px;
+    color: var(--theme-elevation-600);
+    font-size: var(--be-text-m);
     line-height: 1.45;
   }
 
@@ -211,9 +211,9 @@
 
   .builder-bind__preview-from {
     overflow: hidden;
-    color: var(--theme-elevation-500);
-    font-size: 10.5px;
-    font-weight: 600;
+    color: var(--theme-elevation-600);
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-strong);
     letter-spacing: 0.04em;
     text-overflow: ellipsis;
     text-transform: uppercase;
@@ -224,7 +224,7 @@
     display: -webkit-box;
     overflow: hidden;
     color: var(--theme-text);
-    font-size: 12.5px;
+    font-size: var(--be-text-m);
     line-height: 1.45;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
@@ -241,8 +241,8 @@
   }
 
   .builder-bind__preview-empty {
-    color: var(--theme-elevation-500);
-    font-size: 12px;
+    color: var(--theme-elevation-600);
+    font-size: var(--be-text-m);
     font-style: italic;
   }
 
@@ -254,9 +254,9 @@
     padding: 2px 0;
     border: 0;
     background: none;
-    color: var(--theme-elevation-500);
+    color: var(--theme-elevation-600);
     font: inherit;
-    font-size: 12px;
+    font-size: var(--be-text-m);
     cursor: pointer;
 
     &:hover {
@@ -281,7 +281,7 @@
     border-radius: var(--style-radius-m, 6px);
     background: var(--theme-elevation-50);
     color: var(--theme-elevation-700);
-    font-size: 12px;
+    font-size: var(--be-text-m);
     line-height: 1.45;
 
     > svg {
@@ -316,7 +316,7 @@
     background: none;
     color: var(--theme-text);
     font: inherit;
-    font-weight: 600;
+    font-weight: var(--be-weight-strong);
     text-decoration: underline;
     text-underline-offset: 2px;
     cursor: pointer;
@@ -351,8 +351,8 @@
     align-items: center;
     gap: 6px;
     color: var(--theme-elevation-600);
-    font-size: 11px;
-    font-weight: 600;
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-strong);
     letter-spacing: 0.04em;
     text-transform: uppercase;
 
@@ -388,15 +388,15 @@
       background: transparent;
       color: var(--theme-text);
       font: inherit;
-      font-size: 12.5px;
+      font-size: var(--be-text-m);
     }
   }
 
   .builder-bind__picker-empty {
     margin: 0;
     padding: 16px 14px 18px;
-    color: var(--theme-elevation-500);
-    font-size: 12px;
+    color: var(--theme-elevation-600);
+    font-size: var(--be-text-m);
     text-align: center;
   }
 
@@ -404,8 +404,8 @@
     margin: 0;
     padding: 8px 12px;
     border-top: 1px solid var(--theme-elevation-100);
-    color: var(--theme-elevation-500);
-    font-size: 11px;
+    color: var(--theme-elevation-600);
+    font-size: var(--be-text-s);
   }
 
   .builder-bind__rows {
@@ -433,20 +433,20 @@
     }
 
     &[data-current] .builder-bind__row-label {
-      font-weight: 600;
+      font-weight: var(--be-weight-strong);
     }
   }
 
   .builder-bind__row--group {
     min-height: 26px;
     margin-top: 2px;
-    color: var(--theme-elevation-500);
-    font-size: 11px;
-    font-weight: 600;
+    color: var(--theme-elevation-600);
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-strong);
     cursor: default;
 
     .builder-bind__row-label {
-      font-weight: 600;
+      font-weight: var(--be-weight-strong);
     }
   }
 
@@ -454,8 +454,8 @@
     padding: 0 5px;
     border-radius: 8px;
     background: var(--theme-elevation-100);
-    font-size: 10px;
-    font-weight: 500;
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-medium);
   }
 
   .builder-bind__row-icon {
@@ -479,16 +479,16 @@
 
   .builder-bind__row-label {
     overflow: hidden;
-    font-size: 12.5px;
+    font-size: var(--be-text-m);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .builder-bind__row-path {
     overflow: hidden;
-    color: var(--theme-elevation-500);
+    color: var(--theme-elevation-600);
     font-family: var(--font-mono, monospace);
-    font-size: 10.5px;
+    font-size: var(--be-text-s);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -497,8 +497,8 @@
     flex: none;
     max-width: 40%;
     overflow: hidden;
-    color: var(--theme-elevation-500);
-    font-size: 11px;
+    color: var(--theme-elevation-600);
+    font-size: var(--be-text-s);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -525,7 +525,7 @@
     border-radius: 14px;
     background: var(--theme-elevation-50);
     color: var(--theme-elevation-800);
-    font-size: 12px;
+    font-size: var(--be-text-m);
     white-space: nowrap;
     cursor: pointer;
     transition:
@@ -539,7 +539,7 @@
 
     > svg:last-child {
       flex: none;
-      color: var(--theme-elevation-500);
+      color: var(--theme-elevation-600);
     }
 
     &:hover,
@@ -560,7 +560,7 @@
 
   .builder-template__mode {
     flex: none;
-    font-weight: 600;
+    font-weight: var(--be-weight-strong);
   }
 
   .builder-template__sep {
@@ -576,7 +576,7 @@
 
     strong {
       color: var(--theme-text);
-      font-weight: 500;
+      font-weight: var(--be-weight-medium);
     }
   }
 
@@ -586,7 +586,7 @@
     border-radius: 8px;
     background: var(--theme-elevation-100);
     color: var(--theme-elevation-600);
-    font-size: 10.5px;
+    font-size: var(--be-text-s);
     line-height: 16px;
   }
 

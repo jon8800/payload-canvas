@@ -20,7 +20,7 @@ export const cardGrid = defineSection<CardGridInput>({
             'grid grid-cols-1 gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-3',
             cards.map((card) => {
               const body = [
-                ...(card.image ? [image(card.image.id, card.image.alt, styles.image)] : []),
+                ...(card.image ? [image(card.image.id, card.image.alt, styles.cardImage)] : []),
                 stack('div', 'flex flex-col gap-2', [
                   heading(card.title, '3', `${styles.cardTitle}${card.link ? ' group-hover:underline' : ''}`),
                   text(card.text, styles.muted),

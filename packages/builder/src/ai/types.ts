@@ -303,7 +303,7 @@ export type AiToolImage = { id: string | number; url: string; alt: string | null
 export type AiStreamEvent =
   | { type: 'text'; text: string }
   | { type: 'tool'; callId: string; name: string; status: AiToolStatus; summary: string; image?: AiToolImage }
-  | { type: 'operations'; turnId: string; ops: Operation[] }
+  | { type: 'operations'; turnId: string; ops: Operation[]; /** The tool call that made them. */ callId?: string }
   | { type: 'message'; message: AiMessage }
   | { type: 'done'; turnId: string; stopReason: string | null; usage?: AiUsage }
   | { type: 'error'; code: 'no_api_key' | 'forbidden' | 'api_error' | 'invalid_request' | 'aborted'; message: string }

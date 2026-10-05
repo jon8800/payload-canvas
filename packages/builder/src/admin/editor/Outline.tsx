@@ -15,7 +15,7 @@ import {
 
 import { describeMotion, findLocation, getBlockDefinition, slotNames, walkBlocks } from '../../core'
 import type { Block, Layout } from '../../core/types'
-import { ancestors, duplicateBlock, removeBlock, renameBlock, toggleHidden } from './actions'
+import { ancestors, renameBlock, toggleHidden } from './actions'
 import { BlockIcon, Icon, type IconName } from './icons'
 import { PeerDots } from './live/PresenceUI'
 import { missingWords, useUntranslated } from './locale/locale'
@@ -376,16 +376,24 @@ const OutlineRow = memo(function OutlineRow({
     .filter(Boolean)
     .join(' ')
 
-  const actions: { icon: IconName; label: string; keys: readonly string[]; run: () => void; danger?: boolean }[] = [
-    { icon: 'rename', label: 'Rename', keys: BLOCK_KEYS.rename, run: () => onRename(block.id) },
+  // Two hover actions, so the row keeps room for its name. Rename, duplicate and delete are in
+  // the menu and on their keys.
+  const actions: { icon: IconName; label: string; tooltip: string; run: (button: HTMLElement) => void }[] = [
     {
       icon: block.hidden ? 'eye' : 'eyeOff',
       label: block.hidden ? 'Show on the site' : 'Hide on the site',
-      keys: BLOCK_KEYS.hide,
+      tooltip: `${block.hidden ? 'Show on the site' : 'Hide on the site'} · ${keyText(BLOCK_KEYS.hide)}`,
       run: () => toggleHidden(runtime, block.id),
     },
-    { icon: 'duplicate', label: 'Duplicate', keys: BLOCK_KEYS.duplicate, run: () => duplicateBlock(runtime, block.id) },
-    { icon: 'delete', label: 'Delete', keys: BLOCK_KEYS.delete, run: () => removeBlock(runtime, block.id), danger: true },
+    {
+      icon: 'more',
+      label: 'More actions',
+      tooltip: 'More actions',
+      run: (button) => {
+        const box = button.getBoundingClientRect()
+        openBlockMenu(runtime, block.id, { x: box.left, y: box.bottom + 4 }, 'outline')
+      },
+    },
   ]
 
   return (
@@ -498,13 +506,14 @@ const OutlineRow = memo(function OutlineRow({
               key={action.icon}
               type="button"
               tabIndex={-1}
-              className={`builder-editor__row-action${action.danger ? ' builder-editor__row-action--danger' : ''}`}
+              className="builder-editor__row-action"
               aria-label={action.label}
-              data-tooltip={`${action.label} · ${keyText(action.keys)}`}
+              aria-haspopup={action.icon === 'more' ? 'menu' : undefined}
+              data-tooltip={action.tooltip}
               onPointerDown={stop}
               onClick={(e) => {
                 e.stopPropagation()
-                action.run()
+                action.run(e.currentTarget)
               }}
             >
               <Icon name={action.icon} size={14} />

@@ -59,12 +59,22 @@ export const MENU_CLASS_MAP = withMarker({
   iconClose: 'hidden size-5 group-open:block',
   panel:
     'absolute inset-x-0 top-full z-50 border-y border-border bg-background px-5 pt-2 pb-6 text-foreground ' +
-    'shadow-[0_24px_40px_-24px_rgb(0_0_0/0.3)]',
+    'shadow-md',
   panelList: 'flex flex-col',
   panelLink:
     'flex min-h-12 items-center border-b border-border py-3 text-lg ' +
     'aria-[current=page]:font-semibold aria-[current=page]:underline decoration-1 underline-offset-8',
+  /** The optional button after the links in the panel. */
+  panelCta:
+    'mt-5 flex min-h-12 items-center justify-center rounded-full bg-primary px-6 text-base font-medium ' +
+    'text-primary-foreground transition-colors hover:bg-[color-mix(in_oklch,var(--color-primary),black_14%)]',
 } as const)
+
+/**
+ * Classes the field component adds to rich text that has no `prose` class of its own (see `Field.tsx`),
+ * so a post body looks right by default. Listed in the field block's `classes`.
+ */
+export const FIELD_CLASS_MAP = withMarker({ richText: 'prose max-w-none' } as const)
 
 const MENU_CLASSES = [
   ...new Set(
@@ -75,6 +85,10 @@ const MENU_CLASSES = [
   ),
   'group',
 ]
+
+const FIELD_CLASSES = Object.values(FIELD_CLASS_MAP)
+  .flatMap((value) => value.split(' '))
+  .filter((cls) => cls !== BUILDER_CSS_CLASS)
 
 /**
  * The built-in blocks: stack, grid, heading, text, richText, image, button, link, menu, list (with
@@ -96,10 +110,23 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
       {
         name: 'as',
         type: 'select',
-        label: 'HTML element',
-        options: ['div', 'section', 'header', 'footer', 'main', 'nav', 'article', 'aside'],
+        label: 'Kind of area',
+        options: [
+          { label: 'Plain group (div)', value: 'div' },
+          { label: 'Page section (section)', value: 'section' },
+          { label: 'Site header (header)', value: 'header' },
+          { label: 'Site footer (footer)', value: 'footer' },
+          { label: 'Main content (main)', value: 'main' },
+          { label: 'Navigation (nav)', value: 'nav' },
+          { label: 'Article or post (article)', value: 'article' },
+          { label: 'Side note (aside)', value: 'aside' },
+        ],
         defaultValue: 'div',
-        admin: { description: 'The HTML tag. Use "section" for page sections, "header" and "footer" for page chrome.' },
+        admin: {
+          description:
+            'What this area is on the page. It does not change the look. Screen readers and search engines use it. ' +
+            'Use "Page section" for each section of a page.',
+        },
       },
     ],
     slots: { children: { label: 'Children' } },
@@ -160,9 +187,20 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         name: 'level',
         type: 'select',
         label: 'Level',
-        options: ['1', '2', '3', '4', '5', '6'],
+        options: [
+          { label: 'Heading 1 – page title', value: '1' },
+          { label: 'Heading 2 – section', value: '2' },
+          { label: 'Heading 3 – part of a section', value: '3' },
+          { label: 'Heading 4', value: '4' },
+          { label: 'Heading 5', value: '5' },
+          { label: 'Heading 6', value: '6' },
+        ],
         defaultValue: '2',
-        admin: { description: 'HTML heading level: "1" renders <h1>, "2" renders <h2>, and so on.' },
+        admin: {
+          description:
+            'Where the heading sits in the page outline. It does not set the size. Use Heading 1 once per page, ' +
+            'Heading 2 for each section, and Heading 3 inside a section.',
+        },
       },
     ],
     // `break-words`: a long word (a URL, a product code) wraps instead of widening the page.
@@ -245,7 +283,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         type: 'text',
         label: 'Alt text',
         localized: true,
-        admin: { description: 'Overrides the image\'s own alt text.' },
+        admin: { description: 'Describes the image for people who cannot see it. Leave empty to use the alt text saved with the image.' },
       },
     ],
     ai: {
@@ -344,6 +382,18 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         defaultValue: 'md',
         admin: { description: 'On small screens the links fold into a "Menu" button with a panel.' },
       },
+      {
+        name: 'ctaLabel',
+        type: 'text',
+        label: 'Panel button text',
+        localized: true,
+        admin: {
+          description:
+            'Optional. A button as the last row of the small-screen panel, for example the call to action the header ' +
+            'shows only on wide screens. Needs a link below. Not shown when the links are always visible.',
+        },
+      },
+      linkField({ name: 'cta', label: 'Panel button link', collections: linkCollections }),
     ],
     defaultClassName: 'flex flex-row items-center gap-6 text-sm font-medium',
     classes: MENU_CLASSES,
@@ -352,7 +402,8 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         'Site navigation: a <nav> with a list of links. The link to the current page is marked. ' +
         'On small screens the links fold into a "Menu" button that opens a panel ("collapse": "md" or "lg"; ' +
         '"never" keeps the links visible, for footers). The className lays out the links. ' +
-        'Put it in a header stack that has the "relative" class, so the panel opens below the header.',
+        'Put it in a header stack that has the "relative" class, so the panel opens below the header. ' +
+        'Optional "ctaLabel" and "cta" (a link) add a button as the last row of the small-screen panel.',
       example: {
         type: 'menu',
         props: {
@@ -510,16 +561,17 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         type: 'text',
         label: 'Field',
         required: true,
-        admin: { description: 'Dot path of a field of the document, e.g. "content", "featuredImage" or "author.name".' },
+        admin: { description: 'The name of the field to show, for example "content" or "featuredImage". For a field inside another, join the names with a dot: "author.name".' },
       },
       {
         name: 'fallback',
         type: 'text',
         label: 'Fallback',
         localized: true,
-        admin: { description: 'Shown when the document has no value.' },
+        admin: { description: 'Shown when this field is empty.' },
       },
     ],
+    classes: FIELD_CLASSES,
     ai: {
       description:
         'Shows one field of the current document in a template, rendered by its value: rich text as formatted ' +
@@ -546,14 +598,14 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         type: 'text',
         label: 'Sort',
         defaultValue: '-createdAt',
-        admin: { description: 'A field name. A leading "-" sorts newest or largest first, e.g. "-publishedAt".' },
+        admin: { description: 'The field to sort by, for example "publishedAt". Put a "-" in front for newest or largest first: "-publishedAt".' },
       },
       {
         name: 'excludeCurrent',
         type: 'checkbox',
         label: 'Leave out the current document',
         defaultValue: true,
-        admin: { description: 'In a template of the same collection, the page\'s own document is not listed.' },
+        admin: { description: 'On a page made from a template, the item that the page shows is not listed again.' },
       },
     ],
     slots: { [LIST_ITEM_SLOT]: { label: 'Item' } },

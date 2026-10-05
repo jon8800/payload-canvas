@@ -1,0 +1,92 @@
+// The empty page's start card, over the canvas. Payload CSS variables only.
+
+@layer payload-default {
+  .builder-empty-start {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 72px 16px 16px;
+    overflow: auto;
+    // Drops from the library pass through to the canvas around the card.
+    pointer-events: none;
+  }
+
+  .builder-empty-start__card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: min(560px, 100%);
+    padding: 24px;
+    border: 1px solid var(--be-border);
+    border-radius: var(--be-radius-m);
+    background: var(--be-panel);
+    color: var(--theme-text);
+    box-shadow: var(--be-shadow);
+    text-align: center;
+    pointer-events: auto;
+    animation: builder-fade-in 200ms var(--be-ease) both;
+  }
+
+  .builder-empty-start__icon {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--be-raised);
+    color: var(--be-muted);
+  }
+
+  .builder-empty-start__title {
+    margin: 0;
+    // Payload's h4 size (16px): the start card's title is a page-level heading, not panel text.
+    font-size: calc(var(--base) * 0.8);
+    font-weight: var(--be-weight-strong);
+    line-height: 1.35;
+    text-wrap: balance;
+  }
+
+  .builder-empty-start__text {
+    max-width: 48ch;
+    margin: 0;
+    color: var(--theme-elevation-650);
+    font-size: var(--be-text-m);
+    line-height: 1.5;
+    text-wrap: balance;
+  }
+
+  .builder-empty-start__sections {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    width: 100%;
+    margin: 4px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .builder-empty-start__section {
+    height: 100%;
+    cursor: pointer;
+
+    .builder-editor__thumb {
+      height: 84px;
+    }
+
+    .builder-editor__thumb--picture {
+      max-height: 84px;
+    }
+  }
+
+  .builder-empty-start__actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 4px;
+  }
+}

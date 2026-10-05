@@ -80,12 +80,7 @@ const EDITOR_CSS = `
 /* Repeated collection list items (2nd, 3rd, …): shown dimmed, never selectable. */
 [data-builder-repeat] { pointer-events: none; }
 [data-builder-repeat]:not([data-builder-repeat] [data-builder-repeat]) { opacity: 0.6; }
-[data-builder-empty-page] {
-  padding: 48px 24px;
-  font: 14px/1.5 system-ui, sans-serif;
-  color: rgb(0 0 0 / 0.45);
-  text-align: center;
-}
+[data-builder-empty-page] { min-height: 240px; }
 /* Inline text editing. The admin overlay draws the editing outline. */
 [data-builder-editing] { user-select: text; -webkit-user-select: text; cursor: text; outline: none; }
 [data-builder-editing='lines'] { white-space: pre-wrap; }
@@ -151,6 +146,9 @@ type Latest = { layout: Layout | null; resolved: Layout | null; definitions: Blo
 const shownBlockIn = (latest: Latest, id: string) => (latest.resolved ? findBlock(latest.resolved, id) : null)
 const definitionIn = (latest: Latest, type: string) => latest.definitions?.find((d) => d.type === type)
 
+/** How long Enter or Backspace in a list item waits for the admin's `inlineStart` (it may refuse the edit). */
+const PROVISIONAL_START_MS = 500
+
 /** How long a released freeze waits for the admin's layout at most. */
 const RELEASE_MS = 1500
 
@@ -199,10 +197,22 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
   const activeRef = useRef<ActiveSession | null>(null)
   const startingRef = useRef(false)
   // An `inlineStart` for a block that is not rendered yet (a list item the admin just added).
-  const pendingStartRef = useRef<{ id: string; offset?: number; until: number } | null>(null)
+  // `id: null`: Enter or Backspace in a list item asked the admin, whose `inlineStart` follows.
+  const pendingStartRef = useRef<{ id: string | null; offset?: number; until: number } | null>(null)
+  // Letters typed while that start waits (fast typing after Enter or Backspace in a list). They go
+  // into the text once editing starts.
+  const typedRef = useRef('')
   const latest = useRef<Latest>({ layout: null, resolved: null, definitions: undefined })
   // The admin's layout the current `resolved` was made from. The drop animation waits for a new one.
   const resolvedFrom = useRef<Layout | null>(null)
+  // Layouts from the admin are numbered as they arrive. `resolvedSeq` is the number of the layout
+  // `resolved` shows; `shownSeq` the one on screen. An `inlineStart` waits until the screen shows the
+  // newest layout: after a list item join, the admin sends the joined text just before it.
+  const layoutRef = useRef<Layout | null>(null)
+  const layoutSeq = useRef(0)
+  const seqOf = useRef(new WeakMap<Layout, number>())
+  const [resolvedSeq, setResolvedSeq] = useState(0)
+  const shownSeq = useRef(0)
   // Blocks rendered on the server, through the app's canvas server action.
   const [serverBlocks] = useState(() =>
     server
@@ -300,12 +310,14 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
         if (stored.type === TEXT_LIST_ITEM_BLOCK && path === 'text') {
           options.onSplit = (after) => {
             stopInline()
+            pendingStartRef.current = { id: null, until: Date.now() + PROVISIONAL_START_MS }
             send({ type: 'inlineSplit', id, after })
           }
           options.onJoin = (current) => {
             const layoutNow = latest.current.layout
             if (!layoutNow || !joinListItem(layoutNow, id, current)) return false
             stopInline()
+            pendingStartRef.current = { id: null, until: Date.now() + PROVISIONAL_START_MS }
             send({ type: 'inlineJoin', id, value: current })
             return true
           }
@@ -324,7 +336,11 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
           return
         }
         activeRef.current = { session, id, path, inline }
+        pendingStartRef.current = null
         send({ type: 'inlineStart', session, id, path, kind })
+        const typed = typedRef.current
+        typedRef.current = ''
+        if (typed && kind !== 'rich') document.execCommand('insertText', false, typed)
       } finally {
         startingRef.current = false
       }
@@ -347,7 +363,10 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
 
   // Block animations: only while the editor's "Play animations" is on, or for one Preview.
   const [motion] = useState(() =>
-    createCanvasMotion((id) => (latest.current.layout ? (findBlock(latest.current.layout, id)?.motion ?? undefined) : undefined)),
+    createCanvasMotion(
+      (id) => (latest.current.layout ? (findBlock(latest.current.layout, id)?.motion ?? undefined) : undefined),
+      () => scheduleMeasure(),
+    ),
   )
   useEffect(() => () => motion.dispose(), [motion])
 
@@ -389,12 +408,19 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
           setInit(message.init)
           stopReady()
           return
-        case 'layout':
+        case 'layout': {
           hasLayout = true
           // Unchanged blocks keep their objects, so the memoized blocks skip them.
-          setLayout((current) => shareStructure(current, message.layout))
+          const next = shareStructure(layoutRef.current, message.layout)
+          const seq = ++layoutSeq.current
+          layoutRef.current = next
+          seqOf.current.set(next, seq)
+          // The same layout again: React keeps the state, so nothing resolves it again.
+          if (next === resolvedFrom.current) setResolvedSeq(seq)
+          setLayout(next)
           stopReady()
           return
+        }
         case 'selection':
           if (message.selectedId && message.selectedId !== selectedRef.current) scrollToBlock(message.selectedId)
           selectedRef.current = message.selectedId
@@ -412,7 +438,9 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
           setLocale(message.locale)
           return
         case 'inlineStart': {
-          const el = document.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(message.id)}"]`)
+          // The screen must show the admin's newest layout first (a joined list item has new text).
+          const current = shownSeq.current === layoutSeq.current
+          const el = current ? document.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(message.id)}"]`) : null
           const target = el ? firstEditable(el, shownBlock, definitionOf) : null
           if (target) void startInline(target, null, message.offset)
           // Not rendered yet (a list item the admin just added): start once it is.
@@ -489,6 +517,16 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
       sendPointer('click', e.clientX, e.clientY)
     }
     const block = (e: Event) => e.preventDefault()
+    // While an editing start waits for its block (a new list item), letters are kept for it, and
+    // keys that would act on the block (Backspace deletes it) do nothing.
+    const onPendingKey = (e: KeyboardEvent) => {
+      const pending = pendingStartRef.current
+      if (!pending || activeRef.current || Date.now() > pending.until || e.isComposing) return
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      if (e.key.length === 1) typedRef.current += e.key
+      else if (e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'Enter') return
+      e.preventDefault()
+    }
     const onKeyDown = (e: KeyboardEvent) => {
       // Keys typed into an edited text belong to the text (Backspace deletes a letter, not the block).
       if (e.defaultPrevented || isEditing(e.target)) return
@@ -506,6 +544,7 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     document.addEventListener('click', onClick, true)
     document.addEventListener('auxclick', block, true)
     document.addEventListener('submit', block, true)
+    document.addEventListener('keydown', onPendingKey, true)
     document.addEventListener('keydown', onKeyDown)
     document.addEventListener('dblclick', onDoubleClick)
     document.addEventListener('pointerdown', onPointerDown, true)
@@ -523,6 +562,7 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
       document.removeEventListener('click', onClick, true)
       document.removeEventListener('auxclick', block, true)
       document.removeEventListener('submit', block, true)
+      document.removeEventListener('keydown', onPendingKey, true)
       document.removeEventListener('keydown', onKeyDown)
       document.removeEventListener('dblclick', onDoubleClick)
       document.removeEventListener('pointerdown', onPointerDown, true)
@@ -571,11 +611,13 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
         if (run !== resolveRun.current) return
         resolvedFrom.current = layout
         setResolved((current) => shareStructure(current, next))
+        setResolvedSeq(seqOf.current.get(layout) ?? 0)
       })
       .catch((error: unknown) => {
         if (run !== resolveRun.current) return
         resolvedFrom.current = layout
         setResolved(layout)
+        setResolvedSeq(seqOf.current.get(layout) ?? 0)
         send({ type: 'error', message: `Canvas data failed to load: ${String(error)}` })
       })
   }, [layout, init, definitions, context, linkResolver, locale])
@@ -628,6 +670,7 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
 
   useLayoutEffect(() => {
     latest.current = { layout, resolved, definitions }
+    shownSeq.current = resolvedSeq
     // The edited element left the page (a collaborator deleted the block): end the session.
     if (activeRef.current && !activeRef.current.inline.element.isConnected) stopInline(false)
     // A pending `inlineStart` starts once its block has rendered.
@@ -635,8 +678,10 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     if (!pending) return
     if (Date.now() > pending.until) {
       pendingStartRef.current = null
+      typedRef.current = ''
       return
     }
+    if (!pending.id || resolvedSeq !== layoutSeq.current) return
     const el = document.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(pending.id)}"]`)
     const shownBlock = (id: string) => shownBlockIn(latest.current, id)
     const definitionOf = (type: string) => definitionIn(latest.current, type)
@@ -703,9 +748,8 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     <>
       <style data-builder-editor-css="">{EDITOR_CSS}</style>
       <div ref={rootRef} data-builder-root="">
-        {visible && shown.blocks.length === 0 && (
-          <p data-builder-empty-page="">This page is empty. Add a section or a block from the Add panel.</p>
-        )}
+        {/* The editor draws the empty-page start screen over this space. */}
+        {visible && shown.blocks.length === 0 && <div data-builder-empty-page="" />}
         <ServerBlocksContext.Provider value={serverContext}>{rendered}</ServerBlocksContext.Provider>
       </div>
     </>

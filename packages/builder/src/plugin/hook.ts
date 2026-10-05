@@ -27,14 +27,17 @@ import { compileClasses, type CssOptions } from '../css'
 import {
   checkStaleSave,
   defaultFieldClock,
+  defaultSettingsLocks,
   KEEP_LOCK_CONTEXT,
   recordFieldChanges,
   rememberLocks,
   restoreLocks,
+  staleSaveErrors,
   staleSaveMessage,
   topFieldLabel,
   type FieldClock,
   type LockPayload,
+  type SettingsLocks,
 } from '../live/fieldsGuard'
 import type { SessionManager } from '../live/session'
 
@@ -157,14 +160,25 @@ function isPluginSave(context: Record<string, unknown> | undefined): boolean {
 
 /**
  * Before a plugin save, remembers Payload's lock on the document, so `layoutAfterChange` can put
- * it back (Payload deletes the lock on every update). See live/fieldsGuard.ts.
+ * it back (Payload deletes the lock on every update). Also before a save by someone who has the
+ * builder's settings drawer open: their own lock stays while the drawer is open, so others keep
+ * getting the "Document locked" dialog between autosaves. See live/fieldsGuard.ts.
  */
-export function keepLockBeforeOperation(options: { collection: string }): CollectionBeforeOperationHook {
+export function keepLockBeforeOperation(options: { collection: string; settingsLocks?: SettingsLocks }): CollectionBeforeOperationHook {
+  const holders = options.settingsLocks ?? defaultSettingsLocks()
   return async ({ args, context, operation, req }) => {
     const id = (args as { id?: unknown }).id
-    if (operation !== 'update' || !context || !isPluginSave(context)) return args
+    if (operation !== 'update' || !context) return args
     if (typeof id !== 'string' && typeof id !== 'number') return args
-    await rememberLocks({ payload: req.payload as unknown as LockPayload, req, collection: options.collection, id, context })
+    const payload = req.payload as unknown as LockPayload
+    if (isPluginSave(context)) {
+      await rememberLocks({ payload, req, collection: options.collection, id, context })
+      return args
+    }
+    const userId = (req.user as { id?: unknown } | null | undefined)?.id
+    if ((typeof userId === 'string' || typeof userId === 'number') && holders.has(options.collection, id, userId)) {
+      await rememberLocks({ payload, req, collection: options.collection, id, context, owner: userId })
+    }
     return args
   }
 }
@@ -288,7 +302,7 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
         pluginSave: isPluginSave(context),
       })
       if (conflicts.length > 0) {
-        throw new APIError(staleSaveMessage(conflicts, (name) => topFieldLabel(collection.fields, name)), 409, undefined, true)
+        throw new APIError(staleSaveMessage(conflicts, (name) => topFieldLabel(collection.fields, name)), 409, staleSaveErrors(conflicts), true)
       }
     }
 

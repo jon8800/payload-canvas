@@ -21,6 +21,7 @@ import { useRuntime, type InspectorTab } from './runtime'
 import { shortcutList } from './shortcuts'
 import { useEditor } from './store'
 import { StylesPanel } from './styles/StylesPanel'
+import { usePayloadControlNames } from './ui/payloadA11y'
 import { useValue, useValueSelector } from './valueStore'
 
 type TabsProps<T extends string> = {
@@ -57,6 +58,8 @@ export function Inspector() {
   const setTab = (next: InspectorTab) => (next === 'assistant' ? runtime.toggleAssistant(true) : runtime.inspectorTab.set(next))
   // Field access: ask the server again after edits to blocks with access rules.
   useAccessRefresh()
+  // Payload's icon-only buttons and selects get accessible names.
+  usePayloadControlNames(inspectorRef)
   // The document's own fields open in Payload's drawer from the top bar ("Page settings").
   return (
     <div ref={inspectorRef} className="builder-editor__inspector">
@@ -145,8 +148,10 @@ function BlockPane() {
   // A block that was just added: focus its first content field.
   useEffect(() => {
     if (!block || focusRequest !== block.id) return
-    runtime.focusRequest.set(null)
+    // The request clears inside the frame: clearing it here re-renders the inspector, and the
+    // cleanup would cancel the frame before the field gets focus.
     const frame = requestAnimationFrame(() => {
+      runtime.focusRequest.set(null)
       const field = runtime.inspectorRef.current?.querySelector<HTMLElement>(
         '.builder-editor__fields input:not([type="hidden"]):not([type="checkbox"]), .builder-editor__fields textarea, .builder-editor__fields [contenteditable="true"]',
       )
@@ -202,7 +207,6 @@ function BlockProblems({ blockId }: { blockId: string }) {
 
 function BlockHeader({ block }: { block: Block }) {
   const runtime = useRuntime()
-  const def = getBlockDefinition(runtime.config.blocks, block.type)
   const [renamingHere, setRenaming] = useState(false)
   // "Rename" in a block menu (or F2 outside the outline) renames here.
   const requested = useValueSelector(renameRequest(runtime), (r) => r?.where === 'inspector' && r.id === block.id)
@@ -214,8 +218,9 @@ function BlockHeader({ block }: { block: Block }) {
   const typeLabel = runtime.blockLabel(block.type)
   const name = blockName(block, typeLabel)
   const kind = typeName(block, typeLabel)
-  // The type shows under a custom name; else the category does.
-  const sub = block.label ? kind : def?.category
+  // The type shows under a custom name. The category is only for the Blocks tab: here it would
+  // repeat the "Content" tab right below.
+  const sub = block.label ? kind : null
   const tag = typeof block.props?.as === 'string' && block.props.as !== 'div' ? `<${block.props.as}>` : null
 
   return (

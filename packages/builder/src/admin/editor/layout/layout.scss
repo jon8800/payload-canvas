@@ -133,7 +133,7 @@
 
   .builder-left__note {
     color: var(--be-muted);
-    font-size: 11.5px;
+    font-size: var(--be-text-s);
     font-variant-numeric: tabular-nums;
   }
 
@@ -203,8 +203,8 @@
     border-radius: 12px;
     background: var(--theme-elevation-900);
     color: var(--theme-elevation-0);
-    font-size: 12px;
-    font-weight: 500;
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-medium);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
     pointer-events: none;

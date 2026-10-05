@@ -13,8 +13,10 @@ import { useRuntime } from '../runtime'
 import { breakpointAt } from '../styles/tokens'
 import { useEditor } from '../store'
 import { sameItems, useValue, useValueSelector } from '../valueStore'
+import { propPathOf } from './field'
 import { cursorPoint, distinctInitials, shortName } from './presence'
 import type { Peer } from './useMultiplayer'
+import './presence.scss'
 
 /** Cursors that have not moved for this long fade out. */
 const CURSOR_IDLE_MS = 10_000
@@ -22,17 +24,33 @@ const MAX_AVATARS = 5
 
 const peerStyle = (color: string, extra?: CSSProperties): CSSProperties => ({ '--be-peer': color, ...extra }) as CSSProperties
 const box = (rect: Rect): CSSProperties => ({ left: rect.x, top: rect.y, width: rect.width, height: rect.height })
+/** `rect` grown by `px` screen pixels on each side (`--be-px` is one screen pixel in the overlay). */
+const grownBox = (rect: Rect, px: number): CSSProperties => ({
+  left: `calc(${rect.x}px - var(--be-px, 1px) * ${px})`,
+  top: `calc(${rect.y}px - var(--be-px, 1px) * ${px})`,
+  width: `calc(${rect.width}px + var(--be-px, 1px) * ${2 * px})`,
+  height: `calc(${rect.height}px + var(--be-px, 1px) * ${2 * px})`,
+})
+/** Another editor's frame on the block this editor selected too: this far outside the own frame. */
+const SHARED_FRAME_GAP = 3
 
 function listNames(names: string[]): string {
   if (names.length <= 1) return names[0] ?? ''
   return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
 }
 
-/** Initials for the collaborators on this page. They differ between people, even for similar names. */
+/**
+ * Initials for the collaborators on this page. They differ between people, even for similar names,
+ * and from this editor's own initials: "builder-dev" sees "builder-dev2" as "BD2", not "BD".
+ */
 function useInitialsOf(): (name: string) => string {
   const runtime = useRuntime()
   const collaborators = useValueSelector(runtime.live, (live) => live?.collaborators)
-  const map = useMemo(() => distinctInitials((collaborators ?? []).map((c) => c.name)), [collaborators])
+  const selfName = useValueSelector(runtime.live, (live) => live?.self?.name)
+  const map = useMemo(
+    () => distinctInitials([...(selfName ? [selfName] : []), ...(collaborators ?? []).map((c) => c.name)]),
+    [collaborators, selfName],
+  )
   return (name) => map.get(name) ?? distinctInitials([name]).get(name) ?? '?'
 }
 
@@ -143,6 +161,7 @@ export function PeerSelections() {
   const measurement = useValue(runtime.measurement)
   const drag = useValue(runtime.drag)
   const live = useValue(runtime.live)
+  const selectedId = useEditor(runtime.store, (s) => s.selectedId)
   const groups = useMemo(() => {
     const byBlock = new Map<string, Peer[]>()
     for (const peer of peers.values()) {
@@ -161,13 +180,19 @@ export function PeerSelections() {
         const flashed = live?.changes.get(blockId)?.actor.label
         const tags = list.filter((peer) => peer.name !== flashed)
         return (
-          <div key={blockId} className="builder-peer-selection" style={{ ...box(rect), ...peerStyle(list[0].color) }}>
+          <div
+            key={blockId}
+            className="builder-peer-selection"
+            // On the own selection, the two frames would draw as one thick line: keep them apart.
+            style={{ ...(blockId === selectedId ? grownBox(rect, SHARED_FRAME_GAP) : box(rect)), ...peerStyle(list[0].color) }}
+          >
             {tags.length > 0 && (
               <span className="builder-peer-selection__tags">
                 {tags.map((peer) => (
                   <span key={peer.clientId} className="builder-peer-selection__tag" style={peerStyle(peer.color)}>
                     {peer.type === 'ai' && <Icon name="sparkle" size={10} />}
                     {nameOf(peer)}
+                    {peer.field && ' · typing'}
                   </span>
                 ))}
               </span>
@@ -263,6 +288,9 @@ export function PeerDots({ blockId }: { blockId: string }) {
   )
 }
 
+/** The wording under the banner: edits sync, and the same field is last-write-wins. */
+const SYNC_NOTE = 'Changes sync live. If you both type in the same field, the last change wins.'
+
 /** "Ana is editing this block", when someone else has the selected block selected too. */
 export function EditingBanner({ blockId }: { blockId: string }) {
   const nameOf = useNameOf()
@@ -283,12 +311,37 @@ export function EditingBanner({ blockId }: { blockId: string }) {
       </span>
       <span>
         {names === 'You (another tab)' ? (
-          <>You are editing this block in another tab. Changes merge live.</>
+          <>You are editing this block in another tab. {SYNC_NOTE}</>
         ) : (
           <>
-            <strong>{names}</strong> {on.length === 1 ? 'is' : 'are'} editing this block. Changes merge live.
+            <strong>{names}</strong> {on.length === 1 ? 'is' : 'are'} editing this block. {SYNC_NOTE}
           </>
         )}
+      </span>
+    </output>
+  )
+}
+
+/**
+ * "Ana is editing this field" under an inspector field (`fieldPath`: "builder.<id>.links.0.label"),
+ * while a collaborator types in the same prop of the same block, here or on the canvas.
+ */
+export function PeerFieldNote({ fieldPath }: { fieldPath: string }) {
+  const nameOf = useNameOf()
+  const runtime = useRuntime()
+  const at = propPathOf(fieldPath)
+  const on = useValueSelector(
+    runtime.peers,
+    (peers) => (at ? [...peers.values()].filter((p) => p.selectedId === at.blockId && p.field === at.path) : []),
+    sameItems,
+  )
+  if (on.length === 0) return null
+  const names = listNames(on.map((p) => nameOf(p)))
+  return (
+    <output className="builder-peer-field" style={peerStyle(on[0].color)}>
+      <span className="builder-peer-field__dot" aria-hidden />
+      <span>
+        {names === 'You (another tab)' ? 'You are editing this field in another tab.' : `${names} ${on.length === 1 ? 'is' : 'are'} editing this field.`}
       </span>
     </output>
   )

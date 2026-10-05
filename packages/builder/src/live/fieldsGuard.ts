@@ -9,16 +9,24 @@
 //   does by default. But Payload deletes the lock row on every update. So these saves read the
 //   lock before the update and put it back in the same transaction: a person in the settings
 //   drawer keeps the lock while others edit the layout.
-// - Payload also deletes the lock after each save of the lock holder, autosave included. On a
-//   collection with a short autosave interval the lock is often gone, and a second person with an
-//   old copy of the form could overwrite the first person's change. The stale-save check catches
-//   this: a save that would undo a field change someone else made after the form was loaded is
-//   rejected with 409, and the message names the person and the fields.
+// - The settings drawer takes the lock when it opens (Payload's form only takes it at the first
+//   change) and gives it back when it closes. Payload also deletes the lock after each save of the
+//   lock holder, autosave included, so with a short autosave interval the lock would be gone most
+//   of the time. While the drawer is open, its owner's own saves keep the lock the same way.
+//   So the second person to open the drawer gets Payload's "Document locked" dialog.
+// - If the lock is gone anyway (it expired, a restart, the Edit view with autosave), a second
+//   person with an old copy of the form could still overwrite the first person's change. The
+//   stale-save check catches this: a save that would undo a field change someone else made after
+//   the form was loaded is rejected with 409. The message names the person and the fields, and
+//   each such field gets an error (staleMessages.ts), so the form shows it next to the field.
 //
 // The field clock lives in memory, like the sessions (one server process). After a restart it
 // starts empty, so the check only covers changes made since then.
 
 import { actorFromUser } from './apply'
+import { staleFieldMessage } from './staleMessages'
+
+export { topFieldLabel } from './staleMessages'
 
 /** `context` flag of the plugin's own saves (publish, unpublish, revert): keep the lock, no stale check. */
 export const KEEP_LOCK_CONTEXT = 'builderKeepLock'
@@ -139,31 +147,6 @@ export function defaultFieldClock(): FieldClock {
 // Stale-save check (beforeChange) and record (afterChange)
 // ---------------------------------------------------------------------------
 
-type FieldLike = { name?: unknown; label?: unknown; fields?: unknown; tabs?: unknown }
-
-/** The label of a top-level field (also inside rows, collapsibles and unnamed tabs), else its name in words. */
-export function topFieldLabel(fields: unknown, name: string): string {
-  const walk = (list: unknown): FieldLike | undefined => {
-    if (!Array.isArray(list)) return undefined
-    for (const item of list as FieldLike[]) {
-      if (!item || typeof item !== 'object') continue
-      if (item.name === name) return item
-      if (typeof item.name === 'string') continue
-      const nested = Array.isArray(item.tabs) ? walk(item.tabs) : walk(item.fields)
-      if (nested) return nested
-    }
-    return undefined
-  }
-  const label = walk(fields)?.label
-  if (typeof label === 'string' && label) return label
-  if (label && typeof label === 'object') {
-    const first = (label as Record<string, unknown>).en ?? Object.values(label)[0]
-    if (typeof first === 'string' && first) return first
-  }
-  const words = name.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').trim()
-  return words.charAt(0).toUpperCase() + words.slice(1)
-}
-
 function listText(items: string[]): string {
   if (items.length <= 1) return items[0] ?? ''
   return `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`
@@ -174,6 +157,14 @@ export function staleSaveMessage(conflicts: readonly FieldConflict[], labelOf: (
   const who = listText([...new Set(conflicts.map((c) => c.label))])
   const what = listText(conflicts.map((c) => labelOf(c.field)))
   return `Not saved. ${who} changed ${what} after you opened this form. Reload it to get their changes, then make your edit again.`
+}
+
+/**
+ * The `data` of the rejected save's APIError: one error per field, with the field's path, so
+ * Payload's form marks each field (and keeps what the user typed).
+ */
+export function staleSaveErrors(conflicts: readonly FieldConflict[]): { errors: { path: string; message: string }[] } {
+  return { errors: conflicts.map((c) => ({ path: c.field, message: staleFieldMessage(c.label) })) }
 }
 
 export type StaleCheckArgs = {
@@ -255,11 +246,30 @@ async function findLocks(payload: LockPayload, req: unknown, collection: string,
   return result.docs ?? []
 }
 
-/** Runs in beforeOperation of a plugin save: remembers the document's lock rows in `context`. */
-export async function rememberLocks(args: { payload: LockPayload; req: unknown; collection: string; id: string | number; context: Context }): Promise<void> {
-  const { payload, req, collection, id, context } = args
+/** The id of the user who holds a lock row, as text. */
+function lockOwner(row: LockRow): string | null {
+  const user = row.user as { value?: unknown } | null | undefined
+  const value = user && typeof user === 'object' ? user.value : user
+  const id = value && typeof value === 'object' ? (value as { id?: unknown }).id : value
+  return typeof id === 'string' || typeof id === 'number' ? String(id) : null
+}
+
+/**
+ * Runs in beforeOperation of a plugin save: remembers the document's lock rows in `context`.
+ * With `owner`, only that user's rows (a settings drawer owner's own save).
+ */
+export async function rememberLocks(args: {
+  payload: LockPayload
+  req: unknown
+  collection: string
+  id: string | number
+  context: Context
+  owner?: string | number
+}): Promise<void> {
+  const { payload, req, collection, id, context, owner } = args
   if (!lockingOn(payload, collection)) return
-  const rows = await findLocks(payload, req, collection, id)
+  const found = await findLocks(payload, req, collection, id)
+  const rows = owner === undefined ? found : found.filter((row) => lockOwner(row) === String(owner))
   if (rows.length === 0) return
   const kept = (context[KEPT_LOCKS_CONTEXT] ??= {}) as Record<string, LockRow[]>
   kept[docKey(collection, id)] = rows
@@ -286,4 +296,127 @@ export async function restoreLocks(args: { payload: LockPayload; req: unknown; c
     await payload.db.create({ collection: LOCKED_DOCUMENTS_SLUG, data, req, returning: false })
   }
   return rows.length
+}
+
+// ---------------------------------------------------------------------------
+// The settings drawer's lock
+// ---------------------------------------------------------------------------
+
+/** Who has the builder's settings drawer open, per document. In memory, like the sessions. */
+export type SettingsLocks = {
+  add(collection: string, id: string | number, user: string | number): void
+  remove(collection: string, id: string | number, user: string | number): void
+  has(collection: string, id: string | number, user: string | number): boolean
+}
+
+export function createSettingsLocks(): SettingsLocks {
+  const holders = new Map<string, Set<string>>()
+  return {
+    add(collection, id, user) {
+      const key = docKey(collection, id)
+      const set = holders.get(key) ?? new Set<string>()
+      set.add(String(user))
+      holders.set(key, set)
+    },
+    remove(collection, id, user) {
+      const key = docKey(collection, id)
+      const set = holders.get(key)
+      set?.delete(String(user))
+      if (set?.size === 0) holders.delete(key)
+    },
+    has(collection, id, user) {
+      return holders.get(docKey(collection, id))?.has(String(user)) ?? false
+    },
+  }
+}
+
+const SETTINGS_LOCKS_KEY = Symbol.for('@payload-toolkit/builder/settings-locks')
+
+/** The process-wide settings drawer holders. Kept on `globalThis`, so a dev hot reload keeps them. */
+export function defaultSettingsLocks(): SettingsLocks {
+  const store = globalThis as unknown as Record<symbol, SettingsLocks | undefined>
+  store[SETTINGS_LOCKS_KEY] ??= createSettingsLocks()
+  return store[SETTINGS_LOCKS_KEY]
+}
+
+/** The lock helpers that delete rows. Tests pass a fake. */
+export type LockWritePayload = LockPayload & {
+  db: LockPayload['db'] & { deleteMany(args: Record<string, unknown>): Promise<unknown> }
+}
+
+const DEFAULT_LOCK_SECONDS = 300
+
+function lockDurationMs(payload: LockPayload, collection: string): number {
+  const option = payload.collections[collection]?.config.lockDocuments
+  const seconds = option && typeof option === 'object' ? Number((option as { duration?: unknown }).duration) : Number.NaN
+  return (Number.isFinite(seconds) && seconds > 0 ? seconds : DEFAULT_LOCK_SECONDS) * 1000
+}
+
+function lockIsActive(row: LockRow, durationMs: number, now: number): boolean {
+  const at = Date.parse(String(row.updatedAt ?? ''))
+  return Number.isFinite(at) && at > now - durationMs
+}
+
+/**
+ * `off`: locking is off for the collection. `taken`: the user holds the lock now (a new row, or
+ * it was already theirs). `other`: someone else holds a live lock, so Payload's drawer shows its
+ * "Document locked" dialog.
+ */
+export type SettingsLockResult = 'off' | 'taken' | 'other'
+
+/**
+ * The settings drawer opens: takes Payload's document lock for `user`, as Payload's form does at
+ * its first change (expired rows go, a new row comes). Leaves another person's live lock alone.
+ * While the user is listed in `holders`, their own saves keep the lock (keepLockBeforeOperation).
+ */
+export async function takeSettingsLock(args: {
+  payload: LockWritePayload
+  req: unknown
+  collection: string
+  id: string | number
+  user: { id: string | number; collection: string }
+  holders: SettingsLocks
+  now?: number
+}): Promise<SettingsLockResult> {
+  const { payload, req, collection, id, user, holders } = args
+  if (!lockingOn(payload, collection)) return 'off'
+  const now = args.now ?? Date.now()
+  const duration = lockDurationMs(payload, collection)
+  const rows = await findLocks(payload, req, collection, id)
+  const active = rows.filter((row) => lockIsActive(row, duration, now))
+  // Listed also when someone else holds the lock: after "Take over" in Payload's dialog the lock
+  // is the user's, and their saves must keep it. Only the user's own rows are ever kept.
+  holders.add(collection, id, user.id)
+  if (active.some((row) => lockOwner(row) !== String(user.id))) return 'other'
+  if (active.length > 0) return 'taken'
+  if (rows.length > 0) await payload.db.deleteMany({ collection: LOCKED_DOCUMENTS_SLUG, where: lockWhere(collection, id), req })
+  await payload.db.create({
+    collection: LOCKED_DOCUMENTS_SLUG,
+    data: { document: { relationTo: collection, value: id }, user: { relationTo: user.collection, value: user.id } },
+    req,
+    returning: false,
+  })
+  return 'taken'
+}
+
+/** The settings drawer closed: deletes `user`'s lock on the document. Returns the number of rows deleted. */
+export async function releaseSettingsLock(args: {
+  payload: LockWritePayload
+  req: unknown
+  collection: string
+  id: string | number
+  user: { id: string | number }
+  holders: SettingsLocks
+}): Promise<number> {
+  const { payload, req, collection, id, user, holders } = args
+  holders.remove(collection, id, user.id)
+  if (!lockingOn(payload, collection)) return 0
+  const own = (await findLocks(payload, req, collection, id)).filter((row) => lockOwner(row) === String(user.id))
+  if (own.length === 0) return 0
+  await payload.db.deleteMany({
+    collection: LOCKED_DOCUMENTS_SLUG,
+    where: { and: [...lockWhere(collection, id).and, { id: { in: own.map((row) => row.id) } }] },
+    req,
+  })
+  return own.length
 }

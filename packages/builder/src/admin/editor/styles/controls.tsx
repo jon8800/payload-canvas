@@ -17,6 +17,9 @@ import { displayValue, parseTyped } from './model'
 import { filterSuggestions, Popover, SuggestList, usePopover, type Suggestion } from './popover'
 import { overrideHint, sourceHint, useProp } from './useProp'
 
+/** "1.02": a decimal number that is not a listed scale value is arbitrary when it replaces one. */
+const DECIMAL = /^\d*\.\d+$/
+
 /**
  * Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y in a style control undo the editor, not the input: the value
  * is already applied, so the input has nothing of its own to undo.
@@ -301,7 +304,12 @@ export function ValueInput({
     setDraft(null)
     if (text.trim() === shown) return
     const parsed = parseTyped(text, def)
-    set(parsed.value, { negative: parsed.negative })
+    // The input shows "[1.02]" as "1.02". An edit to "1.05" stays arbitrary: it must not become
+    // the scale key "1.05". Listed scale values ("1.5") stay scale values.
+    const wasArbitrary = isSet && Boolean(value?.value.startsWith('['))
+    const listed = suggestions.some((s) => s.value === parsed.value)
+    const kept = wasArbitrary && parsed.value && DECIMAL.test(parsed.value) && !listed ? `[${parsed.value}]` : parsed.value
+    set(kept, { negative: parsed.negative })
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -468,9 +476,10 @@ export function Segmented({ prop, items, rotate }: { prop: string; items: Segmen
           size="compact"
           className="builder-styles__more"
           options={def.options}
-          value={extraActive ? value.value : null}
+          // The list marks the current value, also when a button above shows it.
+          value={value ? value.value : null}
           onValueChange={set}
-          emptyLabel={extraActive ? '–' : undefined}
+          emptyLabel={isSet ? '–' : undefined}
           trigger={<Icon name="more" size={14} />}
           tooltip={extraLabel ? `More options: ${extraLabel}` : 'More options'}
           data-active={extraActive || undefined}

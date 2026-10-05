@@ -161,6 +161,14 @@ describe('defaultBlocks', () => {
     }
   })
 
+  it('the menu lists the classes of its panel button, and the field lists its rich text classes', () => {
+    const blocks = defaultBlocks()
+    const menu = blocks.find((b) => b.type === 'menu')
+    for (const name of ['mt-5', 'rounded-full', 'bg-primary']) assert.ok(menu?.classes?.includes(name), name)
+    const field = blocks.find((b) => b.type === 'field')
+    for (const name of ['prose', 'max-w-none']) assert.ok(field?.classes?.includes(name), name)
+  })
+
   it('heading and text wrap long words', () => {
     const blocks = defaultBlocks()
     for (const type of ['heading', 'text']) {

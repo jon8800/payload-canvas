@@ -1,7 +1,8 @@
 // Demo images for the seed, drawn as SVG and rendered with sharp. No network and no stock photos.
 // - Work: four fictional client sites in a browser window (Home "Selected work").
 // - Studio and workshop: a desk and a sitemap wall (image and text sections).
-// - Posts: three flat editorial compositions (blog cards and the services cards).
+// - Posts: three flat editorial compositions (blog cards).
+// - Services: one illustration per service card.
 // A light film grain goes over every image, so the flat shapes read as printed, not as placeholders.
 import sharp from 'sharp'
 
@@ -246,17 +247,19 @@ ${note(1180, 960, '#f2d16b', 3)}`,
 }
 
 function blocksComposition(): string {
+  // A full-bleed sand field, like the other cards: no paper margin that reads as a frame.
+  const tile = '#f1ebdf'
   return svg(
     1600,
     1000,
-    `${rect(0, 0, 1600, 1000, PAPER)}
+    `${rect(0, 0, 1600, 1000, '#d6c8b1')}
 ${rect(120, 120, 760, 470, GREEN, 6)}
 ${rect(904, 120, 576, 220, CLAY, 6)}
-${rect(904, 364, 276, 226, SAND, 6)}
+${rect(904, 364, 276, 226, tile, 6)}
 ${rect(1204, 364, 276, 226, INK, 6)}
 <circle cx="1342" cy="477" r="78" fill="${MUSTARD}"/>
 ${rect(120, 614, 360, 266, MUSTARD, 6)}
-${rect(504, 614, 376, 266, SAND, 6)}
+${rect(504, 614, 376, 266, tile, 6)}
 ${rect(904, 614, 576, 266, GREEN, 6, 'fill-opacity="0.85"')}
 ${[0, 1, 2].map((i) => rect(184, 200 + i * 56, 420 - i * 90, 22, PAPER, 11, 'fill-opacity="0.9"')).join('')}
 ${rect(184, 470, 180, 56, PAPER, 28)}
@@ -281,7 +284,9 @@ ${[0, 1, 2, 3, 4].map((i) => rect(0, 780 + i * 44, 1600, 14, PAPER, 0, `fill-opa
 }
 
 function tokensComposition(): string {
-  const colors = [INK, GREEN, '#3f7a5f', CLAY, MUSTARD, SAND, PAPER]
+  // Six swatches, edge to edge. No paper swatch: it read as an empty strip on the paper page.
+  const colors = [INK, GREEN, '#3f7a5f', CLAY, MUSTARD, SAND]
+  const names = ['ink', 'primary', 'leaf', 'clay', 'sun', 'sand']
   const w = 1600 / colors.length
   return svg(
     1600,
@@ -290,11 +295,104 @@ function tokensComposition(): string {
 ${colors.map((color, i) => {
   const light = i >= 4
   const ink = light ? INK : PAPER
-  const x = Math.round(i * w) + 28
+  const x = Math.round(i * w) + 32
   return `<circle cx="${x + 26}" cy="760" r="26" fill="none" stroke="${ink}" stroke-opacity="0.7" stroke-width="2"/>` +
-    text(x, 850, 26, ink, color.toUpperCase(), { family: MONO, opacity: 0.85 }) +
-    text(x, 892, 20, ink, `--color-${['ink', 'primary', 'leaf', 'clay', 'sun', 'sand', 'paper'][i]}`, { family: MONO, opacity: 0.6 })
+    text(x, 850, 28, ink, color.toUpperCase(), { family: MONO, opacity: 0.85 }) +
+    text(x, 894, 22, ink, `--color-${names[i]}`, { family: MONO, opacity: 0.6 })
 }).join('')}`,
+  )
+}
+
+// Services: one illustration per service, 16:10 like the post images.
+
+/** Website design: a layout sketch on an artboard, a type card and the brand colors. */
+function serviceDesign(): string {
+  const line = (x: number, y: number, w: number, o = 0.7) => rect(x, y, w, 14, INK, 7, `fill-opacity="${o}"`)
+  return svg(
+    1600,
+    1000,
+    `${rect(0, 0, 1600, 1000, '#e9dcc8')}
+${shadow(170, 110, 820, 900, 8, 0.18, 20)}
+${rect(170, 110, 820, 900, '#fbf9f4', 8)}
+${line(230, 170, 120, 0.85)}${[0, 1, 2].map((i) => line(640 + i * 100, 170, 70, 0.45)).join('')}
+${rect(230, 240, 700, 300, '#e3d7c3', 6)}
+<path d="M230 240 L930 540 M930 240 L230 540" stroke="${INK}" stroke-opacity="0.25" stroke-width="3"/>
+${line(230, 580, 420)}${line(230, 616, 340, 0.45)}
+${rect(230, 660, 160, 50, GREEN, 25)}
+${[0, 1, 2].map((i) => `${rect(230 + i * 240, 770, 220, 150, '#efe7d8', 6)}${line(250 + i * 240, 940, 150, 0.5)}`).join('')}
+<g transform="rotate(5 1250 330)">
+  ${shadow(1060, 170, 400, 320, 8, 0.18, 16)}
+  ${rect(1060, 170, 400, 320, '#ffffff', 8)}
+  ${text(1100, 400, 200, INK, 'Aa', { family: SERIF })}
+  ${text(1420, 460, 22, '#77726a', 'Newsreader', { anchor: 'end' })}
+</g>
+${[GREEN, CLAY, MUSTARD, INK].map((color, i) => `<circle cx="${1130 + i * 104}" cy="700" r="42" fill="${color}"/>`).join('')}
+${text(1088, 800, 24, '#55514a', 'primary · clay · sun · ink', { family: MONO })}`,
+  )
+}
+
+/** Payload development: a code editor with a collection config, and a block schema card. */
+function serviceDevelopment(): string {
+  const code: Array<[number, string, string]> = [
+    [0, '#c9b8f5', 'export const Pages = {'],
+    [1, '#9fd3b4', "slug: 'pages',"],
+    [1, '#9fd3b4', 'versions: { drafts: true },'],
+    [1, '#f0c27a', 'fields: ['],
+    [2, '#f6f2ea', "{ name: 'title', type: 'text' },"],
+    [2, '#f6f2ea', "{ name: 'slug', type: 'text' },"],
+    [2, '#f2a58f', "{ name: 'builder', type: 'json' },"],
+    [1, '#f0c27a', '],'],
+    [0, '#c9b8f5', '}'],
+  ]
+  return svg(
+    1600,
+    1000,
+    `${rect(0, 0, 1600, 1000, GREEN)}
+${shadow(150, 120, 900, 760, 14, 0.35, 26)}
+${rect(150, 120, 900, 760, '#16231d', 14)}
+${rect(150, 120, 900, 56, '#203229', 14)}${rect(150, 150, 900, 26, '#203229')}
+${[0, 1, 2].map((i) => `<circle cx="${186 + i * 26}" cy="148" r="7" fill="#3c5247"/>`).join('')}
+${text(600, 156, 18, '#8fa79a', 'collections/Pages.ts', { family: MONO, anchor: 'middle' })}
+${code.map(([indent, color, line], i) => text(200, 250 + i * 64, 28, '#5f7469', String(i + 1).padStart(2, ' '), { family: MONO }) + text(270 + indent * 44, 250 + i * 64, 28, color, line, { family: MONO })).join('')}
+<g transform="rotate(-4 1270 560)">
+  ${shadow(1100, 300, 360, 420, 10, 0.3, 18)}
+  ${rect(1100, 300, 360, 420, PAPER, 10)}
+  ${text(1136, 360, 22, '#77726a', 'Block', { family: MONO })}
+  ${text(1136, 410, 40, INK, 'Testimonial', { family: SERIF })}
+  ${['quote', 'author', 'role', 'photo'].map((f, i) => rect(1136, 450 + i * 62, 288, 46, '#ffffff', 6, 'stroke="#d8d0c2" stroke-width="1.5"') + text(1156, 480 + i * 62, 20, '#55514a', f, { family: MONO })).join('')}
+</g>`,
+  )
+}
+
+/** Launch and training: the page builder on a laptop, with a "Published" badge. */
+function serviceTraining(): string {
+  return svg(
+    1600,
+    1000,
+    `${rect(0, 0, 1600, 1000, MUSTARD)}
+${shadow(260, 130, 1080, 680, 16, 0.25, 26)}
+${rect(260, 130, 1080, 680, INK, 16)}
+${rect(284, 154, 1032, 632, '#f6f3ec', 6)}
+${rect(284, 154, 220, 632, '#ece6db')}
+${[0, 1, 2, 3, 4, 5].map((i) => rect(310, 196 + i * 62, 168, 42, i === 2 ? GREEN : '#ffffff', 6, 'stroke="#d8d0c2" stroke-width="1.5"') + rect(326, 212 + i * 62, 90 - (i % 3) * 18, 10, i === 2 ? PAPER : INK, 5, 'fill-opacity="0.6"')).join('')}
+${rect(560, 200, 700, 200, '#e3d7c3', 6)}
+${rect(600, 250, 360, 26, INK, 13, 'fill-opacity="0.8"')}${rect(600, 300, 260, 16, INK, 8, 'fill-opacity="0.4"')}
+${rect(600, 340, 130, 36, GREEN, 18)}
+${rect(560, 430, 340, 150, '#ffffff', 6)}${rect(920, 430, 340, 150, '#ffffff', 6)}
+${rect(556, 606, 708, 132, 'none', 8, `stroke="${GREEN}" stroke-width="3" stroke-dasharray="12 10"`)}
+<g transform="rotate(-3 760 680)">
+  ${shadow(600, 620, 330, 90, 8, 0.25, 12)}
+  ${rect(600, 620, 330, 90, '#ffffff', 8, `stroke="${GREEN}" stroke-width="2.5"`)}
+  ${rect(626, 650, 180, 14, INK, 7, 'fill-opacity="0.7"')}${rect(626, 676, 120, 12, INK, 6, 'fill-opacity="0.35"')}
+</g>
+<path d="M900 690 l0 52 l14 -14 l12 26 l12 -6 l-12 -26 l20 0 z" fill="${INK}" stroke="#ffffff" stroke-width="3" stroke-linejoin="round"/>
+${rect(200, 810, 1200, 34, '#2d2b27', 17)}
+<g transform="rotate(4 1330 250)">
+  ${shadow(1180, 190, 300, 110, 55, 0.22, 12)}
+  ${rect(1180, 190, 300, 110, GREEN, 55)}
+  <path d="M1222 246 l18 18 l34 -38" stroke="${PAPER}" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  ${text(1298, 258, 30, PAPER, 'Published', { weight: 600 })}
+</g>`,
   )
 }
 
@@ -349,10 +447,16 @@ export const STUDIO_IMAGES: DemoImage[] = [
 export const POST_IMAGES: DemoImage[] = [
   { name: 'demo-post-blocks.jpg', alt: 'Colored blocks arranged like a page layout', width: 1600, height: 1000, svg: blocksComposition },
   { name: 'demo-post-launch.jpg', alt: 'A clay-red sun rising over striped water on deep green', width: 1600, height: 1000, svg: launchComposition },
-  { name: 'demo-post-tokens.jpg', alt: 'Seven color swatches in vertical bands, labeled with their hex values', width: 1600, height: 1000, svg: tokensComposition },
+  { name: 'demo-post-tokens.jpg', alt: 'Six color swatches in vertical bands, labeled with their hex values', width: 1600, height: 1000, svg: tokensComposition },
 ]
 
-export const DEMO_IMAGES = [...WORK_IMAGES, ...STUDIO_IMAGES, ...POST_IMAGES]
+export const SERVICE_IMAGES: DemoImage[] = [
+  { name: 'demo-service-design.jpg', alt: 'A page layout sketch on an artboard, a type card and four brand colors', width: 1600, height: 1000, svg: serviceDesign },
+  { name: 'demo-service-development.jpg', alt: 'A code editor with a Payload collection config next to a block schema card', width: 1600, height: 1000, svg: serviceDevelopment },
+  { name: 'demo-service-training.jpg', alt: 'The page builder on a laptop: a block dragged into place and a Published badge', width: 1600, height: 1000, svg: serviceTraining },
+]
+
+export const DEMO_IMAGES = [...WORK_IMAGES, ...STUDIO_IMAGES, ...POST_IMAGES, ...SERVICE_IMAGES]
 
 /** Renders an image to JPEG with a light grain. */
 export async function renderDemoImage(image: DemoImage): Promise<Buffer> {

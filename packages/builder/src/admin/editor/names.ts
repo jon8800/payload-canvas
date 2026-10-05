@@ -7,6 +7,9 @@ import { FIELD_BLOCK, LIST_BLOCK } from './templates/binding'
 /** Longest preview text, in characters. The row cuts it with an ellipsis anyway. */
 const PREVIEW_MAX = 80
 
+/** Block types whose text names a container only when nothing else inside has text. */
+const CHROME_TYPES = new Set(['menu', 'button'])
+
 /** HTML tags of a Stack that read better as a name than "Stack". */
 const TAG_NAMES: Record<string, string> = {
   section: 'Section',
@@ -28,17 +31,28 @@ export function customLabel(block: Block): string | null {
   return label || null
 }
 
-/** First text found in Lexical rich text JSON. */
+/** Text of a Lexical node and everything inside it (links and formatted runs included). */
+function lexicalInline(node: unknown): string {
+  if (!node || typeof node !== 'object') return ''
+  const { text, children } = node as { text?: unknown; children?: unknown }
+  if (typeof text === 'string') return text
+  return Array.isArray(children) ? children.map(lexicalInline).join('') : ''
+}
+
+/** The first paragraph (or heading, list item…) with text in Lexical rich text JSON, links included. */
 function lexicalText(node: unknown): string {
   if (!node || typeof node !== 'object') return ''
-  const { text, children, root } = node as { text?: unknown; children?: unknown; root?: unknown }
-  if (typeof text === 'string' && text.trim()) return text
+  const { root, children } = node as { root?: unknown; children?: unknown }
   if (root) return lexicalText(root)
-  if (Array.isArray(children)) {
-    for (const child of children) {
-      const found = lexicalText(child)
-      if (found) return found
-    }
+  if (!Array.isArray(children)) return lexicalInline(node)
+  // Block-level children (paragraphs, lists): the first one with text.
+  const blocks = children.filter((child) => child && typeof child === 'object' && Array.isArray((child as { children?: unknown }).children))
+  if (blocks.length === 0) return lexicalInline(node)
+  for (const child of blocks) {
+    const nested = (child as { children: unknown[] }).children
+    // A list holds list items, which hold the text.
+    const text = nested.some((n) => n && typeof n === 'object' && (n as { type?: unknown }).type === 'listitem') ? lexicalText(child) : lexicalInline(child)
+    if (text.trim()) return text.replace(/\s+/g, ' ')
   }
   return ''
 }
@@ -69,8 +83,9 @@ export function innerTitle(block: Block): string {
   visit(childrenOf(block))
   const heading = all.find((b) => b.type === 'heading' && typeof b.props?.text === 'string' && b.props.text.trim())
   if (heading) return clip(String(heading.props?.text).trim())
-  for (const child of all) {
-    if (childrenOf(child).length > 0) continue
+  // Menus and buttons name a container last: "Stack Main" (a menu's name) says little about a hero.
+  const leaves = all.filter((child) => childrenOf(child).length === 0)
+  for (const child of [...leaves.filter((b) => !CHROME_TYPES.has(b.type)), ...leaves.filter((b) => CHROME_TYPES.has(b.type))]) {
     const text = ownPreview(child)
     if (text) return text
   }

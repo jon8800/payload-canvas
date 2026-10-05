@@ -77,14 +77,24 @@ describe('theme css', () => {
     assert.deepEqual(themeVariables({ borderRadius: '', spacing: { baseMultiplier: null } }), {})
   })
 
-  it('outputs the demo theme as one :root:root rule with fonts', () => {
+  it('outputs the demo theme as fallback font faces and one :root:root rule with fonts', () => {
     const css = themeCss(DEMO)
-    assert.match(css, /^:root:root \{ .* \}$/)
+    assert.match(css, /\n:root:root \{ .* \}$/)
     assert.match(css, /--primary: oklch\(0\.3574 0\.0513 165\.64\);/)
     assert.match(css, /--radius: 0\.5rem;/)
-    assert.match(css, /--font-sans: 'Hanken Grotesk', sans-serif;/)
-    assert.match(css, /--font-heading: 'Newsreader', serif;/)
+    assert.match(css, /--font-sans: 'Hanken Grotesk', 'Hanken Grotesk Fallback', sans-serif;/)
+    assert.match(css, /--font-heading: 'Newsreader', 'Newsreader Fallback', serif;/)
     assert.doesNotMatch(css, /--font-mono/)
+  })
+
+  it('adds a size-matched fallback face for a known family, and none for an unknown one', () => {
+    const css = themeCss({ fonts: { sans: 'Inter', heading: 'My Custom Font' } })
+    assert.match(css, /@font-face \{ font-family: 'Inter Fallback'; src: local\('Arial'\); size-adjust: 107\.12%; /)
+    assert.match(css, /ascent-override: 90\.44%; descent-override: 22\.52%; line-gap-override: 0%; \}/)
+    assert.match(css, /--font-heading: 'My Custom Font', serif;/)
+    assert.doesNotMatch(css, /My Custom Font Fallback/)
+    const serif = themeCss({ fonts: { heading: 'Newsreader' } })
+    assert.match(serif, /font-family: 'Newsreader Fallback'; src: local\('Times New Roman'\)/)
   })
 
   it('cleans font names so they cannot break out of CSS', () => {
