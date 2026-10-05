@@ -18,6 +18,7 @@ import {
   toggleHidden,
 } from './actions'
 import { startInlineEditing } from './inline'
+import { leftTabForDigit, selectLeftTab, type LeftTab } from './layout/leftTabs'
 import { BLOCK_KEYS, isMac, keyCaps } from './menu/keys'
 import { openSelectionMenu, requestRename } from './menu/requests'
 import type { Runtime } from './runtime'
@@ -42,6 +43,8 @@ export type EditorAction =
   /** Opens the selected block's menu: the ContextMenu key or Shift+F10. */
   | 'menu'
   | 'rename'
+  /** Alt+1, Alt+2, Alt+3: the left panel's Layers, Blocks or Sections tab. */
+  | `panel:${LeftTab}`
 
 /**
  * Elements where editor shortcuts must not fire: text inputs, editable text (also text edited
@@ -85,6 +88,9 @@ export function editorAction(e: KeyboardEvent): EditorAction | null {
   if (e.altKey && !mod && !e.shiftKey) {
     if (e.key === 'ArrowUp') return 'moveUp'
     if (e.key === 'ArrowDown') return 'moveDown'
+    // The physical key: on a Mac, Option changes `key` (⌥1 types "¡"); AZERTY needs Shift for digits.
+    const tab = /^Digit\d$/.test(e.code) ? leftTabForDigit(e.code.slice(5)) : null
+    if (tab) return `panel:${tab}`
   }
   if (e.shiftKey && !mod && !e.altKey && e.key === 'Enter') return 'parent'
   if (!e.shiftKey && !mod && !e.altKey && e.key === 'Enter') return 'editText'
@@ -122,20 +128,26 @@ export function shortcutList({ ai = false, publish = false }: { ai?: boolean; pu
     { keys: ['Delete'], label: 'Delete block' },
     { keys: [mod, 'Shift', 'H'], label: 'Hide or show on the site' },
     { keys: [isMac() ? '⌥' : 'Alt', '↑', '↓'], label: 'Move block up or down' },
+    { keys: [isMac() ? '⌥' : 'Alt', '1', '2', '3'], label: 'Layers, Blocks or Sections panel' },
     { keys: ['Enter'], label: 'Edit the text of the selected block (or double-click it)' },
     { keys: ['Shift', 'Enter'], label: 'Select the parent block' },
     { keys: ['Shift', 'F10'], label: 'Block menu (or right-click the block)' },
     { keys: ['Esc'], label: 'Clear the selection' },
-    { keys: ['↑', '↓'], label: 'Previous or next block (outline)' },
-    { keys: ['←', '→'], label: 'Collapse or expand (outline)' },
+    { keys: ['↑', '↓'], label: 'Previous or next block (Layers)' },
+    { keys: ['←', '→'], label: 'Collapse or expand (Layers)' },
     { keys: ['F2'], label: 'Rename block' },
-    { keys: ['Enter'], label: 'Edit the selected block (outline)' },
+    { keys: ['Enter'], label: 'Edit the selected block (Layers)' },
     { keys: ['?'], label: 'Show this list' },
   ]
 }
 
 /** Keys that act on the selected block. Without a selection they keep their normal meaning. */
 const NEEDS_SELECTION = new Set<EditorAction>(['moveUp', 'moveDown', 'parent', 'hide', 'copyStyles', 'pasteStyles', 'menu', 'rename'])
+
+/** Panel keys also work in text fields (the search fields of the panels); they type nothing there. */
+const PANEL_KEYS_EXCLUDED = '[role="dialog"], .drawer, .payload__modal-item'
+
+const isPanelAction = (action: EditorAction): action is `panel:${LeftTab}` => action.startsWith('panel:')
 
 /** How long after the menu key its `contextmenu` event may arrive (Windows sends it on key up). */
 const MENU_KEY_MS = 1000
@@ -221,6 +233,11 @@ export function bindShortcuts(runtime: Runtime, doc: Document, { forwarded }: { 
         // Outside the outline (the outline renames in its row itself).
         if (selectedId) requestRename(runtime, selectedId, 'inspector')
         return
+      case 'panel:layers':
+      case 'panel:blocks':
+      case 'panel:sections':
+        selectLeftTab(runtime, action.slice(6) as LeftTab, { focus: true })
+        return
       case 'publish': {
         // The same checks as the Publish button; say why when it is disabled.
         const { changed, pending, canPublish } = publishState(runtime.doc.meta.get(), runtime.doc.busy.get(), runtime.live.get())
@@ -236,9 +253,16 @@ export function bindShortcuts(runtime: Runtime, doc: Document, { forwarded }: { 
   }
 
   const onKeyDown = (e: KeyboardEvent) => {
-    if (e.defaultPrevented || excluded(e.target)) return
+    if (e.defaultPrevented) return
     const action = editorAction(e)
     if (!action) return
+    if (isPanelAction(action)) {
+      if ((e.target as Element | null)?.closest?.(PANEL_KEYS_EXCLUDED)) return
+      e.preventDefault()
+      run(action)
+      return
+    }
+    if (excluded(e.target)) return
     if (action === 'assistant' && !runtime.assistant) return
     // Collections without drafts have no Publish.
     if (action === 'publish' && !runtime.doc.meta.get().drafts) return

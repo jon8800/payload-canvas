@@ -20,12 +20,11 @@ import { Canvas } from './Canvas'
 import { DragLayer } from './DragLayer'
 import { dropAt, endSmoothDrag, isSmoothDrag, MAKE_ROOM_EASING, SETTLE_EASING, startSmoothDrag } from './dnd/smooth'
 import { Inspector } from './Inspector'
+import { LeftPanel } from './layout/LeftPanel'
 import { applySizes, readSizes } from './layout/panels'
 import { Splitter } from './layout/Splitter'
 import './layout/layout.scss'
 import './dnd/dnd.scss'
-import { Library } from './Library'
-import { Outline } from './Outline'
 import { SectionDialog } from './sections/SectionDialog'
 import { createRuntime, RuntimeContext, toCanvasPoint, type DragData, type DragState, type Runtime } from './runtime'
 import { bindShortcuts } from './shortcuts'
@@ -215,11 +214,7 @@ export function Editor({ config, meta, icon, locale }: EditorProps) {
           {ready ? (
             <div className="builder-editor__body">
               <aside className="builder-editor__left">
-                <div className="builder-editor__library">
-                  <Library />
-                </div>
-                <Splitter panel="library" side="before" onActive={lockPointer} />
-                <Outline />
+                <LeftPanel />
               </aside>
               <Splitter panel="left" side="before" onActive={lockPointer} />
               <Canvas />
@@ -231,9 +226,8 @@ export function Editor({ config, meta, icon, locale }: EditorProps) {
           ) : (
             <div className="builder-editor__body builder-editor__body--loading" aria-busy="true" aria-label="Loading the editor">
               <aside className="builder-editor__left">
-                <ShimmerEffect height="34px" />
-                <ShimmerEffect height="160px" />
-                <ShimmerEffect height="34px" />
+                <ShimmerEffect height="30px" />
+                <ShimmerEffect height="240px" />
               </aside>
               <div className="builder-editor__stage">
                 <ShimmerEffect height="100%" />

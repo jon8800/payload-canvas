@@ -15,7 +15,8 @@
     "claude",
     "ai-assistant",
     "openrouter",
-    "cloudflare"
+    "cloudflare",
+    "image-generation"
   ],
   "license": "MIT",
   "author": "Eugene Lominos <hello@eugenelominos.com>",
@@ -50,7 +51,11 @@
     "./ai/cloudflare-workers-ai": "./src/ai/adapters/cloudflare-workers-ai.ts",
     "./ai/openai-compatible": "./src/ai/adapters/openai-compatible.ts",
     "./ai/anthropic": "./src/ai/adapters/anthropic.ts",
-    "./ai/fake": "./src/ai/adapters/fake.ts"
+    "./ai/fake": "./src/ai/adapters/fake.ts",
+    "./ai/images/openrouter": "./src/ai/images/openrouter.ts",
+    "./ai/images/openai": "./src/ai/images/openai.ts",
+    "./ai/images/cloudflare-workers-ai": "./src/ai/images/cloudflare-workers-ai.ts",
+    "./ai/images/fake": "./src/ai/images/fake.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -134,6 +139,22 @@
       "./ai/fake": {
         "types": "./dist/ai/adapters/fake.d.ts",
         "default": "./dist/ai/adapters/fake.js"
+      },
+      "./ai/images/openrouter": {
+        "types": "./dist/ai/images/openrouter.d.ts",
+        "default": "./dist/ai/images/openrouter.js"
+      },
+      "./ai/images/openai": {
+        "types": "./dist/ai/images/openai.d.ts",
+        "default": "./dist/ai/images/openai.js"
+      },
+      "./ai/images/cloudflare-workers-ai": {
+        "types": "./dist/ai/images/cloudflare-workers-ai.d.ts",
+        "default": "./dist/ai/images/cloudflare-workers-ai.js"
+      },
+      "./ai/images/fake": {
+        "types": "./dist/ai/images/fake.d.ts",
+        "default": "./dist/ai/images/fake.js"
       }
     }
   },

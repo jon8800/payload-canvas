@@ -106,6 +106,7 @@ describe('builderMcpTools', () => {
         'applyOperations:update',
         'validateLayout:read',
         'getPreviewUrl:read',
+        'generateImage:create',
       ],
     )
     for (const t of tools) {

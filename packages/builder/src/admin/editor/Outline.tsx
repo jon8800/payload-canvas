@@ -244,11 +244,9 @@ export function Outline() {
 
   return (
     <div className="builder-editor__panel builder-editor__panel--grow builder-editor__outline-panel">
-      <div className="builder-editor__panel-head">
-        <h3 className="builder-editor__panel-title">
-          <Icon name="layers" size={14} /> Outline
-        </h3>
-        {total > 0 && <span className="builder-editor__count">{total}</span>}
+      {/* The Layers tab names the panel: the head shows the block count and the tree tools. */}
+      <div className="builder-editor__panel-head builder-left__tools">
+        <span className="builder-left__note">{total === 0 ? 'No blocks' : total === 1 ? '1 block' : `${total} blocks`}</span>
         <span className="builder-editor__panel-tools">
           <button
             type="button"
@@ -281,12 +279,12 @@ export function Outline() {
           <div className="builder-editor__empty">
             <Icon name="layers" size={20} />
             <p>The page is empty.</p>
-            <p className="builder-editor__hint">Drag a block or a section here or onto the canvas. A click adds it too.</p>
+            <p className="builder-editor__hint">Add blocks from the Blocks or Sections tab: drag them onto the canvas, or click one.</p>
           </div>
         </div>
       ) : (
         // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- keyboard navigation for the tree rows
-        <div ref={outlineRef} className="builder-editor__outline" role="tree" aria-label="Outline" tabIndex={-1} onKeyDown={onKeyDown}>
+        <div ref={outlineRef} className="builder-editor__outline" role="tree" aria-label="Layers" tabIndex={-1} onKeyDown={onKeyDown}>
           {rows.map((row) => (
             <OutlineRow
               key={row.block.id}

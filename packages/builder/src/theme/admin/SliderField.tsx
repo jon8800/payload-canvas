@@ -1,9 +1,9 @@
 'use client'
 
-import { Slider } from '@base-ui/react/slider'
 import { useField } from '@payloadcms/ui'
 import type { StaticLabel } from 'payload'
 
+import { Slider } from '../../admin/editor/ui/Slider'
 import { FieldShell, labelText } from './FieldShell'
 import './fields.scss'
 
@@ -39,23 +39,18 @@ export function ThemeSliderField({ path, field, readOnly }: SliderFieldProps) {
 
   return (
     <FieldShell field={field} path={path} className="theme-slider">
-      <div className={`theme-slider__controls${isSet ? '' : ' theme-slider__controls--empty'}`}>
-        <Slider.Root
+      <div className="theme-slider__controls">
+        <Slider
+          className="theme-slider__root"
           value={current}
           min={min}
           max={max}
           step={step}
           disabled={locked}
-          onValueChange={(next) => set(Array.isArray(next) ? next[0] : next)}
-          className="theme-slider__root"
-        >
-          <Slider.Control className="theme-slider__control">
-            <Slider.Track className="theme-slider__track">
-              <Slider.Indicator className="theme-slider__indicator" />
-              <Slider.Thumb className="theme-slider__thumb" aria-label={labelText(field, path)} />
-            </Slider.Track>
-          </Slider.Control>
-        </Slider.Root>
+          muted={!isSet}
+          aria-label={labelText(field, path)}
+          onValueChange={set}
+        />
         <input
           type="number"
           className="theme-slider__number"

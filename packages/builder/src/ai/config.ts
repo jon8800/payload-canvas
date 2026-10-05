@@ -1,6 +1,14 @@
 // The plugin option `ai` as the editor sees it. Client-safe: the editor imports clientIdentity.
 
-import type { AiClientConfig, AiOptions } from './types'
+import { IMAGE_ASPECT_RATIOS } from './images/ratios'
+import type { AiClientConfig, AiImagesClientConfig, AiOptions } from './types'
+
+/** `AiClientConfig.images`: null unless an image adapter is ready. */
+export function imagesClientConfig(ai: AiOptions, endpoint: string): AiImagesClientConfig | null {
+  const images = ai.images
+  if (!images?.ready) return null
+  return { endpoint: `${endpoint}/image`, label: images.label, model: images.model, collection: ai.mediaCollection ?? 'media', aspectRatios: [...IMAGE_ASPECT_RATIOS] }
+}
 
 /** Shown when `ai` is set without an adapter. */
 export const NO_ADAPTER_PROBLEM =
@@ -19,7 +27,17 @@ export function missingAdapterProblem(ai: AiOptions): string {
 export function aiClientConfig(ai: AiOptions, endpoint: string): AiClientConfig {
   const adapter = ai.adapter
   if (!adapter) {
-    return { endpoint, adapter: 'none', label: 'No adapter', model: '', ready: false, setupProblem: missingAdapterProblem(ai), keyEnv: null, keyUrl: null }
+    return {
+      endpoint,
+      adapter: 'none',
+      label: 'No adapter',
+      model: '',
+      ready: false,
+      setupProblem: missingAdapterProblem(ai),
+      keyEnv: null,
+      keyUrl: null,
+      images: imagesClientConfig(ai, endpoint),
+    }
   }
   return {
     endpoint,
@@ -30,6 +48,7 @@ export function aiClientConfig(ai: AiOptions, endpoint: string): AiClientConfig 
     setupProblem: adapter.ready ? null : adapter.setupProblem?.trim() || `${adapter.label} is not set up.`,
     keyEnv: adapter.keyEnv ?? null,
     keyUrl: adapter.keyUrl ?? null,
+    images: imagesClientConfig(ai, endpoint),
   }
 }
 

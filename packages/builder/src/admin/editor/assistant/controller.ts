@@ -154,7 +154,13 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
         const { history } = current
         const tools = {
           ...history.tools,
-          [event.callId]: { name: event.name, status: event.status, summary: event.summary, note: history.tools[event.callId]?.note },
+          [event.callId]: {
+            name: event.name,
+            status: event.status,
+            summary: event.summary,
+            note: history.tools[event.callId]?.note,
+            ...(event.image ? { image: event.image } : {}),
+          },
         }
         // A chip already in the confirmed history updates in place; a new one joins the live reply.
         const known =

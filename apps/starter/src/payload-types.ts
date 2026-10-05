@@ -1186,6 +1186,7 @@ export interface PayloadMcpApiKey {
         | 'applyOperations'
         | 'validateLayout'
         | 'getPreviewUrl'
+        | 'generateImage'
         | 'listTemplates'
         | 'getBindingSources'
       )[]
@@ -1218,6 +1219,7 @@ export interface PayloadMcpApiKey {
         | 'applyOperations'
         | 'validateLayout'
         | 'getPreviewUrl'
+        | 'generateImage'
         | 'listTemplates'
         | 'getBindingSources'
       )[]

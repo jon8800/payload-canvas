@@ -14,6 +14,7 @@ import { MenuButton } from './menu/Menu'
 import { useCanvasMenus } from './menu/useCanvasMenus'
 import { cursorAt } from './live'
 import { FollowFrame } from './live/PresenceUI'
+import { FrameResize } from './layout/FrameResize'
 import { EDGE_BAND, insertSpotAt, sameSpot } from './insert/spots'
 import { Overlay } from './Overlay'
 import { useRuntime, type Runtime } from './runtime'
@@ -44,16 +45,23 @@ export function Canvas() {
   const locked = useValue(pointerLock)
   const error = useValue(runtime.canvasError)
   const viewportRef = useRef<HTMLDivElement>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const frameRef = useRef<HTMLDivElement>(null)
   const [stage, setStage] = useState({ width: 0, height: 0 })
 
   // Track the space the stage offers. The frame fills it (desktop) or zooms out to fit.
+  // Whole pixels, rounded down: `clientWidth` rounds a fractional width up (125 % display scaling),
+  // and a frame 0.3 px wider than the stage made the stage scroll sideways.
   useLayoutEffect(() => {
     const el = viewportRef.current
     if (!el) return
     const measure = () =>
-      setStage({
-        width: Math.max(0, el.clientWidth - STAGE_PADDING * 2),
-        height: Math.max(0, el.clientHeight - STAGE_PADDING * 2),
+      setStage((current) => {
+        const next = {
+          width: Math.max(0, Math.floor(el.getBoundingClientRect().width) - STAGE_PADDING * 2),
+          height: Math.max(0, el.clientHeight - STAGE_PADDING * 2),
+        }
+        return current.width === next.width && current.height === next.height ? current : next
       })
     measure()
     const observer = new ResizeObserver(measure)
@@ -70,6 +78,9 @@ export function Canvas() {
   const fit = !fluid && frameWidth > stage.width && stage.width > 0 ? stage.width / frameWidth : 1
   const zoom = zoomMode === 'fit' ? fit : zoomMode
   useEffect(() => runtime.frame.set({ width: frameWidth, zoom }), [runtime, frameWidth, zoom])
+  // The stage scrolls sideways only when the zoomed frame is wider than the stage (a fixed zoom).
+  // Otherwise it clips: while the zoom eases to a new value, the scaled frame is wider for a moment.
+  const scrolls = stage.width > 0 && frameWidth * zoom > stage.width + 0.5
 
   // Iframe -> admin messages.
   useEffect(() => {
@@ -280,13 +291,15 @@ export function Canvas() {
           </button>
         </output>
       )}
-      <div ref={viewportRef} className="builder-editor__viewport" style={{ padding: STAGE_PADDING }}>
+      <div ref={viewportRef} className="builder-editor__viewport" data-scroll={scrolls || undefined} style={{ padding: STAGE_PADDING }}>
         <div
+          ref={wrapRef}
           className="builder-editor__frame-wrap"
           data-device={fluid ? 'fluid' : 'fixed'}
           style={{ width: frameWidth * zoom || '100%', height: stage.height || '100%' }}
         >
           <div
+            ref={frameRef}
             className="builder-editor__frame"
             style={frameStyle}
             // While dragging, the iframe ignores the pointer, so forward the wheel to keep scrolling.
@@ -302,6 +315,7 @@ export function Canvas() {
             />
             <Overlay />
           </div>
+          <FrameResize wrapRef={wrapRef} frameRef={frameRef} frameWidth={frameWidth} zoom={zoom} space={stage.width} />
         </div>
         <FollowFrame />
         <Notice />

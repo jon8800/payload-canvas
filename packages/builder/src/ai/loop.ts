@@ -218,7 +218,14 @@ export async function runAgent(args: RunAgentArgs): Promise<void> {
       const outcome = await runTool(call.name, call.input, workspace, env)
       results.push({ type: 'tool_result', tool_use_id: call.id, content: outcome.content, ...(outcome.ok ? {} : { is_error: true }) })
       if (outcome.ops && outcome.ops.length > 0) events.push({ type: 'operations', turnId, ops: outcome.ops })
-      events.push({ type: 'tool', callId: call.id, name: call.name, status: outcome.ok ? 'done' : 'error', summary: outcome.summary })
+      events.push({
+        type: 'tool',
+        callId: call.id,
+        name: call.name,
+        status: outcome.ok ? 'done' : 'error',
+        summary: outcome.summary,
+        ...(outcome.image ? { image: outcome.image } : {}),
+      })
     }
     const toolResults = tag({ role: 'user', content: results, kind: 'tool_results' })
     history.push(assistant, toolResults)

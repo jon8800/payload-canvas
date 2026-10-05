@@ -12,6 +12,7 @@ import type {
 } from 'payload'
 import { AI_PATH, aiEndpoints } from '../ai/endpoint'
 import { aiClientConfig } from '../ai/config'
+import { AI_IMAGES_KEY, createImageService } from '../ai/images/service'
 import type { AiOptions } from '../ai/types'
 import { defaultBlocks } from '../blocks'
 import { richTextFieldName } from '../core/blocks'
@@ -402,6 +403,8 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
         : undefined
 
     const fieldNames: Record<string, string> = {}
+    // Image generation: one service (and one hourly limit) for the assistant, the editor and the MCP tools.
+    const imageService = options.ai ? createImageService(options.ai) : null
 
     return {
       ...config,
@@ -465,6 +468,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
         ...(theme ? { [THEME_CONFIG_KEY]: theme } : {}),
         ...(savedSections ? { [SAVED_SECTIONS_CONFIG_KEY]: savedSections } : {}),
         ...(references ? { [REFERENCES_CONFIG_KEY]: references } : {}),
+        ...(imageService ? { [AI_IMAGES_KEY]: imageService } : {}),
       },
       globals: themeOptions ? [...(config.globals ?? []), themeGlobal(themeOptions)] : config.globals,
       endpoints: [
@@ -480,6 +484,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
         ...(options.ai
           ? aiEndpoints({
               ai: options.ai,
+              images: imageService ?? undefined,
               collections: liveCollections,
               blocks,
               sections: options.sections ?? [],

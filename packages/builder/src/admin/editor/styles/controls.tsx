@@ -6,7 +6,10 @@
 import { useId, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode } from 'react'
 
 import type { Breakpoint, StylePropertyDef, StyleTokens } from '../../../core'
+import { Icon } from '../icons'
 import { useRuntime } from '../runtime'
+import { Select } from '../ui/Select'
+import { Slider } from '../ui/Slider'
 import { ColorField } from './ColorPicker'
 import { useStyles, writeStyle } from './context'
 import { ChevronIcon, ResetIcon } from './icons'
@@ -402,22 +405,16 @@ export function EnumSelect({ prop }: { prop: string }) {
   if (!def?.options) return null
   const inherited = !isSet && value ? def.options.find((o) => o.value === value.value)?.label ?? value.value : null
   return (
-    <select
-      className="builder-styles__select"
+    <Select
+      size="compact"
+      options={def.options}
+      value={isSet && value ? value.value : null}
+      onValueChange={set}
+      emptyLabel={inherited ? `${inherited} (inherited)` : '–'}
       data-source={value?.source ?? 'none'}
       aria-label={def.label}
-      value={isSet ? value?.value : ''}
-      onChange={(e) => set(e.target.value || null)}
       onKeyDown={undoKeys}
-    >
-      <option value="">{inherited ? `${inherited} (inherited)` : '–'}</option>
-      {def.options.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-      {isSet && value && !def.options.some((o) => o.value === value.value) && <option value={value.value}>{value.value}</option>}
-    </select>
+    />
   )
 }
 
@@ -425,7 +422,7 @@ export type SegmentItem = { match: string[]; label: string; icon?: ReactNode; te
 
 /**
  * Icon buttons for the common options. When the property has options that are not in `items`,
- * a small select lists every option.
+ * a "…" button opens a list of every option. It is highlighted while one of those options is active.
  */
 export function Segmented({ prop, items, rotate }: { prop: string; items: SegmentItem[]; rotate?: 90 | -90 }) {
   const { def, value, isSet, set } = useProp(prop)
@@ -437,6 +434,7 @@ export function Segmented({ prop, items, rotate }: { prop: string; items: Segmen
   const covered = new Set(shownItems.map((i) => i.option.value))
   const extra = def.options.some((o) => !covered.has(o.value))
   const extraActive = !!value && !covered.has(value.value)
+  const extraLabel = extraActive ? (def.options.find((o) => o.value === value.value)?.label ?? value.value) : null
 
   return (
     <div className="builder-styles__segmented-wrap">
@@ -466,21 +464,19 @@ export function Segmented({ prop, items, rotate }: { prop: string; items: Segmen
         })}
       </fieldset>
       {extra && (
-        <select
-          className="builder-styles__select builder-styles__select--more"
+        <Select
+          size="compact"
+          className="builder-styles__more"
+          options={def.options}
+          value={extraActive ? value.value : null}
+          onValueChange={set}
+          emptyLabel={extraActive ? '–' : undefined}
+          trigger={<Icon name="more" size={14} />}
+          tooltip={extraLabel ? `More options: ${extraLabel}` : 'More options'}
+          data-active={extraActive || undefined}
           data-source={extraActive ? value?.source : 'none'}
           aria-label={`More ${def.label} options`}
-          data-tooltip="More options"
-          value={extraActive ? value.value : ''}
-          onChange={(e) => set(e.target.value || null)}
-        >
-          <option value="">…</option>
-          {def.options.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+        />
       )}
     </div>
   )
@@ -490,23 +486,14 @@ export function Segmented({ prop, items, rotate }: { prop: string; items: Segmen
 // Slider
 // ---------------------------------------------------------------------------
 
-/** A range input for numeric scales such as opacity (0–100 in steps of 5). */
+/** A slider for numeric scales such as opacity (0–100 in steps of 5). Grey while not set here. */
 export function SliderControl({ prop, min, max, step, unit = '' }: { prop: string; min: number; max: number; step: number; unit?: string }) {
-  const { def, value, set } = useProp(prop)
+  const { def, value, isSet, set } = useProp(prop)
   if (!def) return null
   const n = value && /^\d+$/.test(value.value) ? Number(value.value) : max
   return (
     <div className="builder-styles__slider">
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={n}
-        data-source={value?.source ?? 'none'}
-        aria-label={def.label}
-        onChange={(e) => set(e.target.value)}
-      />
+      <Slider value={n} min={min} max={max} step={step} muted={!isSet} aria-label={def.label} onValueChange={(next) => set(String(next))} />
       <span className="builder-styles__slider-value" data-source={value?.source ?? 'none'}>
         {value ? `${displayValue(value)}${/^\d+$/.test(value.value) ? unit : ''}` : `${max}${unit}`}
       </span>

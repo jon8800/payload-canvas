@@ -249,6 +249,16 @@ function ToolChip({ name, info }: { name: string; info: ToolInfo | undefined }) 
         </span>
       </span>
       {info?.note && <span className="builder-assistant__chip-note">{info.note}</span>}
+      {info?.image?.url && (
+        <img
+          className="builder-assistant__chip-image"
+          src={info.image.url}
+          alt={info.image.alt ?? 'Generated image'}
+          title={info.image.alt ?? undefined}
+          loading="lazy"
+          style={info.image.width && info.image.height ? { aspectRatio: `${info.image.width} / ${info.image.height}` } : undefined}
+        />
+      )}
     </li>
   )
 }

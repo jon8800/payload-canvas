@@ -102,6 +102,81 @@ export type AiAdapter = {
 }
 
 // ---------------------------------------------------------------------------
+// Image adapters
+// ---------------------------------------------------------------------------
+
+/** Width:height of a generated image. Adapters map a ratio their model lacks to the closest one. */
+export type AiImageAspectRatio = '1:1' | '4:3' | '3:4' | '3:2' | '2:3' | '16:9' | '9:16' | '21:9'
+
+/** One image generation call. */
+export type AiImageRequest = {
+  /** What to draw. The caller adds no style words: put style in the prompt. */
+  prompt: string
+  aspectRatio: AiImageAspectRatio
+  /** How many images. The plugin asks for 1. Adapters may return fewer. */
+  n: number
+  signal?: AbortSignal
+}
+
+/** One generated image: the file bytes. */
+export type AiGeneratedImage = { data: Uint8Array; mimeType: string; width?: number; height?: number }
+
+/** Cost and tokens of one image call, when the provider reports them. `cost` in USD. */
+export type AiImageUsage = { cost?: number; inputTokens?: number; outputTokens?: number }
+
+export type AiImageResult = {
+  images: AiGeneratedImage[]
+  /** The prompt the provider actually used, when it rewrote it (OpenAI, some OpenRouter models). */
+  revisedPrompt?: string | null
+  usage?: AiImageUsage
+}
+
+/**
+ * Connects image generation to an image API. Separate from the chat `AiAdapter`: chat models do
+ * not return images through the chat API unless they are image-output models, and MCP clients
+ * (Claude Code, Codex) bring their own chat model. Create one with a built-in factory
+ * (`openRouterImageAdapter`, `openAIImageAdapter`, `cloudflareWorkersAIImageAdapter`,
+ * `fakeImageAdapter`) or write your own. See docs/ai/images.md.
+ */
+export type AiImageAdapter = {
+  /** Short id, e.g. "openrouter". */
+  name: string
+  /** Shown in the editor, e.g. "OpenRouter". */
+  label: string
+  /** The model id in the API's naming. */
+  model: string
+  /** False when the adapter cannot work, for example without an API key. */
+  ready: boolean
+  /** One sentence for the developer when `ready` is false. */
+  setupProblem?: string | null
+  /** The env var that holds the key. */
+  keyEnv?: string | null
+  /** Where to create a key. */
+  keyUrl?: string | null
+  /** Generates images. Throws `AiImageError` (or any Error) with a readable message on failure. */
+  generate(request: AiImageRequest): Promise<AiImageResult>
+}
+
+/** Plugin option `ai.imageLimits`: a guard against runaway cost. */
+export type AiImageLimits = {
+  /** Most images one assistant reply may generate. Default 3. */
+  perRequest?: number
+  /** Most images one user may generate per hour (assistant, inspector and MCP together). Default 20. */
+  perHour?: number
+}
+
+/** Set on AiClientConfig.images when an image adapter is ready. */
+export type AiImagesClientConfig = {
+  /** Full API path of the generate endpoint, e.g. "/api/builder/ai/image". */
+  endpoint: string
+  label: string
+  model: string
+  /** The upload collection generated images go to by default. */
+  collection: string
+  aspectRatios: AiImageAspectRatio[]
+}
+
+// ---------------------------------------------------------------------------
 // Plugin option and client config
 // ---------------------------------------------------------------------------
 
@@ -118,8 +193,22 @@ export type AiOptions = {
   instructions?: string
   /** Maximum tool-loop iterations per user message. Default 12. */
   maxSteps?: number
-  /** Upload collection the assistant may pick images from. Default "media". */
+  /** Upload collection the assistant may pick images from, and where generated images go. Default "media". */
   mediaCollection?: string
+  /**
+   * Image generation, for the assistant, the inspector's Generate action and the MCP
+   * `generateImage` tool, e.g. `openRouterImageAdapter({ apiKey })` from
+   * `@payload-toolkit/builder/ai/images/openrouter`. Independent of `adapter`. See docs/ai/images.md.
+   */
+  images?: AiImageAdapter | null
+  /** Caps for image generation. Default 3 per assistant reply, 20 per user per hour. */
+  imageLimits?: AiImageLimits
+  /**
+   * A text, textarea or JSON field of the media collection that gets a note on generated images
+   * (adapter, model, prompt, date). Used only when the collection has the field. Default
+   * "generatedBy". `false` turns it off.
+   */
+  imageMarkerField?: string | false
 }
 
 /** Set on BuilderClientConfig.ai when the assistant is enabled. */
@@ -139,6 +228,8 @@ export type AiClientConfig = {
   keyEnv: string | null
   /** Where to create a key, for the setup card. */
   keyUrl: string | null
+  /** Image generation. Null when no image adapter is ready: the editor hides the Generate action. */
+  images: AiImagesClientConfig | null
 }
 
 /** Token usage of one turn (all model calls). `cost` in USD when the provider reports it (OpenRouter). */
@@ -187,6 +278,9 @@ export type AiChatRequest = {
   locale?: string | null
 }
 
+/** An image a tool made (generateImage), for the chip's thumbnail. */
+export type AiToolImage = { id: string | number; url: string; alt: string | null; width: number | null; height: number | null }
+
 /**
  * Server-Sent Events from the chat endpoint, in order. `event:` is the type, `data:` the whole
  * event object as JSON (including `type`). Errors before the stream starts (401, 400, 403, 404)
@@ -203,7 +297,7 @@ export type AiChatRequest = {
  */
 export type AiStreamEvent =
   | { type: 'text'; text: string }
-  | { type: 'tool'; callId: string; name: string; status: 'running' | 'done' | 'error'; summary: string }
+  | { type: 'tool'; callId: string; name: string; status: 'running' | 'done' | 'error'; summary: string; image?: AiToolImage }
   | { type: 'operations'; turnId: string; ops: Operation[] }
   | { type: 'message'; message: AiMessage }
   | { type: 'done'; turnId: string; stopReason: string | null; usage?: AiUsage }

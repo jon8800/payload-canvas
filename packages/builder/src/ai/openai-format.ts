@@ -389,9 +389,9 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   })
 }
 
-const retryable = (status: number) => status === 408 || status === 429 || status >= 500
+export const retryable = (status: number) => status === 408 || status === 429 || status >= 500
 
-function retryAfterMs(response: Response): number | null {
+export function retryAfterMs(response: Response): number | null {
   const value = response.headers.get('retry-after')
   if (!value) return null
   const seconds = Number(value)
@@ -401,7 +401,7 @@ function retryAfterMs(response: Response): number | null {
 }
 
 /** The provider's error message from a JSON (or text) error body. */
-async function httpError(response: Response): Promise<OpenAiApiError> {
+export async function httpError(response: Response): Promise<OpenAiApiError> {
   let message = ''
   try {
     const text = await response.text()

@@ -1,7 +1,7 @@
 'use client'
 
 import { useDraggable } from '@dnd-kit/core'
-import { memo, useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { memo, useDeferredValue, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 
 import type { Block, BlockDefinition, SectionDefinition } from '../../core/types'
 import { insertBlocks, insertNewBlock, sectionPosition } from './actions'
@@ -38,80 +38,33 @@ const matches = (query: string, ...texts: (string | undefined)[]) => {
   return !q || texts.some((t) => t?.toLowerCase().includes(q))
 }
 
-type Tab = 'blocks' | 'sections'
-
 /**
- * The insert panel: blocks and ready-made sections. Drag an item onto the canvas or the outline,
- * or click it to insert it at the selection.
+ * A library tab of the left panel: blocks or ready-made sections, with a search field. Drag an
+ * item onto the canvas (or the Layers tab, which opens the tree), or click it to insert it at the
+ * selection.
  */
-export function Library() {
-  const { config, store, sections } = useRuntime()
-  const saved = useValue(sections.saved)
-  const [tab, setTab] = useState<Tab>('blocks')
+export function Library({ kind }: { kind: 'blocks' | 'sections' }) {
   const [query, setQuery] = useState('')
   // The input updates at once; the filtered lists follow in a deferred render.
   const listQuery = useDeferredValue(query)
-  // Open on an empty page. Once the page has blocks the outline matters more: the panel starts closed.
-  const [open, setOpen] = useState(() => store.getState().layout.blocks.length === 0)
-  const sectionCount = (config.sections?.length ?? 0) + (saved?.length ?? 0)
-  // Saved sections load once, in the background.
-  useEffect(() => {
-    void sections.load()
-  }, [sections])
+  const label = kind === 'blocks' ? 'Search blocks' : 'Search sections'
 
   return (
-    <div className={`builder-editor__insert${open ? '' : ' builder-editor__insert--closed'}`}>
-      <div className="builder-editor__panel-head">
-        <button
-          type="button"
-          className="builder-editor__panel-toggle"
-          aria-expanded={open}
-          onClick={() => setOpen(!open)}
-        >
-          <Icon name={open ? 'chevronDown' : 'chevronRight'} size={12} />
-          <span className="builder-editor__panel-title">
-            <Icon name="plus" size={14} /> Add
-          </span>
-        </button>
-        <div className="builder-editor__segmented builder-editor__segmented--small" role="tablist" aria-label="Library">
-          {(['blocks', 'sections'] as const).map((id) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={tab === id}
-              className="builder-editor__segment"
-              onClick={() => {
-                setTab(id)
-                setOpen(true)
-              }}
-            >
-              {id === 'blocks' ? 'Blocks' : 'Sections'}
-              {id === 'sections' && sectionCount > 0 && <span className="builder-editor__segment-count">{sectionCount}</span>}
-            </button>
-          ))}
-        </div>
-      </div>
-      {open && (
-        <>
-          <label className="builder-editor__search">
-            <Icon name="search" size={14} />
-            <input
-              type="search"
-              aria-label={tab === 'blocks' ? 'Search blocks' : 'Search sections'}
-              placeholder={tab === 'blocks' ? 'Search blocks' : 'Search sections'}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') setQuery('')
-              }}
-            />
-          </label>
-          <div className="builder-editor__insert-body">
-            {tab === 'blocks' ? <BlockList query={listQuery} /> : <SectionList query={listQuery} />}
-          </div>
-        </>
-      )}
+    <div className="builder-editor__insert">
+      <label className="builder-editor__search">
+        <Icon name="search" size={14} />
+        <input
+          type="search"
+          aria-label={label}
+          placeholder={label}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setQuery('')
+          }}
+        />
+      </label>
+      <div className="builder-editor__insert-body">{kind === 'blocks' ? <BlockList query={listQuery} /> : <SectionList query={listQuery} />}</div>
     </div>
   )
 }

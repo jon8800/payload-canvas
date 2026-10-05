@@ -11,6 +11,7 @@ import { useMemo } from 'react'
 import { STATES, variantPrefix, variantsInUse, type Breakpoint, type StyleState, type StyleTokens, type Variant } from '../../../core'
 import { Icon } from '../icons'
 import { useRuntime } from '../runtime'
+import { Select, type SelectOption } from '../ui/Select'
 import { useValue } from '../valueStore'
 import { useStyles } from './context'
 import { BREAKPOINTS, breakpointWidths } from './tokens'
@@ -45,6 +46,15 @@ export function VariantBar() {
   const prefix = variantPrefix(variant)
   const minWidth = widths[variant.breakpoint]
   const tooNarrow = variant.breakpoint !== 'base' && frame.width > 0 && frame.width < minWidth
+  // A dot marks a state that already has classes at this breakpoint.
+  const stateOptions = useMemo<SelectOption[]>(
+    () =>
+      STATES.map((id) => {
+        const used = id !== 'default' && inUse.some((v) => v.breakpoint === variant.breakpoint && v.state === id)
+        return { value: id, label: STATE_LABELS[id], suffix: used ? <span className="builder-styles__dot" aria-label="has classes" /> : undefined }
+      }),
+    [inUse, variant.breakpoint],
+  )
 
   return (
     <div className="builder-styles__variants">
@@ -74,24 +84,16 @@ export function VariantBar() {
             </>
           )}
         </p>
-        <label className="builder-styles__state-field">
-          State
-          <select
-            className="builder-styles__select"
+        <div className="builder-styles__state-field">
+          <span aria-hidden="true">State</span>
+          <Select
+            size="compact"
+            aria-label="State"
+            options={stateOptions}
             value={variant.state}
-            onChange={(e) => store.setVariant({ ...variant, state: e.target.value as StyleState })}
-          >
-            {STATES.map((id) => {
-              const used = id !== 'default' && inUse.some((v) => v.breakpoint === variant.breakpoint && v.state === id)
-              return (
-                <option key={id} value={id}>
-                  {STATE_LABELS[id]}
-                  {used ? ' •' : ''}
-                </option>
-              )
-            })}
-          </select>
-        </label>
+            onValueChange={(state) => state && store.setVariant({ ...variant, state: state as StyleState })}
+          />
+        </div>
       </div>
       {tooNarrow && (
         <output className="builder-styles__width-hint">

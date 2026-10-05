@@ -23,6 +23,7 @@ import { createDocumentController, type DocumentController } from './topbar/docu
 import { problemSummary, publishProblems, type PublishProblem } from './topbar/problems'
 import { createValueStore, type ValueStore } from './valueStore'
 import type { InsertSpot } from './insert/spots'
+import { readLeftTab, type LeftTab } from './layout/leftTabs'
 import { createSectionsController, type SectionsController } from './sections/controller'
 import { createThumbnailService, type ThumbnailService } from './sections/thumbnails'
 import type { CollaboratorCursor, LiveState, Peer, PeerCursor } from './live'
@@ -90,6 +91,8 @@ export type Runtime = {
   template: ValueStore<TemplateState>
   /** The inspector's top tab. */
   inspectorTab: ValueStore<InspectorTab>
+  /** The left sidebar's tab. Null until the panel picks a default (the user never chose one). */
+  leftTab: ValueStore<LeftTab | null>
   /** A block that was just added: the inspector focuses its first content field, then clears this. */
   focusRequest: ValueStore<string | null>
   /** The open document: what the top bar shows, publishing, renaming and the settings drawer. */
@@ -212,6 +215,7 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
     follow: createValueStore<string | null>(null),
     template: createValueStore<TemplateState>(initialTemplateState(config)),
     inspectorTab: createValueStore<InspectorTab>('block'),
+    leftTab: createValueStore<LeftTab | null>(readLeftTab()),
     focusRequest: createValueStore<string | null>(null),
     doc: createDocumentController(
       {

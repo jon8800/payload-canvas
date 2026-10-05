@@ -123,7 +123,11 @@ Open the page in the editor, then ask in Claude Code or Codex, for example:
 
 The agent reads the blocks and sections and edits the page's draft layout. The open editor shows each change at once. To roll a change back, use Payload's version history.
 
-Tools the agent gets: `listBlocks`, `getBlockSchema`, `listSections`, `insertSection`, `getLayout`, `applyOperations`, `validateLayout`, `getPreviewUrl`, and `listTemplates` / `getBindingSources` for templates, plus the content tools of `payload-mcp-toolkit`.
+Tools the agent gets: `listBlocks`, `getBlockSchema`, `listSections`, `insertSection`, `getLayout`, `applyOperations`, `validateLayout`, `getPreviewUrl`, `generateImage`, and `listTemplates` / `getBindingSources` for templates, plus the content tools of `payload-mcp-toolkit`.
+
+### Images
+
+Claude Code and Codex cannot make images with your plan. Ask for an image anyway, for example "add a hero image of fresh coffee beans". The agent calls `generateImage`, and your site makes the image with its own image adapter and key, then saves it in Media. The agent then puts the image in a block. This needs `ai.images` in the site's config and `create` access on the media collection (the **Editor** preset has it). See [images.md](images.md).
 
 ## Claude.ai and ChatGPT (deployed sites)
 

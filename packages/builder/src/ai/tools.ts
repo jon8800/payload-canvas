@@ -9,7 +9,10 @@ import { blockJsonSchema } from '../core/schema'
 import { indexLayout, isPlainObject, subtreeIds } from '../core/tree'
 import { resolveLayoutLocale, stampLocale, untranslatedKeys } from '../core/locale'
 import type { BindingField, Block, BlockDefinition, Layout, LocaleSettings, Operation, SectionDefinition } from '../core/types'
-import type { AiToolDefinition } from './types'
+import { dataFields, type DataField } from '../core/fields'
+import type { AiToolDefinition, AiToolImage } from './types'
+import { IMAGE_ASPECT_RATIOS } from './images/shared'
+import { IMAGES_NOT_CONFIGURED, type GenerateImageOutcome } from './images/service'
 import { validateLayout, type LayoutError } from '../core/validate'
 import { resolveOperations, splitLayoutErrors } from '../live/apply'
 import { isRootParentId, sectionInsertOps } from '../mcp/shared'
@@ -38,6 +41,13 @@ export type ToolEnv = {
   bindingSources: Record<string, BindingField[]> | null
   /** Searches the media collection as the request's user. */
   searchMedia: (query: string, limit: number) => Promise<MediaItem[]>
+  /**
+   * Generates an image and saves it in the media collection as the request's user. Left out: the
+   * generateImage tool says that image generation is not set up.
+   */
+  generateImage?: (input: { prompt: unknown; aspectRatio?: unknown; alt?: unknown }) => Promise<GenerateImageOutcome>
+  /** The upload collection images come from and go to. Default "media". */
+  mediaCollection?: string
 }
 
 /** Result of one tool call. `ops` is set when the call changed the layout. */
@@ -48,6 +58,8 @@ export type ToolOutcome = {
   /** Short human summary for the editor, e.g. "Inserted Hero section". */
   summary: string
   ops?: Operation[]
+  /** An image the tool made, for the chip's thumbnail. */
+  image?: AiToolImage
 }
 
 // ---------------------------------------------------------------------------
@@ -391,6 +403,27 @@ export function toolDefinitions(env: ToolEnv): AiToolDefinition[] {
       },
       strict: true,
     },
+    {
+      name: 'generateImage',
+      description: [
+        'Generates a NEW image from a text prompt with the site\'s image model and saves it in the media library. It costs money and takes 5 to 60 seconds: when an existing image could fit, use searchMedia first. Generate when the user asks for a new or generated image, or when nothing in the library fits.',
+        'Write the prompt in English as a concrete visual description: subject, setting, light, mood, style ("studio photo", "flat vector illustration") and composition. Leave out text, letters and logos. Pick aspectRatio for the place: hero or banner 16:9 or 21:9, card 4:3 or 3:2, portrait 3:4, avatar or icon 1:1.',
+        'With blockId, the image goes straight into that block\'s image prop (prop: the prop name, when the block has more than one image prop). Without it, set the returned id as the prop value with applyOperations. Returns the media id, url, size and alt text.',
+      ].join('\n'),
+      inputSchema: {
+        type: 'object',
+        properties: {
+          prompt: { type: 'string', description: 'What the image shows, in detail.' },
+          aspectRatio: { type: 'string', enum: [...IMAGE_ASPECT_RATIOS], description: 'Width:height. Default "1:1".' },
+          alt: { type: ['string', 'null'], description: 'Short alt text for screen readers, e.g. "Fresh roasted coffee beans in a burlap sack". Default: from the prompt.' },
+          blockId: { type: ['string', 'null'], description: 'Put the image into this block (an image block, or any block with an image prop).' },
+          prop: { type: ['string', 'null'], description: 'The image prop of that block. Default: its first image prop.' },
+        },
+        required: ['prompt'],
+        additionalProperties: false,
+      },
+      strict: true,
+    },
   )
   const sourceSlugs = Object.keys(env.bindingSources ?? {})
   if (sourceSlugs.length > 0) {
@@ -419,6 +452,7 @@ export const RUNNING_SUMMARY: Record<string, string> = {
   applyOperations: 'Editing the page',
   findBlocks: 'Finding blocks',
   searchMedia: 'Searching the media library',
+  generateImage: 'Generating an image',
   getBindingSources: 'Reading document fields',
 }
 
@@ -653,6 +687,9 @@ export async function runTool(name: string, rawInput: unknown, workspace: Worksp
       }
     }
 
+    case 'generateImage':
+      return generateImageTool(input, workspace, env)
+
     case 'getBindingSources': {
       const fields = env.bindingSources?.[String(input.collection)]
       if (!fields) return fail(`No bindable fields for "${String(input.collection)}"`, 'Fields')
@@ -661,5 +698,81 @@ export async function runTool(name: string, rawInput: unknown, workspace: Worksp
 
     default:
       return fail(`Unknown tool "${name}"`, 'Unknown tool')
+  }
+}
+
+// ---------------------------------------------------------------------------
+// generateImage
+// ---------------------------------------------------------------------------
+
+/** Top-level upload props of a block that take images from the collection. */
+function imagePropsOf(def: BlockDefinition, collection: string): DataField[] {
+  return dataFields(def.fields as unknown[]).filter((f) => {
+    if (f.type !== 'upload') return false
+    const to = Array.isArray(f.relationTo) ? f.relationTo : [f.relationTo]
+    return to.includes(collection)
+  })
+}
+
+/** Where a generated image goes: a block's image prop. A string error when the target is wrong. */
+function imageTarget(input: Record<string, unknown>, workspace: Workspace, env: ToolEnv): { blockId: string; field: DataField; current: unknown } | null | string {
+  const blockId = optionalString(input, 'blockId')
+  const prop = optionalString(input, 'prop')
+  if (blockId instanceof Error || prop instanceof Error) return 'blockId and prop must be strings'
+  if (!blockId) return null
+  const block = indexLayout(workspace.layout).get(blockId)?.block
+  if (!block) return `Block "${blockId}" not found. Use an id from the layout, or leave blockId out.`
+  const def = env.blocks.find((b) => b.type === block.type)
+  const collection = env.mediaCollection ?? 'media'
+  const fields = def ? imagePropsOf(def, collection) : []
+  if (fields.length === 0) return `Block "${blockId}" (${block.type}) has no image prop. Pick an image block, or leave blockId out and place the image with applyOperations.`
+  const field = prop ? fields.find((f) => f.name === prop) : fields[0]
+  if (!field) return `Block "${blockId}" has no image prop "${prop}". Its image props: ${fields.map((f) => f.name).join(', ')}.`
+  return { blockId, field, current: block.props?.[field.name] }
+}
+
+/** The prop value for a new upload id: an id, a list with it added, or { relationTo, value }. */
+function uploadValue(field: DataField, collection: string, id: string | number, current: unknown): unknown {
+  const value = Array.isArray(field.relationTo) ? { relationTo: collection, value: id } : id
+  if (!field.hasMany) return value
+  return [...(Array.isArray(current) ? current : []), value]
+}
+
+async function generateImageTool(input: Record<string, unknown>, workspace: Workspace, env: ToolEnv): Promise<ToolOutcome> {
+  if (!env.generateImage) return fail(IMAGES_NOT_CONFIGURED, 'Image generation is not set up')
+  // Check the target before the paid call.
+  const target = imageTarget(input, workspace, env)
+  if (typeof target === 'string') return fail(target, 'Image not generated')
+  const outcome = await env.generateImage({ prompt: input.prompt, aspectRatio: input.aspectRatio ?? undefined, alt: input.alt ?? undefined })
+  if (!outcome.ok) {
+    const summary = outcome.code === 'not_configured' ? 'Image generation is not set up' : 'Image not generated'
+    return fail(outcome.message, summary)
+  }
+  const { media } = outcome
+  const image: AiToolImage = { id: media.id, url: media.thumbnailUrl ?? media.url ?? '', alt: media.alt, width: media.width, height: media.height }
+  const result: Record<string, unknown> = {
+    ok: true,
+    media: { id: media.id, collection: media.collection, url: media.url, alt: media.alt, width: media.width, height: media.height, filename: media.filename },
+    model: outcome.model,
+    seconds: outcome.seconds,
+    ...(outcome.cost !== undefined ? { costUsd: outcome.cost } : {}),
+    ...(outcome.revisedPrompt ? { revisedPrompt: outcome.revisedPrompt } : {}),
+    imagesLeftThisHour: outcome.remainingThisHour,
+  }
+  if (!target) {
+    return { ...ok({ ...result, next: `Set ${JSON.stringify(media.id)} as the image prop of a block with applyOperations "update".` }, 'Generated an image'), image }
+  }
+  const applied = workspace.apply([
+    { type: 'update', id: target.blockId, props: { [target.field.name]: uploadValue(target.field, media.collection, media.id, target.current) } },
+  ])
+  if (!applied.ok) {
+    return {
+      ...ok({ ...result, placed: false, placeError: applied.error, next: 'The image is in the media library. Place it with applyOperations.' }, 'Generated an image (not placed)'),
+      image,
+    }
+  }
+  return {
+    ...ok({ ...result, placed: { blockId: target.blockId, prop: target.field.name } }, 'Generated an image and placed it', applied.ops),
+    image,
   }
 }

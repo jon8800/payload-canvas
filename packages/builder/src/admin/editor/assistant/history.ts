@@ -1,12 +1,15 @@
 // Assistant chat history: the exact model messages per document, kept in local storage and sent
 // back on every request. Pure functions, so they are unit-tested.
 
-import type { AiMessage } from '../../../ai/types'
+import type { AiMessage, AiToolImage } from '../../../ai/types'
 
 export type ToolStatus = 'running' | 'done' | 'error'
 
-/** What the panel shows for one tool call. `note` holds a local problem (an operation that did not apply). */
-export type ToolInfo = { name: string; status: ToolStatus; summary: string; note?: string }
+/**
+ * What the panel shows for one tool call. `note` holds a local problem (an operation that did not
+ * apply). `image`: the image the tool generated, shown as a thumbnail.
+ */
+export type ToolInfo = { name: string; status: ToolStatus; summary: string; note?: string; image?: AiToolImage }
 
 export type ChatHistory = {
   messages: AiMessage[]
