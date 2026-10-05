@@ -28,16 +28,17 @@ Two packages:
 8. [Using existing Payload blocks](#using-existing-payload-blocks)
 9. [Sections](#sections)
 10. [Styling](#styling)
-11. [Theme](#theme)
-12. [Templates and binding](#templates-and-binding)
-13. [References and Used in](#references-and-used-in)
-14. [Localization](#localization)
-15. [AI assistant](#ai-assistant)
-16. [AI editing over MCP](#ai-editing-over-mcp)
-17. [Multiplayer editing](#multiplayer-editing)
-18. [Production and Docker](#production-and-docker)
-19. [Deploying](#deploying)
-20. [Troubleshooting](#troubleshooting)
+11. [Animations](#animations)
+12. [Theme](#theme)
+13. [Templates and binding](#templates-and-binding)
+14. [References and Used in](#references-and-used-in)
+15. [Localization](#localization)
+16. [AI assistant](#ai-assistant)
+17. [AI editing over MCP](#ai-editing-over-mcp)
+18. [Multiplayer editing](#multiplayer-editing)
+19. [Production and Docker](#production-and-docker)
+20. [Deploying](#deploying)
+21. [Troubleshooting](#troubleshooting)
 
 ## Requirements
 
@@ -913,6 +914,67 @@ export default function CanvasPage() {
 
 - **Theme variables in the canvas.** The canvas gets the Theme global from `<ThemeStyle live />` in its layout. If you set other variables at runtime, render the same tag in the canvas layout's `<head>`.
 - **Standalone output** needs `outputFileTracingIncludes`. See [step 8](#8-add-the-standalone-tracing-lines).
+
+## Animations
+
+Editors and the AI can add motion to any block without code: an entrance when the block scrolls into view, hover and press effects, a scroll effect such as parallax, and a loop. The site plays them with the [`motion`](https://motion.dev) package (its DOM API). Animations are data, not classes.
+
+### In the editor
+
+- Select a block and open the **Motion** tab in the inspector (next to Content and Styles). It has four sections: **Entrance**, **Hover and press**, **Scroll** and **Loop**. Pick a preset, then adjust its settings.
+- **Preview** plays the block's animation once on the canvas. Picking a preset also plays it.
+- The canvas shows every block at rest, so it never moves while you edit. **Play animations** (the icon button in the status bar under the canvas) plays the page as visitors see it: entrances on scroll, hover, parallax and loops.
+- Layers marks animated blocks with a small icon. Its tooltip names the animations.
+- **Copy styles** and **Paste styles** carry the animations with the classes. **Reset styles** removes classes only.
+- Changes go through the normal operations, so undo and multiplayer work as for any edit.
+
+### Data
+
+A block stores its animations in `motion`. Every kind is optional. Times are milliseconds, distances pixels. `motion` is left out when it holds nothing.
+
+```json
+{
+  "id": "b_cards",
+  "type": "grid",
+  "className": "grid grid-cols-3 gap-6",
+  "motion": {
+    "enter": { "preset": "fade-up", "stagger": 80 },
+    "hover": { "preset": "lift" },
+    "press": { "preset": "shrink" }
+  }
+}
+```
+
+| Kind | Presets | Settings (default) |
+|---|---|---|
+| `enter` | `fade`, `fade-up`, `fade-down`, `fade-left`, `fade-right`, `zoom-in`, `zoom-out`, `blur-in`, `wipe-up`, `wipe-down`, `wipe-left`, `wipe-right` | `duration` (600), `delay` (0), `easing` (`ease-out`, `ease-in-out`, `linear`, `spring`, `bouncy`), `distance` (24, fade-up/down/left/right), `trigger` (`view`, or `load` for the first section), `amount` in view 0-1 (0.2), `offset` px inside the window (0), `repeat` (false: once), `stagger` |
+| `hover` | `lift`, `grow`, `tilt` | `distance` (lift, 4), `scale` (grow, 1.03), `angle` (tilt, 6) |
+| `press` | `shrink` | `scale` (0.97) |
+| `scroll` | `parallax`, `fade`, `zoom` | `distance` (parallax, 60; negative moves with the scroll), `scale` (zoom start, 0.9) |
+| `loop` | `float`, `pulse` | `duration` (3000 float, 1500 pulse), `distance` (float, 8), `scale` (pulse, 1.04) |
+
+- **Stagger.** `enter.stagger` is the gap in milliseconds between children. The block itself stays still, and its direct child blocks play the entrance one after another. Use it on grids and lists of cards, and on Collection lists. A child's own entrance does not play there (its hover, press, scroll and loop do).
+- **Edits.** An `update` operation takes `motion` as a patch: each kind listed replaces that kind, `null` removes a kind, kinds left out stay, and `motion: null` removes all. The operations refuse unknown presets, unknown keys and values out of range, with a message that names the problem.
+- The presets, limits and defaults live in `core/motion.ts` (`MOTION_SPECS`, `MOTION_PRESET_INFO`). The layout JSON Schema has the motion schema under `$defs.$motion`. The MCP tools and the assistant document it from the same source.
+
+### On the site
+
+- `RenderLayout` puts each animated block's settings on its root element: `data-motion` (JSON), plus `data-motion-item` on the children of a staggering block. Block components need nothing: the attributes come in `attributes`, which every component spreads on its root element.
+- When a layout has motion, `RenderLayout` also renders `<MotionStyle />` (a small `<style>` in the head, once per page) and `<MotionRuntime />` (a client component that renders nothing). Pages without motion get neither, and load no motion code.
+- `MotionRuntime` loads the runtime as its own chunk (about 14 KB gzipped, Motion included) and starts it once per page, however many layouts render it. The runtime finds the elements, watches for new ones (client navigation, streaming), and drives them:
+  - Entrances run on the Web Animations API (`animate` from `motion/mini`), so the browser runs them off the main thread. They animate only `opacity`, `transform`, `filter` and `clip-path`, then hand the element back to its classes. Nothing changes layout, so there is no layout shift.
+  - Hover and press use Motion's `hover` and `press` gestures with short springs. Hover runs only on devices with a fine pointer. Press does not make a block focusable.
+  - Scroll effects use Motion's `scroll`, which uses a native `ViewTimeline` where the browser has one. Scroll and loop effects use the separate `translate`, `scale` and `opacity` properties, so they add to the other effects.
+  - Loops pause while the block is out of view.
+- **No flash, and nothing hidden without JavaScript.** The style hides blocks with an entrance only under `@media (scripting: enabled)`, until the runtime takes them over. Visitors and crawlers without JavaScript see every block. If the runtime never starts (a script error), a CSS failsafe shows the blocks after 2.5 seconds.
+- **Reduced motion.** When the visitor's system asks for less motion (`prefers-reduced-motion: reduce`), every entrance becomes a short fade. Hover, press, parallax, zoom and loops do not run. The scroll fade stays.
+
+### Custom components and renderers
+
+- A custom block component spreads `attributes` on its root element, as before. That is all it needs.
+- A component made with `fromPayloadComponent` gets the attributes on its class wrapper (`className: 'wrap'`, the default, for blocks with styles). Without a wrapper, they go on the component's first element after hydration, so an entrance above the fold can flash once on load. Keep the wrapper for animated blocks.
+- Your own renderer: put `motionAttributes(block.motion, isStaggerChild)` (from `@payload-toolkit/builder/core`) on each block's root element, and render `<MotionStyle />` and `<MotionRuntime />` from `@payload-toolkit/builder-react` once on pages with motion. `startMotion()` and `previewMotion(element)` are exported for other setups.
+- Parallax on an image inside a frame: give the frame `overflow-hidden` and a fixed height, and make the image taller than the frame (for example `h-[120%]`), so the moving image never shows an edge.
 
 ## Theme
 

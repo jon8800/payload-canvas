@@ -1,4 +1,4 @@
-import { grid, heading, quote, stack, styles, defineSection } from './build'
+import { grid, heading, motions, quote, stack, styles, withMotion, defineSection } from './build'
 
 export type TestimonialsInput = {
   title: string
@@ -16,7 +16,10 @@ export const testimonials = defineSection<TestimonialsInput>({
     stack('section', `bg-muted ${styles.section}`, [
       stack('div', styles.container, [
         heading(title, '2', styles.sectionTitle),
-        grid('grid grid-cols-1 gap-12 md:grid-cols-2 md:gap-16', items.map((item) => quote(item.quote, item.cite, QUOTE))),
+        withMotion(
+          grid('grid grid-cols-1 gap-12 md:grid-cols-2 md:gap-16', items.map((item) => quote(item.quote, item.cite, QUOTE))),
+          motions.staggerChildren,
+        ),
       ]),
     ]),
 })

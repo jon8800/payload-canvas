@@ -1,6 +1,9 @@
 import { Fragment, memo, type ReactNode } from 'react'
 import {
+  blocksHaveMotion,
   COLLECTION_LIST_BLOCK,
+  motionAttributes,
+  staggersChildren,
   LIST_ITEM_SLOT,
   LIST_ITEMS_PROP,
   resolveBlockBindings,
@@ -16,6 +19,8 @@ import { richTextFor } from '../components/RichText'
 import { mapFieldValues, type FieldLike, type VisitField } from './fields'
 import { defaultResolveLink, resolveLinkValue } from './link'
 import { listItemsOf } from './lists'
+import { MotionRuntime } from '../motion/MotionRuntime'
+import { MotionStyle } from '../motion/style'
 import { readsPageData } from './marks'
 import { urlResolver } from './resolve'
 import { SlotOutlet } from './SlotOutlet'
@@ -65,18 +70,19 @@ function slotNamesOf(block: Block, ctx: Context): string[] {
  * One block on the canvas. Memoized by block identity: the canvas keeps unchanged blocks as the
  * same objects (`shareStructure`), so an edit renders only the changed block and its ancestors.
  */
-const CanvasBlock = memo(function CanvasBlock({ block, ctx }: { block: Block; ctx: Context }) {
-  return renderBlock(block, ctx)
+const CanvasBlock = memo(function CanvasBlock({ block, ctx, item }: { block: Block; ctx: Context; item: boolean }) {
+  return renderBlock(block, ctx, false, item)
 })
 
-function renderBlocks(blocks: Block[], ctx: Context): ReactNode[] {
-  if (ctx.mode === 'canvas') return blocks.map((block) => <CanvasBlock key={block.id} block={block} ctx={ctx} />)
-  return blocks.map((block) => renderBlock(block, ctx))
+/** `item`: the blocks are direct children of a block whose entrance staggers its children. */
+function renderBlocks(blocks: Block[], ctx: Context, item = false): ReactNode[] {
+  if (ctx.mode === 'canvas') return blocks.map((block) => <CanvasBlock key={block.id} block={block} ctx={ctx} item={item} />)
+  return blocks.map((block) => renderBlock(block, ctx, false, item))
 }
 
 function renderSlot(block: Block, slot: string, ctx: Context): ReactNode {
   const children = block.slots?.[slot] ?? []
-  if (children.length > 0) return renderBlocks(children, ctx)
+  if (children.length > 0) return renderBlocks(children, ctx, staggersChildren(block.motion))
   if (!isEditor(ctx)) return null
   return (
     <div
@@ -103,11 +109,15 @@ function renderListItems(block: Block, ctx: Context): ReactNode {
   if (children.length === 0) return renderSlot(block, LIST_ITEM_SLOT, ctx)
   return items.map((doc, i) => (
     <Fragment key={typeof doc.id === 'string' || typeof doc.id === 'number' ? doc.id : i}>
-      {renderBlocks(children, {
-        ...ctx,
-        context: { collection, doc },
-        repeat: ctx.repeat || (ctx.mode === 'canvas' && i > 0),
-      })}
+      {renderBlocks(
+        children,
+        {
+          ...ctx,
+          context: { collection, doc },
+          repeat: ctx.repeat || (ctx.mode === 'canvas' && i > 0),
+        },
+        staggersChildren(block.motion),
+      )}
     </Fragment>
   ))
 }
@@ -129,7 +139,7 @@ function componentPropsOf(block: Block, ctx: Context): Record<string, unknown> {
  * It gets no editor attributes (the canvas adds them to its first element), and each slot is a
  * `SlotOutlet`, where the canvas shows the children it rendered itself.
  */
-function renderBlock(stored: Block, ctx: Context, preview = false): ReactNode {
+function renderBlock(stored: Block, ctx: Context, preview = false, item = false): ReactNode {
   const canvas = ctx.mode === 'canvas'
   const editor = isEditor(ctx)
   if (stored.hidden && !editor) return null
@@ -146,6 +156,8 @@ function renderBlock(stored: Block, ctx: Context, preview = false): ReactNode {
       ? { 'data-builder-repeat': '' }
       : {}
   if (editor && !preview && block.hidden) attributes['data-builder-hidden'] = 'true'
+  // Animations: settings for the motion runtime (the canvas plays them only on request).
+  if (!preview && (stored.motion || item)) Object.assign(attributes, motionAttributes(stored.motion, item))
 
   const Component = ctx.components[block.type]
   if (!Component) {
@@ -252,10 +264,13 @@ export function RenderLayout({
   pageData,
 }: RenderLayoutProps): ReactNode {
   const ctx = contextFor(mode, components, blocks, resolveLink, context ?? null, pageData ?? null)
+  const motion = mode === 'site' && blocksHaveMotion(layout.blocks)
   return (
     <>
       <BuilderStyle css={css} />
+      {motion && <MotionStyle />}
       {renderBlocks(layout.blocks, ctx)}
+      {motion && <MotionRuntime />}
     </>
   )
 }

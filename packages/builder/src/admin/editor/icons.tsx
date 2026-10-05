@@ -284,6 +284,14 @@ const PATHS = {
       <path d="M2.75 14c.6-2.6 2.75-4.25 5.25-4.25S12.65 11.4 13.25 14" />
     </>
   ),
+  // Animations: a ball with speed lines (blocks with motion, "Play animations"), and play (Preview).
+  motion: (
+    <>
+      <circle cx="10" cy="8" r="3.5" />
+      <path d="M1.5 8h3M2.5 5h2.5M2.5 11h2.5" />
+    </>
+  ),
+  play: <path d="M5 3.25v9.5L12.75 8 5 3.25Z" />,
   // Languages (the locale switcher).
   globe: (
     <>

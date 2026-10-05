@@ -88,7 +88,9 @@ const EMPTY_PAGE_DATA: PageData = Object.freeze({}) as PageData
  * render the slot with `PayloadSlot` (see there) instead of your own renderer.
  *
  * In the canvas the adapter puts the editor attributes (`data-block-id`) on the component's
- * first element. It adds no element of its own (see `PayloadRoot`).
+ * first element. It adds no element of its own (see `PayloadRoot`). On the site it does the same
+ * with a block's motion settings, unless the block has a class wrapper (`className: 'wrap'`),
+ * which then carries them in the server HTML.
  *
  * Async components (server components that load data), and `render: 'server'`, render on the
  * server in the canvas, through the canvas server action (`createCanvasServer`).
@@ -114,10 +116,15 @@ export function fromPayloadComponent<P extends object>(
     }
     const payloadProps = (mapProps ? mapProps(payloadBlock, pageData ?? EMPTY_PAGE_DATA, builder) : { ...payloadBlock, builder }) as P
     let node: ReactNode = <Component {...payloadProps} />
-    if (className && options.className !== 'prop') node = <div className={className}>{node}</div>
-    if (mode === 'canvas' && attributes['data-block-id']) {
+    const wrap = Boolean(className && options.className !== 'prop')
+    // On the site the attributes hold only motion settings (`data-motion`). They go on the class
+    // wrapper when there is one, so they are in the server HTML; otherwise PayloadRoot puts them
+    // on the component's first element after hydration.
+    const site = mode === 'site' && Object.keys(attributes).length > 0
+    if (wrap) node = <div className={className} {...(site ? attributes : {})}>{node}</div>
+    if ((mode === 'canvas' && attributes['data-block-id']) || (site && !wrap)) {
       node = (
-        <PayloadRoot attributes={attributes} label={def?.label ?? block.type}>
+        <PayloadRoot attributes={attributes} label={def?.label ?? block.type} placeholder={mode === 'canvas'}>
           {node}
         </PayloadRoot>
       )

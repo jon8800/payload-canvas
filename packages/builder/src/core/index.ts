@@ -33,6 +33,7 @@ export {
   type FallbackLocale,
 } from './locale'
 export * from './styles'
+export * from './motion'
 export * from './bindings'
 export { TEXT_LIST_BLOCK, TEXT_LIST_ITEM_BLOCK, TEXT_LIST_SLOT, joinListItem, splitListItem, type ListItemEdit } from './textList'
 export { blockName, defineBlock, fitsParent, getBlockDefinition, placementError, slotAccepts, slotAcceptsAt, slotNames, starterSlots } from './blocks'

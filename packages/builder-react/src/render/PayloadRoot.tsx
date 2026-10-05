@@ -7,6 +7,8 @@ type Props = {
   readonly attributes: Record<string, string>
   /** Shown when the component renders no element, so the block stays selectable. */
   readonly label: string
+  /** Show `label` in a box when the component renders no element. Default true (the canvas). */
+  readonly placeholder?: boolean
   readonly children: ReactNode
 }
 
@@ -31,7 +33,7 @@ function firstOf(elements: Iterable<Element>): Element | null {
 }
 
 /**
- * Canvas only. A component written for Payload data does not spread the editor's `attributes`, so
+ * A component written for Payload data does not spread the editor's `attributes`, so
  * this puts them on the component's first element after each render. It adds no element: a
  * fragment ref (`observeUsing`) reports the elements directly inside it as React adds and removes
  * them. So the component's elements stay direct children of their container, as on the site, and
@@ -40,7 +42,7 @@ function firstOf(elements: Iterable<Element>): Element | null {
  * direct children then miss the component).
  * A component that renders nothing gets a small placeholder, so the block can still be selected.
  */
-export function PayloadRoot({ attributes, label, children }: Props) {
+export function PayloadRoot({ attributes, label, placeholder = true, children }: Props) {
   const fragment = useRef<FragmentInstance>(null)
   const host = useRef<HTMLSpanElement>(null)
   const [empty, setEmpty] = useState(false)
@@ -110,7 +112,7 @@ export function PayloadRoot({ attributes, label, children }: Props) {
           {children}
         </span>
       )}
-      {empty && (
+      {empty && placeholder && (
         <div {...attributes} style={EMPTY_STYLE}>
           {label}
         </div>

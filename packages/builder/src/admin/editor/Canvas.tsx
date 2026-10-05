@@ -11,6 +11,7 @@ import { BlockIcon, Icon } from './icons'
 import { applyInlineChange, applyInlineJoin, applyInlineSplit, boundHint, inlineEditing, refuseLockedInline, stopInlineEditing } from './inline'
 import { blockName } from './names'
 import { MenuButton } from './menu/Menu'
+import { playMotion } from './motion/play'
 import { useCanvasMenus } from './menu/useCanvasMenus'
 import { cursorAt } from './live'
 import { FollowFrame } from './live/PresenceUI'
@@ -197,6 +198,7 @@ export function Canvas() {
       if (runtime.template.get().isTemplate) postContext(iframeRef.current, templateContext(runtime.template.get()))
       runtime.postToCanvas({ type: 'layout', layout: view })
       runtime.postToCanvas({ type: 'selection', selectedId, hoveredId })
+      runtime.postToCanvas({ type: 'motionPlay', on: playMotion(runtime).get() })
     }
     window.addEventListener('message', onMessage)
     // The iframe may already be listening (it loaded before this effect ran).
@@ -444,10 +446,29 @@ function StatusBar({
             {px} px · {breakpointAt(widths, px)}
           </span>
           <ZoomControl zoom={zoom} fit={fit} mode={zoomMode} onZoom={onZoom} />
+          <PlayMotionToggle runtime={runtime} />
           <DragModeMenu runtime={runtime} />
         </span>
       )}
     </footer>
+  )
+}
+
+/** "Play animations": the canvas plays block animations as visitors see them. Off: blocks at rest. */
+function PlayMotionToggle({ runtime }: { runtime: Runtime }) {
+  const store = playMotion(runtime)
+  const on = useValue(store)
+  return (
+    <button
+      type="button"
+      className="builder-editor__icon-button builder-editor__icon-button--small"
+      aria-pressed={on}
+      aria-label="Play animations"
+      data-tooltip={on ? 'Stop animations' : 'Play animations'}
+      onClick={() => store.set(!on)}
+    >
+      <Icon name="motion" size={14} />
+    </button>
   )
 }
 

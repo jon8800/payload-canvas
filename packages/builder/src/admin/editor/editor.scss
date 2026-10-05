@@ -117,6 +117,11 @@
     &[aria-expanded='true'] {
       background: var(--be-hover);
     }
+
+    &[aria-pressed='true'] {
+      background: color-mix(in srgb, var(--be-accent) 14%, transparent);
+      color: var(--be-accent);
+    }
   }
 
   .builder-editor__icon-button--small {
@@ -1071,6 +1076,34 @@
   }
 
   .builder-editor__row:hover .builder-editor__row-problem {
+    display: none;
+  }
+
+  // A block with animations (`block.motion`).
+  .builder-editor__row-motion {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    margin-left: auto;
+    border-radius: 4px;
+    color: var(--be-muted);
+  }
+
+  .builder-editor__row--selected .builder-editor__row-motion {
+    color: inherit;
+  }
+
+  // Next to the motion icon, the other end-of-row marks sit close instead of splitting the space.
+  .builder-editor__row-problem ~ .builder-editor__row-motion,
+  .builder-editor__row-motion ~ .builder-editor__row-bound,
+  .builder-editor__row:not(:hover) .builder-editor__row-motion ~ .builder-editor__row-count,
+  .builder-editor__row:not(:hover) .builder-editor__row-motion ~ .builder-editor__row-hidden {
+    margin-left: 2px;
+  }
+
+  .builder-editor__row:hover .builder-editor__row-motion {
     display: none;
   }
 

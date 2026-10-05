@@ -1,4 +1,4 @@
-import { heading, stack, styles, text, defineSection } from './build'
+import { heading, motions, stack, styles, text, withMotion, defineSection } from './build'
 
 export type FeaturesInput = {
   title: string
@@ -18,15 +18,18 @@ export const features = defineSection<FeaturesInput>({
           heading(title, '2', styles.sectionTitle),
           ...(intro ? [text(intro, styles.lead)] : []),
         ]),
-        stack(
-          'div',
-          'flex flex-col border-b border-border md:col-span-7',
-          items.map((item) =>
-            stack('article', 'grid grid-cols-1 gap-2 border-t border-border py-7 sm:grid-cols-[12rem_1fr] sm:gap-8', [
-              heading(item.title, '3', styles.cardTitle),
-              text(item.text, styles.body),
-            ]),
+        withMotion(
+          stack(
+            'div',
+            'flex flex-col border-b border-border md:col-span-7',
+            items.map((item) =>
+              stack('article', 'grid grid-cols-1 gap-2 border-t border-border py-7 sm:grid-cols-[12rem_1fr] sm:gap-8', [
+                heading(item.title, '3', styles.cardTitle),
+                text(item.text, styles.body),
+              ]),
+            ),
           ),
+          motions.staggerChildren,
         ),
       ]),
     ]),

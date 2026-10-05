@@ -194,7 +194,7 @@ function sourceName(runtime: ReturnType<typeof useRuntime>, sources: Iterable<st
  * untranslated prop of the block at once. In the default locale: only when the block has text in
  * another language that the default language does not have, with "Copy N fields from German".
  */
-export function LocaleNote({ blockId, tab }: { blockId: string; tab: 'content' | 'styles' }) {
+export function LocaleNote({ blockId, tab }: { blockId: string; tab: 'content' | 'styles' | 'motion' }) {
   const runtime = useRuntime()
   const settings = runtime.store.localization
   const locale = useEditor(runtime.store, (s) => s.locale)
@@ -245,6 +245,8 @@ export function LocaleNote({ blockId, tab }: { blockId: string; tab: 'content' |
         <p>
           {tab === 'styles'
             ? `Styles change every language, not only ${language}.`
+            : tab === 'motion'
+              ? `Animations change every language, not only ${language}.`
             : `Editing ${language}. Translated fields change ${language} only; other fields, blocks and styles change every language.`}
         </p>
         {tab === 'content' && missing > 0 && (

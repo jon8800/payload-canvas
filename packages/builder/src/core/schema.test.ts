@@ -148,17 +148,17 @@ describe('schema: blocks and layouts', () => {
     assert.equal(heading.$schema, 'https://json-schema.org/draft/2020-12/schema')
     assert.deepEqual(heading.properties.type, { const: 'heading' })
     assert.deepEqual(heading.required, ['id', 'type', 'props'])
-    assert.equal(heading.$defs, undefined)
+    assert.deepEqual(Object.keys(heading.$defs), ['$motion'])
     assert.equal(heading.description, 'A heading.')
     assert.deepEqual(heading.examples, [{ id: 'b_example', type: 'heading', props: { text: 'Hi' } }])
 
     const row = blockJsonSchema(blocks[1], blocks) as S
     assert.deepEqual(row.properties.slots.properties.children.items, { $ref: '#/$defs/text' })
-    assert.deepEqual(Object.keys(row.$defs), ['text'])
+    assert.deepEqual(Object.keys(row.$defs), ['text', '$motion'])
 
     const stack = blockJsonSchema(blocks[0], blocks) as S
     assert.equal(stack.properties.slots.properties.children.items.oneOf.length, 4)
-    assert.deepEqual(Object.keys(stack.$defs), ['stack', 'row', 'heading', 'text'])
+    assert.deepEqual(Object.keys(stack.$defs), ['stack', 'row', 'heading', 'text', '$motion'])
   })
 
   it('omits className when styles is false', () => {
@@ -169,7 +169,7 @@ describe('schema: blocks and layouts', () => {
 
   it('layoutJsonSchema has a $def per block type', () => {
     const schema = layoutJsonSchema(blocks) as S
-    assert.deepEqual(Object.keys(schema.$defs), ['stack', 'row', 'heading', 'text'])
+    assert.deepEqual(Object.keys(schema.$defs), ['stack', 'row', 'heading', 'text', '$motion'])
     assert.deepEqual(schema.properties.version, { const: 1 })
     assert.equal(schema.properties.blocks.items.oneOf.length, 4)
     assert.doesNotThrow(() => JSON.stringify(schema))

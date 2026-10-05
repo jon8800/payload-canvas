@@ -1,4 +1,5 @@
 import { createId } from './ids'
+import { normalizeMotion } from './motion'
 import { migrateTextList } from './textList'
 import type { Block, Layout } from './types'
 
@@ -81,11 +82,12 @@ export function subtreeIds(block: Block, out: string[] = []): string[] {
 // - no empty `props`, `bindings` or `slots` objects, and no empty slot lists
 // - `hidden` is stored only when true, `label` only when non-empty (trimmed)
 // - `locales` holds no empty locale objects, and is left out when empty
+// - `motion` holds only valid kinds and values (motion.ts), and is left out when empty
 // - every id is a non-empty string, unique in the layout
 // - old list blocks (`props.items` rows) hold `listItem` blocks in their `items` slot (textList.ts)
 // The operations module relies on this form for exact undo.
 
-const BLOCK_KEYS = new Set(['id', 'type', 'blockType', 'blockName', 'props', 'className', 'slots', 'children', 'bindings', 'hidden', 'label', 'locales'])
+const BLOCK_KEYS = new Set(['id', 'type', 'blockType', 'blockName', 'props', 'className', 'slots', 'children', 'bindings', 'hidden', 'label', 'locales', 'motion'])
 
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
@@ -172,6 +174,8 @@ function normalizeBlock(value: unknown, seen: Set<string>): Block | null {
     }
     if (Object.keys(locales).length > 0) block.locales = locales
   }
+  const motion = normalizeMotion(value.motion)
+  if (motion) block.motion = motion
   // Old shapes of built-in blocks (see textList.ts).
   migrateTextList(block, (raw) => uniqueId(raw, seen))
   return block

@@ -1,7 +1,7 @@
 // The default layout of a blog post: a template whose blocks bind to the post's fields.
 import type { Block } from '@payload-toolkit/builder/core'
-import { bare, bind, collectionList, field, heading, stack, styles } from './build'
-import { postCard } from './posts'
+import { bare, bind, field, heading, stack, styles } from './build'
+import { postGrid } from './posts'
 
 export function postTemplate(): Block[] {
   return [
@@ -22,9 +22,7 @@ export function postTemplate(): Block[] {
         stack('section', `border-t border-border ${styles.section}`, [
           stack('div', styles.container, [
             heading('More posts', '2', `text-center ${styles.sectionTitle}`),
-            collectionList('posts', { limit: 3, sort: '-publishedAt', excludeCurrent: true }, 'grid grid-cols-1 gap-x-8 gap-y-14 sm:grid-cols-2 lg:grid-cols-3', [
-              postCard('3'),
-            ]),
+            postGrid({ limit: 3, excludeCurrent: true, animate: false }, '3'),
           ]),
         ]),
       ]),

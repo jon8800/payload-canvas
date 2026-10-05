@@ -1,4 +1,4 @@
-import { heading, image, sectionHeader, stack, styles, text, defineSection } from './build'
+import { heading, image, motions, sectionHeader, stack, styles, text, withMotion, defineSection } from './build'
 
 export type WorkInput = {
   title: string
@@ -7,14 +7,19 @@ export type WorkInput = {
   items: Array<{ title: string; meta: string; image: { id: number | string; alt: string } }>
 }
 
+// Each project appears as it scrolls into view. The columns are tall and offset, so one entrance
+// per column would play too early for the lower projects.
 const project = (item: WorkInput['items'][number]) =>
-  stack('article', 'flex flex-col gap-5', [
-    image(item.image.id, item.image.alt, styles.image),
-    stack('div', 'flex flex-col gap-1', [
-      heading(item.title, '3', 'font-display text-2xl leading-tight tracking-[-0.01em] md:text-3xl'),
-      text(item.meta, styles.muted),
+  withMotion(
+    stack('article', 'flex flex-col gap-5', [
+      image(item.image.id, item.image.alt, styles.image),
+      stack('div', 'flex flex-col gap-1', [
+        heading(item.title, '3', 'font-display text-2xl leading-tight tracking-[-0.01em] md:text-3xl'),
+        text(item.meta, styles.muted),
+      ]),
     ]),
-  ])
+    motions.reveal,
+  )
 
 export const work = defineSection<WorkInput>({
   name: 'Selected work',

@@ -5,7 +5,7 @@
 
 import { createId, findBlock, findLocation, getBlockDefinition, slotAcceptsAt, slotNames } from '../../core'
 import type { Block, CanvasMeasurement, Layout, Operation, Position } from '../../core/types'
-import { normalizeClasses, parseStyles, setStylesOps, stylesText } from './menu/styleClipboard'
+import { normalizeClasses, parseStyles, setStylesOps, stylesText, type CopiedStyles } from './menu/styleClipboard'
 import type { Runtime } from './runtime'
 
 /**
@@ -253,15 +253,15 @@ export function pasteBlocks(runtime: Runtime, blocks: Block[]): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Styles clipboard: a block's classes, with every breakpoint and state
+// Styles clipboard: a block's classes, with every breakpoint and state, and its animations
 // ---------------------------------------------------------------------------
 
 const STYLES_KEY = 'payload-builder:styles'
 /** Used when local storage is blocked. */
 let stylesFallback: string | null = null
 
-/** The copied classes ("" for a block without styles), or null when no styles were copied. */
-export function storedStyles(): string | null {
+/** The copied styles, or null when no styles were copied. */
+export function storedStyles(): CopiedStyles | null {
   try {
     return parseStyles(localStorage.getItem(STYLES_KEY)) ?? parseStyles(stylesFallback)
   } catch {
@@ -269,11 +269,11 @@ export function storedStyles(): string | null {
   }
 }
 
-/** Copies the block's classes (all breakpoints and states). Other tabs and pages can paste them. */
+/** Copies the block's classes (all breakpoints and states) and animations. Other tabs and pages can paste them. */
 export function copyStyles(runtime: Runtime, id: string): boolean {
   const block = findBlock(runtime.store.getState().layout, id)
   if (!block) return false
-  const text = stylesText(block.className)
+  const text = stylesText(block.className, block.motion)
   stylesFallback = text
   try {
     localStorage.setItem(STYLES_KEY, text)
@@ -281,27 +281,30 @@ export function copyStyles(runtime: Runtime, id: string): boolean {
     // Storage full or blocked: the copy in memory still works on this page.
   }
   const count = normalizeClasses(block.className).split(' ').filter(Boolean).length
-  runtime.notify(count === 0 ? 'Copied styles: this block has none' : `Copied styles (${count} ${count === 1 ? 'class' : 'classes'})`)
+  const classes = `${count} ${count === 1 ? 'class' : 'classes'}`
+  if (count === 0 && !block.motion) runtime.notify('Copied styles: this block has none')
+  else if (!block.motion) runtime.notify(`Copied styles (${classes})`)
+  else runtime.notify(count === 0 ? 'Copied styles (animations)' : `Copied styles (${classes} and animations)`)
   return true
 }
 
-/** Gives the blocks the copied classes, in place of their own. One undo step. */
+/** Gives the blocks the copied classes and animations, in place of their own. One undo step. */
 export function pasteStyles(runtime: Runtime, ids: readonly string[]): boolean {
-  const className = storedStyles()
-  if (className === null) {
+  const styles = storedStyles()
+  if (styles === null) {
     runtime.notify('Nothing to paste. Copy the styles of a block first.')
     return false
   }
-  return applyStyles(runtime, ids, className, 'Styles pasted')
+  return applyStyles(runtime, ids, styles, 'Styles pasted')
 }
 
-/** Removes every class of the blocks. One undo step. */
+/** Removes every class of the blocks. Animations stay. One undo step. */
 export function resetStyles(runtime: Runtime, ids: readonly string[]): boolean {
-  return applyStyles(runtime, ids, '', 'Styles reset')
+  return applyStyles(runtime, ids, { className: '' }, 'Styles reset')
 }
 
-function applyStyles(runtime: Runtime, ids: readonly string[], className: string, notice: string): boolean {
-  const ops = setStylesOps(runtime.store.getState().layout, runtime.config.blocks, ids, className)
+function applyStyles(runtime: Runtime, ids: readonly string[], styles: CopiedStyles, notice: string): boolean {
+  const ops = setStylesOps(runtime.store.getState().layout, runtime.config.blocks, ids, styles)
   if (ops.length === 0) {
     runtime.notify('The styles are the same already.')
     return false
