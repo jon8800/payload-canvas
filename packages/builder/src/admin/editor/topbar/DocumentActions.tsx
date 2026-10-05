@@ -39,8 +39,10 @@ type SaveStateName = 'connecting' | 'offline' | 'reconnecting' | 'failed' | 'sav
 export function SaveState() {
   const runtime = useRuntime()
   const live = useValue(runtime.live)
-  const { updatedAt } = useValue(runtime.doc.meta)
+  const { updatedAt, drafts } = useValue(runtime.doc.meta)
   const [retrying, setRetrying] = useState(false)
+  // Without drafts (saved sections, collections without versions) each save is the document itself.
+  const asWhat = drafts ? ' as a draft' : ''
 
   let state: SaveStateName = 'saved'
   if (!live || live.status === 'connecting') state = 'connecting'
@@ -62,12 +64,12 @@ export function SaveState() {
     connecting: 'Connecting to the live session',
     offline: 'Offline. Your changes are kept in this tab and sent when the connection is back. Do not close the tab.',
     reconnecting: 'The live connection dropped. Reconnecting.',
-    failed: `The server could not save the draft: ${saveError?.message ?? 'unknown error'}
+    failed: `The server could not save ${drafts ? 'the draft' : 'your changes'}: ${saveError?.message ?? 'unknown error'}
 ${
       saveError?.retrying ? 'It tries again automatically. ' : ''
     }Your changes are kept on the server.`,
-    saving: 'Your changes are being saved as a draft',
-    saved: 'All changes are saved as a draft',
+    saving: `Your changes are being saved${asWhat}`,
+    saved: `All changes are saved${asWhat}`,
   }[state]
 
   const retry = async () => {

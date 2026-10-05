@@ -59,4 +59,28 @@ describe('pickerItems', () => {
     const saved = pickerItems({ blocks, sections, layout, parentId: null, slot: 'children', query: 'saved' })
     assert.deepEqual(saved.map((i) => i.id), ['section:saved:3'])
   })
+
+  it('offers nothing in a full slot, and only sections that fit in the room left', () => {
+    const limited: BlockDefinition[] = [...blocks, { type: 'pair', label: 'Pair', fields: [], slots: { children: { allow: ['heading'], max: 2 } } }]
+    const twoHeadings: SectionDefinition = {
+      id: 'two',
+      label: 'Two headings',
+      blocks: [
+        { id: 'x1', type: 'heading' },
+        { id: 'x2', type: 'heading' },
+      ],
+    }
+    const all = [...sections, twoHeadings]
+    const oneIn: Layout = { version: 1, blocks: [{ id: 'p', type: 'pair', slots: { children: [{ id: 'p1', type: 'heading' }] } }] }
+    const items = pickerItems({ blocks: limited, sections: all, layout: oneIn, parentId: 'p', slot: 'children', query: '' })
+    assert.deepEqual(items.map((i) => i.id), ['block:heading', 'section:saved:3', 'section:hero'])
+    const empty: Layout = { version: 1, blocks: [{ id: 'p', type: 'pair' }] }
+    const roomy = pickerItems({ blocks: limited, sections: all, layout: empty, parentId: 'p', slot: 'children', query: '' })
+    assert.ok(roomy.some((i) => i.id === 'section:two'))
+    const fullLayout: Layout = {
+      version: 1,
+      blocks: [{ id: 'p', type: 'pair', slots: { children: [{ id: 'p1', type: 'heading' }, { id: 'p2', type: 'heading' }] } }],
+    }
+    assert.deepEqual(pickerItems({ blocks: limited, sections: all, layout: fullLayout, parentId: 'p', slot: 'children', query: '' }), [])
+  })
 })

@@ -4,8 +4,11 @@ import { notFound, redirect } from 'next/navigation'
 import type { AdminViewServerProps } from 'payload'
 
 import { builderConfigOf, liveRuntimeOf, loadDocMeta, sessionTargetOf } from '../../live'
+import { fieldRegistryOf } from '../../live/fieldChecks'
 import type { BuilderDocMeta } from '../../live/types'
+import { siteCssConfigOf } from '../../plugin'
 import { builderViewPath } from '../../plugin/links'
+import { savedSectionsConfigOf } from '../../plugin/sections'
 import { BuilderScreen } from '../screen/BuilderScreen'
 
 function segment(value: string | undefined): string {
@@ -49,7 +52,10 @@ export async function BuilderView({ initPageResult, params, searchParams }: Admi
       target,
       url: server.collections[collection]?.url,
       isTemplate: collection === server.templates,
+      isSection: collection === savedSectionsConfigOf(payload)?.slug,
       canUpdate,
+      // The user's prop access: the inspector hides and locks props from the first render.
+      access: { blocks: siteCssConfigOf(payload)?.blocks ?? [], registry: fieldRegistryOf(payload), runtime },
     })
   } catch {
     meta = null

@@ -4,7 +4,7 @@
 // details card.
 
 import { Link, useConfig } from '@payloadcms/ui'
-import { useOptimistic, useRef, useState, useTransition, type KeyboardEvent } from 'react'
+import { useOptimistic, useRef, useState, useTransition, type KeyboardEvent, type RefObject } from 'react'
 
 import type { DocStatus } from '../../../live/types'
 import { useRuntime } from '../runtime'
@@ -40,7 +40,23 @@ export function documentTitle(meta: { title: string; id: string }): string {
   return meta.title.trim() === '' || meta.title === meta.id ? '' : meta.title
 }
 
-/** "Pages › Title". The title is an input: Enter or leaving it saves, Escape cancels. */
+/**
+ * Keys of the top bar's inline inputs: Enter saves (by leaving the input), Escape cancels. Escape
+ * must not clear the block selection. `cancelled` records the cancel for the blur that follows.
+ */
+function inlineInputKeys(e: KeyboardEvent<HTMLInputElement>, cancelled: RefObject<boolean>) {
+  if (e.key === 'Enter') e.currentTarget.blur()
+  if (e.key === 'Escape') {
+    e.stopPropagation()
+    cancelled.current = true
+    e.currentTarget.blur()
+  }
+}
+
+/**
+ * "Pages › Title". The title is an input: Enter or leaving it saves, Escape cancels. A saved
+ * section shows "Section: Name" and its category, both editable.
+ */
 export function DocumentTitle() {
   const runtime = useRuntime()
   const meta = useValue(runtime.doc.meta)
@@ -68,24 +84,28 @@ export function DocumentTitle() {
     })
   }
 
-  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') e.currentTarget.blur()
-    if (e.key === 'Escape') {
-      // Escape only cancels the rename; it must not clear the block selection.
-      e.stopPropagation()
-      cancelled.current = true
-      e.currentTarget.blur()
-    }
-  }
+  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => inlineInputKeys(e, cancelled)
 
   return (
     <nav className="builder-bar__crumbs" aria-label="Breadcrumb">
-      <Link href={`${admin}/collections/${encodeURIComponent(meta.collection)}`} className="builder-bar__crumb">
-        {plural}
-      </Link>
-      <span className="builder-bar__crumb-sep" aria-hidden="true">
-        ›
-      </span>
+      {meta.section ? (
+        <Link
+          href={`${admin}/collections/${encodeURIComponent(meta.collection)}`}
+          className="builder-bar__crumb builder-bar__crumb--section"
+          data-tooltip={`All ${plural.toLowerCase()}`}
+        >
+          Section:
+        </Link>
+      ) : (
+        <>
+          <Link href={`${admin}/collections/${encodeURIComponent(meta.collection)}`} className="builder-bar__crumb">
+            {plural}
+          </Link>
+          <span className="builder-bar__crumb-sep" aria-hidden="true">
+            ›
+          </span>
+        </>
+      )}
       {editable ? (
         <input
           className="builder-bar__title"
@@ -107,7 +127,77 @@ export function DocumentTitle() {
       ) : (
         <span className="builder-bar__title builder-bar__title--static">{title || 'Untitled'}</span>
       )}
+      {meta.section && <SectionCategory />}
     </nav>
+  )
+}
+
+/** A saved section's category, editable in place. Empty clears it. */
+function SectionCategory() {
+  const runtime = useRuntime()
+  const meta = useValue(runtime.doc.meta)
+  const busy = useValue(runtime.doc.busy)
+  const saved = meta.section?.category ?? ''
+  const [draft, setDraft] = useState<string | null>(null)
+  const cancelled = useRef(false)
+  const [category, showCategory] = useOptimistic(saved)
+  const [, startTransition] = useTransition()
+
+  const commit = () => {
+    const value = draft?.trim() ?? null
+    setDraft(null)
+    if (cancelled.current || value === null || value === saved) {
+      cancelled.current = false
+      return
+    }
+    startTransition(async () => {
+      showCategory(value)
+      if (await runtime.doc.saveField('category', value || null)) {
+        const current = runtime.doc.meta.get()
+        runtime.doc.meta.set({ ...current, section: { category: value || null } })
+      }
+    })
+  }
+
+  if (!meta.canUpdate) return category ? <span className="builder-bar__category builder-bar__category--static">{category}</span> : null
+  return (
+    <input
+      className="builder-bar__category"
+      aria-label="Category"
+      data-tooltip="Category in the Sections library · Enter to save"
+      placeholder="Add a category"
+      value={draft ?? category}
+      disabled={busy === 'rename'}
+      maxLength={60}
+      size={Math.max(10, Math.min(24, (draft ?? category).length + 1))}
+      onFocus={(e) => {
+        setDraft(category)
+        e.currentTarget.select()
+      }}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => inlineInputKeys(e, cancelled)}
+    />
+  )
+}
+
+/**
+ * In a saved section: says that pages that inserted it keep their copy, so editing it here
+ * changes only later inserts.
+ */
+export function SectionNote() {
+  const runtime = useRuntime()
+  const isSection = useValue(runtime.doc.meta).section !== null
+  if (!isSection) return null
+  return (
+    <span
+      className="builder-bar__note"
+      // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- focus shows the tooltip for keyboard users
+      tabIndex={0}
+      data-tooltip={'Changes here apply to new inserts only.\nPages that already use this section keep their own copy.'}
+    >
+      Pages keep their copy
+    </span>
   )
 }
 

@@ -208,7 +208,7 @@ How the canvas gets its CSS, in this order:
 2. **The theme** (`ThemeStyle`). Its `:root:root` rule wins over the `:root` defaults in your CSS.
 3. **The CSS for the classes in the layout** and in each block's `classes`. The canvas compiles it in the browser (about 4 ms per new class) from the same entry file as the save hook, and puts it after your CSS. On the site, the generated CSS also comes after your CSS, so the canvas shows the same result. This CSS also holds Preflight and your base styles a second time. Both copies come from the same entry file, so they are identical and change nothing.
 
-One case needs care, on the site and on the canvas alike: a class that is in both stylesheets. The later copy (in the generated CSS) wins over your component's responsive variant in the site's CSS. For example, a header layout uses `flex`, and your component has `flex md:grid`: the element stays `flex` at every width. List such component classes in the block's `classes` (see [Custom blocks](#custom-blocks)).
+The generated CSS styles only block elements, so it never changes the order of your own classes. Every rule in it matches only elements with the class `builder-css`, and `RenderLayout` adds that class to the `className` of every block with classes. Example: a header layout uses `flex`, and your component has `flex md:grid`. Your component's element has no `builder-css`, so the generated `flex` does not reach it, and your site's CSS makes it `grid` from `md` up. A block's element has all its classes in the generated CSS, which is in Tailwind's order and comes last. The rules use `:where(.builder-css)`, which adds no specificity.
 
 Earlier versions told you to leave your site's CSS out of the canvas, because the canvas compiles the full CSS for the layout's classes itself. That missed the classes your components use themselves. If you skip the import, the canvas still works, but only the classes in the layout and in each block's `classes` have CSS.
 
@@ -413,7 +413,7 @@ It also adds these endpoints (signed-in users only):
 | Import | Use it in | Holds |
 |---|---|---|
 | `@payload-toolkit/builder` | `payload.config.ts` (server) | `websiteBuilder`, `defineBlock`, `defaultBlocks`, `fromPayloadBlocks`, `migrateBlocksField`, types |
-| `@payload-toolkit/builder/blocks` | anywhere | `defaultBlocks`, `defineBlock`, `linkField`, `fromPayloadBlocks` |
+| `@payload-toolkit/builder/blocks` | anywhere | `defaultBlocks`, `defineBlock`, `linkField`, `fromPayloadBlocks`, `BUILDER_CSS_CLASS`, `withBuilderCssClass` |
 | `@payload-toolkit/builder/core` | anywhere | layout types, `normalizeLayout`, `validateLayout`, `applyOperations`, tree helpers, `convertPayloadBlocksLayout`, `toPayloadBlock` |
 | `@payload-toolkit/builder/css` | server | `compileClasses`, `getStyleTokens`, `tracingIncludes` |
 | `@payload-toolkit/builder/theme` | anywhere | `themeCss`, `themeVariables`, `themeOutput`, `deriveColors`, `googleFontsHref`, `themeConfigOf`, theme types |
@@ -611,7 +611,7 @@ export const pricingTable = defineBlock({
   ],
   slots: { features: { allow: ['text', 'list'] } },  // named child lists; omit for a leaf block
   defaultClassName: 'flex flex-col gap-4 rounded-xl border p-6',
-  classes: ['text-sm', 'font-semibold'],    // classes the component uses itself
+  // classes: only for a component in a package your CSS does not scan (see below)
   ai: {
     description: 'A pricing card with a plan name, a price and a call to action.',
     example: { props: { plan: 'Pro', price: 29 } },
@@ -621,9 +621,9 @@ export const pricingTable = defineBlock({
 export const blocks = [...defaultBlocks({ linkCollections: ['pages'] }), pricingTable]
 ```
 
-- `slots` declares where child blocks go. `allow` lists the accepted block types, or `['*']`.
+- `slots` declares where child blocks go. `allow` lists the accepted block types, or `['*']`. `max` caps the number of direct children: a full slot refuses insert, move, paste and duplicate (also from MCP and the assistant), and the canvas offers no drop target or "+" there. `min` is the fewest children: fewer block **Publish** but not draft saves.
 - `parents` limits where a block may go: only directly inside the listed block types (never in the root list). The `listItem` block uses `parents: ['list']`. A new block whose slot accepts exactly one such type starts with one child of it, so a new list starts with one item.
-- `classes`: classes your component uses itself that must also go into the generated CSS. Your site's CSS already has them (on the site and on the canvas), so most components need no list. List them for order: the generated CSS comes after your site's CSS, so a class in both (for example `flex`, used by a layout on the page) beats your component's responsive variant from the site's CSS (`md:grid`). In the list, the component's classes compile in the same build as the layout's classes, in Tailwind's order. Built-in blocks need no list: they add no classes of their own.
+- `classes`: classes your component uses itself that your site's CSS does not have. Components in your app need no list: Tailwind finds their classes in your files, and the site's CSS has them on the site and on the canvas. List classes only for a component in a package that your CSS entry does not scan (no `@source` for it). The generated CSS styles only elements with the class `builder-css` (`BUILDER_CSS_CLASS` from `@payload-toolkit/builder/blocks`), so add that class to each element that uses the listed classes. The built-in Menu block does this for its toggle, panel and links.
 - Block fields keep Payload's `validate`, `hooks` and `access`. See [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields).
 - `admin.custom.builderFormat` on a `text` field names a value check, for example `custom: { builderFormat: 'videoUrl' }` (the Video block's URL). The inspector shows the message while the user types, and a bad value blocks **Publish** but not draft saves. `videoUrl` is the only built-in format. Formats live in a registry in `@payload-toolkit/builder/core` (`FORMATS`, `formatProblem`). The renderer can use the same parser (`parseVideoUrl`).
 - `linkField()` stores `{ type, url, reference, newTab }`. The component receives it resolved, with `href`, `target` and `rel`.
@@ -655,10 +655,12 @@ What runs where:
 | `hooks.beforeValidate`, `hooks.beforeChange` | On every save on the server: the live session's draft save (about 1 s after the last change, never per keystroke), Publish, Unpublish, Revert, Restore, REST, Local API, GraphQL. | The returned value is stored. Every open editor gets it at once (see below). |
 | `hooks.afterChange` | After every save. | As in Payload: the returned value changes only the saved document that the API returns, not the stored data. |
 | `hooks.afterRead` | On every read: REST, GraphQL, the Local API, versions, and when the builder loads the document into its live session. | The returned value is what the reader gets. |
-| `access.read` | On every read, unless `overrideAccess`. | The prop is left out of what the user gets. A REST save from that user that leaves it out keeps the stored value. |
-| `access.update` (`access.create` for a new document) | On every live edit (people, the operations endpoint, MCP agents, the AI assistant) and on other saves, unless `overrideAccess`. | A live edit that changes the prop is refused as a whole, with "You cannot change Price (Product). Nothing was applied." Other saves keep the stored value, as Payload does. A new block may hold the prop only empty, at its default value, or as a copy of a value already on the page (duplicate, paste). |
+| `access.read` | On every read, unless `overrideAccess`. In the builder: when it opens, and again after edits to blocks that have access rules. | The prop is left out of what the user gets. A REST save from that user that leaves it out keeps the stored value. The builder's inspector hides the prop from that user, and inline editing on the canvas refuses it. |
+| `access.update` (`access.create` for a new document) | On every live edit (people, the operations endpoint, MCP agents, the AI assistant) and on other saves, unless `overrideAccess`. In the builder: as `access.read`. | A live edit that changes the prop is refused as a whole, with "You cannot change Price (Product). Nothing was applied." Other saves keep the stored value, as Payload does. A new block may hold the prop only empty, at its default value, or as a copy of a value already on the page (duplicate, paste). The builder's inspector shows the prop read-only, with a lock and a tooltip. Inline editing on the canvas refuses it with "You cannot change Price. You do not have permission to edit it." |
 
 Arguments. `validate(value, options)` gets the field config spread in, plus `data` (the whole document), `siblingData` (the block's props, or the group or array row), `blockData` (the block in Payload's shape, `{ id, blockType, ...props }`), `req`, `id`, `operation`, `collectionSlug`, `path`, `previousValue`, `event` (`'submit'`, or `'onChange'` from the inspector), `overrideAccess` and `preferences`. Hooks get `value`, `data`, `siblingData`, `blockData`, `originalDoc`, `previousDoc` (afterChange), `previousValue`, `previousSiblingDoc`, `req`, `operation`, `field`, `path`, `schemaPath`, `context`, `collection`, `global` (null), `overrideAccess`, `siblingFields`, and in afterRead also `findMany`, `depth`, `currentDepth`, `draft` and `showHiddenFields`. `path` is the value's place in the document, for example `['layout', 'blocks', 0, 'props', 'items', 1, 'label']`. `schemaPath` is `['layout', '<block type>', 'items', 'label']`.
+
+Access in the builder. When the builder opens, the server runs `access.read` and `access.update` of every block prop for the signed-in user and sends the answer with the document (`GET …/meta`, field `fieldAccess`). The functions get the same arguments as above, with the stored values of the default locale. The answer has one rule per block type (for new blocks) and one per block whose data changes the answer (for example `update: ({ siblingData }) => !siblingData.locked`). After someone adds, removes or changes a block that has access rules, the editor asks again about a second later (`GET …/access`). The server keeps each block's answer for 30 seconds per user, so it runs only the functions of blocks that changed. A function that throws counts as "no".
 
 Skipped, as in Payload: `validate` of a field its condition hides. Also skipped: `validate` of a prop the block binds to document data.
 
@@ -668,8 +670,8 @@ Payload's own default validators are not called again for block fields: the buil
 
 Limits:
 
-- In the builder itself, every editor sees every prop: `access.read` applies to the API, not to the shared live session. Show a field to some people only with a condition, or keep it out of the block.
-- The inspector does not lock a field the user may not update. A change is refused when it reaches the server, with the message above.
+- `access.read` hides a prop in the builder's inspector, but it does not keep the value secret from editors. Everyone who edits the page shares one live session, and the session sends the whole layout to every editor's browser. The canvas renders what the site renders, so a component that shows the prop shows it on the canvas too. Keep real secrets out of blocks, or give the people who must not see them no update access to the document.
+- In an array, a row that refuses a field locks that field in every row of the inspector. The server still checks each row.
 - On a collection without drafts, nothing is "published", so `validate` messages never block a save. They show in the inspector.
 - Saved sections (`builder-sections`) store blocks without running their field hooks.
 - `migrateBlocksField` writes through the database adapter, so no hooks run. The values come from the old field, where Payload already ran the hooks.
@@ -681,7 +683,7 @@ A site that already has a Payload `blocks` field (for example `pages.layout` wit
 What carries over:
 
 - **Block configs.** `fromPayloadBlocks()` turns Payload `Block` configs into builder blocks. Every field stays a Payload field config, so the inspector shows it with Payload's own inputs: text, textarea, email, code, number, checkbox, select, radio, date, upload, relationship, rich text, JSON, point, group, array, row, collapsible and tabs (also `hasMany` text and number).
-- **Nested blocks fields become slots.** A `blocks` field at the block's own level (also inside rows, collapsibles and unnamed tabs) becomes a slot with the same name. Its `blocks` and `blockReferences` become the slot's `allow`.
+- **Nested blocks fields become slots.** A `blocks` field at the block's own level (also inside rows, collapsibles and unnamed tabs) becomes a slot with the same name. Its `blocks` and `blockReferences` become the slot's `allow`, and its `maxRows` and `minRows` become the slot's `max` and `min`.
 - **Conditions.** An `admin.condition` that tests one sibling field, such as `(_, siblingData) => siblingData?.type === 'custom'`, becomes a JSON condition. The inspector hides the field, and an empty required field that is hidden does not block publishing.
 - **Components.** `fromPayloadComponents()` renders components written for Payload's data (`{ blockType, ...fields }`) unchanged.
 - **Field logic.** `validate`, field hooks and field `access` of the block fields run in the builder and the API, as in Payload. See [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields).
@@ -830,7 +832,7 @@ The `builder` prop holds `mode`, `className`, `slots` (rendered children by slot
 
 ### Limitations
 
-- **Classes in the editor.** Your components' own Tailwind classes come from your site's CSS, which the canvas layout imports ([step 6 of Install](#6-add-the-canvas-route)). A canvas route without that import has CSS only for the classes in the layout and in each block's `classes`. A component with responsive variants of common classes (`flex md:grid`) needs those classes in `overrides: { slug: { classes: [...] } }`, for Tailwind's order on the site and the canvas (see [Custom blocks](#custom-blocks)).
+- **Classes in the editor.** Your components' own Tailwind classes come from your site's CSS, which the canvas layout imports ([step 6 of Install](#6-add-the-canvas-route)). A canvas route without that import has CSS only for the block elements' classes.
 - **Server components that load data** render on the server for the canvas, through the canvas server action ([Server components in the canvas](#server-components-in-the-canvas)). Without the action, the canvas shows "Name: no preview in the editor", and the block stays selectable. Their output updates after a short wait (250 ms after the last change, plus the request), not at once. Data that changes somewhere else shows when the editor opens again.
 - **Custom admin components** on fields (a custom `Field`) need Payload's form, so the inspector shows the default input for the field type. `fromPayloadBlocks` lists them in a warning.
 - **Conditions** that read the document, the user or several fields are not converted: the field always shows (also listed in a warning). Function `defaultValue`s of block fields do not run in the builder. `validate`, field hooks and field `access` do run: see [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields).
@@ -874,9 +876,15 @@ The library shows each section as a real picture: the hidden canvas page (`?mode
 
 ### Saved sections
 
-Editors save their own sections: select a block (a whole section, or any block with its children), open **…** on the canvas or in the inspector, and choose **Save as section…**. Give it a name and, if you like, a category. It appears in **Add › Sections** under **Saved**, for everyone who edits pages. Insert it like any section; every insert gets new block ids. The card's **…** menu renames or deletes it. A deleted section stays on the pages that use it.
+Editors save their own sections: select a block (a whole section, or any block with its children), open **…** on the canvas or in the inspector, and choose **Save as section…**. Give it a name and, if you like, a category. It appears in **Add › Sections** under **Saved**, for everyone who edits pages. Insert it like any section; every insert gets new block ids. The card's **…** menu edits, renames or deletes it. A deleted section stays on the pages that use it.
+
+**Edit section** (in the card's **…** menu) opens the section in the full-screen builder, like a page, at `/admin/builder/builder-sections/<id>`. The top bar shows "Section: <name>" and its category; click either to change it. **Back** returns to the page you came from. Sections have no drafts: each change saves to the section at once, and the library pictures follow on their own. Pages that already inserted the section keep their own copy. A change applies only to later inserts; the top bar says so ("Pages keep their copy"). The section's **Builder** tab in the admin opens the same view.
+
+The collection stores the blocks in its `blocks` field. The builder edits a virtual `layout` field (no database column) that reads from `blocks`, and a save hook writes the layout back to `blocks`. While the section is open in the builder, the live session owns its blocks: a REST save of `blocks` gets the session's blocks, as on pages. Otherwise a REST or MCP save of `blocks` works as before.
 
 The plugin stores them in the `builder-sections` collection (next to Templates in the admin nav). The MCP tools and the AI assistant see them too: `listSections` lists them with `saved: true`, and `insertSection` takes `saved:<id>`, the document id or the section's name.
+
+A saved section runs the same field logic as a page save: the `beforeValidate` and `beforeChange` hooks of block props change its values before it is stored. The props' `validate` messages and other problems that block **Publish** (a missing required prop, a value outside its limits) do not stop the save: a section is never published. They go to the server log as warnings.
 
 ## Styling
 
@@ -885,6 +893,7 @@ The plugin stores them in the `builder-sections` collection (next to Templates i
 - **Theme tokens.** Classes compile against your CSS entry, so tokens from your `@theme` work: `bg-primary`, `font-heading`, `rounded-card`. The Styles panel lists your colors, fonts and sizes.
 - **In the editor.** The canvas compiles the classes in the browser with Tailwind's own compiler. A new class shows at once.
 - **On save.** The `beforeChange` hook compiles only the classes the layout uses and stores the CSS in `<field>Css` (`{ hash, css }`). The output holds the utilities, their `@property` and `@keyframes` rules, and the theme variables. It has no Preflight. `RenderLayout` writes it into a `<style>` tag, so the site does not need a Tailwind build of its own. If the site has one, import the same CSS entry in your site layout for Preflight and base styles.
+- **Block elements only.** Every generated rule matches only elements with the class `builder-css` (`.flex:where(.builder-css)`). `RenderLayout` adds it to each block's `className`, so a block component needs nothing. Your own components keep the order of your site's CSS, even when a layout on the page uses the same classes. If you render layouts with your own renderer, add `builder-css` to each element that gets a block's classes (`withBuilderCssClass` from `@payload-toolkit/builder/blocks`).
 - **Tailwind plugins.** Pass them as a map on the server and in the canvas page. The canvas page must be a client component, because plugins are functions:
 
 ```ts
@@ -1509,7 +1518,7 @@ All entries must show one version. Pin `payload`, `@payloadcms/*` and `next` to 
 
 **The canvas stays blank or shows "Canvas CSS failed to load".** Check that `/builder-canvas` (or your `canvasPath`) renders, that it uses a root layout with `<html>` and `<body>`, and that `css.entry` points to a file that exists.
 
-**A class shows in the editor but not on the site.** The site must pass `css={page.<field>Css?.css}` to `RenderLayout`. Classes that a component hardcodes must be listed in the block's `classes`.
+**A class shows in the editor but not on the site.** The site must pass `css={page.<field>Css?.css}` to `RenderLayout` (or use `compilePageCss`). The element with the block's classes must also have the class `builder-css`: `RenderLayout` adds it to the `className` prop, so check that the component puts `className` on the element. Classes that a component in a package hardcodes must be listed in the block's `classes`, and the element needs `builder-css` too.
 
 **The production log repeats `MaxListenersExceededWarning: 11 drain listeners added to [Gzip]`.** Next's built-in compression leaks one listener per backpressure event while it streams a large HTML page. The builder does not cause it. Set `compress: false` in `next.config.ts` and compress in your reverse proxy. See install step 9.
 

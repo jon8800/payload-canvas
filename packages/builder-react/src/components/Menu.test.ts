@@ -45,8 +45,8 @@ describe('Menu', () => {
   test('renders a labeled nav with inline links and a disclosure for small screens', () => {
     const html = renderToStaticMarkup(createElement(Menu, props({})))
     assert.match(html, /^<nav aria-label="Main" class="flex gap-6">/)
-    assert.match(html, /<ul role="list" class="hidden md:contents">/)
-    assert.match(html, /<details class="group md:hidden"><summary/)
+    assert.match(html, /<ul role="list" class="hidden md:contents builder-css">/)
+    assert.match(html, /<details class="group md:hidden builder-css"><summary/)
     assert.equal(html.match(/href="\/about"/g)?.length, 2)
     // A link without an href renders as text. No link is current before hydration.
     assert.match(html, /<span[^>]*>No link<\/span>/)
@@ -55,7 +55,7 @@ describe('Menu', () => {
 
   test('"never" keeps the links visible and has no disclosure', () => {
     const html = renderToStaticMarkup(createElement(Menu, props({ collapse: 'never' })))
-    assert.match(html, /<ul role="list" class="contents">/)
+    assert.match(html, /<ul role="list" class="contents builder-css">/)
     assert.doesNotMatch(html, /<details/)
   })
 

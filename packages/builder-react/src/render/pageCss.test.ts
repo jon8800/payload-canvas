@@ -31,7 +31,7 @@ describe('compilePageCss', () => {
     const variant = css.indexOf('.md\\:text-xl')
     assert.ok(base !== -1 && variant !== -1, 'both classes compiled')
     assert.ok(variant > base, '`md:text-xl` comes after `text-lg`, so it wins at md and up')
-    assert.equal((css.match(/\.text-lg\s*\{/g) ?? []).length, 1, 'no duplicate rules')
+    assert.equal((css.match(/\.text-lg:where\(\.builder-css\)\s*\{/g) ?? []).length, 1, 'no duplicate rules, scoped to block elements')
   })
   it('falls back to the stored CSS without the plugin config', async () => {
     const css = await compilePageCss(fake({}), [{ layout: layoutWith('p-4'), css: '.a{}' }, { layout: layoutWith('p-2'), css: '.b{}' }])

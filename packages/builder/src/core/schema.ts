@@ -110,9 +110,15 @@ function blockSchema(def: BlockDefinition, all: BlockDefinition[]): Schema {
       const types = allowedTypes(def.type, slot, all)
       const label = slot.label ? `${slot.label}. ` : ''
       const refused = slot.disallow?.length ? ` Never put these anywhere inside it, at any depth: ${slot.disallow.join(', ')}.` : ''
+      const limits = { ...(typeof slot.min === 'number' ? { minItems: slot.min } : {}), ...(typeof slot.max === 'number' ? { maxItems: slot.max } : {}) }
+      const counts = [
+        typeof slot.min === 'number' ? `at least ${slot.min}` : '',
+        typeof slot.max === 'number' ? `at most ${slot.max}` : '',
+      ].filter(Boolean)
+      const countText = counts.length > 0 ? ` Holds ${counts.join(' and ')} ${slot.max === 1 && !slot.min ? 'block' : 'blocks'}.` : ''
       slots[name] =
         types.length > 0
-          ? { type: 'array', description: `${label}Accepts: ${types.join(', ')}.${refused}`, items: blockRefs(types) }
+          ? { type: 'array', description: `${label}Accepts: ${types.join(', ')}.${countText}${refused}`, items: blockRefs(types), ...limits }
           : { type: 'array', description: `${label}Accepts no known block types.`, maxItems: 0 }
     }
     properties.slots = {

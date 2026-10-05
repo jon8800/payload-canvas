@@ -4,7 +4,7 @@ import { describe, it } from 'node:test'
 import { APIUserAbortError } from '@anthropic-ai/sdk'
 
 import type { BlockDefinition, Layout, SectionDefinition } from '../../core/types'
-import { runAgent } from '../loop'
+import { NOT_RUN, runAgent } from '../loop'
 import { toolDefinitions, Workspace, type ToolEnv } from '../tools'
 import type { AiMessage, AiModelEvent, AiModelRequest, AiStreamEvent } from '../types'
 import { AI_BETAS, anthropicAdapter, anthropicTools, NO_KEY_MESSAGE, sanitizeFallback, toParam } from './anthropic'
@@ -329,6 +329,52 @@ describe('anthropic adapter: agent loop', () => {
     const { events } = await run([toolStep, finalStep], { onEvent: (_event, index) => { if (index === 3) controller.abort() } }, controller)
     assert.deepEqual(events.at(-1), { type: 'error', code: 'aborted', message: 'The request was cancelled.' })
     assert.equal(messagesOf(events).some((m) => m.role === 'assistant'), false)
+  })
+
+  it('cancels the chip of a tool call dropped by a mid-reply refusal fallback', async () => {
+    // The declined model streams insertSection (the panel shows a running chip), then the fallback
+    // model takes over and calls getLayout. Only getLayout runs; insertSection gets "cancelled".
+    const fallback: FakeBlock = { type: 'fallback', from: { model: 'claude-opus-5-5' }, to: { model: 'claude-sonnet-5' } }
+    const fallbackStep: FakeStep = {
+      content: [
+        { type: 'text', text: 'Adding a hero.' },
+        { type: 'tool_use', id: 'toolu_old', name: 'insertSection', input: { sectionId: 'hero', index: 0 } },
+        fallback,
+        { type: 'text', text: 'Let me read the page first.' },
+        { type: 'tool_use', id: 'toolu_new', name: 'getLayout', input: {} },
+      ],
+      stop_reason: 'tool_use',
+    }
+    const { events, workspace } = await run([fallbackStep, finalStep])
+    const chips = events.flatMap((e) => (e.type === 'tool' ? [`${e.callId}:${e.status}`] : []))
+    assert.deepEqual(chips, ['toolu_old:running', 'toolu_new:running', 'toolu_old:cancelled', 'toolu_new:done'])
+    const cancelled = events.find((e) => e.type === 'tool' && e.status === 'cancelled')
+    assert.ok(cancelled?.type === 'tool' && cancelled.name === 'insertSection' && cancelled.summary === NOT_RUN.dropped)
+    assert.equal(workspace.layout.blocks.length, 1, 'the dropped insertSection did not run')
+    assert.equal(events.some((e) => e.type === 'operations'), false)
+    assert.equal(events.at(-1)?.type, 'done')
+  })
+
+  it('cancels the chip when the fallback reply has no tool call left', async () => {
+    const fallback: FakeBlock = { type: 'fallback', from: { model: 'claude-opus-5-5' }, to: { model: 'claude-sonnet-5' } }
+    const { events } = await run([
+      {
+        content: [{ type: 'tool_use', id: 'toolu_old', name: 'insertSection', input: { sectionId: 'hero' } }, fallback, { type: 'text', text: 'I can describe it instead.' }],
+        stop_reason: 'end_turn',
+      },
+    ])
+    const chips = events.flatMap((e) => (e.type === 'tool' ? [`${e.callId}:${e.status}`] : []))
+    assert.deepEqual(chips, ['toolu_old:running', 'toolu_old:cancelled'])
+    assert.equal((events.at(-1) as { stopReason?: string }).stopReason, 'end_turn')
+  })
+
+  it('cancels the chip of a tool call cut off by a refusal', async () => {
+    const { events } = await run([
+      { content: [{ type: 'tool_use', id: 'toolu_x', name: 'insertSection', input: { sectionId: 'hero' } }], stop_reason: 'refusal' as never },
+    ])
+    const chips = events.flatMap((e) => (e.type === 'tool' ? [`${e.callId}:${e.status}`] : []))
+    assert.deepEqual(chips, ['toolu_x:running', 'toolu_x:cancelled'])
+    assert.equal((events.at(-1) as { stopReason?: string }).stopReason, 'refusal')
   })
 
   it('maps missing credentials to the no_api_key error', async () => {

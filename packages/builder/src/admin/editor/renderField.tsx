@@ -26,6 +26,7 @@ import { ManyValuesField } from './fields/ManyValuesField'
 import { PointField } from './fields/PointField'
 import { RichTextField } from './fields/RichTextField'
 import { asId, formatProblem, fromRelationshipInput, isFieldVisible, isRecord, toRelationshipInput, type FieldShape } from './fields/values'
+import { FieldAccessFrame, FieldAccessProvider, HiddenFieldsNote, useFieldAccessCheck } from './fields/access'
 import { FieldProblem, FieldProblemsProvider } from './fields/FieldProblems'
 import { LocaleFieldFrame, LocaleFieldsProvider, useInspectorProps, useLocalePlaceholder } from './locale/LocaleField'
 import { GenerateImage } from './generate/GenerateImage'
@@ -328,6 +329,9 @@ type FieldsProps = {
  */
 export function RenderBlockFields({ fields, data, path, onChange, scope = fields }: FieldsProps) {
   const record = isRecord(data) ? data : {}
+  // Field access of this user: unreadable fields are left out, read-only fields are locked.
+  // `setField` copies `record`, so the values of hidden fields stay as they are.
+  const accessOf = useFieldAccessCheck()
   const setField = (name: string, value: unknown) => {
     const next = { ...record }
     if (value === undefined || value === null || value === '') delete next[name]
@@ -357,15 +361,18 @@ export function RenderBlockFields({ fields, data, path, onChange, scope = fields
         const key = `tab-${index}-${tabIndex}`
         if ('name' in tab && tab.name) {
           const name = tab.name
+          const tabAccess = accessOf(`${path}.${name}`)
+          if (!tabAccess.read) return
           out.push(
-            <GroupField
-              key={key}
-              fields={tab.fields}
-              label={text(tab.label) ?? name}
-              onChange={(value) => setField(name, value)}
-              path={`${path}.${name}`}
-              value={record[name]}
-            />,
+            <FieldAccessFrame key={key} locked={!tabAccess.update}>
+              <GroupField
+                fields={tab.fields}
+                label={text(tab.label) ?? name}
+                onChange={(value) => setField(name, value)}
+                path={`${path}.${name}`}
+                value={record[name]}
+              />
+            </FieldAccessFrame>,
           )
           return
         }
@@ -378,16 +385,20 @@ export function RenderBlockFields({ fields, data, path, onChange, scope = fields
     if (!('name' in field) || !field.name) return
     const name = field.name
     const fieldPath = `${path}.${name}`
+    const access = accessOf(fieldPath)
+    if (!access.read) return
     const onFieldChange = (value: unknown) => setField(name, value)
     out.push(
       <Fragment key={name}>
-        {/* In another locale: "Not translated" or "Translated" under a localized field. */}
-        <LocaleFieldFrame path={fieldPath} name={name}>
-          {/* The slot adds binding controls (templates, collection lists) around the normal input. */}
-          <FieldSlot field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} label={fieldLabel(field)}>
-            <RenderBlockField field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} />
-          </FieldSlot>
-        </LocaleFieldFrame>
+        <FieldAccessFrame locked={!access.update}>
+          {/* In another locale: "Not translated" or "Translated" under a localized field. */}
+          <LocaleFieldFrame path={fieldPath} name={name}>
+            {/* The slot adds binding controls (templates, collection lists) around the normal input. */}
+            <FieldSlot field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} label={fieldLabel(field)}>
+              <RenderBlockField field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} />
+            </FieldSlot>
+          </LocaleFieldFrame>
+        </FieldAccessFrame>
         {/* The message of the field's own `validate` function (checked on the server). */}
         <FieldProblem path={fieldPath} />
       </Fragment>,
@@ -433,7 +444,10 @@ export function BlockContentFields({ block }: { readonly block: Block }) {
       <BindingScopeProvider block={block} prefix={`builder.${block.id}.`}>
         <FieldProblemsProvider block={block}>
           <LocaleFieldsProvider block={block}>
-            <RenderBlockFields fields={def.fields} data={props} path={`builder.${block.id}`} onChange={handleChange} />
+            <FieldAccessProvider block={block} prefix={`builder.${block.id}.`}>
+              <RenderBlockFields fields={def.fields} data={props} path={`builder.${block.id}`} onChange={handleChange} />
+              <HiddenFieldsNote block={block} />
+            </FieldAccessProvider>
           </LocaleFieldsProvider>
         </FieldProblemsProvider>
       </BindingScopeProvider>

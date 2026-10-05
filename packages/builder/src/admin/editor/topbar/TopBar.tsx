@@ -5,6 +5,7 @@
 // page settings, help and Publish. The AI assistant opens from the inspector tab (or Ctrl+I).
 
 import { Link, useConfig } from '@payloadcms/ui'
+import { useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 
 import { Icon, type IconName } from '../icons'
@@ -17,11 +18,21 @@ import { breakpointAt, breakpointWidths, useStyleTokens, withFallback } from '..
 import { DESKTOP_WIDTH, DEVICE_WIDTHS, deviceForWidth, MAX_CANVAS_WIDTH, MIN_CANVAS_WIDTH, type Device } from '../styles/viewport'
 import { useValue } from '../valueStore'
 import { LocaleSwitcher } from '../locale/LocaleSwitcher'
-import { DocumentTitle, documentTitle, StatusChip } from './DocumentTitle'
+import { DocumentTitle, documentTitle, SectionNote, StatusChip } from './DocumentTitle'
 import { PageSettings, PreviewButton, PublishButton, SaveState } from './DocumentActions'
 import { ScreenDrawer } from './screens/ScreenDrawer'
 import { useDismiss } from './useDismiss'
 import './topbar.scss'
+
+/**
+ * The `from` query parameter (where the editor came from, e.g. the page builder that opened a
+ * saved section) when it is a path inside the admin. Anything else is ignored.
+ */
+export function backPath(from: string | null, admin: string): string | null {
+  if (!from || !from.startsWith('/') || from.startsWith('//') || from.includes('\\')) return null
+  if (admin && from !== admin && !from.startsWith(`${admin}/`) && !from.startsWith(`${admin}?`)) return null
+  return from
+}
 
 const devices: { id: Device; label: string; icon: IconName }[] = [
   { id: 'fluid', label: 'Fluid · fills the free space', icon: 'width' },
@@ -41,14 +52,20 @@ export function TopBar({ icon }: { icon: ReactNode }) {
     config: { routes },
   } = useConfig()
   const admin = routes.admin === '/' ? '' : routes.admin
+  // Back: where the editor came from (a saved section opened from a page), else the edit view.
+  const from = backPath(useSearchParams().get('from'), admin)
+  const back = from
+    ? { href: from, label: 'Back to where you came from' }
+    : { href: `${admin}/collections/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`, label: 'Back to the edit view' }
   // Loads the tokens early (shared cache with the Styles panel) for the breakpoint widths.
   const { tokens } = useStyleTokens(runtime.config.tokensEndpoint)
   const widths = useMemo(() => breakpointWidths(withFallback(tokens)), [tokens])
 
   // The browser tab shows the document. Next sets the view's static title after hydration and on
   // refreshes, so the title is applied again whenever the head changes.
+  const isSection = doc.section !== null
   useEffect(() => {
-    const wanted = `${title} · Builder`
+    const wanted = isSection ? `Section: ${title} · Builder` : `${title} · Builder`
     const apply = () => {
       if (document.title !== wanted) document.title = wanted
     }
@@ -56,17 +73,12 @@ export function TopBar({ icon }: { icon: ReactNode }) {
     const observer = new MutationObserver(apply)
     observer.observe(document.head, { subtree: true, childList: true, characterData: true })
     return () => observer.disconnect()
-  }, [title])
+  }, [title, isSection])
 
   return (
     <header className="builder-bar">
       <div className="builder-bar__start">
-        <Link
-          href={`${admin}/collections/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`}
-          className="builder-editor__icon-button"
-          aria-label="Back to the edit view"
-          data-tooltip="Back to the edit view"
-        >
+        <Link href={back.href} className="builder-editor__icon-button" aria-label={back.label} data-tooltip={back.label}>
           <Icon name="back" />
         </Link>
         <Link href={admin || '/'} className="builder-bar__home" aria-label="Admin home" data-tooltip="Admin home">
@@ -74,6 +86,7 @@ export function TopBar({ icon }: { icon: ReactNode }) {
         </Link>
         <DocumentTitle />
         <StatusChip />
+        <SectionNote />
       </div>
 
       <div className="builder-bar__center">

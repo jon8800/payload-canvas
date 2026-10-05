@@ -141,8 +141,10 @@ ai: {
 
 - `perRequest`: the most images one assistant reply may make.
 - `perHour`: the most images one user may make in one hour. The assistant, the inspector and MCP share this count. `0` turns image generation off.
-- A failed generation does not count.
-- The count lives in server memory, so a restart clears it. With more than one app server, each server counts on its own.
+- A failed generation does not count: an image API error, an empty result, or refused access. An image that was made but could not be saved counts, because the image API was paid.
+- The count lives in Payload's key-value store, `payload.kv`. Payload's default store is the hidden `payload-kv` collection in your database, so you set up nothing. A restart keeps the count, and all app servers share it. Each user has one entry, with the times of the images of the last hour.
+- If the plugin cannot read the count, it generates no image and answers 503.
+- One server handles the requests of one user one at a time. Two requests at the same moment on two different servers can both pass the last free place.
 
 The server log gets one line per image, with the adapter, model, time and cost.
 

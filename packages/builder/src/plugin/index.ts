@@ -57,9 +57,11 @@ import {
   DEFAULT_SAVED_SECTIONS_SLUG,
   SAVED_SECTIONS_CONFIG_KEY,
   savedSectionsCollection,
+  SECTION_LAYOUT_FIELD,
   type SavedSectionsOptions,
   type SavedSectionsServerConfig,
 } from './sections'
+import { syncSectionBlocks } from './sectionsBuilder'
 import { toJsonSafe } from './jsonSafe'
 import { collectionLabel } from './labels'
 import { listCollectionsOf } from './listCollections'
@@ -335,6 +337,8 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
         ...collections,
         savedSectionsCollection({ slug: savedSections.slug, blocks, options: options.savedSections || undefined }),
       ]
+      // The full-screen builder edits saved sections like pages (no drafts: changes save at once).
+      builderOptions[savedSections.slug] = { field: SECTION_LAYOUT_FIELD }
     }
     // References: which media and documents each layout uses ("Used in", delete protection).
     const references = resolveReferences({
@@ -441,6 +445,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           validateTypes: [...fieldRegistry.types('validate')],
           localization: localizationOf(collection.slug),
         }
+        const isSections = collection.slug === savedSections?.slug
         const built = addBuilder(collection, {
           field,
           clientConfig,
@@ -449,8 +454,9 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           sessions: live.sessions,
           bindings: bindingCheck(collection.slug),
           // Runs after the layout hook, so it sees the live session's layout.
-          afterLayout: collection.slug === templatesSlug && targets.length > 0 ? [requireBlocksForDefault] : [],
-          ownFields: references ? [references.field] : [],
+          afterLayout: collection.slug === templatesSlug && targets.length > 0 ? [requireBlocksForDefault] : isSections ? [syncSectionBlocks] : [],
+          // A saved section's `blocks` follow its layout, which the live session protects.
+          ownFields: [...(references ? [references.field] : []), ...(isSections ? ['blocks'] : [])],
           fieldRegistry,
           localization: localizationOf(collection.slug),
         })
@@ -477,6 +483,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
         ...documentEndpoints({
           collections: liveCollections,
           templates: serverConfig.templates,
+          sections: savedSections?.slug ?? null,
           runtime: live,
           // The publish check uses the same binding rules as the save hook of each collection.
           check: { blocks, bindings: bindingCheck(templatesSlug), fieldRegistry },
@@ -607,6 +614,8 @@ function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): Collect
     name: cssField,
     type: 'json',
     admin: { hidden: true },
+    // A virtual layout (saved sections) needs no stored CSS: the site never renders it directly.
+    ...(base.virtual ? { virtual: true } : {}),
   }
   const richText = richTextSupportField(blocks, field)
   if (richText && fields.some((f) => 'name' in f && f.name === richText.name)) {

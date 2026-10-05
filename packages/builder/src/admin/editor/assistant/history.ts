@@ -1,9 +1,9 @@
 // Assistant chat history: the exact model messages per document, kept in local storage and sent
 // back on every request. Pure functions, so they are unit-tested.
 
-import type { AiMessage, AiToolImage } from '../../../ai/types'
+import type { AiMessage, AiToolImage, AiToolStatus } from '../../../ai/types'
 
-export type ToolStatus = 'running' | 'done' | 'error'
+export type ToolStatus = AiToolStatus
 
 /**
  * What the panel shows for one tool call. `note` holds a local problem (an operation that did not
@@ -101,6 +101,25 @@ function pickTools(messages: AiMessage[], tools: Record<string, ToolInfo>): Reco
   const result: Record<string, ToolInfo> = {}
   for (const id of toolUseIds(messages)) if (tools[id]) result[id] = tools[id]
   return result
+}
+
+/** Summary of a chip that was still running when its reply ended. */
+export const ENDED_SUMMARY = 'Not run: the reply ended first'
+
+/**
+ * When a reply ends (done, error, Stop), a chip of that reply that still runs will never finish:
+ * it becomes `cancelled`. The server sends a final status for every call; this covers a stream
+ * that broke off. Returns the same object when nothing changed.
+ */
+export function settleTools(tools: Record<string, ToolInfo>, callIds: string[]): Record<string, ToolInfo> {
+  let out = tools
+  for (const id of callIds) {
+    const tool = out[id]
+    if (tool?.status !== 'running') continue
+    if (out === tools) out = { ...tools }
+    out[id] = { ...tool, status: 'cancelled', summary: ENDED_SUMMARY }
+  }
+  return out
 }
 
 const STOPPED_RESULT = 'The user stopped the response before this tool finished.'

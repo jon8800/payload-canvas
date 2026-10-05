@@ -78,6 +78,11 @@ function defaultWarn(message: string): void {
   console.warn(message)
 }
 
+/** `{ max: 1 }` from `maxRows: 1`; nothing for a missing or invalid row count. */
+function rowLimit(key: 'max' | 'min', rows: unknown): Partial<Record<'max' | 'min', number>> {
+  return typeof rows === 'number' && Number.isInteger(rows) && rows >= 0 ? { [key]: rows } : {}
+}
+
 /** "fullWidth" -> "Full width", "experiences-grid" -> "Experiences grid". */
 function words(slug: string): string {
   const text = slug.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').trim().toLowerCase()
@@ -92,7 +97,8 @@ const ADMIN_COMPONENT_KEYS = ['Field', 'Label', 'Description', 'Error', 'beforeI
  * - Every field stays a Payload field config: the inspector renders it like Payload does.
  * - A nested `blocks` field at the block's own data level (also inside rows, collapsibles and
  *   unnamed tabs) becomes a slot with the same name. Its `allow` lists the blocks of that field
- *   (inline `blocks` and `blockReferences`). Inline blocks become definitions too.
+ *   (inline `blocks` and `blockReferences`). Inline blocks become definitions too. `maxRows` and
+ *   `minRows` become the slot's `max` and `min`.
  * - `labels.singular` gives the label, `admin.group` the library category. `interfaceName`,
  *   `dbName`, `imageURL` and the block's admin components are not used.
  * - `admin.condition` functions that test one sibling field (`(_, s) => s?.type === 'custom'`)
@@ -174,7 +180,12 @@ export function fromPayloadBlocks(blocks: readonly Config[], options: FromPayloa
           const allowed = blocksOfField(field)
           if (top && name) {
             const slotLabel = textOf(field.label)
-            slots[name] = { ...(slotLabel ? { label: slotLabel } : {}), allow: allowed.map((b) => typeOf(b.slug)) }
+            slots[name] = {
+              ...(slotLabel ? { label: slotLabel } : {}),
+              allow: allowed.map((b) => typeOf(b.slug)),
+              ...rowLimit('max', field.maxRows),
+              ...rowLimit('min', field.minRows),
+            }
             for (const b of allowed) enqueue(b)
             return null
           }

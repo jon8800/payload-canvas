@@ -76,7 +76,7 @@ export const SESSION_SAVE_CONTEXT = 'builderSession'
  */
 export const KEEP_LAYOUT_CONTEXT = 'builderKeepLayout'
 /** `context` key where the guard records the session seq it wrote. */
-const GUARD_SEQ_CONTEXT = 'builderSessionSeq'
+export const GUARD_SEQ_CONTEXT = 'builderSessionSeq'
 /**
  * `context` key where the save hook puts the layout before and after the prop hooks
  * (`{ input, output }`), when the hooks changed a value. The live session reads it after its save

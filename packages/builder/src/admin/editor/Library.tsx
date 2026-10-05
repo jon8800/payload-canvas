@@ -1,9 +1,12 @@
 'use client'
 
 import { useDraggable } from '@dnd-kit/core'
-import { memo, useDeferredValue, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useConfig, useRouteTransition } from '@payloadcms/ui'
+import { useRouter } from 'next/navigation'
+import { memo, useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 
 import type { Block, BlockDefinition, SectionDefinition } from '../../core/types'
+import { builderViewPath } from '../../plugin/links'
 import { insertBlocks, insertNewBlock, sectionPosition } from './actions'
 import { BlockIcon, Icon } from './icons'
 import { MenuButton } from './menu/Menu'
@@ -138,6 +141,13 @@ const SectionList = memo(function SectionList({ query }: { query: string }) {
   const { config, sections: controller } = useRuntime()
   const saved = useValue(controller.saved)
   const builtIn = useMemo(() => config.sections ?? [], [config.sections])
+  // A section edited in another tab: coming back to this one shows its new content and picture.
+  useEffect(() => {
+    if (!controller.enabled) return
+    const reload = () => void controller.load(true)
+    window.addEventListener('focus', reload)
+    return () => window.removeEventListener('focus', reload)
+  }, [controller])
   const groups = useMemo(() => {
     const own = (saved ?? []).filter((s) => matches(query, s.label, s.category, SAVED))
     const rest = groupBy(builtIn.filter((s) => matches(query, s.label, s.description, s.category)), SECTION_CATEGORIES)
@@ -219,16 +229,35 @@ function SectionCard({ section }: { section: SectionDefinition }) {
   )
 }
 
-/** Rename and delete for a saved section. */
+/** The builder URL that edits a saved section, with `from` (this page) for its Back button. */
+export function editSectionPath(adminRoute: string, collection: string, id: string | number, from: string): string {
+  return `${builderViewPath(adminRoute, collection, id)}?from=${encodeURIComponent(from)}`
+}
+
+/** Edit, rename and delete for a saved section. */
 function SavedSectionMenu({ section }: { section: SectionDefinition }) {
   const runtime = useRuntime()
+  const router = useRouter()
+  const { startRouteTransition } = useRouteTransition()
+  const {
+    config: { routes },
+  } = useConfig()
+  const collection = runtime.config.savedSections?.collection
+  // Opens the section in the full-screen builder, like a page. Pages that use it keep their copy.
+  const edit = () => {
+    if (!collection || section.savedId === undefined) return
+    const href = editSectionPath(routes.admin, collection, section.savedId, `${window.location.pathname}${window.location.search}`)
+    startRouteTransition(() => router.push(href))
+  }
   return (
     <MenuButton
       className="builder-editor__icon-button builder-editor__icon-button--small builder-editor__card-more"
       triggerLabel={`Actions for ${section.label}`}
-      tooltip="Rename or delete"
+      tooltip="Edit, rename or delete"
       label="Saved section actions"
+      footer="Pages that use this section keep their own copy."
       items={() => [
+        ...(collection ? [{ icon: 'compose' as const, label: 'Edit section', run: edit }] : []),
         { icon: 'rename', label: 'Rename…', ownFocus: true, run: () => requestRenameSection(runtime, section) },
         { icon: 'delete', label: 'Delete…', ownFocus: true, danger: true, run: () => requestDeleteSection(runtime, section) },
       ]}

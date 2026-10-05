@@ -244,4 +244,64 @@
       max-width: calc(100% - 40px);
     }
   }
+
+  // A prop the user may read but not change (field `access.update`): a lock at the top right,
+  // the input dimmed and inert.
+  .builder-field-locked {
+    position: relative;
+    min-width: 0;
+  }
+
+  // `.builder-editor [data-tooltip]` sets `position: relative`; this rule is more specific.
+  // The lock sits on the label row, at the right edge, left of a bind button when there is one.
+  .builder-editor .builder-field-locked > .builder-field-locked__badge {
+    position: absolute;
+
+    &:hover::after {
+      left: auto;
+      right: 0;
+      transform: none;
+    }
+  }
+
+  .builder-field-locked:has(.builder-bind__button) > .builder-field-locked__badge {
+    right: 26px;
+  }
+
+  .builder-field-locked__badge {
+    z-index: 1;
+    top: -2px;
+    right: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: var(--style-radius-s);
+    color: var(--theme-elevation-500);
+    background: var(--theme-elevation-50);
+    cursor: help;
+  }
+
+  // Read by screen readers; the tooltip shows it to everyone else.
+  .builder-field-locked__text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .builder-field-locked__body {
+    opacity: 0.65;
+    cursor: not-allowed;
+  }
+
+  .builder-field-hidden-note {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+  }
 }

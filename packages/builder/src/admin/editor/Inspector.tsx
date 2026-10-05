@@ -14,6 +14,7 @@ import { RenameInput } from './Outline'
 import { EditingBanner } from './live/PresenceUI'
 import { LocaleNote } from './locale/LocaleField'
 import { AssistantPanel } from './assistant/AssistantPanel'
+import { useAccessRefresh } from './fields/access'
 import { BlockContentFields } from './renderField'
 import { useRuntime, type InspectorTab } from './runtime'
 import { shortcutList } from './shortcuts'
@@ -53,6 +54,8 @@ export function Inspector() {
   const { inspectorRef } = runtime
   const tab = useValue(runtime.inspectorTab)
   const setTab = (next: InspectorTab) => (next === 'assistant' ? runtime.toggleAssistant(true) : runtime.inspectorTab.set(next))
+  // Field access: ask the server again after edits to blocks with access rules.
+  useAccessRefresh()
   // The document's own fields open in Payload's drawer from the top bar ("Page settings").
   return (
     <div ref={inspectorRef} className="builder-editor__inspector">

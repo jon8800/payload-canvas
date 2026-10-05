@@ -8,7 +8,7 @@ import { ancestors } from './actions'
 import { dragModeChoice, prefersReducedMotion, useDragModeSetting } from './dnd/mode'
 import { dropAt } from './dnd/smooth'
 import { BlockIcon, Icon } from './icons'
-import { applyInlineChange, applyInlineJoin, applyInlineSplit, boundHint, inlineEditing, stopInlineEditing } from './inline'
+import { applyInlineChange, applyInlineJoin, applyInlineSplit, boundHint, inlineEditing, refuseLockedInline, stopInlineEditing } from './inline'
 import { blockName } from './names'
 import { MenuButton } from './menu/Menu'
 import { useCanvasMenus } from './menu/useCanvasMenus'
@@ -149,6 +149,7 @@ export function Canvas() {
           return
         case 'inlineStart':
           store.select(message.id)
+          if (refuseLockedInline(runtime, message)) return
           inline.set({ session: message.session, id: message.id, path: message.path, kind: message.kind, format: null, linkRequest: 0 })
           store.hover(null)
           return

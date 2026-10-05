@@ -87,14 +87,14 @@ test('styled blocks get a wrapper with their classes, or the classes as a prop',
   const styled = fromPayloadBlocks(configs, { onWarning: false, styles: true })
   const one: Layout = { version: 1, blocks: [{ id: 'h', type: 'heading', className: 'mt-4', props: { text: 'Hi' } }] }
   const wrap = renderToStaticMarkup(createElement(RenderLayout, { layout: one, blocks: styled, components: { heading: fromPayloadComponent(Heading, { blocks: styled }) } }))
-  assert.equal(wrap, '<div class="mt-4"><h2>Hi</h2></div>')
+  assert.equal(wrap, '<div class="mt-4 builder-css"><h2>Hi</h2></div>')
   const seen: unknown[] = []
   const Probe = (props: HeadingData) => {
     seen.push(props.builder?.className)
     return null
   }
   renderToStaticMarkup(createElement(RenderLayout, { layout: one, blocks: styled, components: { heading: fromPayloadComponent(Probe, { blocks: styled, className: 'prop' }) } }))
-  assert.deepEqual(seen, ['mt-4'])
+  assert.deepEqual(seen, ['mt-4 builder-css'])
 })
 
 test('canvas: a known block without a component shows a placeholder with its label', () => {

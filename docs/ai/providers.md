@@ -215,6 +215,8 @@ ai: { adapter: anthropicAdapter({ apiKey: process.env.ANTHROPIC_API_KEY }) }
 | `maxTokens` | `32000` | Output limit per model call, thinking included. |
 | `fallbacks` | on for `claude-opus-5-5` | When a safety classifier declines a request, the API retries it on Anthropic's recommended fallback model. |
 
+When the fallback model takes over in the middle of a reply, the tool calls of the declining model never run. Their chips in the panel show "Not run".
+
 This adapter uses prompt caching, adaptive thinking and `ai.effort` (default `medium`). Only this entry point loads `@anthropic-ai/sdk`, so other sites do not need the package.
 
 ## The fake adapter
@@ -253,6 +255,7 @@ Changing the adapter or the model starts a new chat in the panel.
 - **Retries.** OpenAI-format adapters retry 408, 429 and 5xx responses and network errors twice, after 1 and 2 seconds, or after the time in `Retry-After` (up to 20 seconds).
 - **Timeouts.** 60 seconds for the response to start, then 120 seconds between two stream chunks.
 - **Stop.** The Stop button cancels the request. OpenRouter stops billing for most providers when the stream is cancelled.
+- **Tool chips.** Every tool call the panel shows as running gets a final state: done, failed, or "Not run" (grey, dashed). "Not run" means the call never ran: the model dropped it, declined the request, or the reply was stopped or failed first. The server sends this state as `tool` events with `status: 'cancelled'`. If the stream breaks off, the panel marks the reply's running chips "Not run" itself.
 - **Errors.** A rejected key (401) shows the setup card with the provider's message. Other errors show the provider's message, for example "No endpoints found that support tool use" for a model without tools.
 - **Switching adapter or model** starts a new chat in the panel. Chat history from one adapter cannot be replayed on another.
 

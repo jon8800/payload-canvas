@@ -2,6 +2,7 @@
 // Pure TypeScript: no React, no Payload runtime imports. See docs/architecture.md section 12.
 
 import type { Layout, Operation } from '../core/types'
+import type { PropAccessInfo } from '../core/fieldAccess'
 
 /** Who made a change. `label` is what the editor shows, e.g. "Claude Desktop" or "Ana". */
 export type LiveActor = { type: 'user' | 'ai'; id: string; label: string }
@@ -294,7 +295,21 @@ export type BuilderDocMeta = {
    * without their own template show the default one.
    */
   template: { target: string | null; preview: unknown; defaultId: string | number | null } | null
+  /**
+   * Saved sections (the plugin's `builder-sections` collection): the section's category. The top
+   * bar then shows "Section: <name>". Null for other documents.
+   */
+  section: { category: string | null } | null
+  /**
+   * What this user may read and change in each block (field `access.read` / `access.update` of
+   * block props). Null when no block field has such access. The inspector hides unreadable props
+   * and locks read-only ones; inline editing refuses both. `GET …/access` loads it again.
+   */
+  fieldAccess: PropAccessInfo | null
 }
+
+/** `GET {live}/:collection/:id/access`: the user's prop access, as in `BuilderDocMeta.fieldAccess`. */
+export type LiveAccessResponse = { ok: true; fieldAccess: PropAccessInfo | null } | { ok: false; error: string }
 
 /**
  * `error` is one readable line ("Title and 3 blocks need attention."). `errors` lists each problem

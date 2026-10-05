@@ -5,14 +5,15 @@
 // `hidden` only when true. Operations keep this form. When a slot list becomes empty, its key is
 // deleted. This is what makes every inverse restore the exact previous layout.
 
-import { placementError } from './blocks'
+import { placementError, slotFullError } from './blocks'
 import { createId } from './ids'
 import { DEFAULT_SLOT, indexLayout, isPlainObject, subtreeIds, type IndexedBlock } from './tree'
 import type { ApplyResult, Block, BlockDefinition, Layout, Operation, Position } from './types'
 
 /**
- * With `blocks`, `insert` and `move` also check the slot rules (`allow`, and `disallow` of every
- * ancestor slot, for the whole placed subtree). Without it they check only the tree shape.
+ * With `blocks`, `insert` and `move` also check the slot rules (`allow`, `max`, and `disallow` of
+ * every ancestor slot, for the whole placed subtree), and `duplicate` checks the slot's `max`.
+ * Without it they check only the tree shape.
  */
 export type ApplyOptions = { blocks?: readonly BlockDefinition[] }
 
@@ -32,7 +33,7 @@ export function applyOperation(layout: Layout, op: Operation, options?: ApplyOpt
     case 'remove':
       return remove(layout, op.id)
     case 'duplicate':
-      return duplicate(layout, op.id, op.newId)
+      return duplicate(layout, op.id, op.newId, options?.blocks)
     case 'update':
       return update(layout, op)
     default:
@@ -106,12 +107,15 @@ function move(layout: Layout, id: unknown, rawTo: unknown, blocks?: readonly Blo
   return ok(next, [{ type: 'move', id: entry.block.id, to: locationOf(entry) }])
 }
 
-function duplicate(layout: Layout, id: unknown, newId: unknown): ApplyResult {
+function duplicate(layout: Layout, id: unknown, newId: unknown, blocks?: readonly BlockDefinition[]): ApplyResult {
   const index = indexLayout(layout)
   const entry = getEntry(index, id)
   if (typeof entry === 'string') return fail(entry)
   if (typeof newId !== 'string' || newId === '') return fail('`newId` must be a non-empty string')
   if (index.has(newId)) return fail(`Block id "${newId}" already exists`)
+  const parent = entry.parentId === null ? undefined : index.get(entry.parentId)?.block
+  const full = blocks && parent ? slotFullError(blocks, parent, entry.slot) : null
+  if (full) return fail(full)
 
   const used = new Set(index.keys())
   used.add(newId)

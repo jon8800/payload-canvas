@@ -500,7 +500,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       'Edits the layout of a document with a list of operations, applied in order, all or nothing. Saves a draft about a second later (never publishes). People with the page open in the editor see each change live.',
       'Operations: insert { block, to }, move { id, to }, remove { id }, duplicate { id, newId? }, update { id, props?, unsetProps?, className?, hidden?, bindings?, label? }. "update" merges props and bindings; className REPLACES all classes, so send the full list.',
       'Templates are edited the same way: collection = the templates collection, id = the template id from listTemplates.',
-      'If any operation fails, nothing is saved and the error names the failing operation. Call getLayout for current ids first. The result is validated against the block schemas: missing required props are allowed in drafts (warnings), wrong types are errors. insert and move refuse a block that a slot does not accept, also deeper inside (for example no button or form anywhere inside a link).',
+      'If any operation fails, nothing is saved and the error names the failing operation. Call getLayout for current ids first. The result is validated against the block schemas: missing required props are allowed in drafts (warnings), wrong types are errors. insert and move refuse a block that a slot does not accept, also deeper inside (for example no button or form anywhere inside a link). insert, move and duplicate refuse to add a block to a slot that already holds its maxBlocks (listBlocks).',
       'Localized sites: with `locale`, "update" props change that locale\'s values of localized props (a translation); other props and everything else (insert, move, remove, classes) change every locale. Blocks you insert with `locale` hold their localized props in that locale only: the default locale stays empty until someone writes it (required props then block publishing). Without `locale` they hold the default locale\'s values. Sections (insertSection) keep their own text.',
       NO_DIRECT_EDIT,
       LAYOUT_GUIDE,
@@ -541,7 +541,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     name: 'validateLayout',
     routing: { kind: 'collection', action: 'read' },
     description:
-      'Checks a layout against the block schemas without saving. Pass `layout` (the JSON object) to check a layout you wrote, or only `id` to check the document\'s current draft. Returns `errors` (block a save) and `warnings` (allowed in drafts, but they block publishing: missing required props, values outside their limits, messages from the validate functions of props; unknown props never block).',
+      'Checks a layout against the block schemas without saving. Pass `layout` (the JSON object) to check a layout you wrote, or only `id` to check the document\'s current draft. Returns `errors` (block a save) and `warnings` (allowed in drafts, but they block publishing: missing required props, values outside their limits, slots with fewer blocks than their minBlocks, messages from the validate functions of props; unknown props never block).',
     parameters: {
       collection: collectionArg,
       id: idArg.optional(),

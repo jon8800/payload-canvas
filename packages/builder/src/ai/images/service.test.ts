@@ -9,13 +9,13 @@ import { aiEndpoints, assistantImageGenerator } from '../endpoint'
 import { runTool, Workspace, type ToolEnv } from '../tools'
 import type { AiImageRequest } from '../types'
 import { fakeImageAdapter } from './fake'
-import { AI_IMAGES_KEY, altFromPrompt, createImageService, generatedFilename, generateImageToMedia, HourlyLimiter, IMAGES_NOT_CONFIGURED } from './service'
+import { AI_IMAGES_KEY, altFromPrompt, createImageService, generatedFilename, generateImageToMedia, HourlyLimiter, IMAGES_NOT_CONFIGURED, memoryCountStore, type ImageCountStore } from './service'
 import { AiImageError } from './shared'
 
 type Field = { name: string; type: string }
 
 /** A fake request: a media upload collection, a pages collection, and Payload's create. */
-function fakeReq(options: { user?: Record<string, unknown> | null; canCreate?: boolean; fields?: Field[]; createFails?: boolean; custom?: Record<string, unknown> } = {}) {
+function fakeReq(options: { user?: Record<string, unknown> | null; canCreate?: boolean; fields?: Field[]; createFails?: boolean; custom?: Record<string, unknown>; kv?: ImageCountStore } = {}) {
   const created: Array<Record<string, unknown>> = []
   const user = options.user === undefined ? { id: 'u1', collection: 'users', email: 'a@b.c' } : options.user
   const payload = {
@@ -25,7 +25,8 @@ function fakeReq(options: { user?: Record<string, unknown> | null; canCreate?: b
       pages: { config: { slug: 'pages', fields: [] } },
     },
     config: { custom: options.custom ?? {} },
-    logger: { info: () => {} },
+    ...(options.kv ? { kv: options.kv } : {}),
+    logger: { info: () => {}, error: () => {} },
     create: async (args: Record<string, unknown>) => {
       created.push(args)
       if (options.createFails) throw new Error('The file is too large.')
@@ -132,7 +133,7 @@ describe('generateImageToMedia', () => {
     let now = 1_000_000
     const failing = { fail: false }
     const adapter = { ...fakeImageAdapter(), generate: async (r: AiImageRequest) => (failing.fail ? Promise.reject(new AiImageError('api_error', 'Provider down')) : fakeImageAdapter().generate(r)) }
-    const service = createImageService({ images: adapter, imageLimits: { perHour: 2 } }, () => now)
+    const service = createImageService({ images: adapter, imageLimits: { perHour: 2 } }, { now: () => now })
     const { req } = fakeReq()
     const other = fakeReq({ user: { id: 'u2', collection: 'users' } })
     assert.equal((await generateImageToMedia(req, service, { prompt: 'One', source: 'editor' })).ok, true)
@@ -164,16 +165,117 @@ describe('generateImageToMedia', () => {
     assert.ok(altFromPrompt('word '.repeat(60)).length <= 120)
   })
 
-  it('HourlyLimiter counts in a sliding hour', () => {
+  it('HourlyLimiter counts in a sliding hour', async () => {
     let now = 0
     const limiter = new HourlyLimiter(1, () => now)
-    assert.equal(limiter.take('a'), true)
-    assert.equal(limiter.take('a'), false)
-    assert.equal(limiter.minutesUntilFree('a'), 60)
+    const reservation = await limiter.take('a')
+    assert.equal(reservation, 0)
+    assert.equal(await limiter.take('a'), null)
+    assert.equal(await limiter.minutesUntilFree('a'), 60)
     now = 30 * 60_000
-    assert.equal(limiter.minutesUntilFree('a'), 30)
-    limiter.release('a')
-    assert.equal(limiter.remaining('a'), 1)
+    assert.equal(await limiter.minutesUntilFree('a'), 30)
+    await limiter.release('a', reservation!)
+    assert.equal(await limiter.remaining('a'), 1)
+  })
+
+  it('HourlyLimiter lets parallel requests of one user take only the free places', async () => {
+    const limiter = new HourlyLimiter(2, () => 5, memoryCountStore())
+    const taken = await Promise.all([limiter.take('a'), limiter.take('a'), limiter.take('a')])
+    assert.deepEqual(taken, [5, 5, null])
+  })
+})
+
+/** A store that records its keys, like Payload's `payload-kv` collection. */
+function sharedStore() {
+  const store = memoryCountStore()
+  const keys = new Set<string>()
+  const shared: ImageCountStore = {
+    get: store.get,
+    set: async (key, value) => {
+      keys.add(key)
+      await store.set(key, value)
+    },
+    delete: async (key) => {
+      keys.delete(key)
+      await store.delete(key)
+    },
+  }
+  return { keys, store: shared }
+}
+
+describe('hourly image count in a shared store', () => {
+  it('keeps the count across two service instances (a restart, or a second server)', async () => {
+    const { store, keys } = sharedStore()
+    const first = createImageService({ images: fakeImageAdapter(), imageLimits: { perHour: 2 } }, { store })
+    const { req } = fakeReq()
+    assert.equal((await generateImageToMedia(req, first, { prompt: 'One', source: 'editor' })).ok, true)
+    assert.deepEqual([...keys], ['website-builder:image-count:users:u1'])
+
+    const second = createImageService({ images: fakeImageAdapter(), imageLimits: { perHour: 2 } }, { store })
+    const two = await generateImageToMedia(req, second, { prompt: 'Two', source: 'mcp' })
+    assert.equal(two.ok && two.remainingThisHour, 0)
+    const limited = await generateImageToMedia(req, first, { prompt: 'Three', source: 'assistant' })
+    assert.equal(!limited.ok && limited.code, 'rate_limited')
+    assert.match(!limited.ok ? limited.message : '', /limit of 2 generated images per hour/)
+  })
+
+  it('uses payload.kv from the request when no store is given', async () => {
+    const { store, keys } = sharedStore()
+    const service = createImageService({ images: fakeImageAdapter(), imageLimits: { perHour: 1 } })
+    assert.equal((await generateImageToMedia(fakeReq({ kv: store }).req, service, { prompt: 'One', source: 'editor' })).ok, true)
+    assert.equal(keys.size, 1)
+    const restarted = createImageService({ images: fakeImageAdapter(), imageLimits: { perHour: 1 } })
+    const limited = await generateImageToMedia(fakeReq({ kv: store }).req, restarted, { prompt: 'Two', source: 'editor' })
+    assert.equal(!limited.ok && limited.code, 'rate_limited')
+  })
+
+  it('frees places when the hour rolls over', async () => {
+    const { store, keys } = sharedStore()
+    let now = 1_000_000
+    const service = createImageService({ images: fakeImageAdapter(), imageLimits: { perHour: 2 } }, { now: () => now, store })
+    const { req } = fakeReq()
+    await generateImageToMedia(req, service, { prompt: 'One', source: 'editor' })
+    now += 20 * 60_000
+    await generateImageToMedia(req, service, { prompt: 'Two', source: 'editor' })
+    now += 30 * 60_000
+    const limited = await generateImageToMedia(req, service, { prompt: 'Three', source: 'editor' })
+    assert.match(!limited.ok ? limited.message : '', /Try again in about 10 minutes/)
+    now += 10 * 60_000 + 1
+    const four = await generateImageToMedia(req, service, { prompt: 'Four', source: 'editor' })
+    assert.equal(four.ok && four.remainingThisHour, 0, 'the first image dropped out, the second still counts')
+    now += 2 * 60 * 60_000
+    assert.equal(await service.limiter.remaining('users:u1', store), 2)
+    assert.equal(keys.size, 1)
+  })
+
+  it('does not count failed attempts (adapter error, access refused); a paid image that failed to upload counts', async () => {
+    const { store, keys } = sharedStore()
+    const failing = { fail: false }
+    const adapter = { ...fakeImageAdapter(), generate: async (r: AiImageRequest) => (failing.fail ? Promise.reject(new AiImageError('api_error', 'Provider down')) : fakeImageAdapter().generate(r)) }
+    const service = createImageService({ images: adapter, imageLimits: { perHour: 1 } }, { store })
+
+    failing.fail = true
+    assert.equal((await generateImageToMedia(fakeReq().req, service, { prompt: 'Beans', source: 'editor' })).ok, false)
+    failing.fail = false
+    const refused = await generateImageToMedia(fakeReq({ canCreate: false }).req, service, { prompt: 'Beans', source: 'editor' })
+    assert.equal(!refused.ok && refused.code, 'forbidden')
+    assert.equal(keys.size, 0, 'nothing is stored')
+    assert.equal(await service.limiter.remaining('users:u1', store), 1)
+    const upload = await generateImageToMedia(fakeReq({ createFails: true }).req, service, { prompt: 'Beans', source: 'editor' })
+    assert.equal(!upload.ok && upload.status, 500)
+    assert.equal(await service.limiter.remaining('users:u1', store), 0, 'the paid image counts')
+  })
+
+  it('generates nothing when the store cannot be read', async () => {
+    const { adapter, requests } = counting()
+    const broken: ImageCountStore = {
+      get: async () => Promise.reject(new Error('relation "payload_kv" does not exist')),
+      set: async () => {},
+      delete: async () => {},
+    }
+    const outcome = await generateImageToMedia(fakeReq().req, createImageService({ images: adapter }, { store: broken }), { prompt: 'Beans', source: 'editor' })
+    assert.equal(!outcome.ok && outcome.status, 503)
+    assert.equal(requests.length, 0)
   })
 })
 

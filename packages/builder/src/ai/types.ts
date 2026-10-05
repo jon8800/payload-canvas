@@ -278,6 +278,9 @@ export type AiChatRequest = {
   locale?: string | null
 }
 
+/** The state of one tool call in the panel. `cancelled`: it started streaming but never ran. */
+export type AiToolStatus = 'running' | 'done' | 'error' | 'cancelled'
+
 /** An image a tool made (generateImage), for the chip's thumbnail. */
 export type AiToolImage = { id: string | number; url: string; alt: string | null; width: number | null; height: number | null }
 
@@ -287,7 +290,9 @@ export type AiToolImage = { id: string | number; url: string; alt: string | null
  * use the same format: the body is one `error` event.
  * - text: streamed assistant text (append to the current bubble)
  * - tool: a tool call started (`status: 'running'`) or finished (`'done' | 'error'`), with a short
- *   human summary ("Inserted Hero section", "Updated 3 blocks")
+ *   human summary ("Inserted Hero section", "Updated 3 blocks"). `'cancelled'`: a started call
+ *   that never ran (the model dropped it, a refusal, Stop, an error). Every `running` call gets
+ *   one final status before `done` or `error`.
  * - operations: operations to apply to the editor layout now (already validated against the
  *   server's working copy). Apply in order; group all operations of one `turnId` into one undo step.
  * - message: the complete assistant (and tool_result user) messages to append to the history
@@ -297,7 +302,7 @@ export type AiToolImage = { id: string | number; url: string; alt: string | null
  */
 export type AiStreamEvent =
   | { type: 'text'; text: string }
-  | { type: 'tool'; callId: string; name: string; status: 'running' | 'done' | 'error'; summary: string; image?: AiToolImage }
+  | { type: 'tool'; callId: string; name: string; status: AiToolStatus; summary: string; image?: AiToolImage }
   | { type: 'operations'; turnId: string; ops: Operation[] }
   | { type: 'message'; message: AiMessage }
   | { type: 'done'; turnId: string; stopReason: string | null; usage?: AiUsage }

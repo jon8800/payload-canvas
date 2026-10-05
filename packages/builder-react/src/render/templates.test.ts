@@ -65,19 +65,19 @@ describe('RenderLayout with a template context', () => {
   it('renders bound props and Field blocks by value type', () => {
     assert.match(html, /<h1>First<\/h1>/)
     assert.match(html, /<img src="\/media\/a.png" alt="A" width="10" height="5" loading="lazy"\/>/)
-    assert.match(html, /<div class="prose"><p>Body text<\/p><\/div>/)
+    assert.match(html, /<div class="prose builder-css"><p>Body text<\/p><\/div>/)
     assert.match(html, /<time dateTime="2026-09-10T00:00:00.000Z">Sep 10, 2026<\/time>/)
     assert.match(html, /<div>A, B<\/div>/)
     assert.match(html, /<div>Nothing<\/div>/)
   })
 
   it('renders the list item once per document, bound to that document', () => {
-    assert.match(html, /<div class="grid"><a href="\/blog\/second"><h3>Second<\/h3><\/a><a href="\/blog\/third"><h3>Third<\/h3><\/a><\/div>/)
+    assert.match(html, /<div class="grid builder-css"><a href="\/blog\/second"><h3>Second<\/h3><\/a><a href="\/blog\/third"><h3>Third<\/h3><\/a><\/div>/)
     assert.ok(!html.includes('data-'))
   })
 
   it('renders nothing for a list without documents on the site', () => {
-    assert.ok(!render({ layout: template, context: post }).includes('class="grid"'))
+    assert.ok(!render({ layout: template, context: post }).includes('class="grid builder-css"'))
   })
 
   it('renders bound blocks with their literal props without a context', () => {

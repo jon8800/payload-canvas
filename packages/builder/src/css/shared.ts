@@ -3,6 +3,7 @@
 import { compile } from 'tailwindcss'
 
 import type { CanvasCssInput, TailwindPlugins } from './index'
+import { BUILDER_CSS_CLASS } from './marker'
 
 export type Compiler = Awaited<ReturnType<typeof compile>>
 
@@ -76,6 +77,11 @@ export function splitTopLevel(css: string): string[] {
       i = stop
       continue
     }
+    // An escaped character outside a string (`.content-\[\'x\'\]`) is never a quote or a brace.
+    if (ch === '\\') {
+      i += 2
+      continue
+    }
     if (ch === '"' || ch === "'") {
       i++
       while (i < css.length && css[i] !== ch) i += css[i] === '\\' ? 2 : 1
@@ -115,21 +121,106 @@ export function countUtilityLayers(css: string): number {
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
+// ---------------------------------------------------------------------------------------------
+// Scoping: every generated rule matches only elements with the marker class (see marker.ts)
+
+const SCOPE = `:where(.${BUILDER_CSS_CLASS})`
+/** A class selector, with CSS escapes (`\:`, `\32 `). */
+const CLASS_TOKEN = /\.((?:\\[0-9a-fA-F]{1,6}[ \t\n]?|\\[^\n]|[\w -￿-])+)/g
+const ESCAPE = /\\([0-9a-fA-F]{1,6})[ \t\n]?|\\([^\n])/g
+
+const unescapeClass = (value: string) =>
+  value.replace(ESCAPE, (_, hex: string | undefined, ch: string | undefined) =>
+    hex ? String.fromCodePoint(parseInt(hex, 16)) : (ch ?? ''),
+  )
+
+/** Index of the `{` that opens a statement's block, skipping escapes, strings and brackets. */
+function blockStart(statement: string): number {
+  let depth = 0
+  for (let i = 0; i < statement.length; i++) {
+    const ch = statement[i]
+    if (ch === '\\') i++
+    else if (ch === '"' || ch === "'") {
+      i++
+      while (i < statement.length && statement[i] !== ch) i += statement[i] === '\\' ? 2 : 1
+    } else if (ch === '(' || ch === '[') depth++
+    else if (ch === ')' || ch === ']') depth--
+    else if (ch === '{' && depth === 0) return i
+  }
+  return -1
+}
+
+/**
+ * Adds the scope after the class of the rule's own utility: the first class in the selector that
+ * is one of `classes` (Tailwind writes it first: `.md\:grid`, `:where(.space-y-4 > …)`,
+ * `:is(.\*\:p-4 > *)`). Other classes (`.dark`, `.group`) stay as they are.
+ */
+function scopeSelector(selector: string, classes: ReadonlySet<string>): string {
+  let target: string | null = null
+  for (const match of selector.matchAll(CLASS_TOKEN)) {
+    if (classes.has(unescapeClass(match[1]))) {
+      target = match[0]
+      break
+    }
+  }
+  if (!target) return selector
+  let out = ''
+  let last = 0
+  for (const match of selector.matchAll(CLASS_TOKEN)) {
+    if (match[0] !== target) continue
+    const end = (match.index ?? 0) + match[0].length
+    // A hex escape may end in a space (`.\32 xl\:p-4`); the scope goes after the whole class.
+    out += `${selector.slice(last, end).trimEnd()}${SCOPE}`
+    last = end
+  }
+  return out + selector.slice(last)
+}
+
+function scopeStatements(css: string, classes: ReadonlySet<string>): string {
+  return splitTopLevel(css)
+    .map((statement) => {
+      const open = blockStart(statement)
+      if (open === -1) return statement
+      const head = statement.slice(0, open)
+      // At-rules (`@media`, `@supports`) wrap rules: scope the rules inside.
+      if (head.startsWith('@')) return `${head}{\n${scopeStatements(statement.slice(open + 1, -1), classes)}\n}`
+      return `${scopeSelector(head.trimEnd(), classes)} ${statement.slice(open)}`
+    })
+    .join('\n')
+}
+
+/** Scopes every rule in a `@layer utilities { … }` statement to the marker class. */
+export function scopeUtilitiesLayer(layer: string, classes: ReadonlySet<string>): string {
+  const open = blockStart(layer)
+  return `${layer.slice(0, open)}{\n${scopeStatements(layer.slice(open + 1, -1), classes)}\n}`
+}
+
+/**
+ * A full build with its generated utilities (the first `@layer utilities` block, when there are
+ * more than `staticUtilityLayers`) scoped to the marker class. The rest stays as it is.
+ */
+export function scopeFullBuild(fullCss: string, staticUtilityLayers: number, classes: ReadonlySet<string>): string {
+  const statements = splitTopLevel(fullCss)
+  const layers = statements.filter((s) => layerPattern('utilities').test(s))
+  if (layers.length <= staticUtilityLayers) return statements.join('\n')
+  return statements.map((s) => (s === layers[0] ? scopeUtilitiesLayer(s, classes) : s)).join('\n')
+}
+
 /**
  * Keeps only what the generated utilities need from a full Tailwind build:
  * - the `properties` and `theme` layers (theme holds only the variables the build used, and stays
  *   layered, so the site's unlayered `:root` values win),
  * - the first `@layer utilities` block (the one at `@tailwind utilities`; later blocks are the
- *   app's own hand-written utilities),
+ *   app's own hand-written utilities), scoped to the marker class when `classes` is given,
  * - the `@property` and `@keyframes` rules those utilities reference.
  * Drops Preflight, `@layer base`, and every unlayered rule (`:root`, `.dark`).
  * `staticUtilityLayers` comes from countUtilityLayers(); with no generated block this returns "".
  */
-export function extractUtilities(fullCss: string, staticUtilityLayers: number): string {
+export function extractUtilities(fullCss: string, staticUtilityLayers: number, classes?: ReadonlySet<string>): string {
   const statements = splitTopLevel(fullCss)
   const layers = statements.filter((s) => layerPattern('utilities').test(s))
   if (layers.length <= staticUtilityLayers) return ''
-  const utilities = layers[0]
+  const utilities = classes ? scopeUtilitiesLayer(layers[0], classes) : layers[0]
 
   const kept: string[] = ['@layer properties, theme, base, components, utilities;']
   for (const name of ['properties', 'theme']) {

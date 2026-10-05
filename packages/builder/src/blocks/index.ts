@@ -6,6 +6,7 @@ export { defaultBlocks, MENU_CLASS_MAP, type DefaultBlocksOptions } from './defa
 export { isLinkField, linkField, type BuilderCondition, type LinkFieldOptions } from './link'
 export { fromPayloadBlocks, type FromPayloadBlocksOptions, type PayloadBlockOverride } from './payload'
 export { defineBlock } from '../core/blocks'
+export { BUILDER_CSS_CLASS, withBuilderCssClass } from '../css/marker'
 export type {
   Block,
   BlockDefinition,

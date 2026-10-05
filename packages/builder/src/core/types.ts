@@ -60,6 +60,13 @@ export type SlotDefinition = {
    * inside `<a>` is invalid HTML.
    */
   disallow?: string[]
+  /**
+   * Most direct children the slot holds (Payload's `maxRows`). A full slot refuses insert, move,
+   * paste and duplicate, drop targets skip it and the "+" picker hides there.
+   */
+  max?: number
+  /** Fewest direct children the slot needs (Payload's `minRows`). Fewer blocks only publishing. */
+  min?: number
 }
 
 export type BlockDefinition = {
