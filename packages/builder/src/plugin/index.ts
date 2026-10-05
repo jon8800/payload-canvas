@@ -203,6 +203,8 @@ const BUILDER_TAB_COMPONENT = '@payload-toolkit/builder/client#BuilderTab'
 const PUBLISH_BUTTON_COMPONENT = '@payload-toolkit/builder/client#PublishButton'
 const BUILDER_VIEW_COMPONENT = '@payload-toolkit/builder/rsc#BuilderView'
 const BUILDER_REDIRECT_COMPONENT = '@payload-toolkit/builder/rsc#BuilderRedirect'
+const LAYOUT_DIFF_COMPONENT = '@payload-toolkit/builder/rsc#LayoutDiff'
+const NO_DIFF_COMPONENT = '@payload-toolkit/builder/rsc#NoDiff'
 /** Key of the full-screen builder view in `admin.components.views`. */
 export const BUILDER_VIEW_KEY = 'websiteBuilder'
 /** Path of the full-screen builder view below the admin route. */
@@ -606,14 +608,15 @@ function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): Collect
     },
     admin: {
       ...base.admin,
-      components: { ...base.admin?.components, Field: LAYOUT_FIELD_COMPONENT },
+      components: { ...base.admin?.components, Field: LAYOUT_FIELD_COMPONENT, Diff: base.admin?.components?.Diff ?? LAYOUT_DIFF_COMPONENT },
       custom: { ...base.admin?.custom, builder: clientConfig },
     },
   }
   const generatedCssField: JSONField = {
     name: cssField,
     type: 'json',
-    admin: { hidden: true },
+    // Hidden, and no row of generated CSS in Versions > compare.
+    admin: { hidden: true, components: { Diff: NO_DIFF_COMPONENT } },
     // A virtual layout (saved sections) needs no stored CSS: the site never renders it directly.
     ...(base.virtual ? { virtual: true } : {}),
   }

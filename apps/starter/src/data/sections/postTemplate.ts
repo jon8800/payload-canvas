@@ -7,6 +7,8 @@ export function postTemplate(): Block[] {
   return [
     {
       ...stack('article', 'flex flex-col', [
+        // One text column (max-w-3xl) for the header, the body and "More posts". The padding sits
+        // outside each column, so all three share one left edge. The image is wider, centered.
         stack('header', 'px-5 pt-14 pb-10 md:px-8 md:pt-24 md:pb-14', [
           stack('div', 'mx-auto flex w-full max-w-3xl flex-col gap-5', [
             field('publishedAt', 'text-sm text-muted-foreground'),
@@ -14,15 +16,16 @@ export function postTemplate(): Block[] {
             bind(bare('text', styles.lead), { text: 'excerpt' }),
           ]),
         ]),
-        stack('div', 'mx-auto w-full max-w-5xl px-5 md:px-8', [
-          bind(bare('image', 'aspect-[16/9] w-full rounded-md object-cover'), { image: 'featuredImage' }),
+        stack('div', 'px-5 md:px-8', [
+          stack('div', 'mx-auto w-full max-w-5xl', [bind(bare('image', styles.cardImage), { image: 'featuredImage' })]),
         ]),
-        stack('div', 'mx-auto w-full max-w-3xl px-5 py-14 md:px-8 md:py-20', [field('content', 'prose prose-lg max-w-none')]),
-        // Centered like the article above it, not the left-aligned header of the "Latest posts" section.
+        stack('div', 'px-5 py-14 md:px-8 md:py-20', [
+          stack('div', 'mx-auto w-full max-w-3xl', [field('content', 'prose prose-lg max-w-none')]),
+        ]),
         stack('section', `border-t border-border ${styles.section}`, [
-          stack('div', styles.container, [
-            heading('More posts', '2', `text-center ${styles.sectionTitle}`),
-            postGrid({ limit: 3, excludeCurrent: true, animate: false }, '3'),
+          stack('div', 'mx-auto flex w-full max-w-3xl flex-col gap-10', [
+            heading('More posts', '2', 'font-display text-3xl leading-[1.1] tracking-[-0.02em] md:text-4xl'),
+            postGrid({ limit: 2, excludeCurrent: true, animate: false, columns: 2 }, '3'),
           ]),
         ]),
       ]),

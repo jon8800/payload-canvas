@@ -13,15 +13,17 @@ import '../(frontend)/globals.css'
 
 // The canvas iframe of the page builder has its own root layout: no site header or footer.
 // It gets the same CSS, theme variables, fonts and body classes as the site layout. `live`
-// reloads the theme when the Theme global is saved in another tab.
+// reloads the theme when the Theme global is saved in another tab. ThemeStyle sits in the body,
+// not in a <head> element: React moves its tags into the head anyway, and its `live` client
+// component inside <head> made Next's metadata fail to hydrate on about one load in five.
 export default async function BuilderCanvasLayout({ children }: { children: ReactNode }) {
   const payload = await getPayload({ config })
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
-      <head>
+      <body className="font-sans antialiased">
         <ThemeStyle payload={payload} live />
-      </head>
-      <body className="font-sans antialiased">{children}</body>
+        {children}
+      </body>
     </html>
   )
 }

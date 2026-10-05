@@ -13,19 +13,58 @@
 
 import { ConfirmationModal, Drawer, Gutter, ShimmerEffect, useConfig, useDrawerSlug, useModal, useServerFunctions } from '@payloadcms/ui'
 import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 
 import { Icon } from '../../icons'
 import { useRuntime } from '../../runtime'
+import { useEditor } from '../../store'
+import { useModalA11y } from '../../ui/modalA11y'
 import { useValue } from '../../valueStore'
 import type { DocumentScreen } from '../document'
 import { DrawerRouter, drawerRouterSupport, warnDrawerFallback, type DrawerNavigation } from './DrawerRouter'
+import { withoutUndefinedLocale } from './drawerRouterSupport'
 import './screens.scss'
 
 /** A screen below the document's admin path: `['versions']`, `['versions', id]` or `['api']`. */
 type Route = { path: string[]; search: string }
 
 const RESTORE_SLUG = 'builder-restore-version'
+
+/**
+ * Payload's API screen builds its URL with `locale=${code}`, and an app without localization has
+ * no locale code: the URL shows `locale=undefined`. Payload offers no way to leave it out, so the
+ * drawer cleans the shown link, and the copy button's text right after Payload copies it.
+ */
+function useCleanApiUrl(body: RefObject<HTMLDivElement | null>, enabled: boolean) {
+  useEffect(() => {
+    const el = body.current
+    if (!enabled || !el) return
+    const clean = () => {
+      for (const link of el.querySelectorAll<HTMLAnchorElement>('a[href*="locale=undefined"]')) {
+        const href = withoutUndefinedLocale(link.getAttribute('href') ?? '')
+        link.setAttribute('href', href)
+        if (link.textContent?.includes('locale=undefined')) link.textContent = withoutUndefinedLocale(link.textContent)
+      }
+    }
+    clean()
+    const observer = new MutationObserver(clean)
+    observer.observe(el, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['href'] })
+    // The copy button next to the URL copies Payload's own value: copy the clean link after it.
+    const onClick = (event: MouseEvent) => {
+      const target = event.target instanceof Element ? event.target : null
+      const box = target?.closest('button') ? target.closest('[class*="api-url"]') : null
+      const link = box?.querySelector<HTMLAnchorElement>('a[href]')
+      if (!link) return
+      const url = link.getAttribute('href') ?? ''
+      window.setTimeout(() => void navigator.clipboard?.writeText(url).catch(() => {}), 0)
+    }
+    el.addEventListener('click', onClick)
+    return () => {
+      observer.disconnect()
+      el.removeEventListener('click', onClick)
+    }
+  }, [body, enabled])
+}
 
 function titleOf(route: Route | undefined): string {
   if (!route) return ''
@@ -43,11 +82,14 @@ export function ScreenDrawer() {
   const slug = useDrawerSlug('builder-screen')
   const { openModal, closeModal, modalState } = useModal()
   const isOpen = Boolean(modalState[slug]?.isOpen)
+  useModalA11y(RESTORE_SLUG, { alert: true })
   const { renderDocument } = useServerFunctions()
   const router = useRouter()
   const {
-    config: { routes },
+    config: { routes, localization },
   } = useConfig()
+  // The locale the canvas shows: the API screen opens with it (localized apps only).
+  const locale = useEditor(runtime.store, (state) => state.locale)
   const admin = routes.admin === '/' ? '' : routes.admin
   const docPath = `${admin}/collections/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`
 
@@ -94,7 +136,8 @@ export function ScreenDrawer() {
       return
     }
     pageUrl.current ??= `${window.location.pathname}${window.location.search}`
-    setHistory([{ path: [screen], search: '' }])
+    const known = localization && locale && localization.localeCodes.includes(locale)
+    setHistory([{ path: [screen], search: screen === 'api' && known ? `?${new URLSearchParams({ locale })}` : '' }])
     openModal(slug)
   })
   useEffect(() => {
@@ -179,6 +222,8 @@ export function ScreenDrawer() {
   const versionId = current?.path[0] === 'versions' ? current.path[1] : undefined
   const canRestore = Boolean(versionId) && meta.canUpdate
   const segments = useMemo(() => ['collections', collection, id, ...(shownRoute?.path ?? [])], [collection, id, shownRoute])
+  const body = useRef<HTMLDivElement>(null)
+  useCleanApiUrl(body, !localization && shownRoute?.path[0] === 'api')
 
   return (
     <Drawer slug={slug} className="builder-screen-drawer" gutter={false} Header={null}>
@@ -201,7 +246,7 @@ export function ScreenDrawer() {
           </button>
         </div>
       </Gutter>
-      <div className="builder-screen-drawer__body" aria-busy={loading}>
+      <div ref={body} className="builder-screen-drawer__body" aria-busy={loading}>
         {failed ? (
           <Gutter>
             <p className="builder-screen-drawer__error">

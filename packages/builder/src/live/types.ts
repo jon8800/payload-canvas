@@ -100,6 +100,8 @@ export type Awareness = {
   canvasWidth: number | null
   /** The locale the editor shows and edits (localized documents only). */
   locale?: string | null
+  /** Prop path of the selected block the person is typing in (inspector or canvas), e.g. "text" or "links.0.label". */
+  field?: string | null
 }
 
 /** Sent to every editor of a document when the session applies operations. */
@@ -307,6 +309,14 @@ export type BuilderDocMeta = {
    */
   fieldAccess: PropAccessInfo | null
 }
+
+/**
+ * `POST` / `DELETE {live}/:collection/:id/settings-lock`: the settings drawer opens or closes.
+ * `taken`: this user holds Payload's document lock now. `other`: someone else holds it (the drawer
+ * shows Payload's "Document locked" dialog). `off`: no lock (locking is off, or the user may not
+ * change the document). `released`: the user's lock is gone.
+ */
+export type SettingsLockResponse = { ok: true; lock: 'taken' | 'other' | 'off' | 'released' } | { ok: false; error: string }
 
 /** `GET {live}/:collection/:id/access`: the user's prop access, as in `BuilderDocMeta.fieldAccess`. */
 export type LiveAccessResponse = { ok: true; fieldAccess: PropAccessInfo | null } | { ok: false; error: string }

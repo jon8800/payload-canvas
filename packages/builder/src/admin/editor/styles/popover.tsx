@@ -22,7 +22,11 @@ function place(el: HTMLElement, anchor: HTMLElement, matchWidth: boolean) {
   if (matchWidth) el.style.minWidth = `${rect.width}px`
   const { offsetWidth: w, offsetHeight: h } = el
   let top = rect.bottom + GAP
-  if (top + h > window.innerHeight - MARGIN && rect.top - GAP - h > MARGIN) top = rect.top - GAP - h
+  const bottomLimit = window.innerHeight - MARGIN
+  if (top + h > bottomLimit) {
+    // Above when it fits there. Else as low as the window allows, so nothing is cut off.
+    top = rect.top - GAP - h > MARGIN ? rect.top - GAP - h : bottomLimit - h
+  }
   const left = Math.max(MARGIN, Math.min(rect.left, window.innerWidth - w - MARGIN))
   el.style.top = `${Math.max(MARGIN, top)}px`
   el.style.left = `${left}px`

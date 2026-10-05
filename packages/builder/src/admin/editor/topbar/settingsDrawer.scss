@@ -1,0 +1,32 @@
+// The "Not saved" banner in the settings drawer (settingsDrawer.tsx). It renders inside Payload's
+// document controls, outside `.builder-editor`, so it uses Payload's CSS variables only.
+
+@layer payload-default {
+  // Above the form's fields (the banner moves there from the controls row).
+  .builder-stale-save__slot {
+    padding: var(--base) var(--gutter-h) 0;
+  }
+
+  .builder-stale-save {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(var(--base) * 0.5) var(--base);
+    width: 100%;
+    padding: calc(var(--base) * 0.5) calc(var(--base) * 0.75);
+    border: 1px solid var(--theme-error-300);
+    border-radius: var(--style-radius-m);
+    background: var(--theme-error-50);
+    color: var(--theme-error-800);
+    line-height: 1.4;
+  }
+
+  .builder-stale-save__text {
+    flex: 1 1 280px;
+    margin: 0;
+  }
+
+  .builder-stale-save__reload {
+    flex: none;
+  }
+}

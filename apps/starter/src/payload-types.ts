@@ -991,7 +991,7 @@ export interface TemplatePart {
   _status?: ('draft' | 'published') | null;
 }
 /**
- * Sections saved from the page builder with "Save as section…". The builder lists them under "Saved" in Add > Sections.
+ * Sections saved from the page builder with "Save as section…". The builder lists them in the Sections tab, under "Saved".
  *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "builder-sections".

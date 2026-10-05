@@ -1,5 +1,6 @@
 // The Field block: one field of the current document, rendered by the value's type.
 
+import { FIELD_CLASS_MAP } from '@payload-toolkit/builder/blocks'
 import {
   FIELD_VALUE_PROP,
   formatDate,
@@ -20,6 +21,15 @@ import { lines } from './Text'
 const isImage = (doc: Record<string, unknown>) =>
   typeof doc.mimeType !== 'string' || doc.mimeType.startsWith('image/')
 
+/**
+ * Rich text gets the `prose` typography unless the block has it already (a `prose-lg` or other
+ * `prose` class from the author wins). The classes are listed in the field block's `classes`.
+ */
+function richTextClass(className: string | undefined): string {
+  if (className?.split(/\s+/).includes('prose')) return className
+  return className ? `${className} ${FIELD_CLASS_MAP.richText}` : FIELD_CLASS_MAP.richText
+}
+
 const asNumber = (value: unknown): number | undefined => (typeof value === 'number' ? value : undefined)
 
 function createField(resolveLink: ResolveLink): ComponentType<BlockComponentProps> {
@@ -37,7 +47,7 @@ function createField(resolveLink: ResolveLink): ComponentType<BlockComponentProp
       )
     }
     if (isRichText(value)) {
-      return <div {...attributes} className={className}>{renderRichText(value, resolveLink)}</div>
+      return <div {...attributes} className={richTextClass(className)}>{renderRichText(value, resolveLink)}</div>
     }
     if (isUploadDoc(value)) {
       if (!isImage(value)) {

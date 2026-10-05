@@ -19,7 +19,10 @@ type HistoryEntry = {
   ops: Operation[]
   /** Selection to restore when this entry is applied. */
   selectedId: string | null
-  /** Consecutive edits with the same key merge into one entry (typing in a text input). */
+  /**
+   * Consecutive edits with the same key merge into one entry (typing in a text input). In a group
+   * entry: the key of the newest edit, so a run of edits to one prop keeps only its first inverse.
+   */
   mergeKey?: string
   /** Consecutive edits with the same group merge into one entry, with no time limit (one assistant turn). */
   group?: string
@@ -283,6 +286,9 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
       const now = Date.now()
       const top = state.undoStack.at(-1)
       const grouped = Boolean(applyOptions.group) && top?.group === applyOptions.group
+      // In a group, more edits of the same merge run (typing in one prop) need no inverse of their
+      // own: the run's first inverse, already in the entry, restores the value before the run.
+      const sameRun = grouped && Boolean(applyOptions.mergeKey) && top?.mergeKey === applyOptions.mergeKey
       const merge =
         !grouped &&
         applyOptions.mergeKey &&
@@ -291,7 +297,16 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
       const undoStack =
         top && grouped
           ? // Undo the newest edit first, then the older ones in the group.
-            [...state.undoStack.slice(0, -1), { ...top, ops: [...result.inverse, ...top.ops], tags: [...top.tags, tag], at: now }]
+            [
+              ...state.undoStack.slice(0, -1),
+              {
+                ...top,
+                ops: sameRun ? top.ops : [...result.inverse, ...top.ops],
+                mergeKey: applyOptions.mergeKey,
+                tags: [...top.tags, tag],
+                at: now,
+              },
+            ]
           : top && merge
             ? // When merging, keep the older inverse: it already restores the values before the first edit.
               [...state.undoStack.slice(0, -1), { ...top, tags: [...top.tags, tag], at: now }]
@@ -348,6 +363,16 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
         selectedId: entry.selectedId,
         lastError: null,
       })
+    },
+
+    /**
+     * Ends the current merge run: the next edit starts a new undo step even with the same
+     * `mergeKey` (a text field lost the focus). Groups are not affected.
+     */
+    endMerge() {
+      const top = state.undoStack.at(-1)
+      if (!top?.mergeKey || top.group) return
+      set({ undoStack: [...state.undoStack.slice(0, -1), { ...top, mergeKey: undefined }] })
     },
 
     select(id: string | null) {

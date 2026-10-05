@@ -32,7 +32,7 @@ export type PostListInput = {
 export function postCard(level: HeadingLevel = '3') {
   // Literal values are design-time placeholders; each post's own values replace them.
   const card = link({ type: 'url', url: '/blog' }, 'group flex flex-col gap-5', [
-    bind(bare('image', 'aspect-[16/10] w-full rounded-md object-cover'), { image: 'featuredImage' }),
+    bind(bare('image', styles.cardImage), { image: 'featuredImage' }),
     stack('div', 'flex flex-col gap-2', [
       field('publishedAt', 'text-sm text-muted-foreground'),
       bind(
@@ -49,13 +49,19 @@ export function postCard(level: HeadingLevel = '3') {
   return bind(withMotion(card, motions.interactive), { link: '$url' })
 }
 
-/** A grid of post cards. The cards appear one after another, unless `animate` is false. */
-export function postGrid(options: { limit: number; excludeCurrent?: boolean; animate?: boolean }, level: HeadingLevel): Block {
-  const { limit, excludeCurrent, animate = true } = options
+/**
+ * A grid of post cards. The cards appear one after another, unless `animate` is false.
+ * `columns`: 3 (default) on laptops, or 2 for a narrow column such as the post page.
+ */
+export function postGrid(
+  options: { limit: number; excludeCurrent?: boolean; animate?: boolean; columns?: 2 | 3 },
+  level: HeadingLevel,
+): Block {
+  const { limit, excludeCurrent, animate = true, columns = 3 } = options
   const grid = collectionList(
     'posts',
     { limit, sort: '-publishedAt', ...(excludeCurrent === undefined ? {} : { excludeCurrent }) },
-    'grid grid-cols-1 gap-x-8 gap-y-14 sm:grid-cols-2 lg:grid-cols-3',
+    `grid grid-cols-1 gap-x-8 gap-y-14 sm:grid-cols-2${columns === 3 ? ' lg:grid-cols-3' : ''}`,
     [postCard(level)],
   )
   return animate ? withMotion(grid, motions.staggerChildren) : grid

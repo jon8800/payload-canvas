@@ -126,6 +126,7 @@ export function sameAwareness(a: Awareness | null, b: Awareness | null): boolean
     a.hoveredId === b.hoveredId &&
     a.canvasWidth === b.canvasWidth &&
     (a.locale ?? null) === (b.locale ?? null) &&
+    (a.field ?? null) === (b.field ?? null) &&
     sameCursor(a.cursor, b.cursor)
   )
 }

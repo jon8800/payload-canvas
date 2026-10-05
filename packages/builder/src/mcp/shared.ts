@@ -78,16 +78,51 @@ export function withNewIds(block: Block, used: Set<string>): Block {
   return copy
 }
 
+/** Words models use for the page root. An id counts as the root when ALL its words are in this list. */
+const ROOT_WORDS = new Set([
+  'root', 'page', 'body', 'null', 'none', 'nil', 'undefined', 'document', 'doc', 'top', 'level', 'main', 'html',
+  'layout', 'canvas', 'the', 'of', 'toplevel', 'pageroot', 'rootpage', 'documentroot',
+])
+
 /**
  * True for a parent id that means "the page root" although it is a string: models send "", "root",
- * ":root", ".", "]", "body" and the like instead of null. Block ids always contain letters or
- * digits, so an id without any is never a real block (strict tool schemas make them fill
- * every field).
+ * "__PAGE_ROOT__", "<root>", "$root", "page-root", "body" and the like instead of null (strict tool
+ * schemas make them fill every field).
+ *
+ * The id is split into words at every character that is not a letter or digit (and at camelCase
+ * borders). It is the root when it has no words, or when every word is a root word. Generated block
+ * ids ("b_k3x9qa") always hold the word "b" and a 6-character random word, so they never match.
+ * `exists` guards a layout that really has a block with such an id: that block wins.
  */
-export function isRootParentId(id: unknown): boolean {
+export function isRootParentId(id: unknown, exists?: (id: string) => boolean): boolean {
   if (id === null || id === undefined) return true
   if (typeof id !== 'string') return false
-  return /^[^a-z0-9]*(root|page|body|null|none|document|top)?[^a-z0-9]*$/i.test(id)
+  if (exists?.(id)) return false
+  const words = id
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+  return words.every((word) => ROOT_WORDS.has(word))
+}
+
+/**
+ * Sets a root-like `to.parentId` ("__PAGE_ROOT__", "root", ...) of insert and move operations to
+ * null. Returns the operations (copies only where something changed) and how many ids it fixed.
+ * Operations that are not plain objects pass through: the operation checks report them.
+ */
+export function repairRootParents<T>(layout: Layout, ops: T[]): { ops: T[]; fixed: number } {
+  const index = indexLayout(layout)
+  let fixed = 0
+  const out = ops.map((op) => {
+    const value = op as { type?: unknown; to?: { parentId?: unknown } } | null
+    const parentId = value?.to?.parentId
+    if (!value || (value.type !== 'insert' && value.type !== 'move') || typeof parentId !== 'string') return op
+    if (!isRootParentId(parentId, (id) => index.has(id))) return op
+    fixed++
+    return { ...value, to: { ...value.to, parentId: null } } as T
+  })
+  return { ops: out, fixed }
 }
 
 /** How to fix an unknown parent id. Models retry the same call when the error does not say. */
@@ -103,7 +138,7 @@ export function sectionInsertOps(
 ): Operation[] | string {
   const index = indexLayout(layout)
   // Models often send "" or "root" for the page root (strict tool schemas make them fill every field).
-  const parentId = isRootParentId(at.parentId) ? null : (at.parentId as string)
+  const parentId = isRootParentId(at.parentId, (id) => index.has(id)) ? null : (at.parentId as string)
   const slot = at.slot?.trim() ? at.slot : DEFAULT_SLOT
   if (parentId !== null && !index.has(parentId)) return unknownParentMessage(parentId)
   const list = parentId === null ? layout.blocks : (index.get(parentId)?.block.slots?.[slot] ?? [])

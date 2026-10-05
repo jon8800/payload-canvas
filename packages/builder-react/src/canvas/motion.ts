@@ -19,9 +19,11 @@ export type CanvasMotion = {
 /**
  * `motionOf` gives a block's motion in the newest layout from the admin. A preview waits until
  * the block renders with exactly those settings (the edit that asked for it may not be on screen
- * yet), for up to a second.
+ * yet), for up to a second. `onSettled` runs when a preview ends and when playing stops: blocks are
+ * back in place, so the editor measures them again (a transform does not resize anything, so no
+ * observer notices it).
  */
-export function createCanvasMotion(motionOf: (id: string) => BlockMotion | undefined): CanvasMotion {
+export function createCanvasMotion(motionOf: (id: string) => BlockMotion | undefined, onSettled: () => void = () => {}): CanvasMotion {
   let stop: (() => void) | null = null
   let frame = 0
   let timer = 0
@@ -37,6 +39,7 @@ export function createCanvasMotion(motionOf: (id: string) => BlockMotion | undef
       if (!on && stop) {
         stop()
         stop = null
+        requestAnimationFrame(onSettled)
       }
     },
     preview(id) {
@@ -48,7 +51,7 @@ export function createCanvasMotion(motionOf: (id: string) => BlockMotion | undef
         const current = el?.getAttribute(MOTION_ATTR) ?? null
         const ready = el !== null && motion !== undefined && current === JSON.stringify(motion)
         if (el && (ready || (Date.now() >= until && current))) {
-          void previewMotion(el)
+          void previewMotion(el).finally(() => requestAnimationFrame(onSettled))
           return
         }
         if (Date.now() < until) timer = window.setTimeout(attempt, RETRY_MS)

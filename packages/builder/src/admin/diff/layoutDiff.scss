@@ -1,0 +1,181 @@
+// The builder layout diff in Payload's Versions > compare view. Payload CSS variables only, no
+// Tailwind. Colors come from Payload's own diff variables (`--diff-create-*`, `--diff-delete-*`),
+// with theme fallbacks, so it matches the other fields' diffs in light and dark theme.
+
+@layer payload-default {
+  .layout-diff {
+    position: relative;
+
+    &__content {
+      display: flex;
+      flex-direction: column;
+      gap: calc(var(--base) * 0.5);
+      background: var(--theme-elevation-50);
+      padding: calc(var(--base) * 0.5);
+    }
+
+    &__summary {
+      margin: 0;
+      color: var(--theme-elevation-800);
+      font-weight: 500;
+    }
+
+    &__list,
+    &__details {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    &__list {
+      display: flex;
+      flex-direction: column;
+      gap: calc(var(--base) * 0.25);
+    }
+
+    &__change {
+      padding: calc(var(--base) * 0.4) calc(var(--base) * 0.5);
+      border: 1px solid var(--theme-elevation-100);
+      border-radius: var(--style-radius-s);
+      background: var(--theme-elevation-0);
+    }
+
+    &__head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: calc(var(--base) * 0.3);
+      min-width: 0;
+    }
+
+    &__pill {
+      flex: none;
+      padding: 0 calc(var(--base) * 0.25);
+      border: 1px solid var(--theme-elevation-150);
+      border-radius: var(--style-radius-s);
+      background: var(--theme-elevation-100);
+      color: var(--theme-elevation-800);
+      font-size: calc(var(--base) * 0.55);
+      font-weight: 600;
+      line-height: 1.6;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+
+      &--added {
+        border-color: var(--diff-create-pill-border, var(--theme-success-400));
+        background: var(--diff-create-pill-bg, var(--theme-success-200));
+        color: var(--diff-create-pill-color, var(--theme-success-600));
+      }
+
+      &--removed {
+        border-color: var(--diff-delete-pill-border, var(--theme-error-400));
+        background: var(--diff-delete-pill-bg, var(--theme-error-200));
+        color: var(--diff-delete-pill-color, var(--theme-error-600));
+      }
+    }
+
+    &__name {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    &__where {
+      color: var(--theme-elevation-600);
+    }
+
+    &__details {
+      display: flex;
+      flex-direction: column;
+      gap: calc(var(--base) * 0.2);
+      margin-top: calc(var(--base) * 0.3);
+      padding-inline-start: calc(var(--base) * 0.5);
+      border-inline-start: 2px solid var(--theme-elevation-100);
+    }
+
+    &__detail {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: calc(var(--base) * 0.25);
+      min-width: 0;
+    }
+
+    &__detail-label {
+      display: inline-flex;
+      align-items: baseline;
+      gap: calc(var(--base) * 0.2);
+      color: var(--theme-elevation-600);
+
+      &::after {
+        content: ':';
+      }
+
+      .field-diff__locale-label {
+        margin: 0;
+      }
+    }
+
+    &__value,
+    &__class {
+      padding: 0 calc(var(--base) * 0.15);
+      border-radius: var(--style-radius-s);
+      text-decoration: none;
+      overflow-wrap: anywhere;
+    }
+
+    &__value--del {
+      background: var(--diff-delete-parent-bg, var(--theme-error-100));
+      color: var(--diff-delete-parent-color, var(--theme-error-800));
+      text-decoration: line-through;
+      text-decoration-color: var(--diff-delete-pill-border, var(--theme-error-400));
+    }
+
+    &__value--ins {
+      background: var(--diff-create-parent-bg, var(--theme-success-100));
+      color: var(--diff-create-parent-color, var(--theme-success-800));
+    }
+
+    &__class {
+      font-family: var(--font-mono, ui-monospace, monospace);
+      font-size: calc(var(--base) * 0.55);
+    }
+
+    &__empty {
+      color: var(--theme-elevation-400);
+      font-style: italic;
+    }
+
+    &__arrow {
+      color: var(--theme-elevation-400);
+    }
+
+    &__json {
+      border-top: 1px solid var(--theme-elevation-100);
+      padding-top: calc(var(--base) * 0.4);
+    }
+
+    &__json-summary {
+      cursor: pointer;
+      color: var(--theme-elevation-600);
+      width: fit-content;
+
+      &:hover {
+        color: var(--theme-elevation-900);
+      }
+    }
+
+    &__json-content {
+      display: grid;
+      // Same columns as Payload's field diffs: old on the left, new on the right.
+      grid-template-columns: calc(50% - var(--base) * 0.5) calc(50% - var(--base) * 0.5);
+      gap: var(--base);
+      margin-top: calc(var(--base) * 0.5);
+      overflow-x: auto;
+
+      pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+    }
+  }
+}

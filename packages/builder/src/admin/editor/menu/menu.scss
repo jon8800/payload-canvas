@@ -19,9 +19,9 @@
     background: var(--theme-bg);
     color: var(--theme-text);
     font-family: var(--font-body);
-    font-size: 12.5px;
+    font-size: var(--be-text-m);
     line-height: 1.3;
-    box-shadow: 0 8px 24px rgb(0 0 0 / 0.18), 0 1px 3px rgb(0 0 0 / 0.12);
+    box-shadow: var(--be-shadow);
     outline: 0;
     transform-origin: var(--transform-origin);
 
@@ -102,7 +102,7 @@
     background: none;
     color: var(--be-subtle, var(--theme-elevation-400));
     font: inherit;
-    font-size: 11px;
+    font-size: var(--be-text-s);
   }
 
   .builder-menu .builder-menu__check {
@@ -121,7 +121,7 @@
     padding: 6px 8px 4px;
     border-top: 1px solid var(--be-border-soft, var(--theme-elevation-100));
     color: var(--be-muted, var(--theme-elevation-500));
-    font-size: 11px;
+    font-size: var(--be-text-s);
   }
 
   // The highlight shows the keyboard position; no focus ring inside the menu.

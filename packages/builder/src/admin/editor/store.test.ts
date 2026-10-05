@@ -27,6 +27,38 @@ test('operations with the same group become one undo step; redo re-applies all o
   assert.equal(textOf(store.getState().layout, 0), 'A!')
 })
 
+test('a list run: typing, a new item and more typing in a group are one undo step with few inverses', () => {
+  const store = createEditorStore(layout(block('a', '')))
+  const type = (id: string, text: string, session: string) =>
+    store.apply({ type: 'update', id, props: { text } }, { group: 'list:s1', mergeKey: `inline:${session}`, mergeWithin: Infinity })
+  type('a', 'A', 's1')
+  type('a', 'Al', 's1')
+  type('a', 'Alpha', 's1')
+  store.apply(insert('b', 1), { group: 'list:s1' })
+  type('b', 'B', 's2')
+  type('b', 'Beta', 's2')
+  assert.equal(store.getState().undoStack.length, 1)
+  // One inverse per run of typing, one for the insert.
+  assert.equal(store.getState().undoStack[0].ops.length, 3)
+  store.undo()
+  assert.deepEqual(store.getState().layout, layout(block('a', '')))
+  store.redo()
+  assert.deepEqual(ids(store.getState().layout), ['a', 'b'])
+  assert.equal(textOf(store.getState().layout, 1), 'Beta')
+})
+
+test('endMerge: the next edit with the same key starts a new undo step', () => {
+  const store = createEditorStore(layout(block('a', '')))
+  store.apply({ type: 'update', id: 'a', props: { text: 'x' } }, { mergeKey: 'props:a:text' })
+  store.apply({ type: 'update', id: 'a', props: { text: 'xy' } }, { mergeKey: 'props:a:text' })
+  assert.equal(store.getState().undoStack.length, 1)
+  store.endMerge()
+  store.apply({ type: 'update', id: 'a', props: { text: 'xyz' } }, { mergeKey: 'props:a:text' })
+  assert.equal(store.getState().undoStack.length, 2)
+  store.undo()
+  assert.equal(textOf(store.getState().layout, 0), 'xy')
+})
+
 test('separate turns stay separate undo steps, even right after each other', () => {
   const store = createEditorStore(layout())
   store.apply(insert('a', 0), { group: 'ai:t1' })

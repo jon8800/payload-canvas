@@ -11,7 +11,7 @@ import {
   UploadInput,
   useConfig,
 } from '@payloadcms/ui'
-import { Fragment, type ChangeEvent, type ReactNode } from 'react'
+import { Fragment, useEffect, type ChangeEvent, type FocusEvent, type KeyboardEvent, type ReactNode } from 'react'
 import type { Field, OptionObject } from 'payload'
 
 import { getBlockDefinition } from '../../core'
@@ -25,11 +25,14 @@ import { JsonField } from './fields/JsonField'
 import { ManyValuesField } from './fields/ManyValuesField'
 import { PointField } from './fields/PointField'
 import { RichTextField } from './fields/RichTextField'
+import { fieldMergeKey } from './fields/undoPath'
 import { asId, formatProblem, fromRelationshipInput, isFieldVisible, isRecord, toRelationshipInput, type FieldShape } from './fields/values'
 import { FieldAccessFrame, FieldAccessProvider, HiddenFieldsNote, useFieldAccessCheck } from './fields/access'
 import { FieldProblem, FieldProblemsProvider } from './fields/FieldProblems'
 import { LocaleFieldFrame, LocaleFieldsProvider, useInspectorProps, useLocalePlaceholder } from './locale/LocaleField'
 import { GenerateImage } from './generate/GenerateImage'
+import { focusedField, propPathOf } from './live/field'
+import { PeerFieldNote } from './live/PresenceUI'
 import { useRuntime } from './runtime'
 import { BindingScopeProvider, FieldSlot } from './templates/Bindable'
 import './fields/fields.scss'
@@ -168,7 +171,7 @@ export function RenderBlockField({ field, onChange, path, value }: Props) {
         <SelectInput
           description={description}
           hasMany={hasMany}
-          isClearable={!required}
+          isClearable={!required && field.defaultValue == null}
           label={label}
           name={field.name}
           onChange={(option: { value: unknown } | { value: unknown }[] | null) =>
@@ -389,7 +392,8 @@ export function RenderBlockFields({ fields, data, path, onChange, scope = fields
     if (!access.read) return
     const onFieldChange = (value: unknown) => setField(name, value)
     out.push(
-      <Fragment key={name}>
+      // `data-builder-field`: the field the focus is in, for collaborators ("Anna is editing this field").
+      <div key={name} data-builder-field={fieldPath} style={{ display: 'contents' }}>
         <FieldAccessFrame locked={!access.update}>
           {/* In another locale: "Not translated" or "Translated" under a localized field. */}
           <LocaleFieldFrame path={fieldPath} name={name}>
@@ -399,24 +403,39 @@ export function RenderBlockFields({ fields, data, path, onChange, scope = fields
             </FieldSlot>
           </LocaleFieldFrame>
         </FieldAccessFrame>
+        <PeerFieldNote fieldPath={fieldPath} />
         {/* The message of the field's own `validate` function (checked on the server). */}
         <FieldProblem path={fieldPath} />
-      </Fragment>,
+      </div>,
     )
   })
   return <>{out}</>
 }
 
+/** The inspector field path (`data-builder-field`) of the field around `node`, or null. */
+const fieldAt = (node: EventTarget | null) =>
+  node instanceof Element ? (node.closest<HTMLElement>('[data-builder-field]')?.dataset.builderField ?? null) : null
+
+/** Text inputs whose native undo the editor replaces with its own (see `onUndoKeys`). */
+const TEXT_INPUT = 'textarea, input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="url"], input[type="number"], input[type="tel"]'
+
 /**
  * The Content tab of the block inspector: every field of the selected block, with conditions.
- * Each changed prop becomes one `update` operation. Edits to the same prop in a burst merge into
- * one undo step.
+ * Each changed prop becomes one `update` operation.
+ *
+ * Undo steps: typing in one field merges into one step until a pause of about a second
+ * (MERGE_WINDOW_MS in the store) or until the field loses the focus. Two fields never merge, also
+ * two fields of one array row or group (`fieldMergeKey`). Ctrl+Z in a text input runs this undo,
+ * not the browser's, which groups typing in its own way and would add new edits.
  */
 export function BlockContentFields({ block }: { readonly block: Block }) {
   const runtime = useRuntime()
   // `block` is the editor's locale view. Untranslated text props are left out: their fallback is
   // the placeholder, so typing starts a translation instead of editing the other language's text.
   const props = useInspectorProps(block)
+  // Collaborators see the field the focus is in. Cleared when the inspector shows another block.
+  const field = focusedField(runtime)
+  useEffect(() => () => field.set(null), [field])
   const def = getBlockDefinition(runtime.config.blocks, block.type)
   if (!def) return <p className="builder-editor__hint">Unknown block type “{block.type}”.</p>
   if (def.fields.length === 0) return <p className="builder-editor__hint">This block has no content fields.</p>
@@ -435,12 +454,35 @@ export function BlockContentFields({ block }: { readonly block: Block }) {
         ...(removed.length > 0 ? { unsetProps: removed } : {}),
       },
       // Typing in a burst merges into one undo step; moving, adding or removing array rows does not.
-      keys.length === 1 && !isStructuralChange() ? { mergeKey: `props:${block.id}:${keys[0]}` } : {},
+      keys.length === 1 && !isStructuralChange() ? { mergeKey: fieldMergeKey(block.id, keys[0], props[keys[0]], after[keys[0]]) } : {},
     )
   }
 
+  const onFocus = (e: FocusEvent<HTMLDivElement>) => {
+    const at = propPathOf(fieldAt(e.target) ?? '')
+    field.set(at?.blockId === block.id ? at.path : null)
+  }
+  // Leaving a field ends its undo step. Focus moving inside one field (a select's menu) does not.
+  const onBlur = (e: FocusEvent<HTMLDivElement>) => {
+    const from = fieldAt(e.target)
+    if (from !== null && from === fieldAt(e.relatedTarget)) return
+    runtime.store.endMerge()
+    if (!(e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget))) field.set(null)
+  }
+  const onUndoKeys = (e: KeyboardEvent<HTMLDivElement>) => {
+    const mod = e.ctrlKey || e.metaKey
+    if (!mod || e.altKey || !(e.target instanceof Element) || !e.target.matches(TEXT_INPUT)) return
+    const key = e.key.toLowerCase()
+    const action = key === 'z' ? (e.shiftKey ? 'redo' : 'undo') : key === 'y' && !e.shiftKey ? 'redo' : null
+    if (!action) return
+    e.preventDefault()
+    if (action === 'undo') runtime.store.undo()
+    else runtime.store.redo()
+  }
+
   return (
-    <div className="builder-editor__fields">
+    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- delegates the undo keys of the inputs inside
+    <div className="builder-editor__fields" onFocus={onFocus} onBlur={onBlur} onKeyDown={onUndoKeys}>
       <BindingScopeProvider block={block} prefix={`builder.${block.id}.`}>
         <FieldProblemsProvider block={block}>
           <LocaleFieldsProvider block={block}>

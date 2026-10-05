@@ -59,6 +59,9 @@ const template: Layout = {
 
 const withItems = attachListItems(template, new Map([['list', items]]))
 
+const richBody = (className?: string) =>
+  render({ layout: { version: 1, blocks: [{ id: 'b', type: 'field', props: { path: 'content' }, ...(className ? { className } : {}) }] }, context: post, resolveLink })
+
 describe('RenderLayout with a template context', () => {
   const html = render({ layout: withItems, context: post, resolveLink })
 
@@ -69,6 +72,14 @@ describe('RenderLayout with a template context', () => {
     assert.match(html, /<time dateTime="2026-09-10T00:00:00.000Z">Sep 10, 2026<\/time>/)
     assert.match(html, /<div>A, B<\/div>/)
     assert.match(html, /<div>Nothing<\/div>/)
+  })
+
+  it('gives rich text in a Field block the prose styles unless the block has them', () => {
+    assert.equal(richBody(), '<div class="prose max-w-none builder-css"><p>Body text</p></div>')
+    assert.equal(richBody('prose prose-lg'), '<div class="prose prose-lg builder-css"><p>Body text</p></div>')
+    assert.match(richBody('mt-4'), /^<div class="mt-4 builder-css prose max-w-none builder-css">/)
+    // Other values are not styled.
+    assert.match(html, /<div>A, B<\/div>/)
   })
 
   it('renders the list item once per document, bound to that document', () => {

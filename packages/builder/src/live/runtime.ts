@@ -16,7 +16,8 @@ export const LIVE_RUNTIME_KEY = 'websiteBuilderLive'
 
 // v6: commits put locale operations in canonical form, sessions load every locale, and awareness
 // carries the editor's locale. A dev hot reload from an older runtime must not reuse its object.
-const GLOBAL_KEY = Symbol.for('@payload-toolkit/builder/live-runtime-v7')
+// v8: awareness carries the field the editor types in.
+const GLOBAL_KEY = Symbol.for('@payload-toolkit/builder/live-runtime-v8')
 
 const ACCESS_TTL_MS = 30_000
 

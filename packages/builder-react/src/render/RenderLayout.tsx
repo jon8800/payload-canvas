@@ -268,7 +268,7 @@ export function RenderLayout({
   return (
     <>
       <BuilderStyle css={css} />
-      {motion && <MotionStyle />}
+      {motion && <MotionStyle blocks={layout.blocks} />}
       {renderBlocks(layout.blocks, ctx)}
       {motion && <MotionRuntime />}
     </>

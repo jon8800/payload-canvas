@@ -114,6 +114,23 @@ describe('insertSpotAt', () => {
     assert.deepEqual(empty && spotPosition(empty), { parentId: null, slot: 'children', index: 0 })
   })
 
+  it("offers no spot on the selected block's own edge, but its neighbour's edge still does", () => {
+    const selected = { id: 'h', tolerance: 4 }
+    // The lower half of h: after h, on its bottom edge (s touches it).
+    assert.equal(insertSpotAt(layout, blocks, m, { x: 100, y: 45 }, { selected }), null)
+    // The same place from s's top edge band: offered.
+    const fromNeighbour = insertSpotAt(layout, blocks, m, { x: 100, y: 53 }, { selected })
+    assert.deepEqual(fromNeighbour && spotPosition(fromNeighbour), { parentId: null, slot: 'children', index: 1 })
+    // a is selected: its top edge (no block above it in s) offers nothing, not the edge of s either.
+    const child = { id: 'a', tolerance: 4 }
+    assert.equal(insertSpotAt(layout, blocks, m, { x: 100, y: 80 }, { selected: child }), null)
+    // A gap wider than the tolerance keeps its spot in the middle.
+    const gap = insertSpotAt(layout, blocks, m, { x: 100, y: 125 }, { selected: child })
+    assert.equal(gap?.at.y, 145)
+    // In a row, the left and right edges count.
+    assert.equal(insertSpotAt(layout, blocks, m, { x: 40, y: 400 }, { selected: { id: 'x', tolerance: 4 } }), null)
+  })
+
   it('compares spots by position and place', () => {
     const a = insertSpotAt(layout, blocks, m, { x: 100, y: 125 })
     const b = insertSpotAt(layout, blocks, m, { x: 120, y: 128 })

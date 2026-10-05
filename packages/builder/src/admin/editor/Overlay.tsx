@@ -24,6 +24,11 @@ import { useValue, useValueSelector } from './valueStore'
 const BAR_HEIGHT = 26
 /** Below this screen width the action bar would cover the name tag, so it goes under the block. */
 const NARROW_BLOCK = 190
+/** Height of a name tag, in screen pixels (`.builder-editor__tag`). */
+const TAG_HEIGHT = 20
+
+/** Where a name tag sits: above the block, under it, or inside its top left corner. */
+type TagPlace = 'above' | 'below' | 'inside'
 
 function box(rect: Rect): CSSProperties {
   return { left: rect.x, top: rect.y, width: rect.width, height: rect.height }
@@ -100,6 +105,26 @@ export function Overlay() {
   const gapShift = smooth && scroll ? { x: scroll.x - smooth.baseScroll.x, y: scroll.y - smooth.baseScroll.y } : { x: 0, y: 0 }
   /** A chip fits above a rect when the rect starts lower than the chip height (in iframe pixels). */
   const roomAbove = (rect: Rect) => rect.y * zoom >= BAR_HEIGHT
+  /**
+   * A tag sits outside the block, so it never covers the block's own first line: above when there is
+   * room, else under the block when its bottom edge is in view (and the action bar is not there).
+   * Only a block that fills the view from the top keeps the tag inside, at the visible top edge.
+   */
+  const tagPlace = (rect: Rect, barBelow = false): TagPlace => {
+    if (roomAbove(rect)) return 'above'
+    const viewportHeight = measurement?.viewport.height
+    const bottomInView = viewportHeight !== undefined && (rect.y + rect.height) * zoom + TAG_HEIGHT <= viewportHeight * zoom
+    return bottomInView && !barBelow ? 'below' : 'inside'
+  }
+  /** Class and style of a name tag. `modifier` adds a `builder-editor__tag--<modifier>` class. */
+  const tagProps = (rect: Rect, modifier?: string, barBelow = false) => {
+    const place = tagPlace(rect, barBelow)
+    const classes = ['builder-editor__tag', modifier && `builder-editor__tag--${modifier}`, place !== 'above' && `builder-editor__tag--${place}`]
+    // A block scrolled up past the view keeps its tag at the top of the view.
+    const style: CSSProperties | undefined =
+      place === 'inside' && rect.y < 0 ? { top: Math.min(-rect.y, Math.max(0, rect.height - TAG_HEIGHT / zoom)) } : undefined
+    return { className: classes.filter(Boolean).join(' '), style }
+  }
   const taggedActors = new Set<string>()
 
   return (
@@ -140,7 +165,7 @@ export function Overlay() {
       )}
       {hovered && hoverRect && (
         <div className="builder-editor__hover" style={box(hoverRect)}>
-          <span className={`builder-editor__tag builder-editor__tag--hover${roomAbove(hoverRect) ? '' : ' builder-editor__tag--inside'}`}>
+          <span {...tagProps(hoverRect, 'hover')}>
             <BlockIcon name={runtime.blockIcon(hovered.type)} size={12} />
             {blockName(hovered, runtime.blockLabel(hovered.type))}
           </span>
@@ -155,13 +180,13 @@ export function Overlay() {
             style={box(editing && editRect ? editRect : selectedRect)}
           >
             {editing && editRect && inline?.kind !== 'rich' && (
-              <span className={`builder-editor__tag builder-editor__tag--editing${roomAbove(editRect) ? '' : ' builder-editor__tag--inside'}`}>
+              <span {...tagProps(editRect, 'editing')}>
                 <Icon name="rename" size={12} />
                 Editing text · Esc to finish
               </span>
             )}
             {!drag && !editing && (
-              <span className={`builder-editor__tag${roomAbove(selectedRect) ? '' : ' builder-editor__tag--inside'}`}>
+              <span {...tagProps(selectedRect, undefined, selectedRect.width * zoom < NARROW_BLOCK)}>
                 <BlockIcon name={runtime.blockIcon(selected.type)} size={12} />
                 {blockName(selected, runtime.blockLabel(selected.type))}
                 {selected.bindings && Object.keys(selected.bindings).length > 0 && (
@@ -214,7 +239,7 @@ export function Overlay() {
             style={{ ...box(rect), '--be-remote': change.color } as CSSProperties}
           >
             {tagged && (
-              <span className={`builder-editor__tag builder-editor__tag--remote${roomAbove(rect) ? '' : ' builder-editor__tag--inside'}`}>
+              <span {...tagProps(rect, 'remote')}>
                 <Icon name={change.actor.type === 'ai' ? 'sparkle' : 'user'} size={12} />
                 {shortName(change.actor.label)}
               </span>
@@ -230,7 +255,7 @@ export function Overlay() {
           // The time in the key restarts the flash when the assistant changes the block again.
           <div key={`${id}:${at}`} className="builder-editor__remote builder-editor__remote--assistant" style={box(rect)}>
             {i === 0 && (
-              <span className={`builder-editor__tag builder-editor__tag--remote${roomAbove(rect) ? '' : ' builder-editor__tag--inside'}`}>
+              <span {...tagProps(rect, 'remote')}>
                 <Icon name="sparkle" size={12} />
                 Assistant
               </span>

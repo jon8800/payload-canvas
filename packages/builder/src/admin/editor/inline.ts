@@ -3,9 +3,10 @@
 // Inline text editing on the canvas, admin side. The canvas iframe edits the text in place and
 // sends the new prop value about every 150 ms. Each value becomes an `update` operation through
 // the store, so it syncs to collaborators like any edit. All updates of one editing session merge
-// into one undo step.
+// into one undo step. In a list, Enter and Backspace move the editing to another item: typing,
+// the new and joined items and the typing in them stay one undo step until editing ends.
 
-import { createId, findBlock, joinListItem, splitListItem, type ListItemEdit } from '../../core'
+import { createId, findBlock, joinListItem, splitListItem, TEXT_LIST_ITEM_BLOCK, type ListItemEdit } from '../../core'
 import type { Block, Operation } from '../../core/types'
 import { setPropPath, type InlineKind, type RichCommand, type RichFormatState } from '../../protocol'
 import { lockedMessage, propAccessNow } from './fields/accessRules'
@@ -25,6 +26,37 @@ export type InlineEditing = {
 }
 
 const stores = new WeakMap<Runtime, ValueStore<InlineEditing | null>>()
+
+/**
+ * One run of list editing: the undo group of its edits, the session that types now, and the item
+ * the next session edits (after Enter or Backspace).
+ */
+type ListRun = { group: string; session: string | null; next: string | null }
+const listRuns = new WeakMap<Runtime, ListRun>()
+
+/**
+ * The canvas started an editing session. A session on the item a list key moved to continues that
+ * key's run; a new session on a list item starts a run; any other session ends it.
+ */
+export function noteInlineStart(runtime: Runtime, message: { session: string; id: string; path: string }) {
+  const run = listRuns.get(runtime)
+  if (run && run.next === message.id) {
+    listRuns.set(runtime, { ...run, session: message.session, next: null })
+    return
+  }
+  const block = findBlock(runtime.store.getState().view, message.id)
+  if (block?.type === TEXT_LIST_ITEM_BLOCK && message.path === 'text') {
+    listRuns.set(runtime, { group: `list:${message.session}`, session: message.session, next: null })
+    return
+  }
+  listRuns.delete(runtime)
+}
+
+/** The undo group of a session's edits: its list run's, or none. */
+function groupOf(runtime: Runtime, session: string): string | undefined {
+  const run = listRuns.get(runtime)
+  return run && run.session === session ? run.group : undefined
+}
 
 /** The inline editing session of this editor, or null. */
 export function inlineEditing(runtime: Runtime): ValueStore<InlineEditing | null> {
@@ -55,7 +87,8 @@ export function applyInlineChange(runtime: Runtime, change: { session: string; i
   if (block && !propAccessNow(runtime, block, change.path).update) return
   const op = block ? inlineUpdate(block, change.path, change.value) : null
   if (!op) return
-  runtime.store.apply(op, { mergeKey: `inline:${change.session}`, mergeWithin: Number.POSITIVE_INFINITY })
+  const group = groupOf(runtime, change.session)
+  runtime.store.apply(op, { mergeKey: `inline:${change.session}`, mergeWithin: Number.POSITIVE_INFINITY, ...(group ? { group } : {}) })
 }
 
 /**
@@ -79,11 +112,14 @@ export function startInlineEditing(runtime: Runtime, id: string, offset?: number
 }
 
 /**
- * Applies a list item key press as one undo step, selects the item to edit and edits it. A new
- * item's text is typed in the editor's locale.
+ * Applies a list item key press, selects the item to edit and edits it. It joins the undo step of
+ * the list run (the session the key ended). A new item's text is typed in the editor's locale.
  */
 function applyListItemEdit(runtime: Runtime, edit: ListItemEdit | null) {
-  if (!edit || !runtime.store.apply(edit.ops, { select: edit.editId, newContent: true })) return
+  const run = listRuns.get(runtime)
+  const group = run?.session ? run.group : undefined
+  if (!edit || !runtime.store.apply(edit.ops, { select: edit.editId, newContent: true, ...(group ? { group } : {}) })) return
+  if (run && group) listRuns.set(runtime, { group, session: null, next: edit.editId })
   startInlineEditing(runtime, edit.editId, edit.offset)
 }
 

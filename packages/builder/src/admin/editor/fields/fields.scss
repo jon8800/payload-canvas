@@ -2,6 +2,15 @@
 // Payload CSS variables only, inside Payload's own layer.
 
 @layer payload-default {
+  // Payload's grey help and meta text (elevation-400/500) is below 4.5:1 on white. In the
+  // inspector it uses the darker grey, so every field reads well.
+  .builder-editor__fields {
+    .field-description,
+    .upload-relationship-details__meta {
+      color: var(--theme-elevation-600);
+    }
+  }
+
   .builder-field-group {
     display: flex;
     flex-direction: column;
@@ -16,17 +25,17 @@
   .builder-field-group__label {
     margin: 0 0 calc(var(--base) * 0.25);
     padding: 0;
-    color: var(--theme-elevation-500);
-    font-size: 11px;
-    font-weight: 600;
+    color: var(--theme-elevation-600);
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-strong);
     letter-spacing: 0.04em;
     text-transform: uppercase;
   }
 
   .builder-field-group__description {
     margin: 0;
-    color: var(--theme-elevation-500);
-    font-size: 12px;
+    color: var(--theme-elevation-600);
+    font-size: var(--be-text-m);
   }
 
   .builder-field-group__fields {
@@ -87,7 +96,7 @@
       background: none;
       color: var(--theme-elevation-800);
       font: inherit;
-      font-size: 12px;
+      font-size: var(--be-text-m);
       cursor: pointer;
 
       &:hover,
@@ -181,7 +190,7 @@
     display: block;
     overflow: hidden;
     color: var(--theme-text);
-    font-size: 13px;
+    font-size: var(--be-text-m);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -224,7 +233,7 @@
   .builder-field-error {
     margin: 4px 0 0;
     color: var(--theme-error-500);
-    font-size: 12px;
+    font-size: var(--be-text-m);
   }
 
   .builder-field-richtext {
@@ -278,7 +287,7 @@
     width: 20px;
     height: 20px;
     border-radius: var(--style-radius-s);
-    color: var(--theme-elevation-500);
+    color: var(--theme-elevation-600);
     background: var(--theme-elevation-50);
     cursor: help;
   }

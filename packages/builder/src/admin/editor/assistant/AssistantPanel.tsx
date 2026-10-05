@@ -15,7 +15,7 @@ import { useValue } from '../valueStore'
 import type { AiClientConfig } from '../../../ai/types'
 import { ConnectAgents, useCopy } from './ConnectAgents'
 import type { AssistantController, AssistantNotice, AssistantState } from './controller'
-import { humanizeTool, transcript, type ToolInfo, type TranscriptItem, type TranscriptPart } from './history'
+import { failedAction, failureParts, humanizeTool, retriedCalls, transcript, type ToolInfo, type TranscriptItem, type TranscriptPart } from './history'
 import { Markdown } from './MarkdownView'
 
 import './assistant.scss'
@@ -36,8 +36,9 @@ function Panel({ assistant, hidden }: { assistant: AssistantController; hidden: 
   const state = useValue(assistant.state)
   const { history, streaming, live, notice, failed } = state
   const items = buildItems(state)
-  // An info note (e.g. "New chat: the assistant now uses …") shows inside the welcome.
-  const empty = items.length === 0 && !failed && (!notice || notice.kind === 'info')
+  // An info note (e.g. "New chat: the assistant now uses …") shows inside the welcome. A note that
+  // comes with the user's message (after Stop) belongs to the conversation.
+  const empty = items.length === 0 && !failed && (!notice || (notice.kind === 'info' && !notice.echo))
   const [connect, setConnect] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const stick = useRef(true)
@@ -93,6 +94,9 @@ function Panel({ assistant, hidden }: { assistant: AssistantController; hidden: 
           <Welcome assistant={assistant} note={notice?.kind === 'info' ? notice.message : null} />
         ) : (
           <div className="builder-assistant__log" role="log" aria-live="polite" aria-busy={streaming} aria-label="Conversation">
+            {state.restored && items.some((item) => item.kind === 'assistant') && (
+              <p className="builder-assistant__info">Undo of earlier replies is not available after a reload.</p>
+            )}
             {items.map((item, i) =>
               item.kind === 'user' ? (
                 <UserBubble key={item.key} text={item.text} />
@@ -106,6 +110,7 @@ function Panel({ assistant, hidden }: { assistant: AssistantController; hidden: 
               ),
             )}
             {failed && <UserBubble text={failed} failed />}
+            {notice?.kind === 'info' && notice.echo && <UserBubble text={notice.echo} failed label="Not sent" />}
             {notice && <Notice assistant={assistant} notice={notice} canRetry={Boolean(failed)} />}
           </div>
         )}
@@ -153,11 +158,11 @@ function EmptyMark() {
   )
 }
 
-function UserBubble({ text, failed = false }: { text: string; failed?: boolean }) {
+function UserBubble({ text, failed = false, label = 'Not sent' }: { text: string; failed?: boolean; label?: string }) {
   return (
     <div className={`builder-assistant__user${failed ? ' builder-assistant__user--failed' : ''}`}>
       <p className="builder-assistant__bubble">{text}</p>
-      {failed && <span className="builder-assistant__failed-label">Not sent</span>}
+      {failed && <span className="builder-assistant__failed-label">{label}</span>}
     </div>
   )
 }
@@ -177,6 +182,10 @@ function AssistantTurn({
   const toolRunning = parts.some((p) => p.kind === 'tool' && tools[p.callId]?.status === 'running')
   const thinking = streaming && !toolRunning && last?.kind !== 'text'
   const groups = groupParts(parts)
+  const retried = retriedCalls(
+    parts.flatMap((p) => (p.kind === 'tool' ? [p] : [])),
+    tools,
+  )
 
   return (
     <article className="builder-assistant__turn" aria-label="Assistant reply">
@@ -198,7 +207,7 @@ function AssistantTurn({
         ) : (
           <ul key={i} className="builder-assistant__tools" aria-label="Changes">
             {group.calls.map((call) => (
-              <ToolChip key={call.callId} name={call.name} info={tools[call.callId]} />
+              <ToolChip key={call.callId} name={call.name} info={tools[call.callId]} retried={retried.has(call.callId)} />
             ))}
           </ul>
         ),
@@ -231,13 +240,26 @@ function groupParts(parts: TranscriptPart[]): PartGroup[] {
   return groups
 }
 
-function ToolChip({ name, info }: { name: string; info: ToolInfo | undefined }) {
+/**
+ * One tool call. A failed call shows a short line ("Could not insert FAQ"); the raw error is behind
+ * "Details". When the model retried the same tool and it worked, the failed call is a quiet
+ * "Retried: Insert FAQ", like a call that never ran.
+ */
+function ToolChip({ name, info, retried }: { name: string; info: ToolInfo | undefined; retried: boolean }) {
+  const runtime = useRuntime()
   const status = info?.status ?? 'done'
-  const label = info?.summary || humanizeTool(name)
+  const failure = status === 'error' ? failureParts(info?.summary ?? '') : null
+  const label = failure
+    ? retried
+      ? `Retried: ${failedAction(failure.short, name)}`
+      : failure.short || `Could not run ${humanizeTool(name).toLowerCase()}`
+    : info?.summary || humanizeTool(name)
   // A tool that ran but had changes that did not apply here is a warning, not a failure.
   const problem = status === 'error' || (status === 'done' && Boolean(info?.note))
-  const tone = status === 'error' ? 'error' : problem ? 'warn' : status
-  const icon = status === 'running' ? null : status === 'cancelled' ? 'minus' : problem ? 'warning' : 'check'
+  const tone = retried ? 'retried' : status === 'error' ? 'error' : problem ? 'warn' : status
+  const icon = status === 'running' ? null : status === 'cancelled' ? 'minus' : retried ? 'retry' : problem ? 'warning' : 'check'
+  const showId = status === 'done' ? info?.showId : undefined
+  const canShow = useEditor(runtime.store, (s) => Boolean(showId && findBlock(s.layout, showId)))
   return (
     <li className={`builder-assistant__chip builder-assistant__chip--${tone}`}>
       <span className="builder-assistant__chip-row">
@@ -246,9 +268,27 @@ function ToolChip({ name, info }: { name: string; info: ToolInfo | undefined }) 
         </span>
         <span className="builder-assistant__chip-label">{label}</span>
         <span className="builder-assistant__sr-only">
-          {status === 'running' ? ' (running)' : status === 'cancelled' ? ' (not run)' : problem ? ' (failed)' : ' (done)'}
+          {status === 'running' ? ' (running)' : status === 'cancelled' ? ' (not run)' : retried ? ' (retried)' : problem ? ' (failed)' : ' (done)'}
         </span>
+        {canShow && showId && (
+          <button
+            type="button"
+            className="builder-assistant__ghost builder-assistant__chip-show"
+            aria-label="Show the changed block on the canvas"
+            onClick={() => runtime.assistant?.show(showId)}
+          >
+            Show
+          </button>
+        )}
       </span>
+      {failure?.detail && (
+        <details className="builder-assistant__details builder-assistant__chip-details">
+          <summary>
+            Details<span className="builder-assistant__sr-only"> of {label}</span>
+          </summary>
+          <p className="builder-assistant__chip-detail">{failure.detail}</p>
+        </details>
+      )}
       {info?.note && <span className="builder-assistant__chip-note">{info.note}</span>}
       {info?.image?.url && (
         <img

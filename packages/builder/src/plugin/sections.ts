@@ -211,7 +211,7 @@ export function savedSectionsCollection(args: { slug: string; blocks: BlockDefin
     admin: {
       useAsTitle: 'name',
       defaultColumns: ['name', 'category', 'updatedAt'],
-      description: 'Sections saved from the page builder with "Save as section…". The builder lists them under "Saved" in Add > Sections.',
+      description: 'Sections saved from the page builder with "Save as section…". The builder lists them in the Sections tab, under "Saved".',
       ...options?.admin,
     },
     defaultSort: '-createdAt',

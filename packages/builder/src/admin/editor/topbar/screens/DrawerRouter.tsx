@@ -147,6 +147,31 @@ export function DrawerRouter({
   )
 }
 
+/**
+ * Lets `intercept` take some `router.push` / `router.replace` calls of the screens inside (it
+ * returns true when it took one). The other calls go to the page's own router. The settings
+ * drawer uses it: the "Go back" of Payload's "Document locked" dialog pushes the collection list,
+ * which would leave the builder. Without the context (a Next upgrade) the calls are not taken.
+ */
+export function RouterIntercept({ intercept, children }: { intercept: (href: string) => boolean; children: ReactNode }) {
+  const router = useRouter()
+  const wrapped = useMemo<AppRouterInstance>(
+    () => ({
+      ...router,
+      push: (href, options) => {
+        if (!intercept(href)) router.push(href, options)
+      },
+      replace: (href, options) => {
+        if (!intercept(href)) router.replace(href, options)
+      },
+    }),
+    [router, intercept],
+  )
+  if (!isReactContext(internals.AppRouterContext)) return children
+  const { AppRouterContext } = contexts
+  return <AppRouterContext value={wrapped}>{children}</AppRouterContext>
+}
+
 /** Renders the screen only when Next's hooks return the drawer's values. */
 function Probe({
   pathname,

@@ -37,7 +37,7 @@ import {
   type EnterTiming,
 } from '@payload-toolkit/builder/core'
 
-import { FAILSAFE_ANIMATION } from './style'
+import { ENTER_ANIMATION_PREFIX, HIDE_ANIMATION } from './style'
 
 type Controls = ReturnType<typeof animate>
 
@@ -103,14 +103,25 @@ function ownerOf(item: Element): HTMLElement | null {
   return item.parentElement?.closest<HTMLElement>(`[${MOTION_ATTR}]`) ?? null
 }
 
+/** The CSS animations of an element whose name passes `test`. */
+function cssAnimations(el: HTMLElement, test: (name: string) => boolean): CSSAnimation[] {
+  return el.getAnimations().filter((a): a is CSSAnimation => 'animationName' in a && test((a as CSSAnimation).animationName))
+}
+
 /**
- * True when the CSS failsafe already showed the element (the runtime started more than 2.5 s
- * late). Hiding it again would flash, so it skips its entrance.
+ * True when the visitor may already see the element, so hiding it for its entrance would flash:
+ * it is in the window, and no CSS hides it, because the hiding ended (the runtime started late) or
+ * the visitor asked for less motion (nothing is hidden then). Elements below the window still play
+ * their entrance. Without any hiding CSS (the editor canvas), every element plays.
  */
-function shownByFailsafe(el: HTMLElement): boolean {
+function alreadySeen(el: HTMLElement, reduced: boolean): boolean {
   if (el.hasAttribute(MOTION_READY_ATTR)) return false
-  const style = el.ownerDocument.defaultView!.getComputedStyle(el)
-  return style.animationName.includes(FAILSAFE_ANIMATION) && style.opacity !== '0'
+  const win = el.ownerDocument.defaultView!
+  const hiding = win.getComputedStyle(el).animationName.includes(HIDE_ANIMATION)
+  if (hiding && cssAnimations(el, (name) => name === HIDE_ANIMATION).length > 0) return false
+  if (!hiding && !reduced) return false
+  const rect = el.getBoundingClientRect()
+  return rect.bottom > 0 && rect.top < win.innerHeight && rect.right > 0 && rect.left < win.innerWidth
 }
 
 /** True when an ancestor below the page is a scroll box (`overflow` hidden, auto or scroll). */
@@ -262,7 +273,7 @@ class MotionController {
     for (const el of this.doc.querySelectorAll<HTMLElement>(`[${MOTION_REVEAL_ATTR}]:not([${MOTION_READY_ATTR}])`)) {
       const owner = el.hasAttribute(MOTION_ITEM_ATTR) ? ownerOf(el) : null
       const entry = owner ? this.entries.get(owner) : undefined
-      if (entry?.state === 'waiting' && entry.motion.enter && !shownByFailsafe(el)) {
+      if (entry?.state === 'waiting' && entry.motion.enter && !alreadySeen(el, this.reduced)) {
         entry.targets.push(...prepareTargets([el], entry.motion.enter, this.reduced))
         this.entering.add(el)
       } else {
@@ -293,13 +304,17 @@ class MotionController {
   // Entrances ---------------------------------------------------------------
 
   private setupEnter(entry: Entry, enter: EnterMotion): void {
+    const view = enterView(enter)
     const all = staggersChildren(entry.motion) ? itemsOf(entry.el) : [entry.el]
-    const elements = all.filter((el) => !shownByFailsafe(el))
-    for (const el of all) if (!elements.includes(el)) el.setAttribute(MOTION_READY_ATTR, '')
+    const elements: HTMLElement[] = []
+    for (const el of all) {
+      if (view.load && this.takeCssEntrance(el)) continue
+      if (alreadySeen(el, this.reduced)) el.setAttribute(MOTION_READY_ATTR, '')
+      else elements.push(el)
+    }
     entry.targets = prepareTargets(elements, enter, this.reduced)
     for (const target of entry.targets) this.entering.add(target.el)
     entry.state = 'waiting'
-    const view = enterView(enter)
     if (view.load) {
       this.playEnter(entry, enter)
       return
@@ -310,6 +325,22 @@ class MotionController {
         leave: view.repeat ? () => this.resetEnter(entry) : undefined,
       }),
     )
+  }
+
+  /**
+   * A block that appears on load already plays its entrance in CSS (`enterCss`), from first
+   * paint. The runtime only marks it as its own and holds hover and press until it ends.
+   */
+  private takeCssEntrance(el: HTMLElement): boolean {
+    if (!this.win.getComputedStyle(el).animationName.includes(ENTER_ANIMATION_PREFIX)) return false
+    el.setAttribute(MOTION_READY_ATTR, '')
+    const running = cssAnimations(el, (name) => name.startsWith(ENTER_ANIMATION_PREFIX)).filter((a) => a.playState !== 'finished')
+    if (running.length > 0) {
+      this.entering.add(el)
+      const done = () => this.entering.delete(el)
+      void Promise.all(running.map((a) => a.finished)).then(done, done)
+    }
+    return true
   }
 
   private playEnter(entry: Entry, enter: EnterMotion): void {

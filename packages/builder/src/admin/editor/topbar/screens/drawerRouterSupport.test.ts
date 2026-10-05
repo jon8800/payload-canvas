@@ -3,7 +3,7 @@ import { describe, it } from 'node:test'
 
 import { createContext } from 'react'
 
-import { drawerLinkHref, hooksFollow, REQUIRED_CONTEXTS, routerSupport, type LinkClick } from './drawerRouterSupport'
+import { drawerLinkHref, hooksFollow, REQUIRED_CONTEXTS, routerSupport, withoutUndefinedLocale, type LinkClick } from './drawerRouterSupport'
 
 const push = () => {}
 const link = (href: string | null, target = '', download = false) => ({ href, target, download })
@@ -60,5 +60,15 @@ describe('drawer link clicks', () => {
     assert.equal(drawerLinkHref(click, link('https://payloadcms.com/docs'), origin), null)
     assert.equal(drawerLinkHref(click, link('mailto:a@b.c'), origin), null)
     assert.equal(drawerLinkHref(click, null, origin), null)
+  })
+})
+
+describe('API screen URL', () => {
+  it('drops locale=undefined and keeps the other parameters', () => {
+    const base = 'http://localhost:3300/api/pages/1'
+    assert.equal(withoutUndefinedLocale(`${base}?depth=2&draft=false&locale=undefined&trash=false`), `${base}?depth=2&draft=false&trash=false`)
+    assert.equal(withoutUndefinedLocale(`${base}?locale=undefined&depth=2`), `${base}?depth=2`)
+    assert.equal(withoutUndefinedLocale(`${base}?depth=2&locale=undefined`), `${base}?depth=2`)
+    assert.equal(withoutUndefinedLocale(`${base}?depth=2&locale=en`), `${base}?depth=2&locale=en`)
   })
 })

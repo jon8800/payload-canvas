@@ -47,8 +47,10 @@ export const postLink = (id: number | string): LinkInput => ({ type: 'reference'
  * Spacing rhythm: sections are px-5 / md:px-8 around a max-w-6xl container, py-20 / md:py-28.
  */
 const BUTTON = 'inline-flex min-h-12 items-center justify-center rounded-full px-6 text-base font-medium'
+/** A primary-colored button gets a little darker on hover. */
+export const PRIMARY_HOVER = 'hover:bg-[color-mix(in_oklch,var(--color-primary),black_14%)]'
 export const styles = {
-  buttonPrimary: `${BUTTON} bg-primary text-primary-foreground transition-opacity hover:opacity-90`,
+  buttonPrimary: `${BUTTON} bg-primary text-primary-foreground transition-colors ${PRIMARY_HOVER}`,
   buttonOutline: `${BUTTON} border border-foreground/25 text-foreground transition-colors hover:border-foreground`,
   buttonInverted: `${BUTTON} bg-primary-foreground text-primary transition-opacity hover:opacity-90`,
   buttonOutlineInverted: `${BUTTON} border border-primary-foreground/40 transition-colors hover:border-primary-foreground`,
@@ -64,7 +66,10 @@ export const styles = {
   body: 'max-w-[62ch] text-lg leading-relaxed text-muted-foreground',
   muted: 'text-muted-foreground',
   textLink: 'inline-flex min-h-11 items-center font-medium underline decoration-1 underline-offset-[6px] hover:decoration-2',
+  /** A large image (work, image and text): 4:3. */
   image: 'aspect-[4/3] w-full rounded-md object-cover',
+  /** A card image (services, posts): 16:10, the ratio of the card illustrations, so nothing is cropped. */
+  cardImage: 'aspect-[16/10] w-full rounded-md object-cover',
 }
 
 /** A title on the left and an intro on the right (stacked on phones). Used above grids. */
@@ -102,8 +107,18 @@ export const divider = (className?: string) => block('divider', undefined, class
 export const spacer = (className?: string) => block('spacer', undefined, className)
 export const form = (id: number | string, className?: string) => block('form', { form: id }, className)
 /** Site navigation. `collapse`: the width below which links fold into a "Menu" button ("never" for footers). */
-export const menu = (items: Action[], label: string, collapse: 'md' | 'lg' | 'never', className: string) =>
-  block('menu', { label, collapse, items: items.map((item) => ({ label: item.label, link: item.link })) }, className)
+/** `cta` adds a button as the last row of the small-screen panel. */
+export const menu = (items: Action[], label: string, collapse: 'md' | 'lg' | 'never', className: string, cta?: Action) =>
+  block(
+    'menu',
+    {
+      label,
+      collapse,
+      items: items.map((item) => ({ label: item.label, link: item.link })),
+      ...(cta ? { ctaLabel: cta.label, cta: cta.link } : {}),
+    },
+    className,
+  )
 
 /** Adds animations to a block. Merges with motion the block already has. */
 export const withMotion = (target: Block, motion: BlockMotion): Block => ({ ...target, motion: { ...target.motion, ...motion } })
@@ -113,8 +128,11 @@ export const withMotion = (target: Block, motion: BlockMotion): Block => ({ ...t
  * Never used on the header or the footer.
  */
 export const motions = {
-  /** The first content of a page: plays on load, not on scroll. */
-  heroEnter: { enter: { preset: 'fade-up', trigger: 'load', duration: 700, distance: 20 } },
+  /**
+   * The text beside a page title: plays on load in CSS, so it starts at first paint. Never on the
+   * title itself, which paints at once. The delay lets the title land first.
+   */
+  heroEnter: { enter: { preset: 'fade-up', trigger: 'load', duration: 700, distance: 16, delay: 120 } },
   /** One block appears as it scrolls into view. */
   reveal: { enter: { preset: 'fade-up', distance: 16 } },
   /** The children of a grid or list appear one after another. */

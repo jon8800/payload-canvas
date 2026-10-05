@@ -12,11 +12,13 @@ import {
   duplicateBlock,
   inRow,
   moveBy,
+  parseClipboard,
   pasteStoredBlocks,
   pasteStyles,
   removeBlock,
   resetStyles,
   siblingCount,
+  storedClipboard,
   storedStyles,
   toggleHidden,
 } from '../actions'
@@ -81,7 +83,14 @@ export function blockMenuEntries(runtime: Runtime, id: string, origin: MenuOrigi
     'separator',
     { icon: 'duplicate', label: 'Duplicate', keys: keys('duplicate'), run: () => duplicateBlock(runtime, id) },
     { icon: 'copy', label: 'Copy', keys: keys('copy'), run: () => copyBlock(runtime, id) },
-    { icon: 'paste', label: 'Paste inside or after', keys: keys('paste'), run: () => pasteStoredBlocks(runtime) },
+    {
+      icon: 'paste',
+      label: 'Paste inside or after',
+      keys: keys('paste'),
+      // Grey until a block was copied in this browser.
+      disabled: parseClipboard(storedClipboard()) === null,
+      run: () => pasteStoredBlocks(runtime),
+    },
     'separator',
     { icon: BRUSH, label: 'Copy styles', keys: keys('copyStyles'), disabled: !styled, run: () => copyStyles(runtime, id) },
     {

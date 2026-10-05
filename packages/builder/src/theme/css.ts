@@ -1,5 +1,6 @@
 // The stored theme as CSS variables and font links. Pure and client-safe.
 import { deriveColors, type ThemeColors } from './colors'
+import { fallbackFamilyName, fallbackFontFace, hasFallbackMetrics } from './fallbacks'
 
 /** The theme global's data, as Payload stores it. Every value is optional. */
 export type ThemeData = {
@@ -74,19 +75,24 @@ export function themeVariables(theme: ThemeData | null | undefined): Record<stri
   if (base != null && base > 0) vars['--spacing'] = `${base / 16}rem`
 
   for (const [name, family] of Object.entries(themeFontFamilies(theme))) {
-    vars[`--font-${name}`] = `'${family}', ${FONT_FALLBACKS[name as keyof ThemeFonts]}`
+    // A known family gets a fallback face scaled to its size (see `themeCss`), so the swap does not move text.
+    const sized = hasFallbackMetrics(family) ? `'${fallbackFamilyName(family)}', ` : ''
+    vars[`--font-${name}`] = `'${family}', ${sized}${FONT_FALLBACKS[name as keyof ThemeFonts]}`
   }
   return vars
 }
 
 /**
- * The theme as one CSS rule: `:root:root { --primary: …; … }`. Empty string when the theme sets
- * nothing. The doubled selector wins over the `:root` defaults in the app's CSS in any load order.
+ * The theme as CSS: the fallback font faces (one `@font-face` for each chosen family that has known
+ * metrics), then one rule `:root:root { --primary: …; … }`. Empty string when the theme sets nothing.
+ * The doubled selector wins over the `:root` defaults in the app's CSS in any load order.
  */
 export function themeCss(theme: ThemeData | null | undefined): string {
   const entries = Object.entries(themeVariables(theme))
   if (entries.length === 0) return ''
-  return `:root:root { ${entries.map(([k, v]) => `${k}: ${v};`).join(' ')} }`
+  const faces = [...new Set(Object.values(themeFontFamilies(theme)))].flatMap((family) => fallbackFontFace(family) ?? [])
+  const rule = `:root:root { ${entries.map(([k, v]) => `${k}: ${v};`).join(' ')} }`
+  return [...faces, rule].join('\n')
 }
 
 /**

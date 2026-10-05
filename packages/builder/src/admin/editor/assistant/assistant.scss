@@ -82,7 +82,7 @@
     flex-direction: column;
     align-items: stretch;
     gap: 6px;
-    font-size: 12.5px;
+    font-size: var(--be-text-m);
 
     code {
       padding: 1px 4px;
@@ -103,7 +103,7 @@
   }
 
   .builder-assistant__step-title {
-    font-weight: 600;
+    font-weight: var(--be-weight-strong);
   }
 
   .builder-assistant__step-text {
@@ -111,23 +111,44 @@
     line-height: 1.5;
   }
 
+  // The box holds the command and its copy button (top right). The command scrolls sideways and
+  // fades out at the right edge, so a cut line reads as "more to scroll".
   .builder-assistant__copy-code {
-    display: flex;
-    align-items: flex-start;
+    --ba-code-bg: var(--theme-elevation-100);
+    position: relative;
     align-self: stretch;
-    gap: 4px;
+    border-radius: var(--be-radius);
+    background: var(--ba-code-bg);
 
     // Commands never wrap: a broken line would copy wrong and read worse. They scroll sideways.
+    // The right padding keeps the end of the command clear of the button and the fade.
     .builder-assistant__card-code {
-      flex: 1;
       min-width: 0;
+      padding-right: 40px;
       overflow-x: auto;
+      background: none;
       white-space: pre;
       scrollbar-width: thin;
     }
 
+    &::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 56px;
+      border-radius: 0 var(--be-radius) var(--be-radius) 0;
+      background: linear-gradient(to right, transparent, var(--ba-code-bg) 70%);
+      pointer-events: none;
+    }
+
     .builder-editor__icon-button {
-      flex: none;
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      z-index: 1;
+      background: var(--ba-code-bg);
     }
   }
 
@@ -188,7 +209,7 @@
     border-radius: 14px 14px 4px;
     background: var(--theme-elevation-100);
     color: var(--theme-text);
-    font-size: 13px;
+    font-size: var(--be-text-m);
     line-height: 1.5;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -200,7 +221,7 @@
 
   .builder-assistant__failed-label {
     color: var(--be-muted);
-    font-size: 11px;
+    font-size: var(--be-text-s);
   }
 
   .builder-assistant__turn {
@@ -216,8 +237,8 @@
     gap: 6px;
     height: 22px;
     color: var(--be-muted);
-    font-size: 11.5px;
-    font-weight: 500;
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-medium);
 
     > span:nth-child(2) {
       flex: 1;
@@ -237,7 +258,7 @@
   // Markdown
   .builder-assistant__md {
     color: var(--theme-text);
-    font-size: 13px;
+    font-size: var(--be-text-m);
     line-height: 1.6;
     overflow-wrap: anywhere;
 
@@ -263,14 +284,14 @@
     }
 
     strong {
-      font-weight: 600;
+      font-weight: var(--be-weight-strong);
     }
 
     code {
       padding: 1px 4px;
       border-radius: 4px;
       background: var(--theme-elevation-100);
-      font-size: 11.5px;
+      font-size: var(--be-text-s);
     }
 
     pre {
@@ -295,7 +316,7 @@
   }
 
   .builder-assistant__md-heading {
-    font-weight: 600;
+    font-weight: var(--be-weight-strong);
   }
 
   // The caret at the end of streaming text.
@@ -359,7 +380,7 @@
   .builder-assistant__chip-label {
     overflow: hidden;
     color: var(--theme-elevation-800);
-    font-size: 12px;
+    font-size: var(--be-text-s);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -383,11 +404,26 @@
 
     .builder-assistant__chip-icon {
       background: var(--theme-elevation-100);
-      color: var(--theme-elevation-500);
+      color: var(--theme-elevation-600);
     }
 
     .builder-assistant__chip-label {
-      color: var(--theme-elevation-500);
+      color: var(--theme-elevation-600);
+    }
+  }
+
+  // A failed call the model retried and fixed: as quiet as a call that never ran.
+  .builder-assistant__chip--retried {
+    border-style: dashed;
+    background: none;
+
+    .builder-assistant__chip-icon {
+      background: var(--theme-elevation-100);
+      color: var(--theme-elevation-600);
+    }
+
+    .builder-assistant__chip-label {
+      color: var(--theme-elevation-700);
     }
   }
 
@@ -424,10 +460,35 @@
     object-fit: cover;
   }
 
+  // "Show" on a change: pushed to the right end of the chip.
+  .builder-assistant__chip-show {
+    flex: none;
+    margin-left: auto;
+  }
+
+  // The raw error of a failed call, behind "Details".
+  .builder-assistant__chip-details {
+    padding-left: 24px;
+
+    summary {
+      color: var(--be-muted);
+      font-size: var(--be-text-s);
+      font-weight: var(--be-weight-regular);
+    }
+  }
+
+  .builder-assistant__chip-detail {
+    margin: 4px 0 0;
+    color: var(--theme-elevation-700);
+    font-size: var(--be-text-s);
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+
   .builder-assistant__chip-note {
     padding-left: 24px;
     color: var(--theme-error-500);
-    font-size: 11px;
+    font-size: var(--be-text-s);
     line-height: 1.4;
   }
 
@@ -446,7 +507,7 @@
     gap: 8px;
     margin: 0;
     color: var(--be-muted);
-    font-size: 12px;
+    font-size: var(--be-text-m);
   }
 
   .builder-assistant__dots {
@@ -474,7 +535,7 @@
   .builder-assistant__info {
     margin: 0;
     color: var(--be-muted);
-    font-size: 12px;
+    font-size: var(--be-text-m);
     text-align: center;
   }
 
@@ -489,12 +550,12 @@
   }
 
   .builder-assistant__details {
-    font-size: 12.5px;
+    font-size: var(--be-text-m);
 
     summary {
       width: fit-content;
       color: var(--theme-elevation-800);
-      font-weight: 500;
+      font-weight: var(--be-weight-medium);
       cursor: pointer;
 
       &:focus-visible {
@@ -531,8 +592,8 @@
 
   .builder-assistant__card-title {
     margin: 0;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--be-text-m);
+    font-weight: var(--be-weight-strong);
   }
 
   .builder-assistant__card-text {
@@ -540,7 +601,7 @@
     gap: 6px;
     margin: 0;
     color: var(--theme-elevation-800);
-    font-size: 12.5px;
+    font-size: var(--be-text-m);
     line-height: 1.5;
 
     code {
@@ -556,7 +617,7 @@
     border-radius: var(--be-radius);
     background: var(--theme-elevation-100);
     font-family: var(--font-mono, ui-monospace, monospace);
-    font-size: 11.5px;
+    font-size: var(--be-text-s);
   }
 
   .builder-assistant__card-actions {
@@ -575,8 +636,8 @@
     border: 0;
     background: none;
     color: var(--theme-text);
-    font-size: 12px;
-    font-weight: 500;
+    font-size: var(--be-text-m);
+    font-weight: var(--be-weight-medium);
     text-decoration: none;
     cursor: pointer;
 
@@ -624,8 +685,8 @@
 
   .builder-assistant__empty-title {
     margin: 0;
-    font-size: 14px;
-    font-weight: 600;
+    font-size: var(--be-text-l);
+    font-weight: var(--be-weight-strong);
   }
 
   .builder-assistant__suggestions {
@@ -646,7 +707,7 @@
     border-radius: var(--be-radius-m);
     background: var(--theme-bg);
     color: var(--theme-elevation-800);
-    font-size: 12.5px;
+    font-size: var(--be-text-m);
     line-height: 1.35;
     text-align: left;
     cursor: pointer;
@@ -694,8 +755,8 @@
     border-radius: 11px;
     background: var(--theme-elevation-100);
     color: var(--be-muted);
-    font-size: 11.5px;
-    font-weight: 500;
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-medium);
   }
 
   .builder-assistant__context-chip--selected {
@@ -704,7 +765,7 @@
     color: var(--theme-text);
 
     > svg {
-      color: var(--be-accent);
+      color: var(--be-accent-text);
     }
   }
 
@@ -770,7 +831,7 @@
     background: transparent;
     color: var(--theme-text);
     font-family: inherit;
-    font-size: 13px;
+    font-size: var(--be-text-m);
     line-height: 18px;
     resize: none;
     outline: none;
@@ -848,15 +909,15 @@
     align-items: center;
     gap: 3px;
     margin: 0;
-    color: var(--be-subtle);
-    font-size: 11px;
+    color: var(--be-muted);
+    font-size: var(--be-text-s);
 
     kbd {
       min-width: 0;
       height: 16px;
       padding: 0 4px;
       border-bottom-width: 1px;
-      font-size: 10px;
+      font-size: var(--be-text-s);
     }
   }
 

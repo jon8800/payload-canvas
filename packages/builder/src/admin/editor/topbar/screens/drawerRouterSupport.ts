@@ -71,3 +71,10 @@ export function disabledByDevFlag(): boolean {
     return false
   }
 }
+
+const UNDEFINED_LOCALE = /([?&])locale=undefined(&|$)/
+
+/** A URL without the `locale=undefined` that Payload's API screen adds when the app has no locales. */
+export function withoutUndefinedLocale(url: string): string {
+  return url.replace(UNDEFINED_LOCALE, (_, before: string, after: string) => (after ? before : ''))
+}

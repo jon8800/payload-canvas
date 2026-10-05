@@ -7,9 +7,10 @@ export type ToolStatus = AiToolStatus
 
 /**
  * What the panel shows for one tool call. `note` holds a local problem (an operation that did not
- * apply). `image`: the image the tool generated, shown as a thumbnail.
+ * apply). `image`: the image the tool generated, shown as a thumbnail. `showId`: the first block
+ * the call changed, for the chip's "Show" button.
  */
-export type ToolInfo = { name: string; status: ToolStatus; summary: string; note?: string; image?: AiToolImage }
+export type ToolInfo = { name: string; status: ToolStatus; summary: string; note?: string; image?: AiToolImage; showId?: string }
 
 export type ChatHistory = {
   messages: AiMessage[]
@@ -181,6 +182,43 @@ export function transcript(messages: AiMessage[]): TranscriptItem[] {
 export function humanizeTool(name: string): string {
   const words = name.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').trim().toLowerCase()
   return words ? words[0].toUpperCase() + words.slice(1) : 'Tool'
+}
+
+/**
+ * Splits the summary of a failed call ("Could not insert FAQ: Parent block … not found") into a
+ * short line for the chip and the raw text for the "Details" disclosure. The server writes
+ * `${what}: ${error}`. A summary without ": " has no details.
+ */
+export function failureParts(summary: string): { short: string; detail: string | null } {
+  const at = summary.indexOf(': ')
+  if (at <= 0) return { short: summary, detail: null }
+  return { short: summary.slice(0, at), detail: summary.slice(at + 2).trim() || null }
+}
+
+/**
+ * The call that failed, as an action: "Could not insert FAQ" -> "Insert FAQ", "Edit failed" ->
+ * "Edit". Other texts fall back to the tool's name ("insert_section" -> "Insert section").
+ */
+export function failedAction(short: string, toolName: string): string {
+  const could = /^could not (.+)$/i.exec(short)
+  if (could) return could[1][0].toUpperCase() + could[1].slice(1)
+  const failed = /^(.+?) failed$/i.exec(short)
+  if (failed && !/^the tool$/i.test(failed[1])) return failed[1]
+  return humanizeTool(toolName)
+}
+
+/**
+ * Failed calls that a later call of the same tool in the same reply made good: the model retried
+ * and it worked. The panel shows these quietly ("Retried: Insert FAQ"), not as errors.
+ */
+export function retriedCalls(calls: { callId: string; name: string }[], tools: Record<string, ToolInfo>): Set<string> {
+  const retried = new Set<string>()
+  calls.forEach((call, i) => {
+    if (tools[call.callId]?.status !== 'error') return
+    const later = calls.slice(i + 1).some((next) => next.name === call.name && tools[next.callId]?.status === 'done')
+    if (later) retried.add(call.callId)
+  })
+  return retried
 }
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>

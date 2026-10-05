@@ -5,7 +5,7 @@
 import { ConfirmationModal, useConfig, useDocumentDrawer, useModal, useRouteTransition } from '@payloadcms/ui'
 import { useRouter } from 'next/navigation'
 import type { DefaultDocumentIDType } from 'payload'
-import { useEffect, useEffectEvent, useRef, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
 
 import { findBlock } from '../../../core'
 import { BlockIcon, Icon } from '../icons'
@@ -16,11 +16,13 @@ import { useRuntime } from '../runtime'
 import { publishShortcut } from '../shortcuts'
 import { Popover, usePopover } from '../styles/popover'
 import { useCollectionLabel } from '../templates/useTemplate'
+import { useModalA11y } from '../ui/modalA11y'
 import { useValue } from '../valueStore'
 import { publishState } from './document'
 import type { PublishProblem } from './problems'
+import { RouterIntercept } from './screens/DrawerRouter'
 import { DrawerWidth } from './screens/DrawerWidth'
-import { SettingsDrawerSlug } from './settingsDrawer'
+import { SettingsDrawerReload, SettingsDrawerSlug } from './settingsDrawer'
 
 function formatTime(iso: string | null): string {
   if (!iso) return ''
@@ -124,22 +126,68 @@ export function PageSettings() {
   const { collection, id } = useValue(runtime.doc.meta)
   const request = useValue(runtime.doc.settingsRequest)
   const singular = useCollectionLabel(collection, 'singular')
+  const {
+    config: { routes },
+  } = useConfig()
   // Numeric ids go to Payload as numbers (the app's ID type can be `number`).
   const docId = (/^\d+$/.test(id) ? Number(id) : id) as DefaultDocumentIDType
-  const [DocumentDrawer, , { drawerSlug, openDrawer, isDrawerOpen }] = useDocumentDrawer({ collectionSlug: collection, id: docId })
-  const open = useEffectEvent(() => openDrawer())
+  const [DocumentDrawer, , { drawerSlug, openDrawer, closeDrawer, isDrawerOpen }] = useDocumentDrawer({ collectionSlug: collection, id: docId })
+  // A new key mounts the drawer's form again: Payload loads the document again.
+  const [formKey, setFormKey] = useState(0)
+
+  // The drawer takes Payload's document lock first, so a second person gets Payload's "Document
+  // locked" dialog when the form loads (see live/fieldsGuard.ts).
+  const open = useEffectEvent(async () => {
+    await runtime.doc.settingsLock(true)
+    openDrawer()
+  })
+  const reload = useCallback(async () => {
+    await runtime.doc.settingsLock(true)
+    setFormKey((key) => key + 1)
+  }, [runtime])
 
   useEffect(() => {
-    if (request > 0) open()
+    if (request > 0) void open()
   }, [request])
 
-  // Closing the drawer reloads the header (title, slug, a template's collection, …).
+  // Closing the drawer gives the lock back and reloads the header (title, slug, a template's
+  // collection, …).
   useEffect(() => {
     const { settingsOpen } = runtime.doc
     if (settingsOpen.get() === isDrawerOpen) return
     settingsOpen.set(isDrawerOpen)
-    if (!isDrawerOpen) void runtime.doc.refresh()
+    if (isDrawerOpen) return
+    void runtime.doc.settingsLock(false)
+    void runtime.doc.refresh()
   }, [isDrawerOpen, runtime])
+  // Leaving the builder (or closing the tab) with the drawer open gives the lock back too.
+  useEffect(() => {
+    if (!isDrawerOpen) return
+    const release = () => void runtime.doc.settingsLock(false)
+    window.addEventListener('pagehide', release)
+    return () => window.removeEventListener('pagehide', release)
+  }, [isDrawerOpen, runtime])
+  useEffect(
+    () => () => {
+      if (!runtime.doc.settingsOpen.get()) return
+      runtime.doc.settingsOpen.set(false)
+      void runtime.doc.settingsLock(false)
+    },
+    [runtime],
+  )
+
+  // Payload's "Document locked" dialog: "Go back" pushes the collection list and the dashboard
+  // button pushes the admin home. In the builder they close the drawer instead.
+  const admin = routes.admin === '/' ? '' : routes.admin
+  const intercept = useCallback(
+    (href: string) => {
+      const path = new URL(href, window.location.origin).pathname.replace(/\/$/, '')
+      if (path !== admin && path !== `${admin}/collections/${collection}`) return false
+      closeDrawer()
+      return true
+    },
+    [admin, collection, closeDrawer],
+  )
 
   return (
     <>
@@ -154,9 +202,13 @@ export function PageSettings() {
         <span className="builder-bar__label">{singular} settings</span>
       </button>
       {/* The settings drawer holds a few document fields, not a whole page: narrow, on the right. */}
-      <DrawerWidth slug={drawerSlug} width="min(1040px, calc(100% - var(--gutter-h)))" />
+      <DrawerWidth slug={drawerSlug} width="min(720px, calc(100% - var(--gutter-h)))" />
       <SettingsDrawerSlug value={drawerSlug}>
-        <DocumentDrawer disableActions onSave={() => void runtime.doc.refresh()} />
+        <SettingsDrawerReload value={reload}>
+          <RouterIntercept intercept={intercept}>
+            <DocumentDrawer key={formKey} disableActions onSave={() => void runtime.doc.refresh()} />
+          </RouterIntercept>
+        </SettingsDrawerReload>
       </SettingsDrawerSlug>
     </>
   )
@@ -182,6 +234,8 @@ export function PublishButton() {
   const docPath = `${admin}/collections/${encodeURIComponent(meta.collection)}/${encodeURIComponent(meta.id)}`
   const revertSlug = `builder-revert-${meta.collection}-${meta.id}`
   const unpublishSlug = `builder-unpublish-${meta.collection}-${meta.id}`
+  useModalA11y(revertSlug, { alert: true })
+  useModalA11y(unpublishSlug, { alert: true })
 
   const published = meta.publishedAt !== null
   const { changed, canPublish } = publishState(meta, busy, live)
