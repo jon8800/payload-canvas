@@ -61,7 +61,16 @@ export type BlockComponentProps = {
   /** Spread on the element that directly contains each slot's children. */
   slotAttributes: Record<string, Record<string, string>>
   mode: RenderMode
+  /**
+   * The page data (`RenderLayout`'s `pageData`; in the canvas, the `pageData` loader of
+   * `createCanvasServer`). Only components marked with `withPageData` get it, and every
+   * `fromPayloadComponent` component.
+   */
+  pageData?: PageData
 }
+
+/** Data the page loads once for all its blocks, for example a list of services or review totals. */
+export type PageData = Record<string, unknown>
 
 export type BlockComponents = Record<string, ComponentType<BlockComponentProps>>
 
@@ -90,6 +99,12 @@ export type RenderLayoutProps = {
    * Load it with `depth: 1` and pass the same context to `loadLayoutData`.
    */
   context?: TemplateContext | null
+  /**
+   * Data the page loads once for all its blocks (plain data). Components marked with
+   * `withPageData`, and `fromPayloadComponent` components, get it as `pageData`. In the canvas it
+   * comes from the `pageData` loader of `createCanvasServer`: use the same loader on the site.
+   */
+  pageData?: PageData | null
 }
 
 /** Loads documents for a batch of ids in one collection. */

@@ -9,6 +9,8 @@ async function resolve(
   currentPath: string,
   currentCollection?: string,
   draft?: boolean,
+  /** The page's language (translation demo). Builder layouts come back in it. */
+  locale?: string,
 ) {
   const payload = await getPayload({ config: configPromise })
 
@@ -26,6 +28,7 @@ async function resolve(
     // Depth 1 loads the display condition pages (their slugs). The layout data loads separately.
     depth: 1,
     draft: draft || false,
+    ...(locale ? { locale: locale as never } : {}),
   })
 
   // Priority 1: Specific pages match

@@ -22,19 +22,22 @@ Two packages:
 3. [The builder view](#the-builder-view)
 4. [Plugin options](#plugin-options)
 5. [Rendering](#rendering)
-6. [Custom blocks](#custom-blocks)
-7. [Using existing Payload blocks](#using-existing-payload-blocks)
-8. [Sections](#sections)
-9. [Styling](#styling)
-10. [Theme](#theme)
-11. [Templates and binding](#templates-and-binding)
-12. [References and Used in](#references-and-used-in)
-13. [AI assistant](#ai-assistant)
-14. [AI editing over MCP](#ai-editing-over-mcp)
-15. [Multiplayer editing](#multiplayer-editing)
-16. [Production and Docker](#production-and-docker)
-17. [Deploying](#deploying)
-18. [Troubleshooting](#troubleshooting)
+6. [Server components in the canvas](#server-components-in-the-canvas)
+7. [Custom blocks](#custom-blocks)
+   - [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields)
+8. [Using existing Payload blocks](#using-existing-payload-blocks)
+9. [Sections](#sections)
+10. [Styling](#styling)
+11. [Theme](#theme)
+12. [Templates and binding](#templates-and-binding)
+13. [References and Used in](#references-and-used-in)
+14. [Localization](#localization)
+15. [AI assistant](#ai-assistant)
+16. [AI editing over MCP](#ai-editing-over-mcp)
+17. [Multiplayer editing](#multiplayer-editing)
+18. [Production and Docker](#production-and-docker)
+19. [Deploying](#deploying)
+20. [Troubleshooting](#troubleshooting)
 
 ## Requirements
 
@@ -142,7 +145,7 @@ pnpm payload generate:types
 
 ### 6. Add the canvas route
 
-The editor shows the page in an iframe. The iframe loads a route in your app, so the canvas uses your real block components. Give the route its own root layout, without your site header, footer or `globals.css`. The canvas compiles its own CSS in the browser.
+The editor shows the page in an iframe. The iframe loads a route in your app, so the canvas uses your real block components and your CSS. Give the route its own root layout, without your site header and footer, and import your site's CSS in it.
 
 ```tsx
 // src/app/(builder-canvas)/layout.tsx
@@ -150,6 +153,9 @@ import { ThemeStyle } from '@payload-toolkit/builder-react/server'
 import config from '@payload-config'
 import { getPayload } from 'payload'
 import type { ReactNode } from 'react'
+
+// Your site's CSS: it holds every class Tailwind found in your files.
+import '../(frontend)/globals.css'
 
 export default async function CanvasLayout({ children }: { children: ReactNode }) {
   const payload = await getPayload({ config })
@@ -159,7 +165,8 @@ export default async function CanvasLayout({ children }: { children: ReactNode }
         {/* The Theme global's variables and fonts. `live` reloads them after a theme save. */}
         <ThemeStyle payload={payload} live />
       </head>
-      <body>{children}</body>
+      {/* The same body classes as your site layout. */}
+      <body className="font-sans antialiased">{children}</body>
     </html>
   )
 }
@@ -171,13 +178,41 @@ export default async function CanvasLayout({ children }: { children: ReactNode }
 
 import { BuilderCanvas } from '@payload-toolkit/builder-react/canvas'
 import { blocks } from '@/builder'
+import { builderCanvas } from './actions'
 
 export default function CanvasPage() {
-  return <BuilderCanvas blocks={blocks} />
+  return <BuilderCanvas blocks={blocks} server={builderCanvas} />
 }
 ```
 
-The same page also renders the library's section thumbnails: the editor loads it hidden, with `?mode=thumbnail`, when the **Sections** tab needs pictures. Nothing to add for that.
+```ts
+// src/app/(builder-canvas)/builder-canvas/actions.ts
+'use server'
+
+import config from '@payload-config'
+import { createCanvasServer, type CanvasServerRequest } from '@payload-toolkit/builder-react/server'
+import { blocks } from '@/builder'
+
+const canvas = createCanvasServer({ config, blocks })
+
+export async function builderCanvas(request: CanvasServerRequest) {
+  return canvas(request)
+}
+```
+
+The server action renders the blocks the canvas cannot render itself: server components that load data. It is optional. Without it, those blocks show "Name: no preview in the editor". See [Server components in the canvas](#server-components-in-the-canvas).
+
+How the canvas gets its CSS, in this order:
+
+1. **Your site's CSS.** Tailwind puts every class it finds in your files into it, so your components' own classes work on the canvas as on the site. Blocks do not have to list them in `classes`.
+2. **The theme** (`ThemeStyle`). Its `:root:root` rule wins over the `:root` defaults in your CSS.
+3. **The CSS for the classes in the layout** and in each block's `classes`. The canvas compiles it in the browser (about 4 ms per new class) from the same entry file as the save hook, and puts it after your CSS. On the site, the generated CSS also comes after your CSS, so the canvas shows the same result. This CSS also holds Preflight and your base styles a second time. Both copies come from the same entry file, so they are identical and change nothing.
+
+One case needs care, on the site and on the canvas alike: a class that is in both stylesheets. The later copy (in the generated CSS) wins over your component's responsive variant in the site's CSS. For example, a header layout uses `flex`, and your component has `flex md:grid`: the element stays `flex` at every width. List such component classes in the block's `classes` (see [Custom blocks](#custom-blocks)).
+
+Earlier versions told you to leave your site's CSS out of the canvas, because the canvas compiles the full CSS for the layout's classes itself. That missed the classes your components use themselves. If you skip the import, the canvas still works, but only the classes in the layout and in each block's `classes` have CSS.
+
+The same page also renders the library's section thumbnails: the editor loads it hidden, with `?mode=thumbnail`, when the **Sections** tab needs pictures. Nothing to add for that. A thumbnail copies the page's stylesheets into the picture, and it waits for server blocks before it takes the picture.
 
 The default path is `/builder-canvas`. Change it with the `canvasPath` option. If your app has a single root `app/layout.tsx`, move the site into a route group first, so the canvas can have its own root layout. Payload's templates already use `(frontend)` and `(payload)` groups.
 
@@ -278,7 +313,7 @@ The sidebars and the split between the Add panel and the outline resize: drag th
 
 Publishing. All editors of a document share one live session (see [Multiplayer editing](#multiplayer-editing)). The session saves the layout as a draft about a second after each change. **Publish changes** saves what is still unsaved, then publishes with Payload's Local API as the signed-in user, so access control, hooks and versions work as usual. **Unpublish** sets the document back to draft. **Revert to published** loads the published version into the session, so every open editor reloads the canvas, and saves it again. Every open editor sees the new status at once.
 
-Save rules. Every save checks the layout. A broken layout (wrong shape, duplicate ids, unknown block types, wrong prop types) blocks every save. Unfinished blocks do not block drafts, autosave or live sessions: a missing required prop, a prop whose value does not match its `builderFormat` (for example a half-typed video URL), a block in a slot that refuses it, and a binding the prop cannot use. They block **Publish** only, and the problem list names the block ("Video: this YouTube link does not point to a video"). Click a problem to select the block.
+Save rules. Every save checks the layout. A broken layout (wrong shape, duplicate ids, unknown block types, wrong prop types) blocks every save. Unfinished blocks do not block drafts, autosave or live sessions: a missing required prop, a prop whose value does not match its `builderFormat` (for example a half-typed video URL), a value outside the field's limits (`minLength`, `maxLength`, `min`, `max`, `minRows`, `maxRows`, an email address without a valid form), a message from the field's own `validate` function, a block in a slot that refuses it, and a binding the prop cannot use. All of these can be true while someone is still typing. They block **Publish** only, and the problem list names the block ("Video: this YouTube link does not point to a video", "Product: SKU: use a SKU like ABC-123"). Click a problem to select the block. See [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields).
 
 Adding blocks on the canvas. Hover the canvas: a small **+** shows on the edge between two blocks next to the pointer (above or below in a column, left or right in a row), and in the middle of an empty container. Click it to open a picker with the blocks and sections that fit there (slot rules apply). Type to search, use the arrow keys and Enter, or click. The new block goes in exactly that place and is selected. The **+** hides while you drag and while you edit text on the canvas.
 
@@ -322,6 +357,8 @@ websiteBuilder({
 | `collections[slug].field` | `string` | Name of the layout JSON field. Default `layout`. The generated CSS goes in `<field>Css`. If a `json` field with this name exists (also inside rows, collapsibles or unnamed tabs), the plugin reuses it and moves it to the top level. |
 | `collections[slug].url` | `(doc) => string` | The frontend path of a document. AI tools use it for preview links. The collection list block uses it for links. |
 | `collections[slug].templates` | `boolean` | Documents render through templates. See [Templates](#templates-and-binding). |
+| `collections[slug].legacyFields` | `string[]` | Top-level fields the builder replaced but the collection still has (the old `blocks` field after `migrateBlocksField`). **Publish** in the builder keeps their published value, so only the builder content goes live. See [Using existing Payload blocks](#using-existing-payload-blocks), step 7. |
+| `collections[slug].localization` | `'props' \| false` | With Payload `localization` on: `'props'` (the default) translates localized props in one shared layout; `false` keeps one set of values. See [Localization](#localization). |
 | `blocks` | `BlockDefinition[]` | The blocks editors can use. Default `defaultBlocks()`. |
 | `sections` | `SectionDefinition[]` | Ready-made sections. See [Sections](#sections). |
 | `savedSections` | `{ slug?, access?, admin?, hooks? } \| false` | The collection for sections people save in the editor. Default slug `builder-sections`; default access: every signed-in user. `false` turns it off. See [Saved sections](#saved-sections). |
@@ -363,6 +400,7 @@ It also adds these endpoints (signed-in users only):
 | `POST /api/builder/live/:collection/:id/unpublish` | Sets the document back to draft. |
 | `POST /api/builder/live/:collection/:id/revert` | Drops the draft changes: the live session and the draft get the published version. |
 | `POST /api/builder/live/:collection/:id/restore` | Body `{ versionId }`. Restores an older version: the live session and the draft get its layout. With drafts it becomes the draft. |
+| `POST /api/builder/live/:collection/:id/validate` | Body `{ block }`. Runs the `validate` functions of the block's props and returns `{ problems: [{ propPath, message }] }`. The inspector calls it while someone edits. |
 | `POST /api/builder/ai/chat` | The AI assistant (only with the `ai` option). Streams Server-Sent Events. |
 | `GET /api/builder/theme` | The theme as `{ css, fontsHref }` (with the theme on). It uses the global's read access, so it is public by default. |
 
@@ -393,6 +431,7 @@ It also adds these endpoints (signed-in users only):
 | `components` | `Record<type, Component>` | Your components, merged over the defaults. |
 | `resolveLink` | `(link) => string \| null` | Turns links into an `href`. Default: the URL, or `/<slug>` for a loaded document. |
 | `context` | `{ collection, doc }` | The document a template renders. See [Templates](#templates-and-binding). |
+| `pageData` | `Record<string, unknown>` | Data the page loads once for its blocks. See [Page data](#page-data-and--block-context--components). |
 
 `loadLayoutData(layout, blocks, payload, options)` (from `@payload-toolkit/builder-react/server`) loads the documents that upload and relationship props point to, in one `find` per collection. Options: `draft`, `context`, `resolveLink`.
 
@@ -442,6 +481,110 @@ export const components: BlockComponents = { pricingTable: PricingTable }
 <BuilderCanvas blocks={blocks} components={components} resolveLink={resolveLink} />
 ```
 
+## Server components in the canvas
+
+Some block components load their own data: a model grid that calls `payload.find`, a review carousel, a blog listing, a FAQ from a collection. They are async server components, and they import Payload and your config. The canvas iframe is a client page, so it cannot import them. The canvas sends these blocks to a server action in the canvas route instead. The action renders them with your site's components and sends back the result as React Server Component output. Client components inside it (a carousel, a lightbox) work in the canvas as on the site. You do not change your components.
+
+You keep two component maps:
+
+- **The client-safe map** (`components`): for the canvas. It must not import server code.
+- **The server map**: the client-safe map plus the server components. The site and the server action use it.
+
+**1. Make the server map** in a file that only server code imports:
+
+```ts
+// src/components/blocks.server.ts
+import { fromPayloadComponents } from '@payload-toolkit/builder-react'
+import { blocks } from '@/builder'
+import { ModelGridLeaf } from '@/blocks/leaves/modelGrid/component'
+import { components } from './blocks'
+
+export const serverComponents = {
+  ...components,
+  ...fromPayloadComponents({ modelGrid: ModelGridLeaf }, blocks),
+}
+```
+
+**2. Give it to the server action** (see [step 6 of Install](#6-add-the-canvas-route)):
+
+```ts
+const canvas = createCanvasServer({ config, blocks, components: serverComponents, resolveLink })
+```
+
+**3. Render the site with it:** `<RenderLayout components={serverComponents} … />`.
+
+The canvas renders a block on the server when:
+
+- the block type has no component in the canvas's `components` (the default blocks always have one),
+- its component is an `async` function, or
+- its component is marked: `renderOnServer(Component)`, or `fromPayloadComponent(Component, { render: 'server' })`.
+
+`createCanvasServer` options:
+
+| Option | What it does |
+|---|---|
+| `config` | Your Payload config. Required. |
+| `blocks` | The block definitions. Default: the plugin's `blocks`. |
+| `components` | The server map. |
+| `resolveLink` | The same link resolver as the site. |
+| `pageData` | `({ payload, user, document, context }) => data`: the page data. See below. |
+
+How it works in the editor:
+
+- The first render shows a gray box with the block's name. Then the server output shows.
+- After a change to the block (its props, its classes or its children), the canvas asks again 250 ms after the last change, and at the latest after 1 s. The changes of several blocks go in one request, because Next runs server actions one at a time. The old output stays on the screen until the new one is ready. It dims only when the answer takes longer than 300 ms.
+- The canvas keeps the results by the block's content, so undo shows the earlier output at once. A block that did not change never asks again while the editor is open. Data that changes somewhere else (a new post) shows when you open the editor again.
+- The data loads as on the site (`loadLayoutData`): the latest drafts, uploads and relationships one level deep, and the user's access for collection lists. In a template, bindings use the sample document.
+- Only signed-in users of the admin collection get an answer.
+- When a component fails, that block shows "Name: the preview failed" with the error. The other blocks are not affected.
+- Selecting, dragging, the outline and the inspector work as for every block. The editor puts the block id on the first element of the output.
+
+### Slots in server-rendered blocks
+
+The server renders each slot of the block as a small client component, a slot outlet. In the canvas, the outlet shows the children the canvas renders itself. So:
+
+- Children that your component renders through the builder (`PayloadSlot`, or `slots` in a builder component) stay fully editable on the canvas: select, drag, drop, double-click to edit text. They update at once, without a request to the server. A child can be a server-rendered block too.
+- Children that your component renders itself (`<RenderLeaves blocks={content} />`) render on the server with the block. They show correctly, but you cannot select them on the canvas. Edit them in the outline and the inspector. This is the same as for client components that render their own children.
+- The server output can depend on the children's data, so a change to a child also asks for the parent again (after the same 250 ms). The parent keeps its output on the screen meanwhile, and children in outlets update at once.
+
+Why not static HTML: the canvas would have to inject markup that React does not own. Client components inside it would not run, and the children in its slots could not stay live React elements.
+
+### Page data and `{ block, context }` components
+
+Some sites load data once per page and give it to every block, for example `<RenderBlocks blocks={blocks} context={{ services, reviewAggregate }} />`, with components written as `function Hero({ block, context })`. Use the adapter's `props` option for them:
+
+```ts
+export const components = fromPayloadComponents({ hero: HeroBlockRenderer, cta: CTABlockRenderer }, blocks, {
+  props: (block, context) => ({ block, context }),
+})
+```
+
+`block` holds `{ id, blockType, blockName, ...fields }`, with each slot as a nested array. `context` is the page data. The third argument is the `builder` prop.
+
+Give the page data with one function, on the site and in the canvas:
+
+```ts
+// src/lib/pageData.ts (server)
+export async function loadPageData(payload: Payload) {
+  const services = await payload.find({ collection: 'services', depth: 1 })
+  return { services: services.docs }
+}
+```
+
+```tsx
+// The site
+<RenderLayout layout={layout} components={serverComponents} pageData={await loadPageData(payload)} … />
+```
+
+```ts
+// The canvas server action
+createCanvasServer({ config, blocks, components: serverComponents, pageData: ({ payload }) => loadPageData(payload) })
+```
+
+The loader also gets `user`, `document` (the document open in the builder, `{ collection, id }`) and `context` (a template's sample document). The canvas loads the page data once, before its first render, and server-rendered blocks get it on every render. The page data must be plain data.
+
+Only components that ask for the page data get it: every `fromPayloadComponent` component, and components marked with `withPageData(Component)` (they get it as `pageData`). So a client component does not carry the page data in the page's payload.
+
 ## Custom blocks
 
 Declare a block with `defineBlock`. Props are Payload field configs. The editor builds its inputs from them, and the plugin builds a JSON Schema for validation and AI tools.
@@ -474,11 +617,56 @@ export const blocks = [...defaultBlocks({ linkCollections: ['pages'] }), pricing
 
 - `slots` declares where child blocks go. `allow` lists the accepted block types, or `['*']`.
 - `parents` limits where a block may go: only directly inside the listed block types (never in the root list). The `listItem` block uses `parents: ['list']`. A new block whose slot accepts exactly one such type starts with one child of it, so a new list starts with one item.
-- `classes`: the save hook only sees the classes stored in the layout. List the classes your component hardcodes, so they are in the generated CSS too.
+- `classes`: classes your component uses itself that must also go into the generated CSS. Your site's CSS already has them (on the site and on the canvas), so most components need no list. List them for order: the generated CSS comes after your site's CSS, so a class in both (for example `flex`, used by a layout on the page) beats your component's responsive variant from the site's CSS (`md:grid`). In the list, the component's classes compile in the same build as the layout's classes, in Tailwind's order. Built-in blocks need no list: they add no classes of their own.
+- Block fields keep Payload's `validate`, `hooks` and `access`. See [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields).
 - `admin.custom.builderFormat` on a `text` field names a value check, for example `custom: { builderFormat: 'videoUrl' }` (the Video block's URL). The inspector shows the message while the user types, and a bad value blocks **Publish** but not draft saves. `videoUrl` is the only built-in format. Formats live in a registry in `@payload-toolkit/builder/core` (`FORMATS`, `formatProblem`). The renderer can use the same parser (`parseVideoUrl`).
 - `linkField()` stores `{ type, url, reference, newTab }`. The component receives it resolved, with `href`, `target` and `rel`.
 - The default blocks are `stack`, `grid`, `heading`, `text`, `richText`, `image`, `video`, `button`, `link`, `menu`, `list` with its `listItem` blocks, `quote`, `divider`, `spacer`, `collectionList` (documents from a collection) and `field` (a field of the document a template renders).
 - A list holds its items as `listItem` blocks in its `items` slot, so each item can be selected, dragged, styled and edited on the canvas. Enter at the end of an item adds the next one; Backspace at the start of an item joins it to the one before. Older layouts stored the items as a prop (`props.items: [{ text }]`). `normalizeLayout` turns them into `listItem` blocks when a layout loads, and the List component still renders the old prop until the layout is saved again. A list whose `items` prop is bound to document data keeps the old form.
+
+### Validation, hooks and access on block fields
+
+Block props live inside one JSON field, so Payload itself never runs the field logic of block fields. The plugin runs it, with the arguments Payload passes. It works the same for `defineBlock` fields and for blocks made with `fromPayloadBlocks()`, at any depth (groups, named tabs, rows, collapsibles, arrays and `blocks` fields inside props).
+
+```ts
+defineBlock({
+  type: 'product',
+  label: 'Product',
+  fields: [
+    { name: 'sku', type: 'text', validate: (value) => !value || /^[A-Z]{3}-\d{3}$/.test(value) || 'Use a SKU like ABC-123' },
+    { name: 'slug', type: 'text', hooks: { beforeChange: [({ value }) => slugify(value)] } },
+    { name: 'note', type: 'text', access: { read: ({ req }) => Boolean(req.user?.isAdmin) } },
+    { name: 'price', type: 'number', access: { update: ({ req }) => Boolean(req.user?.isAdmin) } },
+  ],
+})
+```
+
+What runs where:
+
+| Field logic | Runs | Effect |
+|---|---|---|
+| `validate` | On **Publish** (the builder's button, REST, Local API): every block, after the hooks. In the inspector: the server checks the selected block about half a second after each change (`POST …/validate`). The MCP `validateLayout` tool lists the messages as warnings. | A message blocks **Publish** only, never a draft, autosave or a live session save. It shows under the field and in the problem list. |
+| `hooks.beforeValidate`, `hooks.beforeChange` | On every save on the server: the live session's draft save (about 1 s after the last change, never per keystroke), Publish, Unpublish, Revert, Restore, REST, Local API, GraphQL. | The returned value is stored. Every open editor gets it at once (see below). |
+| `hooks.afterChange` | After every save. | As in Payload: the returned value changes only the saved document that the API returns, not the stored data. |
+| `hooks.afterRead` | On every read: REST, GraphQL, the Local API, versions, and when the builder loads the document into its live session. | The returned value is what the reader gets. |
+| `access.read` | On every read, unless `overrideAccess`. | The prop is left out of what the user gets. A REST save from that user that leaves it out keeps the stored value. |
+| `access.update` (`access.create` for a new document) | On every live edit (people, the operations endpoint, MCP agents, the AI assistant) and on other saves, unless `overrideAccess`. | A live edit that changes the prop is refused as a whole, with "You cannot change Price (Product). Nothing was applied." Other saves keep the stored value, as Payload does. A new block may hold the prop only empty, at its default value, or as a copy of a value already on the page (duplicate, paste). |
+
+Arguments. `validate(value, options)` gets the field config spread in, plus `data` (the whole document), `siblingData` (the block's props, or the group or array row), `blockData` (the block in Payload's shape, `{ id, blockType, ...props }`), `req`, `id`, `operation`, `collectionSlug`, `path`, `previousValue`, `event` (`'submit'`, or `'onChange'` from the inspector), `overrideAccess` and `preferences`. Hooks get `value`, `data`, `siblingData`, `blockData`, `originalDoc`, `previousDoc` (afterChange), `previousValue`, `previousSiblingDoc`, `req`, `operation`, `field`, `path`, `schemaPath`, `context`, `collection`, `global` (null), `overrideAccess`, `siblingFields`, and in afterRead also `findMany`, `depth`, `currentDepth`, `draft` and `showHiddenFields`. `path` is the value's place in the document, for example `['layout', 'blocks', 0, 'props', 'items', 1, 'label']`. `schemaPath` is `['layout', '<block type>', 'items', 'label']`.
+
+Skipped, as in Payload: `validate` of a field its condition hides. Also skipped: `validate` of a prop the block binds to document data.
+
+Hook values and several editors. The live session saves its layout about a second after the last change. When a hook changes a value in that save, the session applies the stored value as one more change from "Field hooks", so every open editor shows it (for example "Red Shoe" becomes "red-shoe" in every inspector). When nobody changed anything during the save, that change counts as saved: no second save. A value someone changed again during the save keeps their newer value, and the next save runs the hook on it. Publish, REST and other saves while the builder is open work the same way.
+
+Payload's own default validators are not called again for block fields: the builder's own check already covers types, required props, lengths, ranges, row counts and email addresses. The plugin reads `validate`, `hooks` and `access` once, when it starts, because Payload later adds its defaults to the same field objects.
+
+Limits:
+
+- In the builder itself, every editor sees every prop: `access.read` applies to the API, not to the shared live session. Show a field to some people only with a condition, or keep it out of the block.
+- The inspector does not lock a field the user may not update. A change is refused when it reaches the server, with the message above.
+- On a collection without drafts, nothing is "published", so `validate` messages never block a save. They show in the inspector.
+- Saved sections (`builder-sections`) store blocks without running their field hooks.
+- `migrateBlocksField` writes through the database adapter, so no hooks run. The values come from the old field, where Payload already ran the hooks.
 
 ## Using existing Payload blocks
 
@@ -490,6 +678,7 @@ What carries over:
 - **Nested blocks fields become slots.** A `blocks` field at the block's own level (also inside rows, collapsibles and unnamed tabs) becomes a slot with the same name. Its `blocks` and `blockReferences` become the slot's `allow`.
 - **Conditions.** An `admin.condition` that tests one sibling field, such as `(_, siblingData) => siblingData?.type === 'custom'`, becomes a JSON condition. The inspector hides the field, and an empty required field that is hidden does not block publishing.
 - **Components.** `fromPayloadComponents()` renders components written for Payload's data (`{ blockType, ...fields }`) unchanged.
+- **Field logic.** `validate`, field hooks and field `access` of the block fields run in the builder and the API, as in Payload. See [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields).
 - **Content.** `migrateBlocksField()` converts every document, its drafts and its versions.
 
 ### Step by step
@@ -553,6 +742,9 @@ export const components = fromPayloadComponents({ fullWidth: FullWidthComponent,
 
 Each component gets the props it always got: `{ id, blockType, blockName, ...fields }`. `loadLayoutData` loads uploads and relationships (one level deep), and missing fields get their `defaultValue`. Each slot arrives under its field name as an array of Payload-shaped blocks, so `<RenderLeaves blocks={content} />` keeps working. The component also gets a `builder` prop (see below).
 
+- **Components that take `{ block, context }`** instead of the fields as props: add `{ props: (block, context) => ({ block, context }) }` as the third argument. `context` is the page data. See [Page data](#page-data-and--block-context--components).
+- **Components that load data** (async server components, or components that import Payload): leave them out of this client-safe map and put them in the server map. The canvas renders them on the server. See [Server components in the canvas](#server-components-in-the-canvas). A section whose file imports such a component (through its own `RenderLeaves`) goes in the server map too.
+
 **5. Convert the content.** Run a dry run first. It writes nothing and lists what it would do:
 
 ```ts
@@ -594,7 +786,16 @@ Close every builder tab while it runs. An open builder keeps its own copy of the
 
 **6. Render pages with the builder.** Change the page route to `RenderLayout` with `page.builderLayout` and `page.builderLayoutCss` (see [step 7 of Install](#7-render-pages-on-the-site)). Pass your wrapped `components` to `RenderLayout` and to `BuilderCanvas`.
 
-**7. Remove the old field later**, once every page renders from the builder. Until then, note that Publish in the builder publishes the whole document, the old field's latest draft included.
+**7. Keep the old field out of Publish, and remove it later.** Payload publishes the whole document. Without more setup, **Publish** in the builder would also publish the old field's latest draft (for example an edit someone made in the Edit view after the migration). List the old field in `legacyFields`:
+
+```ts
+websiteBuilder({
+  collections: { pages: { field: 'builderLayout', legacyFields: ['layout'], url: (doc) => `/${doc.slug}` } },
+  // …
+})
+```
+
+Then **Publish** in the builder sends the old field's published value with the publish, so the site keeps it. The newer draft of the old field stays in the version history, but it is no longer the latest draft. A document that was never published has no published value to keep, so its old field goes live as it is. Publishing from the Edit view or the REST API is not changed. Remove the field and its name in `legacyFields` once every page renders from the builder. The migration report reminds you of this option.
 
 ### Slots and existing components: the trade-off
 
@@ -619,14 +820,14 @@ export function TwoColumnComponent({ leftColumn, rightColumn, builder }: Payload
 }
 ```
 
-The `builder` prop holds `mode`, `className`, `slots` (rendered children by slot name) and `slotAttributes`. In the canvas, the adapter puts the block id on your component's first element through a `display: contents` wrapper, so the layout stays as on the site. A component that renders nothing gets a small placeholder.
+The `builder` prop holds `mode`, `className`, `slots` (rendered children by slot name) and `slotAttributes`. In the canvas, the adapter puts the block id on your component's first element. It adds no wrapper element, so the layout stays as on the site: container rules such as `space-y-8` and `divide-y` reach your elements. A component that renders nothing gets a small placeholder.
 
 ### Limitations
 
-- **Classes in the editor.** The canvas compiles only the classes in the layout and in each block's `classes`. Your components' own Tailwind classes are missing there unless you list them (`overrides: { fullWidth: { classes: [...] } }`) or import your site's compiled CSS in the canvas layout (`src/app/(builder-canvas)/layout.tsx`). On the site, your own Tailwind build covers them as before.
-- **Server components that fetch data** (for example a model grid that calls `payload.find`) cannot run in the canvas, which is a client page. Leave them out of the canvas map: the canvas shows "Name: no preview in the editor", and the block stays selectable. The site renders them as usual.
+- **Classes in the editor.** Your components' own Tailwind classes come from your site's CSS, which the canvas layout imports ([step 6 of Install](#6-add-the-canvas-route)). A canvas route without that import has CSS only for the classes in the layout and in each block's `classes`. A component with responsive variants of common classes (`flex md:grid`) needs those classes in `overrides: { slug: { classes: [...] } }`, for Tailwind's order on the site and the canvas (see [Custom blocks](#custom-blocks)).
+- **Server components that load data** render on the server for the canvas, through the canvas server action ([Server components in the canvas](#server-components-in-the-canvas)). Without the action, the canvas shows "Name: no preview in the editor", and the block stays selectable. Their output updates after a short wait (250 ms after the last change, plus the request), not at once. Data that changes somewhere else shows when the editor opens again.
 - **Custom admin components** on fields (a custom `Field`) need Payload's form, so the inspector shows the default input for the field type. `fromPayloadBlocks` lists them in a warning.
-- **Conditions** that read the document, the user or several fields are not converted: the field always shows (also listed in a warning). `validate` functions, field hooks and function `defaultValue`s of block fields do not run in the builder.
+- **Conditions** that read the document, the user or several fields are not converted: the field always shows (also listed in a warning). Function `defaultValue`s of block fields do not run in the builder. `validate`, field hooks and field `access` do run: see [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields).
 - **Loaded data** is one level deep. A component that needs deeper data loads it itself.
 - **Blocks fields inside a group, a named tab or an array** stay props, edited as JSON. Localized block fields are not supported.
 - A Payload slug `list` with an `items` array is read as the old built-in list (`normalizeLayout`). Use `prefix` to avoid that.
@@ -918,6 +1119,67 @@ process.exit(0)
 It writes only the `builderRefs` field of each document and of each latest draft, through the database adapter: no hooks run, no new versions, and `updatedAt` does not change. It skips documents that are already right, so you can run it again.
 
 **Database schema.** The field adds rows to the builder collections' `_rels` tables (and their version tables). In development, `pnpm dev` pushes the change. Before a production deploy, create a migration with `pnpm payload migrate:create`.
+
+## Localization
+
+Turn on Payload's `localization`, and builder pages translate. Every language shares one layout: the same blocks, order, classes and bindings. Only the text props differ per language. This is the Webflow model.
+
+```ts
+buildConfig({
+  localization: { locales: [{ code: 'en', label: 'English' }, { code: 'de', label: 'Deutsch' }], defaultLocale: 'en', fallback: true },
+  plugins: [websiteBuilder({ … })],
+})
+```
+
+**Which props translate.** A prop translates when its field config says `localized: true`, as in Payload. A group or array that holds a localized field translates as a whole. The default blocks mark their text as localized: heading, text, rich text, button label, image alt text, list items, quote and source, menu links and name, and the field block's fallback. Images, links, numbers, selects and checkboxes are shared. Add `localized: true` to the fields of your own blocks. Without Payload localization, `localized` does nothing.
+
+**How it is stored.** The default language stays in `props`. Each other language keeps only its own values in `locales`:
+
+```json
+{ "id": "b_1", "type": "heading", "props": { "text": "Hello", "level": "2" }, "locales": { "de": { "text": "Hallo" } } }
+```
+
+A value a language does not have falls back, as Payload's `fallback` and `fallbackLocale` say (text and textarea also fall back when empty). Layouts saved before localization keep working: their values are the default language.
+
+**The editor.**
+
+- The top bar has a language switcher (the globe). The canvas shows the chosen language, and the inspector edits it. The address keeps it as `?locale=de`, Payload's convention, so a reload opens the same language.
+- In another language than the default, a translated field says **Translated** (with **Use English**, which removes the translation). An untranslated field says **Not translated · shows English**: text fields show the English text as a greyed placeholder, other fields show the English value greyed. **Copy English** copies the value, so you can change it. A note above the tabs has **Copy N fields from English** for the whole block.
+- The outline marks blocks with untranslated text with an orange dot.
+- Inline editing on the canvas writes the shown language.
+- Blocks, order, classes and fields that are not localized change every language. The inspector says so, and the first such edit in another language shows a notice.
+- Collaborators see each other's language in the avatar (a small "DE") and in its tooltip. Structure changes reach everyone at once; each person sees the text of their own language. Undo stays per person.
+
+**Saving and publishing.** Every save checks the translations too. The default language must fill every required prop. Another language needs its own value only when it has no fallback (`fallback: false`). The publish problem list names the language: "Heading: fill in text (DE)". Field `validate`, `hooks` and `access` of localized props run for each language's values too, with `req.locale` set to that language.
+
+**The site and the API.** Read a document with a locale and the layout comes back in that language, with fallback, without `locales`:
+
+- REST: `GET /api/pages/1?locale=de` (add `&fallback-locale=none` for no fallback). `?locale=all` gives the stored form with `locales`.
+- Local API: `payload.find({ collection: 'pages', locale: 'de' })`.
+- A save with a locale (`PATCH /api/pages/1?locale=de`, the Edit view in German) writes the localized props to that language and keeps the others, as Payload does for localized fields. A value equal to the fallback the reader saw stays a fallback.
+
+Render the site with the same locale everywhere:
+
+```tsx
+const page = await payload.find({ collection: 'pages', where, locale })
+const template = await loadTemplate(payload, { collection: 'posts', doc: post, draft, locale })
+const layout = await loadLayoutData(page.layout, blocks, payload, { draft, locale })   // documents and lists in German too
+```
+
+`loadLayoutData` also resolves a layout in the stored form (`localizeLayout` from `/server` does it alone). The generated CSS is the same for every language, because classes are shared. Bindings read the document you pass, so load it with the same `locale`.
+
+**AI and MCP.** `getLayout` and `applyOperations` take `locale`. `getLayout` returns that language's view, the localized props of each block type and the untranslated props per block. `applyOperations` with a locale writes that language's text; other changes affect every language. In the editor, the assistant works in the language you have open. Operations name their language as `update { id, props, locale }`.
+
+**References.** Every language's values count: a German image is "used" too.
+
+**Per collection.** `collections: { pages: { localization: false } }` keeps one set of values for every language. A separate layout per language (`localized: true` on the whole field, so the structure differs per language) is not supported yet.
+
+**Limits.**
+
+- Classes and structure are always shared.
+- A block added in another language holds its text as the default language's text until someone writes the default language.
+- In the editor canvas, related documents (collection lists, server-rendered blocks) load in the default language. The site loads them in the page's language.
+- `migrateBlocksField` copies the default language of a localized Payload `blocks` field only.
 
 ## AI assistant
 

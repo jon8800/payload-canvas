@@ -16,11 +16,13 @@ import type { AiOptions } from '../ai/types'
 import { defaultBlocks } from '../blocks'
 import { richTextFieldName } from '../core/blocks'
 import { DEFAULT_TEMPLATES_SLUG, DOCUMENT_TEMPLATE_FIELD, TEMPLATE_TARGET_FIELD } from '../core/bindings'
+import { localeSettingsOf } from '../core/locale'
 import {
   EMPTY_LAYOUT,
   type BlockDefinition,
   type BuilderClientConfig,
   type EditorOptions,
+  type LocaleSettings,
   type SectionDefinition,
   type TemplatesClientConfig,
 } from '../core/types'
@@ -40,7 +42,16 @@ import {
   type BuilderServerConfig,
   type SessionManager,
 } from '../live'
-import { keepLockBeforeOperation, layoutAfterChange, layoutBeforeChange, type BindingCheck } from './hook'
+import { captureFieldSemantics, type FieldRegistry } from '../core/fieldSemantics'
+import { FIELD_REGISTRY_KEY } from '../live/fieldChecks'
+import {
+  keepLockBeforeOperation,
+  layoutAfterChange,
+  layoutAfterRead,
+  layoutBeforeChange,
+  recordOverrideAccess,
+  type BindingCheck,
+} from './hook'
 import {
   DEFAULT_SAVED_SECTIONS_SLUG,
   SAVED_SECTIONS_CONFIG_KEY,
@@ -95,6 +106,20 @@ export type BuilderCollectionOptions = {
    * from `@payload-toolkit/builder-react/server`.
    */
   templates?: boolean
+  /**
+   * Top-level fields the builder replaced but the collection still has, for example the old
+   * `blocks` field after `migrateBlocksField`. Publish in the builder keeps their published value,
+   * so only the builder content goes live. Without it, Publish publishes the old field's latest
+   * draft too. Remove the names when you remove the fields.
+   */
+  legacyFields?: string[]
+  /**
+   * How the layout is translated when Payload's `localization` is on. `'props'` (the default):
+   * one layout structure for every locale; props whose field says `localized: true` hold a value
+   * per locale. `false`: the layout is not translated (one set of values for every locale).
+   * A separate layout per locale (`localized: true` on the whole field) is not supported yet.
+   */
+  localization?: 'props' | false
 }
 
 export type TemplatesOptions = {
@@ -102,6 +127,8 @@ export type TemplatesOptions = {
   slug?: string
   /** Hooks for the templates collection, e.g. `afterChange` to revalidate the pages that use templates. */
   hooks?: CollectionConfig['hooks']
+  /** `false`: template layouts are not translated. Default: as the collections (`'props'`). */
+  localization?: 'props' | false
 }
 
 export type { FontFamilies }
@@ -198,6 +225,15 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
     const canvasPath = options.canvasPath ?? '/builder-canvas'
     const sourceCollections = config.collections ?? []
     const live = defaultLiveRuntime()
+    // Payload's locales. Each builder collection uses them unless it sets `localization: false`.
+    const locales = localeSettingsOf(config.localization)
+    const localizationOf = (slug: string): LocaleSettings | null => {
+      const option = builderOptions[slug]?.localization
+      if (option !== undefined && option !== false && option !== 'props') {
+        throw new Error(`[websiteBuilder] \`localization\` of "${slug}" must be 'props' or false. A separate layout per locale is not supported yet.`)
+      }
+      return option === false ? null : locales
+    }
 
     for (const slug of Object.keys(options.collections)) {
       if (!sourceCollections.some((c) => c.slug === slug)) {
@@ -261,7 +297,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           hooks: options.templates?.hooks,
         }),
       ]
-      builderOptions[templatesSlug] = { field: TEMPLATE_LAYOUT_FIELD }
+      builderOptions[templatesSlug] = { field: TEMPLATE_LAYOUT_FIELD, ...(options.templates?.localization === false ? { localization: false } : {}) }
     }
 
     const blocks = listCollectionsOf(options.blocks ?? defaultBlocks(), [...withUrl])
@@ -270,6 +306,19 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       throw new Error(
         `[websiteBuilder] Two blocks have the type "${duplicate.type}". Every block type must be unique. For blocks made with fromPayloadBlocks(), set \`prefix\` (for example \`prefix: 'site'\` makes "${duplicate.type}" "site${duplicate.type.charAt(0).toUpperCase()}${duplicate.type.slice(1)}").`,
       )
+    }
+    // The props' validate, hooks and access, read now: Payload's config sanitizing later adds its
+    // default validators and editor hooks to the same field objects (core/fieldSemantics.ts).
+    const fieldRegistry = captureFieldSemantics(blocks)
+    for (const [slug, o] of Object.entries(options.collections)) {
+      for (const name of o.legacyFields ?? []) {
+        const source = sourceCollections.find((c) => c.slug === slug)
+        if (name === (o.field ?? 'layout') || !source || !hasFieldNamed(source.fields, name)) {
+          throw new Error(
+            `[websiteBuilder] \`legacyFields\` of "${slug}" names "${name}", which is ${name === (o.field ?? 'layout') ? 'the builder field itself' : 'not a field of the collection'}. List the old fields the builder replaced.`,
+          )
+        }
+      }
     }
 
     // Saved sections: a collection of sections people saved from the editor.
@@ -302,7 +351,15 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       plugins: options.css.plugins,
     }
     const liveCollections: Record<string, BuilderCollectionServer> = Object.fromEntries(
-      Object.entries(builderOptions).map(([slug, o]) => [slug, { field: o.field ?? 'layout', ...(o.url ? { url: o.url } : {}) }]),
+      Object.entries(builderOptions).map(([slug, o]) => [
+        slug,
+        {
+          field: o.field ?? 'layout',
+          ...(o.url ? { url: o.url } : {}),
+          ...(o.legacyFields?.length ? { legacyFields: o.legacyFields } : {}),
+          localization: localizationOf(slug),
+        },
+      ]),
     )
     const serverConfig: BuilderServerConfig = { collections: liveCollections, templates: targets.length > 0 ? templatesSlug : null }
     const views = config.admin?.components?.views
@@ -378,6 +435,8 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           savedSections: savedSections ? { collection: savedSections.slug } : null,
           themeEndpoint: theme ? theme.endpoint : null,
           editor: { dragMode: options.editor?.dragMode ?? 'indicator' },
+          validateTypes: [...fieldRegistry.types('validate')],
+          localization: localizationOf(collection.slug),
         }
         const built = addBuilder(collection, {
           field,
@@ -389,6 +448,8 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           // Runs after the layout hook, so it sees the live session's layout.
           afterLayout: collection.slug === templatesSlug && targets.length > 0 ? [requireBlocksForDefault] : [],
           ownFields: references ? [references.field] : [],
+          fieldRegistry,
+          localization: localizationOf(collection.slug),
         })
         // After the layout hook, so the references follow the layout the session guard put in.
         return references ? addReferences(built, references) : built
@@ -397,6 +458,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       custom: {
         ...config.custom,
         [LIVE_RUNTIME_KEY]: live,
+        [FIELD_REGISTRY_KEY]: fieldRegistry,
         [BUILDER_CONFIG_KEY]: serverConfig,
         [SITE_CSS_KEY]: { css, blocks } satisfies SiteCssConfig,
         ...(templates ? { [TEMPLATES_CONFIG_KEY]: templates } : {}),
@@ -407,13 +469,13 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       globals: themeOptions ? [...(config.globals ?? []), themeGlobal(themeOptions)] : config.globals,
       endpoints: [
         ...(config.endpoints ?? []),
-        ...liveEndpoints({ collections: liveCollections, blocks, runtime: live, heartbeatMs: options.live?.heartbeatMs }),
+        ...liveEndpoints({ collections: liveCollections, blocks, runtime: live, heartbeatMs: options.live?.heartbeatMs, fieldRegistry }),
         ...documentEndpoints({
           collections: liveCollections,
           templates: serverConfig.templates,
           runtime: live,
           // The publish check uses the same binding rules as the save hook of each collection.
-          check: { blocks, bindings: bindingCheck(templatesSlug) },
+          check: { blocks, bindings: bindingCheck(templatesSlug), fieldRegistry },
         }),
         ...(options.ai
           ? aiEndpoints({
@@ -498,10 +560,14 @@ type AddBuilderArgs = {
   afterLayout?: CollectionBeforeChangeHook[]
   /** More server-owned fields the stale-save check leaves out (the references field). */
   ownFields?: readonly string[]
+  /** The props' validate, hooks and access. */
+  fieldRegistry: FieldRegistry
+  /** The locales of localized props, or null. */
+  localization: LocaleSettings | null
 }
 
 function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): CollectionConfig {
-  const { field, clientConfig, blocks, css, sessions, bindings, afterLayout = [], ownFields } = args
+  const { field, clientConfig, blocks, css, sessions, bindings, afterLayout = [], ownFields, fieldRegistry, localization } = args
   const cssField = cssFieldName(field)
 
   // An existing field with this name (also inside rows, collapsibles or unnamed tabs) is reused
@@ -519,6 +585,13 @@ function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): Collect
   const base: JSONField = found ?? { name: field, type: 'json', defaultValue: { ...EMPTY_LAYOUT, blocks: [] } }
   const layoutField: JSONField = {
     ...base,
+    // Field logic of block props (plugin/hook.ts): the operation's overrideAccess for field access,
+    // and the props' afterRead hooks and read access on every read.
+    hooks: {
+      ...base.hooks,
+      beforeValidate: [recordOverrideAccess(), ...(base.hooks?.beforeValidate ?? [])],
+      afterRead: [...(base.hooks?.afterRead ?? []), layoutAfterRead({ field, blocks, registry: fieldRegistry, localization })],
+    },
     admin: {
       ...base.admin,
       components: { ...base.admin?.components, Field: LAYOUT_FIELD_COMPONENT },
@@ -563,10 +636,13 @@ function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): Collect
       beforeOperation: [...(collection.hooks?.beforeOperation ?? []), keepLockBeforeOperation({ collection: collection.slug })],
       beforeChange: [
         ...(collection.hooks?.beforeChange ?? []),
-        layoutBeforeChange({ collection: collection.slug, field, cssField, blocks, css, sessions, bindings, ownFields }),
+        layoutBeforeChange({ collection: collection.slug, field, cssField, blocks, css, sessions, bindings, ownFields, fieldRegistry, localization }),
         ...afterLayout,
       ],
-      afterChange: [...(collection.hooks?.afterChange ?? []), layoutAfterChange({ collection: collection.slug, sessions })],
+      afterChange: [
+        ...(collection.hooks?.afterChange ?? []),
+        layoutAfterChange({ collection: collection.slug, sessions, props: { field, blocks, registry: fieldRegistry, localization } }),
+      ],
     },
     admin: {
       ...collection.admin,

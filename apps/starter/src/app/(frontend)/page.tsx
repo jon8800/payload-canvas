@@ -5,6 +5,7 @@ import configPromise from '@payload-config'
 import { partOf, SiteFrame, visitorOf } from '@/components/BuilderContent'
 import { LivePreviewListener } from '@/components/LivePreviewListener'
 import { generateMeta } from '@/utilities/generateMeta'
+import { requestLocale } from '@/lib/i18n'
 
 /** The home page from Site Settings, with the visitor's access (published only for visitors). */
 async function findHomePage(draft: boolean, depth = 0) {
@@ -21,6 +22,8 @@ async function findHomePage(draft: boolean, depth = 0) {
     draft,
     overrideAccess: false,
     user: (await visitorOf(payload, draft)) as never,
+    // Translation demo: the layout comes back in the page's language (/de).
+    locale: (await requestLocale()) as never,
   })
   return docs[0] ?? null
 }

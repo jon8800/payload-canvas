@@ -8,6 +8,7 @@ import {
   type CollectionConfig,
   type CollectionSlug,
   type Field,
+  type PayloadRequest,
   type RelationshipField,
 } from 'payload'
 import {
@@ -143,6 +144,18 @@ export function bindingSources(args: {
 const DEFAULT_CONTEXT = 'builderTemplateDefault'
 /** Same value as `KEEP_LAYOUT_CONTEXT` in hook.ts: the session guard leaves the layout alone. */
 const KEEP_LAYOUT = 'builderKeepLayout'
+/** Same values as `RAW_LAYOUT_CONTEXT` and `STORED_LAYOUT_CONTEXT` in hook.ts (localized layouts). */
+const RAW_LAYOUT = 'builderRawLayout'
+const STORED_LAYOUT = 'builderStoredLayout'
+
+/**
+ * The stored layout of a template (every locale), published or latest. A read with `req` returns
+ * one locale's view, so this read has its own request (no `req`: its context stays its own).
+ */
+async function storedTemplateLayout(payload: PayloadRequest['payload'], slug: CollectionSlug, id: string | number, draft: boolean): Promise<unknown> {
+  const doc = (await payload.findByID({ collection: slug, id, draft, depth: 0, overrideAccess: true, context: { [RAW_LAYOUT]: true } })) as unknown as Record<string, unknown>
+  return doc[TEMPLATE_LAYOUT_FIELD]
+}
 
 const isPublished = (doc: Record<string, unknown> | undefined) => doc?._status === 'published'
 
@@ -206,6 +219,9 @@ export const keepOneDefault: CollectionAfterChangeHook = async ({ collection, co
     const id = other.id as string | number
     const latest = (await req.payload.findByID({ collection: slug, id, draft: true, depth: 0, req })) as unknown as Record<string, unknown>
     const { id: _id, ...published } = other
+    // Localized templates: the reads above hold one locale's view; save the stored layouts.
+    published[TEMPLATE_LAYOUT_FIELD] = await storedTemplateLayout(req.payload, slug, id, false)
+    latest[TEMPLATE_LAYOUT_FIELD] = await storedTemplateLayout(req.payload, slug, id, true)
     // 1. The published version, unchanged except for the flag (exactly its own layout).
     await req.payload.update({
       collection: slug,
@@ -214,7 +230,7 @@ export const keepOneDefault: CollectionAfterChangeHook = async ({ collection, co
       draft: false,
       depth: 0,
       req,
-      context: { [DEFAULT_CONTEXT]: true, [KEEP_LAYOUT]: true },
+      context: { [DEFAULT_CONTEXT]: true, [KEEP_LAYOUT]: true, [STORED_LAYOUT]: true },
     })
     // 2. A newer unpublished draft goes back on top, with the flag off. An open live session
     //    gives it its current layout (the session guard).
@@ -227,7 +243,7 @@ export const keepOneDefault: CollectionAfterChangeHook = async ({ collection, co
         draft: true,
         depth: 0,
         req,
-        context: { [DEFAULT_CONTEXT]: true },
+        context: { [DEFAULT_CONTEXT]: true, [STORED_LAYOUT]: true },
       })
     }
   }

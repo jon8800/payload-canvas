@@ -14,19 +14,19 @@ const layoutWith = (url: string): Layout => ({
 const BAD = 'https://www.youtube.com/watch?v=short'
 
 describe('checkLayout with a bad video URL', () => {
-  it('warns on a draft save and blocks publishing', () => {
-    const draft = checkLayout(layoutWith(BAD), { blocks, publishing: false })
+  it('warns on a draft save and blocks publishing', async () => {
+    const draft = await checkLayout(layoutWith(BAD), { blocks, publishing: false })
     assert.deepEqual(draft.blocking, [])
     assert.deepEqual(draft.warnings.map((e) => [e.blockId, e.code]), [['vid', 'format']])
 
-    const publish = checkLayout(layoutWith(BAD), { blocks, publishing: true })
+    const publish = await checkLayout(layoutWith(BAD), { blocks, publishing: true })
     assert.deepEqual(publish.blocking.map((e) => [e.blockId, e.code]), [['vid', 'format']])
     assert.deepEqual(publish.warnings, [])
   })
 
-  it('passes a good URL both ways', () => {
+  it('passes a good URL both ways', async () => {
     for (const publishing of [false, true]) {
-      const result = checkLayout(layoutWith('https://youtu.be/aqz-KE-bpKQ'), { blocks, publishing })
+      const result = await checkLayout(layoutWith('https://youtu.be/aqz-KE-bpKQ'), { blocks, publishing })
       assert.deepEqual([result.blocking, result.warnings], [[], []])
     }
   })

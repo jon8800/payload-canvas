@@ -9,7 +9,8 @@ import { isRichText, richTextToPlain, withoutBoundRequired } from '../core/bindi
 import { createId } from '../core/ids'
 import { blockJsonSchema } from '../core/schema'
 import { indexLayout, isPlainObject, subtreeIds } from '../core/tree'
-import type { BindingField, Block, BlockDefinition, Layout, Operation, SectionDefinition } from '../core/types'
+import { resolveLayoutLocale, stampLocale, untranslatedKeys } from '../core/locale'
+import type { BindingField, Block, BlockDefinition, Layout, LocaleSettings, Operation, SectionDefinition } from '../core/types'
 import { validateLayout, type LayoutError } from '../core/validate'
 import { resolveOperations, splitLayoutErrors } from '../live/apply'
 import { sectionInsertOps } from '../mcp/shared'
@@ -66,24 +67,47 @@ function errorKey(error: LayoutError): string {
  * user's layout do not block.
  */
 export class Workspace {
+  /** The stored layout (every locale). */
   layout: Layout
   readonly #blocks: BlockDefinition[]
   readonly #baseline: Set<string>
+  readonly #localization: LocaleSettings | null
+  /** The locale the assistant reads and writes. Null without localization. */
+  readonly locale: string | null
 
-  constructor(layout: Layout, blocks: BlockDefinition[]) {
+  constructor(layout: Layout, blocks: BlockDefinition[], options: { localization?: LocaleSettings | null; locale?: string | null } = {}) {
     this.layout = layout
     this.#blocks = blocks
+    this.#localization = options.localization ?? null
+    this.locale = this.#localization ? (options.locale ?? this.#localization.defaultLocale) : null
     this.#baseline = new Set(this.#errors(layout).blocking.map(errorKey))
   }
 
-  #errors(layout: Layout) {
-    return splitLayoutErrors(withoutBoundRequired(validateLayout(layout, this.#blocks), layout))
+  /** The layout as the assistant sees it: the locale's values with fallback (the stored layout without localization). */
+  get view(): Layout {
+    return this.#localization && this.locale ? resolveLayoutLocale(this.layout, this.#blocks, this.#localization, this.locale) : this.layout
   }
 
-  /** Applies operations. Returns the applied operations (duplicates as inserts) and warnings. */
+  /** How many props show the fallback language in the workspace's locale. */
+  untranslatedCount(): number {
+    const settings = this.#localization
+    if (!settings || !this.locale || this.locale === settings.defaultLocale) return 0
+    let count = 0
+    for (const entry of indexLayout(this.layout).values()) count += untranslatedKeys(entry.block, this.#blocks, settings, this.locale).length
+    return count
+  }
+
+  #errors(layout: Layout) {
+    return splitLayoutErrors(withoutBoundRequired(validateLayout(layout, this.#blocks, { localization: this.#localization }), layout))
+  }
+
+  /**
+   * Applies operations. Returns the applied operations (duplicates as inserts) and warnings. Prop
+   * updates write the workspace's locale (localized props only).
+   */
   apply(ops: unknown[]): { ok: true; ops: Operation[]; warnings: LayoutError[] } | { ok: false; error: string; errors?: LayoutError[] } {
-    const prepared = prepareOps(ops, this.layout)
-    const resolved = resolveOperations(this.layout, prepared, this.#blocks)
+    const prepared = stampLocale(prepareOps(ops, this.layout) as Operation[], this.locale, this.#localization)
+    const resolved = resolveOperations(this.layout, prepared, this.#blocks, this.#localization)
     if (!resolved.ok) return { ok: false, error: resolved.error }
     const { blocking, warnings } = this.#errors(resolved.layout)
     const added = blocking.filter((e) => !this.#baseline.has(errorKey(e)))
@@ -562,7 +586,7 @@ export async function runTool(name: string, rawInput: unknown, workspace: Worksp
 
   switch (name) {
     case 'getLayout':
-      return ok({ layout: workspace.layout }, 'Read the page')
+      return ok({ layout: workspace.view }, 'Read the page')
 
     case 'getBlockSchema': {
       const def = env.blocks.find((b) => b.type === input.type)
@@ -641,7 +665,7 @@ export async function runTool(name: string, rawInput: unknown, workspace: Worksp
       if (type instanceof Error || query instanceof Error) return fail('type and text must be strings', 'Find failed')
       const needle = query?.trim().toLowerCase() ?? ''
       const matches: unknown[] = []
-      for (const entry of indexLayout(workspace.layout).values()) {
+      for (const entry of indexLayout(workspace.view).values()) {
         if (type && entry.block.type !== type) continue
         const text = blockText(entry.block)
         if (needle && !text.toLowerCase().includes(needle)) continue

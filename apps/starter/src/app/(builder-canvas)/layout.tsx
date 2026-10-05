@@ -6,10 +6,14 @@ import { ThemeStyle } from '@payload-toolkit/builder-react/server'
 import config from '@payload-config'
 import { getPayload } from 'payload'
 
-// The canvas iframe of the page builder has its own root layout: no site header or footer,
-// and no globals.css. The canvas compiles the full CSS for the layout in the browser.
-// It gets the same theme variables and fonts as the site layout. `live` reloads them when the
-// Theme global is saved in another tab.
+// The site's CSS: every class Tailwind found in the app's files, so components show their own
+// classes on the canvas as on the site. The canvas adds the CSS for the layout's classes after it
+// (compiled in the browser), as the site adds the generated CSS.
+import '../(frontend)/globals.css'
+
+// The canvas iframe of the page builder has its own root layout: no site header or footer.
+// It gets the same CSS, theme variables, fonts and body classes as the site layout. `live`
+// reloads the theme when the Theme global is saved in another tab.
 export default async function BuilderCanvasLayout({ children }: { children: ReactNode }) {
   const payload = await getPayload({ config })
   return (
@@ -17,7 +21,7 @@ export default async function BuilderCanvasLayout({ children }: { children: Reac
       <head>
         <ThemeStyle payload={payload} live />
       </head>
-      <body>{children}</body>
+      <body className="font-sans antialiased">{children}</body>
     </html>
   )
 }

@@ -48,7 +48,8 @@ export function inlineUpdate(block: Block, path: string, value: unknown): Extrac
 
 /** Applies one value from the canvas. Every change of a session joins the same undo step. */
 export function applyInlineChange(runtime: Runtime, change: { session: string; id: string; path: string; value: unknown }) {
-  const block = findBlock(runtime.store.getState().layout, change.id)
+  // The block as the canvas shows it (the editor's locale): the store writes that locale.
+  const block = findBlock(runtime.store.getState().view, change.id)
   const op = block ? inlineUpdate(block, change.path, change.value) : null
   if (!op) return
   runtime.store.apply(op, { mergeKey: `inline:${change.session}`, mergeWithin: Number.POSITIVE_INFINITY })
@@ -68,12 +69,12 @@ function applyListItemEdit(runtime: Runtime, edit: ListItemEdit | null) {
 
 /** Enter in a list item on the canvas: the next item gets the text after the caret. */
 export function applyInlineSplit(runtime: Runtime, message: { id: string; after: string }) {
-  applyListItemEdit(runtime, splitListItem(runtime.store.getState().layout, message.id, message.after, createId()))
+  applyListItemEdit(runtime, splitListItem(runtime.store.getState().view, message.id, message.after, createId()))
 }
 
 /** Backspace at the start of a list item on the canvas: it joins the item before. */
 export function applyInlineJoin(runtime: Runtime, message: { id: string; value: string }) {
-  applyListItemEdit(runtime, joinListItem(runtime.store.getState().layout, message.id, message.value))
+  applyListItemEdit(runtime, joinListItem(runtime.store.getState().view, message.id, message.value))
 }
 
 /** Ends inline editing, if a session is open. */

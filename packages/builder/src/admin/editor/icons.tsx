@@ -278,6 +278,13 @@ const PATHS = {
       <path d="M2.75 14c.6-2.6 2.75-4.25 5.25-4.25S12.65 11.4 13.25 14" />
     </>
   ),
+  // Languages (the locale switcher).
+  globe: (
+    <>
+      <circle cx="8" cy="8" r="6" />
+      <path d="M2 8h12M8 2c1.75 1.7 2.6 3.7 2.6 6S9.75 12.3 8 14c-1.75-1.7-2.6-3.7-2.6-6S6.25 3.7 8 2Z" />
+    </>
+  ),
 } satisfies Record<string, ReactNode>
 
 export type IconName = keyof typeof PATHS

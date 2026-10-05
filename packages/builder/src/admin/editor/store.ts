@@ -8,8 +8,9 @@
 // reverts someone else's edit. Undo applies the inverse as NEW local operations, so it syncs like
 // any edit. Parts of it that no longer apply (someone else changed or deleted the block) are skipped.
 
-import { applyOperation, BASE_VARIANT, findBlock, type Variant } from '../../core'
-import type { Block, Layout, Operation } from '../../core/types'
+import { applyOperation, BASE_VARIANT, createLocaleView, findBlock, knownLocale, localizeOperations, stampLocale, type Variant } from '../../core'
+import type { Block, BlockDefinition, Layout, LocaleSettings, Operation } from '../../core/types'
+import { ACCESS_DENIED_PREFIX } from '../../core/fieldAccess'
 import { createSyncEngine, type SyncOptions, type SyncUpdate } from './live/sync'
 import { useSelector, type Equality } from './valueStore'
 
@@ -28,7 +29,16 @@ type HistoryEntry = {
 }
 
 export type EditorState = {
+  /** The stored layout: shared structure, default locale values in `props`, translations in `locales`. */
   layout: Layout
+  /**
+   * The layout in the locale the editor shows (`resolveLayoutLocale`): what the canvas renders and
+   * the inspector edits. The same object as `layout` without localization. Blocks keep their
+   * identity while they do not change.
+   */
+  view: Layout
+  /** The locale the editor shows and edits. Null without localization. */
+  locale: string | null
   selectedId: string | null
   hoveredId: string | null
   undoStack: HistoryEntry[]
@@ -56,11 +66,21 @@ export type ApplyOptions = {
    * (all operations of one AI assistant turn). An edit with another group or none ends the group.
    */
   group?: string
+  /**
+   * `false`: the operations already name their locale (the AI assistant's, a "copy from" action).
+   * By default, prop updates without a `locale` write the editor's locale.
+   */
+  stampLocale?: false
 }
 
 export type EditorStoreOptions = {
   /** Sync engine options (tests pass a manual clock). `clientId` defaults to a random UUID. */
   sync?: Partial<SyncOptions>
+  /**
+   * Localized layouts: the locales, the block definitions (they say which props are localized) and
+   * the locale to start in (default: the default locale).
+   */
+  localization?: { settings: LocaleSettings; blocks: readonly BlockDefinition[]; locale?: string | null }
 }
 
 const HISTORY_LIMIT = 200
@@ -120,8 +140,14 @@ export function applyLenient(layout: Layout, ops: Operation[]) {
 
 export function createEditorStore(initial: Layout, options: EditorStoreOptions = {}) {
   const sync = createSyncEngine(initial, { clientId: newClientId(), ...options.sync })
+  const localization = options.localization ?? null
+  const localeView = localization ? createLocaleView(localization.blocks, localization.settings) : null
+  const viewOf = (layout: Layout, locale: string | null) => (localeView && locale ? localeView(layout, locale) : layout)
+  const startLocale = localization ? knownLocale(localization.settings, localization.locale) : null
   let state: EditorState = {
     layout: initial,
+    view: viewOf(initial, startLocale),
+    locale: startLocale,
     selectedId: null,
     hoveredId: null,
     undoStack: [],
@@ -132,6 +158,7 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
   }
   const listeners = new Set<() => void>()
   const warnings = new Set<(text: string) => void>()
+  const sharedEdits = new Set<() => void>()
   let tagCounter = 0
   const nextTag = () => `t${++tagCounter}`
 
@@ -140,7 +167,9 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
   }
 
   const set = (patch: Partial<EditorState>) => {
+    const before = state
     state = { ...state, ...patch }
+    if (state.layout !== before.layout || state.locale !== before.locale) state = { ...state, view: viewOf(state.layout, state.locale) }
     // Drop a selection or hover that no longer exists.
     if (state.selectedId && !findBlock(state.layout, state.selectedId)) state = { ...state, selectedId: null }
     if (state.hoveredId && !findBlock(state.layout, state.hoveredId)) state = { ...state, hoveredId: null }
@@ -162,7 +191,11 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
       layout: update.layout,
       ...(dropped.size > 0 ? { undoStack: state.undoStack.filter(keep), redoStack: state.redoStack.filter(keep) } : {}),
     })
-    if (dropped.size > 0) warn(update.error ? `${EDIT_DROPPED} (${update.error})` : EDIT_DROPPED)
+    if (dropped.size > 0) {
+      // A refused change to a prop the user may not update says so itself; it is no conflict.
+      if (update.error?.startsWith(ACCESS_DENIED_PREFIX)) warn(update.error)
+      else warn(update.error ? `${EDIT_DROPPED} (${update.error})` : EDIT_DROPPED)
+    }
     else if (selectedBefore && !state.selectedId && update.commit) {
       warn(`${update.commit.actor.label} deleted the block you had selected.`)
     }
@@ -198,6 +231,13 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
         listeners.delete(listener)
       }
     },
+    /** Called after the user's edit in a non-default locale that changes every locale (blocks, classes, shared props). */
+    onSharedEdit(listener: () => void) {
+      sharedEdits.add(listener)
+      return () => {
+        sharedEdits.delete(listener)
+      }
+    },
     /** Short warnings for the user (an undo or an edit that conflicted with someone else's change). */
     onWarning(listener: (text: string) => void) {
       warnings.add(listener)
@@ -208,13 +248,29 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
 
     /** Applies the user's own edit. Returns false (and records the error) when the core refuses it. */
     apply(ops: Operation | Operation[], applyOptions: ApplyOptions = {}): boolean {
-      const list = Array.isArray(ops) ? ops : [ops]
+      let list = Array.isArray(ops) ? ops : [ops]
       if (list.length === 0) return true
+      if (localization) {
+        // Prop edits write the shown locale; props that are not localized stay shared. The server
+        // runs the same `localizeOperations`, so both apply the same operations.
+        const stamped = applyOptions.stampLocale === false ? list : stampLocale(list, state.locale, localization.settings)
+        const localized = localizeOperations(state.layout, stamped, localization.blocks, localization.settings)
+        if (!localized.ok) {
+          set({ lastError: localized.error })
+          return false
+        }
+        list = localized.ops
+      }
       const tag = nextTag()
       const result = sync.local(list, tag)
       if (!result.ok) {
         set({ lastError: result.error })
         return false
+      }
+      // In another locale than the default, an edit of the structure, the classes or a shared prop
+      // changes every locale. The editor says so once (runtime.ts).
+      if (localization && state.locale !== localization.settings.defaultLocale && list.some((op) => op.type !== 'update' || op.locale === undefined)) {
+        for (const listener of sharedEdits) listener()
       }
       const now = Date.now()
       const top = state.undoStack.at(-1)
@@ -302,6 +358,14 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
     setCanvasWidth(width: number | null) {
       if (state.canvasWidth !== width) set({ canvasWidth: width })
     },
+    /** Shows and edits another locale. Unknown codes fall back to the default locale. */
+    setLocale(locale: string) {
+      if (!localization) return
+      const next = knownLocale(localization.settings, locale)
+      if (state.locale !== next) set({ locale: next })
+    },
+    /** The locales, or null without localization. */
+    localization: localization?.settings ?? null,
   }
 }
 

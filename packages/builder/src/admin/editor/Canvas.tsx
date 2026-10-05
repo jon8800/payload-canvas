@@ -176,11 +176,12 @@ export function Canvas() {
     }
     document.addEventListener('pointerdown', onPointerDown, true)
     const sendAll = () => {
-      const { layout, selectedId, hoveredId } = store.getState()
+      // The canvas renders the layout in the editor's locale (`view`).
+      const { view, selectedId, hoveredId } = store.getState()
       runtime.postToCanvas({ type: 'init', init: runtime.canvasInit })
       // Before the layout, so a template's first render already has its document.
       if (runtime.template.get().isTemplate) postContext(iframeRef.current, templateContext(runtime.template.get()))
-      runtime.postToCanvas({ type: 'layout', layout })
+      runtime.postToCanvas({ type: 'layout', layout: view })
       runtime.postToCanvas({ type: 'selection', selectedId, hoveredId })
     }
     window.addEventListener('message', onMessage)
@@ -230,8 +231,8 @@ export function Canvas() {
     let reveal: number[] = []
     const unsubscribe = runtime.store.subscribe(() => {
       const next = runtime.store.getState()
-      if (next.layout !== last.layout) {
-        runtime.postToCanvas({ type: 'layout', layout: next.layout })
+      if (next.view !== last.view) {
+        runtime.postToCanvas({ type: 'layout', layout: next.view })
         // The "+" belongs to the old layout. The next pointer move places it again.
         runtime.insertSpot.set(null)
       }

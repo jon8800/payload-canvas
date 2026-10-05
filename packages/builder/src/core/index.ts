@@ -8,7 +8,27 @@ export { applyOperation, applyOperations, type ApplyOptions } from './operations
 export { deepestBlockAt, canvasDropTarget, outlineDropTarget } from './dropTarget'
 export { collectClasses } from './classes'
 export { blockJsonSchema, layoutJsonSchema } from './schema'
-export { validateLayout, isBlockingError, isLayoutWarning, PUBLISH_ONLY_CODES, type LayoutError, type LayoutErrorCode } from './validate'
+export { validateLayout, isBlockingError, isLayoutWarning, PUBLISH_ONLY_CODES, type LayoutError, type LayoutErrorCode, type ValidateOptions } from './validate'
+export {
+  createLocaleView,
+  fallbackChain,
+  hasLocaleValues,
+  hasLocalizedProps,
+  hasOwnValue,
+  knownLocale,
+  localeLabel,
+  localeSettingsOf,
+  localesIn,
+  localizedKeys,
+  localizedValue,
+  localizeOperations,
+  mergeLocaleView,
+  ownValue,
+  resolveLayoutLocale,
+  stampLocale,
+  untranslatedKeys,
+  type FallbackLocale,
+} from './locale'
 export * from './styles'
 export * from './bindings'
 export { TEXT_LIST_BLOCK, TEXT_LIST_ITEM_BLOCK, TEXT_LIST_SLOT, joinListItem, splitListItem, type ListItemEdit } from './textList'

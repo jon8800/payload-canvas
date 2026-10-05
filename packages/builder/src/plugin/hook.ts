@@ -2,17 +2,26 @@ import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import {
   APIError,
+  getLatestCollectionVersion,
   ValidationError,
   type CollectionAfterChangeHook,
   type CollectionBeforeChangeHook,
   type CollectionBeforeOperationHook,
+  type FieldHook,
+  type PayloadRequest,
+  type SanitizedCollectionConfig,
 } from 'payload'
 import { validateBindings, withoutBoundRequired } from '../core/bindings'
 import { richTextFieldName } from '../core/blocks'
 import { collectClasses } from '../core/classes'
+import { enforcePropAccess, filterUnreadableProps, hasPropAccess } from '../core/fieldAccess'
+import { hasPropHooks, runPropHooks, type FieldRunContext } from '../core/fieldHooks'
+import { sameJson, type FieldRegistry } from '../core/fieldSemantics'
+import { runPropValidators } from '../core/fieldValidate'
 import { describeLayoutErrors } from '../core/issues'
-import { normalizeLayout } from '../core/tree'
-import type { BindingField, BlockDefinition, Layout } from '../core/types'
+import { hasLocaleValues, knownLocale, mergeLocaleView, resolveLayoutLocale, type FallbackLocale } from '../core/locale'
+import { isPlainObject, normalizeLayout } from '../core/tree'
+import type { BindingField, BlockDefinition, Layout, LocaleSettings } from '../core/types'
 import { isBlockingError, isLayoutWarning, validateLayout, type LayoutError } from '../core/validate'
 import { compileClasses, type CssOptions } from '../css'
 import {
@@ -53,6 +62,10 @@ type HookOptions = {
   fieldClock?: FieldClock
   /** More server-owned fields (e.g. the references field) the stale-save check leaves out. */
   ownFields?: readonly string[]
+  /** The `validate`, `hooks` and `access` of block props (captureFieldSemantics). */
+  fieldRegistry?: FieldRegistry
+  /** The locales of localized props. Null or left out: the layout is not localized. */
+  localization?: LocaleSettings | null
 }
 
 /** `context` flag of the session's own draft saves. */
@@ -64,6 +77,75 @@ export const SESSION_SAVE_CONTEXT = 'builderSession'
 export const KEEP_LAYOUT_CONTEXT = 'builderKeepLayout'
 /** `context` key where the guard records the session seq it wrote. */
 const GUARD_SEQ_CONTEXT = 'builderSessionSeq'
+/**
+ * `context` key where the save hook puts the layout before and after the prop hooks
+ * (`{ input, output }`), when the hooks changed a value. The live session reads it after its save
+ * and sends the changed values to every editor (session.ts, `adoptSaved`).
+ */
+export const HOOK_CHANGES_CONTEXT = 'builderHookChanges'
+/**
+ * `context` key where the layout field's `beforeValidate` hook records the operation's
+ * `overrideAccess` (collection hooks do not get it). Field access applies only when it is false.
+ */
+const OVERRIDE_ACCESS_CONTEXT = 'builderOverrideAccess'
+/**
+ * `context` flag for the plugin's own reads that feed a save (Revert, Restore): the layout field's
+ * `afterRead` hook returns the stored layout, without prop hooks and without removing props the
+ * user may not read.
+ */
+export const RAW_LAYOUT_CONTEXT = 'builderRawLayout'
+/**
+ * `context` flag for reads that need every locale (the live session's load): the layout field's
+ * `afterRead` hook returns the stored form with `locales`, instead of one locale's view. Prop
+ * hooks and read access still apply, to every locale's values.
+ */
+export const ALL_LOCALES_CONTEXT = 'builderAllLocales'
+/**
+ * `context` flag of saves that send the stored form of the layout (Revert, Restore): no locale
+ * merge, even when the layout has no translations left.
+ */
+export const STORED_LAYOUT_CONTEXT = 'builderStoredLayout'
+
+/**
+ * The stored layout of a document, with every locale: the latest version as the database holds
+ * it. Payload gives the save hook `originalDoc` read in the request's locale (one locale's view),
+ * so localized collections read the stored form here (one query per save).
+ */
+export async function storedLayout(req: PayloadRequest, collection: SanitizedCollectionConfig, id: string | number, field: string): Promise<Layout | null> {
+  try {
+    const doc = (await getLatestCollectionVersion({
+      id,
+      config: collection,
+      payload: req.payload,
+      query: { collection: collection.slug, where: { id: { equals: id } } } as never,
+      req,
+    })) as Record<string, unknown> | undefined
+    return isPlainObject(doc?.[field]) ? normalizeLayout(doc[field]) : null
+  } catch {
+    return null
+  }
+}
+
+/** The request's locale when it names one (not "all"), with the request's fallback. */
+function requestLocale(req: unknown, settings: LocaleSettings): { locale: string; fallback: FallbackLocale } | null {
+  const r = req as { locale?: unknown; fallbackLocale?: unknown } | undefined
+  const locale = typeof r?.locale === 'string' ? r.locale : null
+  if (!locale || locale === 'all' || locale === '*') return null
+  const fallback = r?.fallbackLocale
+  return {
+    locale: knownLocale(settings, locale),
+    fallback: typeof fallback === 'string' || Array.isArray(fallback) || fallback === false ? (fallback as FallbackLocale) : undefined,
+  }
+}
+
+/** The layout before and after the prop hooks of one save. */
+export type HookChanges = { input: Layout; output: Layout }
+
+/** The prop hook changes a save recorded in its `context`, or null. */
+export function hookChangesOf(context: Record<string, unknown> | undefined): HookChanges | null {
+  const value = context?.[HOOK_CHANGES_CONTEXT]
+  return isPlainObject(value) && isPlainObject(value.input) && isPlainObject(value.output) ? (value as HookChanges) : null
+}
 
 /**
  * A save by the plugin itself: the session's draft, publish / unpublish / revert, or the template
@@ -112,18 +194,39 @@ function formatErrors(errors: LayoutError[]): string {
     .join('\n')
 }
 
+/** What the props' own `validate` functions need. Without it, they do not run. */
+export type FieldCheck = {
+  registry: FieldRegistry
+  /** `data` is the whole document; `req` is required. */
+  ctx: FieldRunContext
+  previous?: Layout | null
+}
+
 /**
  * Every problem of a layout, split for this save. With `publishing`, missing required props,
- * nesting and binding problems block too. The save hook and the publish endpoint share this, so
- * the endpoint can name the blocks before it calls Payload. Bound props may stay empty.
+ * values outside their limits, the props' own `validate` messages, nesting and binding problems
+ * block too. The save hook and the publish endpoint share this, so the endpoint can name the
+ * blocks before it calls Payload. Bound props may stay empty. The `validate` functions run only
+ * when publishing: their messages never block a draft, so drafts skip the cost.
  */
-export function checkLayout(
+export async function checkLayout(
   layout: Layout,
-  options: { blocks: readonly BlockDefinition[]; publishing: boolean; bindings?: BindingCheck; doc?: Record<string, unknown> },
-): { blocking: LayoutError[]; warnings: LayoutError[] } {
-  const { blocks, publishing, bindings } = options
-  const errors = withoutBoundRequired(validateLayout(layout, blocks as BlockDefinition[]), layout)
+  options: {
+    blocks: readonly BlockDefinition[]
+    publishing: boolean
+    bindings?: BindingCheck
+    doc?: Record<string, unknown>
+    fields?: FieldCheck
+    /** The document's locales: translations are checked too, and their problems name the locale. */
+    localization?: LocaleSettings | null
+  },
+): Promise<{ blocking: LayoutError[]; warnings: LayoutError[] }> {
+  const { blocks, publishing, bindings, fields, localization } = options
+  const errors = withoutBoundRequired(validateLayout(layout, blocks as BlockDefinition[], { localization }), layout)
   if (bindings) errors.push(...validateBindings(layout, blocks, bindings.sources, bindings.collectionOf(options.doc ?? {})))
+  if (publishing && fields) {
+    errors.push(...(await runPropValidators(layout, { blocks, registry: fields.registry, previous: fields.previous, ctx: fields.ctx, localization: localization ?? null })))
+  }
   const blocking: LayoutError[] = []
   const warnings: LayoutError[] = []
   for (const error of errors) {
@@ -146,7 +249,8 @@ export function checkLayout(
  * block. The error text is readable ("Image: choose an image"); raw paths go to the server log.
  */
 export function layoutBeforeChange(options: HookOptions): CollectionBeforeChangeHook {
-  const { collection: slug, field, cssField, blocks, css, sessions, bindings } = options
+  const { collection: slug, field, cssField, blocks, css, sessions, bindings, fieldRegistry: registry } = options
+  const localization = options.localization ?? null
   const clock = options.fieldClock ?? defaultFieldClock()
   // The layout and the plugin's own fields: the session protects them, not the stale-save check.
   const pluginFields = new Set([field, cssField, richTextFieldName(field), ...(options.ownFields ?? [])])
@@ -159,10 +263,12 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
     // layout, so it can never overwrite collaborators. Publish therefore publishes the session.
     const docId = originalDoc?.id as string | number | undefined
     const own = context?.[SESSION_SAVE_CONTEXT] || context?.[KEEP_LAYOUT_CONTEXT]
+    let guarded = false
     if (sessions && operation === 'update' && docId !== undefined && !own) {
       const open = sessions.peek(slug, docId)
       if (open) {
         data[field] = structuredClone(open.layout)
+        guarded = true
         if (context) context[GUARD_SEQ_CONTEXT] = open.seq
       }
     }
@@ -190,21 +296,76 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
     // The generated field is server-owned. Ignore what the client sends.
     delete data[cssField]
 
-    // Partial update without the layout: keep the stored layout and CSS.
-    if (data[field] === undefined) return data
-
-    const layout: Layout = normalizeLayout(data[field])
     // A KEEP_LAYOUT save re-stores an already published layout (only another field changes), so
     // rules added since then do not block it.
     const publishing =
       Boolean(collection.versions?.drafts) && (data._status ?? originalDoc?._status) === 'published' && !context?.[KEEP_LAYOUT_CONTEXT]
-    const { blocking, warnings } = checkLayout(layout, { blocks, publishing, bindings, doc: { ...originalDoc, ...data } })
-    if (blocking.length > 0) {
+    const merged = { ...originalDoc, ...data }
+    const ctx: FieldRunContext = {
+      layoutField: field,
+      req,
+      collection,
+      context,
+      operation,
+      id: docId,
+      data,
+      originalDoc,
+      overrideAccess: context?.[OVERRIDE_ACCESS_CONTEXT] !== false,
+    }
+    const fieldCheck = (saved: Layout | null): FieldCheck | undefined =>
+      registry ? { registry, previous: saved, ctx: { ...ctx, data: merged } } : undefined
+    const reject = (layout: Layout, blocking: LayoutError[]): never => {
       req.payload.logger.info(`[websiteBuilder] ${slug}.${field} not saved:\n${formatErrors(blocking)}`)
       // One entry for the field, so the admin shows every problem under it.
       const lines = describeLayoutErrors(layout, blocking, blocks).map((issue) => issue.message)
       throw new ValidationError({ collection: slug, errors: [{ path: field, message: lines.join('\n') }], req }, req.t)
     }
+
+    // Partial update without the layout: keep the stored layout and CSS. A publish of that kind
+    // (REST `{ _status: 'published' }`) still runs the props' own `validate` functions.
+    if (data[field] === undefined) {
+      if (publishing && registry && isPlainObject(originalDoc?.[field])) {
+        const stored = (localization && docId !== undefined ? await storedLayout(req, collection, docId, field) : null) ?? normalizeLayout(originalDoc[field])
+        const { blocking } = await checkLayout(stored, { blocks, publishing, bindings, doc: merged, fields: fieldCheck(stored), localization })
+        if (blocking.length > 0) reject(stored, blocking)
+      }
+      return data
+    }
+
+    // With localization, `originalDoc` holds one locale's view: the stored form comes from the database.
+    const storedForm = localization && docId !== undefined && operation === 'update' ? await storedLayout(req, collection, docId, field) : null
+    const savedLayout = storedForm ?? (isPlainObject(originalDoc?.[field]) ? normalizeLayout(originalDoc[field]) : null)
+    let layout: Layout = normalizeLayout(data[field])
+    // A layout read in one locale and sent back (REST, the Local API, the Edit view): its
+    // localized props go to that locale, and the other locales keep their values, as Payload saves
+    // localized fields. The session's own saves, guarded saves and Revert / Restore send the stored form.
+    if (localization && !own && !guarded && !context?.[STORED_LAYOUT_CONTEXT] && !hasLocaleValues(layout)) {
+      const at = requestLocale(req, localization)
+      if (at) layout = mergeLocaleView(savedLayout, layout, at.locale, blocks, localization)
+    }
+    if (registry) {
+      // Field access. The live session checks every edit when it arrives (session.ts), so its
+      // saves and the layouts the guard put in are not checked again. Other saves (REST, the
+      // Local API as a user, the Edit view) lose the changes the user may not make.
+      if (!own && !guarded && context?.[OVERRIDE_ACCESS_CONTEXT] === false) {
+        const withoutLayout = { ...originalDoc, [field]: undefined }
+        const reverted = await enforcePropAccess(layout, { before: savedLayout, doc: withoutLayout, blocks, registry, ctx, localization })
+        if (reverted.length > 0) {
+          req.payload.logger.info(
+            `[websiteBuilder] ${slug}.${field}: kept the saved value of props the user may not change: ${reverted.map((d) => d.path).join(', ')}`,
+          )
+        }
+      }
+      // Prop hooks, in Payload's order: beforeValidate, then beforeChange, then validation.
+      if (hasPropHooks(registry, 'beforeValidate') || hasPropHooks(registry, 'beforeChange')) {
+        const input = structuredClone(layout)
+        await runPropHooks('beforeValidate', layout, { blocks, registry, previous: savedLayout, ctx, localization })
+        await runPropHooks('beforeChange', layout, { blocks, registry, previous: savedLayout, ctx, localization })
+        if (context && !sameJson(input, layout)) context[HOOK_CHANGES_CONTEXT] = { input, output: structuredClone(layout) } satisfies HookChanges
+      }
+    }
+    const { blocking, warnings } = await checkLayout(layout, { blocks, publishing, bindings, doc: merged, fields: fieldCheck(savedLayout), localization })
+    if (blocking.length > 0) reject(layout, blocking)
     const logged = warnings.filter(isLayoutWarning)
     if (logged.length > 0) {
       req.payload.logger.warn(`[websiteBuilder] ${slug}.${field} saved with warnings:\n${formatErrors(logged)}`)
@@ -243,18 +404,105 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
  * state again. This matters after Publish: a later draft save of the same layout would mark the
  * document as changed.
  */
-export function layoutAfterChange(options: { collection: string; sessions: SessionManager; fieldClock?: FieldClock }): CollectionAfterChangeHook {
+export function layoutAfterChange(options: {
+  collection: string
+  sessions: SessionManager
+  fieldClock?: FieldClock
+  /** For the props' `afterChange` hooks: the layout field, the blocks, the field registry and the locales. */
+  props?: { field: string; blocks: readonly BlockDefinition[]; registry: FieldRegistry; localization?: LocaleSettings | null }
+}): CollectionAfterChangeHook {
   const clock = options.fieldClock ?? defaultFieldClock()
-  return async ({ context, doc, operation, req }) => {
+  const props = options.props
+  return async ({ collection, context, data, doc, operation, previousDoc, req }) => {
     if (doc?.id === undefined) return doc
     const seq = context?.[GUARD_SEQ_CONTEXT]
     if (typeof seq === 'number') {
       options.sessions.markSaved(options.collection, doc.id, seq, { updatedAt: doc.updatedAt, status: doc._status })
+      // The save ran the prop hooks on the session's layout. Every editor gets the changed values.
+      const changes = hookChangesOf(context)
+      if (changes) options.sessions.adoptSaved(options.collection, doc.id, { ...changes, seq })
     }
-    if (operation !== 'update') return doc
+    // The props' afterChange hooks. As in Payload, what they return changes only the returned document.
+    let result = doc
+    if (props && hasPropHooks(props.registry, 'afterChange') && isPlainObject(doc[props.field])) {
+      const layout = structuredClone(doc[props.field]) as Layout
+      const previous = isPlainObject(previousDoc?.[props.field]) ? normalizeLayout(previousDoc[props.field]) : null
+      const changed = await runPropHooks('afterChange', layout, {
+        blocks: props.blocks,
+        registry: props.registry,
+        previous,
+        ctx: { layoutField: props.field, req, collection, context, operation, id: doc.id, data, originalDoc: doc, previousDoc },
+        localization: props.localization ?? null,
+      })
+      if (changed) result = { ...doc, [props.field]: layout }
+    }
+    if (operation !== 'update') return result
     recordFieldChanges({ clock, collection: options.collection, doc, user: req.user, context })
     // Same transaction as Payload's delete of the lock, so nobody sees the document unlocked.
     await restoreLocks({ payload: req.payload as unknown as LockPayload, req, collection: options.collection, id: doc.id, context })
-    return doc
+    return result
+  }
+}
+
+/**
+ * The layout field's `beforeValidate` hook: records the operation's `overrideAccess` in `context`,
+ * because the collection's `beforeChange` hooks do not get it (field access needs it).
+ */
+export function recordOverrideAccess(): FieldHook {
+  return ({ context, overrideAccess, value }) => {
+    if (context) context[OVERRIDE_ACCESS_CONTEXT] = overrideAccess === true
+    return value
+  }
+}
+
+/**
+ * The layout field's `afterRead` hook: runs the props' `afterRead` hooks and leaves out the props
+ * the user may not read (`access.read`, unless `overrideAccess`). It runs for every read: REST,
+ * GraphQL, the Local API, versions, and the live session when it loads the document. The plugin's
+ * own reads for Revert and Restore set `RAW_LAYOUT_CONTEXT` and get the stored layout.
+ */
+export function layoutAfterRead(options: {
+  field: string
+  blocks: readonly BlockDefinition[]
+  registry: FieldRegistry
+  /** The locales of localized props. A read in one locale gets that locale's view. */
+  localization?: LocaleSettings | null
+}): FieldHook {
+  const { field, blocks, registry } = options
+  const localization = options.localization ?? null
+  return async (args) => {
+    const { value, context, overrideAccess } = args
+    if (!isPlainObject(value) || context?.[RAW_LAYOUT_CONTEXT]) return value
+    // Localization: a read in one locale (REST `?locale=de`, the Local API's `locale`) gets that
+    // locale's values with Payload's fallback, and no `locales`. `locale=all` and the live
+    // session's load get the stored form.
+    const at = localization && !context?.[ALL_LOCALES_CONTEXT] ? requestLocale(args.req, localization) : null
+    const view = at && localization ? resolveLayoutLocale(normalizeLayout(value), blocks, localization, at.locale, at.fallback) : null
+    const hooks = hasPropHooks(registry, 'afterRead')
+    const read = !overrideAccess && hasPropAccess(registry, 'read')
+    if (!hooks && !read) return view ?? value
+    const doc = (args.data ?? {}) as Record<string, unknown>
+    const layout = structuredClone(view ?? value) as Layout
+    // The stored form: the hooks and read access apply to every locale's values too.
+    const perLocale = view ? undefined : localization
+    const ctx: FieldRunContext = {
+      layoutField: field,
+      req: args.req,
+      collection: args.collection,
+      context,
+      operation: 'read',
+      id: doc.id as string | number | undefined,
+      data: doc,
+      originalDoc: doc,
+      overrideAccess,
+      findMany: args.findMany,
+      depth: args.depth,
+      currentDepth: args.currentDepth,
+      draft: args.draft,
+      showHiddenFields: args.showHiddenFields,
+    }
+    if (hooks) await runPropHooks('afterRead', layout, { blocks, registry, ctx, localization: perLocale })
+    if (read) await filterUnreadableProps(layout, { blocks, registry, ctx, doc, localization: perLocale })
+    return layout
   }
 }

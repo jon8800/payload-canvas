@@ -9,10 +9,11 @@ import { headers } from 'next/headers'
 import { getPayload, type Payload } from 'payload'
 import configPromise from '@payload-config'
 import { normalizeLayout, type Layout, type TemplateContext } from '@payload-toolkit/builder/core'
-import { BuilderStyle, loadLayoutData, RenderLayout } from '@payload-toolkit/builder-react'
+import { BuilderStyle, loadLayoutData, RenderLayout, type PageData } from '@payload-toolkit/builder-react'
 import { compilePageCss } from '@payload-toolkit/builder-react/server'
 import { builderBlocks, resolveLink } from '@/builder'
-import { blockComponents } from '@/components/blocks'
+import { serverBlockComponents } from '@/components/blocks/server'
+import { requestLocale } from '@/lib/i18n'
 import { resolveTemplateParts } from '@/utilities/resolveTemplateParts'
 
 /** A document with the plugin's layout field ("builder") and its generated CSS ("builderCss"). */
@@ -24,6 +25,8 @@ export type LayoutPart = {
   css: string | null
   /** The document a template renders (load it with depth 1 and the visitor's access). */
   context?: TemplateContext | null
+  /** Data the page loads once for its blocks (`RenderLayout`'s `pageData`). */
+  pageData?: PageData | null
 }
 
 export function generatedCss(value: unknown): string | null {
@@ -53,19 +56,21 @@ export async function visitorOf(payload: Payload, draft: boolean): Promise<unkno
   }
 }
 
-type RenderArgs = { part: LayoutPart; payload: Payload; draft: boolean; user: unknown }
+type RenderArgs = { part: LayoutPart; payload: Payload; draft: boolean; user: unknown; locale?: string }
 
 /** Loads a layout's data (documents, collection lists, bindings) and renders it, without CSS. */
-async function BuilderLayout({ part, payload, draft, user }: RenderArgs) {
-  const { layout, context } = part
-  const loaded = await loadLayoutData(layout, builderBlocks, payload, { draft, context, resolveLink, user })
+async function BuilderLayout({ part, payload, draft, user, locale }: RenderArgs) {
+  const { layout, context, pageData } = part
+  // `locale`: related documents and collection lists load in the page's language too.
+  const loaded = await loadLayoutData(layout, builderBlocks, payload, { draft, context, resolveLink, user, locale })
   return (
     <RenderLayout
       layout={loaded}
       blocks={builderBlocks}
-      components={blockComponents}
+      components={serverBlockComponents}
       resolveLink={resolveLink}
       context={context}
+      pageData={pageData}
     />
   )
 }
@@ -86,10 +91,12 @@ type SiteFrameProps = {
  */
 export async function SiteFrame({ pathname, draft, main, children }: SiteFrameProps) {
   const collection = pathname.startsWith('/blog') ? 'posts' : 'pages'
+  // Translation demo: the request's language (/de/…), else the default.
+  const locale = await requestLocale()
   const [payload, header, footer] = await Promise.all([
     getPayload({ config: configPromise }),
-    resolveTemplateParts('header', pathname, collection, draft),
-    resolveTemplateParts('footer', pathname, collection, draft),
+    resolveTemplateParts('header', pathname, collection, draft, locale),
+    resolveTemplateParts('footer', pathname, collection, draft, locale),
   ])
   const headerPart = partOf(header)
   const footerPart = partOf(footer)
@@ -104,12 +111,12 @@ export async function SiteFrame({ pathname, draft, main, children }: SiteFramePr
       >
         Skip to content
       </a>
-      {headerPart ? <BuilderLayout part={headerPart} payload={payload} draft={draft} user={user} /> : null}
+      {headerPart ? <BuilderLayout part={headerPart} payload={payload} draft={draft} user={user} locale={locale} /> : null}
       <main id="main" tabIndex={-1} className="outline-none">
-        {main ? <BuilderLayout part={main} payload={payload} draft={draft} user={user} /> : null}
+        {main ? <BuilderLayout part={main} payload={payload} draft={draft} user={user} locale={locale} /> : null}
         {children}
       </main>
-      {footerPart ? <BuilderLayout part={footerPart} payload={payload} draft={draft} user={user} /> : null}
+      {footerPart ? <BuilderLayout part={footerPart} payload={payload} draft={draft} user={user} locale={locale} /> : null}
     </>
   )
 }

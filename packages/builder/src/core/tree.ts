@@ -80,11 +80,12 @@ export function subtreeIds(block: Block, out: string[] = []): string[] {
 // Canonical form (produced here and kept by every operation):
 // - no empty `props`, `bindings` or `slots` objects, and no empty slot lists
 // - `hidden` is stored only when true, `label` only when non-empty (trimmed)
+// - `locales` holds no empty locale objects, and is left out when empty
 // - every id is a non-empty string, unique in the layout
 // - old list blocks (`props.items` rows) hold `listItem` blocks in their `items` slot (textList.ts)
 // The operations module relies on this form for exact undo.
 
-const BLOCK_KEYS = new Set(['id', 'type', 'blockType', 'blockName', 'props', 'className', 'slots', 'children', 'bindings', 'hidden', 'label'])
+const BLOCK_KEYS = new Set(['id', 'type', 'blockType', 'blockName', 'props', 'className', 'slots', 'children', 'bindings', 'hidden', 'label', 'locales'])
 
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
@@ -161,6 +162,16 @@ function normalizeBlock(value: unknown, seen: Set<string>): Block | null {
 
   if (value.hidden === true) block.hidden = true
   if (typeof value.label === 'string' && value.label.trim() !== '') block.label = value.label.trim()
+  // Translations of localized props (locale.ts): no empty locale objects.
+  if (isPlainObject(value.locales)) {
+    const locales: Record<string, Record<string, unknown>> = {}
+    for (const [code, values] of Object.entries(value.locales)) {
+      if (!isPlainObject(values)) continue
+      const kept = Object.fromEntries(Object.entries(values).filter(([, v]) => v !== undefined))
+      if (Object.keys(kept).length > 0) locales[code] = kept
+    }
+    if (Object.keys(locales).length > 0) block.locales = locales
+  }
   // Old shapes of built-in blocks (see textList.ts).
   migrateTextList(block, (raw) => uniqueId(raw, seen))
   return block

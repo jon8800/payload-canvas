@@ -142,7 +142,8 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     icon: 'heading',
     category: 'Content',
     fields: [
-      { name: 'text', type: 'text', label: 'Text', required: true },
+      // `localized`: with Payload localization on, each locale has its own text (README: "Localization").
+      { name: 'text', type: 'text', label: 'Text', required: true, localized: true },
       {
         name: 'level',
         type: 'select',
@@ -165,7 +166,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     label: 'Text',
     icon: 'text',
     category: 'Content',
-    fields: [{ name: 'text', type: 'textarea', label: 'Text', required: true }],
+    fields: [{ name: 'text', type: 'textarea', label: 'Text', required: true, localized: true }],
     defaultClassName: 'break-words',
     ai: {
       description: 'A paragraph of plain text. Line breaks are kept. Use richText for formatting, links and lists.',
@@ -178,7 +179,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     label: 'Rich text',
     icon: 'richText',
     category: 'Content',
-    fields: [{ name: 'content', type: 'richText', label: 'Content', required: true }],
+    fields: [{ name: 'content', type: 'richText', label: 'Content', required: true, localized: true }],
     defaultClassName: 'prose',
     ai: {
       description:
@@ -231,6 +232,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         name: 'alt',
         type: 'text',
         label: 'Alt text',
+        localized: true,
         admin: { description: 'Overrides the image\'s own alt text.' },
       },
     ],
@@ -248,7 +250,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     icon: 'button',
     category: 'Interactive',
     fields: [
-      { name: 'label', type: 'text', label: 'Label', required: true },
+      { name: 'label', type: 'text', label: 'Label', required: true, localized: true },
       linkField({ collections: linkCollections }),
     ],
     defaultClassName:
@@ -304,8 +306,9 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         name: 'items',
         type: 'array',
         label: 'Links',
+        // A localized label makes the whole list of links one value per locale.
         fields: [
-          { name: 'label', type: 'text', label: 'Label', required: true },
+          { name: 'label', type: 'text', label: 'Label', required: true, localized: true },
           linkField({ collections: linkCollections }),
         ],
       },
@@ -314,6 +317,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         type: 'text',
         label: 'Menu name',
         defaultValue: 'Main',
+        localized: true,
         admin: { description: 'Read by screen readers, for example "Main" or "Footer".' },
       },
       {
@@ -383,7 +387,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     label: 'List item',
     icon: 'text',
     category: 'Content',
-    fields: [{ name: 'text', type: 'text', label: 'Text', required: true }],
+    fields: [{ name: 'text', type: 'text', label: 'Text', required: true, localized: true }],
     parents: [TEXT_LIST_BLOCK],
     ai: {
       description: `One item (<li>) of a "${TEXT_LIST_BLOCK}" block. It goes only in a list's "${TEXT_LIST_SLOT}" slot.`,
@@ -397,8 +401,8 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     icon: 'quote',
     category: 'Content',
     fields: [
-      { name: 'quote', type: 'textarea', label: 'Quote', required: true },
-      { name: 'cite', type: 'text', label: 'Source', admin: { description: 'Who said it, for example "Jane Doe, CEO".' } },
+      { name: 'quote', type: 'textarea', label: 'Quote', required: true, localized: true },
+      { name: 'cite', type: 'text', label: 'Source', localized: true, admin: { description: 'Who said it, for example "Jane Doe, CEO".' } },
     ],
     defaultClassName: 'border-l-4 pl-4 italic',
     ai: {
@@ -500,6 +504,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         name: 'fallback',
         type: 'text',
         label: 'Fallback',
+        localized: true,
         admin: { description: 'Shown when the document has no value.' },
       },
     ],

@@ -7,6 +7,7 @@ import { getPayload } from 'payload'
 import configPromise from '@payload-config'
 import { normalizeLayout } from '@payload-toolkit/builder/core'
 import { generatedCss, SiteFrame, visitorOf } from '@/components/BuilderContent'
+import { loadPageData } from '@/components/blocks/server'
 import { RenderBlocks } from '@/legacy-fixture/components'
 import { LEGACY_COLLECTION, legacyDemo } from '@/legacy-fixture/enabled'
 
@@ -39,5 +40,12 @@ export default async function LegacyDemoPage({ params, searchParams }: Props) {
     )
   }
   const layout = normalizeLayout(page.builderLayout)
-  return <SiteFrame pathname={`/legacy-demo/${slug}`} draft={draft} main={{ layout, css: generatedCss(page.builderLayoutCss) }} />
+  const pageData = await loadPageData({ payload })
+  return (
+    <SiteFrame
+      pathname={`/legacy-demo/${slug}`}
+      draft={draft}
+      main={{ layout, css: generatedCss(page.builderLayoutCss), pageData }}
+    />
+  )
 }

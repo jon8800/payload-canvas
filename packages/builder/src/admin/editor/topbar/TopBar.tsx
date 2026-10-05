@@ -16,6 +16,7 @@ import { TemplateControl } from '../templates/SamplePicker'
 import { breakpointAt, breakpointWidths, useStyleTokens, withFallback } from '../styles/tokens'
 import { DESKTOP_WIDTH, DEVICE_WIDTHS, deviceForWidth, MAX_CANVAS_WIDTH, MIN_CANVAS_WIDTH, type Device } from '../styles/viewport'
 import { useValue } from '../valueStore'
+import { LocaleSwitcher } from '../locale/LocaleSwitcher'
 import { DocumentTitle, documentTitle, StatusChip } from './DocumentTitle'
 import { PageSettings, PreviewButton, PublishButton, SaveState } from './DocumentActions'
 import { ScreenDrawer } from './screens/ScreenDrawer'
@@ -80,6 +81,7 @@ export function TopBar({ icon }: { icon: ReactNode }) {
         <span className="builder-bar__divider" />
         <CanvasWidth widths={widths} />
         <TemplateControl />
+        <LocaleSwitcher />
       </div>
 
       <div className="builder-bar__end">

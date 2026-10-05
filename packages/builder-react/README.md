@@ -12,8 +12,8 @@ The full setup guide is in the [`@payload-toolkit/builder` README](https://githu
 
 | Import | Runs on | Holds |
 |---|---|---|
-| `@payload-toolkit/builder-react` | server and client | `RenderLayout`, `defaultComponents`, link helpers, `ThemeLive`, types |
-| `@payload-toolkit/builder-react/server` | server only | `loadLayoutData`, `loadTemplate`, `loadTheme`, `ThemeStyle` (they call Payload's Local API) |
+| `@payload-toolkit/builder-react` | server and client | `RenderLayout`, `defaultComponents`, `fromPayloadComponent(s)`, `withPageData`, `renderOnServer`, link helpers, `ThemeLive`, types |
+| `@payload-toolkit/builder-react/server` | server only | `loadLayoutData`, `loadTemplate`, `loadTheme`, `ThemeStyle`, `createCanvasServer` (they call Payload's Local API) |
 | `@payload-toolkit/builder-react/canvas` | client only | `BuilderCanvas`, the runtime for the editor's iframe |
 
 ## Render a layout
@@ -62,7 +62,7 @@ export default function CanvasPage() {
 }
 ```
 
-Give the route its own root layout with `<html>` and `<body>`, without your site header or CSS, with `<ThemeStyle payload={payload} live />` in its `<head>`. `BuilderCanvas` takes the same `blocks`, `components` and `resolveLink` as `RenderLayout`, plus `plugins` (your Tailwind plugins map).
+Give the route its own root layout with `<html>` and `<body>`, without your site header, with your site's CSS imported (`import '../(frontend)/globals.css'`) and `<ThemeStyle payload={payload} live />` in its `<head>`. `BuilderCanvas` takes the same `blocks`, `components` and `resolveLink` as `RenderLayout`, plus `plugins` (your Tailwind plugins map) and `server`: a server action made with `createCanvasServer` (`/server`) that renders the blocks the canvas cannot (server components that load data) and loads the page data. See [Server components in the canvas](https://github.com/jon8800/payload-toolkit/tree/main/packages/builder#server-components-in-the-canvas).
 
 ## Block components
 

@@ -171,7 +171,7 @@ export async function migrateBlocksField(payload: Payload, options: MigrateBlock
     if (layout.blocks.length === 0) return { status: 'empty', report: part }
     if (hasExisting && JSON.stringify(normalizeLayout(existing)) === JSON.stringify(layout)) return { status: 'skip', report: part }
     for (const [publishing, blocking] of [[false, 'save'], [true, 'publish']] as const) {
-      const { blocking: errors } = checkLayout(layout, { blocks, publishing })
+      const { blocking: errors } = await checkLayout(layout, { blocks, publishing })
       const fresh = publishing ? errors.filter((e) => e.code !== 'invalid') : errors
       for (const line of describeLayoutErrors(layout, fresh, blocks)) report.problems.push({ ...issue, message: line.message, blocking })
     }
@@ -321,5 +321,9 @@ export function formatMigrationReport(report: MigrateBlocksReport): string {
     line(`"Used in" records: ${r.checked} documents checked, ${r.updated} updated, ${r.draftsChecked} drafts checked, ${r.draftsUpdated} updated`)
   }
   if (report.dryRun) line('Nothing was written. Run again with dryRun: false to write.')
+  // Until the old field is removed, Publish in the builder must not publish its newer drafts.
+  line(
+    `While "${report.from}" stays, set websiteBuilder({ collections: { ${report.collection}: { legacyFields: ['${report.from}'] } } }), so Publish in the builder keeps its published value.`,
+  )
   return lines.join('\n')
 }

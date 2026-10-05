@@ -419,3 +419,49 @@ describe('template tools', () => {
     })
   })
 })
+
+/** A fake request on a site with English and German. */
+function setup() {
+  const ctx = fakeRequest({ version: 1, blocks: [{ id: 'h', type: 'heading', props: { text: 'Hello', level: '1' } }] })
+  ;(ctx.req.payload.config as unknown as Record<string, unknown>).localization = { locales: ['en', 'de'], defaultLocale: 'en', fallback: true }
+  return ctx
+}
+
+describe('builderMcpTools with locales', () => {
+  const localized: BlockDefinition[] = [
+    { type: 'heading', label: 'Heading', fields: [{ name: 'text', type: 'text', required: true, localized: true }, { name: 'level', type: 'text' }] },
+  ]
+  const i18nTools = builderMcpTools({ blocks: localized, collections: { pages: { field: 'layout' } } })
+  const i18nTool = (name: string) => i18nTools.find((t) => t.name === name)!
+
+  it('applyOperations with a locale writes that locale; getLayout returns its view and what is untranslated', async () => {
+    const { req } = setup()
+    const before = json(await i18nTool('getLayout').handler({ collection: 'pages', id: 'p1', locale: 'de' }, req, {}))
+    assert.deepEqual(before.untranslated, { h: ['text'] })
+    assert.deepEqual(before.localizedProps, { heading: ['text'] })
+
+    const result = json(
+      await i18nTool('applyOperations').handler(
+        { collection: 'pages', id: 'p1', locale: 'de', operations: [{ type: 'update', id: 'h', props: { text: 'Hallo', level: '2' } }] },
+        req,
+        {},
+      ),
+    )
+    assert.equal(result.ok, true)
+    const de = json(await i18nTool('getLayout').handler({ collection: 'pages', id: 'p1', locale: 'de' }, req, {}))
+    assert.deepEqual((de.layout as Layout).blocks[0].props, { text: 'Hallo', level: '2' })
+    assert.equal(de.untranslated, undefined)
+    const all = json(await i18nTool('getLayout').handler({ collection: 'pages', id: 'p1', locale: 'all' }, req, {}))
+    assert.deepEqual((all.layout as Layout).blocks[0], { id: 'h', type: 'heading', props: { text: 'Hello', level: '2' }, locales: { de: { text: 'Hallo' } } })
+  })
+
+  it('refuses an unknown locale', async () => {
+    const { req } = setup()
+    const result = await i18nTool('applyOperations').handler(
+      { collection: 'pages', id: 'p1', locale: 'fr', operations: [{ type: 'update', id: 'h', props: { text: 'Salut' } }] },
+      req,
+      {},
+    )
+    assert.equal(result.isError, true)
+  })
+})

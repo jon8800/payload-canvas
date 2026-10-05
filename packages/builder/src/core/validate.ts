@@ -7,22 +7,47 @@ import { conditionMet, readCondition } from './conditions'
 import { formatProblem } from './formats'
 import { dataFields, fieldBlocks, optionValues, type DataField, type LooseField } from './fields'
 import { isPlainObject } from './tree'
-import type { BlockDefinition, SlotDefinition } from './types'
+import { fallbackChain, localizedKeys } from './locale'
+import type { BlockDefinition, LocaleSettings, SlotDefinition } from './types'
 
 /**
- * - `invalid`: blocks every save.
+ * - `invalid`: blocks every save (wrong shape or type: a layout no renderer can trust).
  * - `required` (a required prop is empty), `format` (a text prop does not match its
- *   `admin.custom.builderFormat`, such as a half-typed video URL), `nesting` (a block in a slot
- *   that refuses it) and `binding` (a binding the prop cannot use): block only publishing, so
- *   drafts can hold unfinished work and older data stays editable.
+ *   `admin.custom.builderFormat`, such as a half-typed video URL), `constraint` (a value outside the
+ *   field's limits: `minLength`/`maxLength`, `min`/`max`, `minRows`/`maxRows`, an email address
+ *   without "@"), `validate` (the field's own `validate` function returned a message), `nesting`
+ *   (a block in a slot that refuses it) and `binding` (a binding the prop cannot use): block only
+ *   publishing. Each of them can be true while someone is still typing, so drafts, autosave and
+ *   live sessions keep saving unfinished work.
  * - `unknown-prop`, `unknown-key`: warnings, never blocking.
  */
-export type LayoutErrorCode = 'invalid' | 'required' | 'format' | 'nesting' | 'binding' | 'unknown-prop' | 'unknown-key'
+export type LayoutErrorCode =
+  | 'invalid'
+  | 'required'
+  | 'format'
+  | 'constraint'
+  | 'validate'
+  | 'nesting'
+  | 'binding'
+  | 'unknown-prop'
+  | 'unknown-key'
 
-export type LayoutError = { blockId?: string; path: string; message: string; code: LayoutErrorCode }
+/**
+ * `locale`: the problem is in that locale's own values (a translation), not the default locale's.
+ * `path` still names the prop below `.props.`, so path readers work the same for every locale.
+ */
+export type LayoutError = { blockId?: string; path: string; message: string; code: LayoutErrorCode; locale?: string }
+
+export type ValidateOptions = {
+  /**
+   * The document's locales. With them, a locale without fallback (`fallback: false`) must fill
+   * every required localized prop too. Without them, translations are still checked by type.
+   */
+  localization?: LocaleSettings | null
+}
 
 /** Codes that block publishing but not draft saves. */
-export const PUBLISH_ONLY_CODES: ReadonlySet<LayoutErrorCode> = new Set(['required', 'format', 'nesting', 'binding'])
+export const PUBLISH_ONLY_CODES: ReadonlySet<LayoutErrorCode> = new Set(['required', 'format', 'constraint', 'validate', 'nesting', 'binding'])
 
 /** True when the error never blocks a save (only logged or shown). */
 export function isLayoutWarning(error: Pick<LayoutError, 'code'>): boolean {
@@ -35,10 +60,10 @@ export function isBlockingError(error: Pick<LayoutError, 'code'>, publishing: bo
   return publishing || !PUBLISH_ONLY_CODES.has(error.code)
 }
 
-const BLOCK_KEYS = new Set(['id', 'type', 'props', 'className', 'slots', 'bindings', 'hidden', 'label'])
+const BLOCK_KEYS = new Set(['id', 'type', 'props', 'className', 'slots', 'bindings', 'hidden', 'label', 'locales'])
 
 /** Checks structure, unique ids, known block types, slot rules and prop types. */
-export function validateLayout(layout: unknown, blocks: BlockDefinition[]): LayoutError[] {
+export function validateLayout(layout: unknown, blocks: BlockDefinition[], options: ValidateOptions = {}): LayoutError[] {
   const errors: LayoutError[] = []
   if (!isPlainObject(layout)) return [{ path: '', message: 'Layout must be an object', code: 'invalid' }]
   if (layout.version !== 1) errors.push({ path: 'version', message: 'version must be 1', code: 'invalid' })
@@ -47,7 +72,8 @@ export function validateLayout(layout: unknown, blocks: BlockDefinition[]): Layo
     return errors
   }
   const seen = new Set<string>()
-  layout.blocks.forEach((block, i) => checkBlock(block, `blocks[${i}]`, null, [], blocks, seen, errors))
+  const localization = options.localization ?? null
+  layout.blocks.forEach((block, i) => checkBlock(block, `blocks[${i}]`, null, [], blocks, seen, errors, localization))
   return errors
 }
 
@@ -67,6 +93,7 @@ function checkBlock(
   blocks: BlockDefinition[],
   seen: Set<string>,
   errors: LayoutError[],
+  localization: LocaleSettings | null,
 ): void {
   if (!isPlainObject(value)) {
     errors.push({ path, message: 'Block must be an object', code: 'invalid' })
@@ -107,6 +134,14 @@ function checkBlock(
   } else if (def) {
     checkFields(def.fields as unknown[], value.props ?? {}, `${path}.props`, report)
   }
+  if (value.locales !== undefined) {
+    if (!isPlainObject(value.locales) || !Object.values(value.locales).every(isPlainObject)) {
+      report(`${path}.locales`, 'locales must be an object of props per locale')
+    } else if (def) {
+      checkLocales(def, value.locales as Record<string, Record<string, unknown>>, isPlainObject(value.props) ? value.props : {}, path, blockId, errors, localization)
+    }
+  }
+  if (def && localization) checkMissingRequired(def, value, path, blockId, errors, localization)
 
   if (value.className !== undefined) {
     if (typeof value.className !== 'string') report(`${path}.className`, 'className must be a string')
@@ -143,11 +178,88 @@ function checkBlock(
     const label = nameOf(value, def, type ?? '')
     const childOwner: Owner = slotDef && type ? { type, label, slot: name, def: slotDef } : null
     const childBanned = slotDef?.disallow?.length ? [...banned, ...slotDef.disallow.map((t) => ({ type: t, by: label }))] : banned
-    children.forEach((child, i) => checkBlock(child, `${slotPath}[${i}]`, childOwner, childBanned, blocks, seen, errors))
+    children.forEach((child, i) => checkBlock(child, `${slotPath}[${i}]`, childOwner, childBanned, blocks, seen, errors, localization))
   }
 }
 
 type Report = (path: string, message: string, code?: LayoutErrorCode) => void
+
+/**
+ * The own values of each locale: only localized props, with the same checks as the default
+ * locale's values. Their paths name the prop under `.props.` and the error carries the locale.
+ * An empty own value of a required prop fails only in a locale without fallback.
+ */
+function checkLocales(
+  def: BlockDefinition,
+  locales: Record<string, Record<string, unknown>>,
+  props: Record<string, unknown>,
+  path: string,
+  blockId: string | undefined,
+  errors: LayoutError[],
+  localization: LocaleSettings | null,
+): void {
+  const keys = localizedKeys(def)
+  const list = dataFields(def.fields as unknown[])
+  for (const [locale, values] of Object.entries(locales)) {
+    const report: Report = (at, message, code = 'invalid') => errors.push({ ...(blockId ? { blockId } : {}), path: at, message, code, locale })
+    if (localization && !localization.locales.includes(locale)) {
+      report(`${path}.locales.${locale}`, `Unknown locale "${locale}"`, 'unknown-key')
+      continue
+    }
+    if (localization?.defaultLocale === locale) {
+      report(`${path}.locales.${locale}`, `"${locale}" is the default locale: its values belong in props`, 'unknown-key')
+      continue
+    }
+    // Conditions read the locale's view of the block: its own values over the shared props.
+    const siblings = { ...props, ...values }
+    // With a fallback, an empty own value shows the fallback's value (Payload's read rule).
+    const fallsBack = !localization || fallbackChain(localization, locale).length > 0
+    for (const [key, value] of Object.entries(values)) {
+      const at = `${path}.props.${key}`
+      const field = list.find((f) => f.name === key)
+      if (!field || !keys.has(key)) {
+        if (value !== undefined) report(at, field ? `"${key}" is not localized` : `Unknown prop "${key}"`, 'unknown-prop')
+        continue
+      }
+      if (isEmpty(value)) {
+        if (field.required && !fallsBack && shown(field, siblings, list)) report(at, `"${field.name}" is required`, 'required')
+        if (value === undefined || value === null) continue
+      }
+      checkValue(field, value, at, report)
+      checkFormat(field, value, siblings, list, at, report)
+    }
+  }
+}
+
+/**
+ * Locales without fallback (`fallback: false`, or a request-free config with no fallback for the
+ * locale) show nothing for a missing value, so every required localized prop needs its own value
+ * there, as in Payload. With fallback, a missing value shows the fallback's value: nothing to report.
+ */
+function checkMissingRequired(
+  def: BlockDefinition,
+  value: Record<string, unknown>,
+  path: string,
+  blockId: string | undefined,
+  errors: LayoutError[],
+  localization: LocaleSettings,
+): void {
+  const keys = localizedKeys(def)
+  if (keys.size === 0) return
+  const props = isPlainObject(value.props) ? value.props : {}
+  const locales = isPlainObject(value.locales) ? value.locales : {}
+  const list = dataFields(def.fields as unknown[])
+  for (const locale of localization.locales) {
+    if (locale === localization.defaultLocale || fallbackChain(localization, locale).length > 0) continue
+    const own = isPlainObject(locales[locale]) ? locales[locale] : {}
+    const siblings = { ...props, ...own }
+    for (const field of list) {
+      if (!field.required || !keys.has(field.name) || Object.hasOwn(own, field.name)) continue
+      if (!shown(field, siblings, list)) continue
+      errors.push({ ...(blockId ? { blockId } : {}), path: `${path}.props.${field.name}`, message: `"${field.name}" is required`, code: 'required', locale })
+    }
+  }
+}
 
 /** False when the field's `builderCondition` hides it in the editor. */
 function shown(field: DataField, siblings: Record<string, unknown>, siblingFields: readonly DataField[]): boolean {
@@ -209,22 +321,25 @@ function checkMany(field: LooseField, value: unknown, path: string, report: Repo
     report(path, 'Must be an array')
     return
   }
-  if (typeof field.minRows === 'number' && value.length < field.minRows) report(path, `Must have at least ${field.minRows} items`)
-  if (typeof field.maxRows === 'number' && value.length > field.maxRows) report(path, `Must have at most ${field.maxRows} items`)
+  if (typeof field.minRows === 'number' && value.length < field.minRows) report(path, `Must have at least ${field.minRows} items`, 'constraint')
+  if (typeof field.maxRows === 'number' && value.length > field.maxRows) report(path, `Must have at most ${field.maxRows} items`, 'constraint')
   value.forEach((v, i) => item(v, `${path}[${i}]`))
 }
 
 function checkString(field: LooseField, value: unknown, path: string, report: Report): void {
   if (typeof value !== 'string') return report(path, 'Must be a string')
-  if (typeof field.minLength === 'number' && value.length < field.minLength) report(path, `Must be at least ${field.minLength} characters`)
-  if (typeof field.maxLength === 'number' && value.length > field.maxLength) report(path, `Must be at most ${field.maxLength} characters`)
+  if (typeof field.minLength === 'number' && value.length < field.minLength) report(path, `Must be at least ${field.minLength} characters`, 'constraint')
+  if (typeof field.maxLength === 'number' && value.length > field.maxLength) report(path, `Must be at most ${field.maxLength} characters`, 'constraint')
 }
 
 function checkNumber(field: LooseField, value: unknown, path: string, report: Report): void {
   if (typeof value !== 'number' || !Number.isFinite(value)) return report(path, 'Must be a number')
-  if (typeof field.min === 'number' && value < field.min) report(path, `Must be at least ${field.min}`)
-  if (typeof field.max === 'number' && value > field.max) report(path, `Must be at most ${field.max}`)
+  if (typeof field.min === 'number' && value < field.min) report(path, `Must be at least ${field.min}`, 'constraint')
+  if (typeof field.max === 'number' && value > field.max) report(path, `Must be at most ${field.max}`, 'constraint')
 }
+
+/** Payload's default email check (`payload/fields/validations`, email). */
+const EMAIL = /^(?!.*\.\.)[\w!#$%&'*+/=?^`{|}~-](?:[\w!#$%&'*+/=?^`{|}~.-]*[\w!#$%&'*+/=?^`{|}~-])?@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*\.[a-z]{2,}$/i
 
 function isId(value: unknown): boolean {
   return (typeof value === 'string' && value !== '') || (typeof value === 'number' && Number.isFinite(value))
@@ -248,9 +363,13 @@ function checkValue(field: DataField, value: unknown, path: string, report: Repo
       if (field.hasMany) return checkMany(field, value, path, report, (v, at) => checkString(field, v, at, report))
       return checkString(field, value, path, report)
     case 'textarea':
-    case 'email':
     case 'code':
       return checkString(field, value, path, report)
+    case 'email':
+      checkString(field, value, path, report)
+      // Payload's own email check: something@something.
+      if (typeof value === 'string' && value !== '' && !EMAIL.test(value)) report(path, 'Must be a valid email address', 'constraint')
+      return
     case 'number':
       if (field.hasMany) return checkMany(field, value, path, report, (v, at) => checkNumber(field, v, at, report))
       return checkNumber(field, value, path, report)

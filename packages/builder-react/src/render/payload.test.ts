@@ -72,13 +72,14 @@ test('site: legacy components get Payload data, with defaults and nested blocks'
   )
 })
 
-test('canvas: the root gets a display:contents host, PayloadSlot children carry block ids', () => {
+test('canvas: no wrapper element, PayloadSlot children carry block ids', () => {
   const html = render('canvas')
-  assert.match(html, /^<span style="display:contents" data-builder-payload=""><section class="tone-light"/)
+  // No wrapper element: the component's own element comes first (the canvas adds the block id to it).
+  assert.match(html, /^<section class="tone-light"/)
   // A component that renders its children itself: they have no block ids.
   assert.doesNotMatch(html, /data-block-id="h1"/)
   // Upgraded slots: the container has the slot attributes, each child its own host.
-  assert.match(html, /<div class="col" data-slot-owner="c" data-slot="left"><span style="display:contents" data-builder-payload=""><h3>Left<\/h3><\/span><\/div>/)
+  assert.match(html, /<div class="col" data-slot-owner="c" data-slot="left"><h3>Left<\/h3><\/div>/)
   assert.match(html, /<div class="col" data-slot-owner="c" data-slot="right"><div data-slot-empty="" data-slot-owner="c" data-slot="right"/)
 })
 

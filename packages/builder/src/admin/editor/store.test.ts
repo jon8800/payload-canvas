@@ -56,3 +56,34 @@ test('a failed operation leaves the group entry as it is', () => {
   store.undo()
   assert.deepEqual(store.getState().layout, layout())
 })
+
+test('in another locale, prop edits write that locale, shared props stay shared, and undo restores both', () => {
+  const defs = [
+    {
+      type: 'heading',
+      label: 'Heading',
+      fields: [
+        { name: 'text', type: 'text' as const, localized: true },
+        { name: 'level', type: 'text' as const },
+      ],
+    },
+  ]
+  const settings = { locales: ['en', 'de'], defaultLocale: 'en', fallback: true }
+  const store = createEditorStore(layout(block('a', 'Hello')), { localization: { settings, blocks: defs, locale: 'de' } })
+  // Untranslated: the view shows the English text.
+  assert.equal(textOf(store.getState().view, 0), 'Hello')
+  let shared = 0
+  store.onSharedEdit(() => shared++)
+
+  store.apply({ type: 'update', id: 'a', props: { text: 'Hallo', level: '1' } })
+  const stored = store.getState().layout.blocks[0]
+  assert.deepEqual(stored.props, { text: 'Hello', level: '1' })
+  assert.deepEqual(stored.locales, { de: { text: 'Hallo' } })
+  assert.equal(textOf(store.getState().view, 0), 'Hallo')
+  assert.equal(shared, 1)
+
+  store.setLocale('en')
+  assert.equal(textOf(store.getState().view, 0), 'Hello')
+  store.undo()
+  assert.deepEqual(store.getState().layout, layout(block('a', 'Hello')))
+})

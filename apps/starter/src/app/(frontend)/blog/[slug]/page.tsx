@@ -9,6 +9,7 @@ import { partOf, SiteFrame, visitorOf, type LayoutPart } from '@/components/Buil
 import { LivePreviewListener } from '@/components/LivePreviewListener'
 import { generateMeta, notFoundMeta } from '@/utilities/generateMeta'
 import { MissingPage } from '@/components/NotFoundContent'
+import { requestLocale } from '@/lib/i18n'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -29,6 +30,8 @@ async function findPost(slug: string, draft: boolean, depth = 1) {
     depth,
     overrideAccess: false,
     user: (await visitorOf(payload, draft)) as never,
+    // Translation demo: the post's fields and layout in the page's language (/de/blog/…).
+    locale: (await requestLocale()) as never,
   })
   return { payload, post: docs[0] ?? null }
 }
@@ -45,7 +48,7 @@ export default async function BlogPost({ params }: Props) {
   const { payload, post } = await findPost(slug, draft)
   if (!post) return <MissingPage pathname={`/blog/${slug}`} />
 
-  const template = await loadTemplate(payload, { collection: 'posts', doc: post, draft })
+  const template = await loadTemplate(payload, { collection: 'posts', doc: post, draft, locale: await requestLocale() })
   const main: LayoutPart | null = template
     ? { layout: template.layout, css: template.css, context: { collection: 'posts', doc: post } }
     : partOf(post)

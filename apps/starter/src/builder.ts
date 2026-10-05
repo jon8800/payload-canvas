@@ -3,6 +3,7 @@
 import { defaultBlocks, defineBlock } from '@payload-toolkit/builder/blocks'
 import { formClassList } from '@/components/blocks/formClasses'
 import { legacyBuilderBlocks, legacyDemo } from '@/legacy-fixture'
+import { fieldSemanticsBlocks } from '@/legacy-fixture/fieldSemantics'
 
 export { resolveLink } from '@/lib/links'
 
@@ -30,4 +31,6 @@ export const builderBlocks = [
   formBlock,
   // Dev fixture: existing Payload blocks used as builder blocks (NEXT_PUBLIC_BUILDER_LEGACY_DEMO=1).
   ...(legacyDemo ? legacyBuilderBlocks : []),
+  // Dev fixture: a block with Payload validate, hooks and access on its props.
+  ...(legacyDemo ? fieldSemanticsBlocks : []),
 ]

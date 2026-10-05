@@ -29,13 +29,17 @@ import {
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { flushSync } from 'react-dom'
 
-import { defaultResolveLink, RenderLayout, type BlockComponents, type ResolveLink } from '../index'
+import { defaultResolveLink, RenderLayout, type BlockComponents, type PageData, type ResolveLink } from '../index'
+import type { CanvasScope, CanvasServer } from '../render/canvasServerTypes'
 import { createCanvasDrag } from './drag'
 import { editableAt, firstEditable, type EditableTarget } from './inline/dom'
 import { bindingFor, inlineKind, valueAtPath, withPropValue } from './inline/model'
 import { startPlainSession, type InlineSession, type SessionOptions } from './inline/session'
 import { measure, sameMeasurement } from './measure'
 import { resolveCanvasLayout } from './resolveLayout'
+import { ServerBlocksContext } from './ServerBlock'
+import { createServerBlocks } from './serverBlocks'
+import { withServerBlocks } from './serverComponents'
 import { shareStructure } from './share'
 import { ThumbnailCanvas } from './thumbnail/ThumbnailCanvas'
 
@@ -52,6 +56,13 @@ export type BuilderCanvasProps = {
   plugins?: TailwindPlugins
   /** Link resolver. Must match the site's `RenderLayout` `resolveLink`. */
   resolveLink?: ResolveLink
+  /**
+   * The app's canvas server action (`createCanvasServer` from `@payload-toolkit/builder-react/server`).
+   * With it, blocks the canvas cannot render itself (server components that load data) render on
+   * the server with the site's components, and blocks get the page data. Without it, those blocks
+   * show a placeholder.
+   */
+  server?: CanvasServer
 }
 
 /** Editor-only styles: visible empty slots and dimmed hidden blocks. Never part of the site CSS. */
@@ -94,6 +105,23 @@ const EDITOR_CSS = `
 span[data-builder-passthrough] { display: inline-block; margin: 0 2px; padding: 0 6px; }
 /* Smooth drag mode: the dragged block hides while a lifted copy follows the pointer. */
 [data-builder-drag-source] { opacity: 0 !important; }
+/* Blocks rendered on the server: a placeholder while the first render loads, and a short dim
+   (only when an update takes longer than 300 ms) while a newer one loads. */
+[data-builder-server] {
+  font: 12px/1.4 system-ui, sans-serif;
+  color: rgb(0 0 0 / 0.5);
+  border: 1px dashed rgb(128 128 128 / 0.5);
+  border-radius: 4px;
+}
+[data-builder-server='loading'] {
+  min-height: 96px;
+  background: linear-gradient(90deg, rgb(0 0 0 / 0.03) 25%, rgb(0 0 0 / 0.07) 50%, rgb(0 0 0 / 0.03) 75%) 0 0 / 200% 100%;
+  animation: builder-server-loading 1.4s linear infinite;
+}
+[data-builder-server='error'] { color: rgb(180 30 30); border-color: rgb(180 30 30 / 0.5); }
+[data-builder-loading] { opacity: 0.7; transition: opacity 0.2s ease 0.3s; }
+@keyframes builder-server-loading { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { [data-builder-server='loading'] { animation: none; } }
 `
 
 /** Room kept above and below a block scrolled into view (the toolbar sits above it). */
@@ -140,7 +168,16 @@ export function BuilderCanvas(props: BuilderCanvasProps) {
   return null
 }
 
-function EditorCanvas({ blocks, components, plugins, resolveLink }: BuilderCanvasProps) {
+/** The scope the canvas server action renders for. */
+export function canvasScope(init: CanvasInit | null, context: TemplateContext | null): CanvasScope {
+  const id = context?.doc.id
+  return {
+    document: init?.document ?? null,
+    context: context && (typeof id === 'string' || typeof id === 'number') ? { collection: context.collection, id } : null,
+  }
+}
+
+function EditorCanvas({ blocks, components, plugins, resolveLink, server }: BuilderCanvasProps) {
   const [init, setInit] = useState<CanvasInit | null>(null)
   const [layout, setLayout] = useState<Layout | null>(null)
   // The document a template renders (the editor's sample document). Null on normal pages.
@@ -162,6 +199,18 @@ function EditorCanvas({ blocks, components, plugins, resolveLink }: BuilderCanva
   const latest = useRef<Latest>({ layout: null, resolved: null, definitions: undefined })
   // The admin's layout the current `resolved` was made from. The drop animation waits for a new one.
   const resolvedFrom = useRef<Layout | null>(null)
+  // Blocks rendered on the server, through the app's canvas server action.
+  const [serverBlocks] = useState(() =>
+    server
+      ? createServerBlocks(server, {
+          label: (type) => definitionIn(latest.current, type)?.label ?? type,
+          onError: (message) => send({ type: 'error', message }),
+        })
+      : null,
+  )
+  // `undefined` while it loads. The canvas waits for it, so blocks never render without it.
+  const [pageData, setPageData] = useState<PageData | null | undefined>(server ? undefined : null)
+  const [serverVersion, setServerVersion] = useState(0)
 
   // Coalesce every trigger (render, resize, scroll) into one measurement per frame. An unchanged
   // measurement is not sent: the admin would redraw the overlay for nothing.
@@ -512,6 +561,35 @@ function EditorCanvas({ blocks, components, plugins, resolveLink }: BuilderCanva
       })
   }, [layout, init, definitions, context, linkResolver])
 
+  // Server blocks: the scope and the page data.
+  useEffect(() => {
+    if (!serverBlocks || !init) return
+    let cancelled = false
+    serverBlocks.setScope(canvasScope(init, context))
+    setServerVersion((version) => version + 1)
+    void serverBlocks.pageData().then((data) => {
+      if (!cancelled) setPageData(data)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [serverBlocks, init, context])
+  // The stored layout server blocks are sent from. A prop being edited inline keeps its value from
+  // the start of editing (as on screen), so the block around it asks again only once editing ends.
+  const editing = freeze && freeze.release === null ? freeze : null
+  const serverLayout = useMemo(
+    () => (layout && editing ? withPropValue(layout, editing.id, editing.key, editing.value) : layout),
+    [layout, editing],
+  )
+  const serverContext = useMemo(
+    () => (serverBlocks ? { store: serverBlocks, layout: serverLayout, version: serverVersion } : null),
+    [serverBlocks, serverLayout, serverVersion],
+  )
+  const canvasComponents = useMemo(
+    () => withServerBlocks(components, definitions, Boolean(serverBlocks)),
+    [components, definitions, serverBlocks],
+  )
+
   // One compile per distinct class set (about 4 ms). `null` until a layout is resolved.
   // Block definitions add the classes their components use (`BlockDefinition.classes`).
   const classKey = useMemo(
@@ -557,10 +635,10 @@ function EditorCanvas({ blocks, components, plugins, resolveLink }: BuilderCanva
     return () => window.clearTimeout(timer)
   }, [freeze])
 
-  const visible = shown && compiler.status !== 'loading'
+  const visible = shown && compiler.status !== 'loading' && pageData !== undefined
 
-  // After the rendered blocks change: observe the current elements and measure.
-  useLayoutEffect(() => {
+  // Observes the current block and slot elements and measures.
+  const observeBlocks = useCallback(() => {
     const ro = observer.current
     const root = rootRef.current
     if (!ro || !root) return
@@ -568,7 +646,18 @@ function EditorCanvas({ blocks, components, plugins, resolveLink }: BuilderCanva
     ro.observe(root)
     for (const el of root.querySelectorAll('[data-block-id], [data-slot-owner]')) ro.observe(el)
     scheduleMeasure()
-  }, [visible, shown, css, scheduleMeasure])
+  }, [scheduleMeasure])
+
+  // After the rendered blocks change, and after a server block shows new content.
+  // oxlint-disable-next-line react-hooks/exhaustive-deps
+  useLayoutEffect(observeBlocks, [visible, shown, css, observeBlocks])
+  useEffect(() => {
+    if (!serverBlocks) return
+    serverBlocks.onRendered = observeBlocks
+    return () => {
+      serverBlocks.onRendered = null
+    }
+  }, [serverBlocks, observeBlocks])
 
   // A drop in the smooth drag mode animates once its layout is on screen, before the browser paints.
   useLayoutEffect(() => drag.rendered(resolvedFrom.current), [shown, drag])
@@ -580,14 +669,15 @@ function EditorCanvas({ blocks, components, plugins, resolveLink }: BuilderCanva
         <RenderLayout
           layout={shown}
           blocks={definitions}
-          components={components}
+          components={canvasComponents}
           css={css}
           mode="canvas"
           resolveLink={resolveLink}
           context={context}
+          pageData={pageData}
         />
       ) : null,
-    [visible, shown, definitions, components, css, resolveLink, context],
+    [visible, shown, definitions, canvasComponents, css, resolveLink, context, pageData],
   )
 
   return (
@@ -597,7 +687,7 @@ function EditorCanvas({ blocks, components, plugins, resolveLink }: BuilderCanva
         {visible && shown.blocks.length === 0 && (
           <p data-builder-empty-page="">This page is empty. Add a section or a block from the Add panel.</p>
         )}
-        {rendered}
+        <ServerBlocksContext.Provider value={serverContext}>{rendered}</ServerBlocksContext.Provider>
       </div>
     </>
   )

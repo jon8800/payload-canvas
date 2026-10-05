@@ -26,7 +26,18 @@ function builderConfigOf(fields: ClientField[]): BuilderClientConfig | null {
  * Payload's admin template is not around a root view, so the builder provides the entity
  * visibility it would provide (Payload's Versions screen in the builder's drawer reads it).
  */
-export function BuilderScreen({ meta, icon, visibleEntities }: { meta: BuilderDocMeta; icon: ReactNode; visibleEntities?: VisibleEntities }) {
+export function BuilderScreen({
+  meta,
+  icon,
+  visibleEntities,
+  locale,
+}: {
+  meta: BuilderDocMeta
+  icon: ReactNode
+  visibleEntities?: VisibleEntities
+  /** The request's locale (`?locale=`, else Payload's locale preference). Localized layouts open in it. */
+  locale?: string | null
+}) {
   const { getEntityConfig } = useConfig()
   const config = builderConfigOf(getEntityConfig({ collectionSlug: meta.collection })?.fields ?? [])
   if (!config) {
@@ -35,7 +46,7 @@ export function BuilderScreen({ meta, icon, visibleEntities }: { meta: BuilderDo
   return (
     <EntityVisibilityProvider visibleEntities={visibleEntities}>
       <EditDepthProvider>
-        <Editor config={config} meta={meta} icon={icon} />
+        <Editor config={config} meta={meta} icon={icon} locale={locale} />
       </EditDepthProvider>
     </EntityVisibilityProvider>
   )

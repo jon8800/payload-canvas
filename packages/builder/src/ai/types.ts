@@ -141,6 +141,11 @@ export type AiChatRequest = {
   context?: TemplateContext | null
   /** Canvas width in px, so the assistant knows which breakpoint the user is looking at. */
   canvasWidth?: number | null
+  /**
+   * Localized layouts: the locale the editor shows. The assistant reads that locale's values, and
+   * its prop updates write that locale. Default: the default locale.
+   */
+  locale?: string | null
 }
 
 /**

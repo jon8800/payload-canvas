@@ -1,9 +1,10 @@
 // Shared helpers of the live channel: resolving operations, splitting validation problems and
 // naming actors. Edits themselves go through the document session (session.ts).
 
+import { localizeOperations } from '../core/locale'
 import { applyOperation } from '../core/operations'
 import { findBlock, findLocation } from '../core/tree'
-import type { BlockDefinition, Layout, Operation } from '../core/types'
+import type { BlockDefinition, Layout, LocaleSettings, Operation } from '../core/types'
 import type { LayoutError } from '../core/validate'
 import type { LiveActor } from './types'
 
@@ -21,15 +22,28 @@ type Resolved = { ok: true; layout: Layout; ops: Operation[] } | { ok: false; er
 /**
  * Applies operations in order, all or nothing, and returns the operations to broadcast.
  * A `duplicate` regenerates child ids at random, so it is broadcast as the `insert` of the
- * finished copy: every client then gets the same ids.
+ * finished copy: every client then gets the same ids. With block definitions, `update`
+ * operations with a `locale` are put in canonical form first (`localizeOperations`): the default
+ * locale is dropped, and props that are not localized move to an operation without a locale.
  */
-export function resolveOperations(layout: Layout, ops: unknown, blocks?: readonly BlockDefinition[]): Resolved {
+export function resolveOperations(
+  layout: Layout,
+  ops: unknown,
+  blocks?: readonly BlockDefinition[],
+  localization?: LocaleSettings | null,
+): Resolved {
   if (!Array.isArray(ops)) return { ok: false, error: 'Operations must be an array' }
   if (ops.length === 0) return { ok: false, error: 'No operations given' }
+  if (blocks) {
+    const localized = localizeOperations(layout, ops, blocks, localization)
+    if (!localized.ok) return localized
+    ops = localized.ops
+  }
   let current = layout
   const out: Operation[] = []
-  for (let i = 0; i < ops.length; i++) {
-    const op = ops[i] as Operation
+  const list = ops as unknown[]
+  for (let i = 0; i < list.length; i++) {
+    const op = list[i] as Operation
     // With block definitions, inserts and moves also follow the slot rules (allow / disallow).
     const result = applyOperation(current, op, blocks ? { blocks } : undefined)
     if (!result.ok) {

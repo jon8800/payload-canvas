@@ -4,7 +4,8 @@
 // request (layout, selection, canvas width, template sample) goes into the context message.
 
 import { isRichText, richTextToPlain } from '../core/bindings'
-import type { BlockDefinition, Layout, SectionDefinition, StyleTokens, TemplateContext, ThemeToken } from '../core/types'
+import { localeLabel } from '../core/locale'
+import type { BlockDefinition, Layout, LocaleSettings, SectionDefinition, StyleTokens, TemplateContext, ThemeToken } from '../core/types'
 import { BINDINGS_GUIDE, describeBlock, layoutGuide, outline } from '../mcp/shared'
 
 export type PromptCatalog = {
@@ -146,6 +147,8 @@ export type ContextInput = {
   sample?: TemplateContext | null
   /** Saved sections the user can read (people made them on this site). Not in the cached system prompt. */
   savedSections?: SectionDefinition[]
+  /** Localized layouts: the locale the user edits, and how many props still show the fallback language. */
+  locale?: { settings: LocaleSettings; locale: string; untranslated: number } | null
 }
 
 const MAX_STRING = 160
@@ -180,6 +183,23 @@ export const CONTEXT_SAVED_SECTIONS = 30
 const OUTLINE_MAX = 160
 
 /** One line per saved section: id, name, category and a condensed outline of its blocks. */
+/** What the assistant must know when the user edits one locale of a localized layout. */
+function localeLines(input: { settings: LocaleSettings; locale: string; untranslated: number }): string[] {
+  const { settings, locale, untranslated } = input
+  const name = `${localeLabel(settings, locale)} (${locale})`
+  const fallback = `${localeLabel(settings, settings.defaultLocale)} (${settings.defaultLocale})`
+  if (locale === settings.defaultLocale) {
+    return [
+      `Language: the page has several languages (${settings.locales.join(', ')}). The user edits ${name}, the default language. Write text in ${localeLabel(settings, locale)}. Blocks, order and classes are the same in every language.`,
+    ]
+  }
+  return [
+    `Language: the user edits ${name}. The layout below shows the ${localeLabel(settings, locale)} values; text props that are not translated yet show the ${fallback} text.`,
+    `Write every text you add or change in ${localeLabel(settings, locale)}. Your "update" props go to ${localeLabel(settings, locale)} only (localized props). Inserted blocks, moves, removals, classes and props that are not localized change EVERY language, so prefer translating text over changing the structure.`,
+    ...(untranslated > 0 ? [`${untranslated} props still show the ${fallback} text. When the user asks to translate, update them with ${localeLabel(settings, locale)} text.`] : []),
+  ]
+}
+
 function savedSectionsBlock(sections: SectionDefinition[] | undefined): string[] {
   if (!sections || sections.length === 0) return []
   const lines = sections.slice(0, CONTEXT_SAVED_SECTIONS).map((s) => {
@@ -229,6 +249,7 @@ export function contextText(input: ContextInput): string {
     lines.push('Selected block: none.')
   }
   lines.push(...savedSectionsBlock(input.savedSections))
+  if (input.locale) lines.push(...localeLines(input.locale))
   lines.push(`Current layout (${input.layout.blocks.length} top-level blocks):`, JSON.stringify(input.layout), '</editor_context>')
   return lines.join('\n')
 }

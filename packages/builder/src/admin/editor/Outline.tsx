@@ -18,6 +18,7 @@ import type { Block, Layout } from '../../core/types'
 import { ancestors, duplicateBlock, removeBlock, renameBlock, toggleHidden } from './actions'
 import { BlockIcon, Icon, type IconName } from './icons'
 import { PeerDots } from './live/PresenceUI'
+import { useUntranslated } from './locale/locale'
 import { BLOCK_KEYS, keyText } from './menu/keys'
 import { openBlockMenu, renameRequest } from './menu/requests'
 import { blockPreview, blockSummary, childrenOf, customLabel, typeName } from './names'
@@ -122,7 +123,9 @@ function hasBrokenBinding(runtime: Runtime, layout: Layout, block: Block, templa
 export function Outline() {
   const runtime = useRuntime()
   const { store, outlineRef } = runtime
-  const layout = useEditor(store, (s) => s.layout)
+  // The outline shows the text of the editor's locale.
+  const layout = useEditor(store, (s) => s.view)
+  const untranslated = useUntranslated(runtime)
   const collapsed = useValue(runtime.collapsed)
   const rows = useMemo(() => visibleRows(runtime, layout, collapsed), [runtime, layout, collapsed])
   const rowIds = useMemo(() => new Set(rows.map((r) => r.block.id)), [rows])
@@ -292,6 +295,7 @@ export function Outline() {
               childCount={row.childCount}
               text={row.text}
               issues={issues.get(row.block.id) ?? NO_ISSUES}
+              untranslated={untranslated.get(row.block.id)?.length ?? 0}
               broken={broken.has(row.block.id)}
               focusable={noSelectedRow && row.block.id === firstId}
               renaming={renaming === row.block.id}
@@ -318,6 +322,8 @@ function openRowMenu(runtime: Runtime, id: string, e: ReactMouseEvent) {
 type OutlineRowProps = Row & {
   /** Publish problems of this block. */
   issues: string[]
+  /** Localized props that show the fallback language's value in the editor's locale. */
+  untranslated: number
   /** A binding reads a field the collection does not have. */
   broken: boolean
   /** In the tab order although not selected: the first row while no visible row is selected. */
@@ -335,6 +341,7 @@ const OutlineRow = memo(function OutlineRow({
   childCount,
   text,
   issues,
+  untranslated,
   broken,
   focusable,
   renaming,
@@ -394,7 +401,14 @@ const OutlineRow = memo(function OutlineRow({
       {...listeners}
       {...attributes}
       role="treeitem"
-      aria-label={[blockSummary(block, typeLabel), block.hidden && 'hidden on the site', ...issues].filter(Boolean).join(', ')}
+      aria-label={[
+        blockSummary(block, typeLabel),
+        block.hidden && 'hidden on the site',
+        untranslated > 0 && `${untranslated} not translated`,
+        ...issues,
+      ]
+        .filter(Boolean)
+        .join(', ')}
       aria-level={depth + 1}
       aria-selected={selected}
       aria-expanded={container && childCount > 0 ? open : undefined}
@@ -436,6 +450,14 @@ const OutlineRow = memo(function OutlineRow({
         </>
       )}
       <PeerDots blockId={block.id} />
+      {untranslated > 0 && (
+        <span
+          className="builder-editor__row-untranslated"
+          aria-hidden="true"
+          data-tooltip={`${untranslated} ${untranslated === 1 ? 'field is' : 'fields are'} not translated`}
+          data-tooltip-side="right"
+        />
+      )}
       {issues.length > 0 && (
         <span className="builder-editor__row-problem" data-tooltip={issues.join('\n')} data-tooltip-side="right">
           <Icon name="warning" size={13} />

@@ -16,8 +16,10 @@ import { richTextFor } from '../components/RichText'
 import { mapFieldValues, type FieldLike, type VisitField } from './fields'
 import { defaultResolveLink, resolveLinkValue } from './link'
 import { listItemsOf } from './lists'
+import { readsPageData } from './marks'
 import { urlResolver } from './resolve'
-import type { BlockComponents, BlockComponentProps, RenderLayoutProps, RenderMode, ResolveLink } from './types'
+import { SlotOutlet } from './SlotOutlet'
+import type { BlockComponents, BlockComponentProps, PageData, RenderLayoutProps, RenderMode, ResolveLink } from './types'
 
 type Context = {
   mode: RenderMode
@@ -32,6 +34,8 @@ type Context = {
    * `data-builder-repeat` instead of editor attributes, so selection maps to the first item.
    */
   repeat: boolean
+  /** Given to components that read the page data (see `withPageData`). */
+  pageData: PageData | null
 }
 
 const PLACEHOLDER_STYLE = { minHeight: 48, minWidth: 48 }
@@ -120,7 +124,12 @@ function componentPropsOf(block: Block, ctx: Context): Record<string, unknown> {
   return fields ? mapFieldValues(props, fields, ctx.resolveLinks) : props
 }
 
-function renderBlock(stored: Block, ctx: Context): ReactNode {
+/**
+ * One block. `preview`: the block renders on the server for the canvas (`renderPreviewBlock`).
+ * It gets no editor attributes (the canvas adds them to its first element), and each slot is a
+ * `SlotOutlet`, where the canvas shows the children it rendered itself.
+ */
+function renderBlock(stored: Block, ctx: Context, preview = false): ReactNode {
   const canvas = ctx.mode === 'canvas'
   const editor = isEditor(ctx)
   if (stored.hidden && !editor) return null
@@ -129,16 +138,18 @@ function renderBlock(stored: Block, ctx: Context): ReactNode {
     ? resolveBlockBindings(stored, ctx.context, ctx.definitions.get(stored.type), ctx.binding)
     : stored
 
-  const attributes: Record<string, string> = editor
+  const attributes: Record<string, string> = preview
+    ? {}
+    : editor
     ? { 'data-block-id': block.id, 'data-block-type': block.type }
     : canvas
       ? { 'data-builder-repeat': '' }
       : {}
-  if (editor && block.hidden) attributes['data-builder-hidden'] = 'true'
+  if (editor && !preview && block.hidden) attributes['data-builder-hidden'] = 'true'
 
   const Component = ctx.components[block.type]
   if (!Component) {
-    if (!editor) return null
+    if (!editor || preview) return null
     // A known block without a component in this map, e.g. a server-only component the canvas
     // cannot run: the editor still shows and selects it.
     const definition = ctx.definitions.get(block.type)
@@ -153,7 +164,8 @@ function renderBlock(stored: Block, ctx: Context): ReactNode {
   const slotAttributes: Record<string, Record<string, string>> = {}
   const isList = block.type === COLLECTION_LIST_BLOCK
   for (const slot of slotNamesOf(block, ctx)) {
-    slots[slot] = isList && slot === LIST_ITEM_SLOT ? renderListItems(block, ctx) : renderSlot(block, slot, ctx)
+    if (preview) slots[slot] = <SlotOutlet name={slot} />
+    else slots[slot] = isList && slot === LIST_ITEM_SLOT ? renderListItems(block, ctx) : renderSlot(block, slot, ctx)
     slotAttributes[slot] = editor ? { 'data-slot-owner': block.id, 'data-slot': slot } : {}
   }
   if (isList && !(LIST_ITEM_SLOT in slots)) {
@@ -171,6 +183,7 @@ function renderBlock(stored: Block, ctx: Context): ReactNode {
     slotAttributes,
     mode: ctx.mode,
   }
+  if (ctx.pageData && readsPageData(Component)) componentProps.pageData = ctx.pageData
   return <Component key={block.id} {...componentProps} />
 }
 
@@ -180,6 +193,7 @@ function createContext(
   blocks: BlockDefinition[] | undefined,
   resolveLink: ResolveLink,
   context: TemplateContext | null,
+  pageData: PageData | null,
 ): Context {
   return {
     mode,
@@ -190,6 +204,7 @@ function createContext(
     binding: { url: urlResolver(resolveLink) },
     context,
     repeat: false,
+    pageData,
   }
 }
 
@@ -206,11 +221,12 @@ function contextFor(
   blocks: BlockDefinition[] | undefined,
   resolveLink: ResolveLink,
   context: TemplateContext | null,
+  pageData: PageData | null,
 ): Context {
-  if (mode !== 'canvas') return createContext(mode, components, blocks, resolveLink, context)
-  const inputs = [components, blocks, resolveLink, context]
+  if (mode !== 'canvas') return createContext(mode, components, blocks, resolveLink, context, pageData)
+  const inputs = [components, blocks, resolveLink, context, pageData]
   if (canvasContext && canvasContext.inputs.every((input, i) => input === inputs[i])) return canvasContext.ctx
-  canvasContext = { inputs, ctx: createContext(mode, components, blocks, resolveLink, context) }
+  canvasContext = { inputs, ctx: createContext(mode, components, blocks, resolveLink, context, pageData) }
   return canvasContext.ctx
 }
 
@@ -232,14 +248,35 @@ export function RenderLayout({
   blocks,
   resolveLink = defaultResolveLink,
   context,
+  pageData,
 }: RenderLayoutProps): ReactNode {
-  const ctx = contextFor(mode, components, blocks, resolveLink, context ?? null)
+  const ctx = contextFor(mode, components, blocks, resolveLink, context ?? null, pageData ?? null)
   return (
     <>
       <BuilderStyle css={css} />
       {renderBlocks(layout.blocks, ctx)}
     </>
   )
+}
+
+export type PreviewBlockOptions = Pick<RenderLayoutProps, 'components' | 'blocks' | 'resolveLink' | 'context' | 'pageData'>
+
+/**
+ * Server preview for the canvas (`createCanvasServer`): renders one block (its data already
+ * loaded) as the canvas would, with the given components. It gets no editor attributes, and each
+ * slot is a `SlotOutlet`: the canvas fills it with the children it renders itself, so they stay
+ * editable. Its slot containers get the editor's slot attributes, as on the canvas.
+ */
+export function renderPreviewBlock(block: Block, options: PreviewBlockOptions = {}): ReactNode {
+  const ctx = createContext(
+    'canvas',
+    options.components,
+    options.blocks,
+    options.resolveLink ?? defaultResolveLink,
+    options.context ?? null,
+    options.pageData ?? null,
+  )
+  return renderBlock(block, ctx, true)
 }
 
 /**
