@@ -66,19 +66,7 @@ export interface Config {
     users: UserAuthOperations;
     'payload-mcp-api-keys': PayloadMcpApiKeyAuthOperations;
   };
-  blocks: {
-    fullWidth: LegacyFullWidthBlock;
-    twoColumn: LegacyTwoColumnBlock;
-    sectionIntro: SectionIntro;
-    postsSection: PostsSection;
-    heading: LegacyHeadingBlock;
-    richText: LegacyRichTextBlock;
-    image: LegacyImageBlock;
-    button: LegacyButtonBlock;
-    faqAccordion: LegacyFaqAccordionBlock;
-    latestPosts: LatestPosts;
-    pageFacts: PageFacts;
-  };
+  blocks: {};
   collections: {
     users: User;
     media: Media;
@@ -87,13 +75,13 @@ export interface Config {
     categories: Category;
     tags: Tag;
     'template-parts': TemplatePart;
-    'legacy-pages': LegacyPage;
     redirects: Redirect;
     forms: Form;
     'form-submissions': FormSubmission;
     exports: Export;
     imports: Import;
     'payload-mcp-api-keys': PayloadMcpApiKey;
+    'payload-mcp-oauth': PayloadMcpOauth;
     search: Search;
     'builder-templates': BuilderTemplate;
     'builder-sections': BuilderSection;
@@ -110,7 +98,6 @@ export interface Config {
       usedInPages: 'pages';
       usedInPosts: 'posts';
       usedInTemplateParts: 'template-parts';
-      usedInLegacyPages: 'legacy-pages';
       usedInBuilderTemplates: 'builder-templates';
       usedInBuilderSections: 'builder-sections';
     };
@@ -126,13 +113,13 @@ export interface Config {
     categories: CategoriesSelect<false> | CategoriesSelect<true>;
     tags: TagsSelect<false> | TagsSelect<true>;
     'template-parts': TemplatePartsSelect<false> | TemplatePartsSelect<true>;
-    'legacy-pages': LegacyPagesSelect<false> | LegacyPagesSelect<true>;
     redirects: RedirectsSelect<false> | RedirectsSelect<true>;
     forms: FormsSelect<false> | FormsSelect<true>;
     'form-submissions': FormSubmissionsSelect<false> | FormSubmissionsSelect<true>;
     exports: ExportsSelect<false> | ExportsSelect<true>;
     imports: ImportsSelect<false> | ImportsSelect<true>;
     'payload-mcp-api-keys': PayloadMcpApiKeysSelect<false> | PayloadMcpApiKeysSelect<true>;
+    'payload-mcp-oauth': PayloadMcpOauthSelect<false> | PayloadMcpOauthSelect<true>;
     search: SearchSelect<false> | SearchSelect<true>;
     'builder-templates': BuilderTemplatesSelect<false> | BuilderTemplatesSelect<true>;
     'builder-sections': BuilderSectionsSelect<false> | BuilderSectionsSelect<true>;
@@ -212,100 +199,30 @@ export interface PayloadMcpApiKeyAuthOperations {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "LegacyFullWidthBlock".
+ * via the `definition` "users".
  */
-export interface LegacyFullWidthBlock {
-  content?:
-    | (
-        | LegacyHeadingBlock
-        | LegacyRichTextBlock
-        | LegacyImageBlock
-        | LegacyButtonBlock
-        | LegacyFaqAccordionBlock
-        | LatestPosts
-        | PageFacts
-      )[]
+export interface User {
+  id: number;
+  name?: string | null;
+  updatedAt: string;
+  createdAt: string;
+  email: string;
+  resetPasswordToken?: string | null;
+  resetPasswordExpiration?: string | null;
+  salt?: string | null;
+  hash?: string | null;
+  resetPasswordRequestedAt?: string | null;
+  loginAttempts?: number | null;
+  lockUntil?: string | null;
+  sessions?:
+    | {
+        id: string;
+        createdAt?: string | null;
+        expiresAt: string;
+      }[]
     | null;
-  bordered?: boolean | null;
-  backgroundImage?: (number | null) | Media;
-  paddingTop?: ('none' | 'small' | 'default' | 'large') | null;
-  paddingBottom?: ('none' | 'small' | 'default' | 'large') | null;
-  background?: ('default' | 'dark') | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'fullWidth';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "LegacyHeadingBlock".
- */
-export interface LegacyHeadingBlock {
-  /**
-   * Small uppercase label above the heading
-   */
-  eyebrow?: string | null;
-  text: string;
-  level?: ('h2' | 'h3' | 'h4') | null;
-  align?: ('left' | 'center') | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'heading';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "LegacyRichTextBlock".
- */
-export interface LegacyRichTextBlock {
-  content: {
-    root: {
-      type: string;
-      children: {
-        type: any;
-        version: number;
-        [k: string]: unknown;
-      }[];
-      direction: ('ltr' | 'rtl') | null;
-      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
-      indent: number;
-      version: number;
-    };
-    [k: string]: unknown;
-  };
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'richText';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "LegacyImageBlock".
- */
-export interface LegacyImageBlock {
-  image: number | Media;
-  aspect?: ('square' | '16:9' | 'auto') | null;
-  caption?: string | null;
-  /**
-   * Optional button over the bottom of the image
-   */
-  overlayButton?: {
-    label?: string | null;
-    link?: {
-      type?: ('reference' | 'custom') | null;
-      newTab?: boolean | null;
-      reference?:
-        | ({
-            relationTo: 'pages';
-            value: number | Page;
-          } | null)
-        | ({
-            relationTo: 'posts';
-            value: number | Post;
-          } | null);
-      url?: string | null;
-    };
-  };
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'image';
+  password?: string | null;
+  collection: 'users';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -341,11 +258,6 @@ export interface Media {
   };
   usedInTemplateParts?: {
     docs?: (number | TemplatePart)[];
-    hasNextPage?: boolean;
-    totalDocs?: number;
-  };
-  usedInLegacyPages?: {
-    docs?: (number | LegacyPage)[];
     hasNextPage?: boolean;
     totalDocs?: number;
   };
@@ -628,33 +540,6 @@ export interface Post {
   createdAt: string;
   deletedAt?: string | null;
   _status?: ('draft' | 'published') | null;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "users".
- */
-export interface User {
-  id: number;
-  name?: string | null;
-  updatedAt: string;
-  createdAt: string;
-  email: string;
-  resetPasswordToken?: string | null;
-  resetPasswordExpiration?: string | null;
-  salt?: string | null;
-  hash?: string | null;
-  resetPasswordRequestedAt?: string | null;
-  loginAttempts?: number | null;
-  lockUntil?: string | null;
-  sessions?:
-    | {
-        id: string;
-        createdAt?: string | null;
-        expiresAt: string;
-      }[]
-    | null;
-  password?: string | null;
-  collection: 'users';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1106,238 +991,6 @@ export interface TemplatePart {
   _status?: ('draft' | 'published') | null;
 }
 /**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "legacy-pages".
- */
-export interface LegacyPage {
-  id: number;
-  title: string;
-  layout?: (LegacyFullWidthBlock | LegacyTwoColumnBlock | SectionIntro | PostsSection)[] | null;
-  slug: string;
-  builderLayout?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  builderLayoutCss?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  builderLayoutRichText?: {
-    root: {
-      type: string;
-      children: {
-        type: any;
-        version: number;
-        [k: string]: unknown;
-      }[];
-      direction: ('ltr' | 'rtl') | null;
-      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
-      indent: number;
-      version: number;
-    };
-    [k: string]: unknown;
-  } | null;
-  /**
-   * Filled by the website builder from the layout on every save.
-   */
-  builderRefs?:
-    | (
-        | {
-            relationTo: 'media';
-            value: number | Media;
-          }
-        | {
-            relationTo: 'pages';
-            value: number | Page;
-          }
-        | {
-            relationTo: 'posts';
-            value: number | Post;
-          }
-        | {
-            relationTo: 'forms';
-            value: number | Form;
-          }
-        | {
-            relationTo: 'exports';
-            value: number | Export;
-          }
-        | {
-            relationTo: 'imports';
-            value: number | Import;
-          }
-      )[]
-    | null;
-  updatedAt: string;
-  createdAt: string;
-  _status?: ('draft' | 'published') | null;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "LegacyTwoColumnBlock".
- */
-export interface LegacyTwoColumnBlock {
-  leftColumn?:
-    | (
-        | LegacyHeadingBlock
-        | LegacyRichTextBlock
-        | LegacyImageBlock
-        | LegacyButtonBlock
-        | LegacyFaqAccordionBlock
-        | LatestPosts
-        | PageFacts
-      )[]
-    | null;
-  rightColumn?:
-    | (
-        | LegacyHeadingBlock
-        | LegacyRichTextBlock
-        | LegacyImageBlock
-        | LegacyButtonBlock
-        | LegacyFaqAccordionBlock
-        | LatestPosts
-        | PageFacts
-      )[]
-    | null;
-  paddingTop?: ('none' | 'small' | 'default' | 'large') | null;
-  paddingBottom?: ('none' | 'small' | 'default' | 'large') | null;
-  columnRatio?: ('50-50' | '67-33') | null;
-  reverseOnMobile?: boolean | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'twoColumn';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "LegacyButtonBlock".
- */
-export interface LegacyButtonBlock {
-  link: {
-    type?: ('reference' | 'custom') | null;
-    newTab?: boolean | null;
-    reference?:
-      | ({
-          relationTo: 'pages';
-          value: number | Page;
-        } | null)
-      | ({
-          relationTo: 'posts';
-          value: number | Post;
-        } | null);
-    url?: string | null;
-    label: string;
-  };
-  variant?: ('primary' | 'outline') | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'button';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "LegacyFaqAccordionBlock".
- */
-export interface LegacyFaqAccordionBlock {
-  heading?: string | null;
-  source?: ('manual' | 'collection') | null;
-  faqs?:
-    | {
-        question: string;
-        answer: {
-          root: {
-            type: string;
-            children: {
-              type: any;
-              version: number;
-              [k: string]: unknown;
-            }[];
-            direction: ('ltr' | 'rtl') | null;
-            format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
-            indent: number;
-            version: number;
-          };
-          [k: string]: unknown;
-        };
-        id?: string | null;
-      }[]
-    | null;
-  /**
-   * Filter FAQs by category slug
-   */
-  category?: string | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'faqAccordion';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "latestPosts".
- */
-export interface LatestPosts {
-  heading?: string | null;
-  count?: number | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'latestPosts';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "pageFacts".
- */
-export interface PageFacts {
-  label?: string | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'pageFacts';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "sectionIntro".
- */
-export interface SectionIntro {
-  eyebrow?: string | null;
-  heading: string;
-  paragraphs?:
-    | {
-        text?: string | null;
-        id?: string | null;
-      }[]
-    | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'sectionIntro';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "postsSection".
- */
-export interface PostsSection {
-  title?: string | null;
-  content?:
-    | (
-        | LegacyHeadingBlock
-        | LegacyRichTextBlock
-        | LegacyImageBlock
-        | LegacyButtonBlock
-        | LegacyFaqAccordionBlock
-        | LatestPosts
-        | PageFacts
-      )[]
-    | null;
-  id?: string | null;
-  blockName?: string | null;
-  blockType: 'postsSection';
-}
-/**
  * Sections saved from the page builder with "Save as section…". The builder lists them under "Saved" in Add > Sections.
  *
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1598,6 +1251,28 @@ export interface PayloadMcpApiKey {
   collection: 'payload-mcp-api-keys';
 }
 /**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payload-mcp-oauth".
+ */
+export interface PayloadMcpOauth {
+  id: number;
+  key: string;
+  kind: 'grant' | 'code' | 'access' | 'refresh' | 'used';
+  expiresAt: string;
+  owner?: string | null;
+  data:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * This is a collection of automatically created search results. These results are used by the global site search and will be updated automatically as documents in the CMS are created or updated.
  *
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1770,10 +1445,6 @@ export interface PayloadLockedDocument {
         value: number | TemplatePart;
       } | null)
     | ({
-        relationTo: 'legacy-pages';
-        value: number | LegacyPage;
-      } | null)
-    | ({
         relationTo: 'redirects';
         value: number | Redirect;
       } | null)
@@ -1788,6 +1459,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'payload-mcp-api-keys';
         value: number | PayloadMcpApiKey;
+      } | null)
+    | ({
+        relationTo: 'payload-mcp-oauth';
+        value: number | PayloadMcpOauth;
       } | null)
     | ({
         relationTo: 'search';
@@ -1940,7 +1615,6 @@ export interface MediaSelect<T extends boolean = true> {
   usedInPages?: T;
   usedInPosts?: T;
   usedInTemplateParts?: T;
-  usedInLegacyPages?: T;
   usedInBuilderTemplates?: T;
   usedInBuilderSections?: T;
   folder?: T;
@@ -2135,22 +1809,6 @@ export interface TemplatePartsSelect<T extends boolean = true> {
   updatedAt?: T;
   createdAt?: T;
   deletedAt?: T;
-  _status?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "legacy-pages_select".
- */
-export interface LegacyPagesSelect<T extends boolean = true> {
-  title?: T;
-  layout?: T | {};
-  slug?: T;
-  builderLayout?: T;
-  builderLayoutCss?: T;
-  builderLayoutRichText?: T;
-  builderRefs?: T;
-  updatedAt?: T;
-  createdAt?: T;
   _status?: T;
 }
 /**
@@ -2403,6 +2061,19 @@ export interface PayloadMcpApiKeysSelect<T extends boolean = true> {
   apiKey?: T;
   apiKeyIndex?: T;
   hasAPIKey?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payload-mcp-oauth_select".
+ */
+export interface PayloadMcpOauthSelect<T extends boolean = true> {
+  key?: T;
+  kind?: T;
+  expiresAt?: T;
+  owner?: T;
+  data?: T;
+  updatedAt?: T;
+  createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -2735,7 +2406,6 @@ export interface TaskCreateCollectionExport {
       | 'categories'
       | 'tags'
       | 'template-parts'
-      | 'legacy-pages'
       | 'redirects'
       | 'forms'
       | 'form-submissions'

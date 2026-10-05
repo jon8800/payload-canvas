@@ -51,7 +51,7 @@ export type AssistantState = {
    * The server has no API key or config. Set at start from the client config (`ai.ready` /
    * `setupProblem`, read when the server started), or when a request answers `no_api_key`. The
    * panel shows the setup state until the user checks again: then the next send asks the server
-   * (Anthropic `ant auth login` credentials cannot be seen at startup). Holds the server's
+   * (Anthropic `ant auth login` credentials cannot be seen at startup). Holds the adapter's
    * message, for the developer details.
    */
   setup: string | null
@@ -79,8 +79,8 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
   let collection = ''
   let docId: string | number | null = null
   let abort: AbortController | null = null
-  /** `${provider}:${model}` of the server. A chat written by another one starts over. */
-  const identity = ai ? clientIdentity(ai) : 'anthropic:unknown'
+  /** `${adapter}:${model}` of the server. A chat written by another one starts over. */
+  const identity = ai ? clientIdentity(ai) : 'none:'
   const emptyHistory = (): ChatHistory => ({ ...EMPTY_HISTORY, provider: identity })
 
   const patch = (next: Partial<AssistantState>) => state.set({ ...state.get(), ...next })
@@ -323,7 +323,7 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
         history: matches ? stored : emptyHistory(),
         streaming: false,
         live: null,
-        notice: matches ? null : { kind: 'info', message: `New chat: the assistant now uses ${ai?.providerLabel ?? 'another provider'} (${ai?.model ?? 'another model'}).` },
+        notice: matches ? null : { kind: 'info', message: `New chat: the assistant now uses ${ai?.label ?? 'another adapter'} (${ai?.model || 'another model'}).` },
         failed: null,
         draft: '',
         setup: state.get().setup,

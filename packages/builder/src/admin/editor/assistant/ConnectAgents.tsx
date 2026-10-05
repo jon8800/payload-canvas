@@ -3,6 +3,8 @@
 // "Use Claude Code or Codex": connect the official CLIs (signed in with a Claude Pro/Max or
 // ChatGPT plan) to this site's MCP endpoint. They edit pages through the live channel, so changes
 // appear in the open editor. Subscriptions are never used as API keys: the CLIs are the MCP clients.
+// Sign-in (OAuth) comes first when the site has it; an MCP API key is the other route.
+// Matches docs/ai/connect-claude-code-and-codex.md.
 
 import { useConfig } from '@payloadcms/ui'
 import { useEffect, useId, useState, type KeyboardEvent } from 'react'
@@ -11,6 +13,11 @@ import { Icon } from '../icons'
 
 /** The API key collection of payload-mcp-toolkit. */
 const MCP_KEYS_SLUG = 'payload-mcp-api-keys'
+/** The grant collection of payload-mcp-toolkit: present when its `oauth` option is on. */
+const MCP_OAUTH_SLUG = 'payload-mcp-oauth'
+/** Fixed callback ports: the site accepts only exact callback URLs. */
+const CLAUDE_CALLBACK_PORT = 8765
+const CODEX_CALLBACK_PORT = 8766
 const SERVER_NAME = 'payload-builder'
 const KEY_ENV = 'PAYLOAD_MCP_KEY'
 type Agent = 'claude' | 'codex'
@@ -28,6 +35,7 @@ export function ConnectAgents({ onClose }: { onClose?: () => void }) {
   // or a failed request, so never during server rendering.
   const origin = config.serverURL || (typeof window === 'undefined' ? '' : window.location.origin)
   const hasMcp = config.collections.some((c) => c.slug === MCP_KEYS_SLUG)
+  const hasOAuth = config.collections.some((c) => c.slug === MCP_OAUTH_SLUG)
   const url = `${origin}${api}/mcp`
   const [agent, setAgent] = useState<Agent>('claude')
   const baseId = useId()
@@ -46,6 +54,73 @@ export function ConnectAgents({ onClose }: { onClose?: () => void }) {
   const claude = `claude mcp add --transport http ${SERVER_NAME} ${url} --header "Authorization: Bearer <key>"`
   const codex = `codex mcp add ${SERVER_NAME} --url ${url} --bearer-token-env-var ${KEY_ENV}`
   const codexToml = `[mcp_servers.${SERVER_NAME}]\nurl = "${url}"\nbearer_token_env_var = "${KEY_ENV}"`
+  const claudeOAuth = `claude mcp add --transport http --callback-port ${CLAUDE_CALLBACK_PORT} ${SERVER_NAME} ${url}`
+  const codexPort = `mcp_oauth_callback_port = ${CODEX_CALLBACK_PORT}`
+  const codexOAuth = `codex mcp add ${SERVER_NAME} --url ${url}\ncodex mcp login ${SERVER_NAME}`
+
+  const keySteps = (
+    <>
+      <div className="builder-assistant__step">
+        <span className="builder-assistant__step-title">1. Create an MCP API key</span>
+        <span className="builder-assistant__step-text">Pick the Editor preset. The key shows only once: copy it.</span>
+        <a className="builder-assistant__link" href={`${admin}/collections/${MCP_KEYS_SLUG}/create`} target="_blank" rel="noopener noreferrer">
+          MCP → API Keys <Icon name="external" size={12} />
+        </a>
+      </div>
+      <div className="builder-assistant__step">
+        <span className="builder-assistant__step-title">2. Add this site to {agent === 'claude' ? 'Claude Code' : 'Codex'}</span>
+        {agent === 'claude' ? (
+          <>
+            <span className="builder-assistant__step-text">Run this. Put your key in place of &lt;key&gt;.</span>
+            <CopyCode code={claude} label="Copy the Claude Code command" />
+          </>
+        ) : (
+          <>
+            <span className="builder-assistant__step-text">
+              Put the key in the <code>{KEY_ENV}</code> environment variable. Then run this.
+            </span>
+            <CopyCode code={codex} label="Copy the Codex command" />
+            <span className="builder-assistant__step-text">
+              Or add this to <code>~/.codex/config.toml</code>.
+            </span>
+            <CopyCode code={codexToml} label="Copy the Codex config" />
+          </>
+        )}
+      </div>
+    </>
+  )
+
+  const oauthSteps =
+    agent === 'claude' ? (
+      <>
+        <div className="builder-assistant__step">
+          <span className="builder-assistant__step-title">1. Add this site to Claude Code</span>
+          <CopyCode code={claudeOAuth} label="Copy the Claude Code command" />
+        </div>
+        <div className="builder-assistant__step">
+          <span className="builder-assistant__step-title">2. Sign in</span>
+          <span className="builder-assistant__step-text">
+            In Claude Code, run <code>/mcp</code>, pick <code>{SERVER_NAME}</code> and choose Authenticate. Or run{' '}
+            <code>claude mcp login {SERVER_NAME}</code>. The browser opens: sign in to the admin and click Allow access.
+          </span>
+        </div>
+      </>
+    ) : (
+      <>
+        <div className="builder-assistant__step">
+          <span className="builder-assistant__step-title">1. Set the callback port</span>
+          <span className="builder-assistant__step-text">
+            Add this line at the top of <code>~/.codex/config.toml</code>, before any <code>[table]</code>.
+          </span>
+          <CopyCode code={codexPort} label="Copy the Codex setting" />
+        </div>
+        <div className="builder-assistant__step">
+          <span className="builder-assistant__step-title">2. Add this site and sign in</span>
+          <CopyCode code={codexOAuth} label="Copy the Codex commands" />
+          <span className="builder-assistant__step-text">The browser opens: sign in to the admin and click Allow access.</span>
+        </div>
+      </>
+    )
 
   return (
     <section className="builder-assistant__card builder-assistant__connect" aria-label="Use Claude Code or Codex">
@@ -67,52 +142,36 @@ export function ConnectAgents({ onClose }: { onClose?: () => void }) {
         </p>
       ) : (
         <>
-          <div className="builder-assistant__step">
-            <span className="builder-assistant__step-title">1. Create an MCP API key</span>
-            <span className="builder-assistant__step-text">Pick the Editor preset. The key shows only once: copy it.</span>
-            <a className="builder-assistant__link" href={`${admin}/collections/${MCP_KEYS_SLUG}/create`} target="_blank" rel="noopener noreferrer">
-              MCP → API Keys <Icon name="external" size={12} />
-            </a>
+          <div className="builder-editor__segmented builder-editor__segmented--full" role="tablist" aria-label="Tool">
+            {AGENTS.map((a) => (
+              <button
+                key={a.id}
+                id={tabId(a.id)}
+                type="button"
+                role="tab"
+                className="builder-editor__segment"
+                aria-selected={agent === a.id}
+                aria-controls={panelId}
+                tabIndex={agent === a.id ? 0 : -1}
+                onClick={() => setAgent(a.id)}
+                onKeyDown={onTabKeyDown}
+              >
+                {a.label}
+              </button>
+            ))}
           </div>
-          <div className="builder-assistant__step">
-            <span className="builder-assistant__step-title">2. Add this site to your tool</span>
-            <div className="builder-editor__segmented builder-editor__segmented--full" role="tablist" aria-label="Tool">
-              {AGENTS.map((a) => (
-                <button
-                  key={a.id}
-                  id={tabId(a.id)}
-                  type="button"
-                  role="tab"
-                  className="builder-editor__segment"
-                  aria-selected={agent === a.id}
-                  aria-controls={panelId}
-                  tabIndex={agent === a.id ? 0 : -1}
-                  onClick={() => setAgent(a.id)}
-                  onKeyDown={onTabKeyDown}
-                >
-                  {a.label}
-                </button>
-              ))}
-            </div>
-            <div id={panelId} role="tabpanel" aria-labelledby={tabId(agent)} className="builder-assistant__tabpanel">
-              {agent === 'claude' ? (
-                <>
-                  <span className="builder-assistant__step-text">Run this. Put your key in place of &lt;key&gt;.</span>
-                  <CopyCode code={claude} label="Copy the Claude Code command" />
-                </>
-              ) : (
-                <>
-                  <span className="builder-assistant__step-text">
-                    Put the key in the <code>{KEY_ENV}</code> environment variable. Then run this.
-                  </span>
-                  <CopyCode code={codex} label="Copy the Codex command" />
-                  <span className="builder-assistant__step-text">
-                    Or add this to <code>~/.codex/config.toml</code>.
-                  </span>
-                  <CopyCode code={codexToml} label="Copy the Codex config" />
-                </>
-              )}
-            </div>
+          <div id={panelId} role="tabpanel" aria-labelledby={tabId(agent)} className="builder-assistant__tabpanel">
+            {hasOAuth ? (
+              <>
+                {oauthSteps}
+                <details className="builder-assistant__details">
+                  <summary>Use an MCP API key instead</summary>
+                  <div className="builder-assistant__details-body">{keySteps}</div>
+                </details>
+              </>
+            ) : (
+              keySteps
+            )}
           </div>
         </>
       )}

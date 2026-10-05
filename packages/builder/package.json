@@ -13,7 +13,9 @@
     "nextjs",
     "mcp",
     "claude",
-    "ai-assistant"
+    "ai-assistant",
+    "openrouter",
+    "cloudflare"
   ],
   "license": "MIT",
   "author": "Eugene Lominos <hello@eugenelominos.com>",
@@ -41,7 +43,14 @@
     "./live": "./src/live/index.ts",
     "./mcp": "./src/mcp/index.ts",
     "./theme": "./src/theme/index.ts",
-    "./theme-client": "./src/theme/client.ts"
+    "./theme-client": "./src/theme/client.ts",
+    "./ai": "./src/ai/index.ts",
+    "./ai/openrouter": "./src/ai/adapters/openrouter.ts",
+    "./ai/cloudflare-gateway": "./src/ai/adapters/cloudflare-gateway.ts",
+    "./ai/cloudflare-workers-ai": "./src/ai/adapters/cloudflare-workers-ai.ts",
+    "./ai/openai-compatible": "./src/ai/adapters/openai-compatible.ts",
+    "./ai/anthropic": "./src/ai/adapters/anthropic.ts",
+    "./ai/fake": "./src/ai/adapters/fake.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -97,6 +106,34 @@
       "./theme-client": {
         "types": "./dist/theme/client.d.ts",
         "default": "./dist/theme/client.js"
+      },
+      "./ai": {
+        "types": "./dist/ai/index.d.ts",
+        "default": "./dist/ai/index.js"
+      },
+      "./ai/openrouter": {
+        "types": "./dist/ai/adapters/openrouter.d.ts",
+        "default": "./dist/ai/adapters/openrouter.js"
+      },
+      "./ai/cloudflare-gateway": {
+        "types": "./dist/ai/adapters/cloudflare-gateway.d.ts",
+        "default": "./dist/ai/adapters/cloudflare-gateway.js"
+      },
+      "./ai/cloudflare-workers-ai": {
+        "types": "./dist/ai/adapters/cloudflare-workers-ai.d.ts",
+        "default": "./dist/ai/adapters/cloudflare-workers-ai.js"
+      },
+      "./ai/openai-compatible": {
+        "types": "./dist/ai/adapters/openai-compatible.d.ts",
+        "default": "./dist/ai/adapters/openai-compatible.js"
+      },
+      "./ai/anthropic": {
+        "types": "./dist/ai/adapters/anthropic.d.ts",
+        "default": "./dist/ai/adapters/anthropic.js"
+      },
+      "./ai/fake": {
+        "types": "./dist/ai/adapters/fake.d.ts",
+        "default": "./dist/ai/adapters/fake.js"
       }
     }
   },

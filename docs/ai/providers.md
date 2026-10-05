@@ -1,19 +1,49 @@
-# AI providers for the editor assistant
+# AI adapters for the editor assistant
 
-The **Assistant** panel in the page builder talks to one model API on your server. You pick the API with the plugin option `ai.provider`, or with environment variables. Four choices:
+The **Assistant** panel in the page builder talks to one model API on your server. An **adapter** makes that connection. You pick it in `payload.config.ts`, the same way you pick a database or storage adapter in Payload:
 
-| Provider | What it is | Key |
+```ts
+import { openRouterAdapter } from '@payload-toolkit/builder/ai/openrouter'
+
+websiteBuilder({
+  // ...
+  ai: { adapter: openRouterAdapter({ apiKey: process.env.OPENROUTER_API_KEY }) },
+})
+```
+
+Each adapter has its own import path. Your site loads only the adapter you import.
+
+| Adapter | Import | What it is |
 |---|---|---|
-| `openrouter` | One key for hundreds of models (OpenAI, Google, Anthropic, DeepSeek, …). Easiest start. | `OPENROUTER_API_KEY` |
-| `cloudflare` | Cloudflare AI Gateway. Logs, caching, rate limits and spend limits in front of many providers. | `CF_AIG_TOKEN` and/or a provider key |
-| `openai-compatible` | Any server that speaks the OpenAI Chat Completions format: OpenAI, Groq, Together, Ollama, LM Studio, vLLM. | `BUILDER_AI_API_KEY` (optional for local servers) |
-| `anthropic` | The Anthropic Messages API, with prompt caching and adaptive thinking. Needs the `@anthropic-ai/sdk` package. | `ANTHROPIC_API_KEY` |
+| `openRouterAdapter` | `@payload-toolkit/builder/ai/openrouter` | One key for hundreds of models (OpenAI, Google, Anthropic, DeepSeek, …). Easiest start. |
+| `cloudflareGatewayAdapter` | `@payload-toolkit/builder/ai/cloudflare-gateway` | Cloudflare AI Gateway in front of many providers: logs, caching, rate limits, spend limits, unified billing. |
+| `cloudflareWorkersAIAdapter` | `@payload-toolkit/builder/ai/cloudflare-workers-ai` | Models that run on Cloudflare's network (Workers AI). |
+| `openAICompatibleAdapter` | `@payload-toolkit/builder/ai/openai-compatible` | Any server that speaks the OpenAI Chat Completions format: OpenAI, Groq, Together, Ollama, LM Studio, vLLM. |
+| `anthropicAdapter` | `@payload-toolkit/builder/ai/anthropic` | The Anthropic Messages API, with prompt caching and adaptive thinking. Needs the `@anthropic-ai/sdk` package. |
+| `fakeAdapter` | `@payload-toolkit/builder/ai/fake` | A scripted model for tests and demos. No network, no cost. |
 
-The first three need no extra package: the plugin calls them with `fetch` and reads the streamed reply itself.
+The first four need no extra package: they call the API with `fetch` and read the streamed reply themselves.
+
+The plugin reads no environment variables for the assistant. Your config code passes the keys to the adapter, so you choose the variable names. Without an adapter, or when the adapter has no key, the panel shows a setup card that says what to set.
 
 No API key at all? Use Claude Code or Codex with your Claude or ChatGPT plan. See [connect-claude-code-and-codex.md](connect-claude-code-and-codex.md).
 
-## Quick start: OpenRouter
+To write your own adapter, see the README, [Write your own adapter](../../packages/builder/README.md#write-your-own-adapter).
+
+## Options for every OpenAI-format adapter
+
+OpenRouter, both Cloudflare adapters and `openAICompatibleAdapter` also take these options:
+
+| Option | Default | What it does |
+|---|---|---|
+| `maxTokens` | not sent | Output limit per model call, sent as `max_tokens`. |
+| `headers` | none | Extra request headers. |
+| `timeoutMs` | `60000` | Time to wait for the response to start. |
+| `idleTimeoutMs` | `120000` | Time to wait between two stream chunks. |
+| `maxRetries` | `2` | Retries on 408, 429, 5xx and network errors, before the stream starts. |
+| `retryDelayMs` | `1000` | First retry delay. It doubles each time. A `Retry-After` header wins (up to 20 seconds). |
+
+## OpenRouter
 
 1. Create a key at [openrouter.ai/keys](https://openrouter.ai/keys) and add credit.
 2. Put it in `.env`:
@@ -22,9 +52,31 @@ No API key at all? Use Claude Code or Codex with your Claude or ChatGPT plan. Se
    OPENROUTER_API_KEY=sk-or-v1-...
    ```
 
-3. Restart the server.
+3. Add the adapter and restart the server:
 
-That is all. When only `OPENROUTER_API_KEY` is set, the plugin picks OpenRouter and the model `openai/gpt-6-luna`.
+   ```ts
+   import { openRouterAdapter } from '@payload-toolkit/builder/ai/openrouter'
+
+   ai: {
+     adapter: openRouterAdapter({
+       apiKey: process.env.OPENROUTER_API_KEY,
+       model: 'google/gemini-3.8-flash', // default: openai/gpt-6-luna
+       siteUrl: process.env.NEXT_PUBLIC_SERVER_URL,
+     }),
+   }
+   ```
+
+| Option | Default | What it does |
+|---|---|---|
+| `apiKey` | none | The OpenRouter key. Without it the panel shows the setup card. |
+| `model` | `openai/gpt-6-luna` | The model id on OpenRouter. |
+| `siteUrl` | none | Sent as `HTTP-Referer`, so the app shows up in your OpenRouter activity. |
+| `appTitle` | `Payload Website Builder` | Sent as `X-Title`. |
+| `baseURL` | `https://openrouter.ai/api/v1` | Change it only for a proxy. |
+
+- `ai.effort` is sent as `reasoning.effort` (`max` becomes `xhigh`). Leave it out to use the model's default.
+- For `anthropic/…` and `google/…` models, the system prompt carries a `cache_control` breakpoint, so repeat requests read it from the cache. Other models cache on their own or not at all.
+- Reasoning text from reasoning models is kept in the chat history and sent back, as OpenRouter asks. The panel does not show it.
 
 ### Cheap models that call tools well
 
@@ -39,46 +91,9 @@ The assistant works through tool calls, so the model must support them. These we
 
 Prices change. Check the model page before you pick. A typical request ("add a pricing section") makes two to four model calls with about 10,000 to 20,000 input tokens each. With `openai/gpt-6-luna` that is well under one US cent.
 
-Pick a model with `BUILDER_AI_MODEL`:
-
-```bash
-BUILDER_AI_MODEL=google/gemini-3.8-flash
-```
-
-## Environment variables
-
-The plugin reads these when `ai.provider` is not set in code. Values in code always win.
-
-| Variable | What it does |
-|---|---|
-| `BUILDER_AI_PROVIDER` | `anthropic`, `openrouter`, `cloudflare` or `openai-compatible`. Default: `openrouter` when only `OPENROUTER_API_KEY` is set, else `anthropic`. |
-| `BUILDER_AI_MODEL` | The model id in the provider's naming. |
-| `BUILDER_AI_BASE_URL` | Base URL for `openai-compatible`, e.g. `https://api.openai.com/v1`. |
-| `BUILDER_AI_API_KEY` | Key for `openai-compatible` (falls back to `OPENAI_API_KEY`), or the provider key behind Cloudflare. |
-| `OPENROUTER_API_KEY` | OpenRouter key. |
-| `ANTHROPIC_API_KEY` | Anthropic key. |
-| `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AI_GATEWAY_ID` | Which Cloudflare gateway to use. |
-| `CF_AIG_TOKEN` | Cloudflare gateway token, sent as `cf-aig-authorization`. |
-| `BUILDER_AI_FAKE=1` | Test only: a scripted model answers, with no network and no cost. Ignored in production. |
-
-## OpenRouter
-
-```ts
-websiteBuilder({
-  // ...
-  ai: { provider: { type: 'openrouter' }, model: 'google/gemini-3.8-flash' },
-})
-```
-
-- URL: `https://openrouter.ai/api/v1/chat/completions`.
-- The plugin sends `HTTP-Referer` (your `serverURL`) and `X-Title: Payload Website Builder`, so the app shows up in your OpenRouter activity.
-- `ai.effort` is sent as `reasoning.effort` (`max` becomes `xhigh`). Leave it out to use the model's default.
-- Options: `apiKey` (a key in code), `apiKeyEnv` (another variable name).
-- Reasoning text from reasoning models is kept in the chat history and sent back, as OpenRouter asks. The panel does not show it.
-
 ## Cloudflare AI Gateway
 
-The gateway forwards each request to the provider in the model id. The plugin uses its OpenAI-compatible endpoint:
+The gateway forwards each request to the provider in the model id. The adapter uses the gateway's OpenAI-compatible endpoint:
 
 ```
 https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_id}/compat/chat/completions
@@ -86,49 +101,98 @@ https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_id}/compat/chat/compl
 
 Model ids are `provider/model`, for example `openai/gpt-5.2`, `anthropic/claude-4-5-sonnet`, `google/gemini-2.5-pro` or `workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast`. See Cloudflare's [OpenAI compatibility](https://developers.cloudflare.com/ai-gateway/usage/chat-completion/) page for the list.
 
-```bash
-BUILDER_AI_PROVIDER=cloudflare
-BUILDER_AI_MODEL=openai/gpt-5.2
-CLOUDFLARE_ACCOUNT_ID=...
-CLOUDFLARE_AI_GATEWAY_ID=my-gateway
-CF_AIG_TOKEN=...          # gateway token: authenticated gateways, stored keys (BYOK), unified billing
-BUILDER_AI_API_KEY=...    # only when the gateway does not store the provider key
-```
-
-Or in code:
-
 ```ts
+import { cloudflareGatewayAdapter } from '@payload-toolkit/builder/ai/cloudflare-gateway'
+
 ai: {
-  provider: { type: 'cloudflare', accountId: '...', gatewayId: 'my-gateway' },
-  model: 'openai/gpt-5.2',
+  adapter: cloudflareGatewayAdapter({
+    accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
+    gatewayId: process.env.CLOUDFLARE_AI_GATEWAY_ID,
+    gatewayToken: process.env.CF_AIG_TOKEN,
+    model: 'openai/gpt-5.2',
+  }),
 }
 ```
 
-- With stored keys (BYOK) or unified billing, set only `CF_AIG_TOKEN`. The plugin then sends no `Authorization` header.
-- With your own provider key, set `BUILDER_AI_API_KEY`. Add `CF_AIG_TOKEN` too when the gateway is authenticated.
-- Options: `apiKey`, `apiKeyEnv`, `gatewayToken`, `gatewayTokenEnv`.
+| Option | What it does |
+|---|---|
+| `accountId`, `gatewayId` | Which gateway. Required. |
+| `model` | `provider/model`. Required. |
+| `gatewayToken` | The gateway token, sent as `cf-aig-authorization`. Needed for authenticated gateways, stored keys (BYOK) and unified billing. |
+| `apiKey` | A provider key (for example an OpenAI key), sent as `Authorization`. Leave it out with stored keys or unified billing. |
+| `url` | Replaces the endpoint URL. |
+
+- **Unified billing:** Cloudflare pays the provider and bills you. Buy credits in the dashboard, then set only `gatewayToken`. It works for OpenAI, Anthropic, Google AI Studio, Vertex, xAI and Groq models.
+- **Stored keys (BYOK):** store the provider key in the gateway, then set only `gatewayToken`.
+- **Your own provider key:** set `apiKey`. Add `gatewayToken` too when the gateway is authenticated.
+- Cloudflare now marks the `/compat` endpoint as deprecated for single-model requests, but it still serves multi-provider requests. If Cloudflare removes it, pass the new URL with `url`.
+
+## Cloudflare Workers AI
+
+Workers AI runs open models on Cloudflare's network. The adapter calls its OpenAI-compatible endpoint:
+
+```
+https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1/chat/completions
+```
+
+1. Create an API token with the **Workers AI** permission at [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens).
+2. Add the adapter:
+
+   ```ts
+   import { cloudflareWorkersAIAdapter } from '@payload-toolkit/builder/ai/cloudflare-workers-ai'
+
+   ai: {
+     adapter: cloudflareWorkersAIAdapter({
+       accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
+       apiToken: process.env.CLOUDFLARE_API_TOKEN,
+       model: '@cf/openai/gpt-oss-120b', // default: @cf/zai-org/glm-4.7-flash
+     }),
+   }
+   ```
+
+Only models with **function calling** work. Find them in the [model catalog](https://developers.cloudflare.com/workers-ai/models/) with the "Function calling" filter. These had it in October 2026 (US dollars per million tokens, input / output):
+
+| Model id | Price | Notes |
+|---|---|---|
+| `@cf/zai-org/glm-4.7-flash` | about $0.06 / $0.40 | The default. Cheap, tool use confirmed. |
+| `@cf/openai/gpt-oss-120b` | $0.35 / $0.75 | Stronger. |
+| `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | $0.29 / $2.25 | Older, costs more for output. |
+
+- `gatewayId` routes the requests through an AI Gateway (`cf-aig-gateway-id` header) for logs, caching and limits.
+- Small models often fail at tool calls. If edits fail, try a larger model.
 
 ## Any OpenAI-compatible API
 
 ```ts
+import { openAICompatibleAdapter } from '@payload-toolkit/builder/ai/openai-compatible'
+
 ai: {
-  provider: { type: 'openai-compatible', baseURL: 'https://api.groq.com/openai/v1', apiKeyEnv: 'GROQ_API_KEY' },
-  model: 'openai/gpt-oss-120b',
+  adapter: openAICompatibleAdapter({
+    baseURL: 'https://api.groq.com/openai/v1',
+    apiKey: process.env.GROQ_API_KEY,
+    model: 'openai/gpt-oss-120b',
+  }),
 }
 ```
 
 Local models with Ollama (no key):
 
-```bash
-BUILDER_AI_PROVIDER=openai-compatible
-BUILDER_AI_BASE_URL=http://localhost:11434/v1
-BUILDER_AI_MODEL=llama3.3
+```ts
+ai: { adapter: openAICompatibleAdapter({ baseURL: 'http://localhost:11434/v1', model: 'llama3.3' }) }
 ```
 
-- The plugin appends `/chat/completions` to the base URL, unless the URL already ends with it.
-- `headers` adds request headers. `apiKey` / `apiKeyEnv` set the key; default `BUILDER_AI_API_KEY`, then `OPENAI_API_KEY`. Without a key, no `Authorization` header is sent.
+| Option | Default | What it does |
+|---|---|---|
+| `baseURL` | none | The API base URL. Required. The adapter appends `/chat/completions`, unless the URL already ends with it. |
+| `model` | none | Required. |
+| `apiKey` | none | Sent as `Authorization: Bearer …`. Without it no `Authorization` header is sent. |
+| `label` | the host of `baseURL` | Shown in the panel. |
+| `name` | `openai-compatible` | Part of the chat identity. Set it when you run two of these adapters. |
+| `keyEnv` | none | The variable name the setup card shows after a rejected key. |
+| `reasoningEffort` | `false` | Send `ai.effort` as `reasoning_effort` (OpenAI and Groq reasoning models). `xhigh` and `max` become `high`. |
+
 - The model must support tool calling. Small local models often fail at it.
-- The plugin asks for token usage with `stream_options`. A server that rejects it gets one retry without it.
+- The adapter asks for token usage with `stream_options`. A server that rejects it gets one retry without it.
 
 ## Anthropic
 
@@ -136,22 +200,59 @@ BUILDER_AI_MODEL=llama3.3
 pnpm add @anthropic-ai/sdk
 ```
 
-```bash
-BUILDER_AI_PROVIDER=anthropic   # only needed when OPENROUTER_API_KEY is also set
-ANTHROPIC_API_KEY=sk-ant-...
+```ts
+import { anthropicAdapter } from '@payload-toolkit/builder/ai/anthropic'
+
+ai: { adapter: anthropicAdapter({ apiKey: process.env.ANTHROPIC_API_KEY }) }
 ```
 
-The default model is `claude-opus-5-5`. This path uses prompt caching, adaptive thinking, `effort` and the server-side refusal fallback. See the [README](../../packages/builder/README.md#ai-assistant) for the options.
+| Option | Default | What it does |
+|---|---|---|
+| `apiKey` | the SDK's own lookup | Without it the SDK reads `ANTHROPIC_API_KEY` or an `ant auth login` profile. |
+| `model` | `claude-opus-5-5` | The model id. |
+| `maxTokens` | `32000` | Output limit per model call, thinking included. |
+| `fallbacks` | on for `claude-opus-5-5` | When a safety classifier declines a request, the API retries it on Anthropic's recommended fallback model. |
+
+This adapter uses prompt caching, adaptive thinking and `ai.effort` (default `medium`). Only this entry point loads `@anthropic-ai/sdk`, so other sites do not need the package.
+
+## The fake adapter
+
+```ts
+import { fakeAdapter } from '@payload-toolkit/builder/ai/fake'
+
+ai: { adapter: fakeAdapter() }
+```
+
+The scripted model lists the sections, inserts a hero section at the top of the page, changes its heading, and streams a few sentences. Use it to try the panel without a key. Never use it in production.
+
+The starter turns it on with `BUILDER_AI_FAKE=1` in `apps/starter/.env`. The starter ignores the flag when `NODE_ENV=production`.
+
+In tests, script each model call: `fakeAdapter({ steps: [{ content: [{ type: 'text', text: 'Hi.' }] }] })`.
+
+## Moving from `ai.provider`
+
+The `ai.provider` and `ai.model` options and the `BUILDER_AI_*` environment variables are gone. A config that still has `ai.provider` shows the setup card, and the card names the replacement.
+
+| Before | After |
+|---|---|
+| `OPENROUTER_API_KEY` alone | `ai: { adapter: openRouterAdapter({ apiKey: process.env.OPENROUTER_API_KEY }) }` |
+| `provider: { type: 'openrouter' }, model: 'x'` | `openRouterAdapter({ apiKey, model: 'x' })` |
+| `provider: { type: 'cloudflare', accountId, gatewayId }` | `cloudflareGatewayAdapter({ accountId, gatewayId, gatewayToken, apiKey, model })` |
+| `provider: { type: 'openai-compatible', baseURL }` | `openAICompatibleAdapter({ baseURL, apiKey, model })` |
+| `provider: { type: 'anthropic' }`, `ai.apiKey`, `ai.maxTokens`, `ai.fallbacks` | `anthropicAdapter({ apiKey, model, maxTokens, fallbacks })` |
+| `BUILDER_AI_FAKE=1` in the plugin | `fakeAdapter()`, picked in your config |
+
+Changing the adapter or the model starts a new chat in the panel.
 
 ## How it behaves
 
-- **Same tools, same prompt.** All providers get the same tools, system prompt and editor context. OpenAI-compatible models get a flatter `applyOperations` schema, which smaller models handle better.
+- **Same tools, same prompt.** Every adapter gets the same tools, system prompt and editor context. OpenAI-format adapters send a flatter `applyOperations` schema, which smaller models handle better.
 - **Repairs.** Smaller models make small mistakes: operations sent as a JSON string, `op` instead of `type`, `parentId: "root"`. The tool fixes these, applies the change, and tells the model what it fixed. Arguments that are not valid JSON are not run; the model gets the parse error and tries again.
-- **Retries.** 408, 429 and 5xx responses and network errors are retried twice, after 1 and 2 seconds, or after the time in `Retry-After` (up to 20 seconds).
+- **Retries.** OpenAI-format adapters retry 408, 429 and 5xx responses and network errors twice, after 1 and 2 seconds, or after the time in `Retry-After` (up to 20 seconds).
 - **Timeouts.** 60 seconds for the response to start, then 120 seconds between two stream chunks.
 - **Stop.** The Stop button cancels the request. OpenRouter stops billing for most providers when the stream is cancelled.
 - **Errors.** A rejected key (401) shows the setup card with the provider's message. Other errors show the provider's message, for example "No endpoints found that support tool use" for a model without tools.
-- **Switching provider or model** starts a new chat in the panel. Chat history from one provider cannot be replayed on another.
+- **Switching adapter or model** starts a new chat in the panel. Chat history from one adapter cannot be replayed on another.
 
 ## Privacy
 

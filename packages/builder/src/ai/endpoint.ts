@@ -11,23 +11,16 @@ import { indexLayout, isPlainObject, normalizeLayout } from '../core/tree'
 import type { BindingField, BlockDefinition, Layout, LocaleSettings, SectionDefinition, StyleTokens, TemplateContext } from '../core/types'
 import { SSE_HEADERS, sseFrame } from '../live/endpoints'
 import { loadSavedSections } from '../plugin/sections'
-import { anthropicAdapter, type AiClient } from './agent'
-import { loadClient, type LoadedClient } from './client'
-import { DEFAULT_AI_MODEL, openAiTarget, resolveAi, type Env } from './config'
-import { demoClient, demoFetch } from './fake'
-import { runAgent, type DescribeError, type ModelAdapter } from './loop'
-import { openAiAdapter } from './openai'
+import { missingAdapterProblem } from './config'
+import { adapterIdentity, runAgent } from './loop'
 import { breakpointsPx, contextText, systemPrompt } from './prompt'
-import { openAiTools, toolDefinitions, Workspace, type MediaItem, type ToolEnv } from './tools'
-import type { AiChatRequest, AiMessage, AiOptions, AiStreamEvent } from './types'
+import { toolDefinitions, Workspace, type MediaItem, type ToolEnv } from './tools'
+import type { AiChatRequest, AiMessage, AiOptions, AiStreamEvent, AiSystemPart } from './types'
 
 /** Path of the assistant endpoints below the API route. */
 export const AI_PATH = '/builder/ai'
 
-export { DEFAULT_AI_MODEL }
-const DEFAULT_EFFORT = 'medium'
 const DEFAULT_MAX_STEPS = 12
-const DEFAULT_MAX_TOKENS = 32_000
 const MAX_MESSAGES = 400
 const HEARTBEAT_MS = 15_000
 
@@ -43,12 +36,6 @@ export type AiEndpointOptions = {
   templates: { slug: string; sources: Record<string, BindingField[]> } | null
   /** The saved sections collection. Each request loads the ones the user can read. Null or left out: off. */
   savedSections?: { slug: string } | null
-  /** Tests: replaces the Anthropic client. */
-  loadClient?: () => Promise<LoadedClient>
-  /** Tests: replaces fetch for OpenAI-compatible providers. */
-  fetch?: typeof fetch
-  /** Tests: replaces process.env when resolving the provider and keys. */
-  env?: Env
   /** Tests: replaces the update-access check (default: Payload's docAccessOperation). */
   canUpdate?: (req: PayloadRequest, collection: string, id: string | number, field: string) => Promise<boolean>
 }
@@ -155,13 +142,6 @@ type MediaConfig = { fields: Array<{ name?: string }> }
 const str = (value: unknown) => (typeof value === 'string' && value ? value : null)
 const num = (value: unknown) => (typeof value === 'number' ? value : null)
 
-/** Errors of the TEST-ONLY fake model. */
-const describeFakeError: DescribeError = (error) => ({
-  type: 'error',
-  code: 'api_error',
-  message: error instanceof Error ? error.message : String(error),
-})
-
 /** Searches an upload collection as the request's user. Images only when the collection has `mimeType`. */
 function mediaSearch(req: PayloadRequest, slug: string) {
   return async (query: string, limit: number): Promise<MediaItem[]> => {
@@ -193,11 +173,6 @@ function mediaSearch(req: PayloadRequest, slug: string) {
   }
 }
 
-/** TEST-ONLY: BUILDER_AI_FAKE=1 answers with a scripted model (never in production). */
-export function fakeModelEnabled(): boolean {
-  return process.env.BUILDER_AI_FAKE === '1' && process.env.NODE_ENV !== 'production'
-}
-
 // ---------------------------------------------------------------------------
 // Endpoint
 // ---------------------------------------------------------------------------
@@ -205,82 +180,40 @@ export function fakeModelEnabled(): boolean {
 export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
   const { ai, collections, blocks, sections, templates } = options
   const savedSections = options.savedSections ?? null
-  const processEnv = options.env ?? process.env
-  const resolved = resolveAi(ai, processEnv)
-  const { model, provider, identity } = resolved
+  const adapter = ai.adapter ?? null
+  const identity = adapter ? adapterIdentity(adapter) : null
   const env: Omit<ToolEnv, 'searchMedia'> = {
     blocks,
     sections,
     savedSections: savedSections !== null,
     bindingSources: templates?.sources ?? null,
   }
-  const toolEnv: ToolEnv = { ...env, searchMedia: async () => [] }
-  const tools = provider.type === 'anthropic' ? toolDefinitions(toolEnv) : []
-  const chatTools = provider.type === 'anthropic' ? [] : openAiTools(toolEnv)
+  // Built once, in a fixed order: tools and system prompt are the cached prompt prefix.
+  const tools = toolDefinitions({ ...env, searchMedia: async () => [] })
 
   // The system prompt is built once (the theme is read once) and reused byte for byte.
-  let prompt: Promise<{ system: string; breakpoints: Array<{ name: string; px: number }> }> | null = null
+  let prompt: Promise<{ system: AiSystemPart[]; breakpoints: Array<{ name: string; px: number }> }> | null = null
   const getPrompt = () => {
     prompt ??= options
       .getTokens()
       .catch(() => null)
       .then((tokens) => ({
-        system: systemPrompt({
-          blocks,
-          sections,
-          tokens,
-          bindings: Boolean(templates),
-          instructions: ai.instructions,
-          savedSections: savedSections !== null,
-        }),
+        system: [
+          {
+            text: systemPrompt({
+              blocks,
+              sections,
+              tokens,
+              bindings: Boolean(templates),
+              instructions: ai.instructions,
+              savedSections: savedSections !== null,
+            }),
+            cache: true,
+          },
+        ],
         breakpoints: breakpointsPx(tokens),
       }))
     return prompt
-  }
-
-  const getAnthropicClient = async (): Promise<LoadedClient> => {
-    if (options.loadClient) return options.loadClient()
-    if (fakeModelEnabled()) return { client: demoClient(sections), describeError: describeFakeError }
-    return loadClient(ai.apiKey)
-  }
-
-  /** The model adapter for one request, or the setup problem (code no_api_key) / load error. */
-  const getAdapter = async (req: PayloadRequest, system: string): Promise<ModelAdapter | { code: 'no_api_key' | 'api_error'; message: string }> => {
-    if (resolved.problem) return { code: 'no_api_key', message: resolved.problem }
-    if (provider.type === 'anthropic') {
-      const loaded = await getAnthropicClient()
-      if ('error' in loaded) return { code: 'api_error', message: loaded.error }
-      return anthropicAdapter({
-        client: loaded.client as AiClient,
-        describeError: loaded.describeError,
-        model,
-        effort: ai.effort ?? DEFAULT_EFFORT,
-        maxTokens: ai.maxTokens ?? DEFAULT_MAX_TOKENS,
-        fallbacks: ai.fallbacks ?? model === DEFAULT_AI_MODEL,
-        system,
-        tools,
-        identity,
-      })
-    }
-    const fake = !options.fetch && fakeModelEnabled()
-    const siteUrl = req.payload.config.serverURL || processEnv.NEXT_PUBLIC_SERVER_URL || null
-    const target = openAiTarget(provider, { env: processEnv, siteUrl })
-    if (target.missingKey && !fake) return { code: 'no_api_key', message: target.missingKey }
-    const effort = ai.effort === 'max' ? 'xhigh' : ai.effort
-    return openAiAdapter({
-      url: target.url,
-      headers: target.headers,
-      label: target.label,
-      keyHint: target.keyHint,
-      model,
-      system,
-      tools: chatTools,
-      maxTokens: ai.maxTokens,
-      // OpenRouter normalizes reasoning effort across models; other APIs differ, so only there.
-      extraBody: provider.type === 'openrouter' && effort ? { reasoning: { effort } } : undefined,
-      identity,
-      fetch: options.fetch ?? (fake ? demoFetch(sections) : undefined),
-    })
   }
 
   const chat: Endpoint = {
@@ -288,6 +221,7 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
     method: 'post',
     handler: async (req) => {
       if (!req.user) return errorResponse(401, 'forbidden', 'Sign in to use the assistant.')
+      if (!adapter || !identity) return errorResponse(500, 'no_api_key', missingAdapterProblem(ai))
       if (req.data === undefined) {
         try {
           await addDataAndFileToRequest(req)
@@ -328,7 +262,7 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
       }
       if (!allowed) return errorResponse(403, 'forbidden', 'You cannot edit this document, so the assistant cannot either.')
 
-      // History from another provider or model cannot be replayed (different message formats).
+      // History from another adapter or model cannot be replayed (different message formats).
       const foreign = body.messages.find((m) => m.provider && m.provider !== identity)
       if (foreign) {
         return errorResponse(
@@ -338,8 +272,6 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
         )
       }
       const { system, breakpoints } = await getPrompt()
-      const adapter = await getAdapter(req, system)
-      if ('code' in adapter) return errorResponse(500, adapter.code, adapter.message)
 
       const layout = normalizeLayout(body.layout)
       // Localized layouts: the assistant reads and writes the editor's locale.
@@ -402,6 +334,9 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
           try {
             await runAgent({
               adapter,
+              system,
+              tools,
+              effort: ai.effort,
               maxSteps: ai.maxSteps ?? DEFAULT_MAX_STEPS,
               messages: body.messages,
               context,

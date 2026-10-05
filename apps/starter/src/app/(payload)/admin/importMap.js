@@ -64,7 +64,9 @@ import { ThemeColorField as ThemeColorField_e0cfbbb020bf87f8280e724d96373a69 } f
 import { ThemeFontField as ThemeFontField_e0cfbbb020bf87f8280e724d96373a69 } from '@payload-toolkit/builder/theme-client'
 import { ThemeSliderField as ThemeSliderField_e0cfbbb020bf87f8280e724d96373a69 } from '@payload-toolkit/builder/theme-client'
 import { ThemeSaveSignal as ThemeSaveSignal_e0cfbbb020bf87f8280e724d96373a69 } from '@payload-toolkit/builder/theme-client'
+import { AgentConnectPill as AgentConnectPill_60f30f580e97936338e112b8b2cc7161 } from 'payload-mcp-toolkit/client'
 import { ImportExportProvider as ImportExportProvider_cdf7e044479f899a31f804427d568b36 } from '@payloadcms/plugin-import-export/rsc'
+import { OAuthView as OAuthView_60f30f580e97936338e112b8b2cc7161 } from 'payload-mcp-toolkit/client'
 import { BuilderView as BuilderView_c0c1af4cd1961baf9cba09efadb7433a } from '@payload-toolkit/builder/rsc'
 import { CollectionCards as CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1 } from '@payloadcms/next/rsc'
 
@@ -136,7 +138,9 @@ export const importMap = {
   "@payload-toolkit/builder/theme-client#ThemeFontField": ThemeFontField_e0cfbbb020bf87f8280e724d96373a69,
   "@payload-toolkit/builder/theme-client#ThemeSliderField": ThemeSliderField_e0cfbbb020bf87f8280e724d96373a69,
   "@payload-toolkit/builder/theme-client#ThemeSaveSignal": ThemeSaveSignal_e0cfbbb020bf87f8280e724d96373a69,
+  "payload-mcp-toolkit/client#AgentConnectPill": AgentConnectPill_60f30f580e97936338e112b8b2cc7161,
   "@payloadcms/plugin-import-export/rsc#ImportExportProvider": ImportExportProvider_cdf7e044479f899a31f804427d568b36,
+  "payload-mcp-toolkit/client#OAuthView": OAuthView_60f30f580e97936338e112b8b2cc7161,
   "@payload-toolkit/builder/rsc#BuilderView": BuilderView_c0c1af4cd1961baf9cba09efadb7433a,
   "@payloadcms/next/rsc#CollectionCards": CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1
 }

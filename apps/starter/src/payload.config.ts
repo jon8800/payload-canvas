@@ -11,6 +11,8 @@ import { importExportPlugin } from '@payloadcms/plugin-import-export'
 import { mcpToolkitPlugin } from 'payload-mcp-toolkit'
 import { searchPlugin } from '@payloadcms/plugin-search'
 import { websiteBuilder, type WebsiteBuilderOptions } from '@payload-toolkit/builder'
+import { fakeAdapter } from '@payload-toolkit/builder/ai/fake'
+import { openRouterAdapter } from '@payload-toolkit/builder/ai/openrouter'
 import { builderMcpTools } from '@payload-toolkit/builder/mcp'
 import typography from '@tailwindcss/typography'
 import { createTransport } from 'nodemailer'
@@ -51,6 +53,26 @@ const builderCollections: WebsiteBuilderOptions['collections'] = {
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
 
+// Who may sign in to the MCP endpoint with their admin login (OAuth). The Users collection has no
+// role field: everyone who can open the admin is staff (nobody can sign up; only staff create users).
+// To allow fewer people, set MCP_OAUTH_ALLOWED_EMAILS to a comma-separated list of emails.
+// To use roles, add a `role` field to Users and check it in `canAuthorize` below.
+const mcpOAuthEmails = (process.env.MCP_OAUTH_ALLOWED_EMAILS ?? '')
+  .split(',')
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean)
+
+// Fixed callback ports for CLI clients. The toolkit accepts only exact redirect URLs, and
+// Claude Code and Codex pick a random port by default: connect with --callback-port (Claude Code)
+// or mcp_oauth_callback_port (Codex). See docs/ai/connect-claude-code-and-codex.md.
+const MCP_CLAUDE_CODE_CALLBACK = 'http://localhost:8765/callback'
+const MCP_CODEX_CALLBACK = 'http://127.0.0.1:8766/callback'
+const MCP_HOSTED_CALLBACKS = [
+  'https://claude.ai/api/mcp/auth_callback',
+  'https://claude.com/api/mcp/auth_callback',
+  'https://chatgpt.com/connector_platform_oauth_redirect',
+]
+
 const smtpAdapter: EmailAdapter = ({ payload }) => {
   const transport = createTransport({
     host: process.env.SMTP_HOST || 'localhost',
@@ -74,6 +96,10 @@ const smtpAdapter: EmailAdapter = ({ payload }) => {
 }
 
 export default buildConfig({
+  // Public origin of this server. MCP sign-in (OAuth) needs it: it is the issuer in the discovery
+  // documents, and MCP requests must arrive on this host. Run a second dev server on another port
+  // with NEXT_PUBLIC_SERVER_URL=http://localhost:<port>.
+  serverURL: process.env.NEXT_PUBLIC_SERVER_URL,
   admin: {
     importMap: {
       baseDir: path.resolve(dirname),
@@ -196,6 +222,15 @@ export default buildConfig({
     // AI agents over MCP (POST /api/mcp, keys in MCP → API Keys). The builder tools edit page
     // layouts through the live channel, so an open editor shows each change as it happens.
     mcpToolkitPlugin({
+      // Sign in with the admin login: add the URL as an MCP server and approve access. API keys keep working.
+      oauth: {
+        canAuthorize: ({ user }) =>
+          Boolean(user) &&
+          user?.collection === Users.slug &&
+          (mcpOAuthEmails.length === 0 || mcpOAuthEmails.includes(String((user as { email?: string }).email ?? '').toLowerCase())),
+        access: 'editor', // the builder tools edit pages; globals stay read-only, delete stays denied
+        redirectURIs: [...MCP_HOSTED_CALLBACKS, MCP_CLAUDE_CODE_CALLBACK, MCP_CODEX_CALLBACK],
+      },
       exclude: {
         collections: ['users', 'form-submissions', 'exports', 'imports', 'search'],
         globals: ['theme-settings'],
@@ -229,9 +264,21 @@ export default buildConfig({
       blocks: builderBlocks,
       sections: sectionLibrary,
       templates: { hooks: { afterChange: [revalidateTemplate] } },
-      // AI assistant in the editor. The provider comes from .env: OPENROUTER_API_KEY alone is enough;
-      // BUILDER_AI_PROVIDER / BUILDER_AI_MODEL pick another one. See docs/ai/providers.md.
-      ai: {},
+      // AI assistant in the editor. The app picks the adapter from .env: BUILDER_AI_FAKE=1 (dev only)
+      // plays a scripted model, OPENROUTER_API_KEY turns on OpenRouter. No adapter: the panel shows the
+      // setup card. Other adapters (Anthropic, Cloudflare, any OpenAI-compatible API): docs/ai/providers.md.
+      ai: {
+        adapter:
+          process.env.BUILDER_AI_FAKE === '1' && process.env.NODE_ENV !== 'production'
+            ? fakeAdapter()
+            : process.env.OPENROUTER_API_KEY
+              ? openRouterAdapter({
+                  apiKey: process.env.OPENROUTER_API_KEY,
+                  model: process.env.OPENROUTER_MODEL,
+                  siteUrl: process.env.NEXT_PUBLIC_SERVER_URL,
+                })
+              : null,
+      },
       css: {
         entry: 'src/app/(frontend)/globals.css',
         plugins: { '@tailwindcss/typography': typography },
