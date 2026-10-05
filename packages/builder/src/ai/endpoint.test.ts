@@ -3,10 +3,10 @@ import { describe, it } from 'node:test'
 import type { PayloadRequest } from 'payload'
 
 import type { BlockDefinition, SectionDefinition } from '../core/types'
-import { loadClient, NO_KEY_MESSAGE } from './client'
+import { fakeAdapter } from './adapters/fake'
+import { NO_ADAPTER_PROBLEM, PROVIDER_REMOVED_PROBLEM } from './config'
 import { aiEndpoints, allowsUpdate, parseChatRequest, type AiEndpointOptions } from './endpoint'
-import { createFakeChatFetch, createFakeClient, demoScript } from './fake'
-import type { AiStreamEvent } from './types'
+import type { AiAdapter, AiModelRequest, AiStreamEvent } from './types'
 
 const blocks: BlockDefinition[] = [
   { type: 'stack', label: 'Stack', fields: [], slots: { children: {} } },
@@ -29,15 +29,13 @@ const body = {
 
 function handler(overrides: Partial<AiEndpointOptions> = {}) {
   const [chat] = aiEndpoints({
-    ai: {},
+    ai: { adapter: fakeAdapter({ delayMs: 0 }) },
     collections: { pages: { field: 'layout' } },
     blocks,
     sections: [hero],
     getTokens: async () => null,
     templates: null,
     canUpdate: async () => true,
-    env: {},
-    loadClient: async () => ({ client: createFakeClient(demoScript([hero])).client, describeError: () => null }),
     ...overrides,
   })
   return chat.handler
@@ -144,6 +142,30 @@ describe('chat endpoint', () => {
     const ops = events.flatMap((e) => (e.type === 'operations' ? e.ops.map((op) => op.type) : []))
     assert.deepEqual(ops, ['insert', 'update'])
     assert.equal(events.at(-1)?.type, 'done')
+    const messages = events.flatMap((e) => (e.type === 'message' ? [e.message] : []))
+    assert.ok(messages.every((m) => m.provider === 'fake:scripted'))
+  })
+
+  it('gives the adapter the cached system prompt, all tools and the effort', async () => {
+    const { req } = fakeReq()
+    const requests: AiModelRequest[] = []
+    const adapter = fakeAdapter({
+      steps: (request) => {
+        requests.push(request)
+        return { content: [{ type: 'text', text: 'Hi.' }] }
+      },
+    })
+    await readEvents(await handler({ ai: { adapter, effort: 'high', instructions: 'Use British English.' } })(req))
+    assert.equal(requests.length, 1)
+    assert.equal(requests[0].system.length, 1)
+    assert.equal(requests[0].system[0].cache, true)
+    assert.match(requests[0].system[0].text, /Use British English\./)
+    assert.equal(requests[0].effort, 'high')
+    const names = requests[0].tools.map((t) => t.name)
+    assert.ok(names.includes('applyOperations') && names.includes('insertSection'))
+    assert.ok(requests[0].tools.find((t) => t.name === 'applyOperations')?.simpleInputSchema)
+    // The history ends with the editor context, after the user's message.
+    assert.equal(requests[0].messages.at(-1)?.kind, 'context')
   })
 
   it('loads saved sections per request: in the context and insertable by id', async () => {
@@ -155,14 +177,13 @@ describe('chat endpoint', () => {
         docs: [{ id: 12, name: 'Team intro', blocks: [{ id: 's1', type: 'heading', props: { text: 'Our team' } }] }],
       }
     }
-    const { client } = createFakeClient([
-      { content: [{ type: 'tool_use', id: 'toolu_1', name: 'insertSection', input: { sectionId: 'saved:12' } }], stop_reason: 'tool_use' },
-      { content: [{ type: 'text', text: 'Done.' }], stop_reason: 'end_turn' },
-    ])
-    const response = await handler({
-      savedSections: { slug: 'builder-sections' },
-      loadClient: async () => ({ client, describeError: () => null }),
-    })(req)
+    const adapter = fakeAdapter({
+      steps: [
+        { content: [{ type: 'tool_use', id: 'toolu_1', name: 'insertSection', input: { sectionId: 'saved:12' } }] },
+        { content: [{ type: 'text', text: 'Done.' }] },
+      ],
+    })
+    const response = await handler({ savedSections: { slug: 'builder-sections' }, ai: { adapter } })(req)
     const events = await readEvents(response)
     assert.equal(finds[0].collection, 'builder-sections')
     assert.equal(finds[0].overrideAccess, false)
@@ -173,48 +194,14 @@ describe('chat endpoint', () => {
     assert.ok(inserted[0].type === 'insert' && inserted[0].block.props?.text === 'Our team')
   })
 
-  it('reports missing credentials as no_api_key', async () => {
+  it('reports an adapter auth error as no_api_key', async () => {
     const { req } = fakeReq()
-    const { client } = createFakeClient([new Error('Could not resolve authentication method.')])
-    const response = await handler({
-      loadClient: async () => ({ client, describeError: () => ({ type: 'error', code: 'no_api_key', message: NO_KEY_MESSAGE }) }),
-    })(req)
-    const events = await readEvents(response)
-    assert.deepEqual(events, [{ type: 'error', code: 'no_api_key', message: NO_KEY_MESSAGE }])
-  })
-})
-
-const openrouter = (fetch?: typeof globalThis.fetch, env: Record<string, string> = { OPENROUTER_API_KEY: 'sk-or-test' }) =>
-  handler({ ai: { provider: { type: 'openrouter' }, model: 'openai/gpt-6-luna' }, env, fetch, loadClient: undefined })
-
-describe('chat endpoint with OpenRouter', () => {
-  it('streams the agent over Chat Completions, with OpenRouter URL and headers', async () => {
-    const fake = createFakeChatFetch(demoScript([hero]))
-    const { req } = fakeReq()
-    const events = await readEvents(await openrouter(fake.fetch)(req))
-    const ops = events.flatMap((e) => (e.type === 'operations' ? e.ops.map((op) => op.type) : []))
-    assert.deepEqual(ops, ['insert', 'update'])
-    assert.equal(events.at(-1)?.type, 'done')
-    const messages = events.flatMap((e) => (e.type === 'message' ? [e.message] : []))
-    assert.ok(messages.every((m) => m.provider === 'openrouter:openai/gpt-6-luna'))
-    const call = fake.calls[0]
-    assert.equal(call.url, 'https://openrouter.ai/api/v1/chat/completions')
-    assert.equal(call.headers.Authorization, 'Bearer sk-or-test')
-    assert.equal(call.headers['HTTP-Referer'], 'https://site.test')
-    assert.equal(call.headers['X-Title'], 'Payload Website Builder')
-    assert.equal(call.body.model, 'openai/gpt-6-luna')
+    const adapter = fakeAdapter({ steps: [{ type: 'error', code: 'auth', message: 'No key.' }] })
+    const events = await readEvents(await handler({ ai: { adapter } })(req))
+    assert.deepEqual(events, [{ type: 'error', code: 'no_api_key', message: 'No key.' }])
   })
 
-  it('reports a missing key as no_api_key before calling the API', async () => {
-    const fake = createFakeChatFetch([])
-    const { req } = fakeReq()
-    const [event] = await readEvents(await openrouter(fake.fetch, {})(req))
-    assert.ok(event.type === 'error' && event.code === 'no_api_key')
-    assert.match(event.message, /OPENROUTER_API_KEY/)
-    assert.equal(fake.calls.length, 0)
-  })
-
-  it('rejects history written by another provider', async () => {
+  it('rejects history written by another adapter or model', async () => {
     const { req } = fakeReq({
       data: {
         ...body,
@@ -225,45 +212,32 @@ describe('chat endpoint with OpenRouter', () => {
         ],
       },
     })
-    const response = await openrouter(createFakeChatFetch([]).fetch)(req)
+    const response = await handler()(req)
     assert.equal(response.status, 409)
     const [event] = await readEvents(response)
     assert.ok(event.type === 'error' && event.code === 'invalid_request')
     assert.match(event.message, /Start a new chat/)
   })
-
-  it('BUILDER_AI_FAKE=1 bypasses the network for OpenAI-compatible providers', async () => {
-    const saved = process.env.BUILDER_AI_FAKE
-    process.env.BUILDER_AI_FAKE = '1'
-    try {
-      const { req } = fakeReq()
-      const events = await readEvents(await openrouter(undefined, {})(req))
-      assert.deepEqual(
-        events.flatMap((e) => (e.type === 'operations' ? e.ops.map((op) => op.type) : [])),
-        ['insert', 'update'],
-      )
-      assert.equal(events.at(-1)?.type, 'done')
-    } finally {
-      if (saved === undefined) delete process.env.BUILDER_AI_FAKE
-      else process.env.BUILDER_AI_FAKE = saved
-    }
-  })
 })
 
-describe('loadClient without credentials', () => {
-  it('maps the SDK failure to no_api_key', async () => {
-    const saved = { key: process.env.ANTHROPIC_API_KEY, token: process.env.ANTHROPIC_AUTH_TOKEN }
-    delete process.env.ANTHROPIC_API_KEY
-    delete process.env.ANTHROPIC_AUTH_TOKEN
-    try {
-      const loaded = await loadClient(undefined)
-      assert.ok(!('error' in loaded))
-      const described = loaded.describeError(new Error('Could not resolve authentication method.'), { streamStarted: false })
-      assert.equal(described?.code, 'no_api_key')
-    } finally {
-      if (saved.key !== undefined) process.env.ANTHROPIC_API_KEY = saved.key
-      if (saved.token !== undefined) process.env.ANTHROPIC_AUTH_TOKEN = saved.token
-    }
+describe('chat endpoint without an adapter', () => {
+  it('answers no_api_key with what to set', async () => {
+    const { req } = fakeReq()
+    const response = await handler({ ai: {} })(req)
+    assert.equal(response.status, 500)
+    assert.deepEqual(await readEvents(response), [{ type: 'error', code: 'no_api_key', message: NO_ADAPTER_PROBLEM }])
+  })
+
+  it('names the replacement when the config still uses ai.provider', async () => {
+    const { req } = fakeReq()
+    const ai = { provider: { type: 'openrouter' } } as unknown as { adapter?: AiAdapter }
+    const [event] = await readEvents(await handler({ ai })(req))
+    assert.ok(event.type === 'error' && event.message === PROVIDER_REMOVED_PROBLEM)
+  })
+
+  it('still rejects anonymous requests first', async () => {
+    const { req } = fakeReq({ user: null })
+    assert.equal((await handler({ ai: {} })(req)).status, 401)
   })
 })
 

@@ -173,9 +173,9 @@ export type WebsiteBuilderOptions = {
   /** Options for the templates collection. It exists when a collection sets `templates: true`. */
   templates?: TemplatesOptions
   /**
-   * The AI assistant in the editor. Presence enables it. Works with Anthropic, OpenRouter,
-   * Cloudflare AI Gateway or any OpenAI-compatible API; without `ai.provider` it reads
-   * BUILDER_AI_PROVIDER / OPENROUTER_API_KEY / ANTHROPIC_API_KEY. See docs/ai/providers.md.
+   * The AI assistant in the editor. Presence enables it. `ai.adapter` connects it to a model API,
+   * e.g. `openRouterAdapter()` from `@payload-toolkit/builder/ai/openrouter`. Without an adapter
+   * the panel shows the setup card. See docs/ai/providers.md.
    */
   ai?: AiOptions
   /**

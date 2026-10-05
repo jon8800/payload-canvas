@@ -45,7 +45,7 @@ export {
   type MigrateCounts,
   type MigrateIssue,
 } from './migrate'
-export type { AiChatRequest, AiClientConfig, AiMessage, AiOptions, AiStreamEvent } from './ai/types'
+export type { AiAdapter, AiChatRequest, AiClientConfig, AiMessage, AiOptions, AiStreamEvent } from './ai/types'
 export { defineBlock } from './core/blocks'
 export { EMPTY_LAYOUT } from './core/types'
 export type {

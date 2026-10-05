@@ -3,20 +3,17 @@
 // and saves as usual. Inputs are validated here, because eager input streaming skips the API's
 // own validation.
 
-import type Anthropic from '@anthropic-ai/sdk'
-
 import { isRichText, richTextToPlain, withoutBoundRequired } from '../core/bindings'
 import { createId } from '../core/ids'
 import { blockJsonSchema } from '../core/schema'
 import { indexLayout, isPlainObject, subtreeIds } from '../core/tree'
 import { resolveLayoutLocale, stampLocale, untranslatedKeys } from '../core/locale'
 import type { BindingField, Block, BlockDefinition, Layout, LocaleSettings, Operation, SectionDefinition } from '../core/types'
+import type { AiToolDefinition } from './types'
 import { validateLayout, type LayoutError } from '../core/validate'
 import { resolveOperations, splitLayoutErrors } from '../live/apply'
 import { sectionInsertOps } from '../mcp/shared'
 import { findSection } from '../plugin/sections'
-
-type BetaTool = Anthropic.Beta.BetaTool
 
 /** One image (or file) of the media library, as the assistant sees it. */
 export type MediaItem = {
@@ -210,26 +207,63 @@ const BLOCK_SCHEMA = {
   required: ['type'],
 } as const
 
+/**
+ * applyOperations as one flat operation object instead of a union (AiToolDefinition.simpleInputSchema).
+ * Smaller models (and Gemini schema converters) handle it better. The tool validates and repairs
+ * the input either way.
+ */
+const FLAT_OPERATIONS_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  properties: {
+    operations: {
+      type: 'array',
+      description: 'One or more operations, applied in order.',
+      items: {
+        type: 'object',
+        properties: {
+          type: { type: 'string', enum: ['insert', 'move', 'remove', 'duplicate', 'update'] },
+          id: { type: 'string', description: 'The block to move, remove, duplicate or update.' },
+          block: { type: 'object', description: 'insert only: the new block { type, props?, className?, slots? }.' },
+          to: {
+            type: 'object',
+            description: 'insert and move: { parentId, slot?, index }. parentId null means the page root.',
+            properties: { parentId: { type: 'string' }, slot: { type: 'string' }, index: { type: 'integer' } },
+          },
+          props: { type: 'object', description: 'update: props to merge.' },
+          unsetProps: { type: 'array', items: { type: 'string' } },
+          className: { type: 'string', description: 'update: the FULL class list (replaces all classes).' },
+          hidden: { type: 'boolean' },
+          bindings: { type: 'object' },
+          label: { type: ['string', 'null'], description: 'update: name for editors (outline). null removes it.' },
+          newId: { type: 'string' },
+        },
+        required: ['type'],
+      },
+    },
+  },
+  required: ['operations'],
+}
+
 /** Tool definitions in a fixed order (the order is part of the cached prompt prefix). */
-export function toolDefinitions(env: ToolEnv): BetaTool[] {
+export function toolDefinitions(env: ToolEnv): AiToolDefinition[] {
   const types = env.blocks.map((b) => b.type)
   const saved = env.savedSections === true
   const sectionIds = env.sections.map((s) => s.id)
   // With saved sections the ids and categories differ per request: no enums (the tools check the input).
   const categories = saved ? [] : [...new Set(env.sections.map((s) => s.category).filter((c): c is string => Boolean(c)))]
-  const tools: BetaTool[] = [
+  const tools: AiToolDefinition[] = [
     {
       name: 'getLayout',
       description:
         'Returns the current layout of the open page, including your changes so far in this reply. Call it when you need block ids or classes after several changes; the <editor_context> block already has the layout as it was when the user wrote.',
-      input_schema: { type: 'object', properties: {}, additionalProperties: false },
+      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       strict: true,
     },
     {
       name: 'getBlockSchema',
       description:
         'Returns the JSON Schema of one block type: its props (with exact value shapes, e.g. links and rich text), className and slots. Call it before you write props whose shape the block catalog does not show.',
-      input_schema: {
+      inputSchema: {
         type: 'object',
         properties: { type: { type: 'string', enum: types, description: 'Block type.' } },
         required: ['type'],
@@ -245,7 +279,7 @@ export function toolDefinitions(env: ToolEnv): BetaTool[] {
         description:
           'Lists the ready-made sections. The system prompt already has their outlines; call this with full: true when you need the exact block JSON of sections before inserting or copying from them.' +
           (saved ? ' The list also has the sections people saved on this site (saved: true, id "saved:<id>").' : ''),
-        input_schema: {
+        inputSchema: {
           type: 'object',
           properties: {
             category: { type: 'string', ...(categories.length > 0 ? { enum: categories } : {}), description: 'Only this category.' },
@@ -259,7 +293,7 @@ export function toolDefinitions(env: ToolEnv): BetaTool[] {
         name: 'insertSection',
         description:
           'Inserts a ready-made or saved section into the open page. Use it to add whole page parts (hero, features, pricing, call to action, footer …). All ids are new; the result returns the inserted blocks with their ids, so you can adjust their text and classes with applyOperations "update" right away. Default position: the end of the page.',
-        input_schema: {
+        inputSchema: {
           type: 'object',
           properties: {
             sectionId: saved
@@ -294,7 +328,7 @@ export function toolDefinitions(env: ToolEnv): BetaTool[] {
         'Example (ids come from the layout; block types and props from the block catalog): change a heading, then add a text block after it in the same section:',
         '{"operations":[{"type":"update","id":"b_head01","props":{"text":"Simple pricing"},"className":"text-4xl font-bold"},{"type":"insert","block":{"type":"text","props":{"text":"Pick a plan."}},"to":{"parentId":"b_sect01","slot":"children","index":1}}]}',
       ].join('\n'),
-      input_schema: {
+      inputSchema: {
         type: 'object',
         properties: {
           operations: {
@@ -326,12 +360,13 @@ export function toolDefinitions(env: ToolEnv): BetaTool[] {
         },
         required: ['operations'],
       },
+      simpleInputSchema: FLAT_OPERATIONS_SCHEMA,
     },
     {
       name: 'findBlocks',
       description:
         'Finds blocks in the open page by type and/or text (case-insensitive, searches text props). Use it to locate "the pricing heading" or "all buttons" in a long page. Returns ids, types, positions and the start of the text.',
-      input_schema: {
+      inputSchema: {
         type: 'object',
         properties: {
           type: { type: 'string', enum: types, description: 'Only blocks of this type.' },
@@ -345,7 +380,7 @@ export function toolDefinitions(env: ToolEnv): BetaTool[] {
       name: 'searchMedia',
       description:
         'Searches the media library for images by alt text or file name. Call it before you set an image or upload prop; use the returned id as the prop value. An empty query returns the newest images.',
-      input_schema: {
+      inputSchema: {
         type: 'object',
         properties: {
           query: { type: 'string', description: 'Words from the alt text or file name, e.g. "team" or "office".' },
@@ -363,7 +398,7 @@ export function toolDefinitions(env: ToolEnv): BetaTool[] {
       name: 'getBindingSources',
       description:
         'Lists the fields of a collection that block props can bind to (dot paths such as "title", "featuredImage", "author.name"). Call it before you add bindings in a template or a collection list item.',
-      input_schema: {
+      inputSchema: {
         type: 'object',
         properties: { collection: { type: 'string', enum: sourceSlugs } },
         required: ['collection'],
@@ -372,87 +407,7 @@ export function toolDefinitions(env: ToolEnv): BetaTool[] {
       strict: true,
     })
   }
-  // Stream tool inputs as they are generated (applyOperations inputs can be long).
-  return tools.map((tool) => ({ ...tool, eager_input_streaming: true }))
-}
-
-// ---------------------------------------------------------------------------
-// OpenAI-compatible function tools
-// ---------------------------------------------------------------------------
-
-export type OpenAiTool = { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }
-
-/**
- * applyOperations for OpenAI-compatible models: one flat operation object instead of a union.
- * Smaller models (and Gemini schema converters) handle it better. The tool validates and repairs
- * the input either way.
- */
-const FLAT_OPERATIONS_SCHEMA = {
-  type: 'object',
-  properties: {
-    operations: {
-      type: 'array',
-      description: 'One or more operations, applied in order.',
-      items: {
-        type: 'object',
-        properties: {
-          type: { type: 'string', enum: ['insert', 'move', 'remove', 'duplicate', 'update'] },
-          id: { type: 'string', description: 'The block to move, remove, duplicate or update.' },
-          block: { type: 'object', description: 'insert only: the new block { type, props?, className?, slots? }.' },
-          to: {
-            type: 'object',
-            description: 'insert and move: { parentId, slot?, index }. parentId null means the page root.',
-            properties: { parentId: { type: 'string' }, slot: { type: 'string' }, index: { type: 'integer' } },
-          },
-          props: { type: 'object', description: 'update: props to merge.' },
-          unsetProps: { type: 'array', items: { type: 'string' } },
-          className: { type: 'string', description: 'update: the FULL class list (replaces all classes).' },
-          hidden: { type: 'boolean' },
-          bindings: { type: 'object' },
-          label: { type: ['string', 'null'], description: 'update: name for editors (outline). null removes it.' },
-          newId: { type: 'string' },
-        },
-        required: ['type'],
-      },
-    },
-  },
-  required: ['operations'],
-}
-
-/**
- * A JSON Schema that most OpenAI-compatible providers accept: no type arrays (["string","null"]
- * becomes "string"), no `const` (becomes a one-value enum), no `additionalProperties`.
- */
-export function portableSchema(schema: unknown): unknown {
-  if (Array.isArray(schema)) return schema.map(portableSchema)
-  if (!isPlainObject(schema)) return schema
-  const out: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(schema)) {
-    if (key === 'additionalProperties') continue
-    if (key === 'type' && Array.isArray(value)) {
-      const types = value.filter((t) => t !== 'null')
-      out.type = types.length === 1 ? types[0] : types
-    } else if (key === 'const') {
-      out.enum = [value]
-    } else if (key === 'properties' && isPlainObject(value)) {
-      out.properties = Object.fromEntries(Object.entries(value).map(([name, item]) => [name, portableSchema(item)]))
-    } else {
-      out[key] = portableSchema(value)
-    }
-  }
-  return out
-}
-
-/** The same tools as Chat Completions function tools. */
-export function openAiTools(env: ToolEnv): OpenAiTool[] {
-  return toolDefinitions(env).map((tool) => ({
-    type: 'function',
-    function: {
-      name: tool.name,
-      description: tool.description ?? '',
-      parameters: portableSchema(tool.name === 'applyOperations' ? FLAT_OPERATIONS_SCHEMA : tool.input_schema) as Record<string, unknown>,
-    },
-  }))
+  return tools
 }
 
 /** Running summaries, shown while the tool input streams in. */

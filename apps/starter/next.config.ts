@@ -27,6 +27,26 @@ const nextConfig: NextConfig = {
       './node_modules/shadcn/dist/tailwind.css',
     ],
   },
+  // MCP sign-in (OAuth): AI clients look for these root URLs. Payload endpoints cannot serve them.
+  async rewrites() {
+    return [
+      { source: '/.well-known/oauth-authorization-server', destination: '/api/mcp/oauth/metadata' },
+      { source: '/.well-known/oauth-protected-resource', destination: '/api/mcp/oauth/resource' },
+      { source: '/.well-known/oauth-protected-resource/api/mcp', destination: '/api/mcp/oauth/resource' },
+    ]
+  },
+  // The approval screen must not load inside another site's frame.
+  async headers() {
+    return [
+      {
+        source: '/admin/mcp-:view',
+        headers: [
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+          { key: 'Referrer-Policy', value: 'same-origin' },
+        ],
+      },
+    ]
+  },
   sassOptions: {
     includePaths: [
       path.resolve(import.meta.dirname, 'node_modules', '@payloadcms', 'ui', 'dist', 'scss'),

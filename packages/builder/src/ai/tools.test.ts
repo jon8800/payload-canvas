@@ -3,8 +3,9 @@ import { describe, it } from 'node:test'
 
 import { findBlock } from '../core/tree'
 import type { BlockDefinition, Layout, SectionDefinition } from '../core/types'
+import { chatTools } from './openai-format'
 import { CONTEXT_SAVED_SECTIONS, contextText, systemPrompt } from './prompt'
-import { openAiTools, runTool, toolDefinitions, Workspace, type ToolEnv } from './tools'
+import { runTool, toolDefinitions, Workspace, type ToolEnv } from './tools'
 
 const blocks: BlockDefinition[] = [
   { type: 'stack', label: 'Stack', fields: [], slots: { children: {} } },
@@ -36,7 +37,7 @@ const env = (overrides: Partial<ToolEnv> = {}): ToolEnv => ({
 
 type Schema = { properties: Record<string, Record<string, unknown>> }
 const schemaOf = (tools: ReturnType<typeof toolDefinitions>, name: string) =>
-  tools.find((t) => t.name === name)?.input_schema as unknown as Schema | undefined
+  tools.find((t) => t.name === name)?.inputSchema as unknown as Schema | undefined
 
 const emptyLayout = (): Layout => ({ version: 1, blocks: [] })
 
@@ -56,11 +57,11 @@ describe('section tool definitions', () => {
     assert.equal('enum' in (schemaOf(tools, 'listSections')?.properties.category ?? {}), false)
     // Strict mode stays valid: every object closes its properties.
     for (const name of ['listSections', 'insertSection']) {
-      const tool = tools.find((t) => t.name === name) as unknown as { strict?: boolean; input_schema: { additionalProperties?: boolean } }
-      assert.equal(tool.strict, true)
-      assert.equal(tool.input_schema.additionalProperties, false)
+      const tool = tools.find((t) => t.name === name)
+      assert.equal(tool?.strict, true)
+      assert.equal(tool?.inputSchema.additionalProperties, false)
     }
-    const openAi = openAiTools(env({ savedSections: true })).find((t) => t.function.name === 'insertSection')
+    const openAi = chatTools(toolDefinitions(env({ savedSections: true }))).find((t) => t.function.name === 'insertSection')
     assert.ok(openAi)
     const properties = openAi.function.parameters.properties as Record<string, Record<string, unknown>>
     assert.equal('enum' in properties.sectionId, false)

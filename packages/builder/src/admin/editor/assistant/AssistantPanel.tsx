@@ -21,12 +21,6 @@ import { Markdown } from './MarkdownView'
 import './assistant.scss'
 
 const PROVIDER_DOCS = 'https://github.com/jon8800/payload-toolkit/blob/main/docs/ai/providers.md'
-/** Where to get a key, per provider. */
-const KEY_PAGES: Record<string, string> = {
-  anthropic: 'https://console.anthropic.com/settings/keys',
-  openrouter: 'https://openrouter.ai/keys',
-  cloudflare: 'https://dash.cloudflare.com/?to=/:account/ai/ai-gateway',
-}
 /** Distance from the bottom (px) within which new content keeps the list scrolled to the end. */
 const STICK_DISTANCE = 48
 const MAX_INPUT_HEIGHT = 168
@@ -130,7 +124,7 @@ function Panel({ assistant, hidden }: { assistant: AssistantController; hidden: 
  */
 function modelLabel(ai: AiClientConfig): string {
   const model = ai.model
-  if (ai.provider && ai.provider !== 'anthropic') return `${ai.providerLabel ?? ai.provider} · ${model}`
+  if (ai.adapter !== 'anthropic') return model ? `${ai.label} · ${model}` : ai.label
   const match = /^claude-([a-z]+)-(\d+)(?:-(\d+))?$/.exec(model)
   if (!match) return model
   const [, family, major, minor] = match
@@ -306,10 +300,9 @@ function Notice({ assistant, notice, canRetry }: { assistant: AssistantControlle
 function SetupState({ assistant, message }: { assistant: AssistantController; message: string }) {
   const runtime = useRuntime()
   const ai = runtime.config.ai
-  const provider = ai?.provider ?? 'anthropic'
-  const label = ai?.providerLabel ?? 'Anthropic'
-  const keyEnv = ai?.keyEnv === undefined ? (provider === 'anthropic' ? 'ANTHROPIC_API_KEY' : null) : ai.keyEnv
-  const keyPage = KEY_PAGES[provider]
+  const noAdapter = !ai || ai.adapter === 'none'
+  const keyEnv = ai?.keyEnv ?? null
+  const keyPage = ai?.keyUrl ?? null
   return (
     <>
       <output className="builder-assistant__card builder-assistant__card--setup">
@@ -322,10 +315,11 @@ function SetupState({ assistant, message }: { assistant: AssistantController; me
           <div className="builder-assistant__details-body">
             <p className="builder-assistant__card-text">{message}</p>
             {keyEnv && <pre className="builder-assistant__card-code">{keyEnv}=…</pre>}
-            <p className="builder-assistant__card-text">
-              The provider is {label}. To use another one, set <code>BUILDER_AI_PROVIDER</code> to <code>openrouter</code>,{' '}
-              <code>cloudflare</code>, <code>openai-compatible</code> or <code>anthropic</code>.
-            </p>
+            {!noAdapter && (
+              <p className="builder-assistant__card-text">
+                The adapter is {ai.label}. To use another one, change <code>ai.adapter</code> in <code>payload.config.ts</code>.
+              </p>
+            )}
             <div className="builder-assistant__card-actions">
               {keyPage && (
                 <a className="builder-assistant__link" href={keyPage} target="_blank" rel="noopener noreferrer">
@@ -642,7 +636,7 @@ function MoreMenu({
         },
         { icon: 'link', label: 'Use Claude Code or Codex', checked: connect, run: onToggleConnect },
       ]}
-      footer={ai && <span data-tooltip={`${ai.providerLabel ?? 'Anthropic'} · ${ai.model}`}>Model: {modelLabel(ai)}</span>}
+      footer={ai && ai.adapter !== 'none' && <span data-tooltip={`${ai.label} · ${ai.model}`}>Model: {modelLabel(ai)}</span>}
     >
       <Icon name="more" size={14} />
     </MenuButton>

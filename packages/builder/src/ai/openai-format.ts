@@ -1,39 +1,22 @@
-// The OpenAI-compatible adapter of the agent loop (loop.ts): Chat Completions over plain fetch with
-// streaming. Works with OpenRouter, Cloudflare AI Gateway (compat endpoint), OpenAI, Groq, Ollama,
-// LM Studio and other servers that speak the same format. No SDK.
+// Shared code of the OpenAI-format adapters (OpenRouter, Cloudflare, any OpenAI-compatible API):
+// Chat Completions over plain fetch with streaming. No SDK.
 //
-// Stored history uses the same block types as the Anthropic adapter ("text", "tool_use",
-// "tool_result"), plus a "reasoning" block that carries the provider's reasoning fields back
-// unchanged. The blocks are turned into Chat Completions messages on every request.
+// Stored history uses the neutral block types ("text", "tool_use", "tool_result"), plus a
+// "reasoning" block that carries the provider's reasoning fields back unchanged. The blocks are
+// turned into Chat Completions messages on every request.
 
 import { createId } from '../core/ids'
 import { isPlainObject } from '../core/tree'
-import type { DescribeError, ModelAdapter, ModelStep, StepHooks, ToolCall } from './loop'
 import { createSseParser } from './sse'
-import type { OpenAiTool } from './tools'
-import type { AiMessage, AiUsage } from './types'
+import type { AiAdapter, AiContentBlock, AiMessage, AiModelEvent, AiModelRequest, AiStopReason, AiSystemPart, AiToolDefinition, AiUsage } from './types'
 
-export type OpenAiAdapterOptions = {
-  /** Full Chat Completions URL. */
-  url: string
-  /** Request headers, credentials included. */
-  headers: Record<string, string>
-  /** "OpenRouter", "Cloudflare AI Gateway", … for error messages. */
-  label: string
-  /** What to set after a 401. */
-  keyHint: string
-  model: string
-  system: string
-  tools: OpenAiTool[]
-  /** Sent as `max_tokens` only when set. */
+/** Request options every OpenAI-format adapter accepts. */
+export type OpenAIFormatTransportOptions = {
+  /** Output limit per model call. Sent as `max_tokens` only when set. */
   maxTokens?: number
-  /** Extra body fields, e.g. OpenRouter's `reasoning: { effort }`. */
-  extraBody?: Record<string, unknown>
-  /** Ask for a usage chunk (`stream_options.include_usage`). Default true; dropped once if the server rejects it. */
-  includeUsage?: boolean
-  /** Written to the stored messages (`AiMessage.provider`). */
-  identity?: string
-  /** Tests and the fake model. Default: global fetch. */
+  /** Extra request headers. */
+  headers?: Record<string, string>
+  /** Tests: replaces fetch. */
   fetch?: typeof fetch
   /** Time to wait for the response headers. Default 60 s. */
   timeoutMs?: number
@@ -45,6 +28,28 @@ export type OpenAiAdapterOptions = {
   retryDelayMs?: number
   /** Tests: replaces the timer. Must reject when the signal aborts. */
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>
+}
+
+export type OpenAIFormatAdapterOptions = OpenAIFormatTransportOptions & {
+  name: string
+  label: string
+  model: string
+  /** The full Chat Completions URL. */
+  url: string
+  /** Credential headers (Authorization, …). Merged before `headers`. Never logged. */
+  authHeaders?: Record<string, string>
+  ready?: boolean
+  setupProblem?: string | null
+  keyEnv?: string | null
+  keyUrl?: string | null
+  /** What to check after a 401. */
+  keyHint: string
+  /** Extra body fields per request, e.g. OpenRouter's `reasoning: { effort }`. */
+  extraBody?: (request: AiModelRequest) => Record<string, unknown> | undefined
+  /** Send the cached system parts as content parts with `cache_control` (OpenRouter: Anthropic and Gemini models). */
+  cacheControl?: boolean
+  /** Ask for a usage chunk (`stream_options.include_usage`). Default true; dropped once if the server rejects it. */
+  includeUsage?: boolean
 }
 
 /** An HTTP or stream error from the provider. `status` is the HTTP status when there is one. */
@@ -63,10 +68,48 @@ export class OpenAiApiError extends Error {
 }
 
 // ---------------------------------------------------------------------------
-// History -> Chat Completions messages
+// Tools and history -> Chat Completions
 // ---------------------------------------------------------------------------
 
-type ChatMessage = Record<string, unknown> & { role: 'system' | 'user' | 'assistant' | 'tool' }
+export type ChatTool = { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }
+
+/**
+ * A JSON Schema that most OpenAI-compatible providers accept: no type arrays (["string","null"]
+ * becomes "string"), no `const` (becomes a one-value enum), no `additionalProperties`.
+ */
+export function portableSchema(schema: unknown): unknown {
+  if (Array.isArray(schema)) return schema.map(portableSchema)
+  if (!isPlainObject(schema)) return schema
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(schema)) {
+    if (key === 'additionalProperties') continue
+    if (key === 'type' && Array.isArray(value)) {
+      const types = value.filter((t) => t !== 'null')
+      out.type = types.length === 1 ? types[0] : types
+    } else if (key === 'const') {
+      out.enum = [value]
+    } else if (key === 'properties' && isPlainObject(value)) {
+      out.properties = Object.fromEntries(Object.entries(value).map(([name, item]) => [name, portableSchema(item)]))
+    } else {
+      out[key] = portableSchema(value)
+    }
+  }
+  return out
+}
+
+/** The tools as Chat Completions function tools (the simpler schema where there is one). */
+export function chatTools(tools: AiToolDefinition[]): ChatTool[] {
+  return tools.map((tool) => ({
+    type: 'function',
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: portableSchema(tool.simpleInputSchema ?? tool.inputSchema) as Record<string, unknown>,
+    },
+  }))
+}
+
+export type ChatMessage = Record<string, unknown> & { role: 'system' | 'user' | 'assistant' | 'tool' }
 type Block = Record<string, unknown> & { type: string }
 
 function blocksOf(content: unknown): Block[] {
@@ -79,16 +122,26 @@ function textOf(blocks: Block[]): string {
   return blocks.flatMap((b) => (b.type === 'text' && typeof b.text === 'string' ? [b.text] : [])).join('\n\n')
 }
 
-/** Tool result content as a string (Anthropic allows a list of blocks). */
+/** Tool result content as a string (it may be a list of blocks). */
 function resultText(content: unknown): string {
   if (typeof content === 'string') return content
   const text = textOf(blocksOf(content))
   return text || JSON.stringify(content ?? null)
 }
 
-/** The stored history as Chat Completions messages. Anthropic-only blocks (thinking) are left out. */
-export function toChatMessages(system: string, history: AiMessage[]): ChatMessage[] {
-  const out: ChatMessage[] = [{ role: 'system', content: system }]
+/** The system message. With `cacheControl`, cached parts carry `cache_control` (OpenRouter passes it on). */
+function systemMessage(system: AiSystemPart[] | string, cacheControl: boolean): ChatMessage {
+  const parts = typeof system === 'string' ? [{ text: system }] : system
+  if (!cacheControl) return { role: 'system', content: parts.map((p) => p.text).join('\n\n') }
+  return {
+    role: 'system',
+    content: parts.map((p) => ({ type: 'text', text: p.text, ...(p.cache ? { cache_control: { type: 'ephemeral' } } : {}) })),
+  }
+}
+
+/** The stored history as Chat Completions messages. Blocks of other adapters (thinking) are left out. */
+export function toChatMessages(system: AiSystemPart[] | string, history: AiMessage[], options: { cacheControl?: boolean } = {}): ChatMessage[] {
+  const out: ChatMessage[] = [systemMessage(system, options.cacheControl === true)]
   for (const message of history) {
     const blocks = blocksOf(message.content)
     if (message.role === 'user') {
@@ -180,16 +233,20 @@ function usageOf(value: unknown): AiUsage | undefined {
   }
 }
 
-/** finish_reason in Anthropic terms, so the editor and the loop see one vocabulary. */
-function stopReasonOf(finish: string | null, hasCalls: boolean): string {
+/** finish_reason in the assistant's stop reasons. */
+function stopReasonOf(finish: string | null, hasCalls: boolean): AiStopReason {
   if (finish === 'length') return 'max_tokens'
-  if (hasCalls) return 'tool_use'
+  // A filtered reply can end in a cut-off tool call: never run it.
   if (finish === 'content_filter') return 'refusal'
+  if (hasCalls) return 'tool_use'
   return 'end_turn'
 }
 
-/** Builds the step result from the stream chunks. One instance per model call. */
-export function createAccumulator(hooks: StepHooks) {
+/**
+ * Builds the model events from the stream chunks. One instance per model call. `onEvent` gets the
+ * text and toolStart events as they stream; `result()` returns the closing events.
+ */
+export function createAccumulator(onEvent: (event: AiModelEvent) => void) {
   let text = ''
   let reasoning = ''
   const details: Record<string, unknown>[] = []
@@ -235,10 +292,7 @@ export function createAccumulator(hooks: StepHooks) {
         return
       }
       if (!isPlainObject(chunk)) return
-      if (!started) {
-        started = true
-        hooks.start()
-      }
+      started = true
       if (isPlainObject(chunk.error)) {
         const code = chunk.error.code
         const message = typeof chunk.error.message === 'string' ? chunk.error.message : 'The stream reported an error.'
@@ -250,7 +304,7 @@ export function createAccumulator(hooks: StepHooks) {
       if (!choice) return
       const delta = isPlainObject(choice.delta) ? choice.delta : isPlainObject(choice.message) ? choice.message : {}
       if (typeof delta.content === 'string' && delta.content) {
-        hooks.text(delta.content, text === '')
+        onEvent({ type: 'text', text: delta.content })
         text += delta.content
       }
       if (typeof delta.reasoning === 'string') reasoning += delta.reasoning
@@ -268,7 +322,7 @@ export function createAccumulator(hooks: StepHooks) {
         if (!call.announced && call.name) {
           call.id ||= `call_${createId().slice(2)}`
           call.announced = true
-          hooks.toolStart(call.id, call.name)
+          onEvent({ type: 'toolStart', id: call.id, name: call.name })
         }
       }
       if (typeof choice.finish_reason === 'string') {
@@ -276,27 +330,31 @@ export function createAccumulator(hooks: StepHooks) {
         if (finish === 'error' && !error) error = new OpenAiApiError('The model stopped with an error.', { kind: 'stream' })
       }
     },
-    /** The step result. Throws the stream's error, if any. */
-    result(): ModelStep {
+    /** The closing events: tool calls, usage, done. Throws the stream's error, if any. */
+    result(): AiModelEvent[] {
       if (error) throw error
       if (!started) throw new OpenAiApiError('The API sent an empty response.', { kind: 'stream' })
-      const toolCalls: ToolCall[] = [...calls.entries()]
-        .toSorted(([a], [b]) => a - b)
-        .flatMap(([, call]) => {
-          if (!call.name) return []
-          const id = call.id || `call_${createId().slice(2)}`
-          const parsed = parseArguments(call.args)
-          return 'error' in parsed ? [{ id, name: call.name, input: {}, invalid: parsed.error }] : [{ id, name: call.name, input: parsed.input }]
-        })
-      const stopReason = stopReasonOf(finish, toolCalls.length > 0)
-      if (stopReason === 'refusal') return { content: [], calls: [], stopReason, refusal: { explanation: null }, usage }
-      const content: unknown[] = []
+      const events: AiModelEvent[] = []
+      const content: AiContentBlock[] = []
       if (reasoning || details.length > 0) {
         content.push({ type: 'reasoning', ...(reasoning ? { reasoning } : {}), ...(details.length > 0 ? { reasoning_details: details } : {}) })
       }
       if (text) content.push({ type: 'text', text })
-      for (const call of toolCalls) content.push({ type: 'tool_use', id: call.id, name: call.name, input: call.input })
-      return { content, calls: toolCalls, stopReason, usage }
+      let hasCalls = false
+      for (const [, call] of [...calls.entries()].toSorted(([a], [b]) => a - b)) {
+        if (!call.name) continue
+        hasCalls = true
+        const id = call.id || `call_${createId().slice(2)}`
+        const parsed = parseArguments(call.args)
+        const input = 'error' in parsed ? {} : parsed.input
+        content.push({ type: 'tool_use', id, name: call.name, input })
+        events.push({ type: 'toolCall', id, name: call.name, input, ...('error' in parsed ? { error: parsed.error } : {}) })
+      }
+      if (usage) events.push({ type: 'usage', usage })
+      const stopReason = stopReasonOf(finish, hasCalls)
+      if (stopReason === 'refusal') return [...events.filter((e) => e.type === 'usage'), { type: 'done', stopReason, content: [], refusal: { explanation: null } }]
+      events.push({ type: 'done', stopReason, content })
+      return events
     },
   }
 }
@@ -350,6 +408,7 @@ async function httpError(response: Response): Promise<OpenAiApiError> {
     try {
       const body = JSON.parse(text) as unknown
       const error = isPlainObject(body) ? body.error : null
+      const errors = isPlainObject(body) && Array.isArray(body.errors) ? body.errors : null
       if (isPlainObject(error)) {
         message = typeof error.message === 'string' ? error.message : ''
         // OpenRouter puts the upstream provider's message in metadata.raw.
@@ -357,6 +416,9 @@ async function httpError(response: Response): Promise<OpenAiApiError> {
         if (typeof raw === 'string' && raw && !message.includes(raw)) message = `${message} (${raw.slice(0, 300)})`
       } else if (typeof error === 'string') {
         message = error
+      } else if (errors && isPlainObject(errors[0]) && typeof errors[0].message === 'string') {
+        // Cloudflare's API: { success: false, errors: [{ code, message }] }.
+        message = errors[0].message
       } else if (isPlainObject(body) && typeof body.message === 'string') {
         message = body.message
       }
@@ -373,48 +435,59 @@ async function httpError(response: Response): Promise<OpenAiApiError> {
   })
 }
 
+/** An adapter error as an `error` event with the provider's message. */
+export function describeOpenAiError(error: unknown, options: { label: string; keyHint: string; model: string }): Extract<AiModelEvent, { type: 'error' }> {
+  const { label, keyHint, model } = options
+  if (error instanceof OpenAiApiError) {
+    const detail = error.message ? `: ${error.message.trim().replace(/\.$/, '')}` : ''
+    if (error.kind === 'timeout') return { type: 'error', code: 'api_error', message: `${label} did not answer in time${detail}. Try again.` }
+    if (error.kind === 'network') return { type: 'error', code: 'api_error', message: `Could not reach ${label}${detail}.` }
+    switch (error.status) {
+      case 401:
+        return { type: 'error', code: 'auth', message: `${label} rejected the API key (401)${detail}. ${keyHint}` }
+      case 402:
+        return { type: 'error', code: 'api_error', message: `${label} says the account has no credits left (402)${detail}.` }
+      case 404:
+        return { type: 'error', code: 'api_error', message: `${label} returned 404${detail}. Check the model id "${model}" and that the model supports tool calling.` }
+      case 429:
+        return { type: 'error', code: 'api_error', message: `${label} rate limit reached (429)${detail}. Wait a moment and try again.` }
+    }
+    const status = error.status ? ` (${error.status})` : ''
+    return { type: 'error', code: 'api_error', message: `${label} returned an error${status}${detail}` }
+  }
+  if (error instanceof Error && error.name === 'AbortError') return { type: 'error', code: 'aborted', message: 'The request was cancelled.' }
+  return { type: 'error', code: 'api_error', message: error instanceof Error ? error.message : String(error) }
+}
+
+/** `${base}/chat/completions`, unless the base already is the full URL. */
+export function chatCompletionsUrl(baseURL: string): string {
+  const base = baseURL.trim().replace(/\/+$/, '')
+  return base.endsWith('/chat/completions') ? base : `${base}/chat/completions`
+}
+
+/** A trimmed value, or undefined when empty. */
+export const clean = (value: string | null | undefined): string | undefined => (value?.trim() ? value.trim() : undefined)
+
+export const bearer = (key: string) => `Bearer ${key}`
+
 // ---------------------------------------------------------------------------
 // Adapter
 // ---------------------------------------------------------------------------
 
-/** Maps adapter errors to `error` events with the provider's message. */
-export function describeOpenAiError(options: Pick<OpenAiAdapterOptions, 'label' | 'keyHint' | 'model'>): DescribeError {
-  const { label, keyHint, model } = options
-  return (error) => {
-    if (error instanceof OpenAiApiError) {
-      const detail = error.message ? `: ${error.message.trim().replace(/\.$/, '')}` : ''
-      if (error.kind === 'timeout') return { type: 'error', code: 'api_error', message: `${label} did not answer in time${detail}. Try again.` }
-      if (error.kind === 'network') return { type: 'error', code: 'api_error', message: `Could not reach ${label}${detail}.` }
-      switch (error.status) {
-        case 401:
-          return { type: 'error', code: 'no_api_key', message: `${label} rejected the API key (401)${detail}. ${keyHint}` }
-        case 402:
-          return { type: 'error', code: 'api_error', message: `${label} says the account has no credits left (402)${detail}.` }
-        case 404:
-          return { type: 'error', code: 'api_error', message: `${label} returned 404${detail}. Check the model id "${model}" and that the model supports tool calling.` }
-        case 429:
-          return { type: 'error', code: 'api_error', message: `${label} rate limit reached (429)${detail}. Wait a moment and try again.` }
-      }
-      const status = error.status ? ` (${error.status})` : ''
-      return { type: 'error', code: 'api_error', message: `${label} returned an error${status}${detail}` }
-    }
-    if (error instanceof Error && error.name === 'AbortError') return { type: 'error', code: 'aborted', message: 'The request was cancelled.' }
-    return { type: 'error', code: 'api_error', message: error instanceof Error ? error.message : String(error) }
-  }
-}
-
-/** An OpenAI-compatible Chat Completions API as a model adapter. */
-export function openAiAdapter(options: OpenAiAdapterOptions): ModelAdapter {
+/** An adapter for any Chat Completions API that streams in the OpenAI format. */
+export function createOpenAIFormatAdapter(options: OpenAIFormatAdapterOptions): AiAdapter {
   const doFetch = options.fetch ?? fetch
   const wait = options.sleep ?? sleep
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const idleMs = options.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS
   const maxRetries = options.maxRetries ?? 2
   const baseDelay = options.retryDelayMs ?? 1000
+  const headers = { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...options.authHeaders, ...options.headers }
   let includeUsage = options.includeUsage ?? true
 
   /** One HTTP attempt. The returned controller also stops the body read (idle timeout, abort). */
   const attempt = async (body: Record<string, unknown>, signal?: AbortSignal) => {
+    if (signal?.aborted) throw abortError()
     const controller = new AbortController()
     let timedOut = false
     const onAbort = () => controller.abort()
@@ -428,12 +501,7 @@ export function openAiAdapter(options: OpenAiAdapterOptions): ModelAdapter {
       signal?.removeEventListener('abort', onAbort)
     }
     try {
-      const response = await doFetch(options.url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...options.headers },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      })
+      const response = await doFetch(options.url, { method: 'POST', headers, body: JSON.stringify(body), signal: controller.signal })
       clearTimeout(timer)
       return { response, controller, cleanup }
     } catch (error) {
@@ -445,20 +513,21 @@ export function openAiAdapter(options: OpenAiAdapterOptions): ModelAdapter {
   }
 
   /** Sends the request, retrying 408 / 429 / 5xx / network errors with backoff. */
-  const request = async (history: AiMessage[], signal?: AbortSignal) => {
+  const send = async (request: AiModelRequest) => {
+    const tools = chatTools(request.tools)
     for (let retry = 0; ; retry++) {
       const body: Record<string, unknown> = {
         model: options.model,
-        messages: toChatMessages(options.system, history),
-        ...(options.tools.length > 0 ? { tools: options.tools, tool_choice: 'auto' } : {}),
+        messages: toChatMessages(request.system, request.messages, { cacheControl: options.cacheControl }),
+        ...(tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
         stream: true,
         ...(includeUsage ? { stream_options: { include_usage: true } } : {}),
         ...(options.maxTokens ? { max_tokens: options.maxTokens } : {}),
-        ...options.extraBody,
+        ...options.extraBody?.(request),
       }
       let failure: OpenAiApiError
       try {
-        const sent = await attempt(body, signal)
+        const sent = await attempt(body, request.signal)
         if (sent.response.ok && sent.response.body) return sent
         sent.cleanup()
         failure = sent.response.ok ? new OpenAiApiError('The API sent no response body.', { kind: 'stream' }) : await httpError(sent.response)
@@ -474,16 +543,36 @@ export function openAiAdapter(options: OpenAiAdapterOptions): ModelAdapter {
       }
       const canRetry = failure.kind === 'network' || failure.kind === 'timeout' || (failure.status !== null && retryable(failure.status))
       if (!canRetry || retry >= maxRetries) throw failure
-      await wait(Math.min(MAX_RETRY_DELAY_MS, failure.retryAfterMs ?? baseDelay * 2 ** retry), signal)
+      await wait(Math.min(MAX_RETRY_DELAY_MS, failure.retryAfterMs ?? baseDelay * 2 ** retry), request.signal)
     }
   }
 
+  const describe = (error: unknown) => describeOpenAiError(error, options)
+
   return {
-    identity: options.identity,
-    describeError: describeOpenAiError(options),
-    async step(history, hooks, signal) {
-      const { response, controller, cleanup } = await request(history, signal)
-      const accumulator = createAccumulator(hooks)
+    name: options.name,
+    label: options.label,
+    model: options.model,
+    ready: options.ready ?? true,
+    setupProblem: options.setupProblem ?? null,
+    keyEnv: options.keyEnv ?? null,
+    keyUrl: options.keyUrl ?? null,
+    async *stream(request) {
+      // Missing key or config: say what to set, without a network call.
+      if (options.ready === false) {
+        yield { type: 'error', code: 'auth', message: options.setupProblem || `${options.label} is not set up.` }
+        return
+      }
+      let sent: Awaited<ReturnType<typeof send>>
+      try {
+        sent = await send(request)
+      } catch (error) {
+        yield describe(error)
+        return
+      }
+      const { response, controller, cleanup } = sent
+      const queue: AiModelEvent[] = []
+      const accumulator = createAccumulator((event) => queue.push(event))
       const parser = createSseParser(({ data }) => accumulator.push(data))
       const reader = (response.body as ReadableStream<Uint8Array>).getReader()
       const decoder = new TextDecoder()
@@ -496,6 +585,7 @@ export function openAiAdapter(options: OpenAiAdapterOptions): ModelAdapter {
           controller.abort()
         }, idleMs)
       }
+      let failure: unknown = null
       try {
         resetIdle()
         while (!accumulator.done) {
@@ -503,20 +593,33 @@ export function openAiAdapter(options: OpenAiAdapterOptions): ModelAdapter {
           if (done) break
           resetIdle()
           parser.push(decoder.decode(value, { stream: true }))
+          while (queue.length > 0) yield queue.shift() as AiModelEvent
         }
         parser.push(decoder.decode())
         parser.end()
       } catch (error) {
-        if (signal?.aborted) throw abortError()
-        if (idleTimedOut) throw new OpenAiApiError(`the stream stalled for ${Math.round(idleMs / 1000)} seconds`, { kind: 'timeout' })
-        throw new OpenAiApiError(error instanceof Error ? error.message : String(error), { kind: 'network' })
+        if (request.signal?.aborted) failure = abortError()
+        else if (idleTimedOut) failure = new OpenAiApiError(`the stream stalled for ${Math.round(idleMs / 1000)} seconds`, { kind: 'timeout' })
+        else failure = new OpenAiApiError(error instanceof Error ? error.message : String(error), { kind: 'network' })
       } finally {
         clearTimeout(idle)
         cleanup()
         // Stop the download when the loop ended early ([DONE] seen, error, abort).
         reader.cancel().catch(() => {})
       }
-      return accumulator.result()
+      if (failure) {
+        yield describe(failure)
+        return
+      }
+      yield* queue
+      let closing: AiModelEvent[]
+      try {
+        closing = accumulator.result()
+      } catch (error) {
+        yield describe(error)
+        return
+      }
+      yield* closing
     },
   }
 }

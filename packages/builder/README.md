@@ -344,7 +344,7 @@ websiteBuilder({
   canvasPath: '/builder-canvas',
   templates: { slug: 'builder-templates' },
   live: { heartbeatMs: 15000 },
-  ai: { effort: 'medium' },    // the AI assistant in the editor
+  ai: { adapter: openRouterAdapter({ apiKey: process.env.OPENROUTER_API_KEY }) }, // the AI assistant
   theme: { admin: { group: 'Settings' } }, // the Theme global; `false` leaves it out
   editor: { dragMode: 'smooth' }, // the default drag and drop style; each user can change it
   references: { usedIn: ['media'], protectDelete: ['media'] }, // "Used in" lists; `false` turns them off
@@ -415,6 +415,8 @@ It also adds these endpoints (signed-in users only):
 | `@payload-toolkit/builder/theme` | anywhere | `themeCss`, `themeVariables`, `themeOutput`, `deriveColors`, `googleFontsHref`, `themeConfigOf`, theme types |
 | `@payload-toolkit/builder/theme-client` | Payload import map, or your own fields | `ThemeColorField`, `ThemeFontField`, `ThemeSliderField` |
 | `@payload-toolkit/builder/mcp` | server | `builderMcpTools` |
+| `@payload-toolkit/builder/ai` | server | the `AiAdapter` type and helpers for writing an adapter |
+| `@payload-toolkit/builder/ai/openrouter`, `/ai/cloudflare-gateway`, `/ai/cloudflare-workers-ai`, `/ai/openai-compatible`, `/ai/anthropic`, `/ai/fake` | `payload.config.ts` (server) | one AI adapter each. See [Adapters](#adapters). |
 | `@payload-toolkit/builder/live` | server | the live sessions and endpoints |
 | `@payload-toolkit/builder/client` | Payload import map only | admin client components (layout field, Builder tab) |
 | `@payload-toolkit/builder/rsc` | Payload import map only | admin server components (the builder view, the tab redirect) |
@@ -1186,59 +1188,145 @@ const layout = await loadLayoutData(page.layout, blocks, payload, { draft, local
 
 The editor gets an **Assistant** panel. The user types a request, for example "add a pricing section with three tiers", and the model edits the open page. Each change appears on the canvas as it happens. One reply is one undo step. The assistant never saves or publishes: the editor saves the page as usual.
 
-It works with OpenRouter, Cloudflare AI Gateway, any OpenAI-compatible API (OpenAI, Groq, Ollama, …) and Anthropic. Full guide: [docs/ai/providers.md](https://github.com/jon8800/payload-toolkit/blob/main/docs/ai/providers.md).
+An **adapter** connects the assistant to a model API, the same way Payload uses adapters for the database, storage and email. Each built-in adapter has its own import path, so your site loads only the one you use. Full guide: [docs/ai/providers.md](https://github.com/jon8800/payload-toolkit/blob/main/docs/ai/providers.md).
 
 No API key? Claude Code and Codex can edit pages with your Claude or ChatGPT plan over MCP: [docs/ai/connect-claude-code-and-codex.md](https://github.com/jon8800/payload-toolkit/blob/main/docs/ai/connect-claude-code-and-codex.md). The panel shows the commands (link icon in its header).
 
 ### Turn it on
 
 ```ts
+import { openRouterAdapter } from '@payload-toolkit/builder/ai/openrouter'
+
 websiteBuilder({
   collections,
   blocks,
   sections,
   css: { entry: 'src/app/(frontend)/globals.css' },
-  ai: {},
+  ai: {
+    adapter: openRouterAdapter({ apiKey: process.env.OPENROUTER_API_KEY }),
+  },
 })
 ```
 
-Then give the server a key. The quickest is an [OpenRouter](https://openrouter.ai/keys) key in `.env`; restart the server after:
+Then put the key in `.env` and restart the server. Get a key at [openrouter.ai/keys](https://openrouter.ai/keys).
 
 ```bash
 OPENROUTER_API_KEY=sk-or-v1-...
 ```
 
-With only that key set, the plugin uses OpenRouter and the cheap model `openai/gpt-6-luna`. Other setups:
+The default model is `openai/gpt-6-luna`: cheap and good at tool calls. Pick another one with `model`.
 
-```bash
-BUILDER_AI_PROVIDER=openrouter          # anthropic | openrouter | cloudflare | openai-compatible
-BUILDER_AI_MODEL=google/gemini-3.8-flash
-```
+Without an adapter, or without a key, the panel shows a setup card. The card says what to set.
 
-Or set the provider in code. Code wins over the environment:
+### Adapters
+
+| Import | Adapter | Notes |
+|---|---|---|
+| `@payload-toolkit/builder/ai/openrouter` | `openRouterAdapter({ apiKey, model?, siteUrl? })` | One key for hundreds of models. Easiest start. |
+| `@payload-toolkit/builder/ai/cloudflare-gateway` | `cloudflareGatewayAdapter({ accountId, gatewayId, model, gatewayToken?, apiKey? })` | Cloudflare AI Gateway in front of OpenAI, Anthropic, Google and others. Supports stored keys and unified billing. |
+| `@payload-toolkit/builder/ai/cloudflare-workers-ai` | `cloudflareWorkersAIAdapter({ accountId, apiToken, model?, gatewayId? })` | Models that run on Cloudflare (Workers AI). Only models with function calling work. |
+| `@payload-toolkit/builder/ai/openai-compatible` | `openAICompatibleAdapter({ baseURL, model, apiKey? })` | OpenAI, Groq, Together, Ollama, LM Studio, vLLM and other Chat Completions servers. |
+| `@payload-toolkit/builder/ai/anthropic` | `anthropicAdapter({ apiKey?, model? })` | The Anthropic Messages API with prompt caching, adaptive thinking and the refusal fallback. Needs `pnpm add @anthropic-ai/sdk`. |
+| `@payload-toolkit/builder/ai/fake` | `fakeAdapter()` | A scripted model for tests and demos. No network, no cost. Never use it in production. |
+
+Examples:
 
 ```ts
-ai: { provider: { type: 'openrouter' }, model: 'google/gemini-3.8-flash' }
-ai: { provider: { type: 'cloudflare', accountId: '…', gatewayId: 'my-gateway' }, model: 'openai/gpt-5.2' }
-ai: { provider: { type: 'openai-compatible', baseURL: 'http://localhost:11434/v1' }, model: 'llama3.3' }
-ai: { provider: { type: 'anthropic' } } // needs `pnpm add @anthropic-ai/sdk` and ANTHROPIC_API_KEY
+ai: { adapter: openRouterAdapter({ apiKey: process.env.OPENROUTER_API_KEY, model: 'google/gemini-3.8-flash' }) }
+ai: { adapter: openAICompatibleAdapter({ baseURL: 'http://localhost:11434/v1', model: 'llama3.3' }) }
+ai: { adapter: anthropicAdapter({ apiKey: process.env.ANTHROPIC_API_KEY }) }
 ```
 
-Without a key the panel shows a setup card that names the variable to set.
+You choose the adapter in your own config code, so you decide which environment variables to read. The starter picks `fakeAdapter()` when `BUILDER_AI_FAKE=1` (development only), else OpenRouter when `OPENROUTER_API_KEY` is set, else no adapter.
 
 ### Options
 
 | Option | Default | What it does |
 |---|---|---|
-| `provider` | from the environment | Which API: see above and [providers.md](https://github.com/jon8800/payload-toolkit/blob/main/docs/ai/providers.md). |
-| `model` | `BUILDER_AI_MODEL`, else `claude-opus-5-5` (Anthropic) or `openai/gpt-6-luna` (OpenRouter) | The model id in the provider's naming. Required for Cloudflare and OpenAI-compatible. |
-| `effort` | `medium` (Anthropic) | How much the model thinks: `low`, `medium`, `high`, `xhigh`, `max`. OpenRouter gets it as `reasoning.effort` when set. Others ignore it. |
-| `apiKey` | the SDK's own lookup | Anthropic only: an explicit API key. Other providers take `apiKey` inside `provider`. |
+| `adapter` | none | The model API. See [Adapters](#adapters). Without it the panel shows the setup card. |
+| `effort` | the adapter's default (Anthropic: `medium`) | How much the model thinks: `low`, `medium`, `high`, `xhigh`, `max`. Anthropic and OpenRouter use it. `openAICompatibleAdapter` sends it as `reasoning_effort` with `reasoningEffort: true`. |
 | `instructions` | none | Extra rules for the assistant, for example your brand voice. Added to the end of the system prompt. |
 | `maxSteps` | `12` | Maximum tool rounds per user message. |
-| `maxTokens` | `32000` (Anthropic) | Output limit per model call. Sent to OpenAI-compatible APIs only when set. |
 | `mediaCollection` | `media` | The upload collection the assistant picks images from. |
-| `fallbacks` | on for `claude-opus-5-5` | Anthropic only: when a safety classifier declines a request, the API retries it on Anthropic's recommended fallback model. |
+
+The model, the key, `maxTokens` and provider settings belong to the adapter. See [providers.md](https://github.com/jon8800/payload-toolkit/blob/main/docs/ai/providers.md) for each adapter's options.
+
+### Write your own adapter
+
+An adapter is a plain object of type `AiAdapter` from `@payload-toolkit/builder/ai`. You do not need to change the plugin.
+
+```ts
+type AiAdapter = {
+  name: string            // short id, e.g. "my-api". Part of the chat identity.
+  label: string           // shown in the panel
+  model: string
+  ready: boolean          // false: the panel shows the setup card
+  setupProblem?: string | null // one sentence for the developer, e.g. "Set MY_API_KEY."
+  keyEnv?: string | null  // shown in the setup card
+  keyUrl?: string | null  // "Get an API key" link
+  stream(request: AiModelRequest): AsyncIterable<AiModelEvent>
+}
+```
+
+`stream` runs one model call. The request has `system` (parts; `cache: true` marks a stable prefix you may cache), `messages` (the conversation), `tools`, `effort` and `signal`. Yield these events, in order:
+
+- `{ type: 'text', text }`: assistant text as it arrives.
+- `{ type: 'toolStart', id, name }`: optional. The panel shows a running chip.
+- `{ type: 'toolCall', id, name, input }`: one complete tool call. Add `error` when the arguments could not be read: the tool does not run, and the model gets the error.
+- `{ type: 'usage', usage: { inputTokens, outputTokens } }`: optional.
+- `{ type: 'done', stopReason, content }`: `stopReason` is `end_turn`, `tool_use`, `max_tokens`, `refusal` or `pause_turn`. `content` is the assistant message the chat stores and sends back next time. Use the block types `text` and `tool_use` (add your own types for data you must send back, such as reasoning).
+- `{ type: 'error', code, message }`: `code` is `auth` (the panel shows the setup card), `aborted`, `api_error` or `invalid_output` (the loop calls the model again). Yield it instead of throwing.
+
+Stored messages use the block types `text`, `tool_use` and `tool_result`. The agent loop runs the tools and adds the `tool_result` blocks.
+
+This example wraps a Chat Completions endpoint without streaming, in about 40 lines:
+
+```ts
+import { chatTools, parseArguments, toChatMessages, type AiAdapter, type AiContentBlock } from '@payload-toolkit/builder/ai'
+
+export function myAdapter({ url, apiKey, model }: { url: string; apiKey?: string; model: string }): AiAdapter {
+  return {
+    name: 'my-api',
+    label: 'My API',
+    model,
+    ready: Boolean(apiKey),
+    setupProblem: apiKey ? null : 'Set MY_API_KEY in .env and restart the server.',
+    keyEnv: 'MY_API_KEY',
+    async *stream({ system, messages, tools, signal }) {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ model, messages: toChatMessages(system, messages), tools: chatTools(tools) }),
+        signal,
+      }).catch((error: Error) => error)
+      if (response instanceof Error) {
+        yield { type: 'error', code: signal?.aborted ? 'aborted' : 'api_error', message: response.message }
+        return
+      }
+      if (!response.ok) {
+        yield { type: 'error', code: response.status === 401 ? 'auth' : 'api_error', message: `My API returned ${response.status}.` }
+        return
+      }
+      const data = await response.json()
+      const message = data.choices[0].message
+      const content: AiContentBlock[] = []
+      if (message.content) {
+        yield { type: 'text', text: message.content }
+        content.push({ type: 'text', text: message.content })
+      }
+      for (const call of message.tool_calls ?? []) {
+        const parsed = parseArguments(call.function.arguments)
+        const input = 'input' in parsed ? parsed.input : {}
+        content.push({ type: 'tool_use', id: call.id, name: call.function.name, input })
+        yield { type: 'toolCall', id: call.id, name: call.function.name, input, ...('error' in parsed ? { error: parsed.error } : {}) }
+      }
+      yield { type: 'done', stopReason: message.tool_calls?.length ? 'tool_use' : 'end_turn', content }
+    },
+  }
+}
+```
+
+For a streaming OpenAI-format API, `createOpenAIFormatAdapter({ name, label, model, url, authHeaders, keyHint })` from the same import does all of this, with streaming, retries and timeouts. The built-in OpenRouter and Cloudflare adapters use it.
 
 ### What it can do
 
@@ -1260,7 +1348,7 @@ You pay the provider for each request. Each request sends the system prompt (blo
 - OpenRouter `openai/gpt-6-luna` ($0.10 / $0.50 per million tokens): well under one US cent per request.
 - Anthropic `claude-opus-5-5` at `medium` effort ($4 / $20 per million tokens): roughly 5 to 30 US cents per request. The fixed prompt is cached, so repeat requests within 5 minutes read it at a tenth of the price or less.
 
-Long conversations and large pages cost more. Start a new conversation when the topic changes. Changing the provider or model starts a new chat.
+Long conversations and large pages cost more. Start a new conversation when the topic changes. Changing the adapter or the model starts a new chat.
 
 ### Privacy
 
@@ -1268,7 +1356,7 @@ The page content goes to the provider you pick (and through OpenRouter or Cloudf
 
 ### Testing without a key
 
-`BUILDER_AI_FAKE=1` (test only, ignored when `NODE_ENV=production`) replaces the model with a scripted one, for every provider, with no network calls. It inserts the first hero section at the top of the page, then changes its heading, and streams a few sentences. Use it to try the panel without an API key.
+`fakeAdapter()` from `@payload-toolkit/builder/ai/fake` is a scripted model with no network calls. It lists the sections, inserts a hero section at the top of the page, changes its heading, and streams a few sentences. In the starter, set `BUILDER_AI_FAKE=1` in `.env` (ignored when `NODE_ENV=production`) and restart the server. For your own tests, pass `fakeAdapter({ steps: [...] })` with one scripted reply per model call.
 
 ## AI editing over MCP
 
@@ -1293,6 +1381,7 @@ plugins: [
 ```
 
 - Agents connect to `POST <your site>/api/mcp` with an API key from **Admin > MCP > API Keys**. Claude Code and Codex setup: [docs/ai/connect-claude-code-and-codex.md](https://github.com/jon8800/payload-toolkit/blob/main/docs/ai/connect-claude-code-and-codex.md).
+- Sign-in with the website account (OAuth, no key to copy) is a `payload-mcp-toolkit` feature: pass `oauth: { canAuthorize, access: 'editor' }` to `mcpToolkitPlugin()` and add the discovery rewrites. The starter shows the setup, and the doc above has the Claude Code and Codex commands. API keys keep working next to it.
 - Tools (`listSections` and `insertSection` include [saved sections](#saved-sections)): `listBlocks`, `getBlockSchema`, `listSections`, `insertSection`, `getLayout`, `applyOperations`, `validateLayout`, `getPreviewUrl`, plus `listTemplates` and `getBindingSources` for templates.
 - Every tool checks the key's access to the collection. Handlers run as the key's user with `overrideAccess: false`.
 - Writes are commits to the document's live session, like an editor's own changes. Open editors show them at once, and the agent appears in the collaborator list while it works. The draft is saved about a second later. `getLayout` returns the session's layout, unsaved changes included.

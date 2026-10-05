@@ -1,103 +1,144 @@
-// AI assistant: contract between the chat endpoint (server) and the editor's Assistant panel.
+// AI assistant: contract between the chat endpoint (server) and the editor's Assistant panel, and
+// the AiAdapter interface that connects the assistant to a model API.
 // The assistant edits the layout the user has open (unsaved edits included). It never saves:
 // the server streams operations back, the editor applies them as one undo step per turn, and
 // Payload's normal autosave persists them. External agents keep using MCP (src/mcp).
 
 import type { Layout, Operation, TemplateContext } from '../core/types'
 
-/**
- * Which API the assistant talks to.
- * - "anthropic": the Anthropic Messages API (official SDK, optional peer dependency).
- * - "openai-compatible": any OpenAI-compatible Chat Completions endpoint, called with fetch:
- *   OpenAI, Groq, Together, Ollama, LM Studio, vLLM, …
- * - "openrouter", "cloudflare": presets of "openai-compatible" that fill the URL and headers.
- * Without `provider`, the plugin reads the environment: BUILDER_AI_PROVIDER, else "openrouter"
- * when only OPENROUTER_API_KEY is set, else "anthropic". See docs/ai/providers.md.
- */
-export type AiProvider =
-  | { type: 'anthropic' }
-  | {
-      type: 'openai-compatible'
-      /** e.g. "https://openrouter.ai/api/v1". */
-      baseURL: string
-      /** Default: read from `apiKeyEnv`. */
-      apiKey?: string
-      /** Env var with the key. Default: BUILDER_AI_API_KEY, then OPENAI_API_KEY. No key: no Authorization header (Ollama, LM Studio). */
-      apiKeyEnv?: string
-      /** Extra headers (e.g. OpenRouter's HTTP-Referer / X-Title, Cloudflare's cf-aig-authorization). */
-      headers?: Record<string, string>
-    }
-  /** https://openrouter.ai/api/v1. Key env default OPENROUTER_API_KEY. */
-  | { type: 'openrouter'; apiKey?: string; apiKeyEnv?: string }
-  | {
-      type: 'cloudflare'
-      /** Cloudflare account id and AI Gateway id. */
-      accountId: string
-      gatewayId: string
-      /**
-       * Provider key (e.g. an OpenAI key), sent as `Authorization`. Leave it out when the gateway
-       * stores the keys (BYOK) or uses unified billing. Default env: BUILDER_AI_API_KEY.
-       */
-      apiKey?: string
-      apiKeyEnv?: string
-      /** Gateway token for authenticated gateways (`cf-aig-authorization`). Default env: CF_AIG_TOKEN. */
-      gatewayToken?: string
-      gatewayTokenEnv?: string
-    }
+// ---------------------------------------------------------------------------
+// Adapters
+// ---------------------------------------------------------------------------
 
-/** Plugin option `ai`. Presence enables the assistant. */
+/** How hard the model thinks. Adapters map it to their API, or ignore it. */
+export type AiEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+
+/** One part of the system prompt. `cache: true` marks a stable prefix the adapter may cache. */
+export type AiSystemPart = { text: string; cache?: boolean }
+
+/** A tool the model may call. */
+export type AiToolDefinition = {
+  name: string
+  description: string
+  /** JSON Schema of the input object. */
+  inputSchema: Record<string, unknown>
+  /**
+   * The same input as a simpler JSON Schema (one flat object instead of a union). Set only where
+   * it differs. Smaller models handle it better; the tool accepts both shapes.
+   */
+  simpleInputSchema?: Record<string, unknown>
+  /** All properties of `inputSchema` are fixed (no free-form objects). APIs with strict tool schemas may use it. */
+  strict?: boolean
+}
+
+/**
+ * The content blocks of stored messages. Every adapter reads and writes these three. An adapter
+ * may add its own block types (Anthropic "thinking", OpenAI-format "reasoning") and must skip the
+ * types it does not know.
+ */
+export type AiContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'tool_use'; id: string; name: string; input: unknown }
+  | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean }
+  | ({ type: string } & Record<string, unknown>)
+
+/** Why a model call ended. */
+export type AiStopReason = 'end_turn' | 'tool_use' | 'max_tokens' | 'refusal' | 'pause_turn'
+
+/** One model call, as the agent loop asks for it. */
+export type AiModelRequest = {
+  /** The system prompt. The same text on every call, so prompt caching hits. */
+  system: AiSystemPart[]
+  /** The conversation so far (oldest first). `content` is a string or a list of AiContentBlock. */
+  messages: AiMessage[]
+  tools: AiToolDefinition[]
+  /** The plugin option `ai.effort`. Undefined: the adapter's default. */
+  effort?: AiEffort
+  /** Aborts the request (Stop button, closed tab). */
+  signal?: AbortSignal
+}
+
+/**
+ * What an adapter yields while one model call streams, in order:
+ * - text: assistant text as it arrives (a delta).
+ * - toolStart: a tool call began (optional; the panel shows a running chip).
+ * - toolCall: one complete tool call. `error` when the arguments could not be read: the tool is
+ *   not run and the model gets the error.
+ * - usage: token usage of this call (the last one counts).
+ * - done: the call finished. `content` is the assistant message to store and send back later
+ *   (text, tool_use and the adapter's own blocks). `refusal` when the model declined.
+ * - error: the call failed. `message` is shown to the editor. `auth` shows the setup card;
+ *   `invalid_output` makes the loop call the model again (up to two times).
+ */
+export type AiModelEvent =
+  | { type: 'text'; text: string }
+  | { type: 'toolStart'; id: string; name: string }
+  | { type: 'toolCall'; id: string; name: string; input: unknown; error?: string }
+  | { type: 'usage'; usage: AiUsage }
+  | { type: 'done'; stopReason: AiStopReason; content: AiContentBlock[]; refusal?: { explanation: string | null } }
+  | { type: 'error'; code: 'auth' | 'aborted' | 'api_error' | 'invalid_output'; message: string }
+
+/**
+ * Connects the assistant to a model API. Create one with a built-in factory
+ * (`openRouterAdapter`, `anthropicAdapter`, …) or write your own. See the README, "AI adapters".
+ */
+export type AiAdapter = {
+  /** Short id, e.g. "openrouter". Part of the chat identity: changing it starts a new chat. */
+  name: string
+  /** Shown in the panel, e.g. "OpenRouter". */
+  label: string
+  /** The model id in the API's naming, e.g. "openai/gpt-6-luna". */
+  model: string
+  /** False when the adapter cannot work, for example without an API key. The panel shows the setup card. */
+  ready: boolean
+  /** One sentence for the developer when `ready` is false, e.g. "No OpenRouter API key. Set OPENROUTER_API_KEY …". */
+  setupProblem?: string | null
+  /** The env var that holds the key, for the setup card. */
+  keyEnv?: string | null
+  /** Where to create a key, for the setup card. */
+  keyUrl?: string | null
+  /** Streams one model call. Must not throw for API errors: yield an `error` event instead. */
+  stream(request: AiModelRequest): AsyncIterable<AiModelEvent>
+}
+
+// ---------------------------------------------------------------------------
+// Plugin option and client config
+// ---------------------------------------------------------------------------
+
+/** Plugin option `ai`. Presence enables the assistant panel. */
 export type AiOptions = {
-  /** Default: from the environment (see AiProvider). */
-  provider?: AiProvider
   /**
-   * Model id in the provider's naming, e.g. "claude-opus-5-5" (anthropic),
-   * "openai/gpt-6-luna" (openrouter), "openai/gpt-5.2" (cloudflare). Default: BUILDER_AI_MODEL,
-   * else "claude-opus-5-5" (anthropic) or "openai/gpt-6-luna" (openrouter). Required for
-   * "cloudflare" and "openai-compatible".
+   * The model API, e.g. `openRouterAdapter({ apiKey: process.env.OPENROUTER_API_KEY })` from
+   * `@payload-toolkit/builder/ai/openrouter`. Without it the panel shows the setup card.
    */
-  model?: string
-  /**
-   * Effort for the agent loop. Anthropic: default "medium". OpenRouter: sent as
-   * `reasoning.effort` only when set. Other OpenAI-compatible APIs: ignored.
-   */
-  effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max'
-  /** Anthropic API key. Default: the Anthropic SDK's own resolution (ANTHROPIC_API_KEY, ant auth profile, …). */
-  apiKey?: string
+  adapter?: AiAdapter | null
+  /** Effort for the agent loop. Default: the adapter's default (Anthropic "medium"). */
+  effort?: AiEffort
   /** Extra instructions appended to the system prompt (brand voice, rules). */
   instructions?: string
   /** Maximum tool-loop iterations per user message. Default 12. */
   maxSteps?: number
   /** Upload collection the assistant may pick images from. Default "media". */
   mediaCollection?: string
-  /** Output limit per model call, thinking included. Default 32000 (anthropic); not sent to OpenAI-compatible APIs unless set. */
-  maxTokens?: number
-  /**
-   * Server-side refusal fallback (`fallbacks: "default"`): when a safety classifier declines a
-   * request, the API retries it on Anthropic's recommended fallback model. Default: on for
-   * "claude-opus-5-5", off for other models.
-   */
-  fallbacks?: boolean
 }
 
 /** Set on BuilderClientConfig.ai when the assistant is enabled. */
 export type AiClientConfig = {
   /** Full API path prefix, e.g. "/api/builder/ai". The chat endpoint is `${endpoint}/chat`. */
   endpoint: string
+  /** `AiAdapter.name`, or "none" without an adapter. */
+  adapter: string
+  /** `AiAdapter.label`, e.g. "OpenRouter". */
+  label: string
   model: string
-  /** Provider type, e.g. "openrouter". Optional only for older configs; treat a missing value as "anthropic". */
-  provider?: AiProvider['type']
-  /** Display name, e.g. "OpenRouter", "Cloudflare AI Gateway", "api.openai.com". */
-  providerLabel?: string
-  /** The env var the server reads the key from, for the setup hint. Null when no key is needed. */
-  keyEnv?: string | null
-  /**
-   * False when the server found no credentials or config at startup, so the panel can show the
-   * setup card before the first message. Anthropic `ant auth login` credentials cannot be seen,
-   * so keep sending possible even when false.
-   */
-  ready?: boolean
-  /** One readable sentence for editors when `ready` is false. */
-  setupProblem?: string | null
+  /** False when the adapter cannot work (no adapter, missing key). The panel shows the setup card. */
+  ready: boolean
+  /** One readable sentence for the developer when `ready` is false. */
+  setupProblem: string | null
+  /** The env var for the key, for the setup card. */
+  keyEnv: string | null
+  /** Where to create a key, for the setup card. */
+  keyUrl: string | null
 }
 
 /** Token usage of one turn (all model calls). `cost` in USD when the provider reports it (OpenRouter). */
@@ -105,10 +146,8 @@ export type AiUsage = { inputTokens: number; outputTokens: number; cachedTokens?
 
 /**
  * One turn of the conversation as the client stores it. `content` is a string or a list of
- * content blocks. Both adapters use the block types "text", "tool_use" and "tool_result", so the
- * panel can render any history. Provider-specific blocks ride along: Anthropic "thinking" /
- * "fallback", OpenAI-compatible "reasoning". The client keeps the history per document
- * (localStorage) and sends it back on every request, append-only.
+ * content blocks (AiContentBlock). The client keeps the history per document (localStorage) and
+ * sends it back on every request, append-only.
  */
 export type AiMessage = {
   role: 'user' | 'assistant'
@@ -120,8 +159,8 @@ export type AiMessage = {
    */
   kind?: 'context' | 'tool_results'
   /**
-   * `${provider}:${model}` of the server that wrote this message. History from another provider
-   * or model cannot be replayed: the server rejects it and the panel starts a new chat.
+   * `${adapter}:${model}` of the server that wrote this message. History from another adapter or
+   * model cannot be replayed: the server rejects it and the panel starts a new chat.
    */
   provider?: string
 }
@@ -158,8 +197,8 @@ export type AiChatRequest = {
  * - operations: operations to apply to the editor layout now (already validated against the
  *   server's working copy). Apply in order; group all operations of one `turnId` into one undo step.
  * - message: the complete assistant (and tool_result user) messages to append to the history
- * - done: the turn finished; `stopReason` in Anthropic terms ("end_turn", "tool_use", "max_tokens",
- *   "refusal", "max_steps"), `usage` summed over the turn's model calls when known
+ * - done: the turn finished; `stopReason` ("end_turn", "tool_use", "max_tokens", "refusal",
+ *   "max_steps"), `usage` summed over the turn's model calls when known
  * - error: a fatal error (missing API key, API error, access denied); `code` for the UI hint
  */
 export type AiStreamEvent =
