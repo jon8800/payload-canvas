@@ -12,7 +12,7 @@ import type { BindingField, Block, BlockDefinition, Layout, LocaleSettings, Oper
 import type { AiToolDefinition } from './types'
 import { validateLayout, type LayoutError } from '../core/validate'
 import { resolveOperations, splitLayoutErrors } from '../live/apply'
-import { sectionInsertOps } from '../mcp/shared'
+import { isRootParentId, sectionInsertOps } from '../mcp/shared'
 import { findSection } from '../plugin/sections'
 
 /** One image (or file) of the media library, as the assistant sees it. */
@@ -299,9 +299,9 @@ export function toolDefinitions(env: ToolEnv): AiToolDefinition[] {
             sectionId: saved
               ? { type: 'string', description: 'A section catalog id, a saved section id ("saved:<id>") or a section name.' }
               : { type: 'string', enum: sectionIds, description: 'Section id from the section catalog.' },
-            parentId: { type: 'string', description: 'Parent block id. Leave out for the page root.' },
-            slot: { type: 'string', description: 'Slot of the parent. Default "children".' },
-            index: { type: 'integer', description: 'Final index in the target list. Leave out to append.' },
+            parentId: { type: ['string', 'null'], description: 'Parent block id, or null for the page root.' },
+            slot: { type: ['string', 'null'], description: 'Slot of the parent, or null for "children".' },
+            index: { type: ['integer', 'null'], description: 'Final index in the target list, or null to append.' },
           },
           required: ['sectionId'],
           additionalProperties: false,
@@ -455,7 +455,6 @@ function blockText(block: Block): string {
 }
 
 const OP_TYPES = new Set(['insert', 'move', 'remove', 'duplicate', 'update'])
-const ROOT_IDS = new Set(['', 'root', 'null', 'page'])
 
 function parseJson(value: unknown): unknown {
   if (typeof value !== 'string') return value
@@ -515,7 +514,7 @@ export function repairOperations(input: Record<string, unknown>): { ops: unknown
       if (isPlainObject(to)) {
         const position: Record<string, unknown> = { ...to }
         const parent = position.parentId
-        if (parent === undefined || (typeof parent === 'string' && ROOT_IDS.has(parent.toLowerCase()))) {
+        if (parent === undefined || (typeof parent === 'string' && isRootParentId(parent))) {
           if (parent !== undefined) fix('use parentId null for the page root.')
           position.parentId = null
         }

@@ -137,20 +137,24 @@ async function defaultCanUpdate(req: PayloadRequest, collection: string, id: str
   return allowsUpdate(permissions, field)
 }
 
-type MediaConfig = { fields: Array<{ name?: string }> }
+type MediaConfig = { fields: Array<{ name?: string; type?: string }> }
+
+/** Field types a `like` query works on. Rich text and JSON (e.g. a rich text `caption`) are left out. */
+const TEXT_FIELD_TYPES = new Set(['text', 'textarea', 'email'])
 
 const str = (value: unknown) => (typeof value === 'string' && value ? value : null)
 const num = (value: unknown) => (typeof value === 'number' ? value : null)
 
 /** Searches an upload collection as the request's user. Images only when the collection has `mimeType`. */
-function mediaSearch(req: PayloadRequest, slug: string) {
+export function mediaSearch(req: PayloadRequest, slug: string) {
   return async (query: string, limit: number): Promise<MediaItem[]> => {
     const config = (req.payload.collections as Record<string, { config: MediaConfig } | undefined>)[slug]?.config
     if (!config) throw new Error(`The media collection "${slug}" does not exist`)
     const has = (name: string) => config.fields.some((f) => f.name === name)
+    const isText = (name: string) => config.fields.some((f) => f.name === name && TEXT_FIELD_TYPES.has(f.type ?? ''))
     const and: Where[] = []
     if (has('mimeType')) and.push({ mimeType: { contains: 'image' } })
-    const searchable = ['alt', 'filename', 'title', 'caption'].filter(has)
+    const searchable = ['alt', 'filename', 'title', 'caption'].filter(isText)
     if (query && searchable.length > 0) and.push({ or: searchable.map((name) => ({ [name]: { like: query } })) })
     const result = await req.payload.find({
       collection: slug as never,

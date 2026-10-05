@@ -47,6 +47,23 @@ export function withNewIds(block: Block, used: Set<string>): Block {
   return copy
 }
 
+/**
+ * True for a parent id that means "the page root" although it is a string: models send "", "root",
+ * ":root", ".", "]", "body" and the like instead of null. Block ids always contain letters or
+ * digits, so an id without any is never a real block (strict tool schemas make them fill
+ * every field).
+ */
+export function isRootParentId(id: unknown): boolean {
+  if (id === null || id === undefined) return true
+  if (typeof id !== 'string') return false
+  return /^[^a-z0-9]*(root|page|body|null|none|document|top)?[^a-z0-9]*$/i.test(id)
+}
+
+/** How to fix an unknown parent id. Models retry the same call when the error does not say. */
+export function unknownParentMessage(id: string): string {
+  return `Parent block "${id}" not found. Use parentId null for the page root, or a block id from getLayout.`
+}
+
 /** Operations that insert a section's blocks at a position. Ids are regenerated. */
 export function sectionInsertOps(
   layout: Layout,
@@ -54,9 +71,10 @@ export function sectionInsertOps(
   at: { parentId?: string | null; slot?: string; index?: number },
 ): Operation[] | string {
   const index = indexLayout(layout)
-  const parentId = at.parentId ?? null
-  const slot = at.slot ?? DEFAULT_SLOT
-  if (parentId !== null && !index.has(parentId)) return `Parent block "${parentId}" not found`
+  // Models often send "" or "root" for the page root (strict tool schemas make them fill every field).
+  const parentId = isRootParentId(at.parentId) ? null : (at.parentId as string)
+  const slot = at.slot?.trim() ? at.slot : DEFAULT_SLOT
+  if (parentId !== null && !index.has(parentId)) return unknownParentMessage(parentId)
   const list = parentId === null ? layout.blocks : (index.get(parentId)?.block.slots?.[slot] ?? [])
   const start = at.index ?? list.length
   if (start < 0 || start > list.length) return `Index ${start} is out of range (0-${list.length})`
