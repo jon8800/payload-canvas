@@ -1,10 +1,13 @@
 // Browser-side Tailwind compile for the canvas iframe. Owner: css agent.
 // Must not import Node built-ins (directly or through shared.ts).
 import type { CanvasCssInput, TailwindPlugins } from './index'
-import { compileFromInput, normalizeClasses } from './shared'
+import { compileFromInput, countUtilityLayers, normalizeClasses, scopeFullBuild } from './shared'
 
 export type CanvasCompiler = {
-  /** Full CSS for the page (Preflight + theme + utilities) for exactly these classes. */
+  /**
+   * Full CSS for the page (Preflight + theme + utilities) for exactly these classes. The
+   * utilities match only elements with the `builder-css` class, as on the site.
+   */
   build(classes: string[]): string
 }
 
@@ -21,5 +24,14 @@ export async function createCanvasCompiler(
   plugins?: TailwindPlugins,
 ): Promise<CanvasCompiler> {
   const compiler = await compileFromInput(input, plugins)
-  return { build: (classes) => compiler.build(normalizeClasses(classes)) }
+  const staticLayers = countUtilityLayers(compiler.build([]))
+  // Every class the compiler has seen: its output holds them all.
+  const seen = new Set<string>()
+  return {
+    build: (classes) => {
+      const candidates = normalizeClasses(classes)
+      for (const cls of candidates) seen.add(cls)
+      return scopeFullBuild(compiler.build(candidates), staticLayers, seen)
+    },
+  }
 }

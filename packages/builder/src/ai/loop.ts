@@ -7,7 +7,7 @@
 
 import { createId } from '../core/ids'
 import { isPlainObject } from '../core/tree'
-import { RUNNING_SUMMARY, runTool, type ToolEnv, type Workspace } from './tools'
+import { RUNNING_SUMMARY, runTool, type ToolEnv, type ToolOutcome, type Workspace } from './tools'
 import type { AiAdapter, AiContentBlock, AiEffort, AiMessage, AiModelEvent, AiStreamEvent, AiSystemPart, AiToolDefinition, AiUsage } from './types'
 
 export type AiErrorEvent = Extract<AiStreamEvent, { type: 'error' }>
@@ -40,6 +40,15 @@ export function adapterIdentity(adapter: Pick<AiAdapter, 'name' | 'model'>): str
 const REFUSAL_TEXT = 'I can’t help with that request.'
 const MAX_OUTPUT_RETRIES = 2
 const CANCELLED = 'The request was cancelled.'
+
+/** Chip summaries for tool calls that started streaming but never ran. */
+export const NOT_RUN = {
+  dropped: 'Not run: the model dropped this call',
+  declined: 'Not run: the model declined the request',
+  unreadable: 'Not run: the model sent a call that could not be read',
+  stopped: 'Not run: the reply was stopped',
+  failed: 'Not run: the reply failed',
+} as const
 
 const sum = (a?: number, b?: number) => (a === undefined && b === undefined ? undefined : (a ?? 0) + (b ?? 0))
 
@@ -96,13 +105,37 @@ export async function runAgent(args: RunAgentArgs): Promise<void> {
   let outputRetries = 0
   let usage: AiUsage | undefined
 
+  // Tool calls announced to the client ("running") that have no final status yet. Every one gets
+  // a final status: done, error, or cancelled when it never runs (refusal fallback, refusal,
+  // abort, error, stream end). Otherwise its chip would spin forever.
+  const open = new Map<string, string>()
+  const cancelOpen = (summary: string, keep: string[] = []) => {
+    for (const [callId, name] of open) {
+      if (keep.includes(callId)) continue
+      open.delete(callId)
+      emit({ type: 'tool', callId, name, status: 'cancelled', summary })
+    }
+  }
+  /** Emits an event. Tracks running tool calls, and cancels the open ones before the turn ends. */
+  const send = (event: AiStreamEvent) => {
+    if (event.type === 'tool') {
+      if (event.status === 'running') open.set(event.callId, event.name)
+      else open.delete(event.callId)
+    } else if (event.type === 'done') {
+      cancelOpen(NOT_RUN.dropped)
+    } else if (event.type === 'error') {
+      cancelOpen(event.code === 'aborted' ? NOT_RUN.stopped : NOT_RUN.failed)
+    }
+    emit(event)
+  }
+
   const sendText = (text: string) => {
     if (!text) return
-    emit({ type: 'text', text })
+    send({ type: 'text', text })
     textSent = true
   }
-  const done = (stopReason: string | null) => emit({ type: 'done', turnId, stopReason, ...(usage ? { usage } : {}) })
-  const aborted = () => emit({ type: 'error', code: 'aborted', message: CANCELLED })
+  const done = (stopReason: string | null) => send({ type: 'done', turnId, stopReason, ...(usage ? { usage } : {}) })
+  const aborted = () => send({ type: 'error', code: 'aborted', message: CANCELLED })
 
   for (let step = 0; step < args.maxSteps; step++) {
     if (signal?.aborted) return aborted()
@@ -124,7 +157,7 @@ export async function runAgent(args: RunAgentArgs): Promise<void> {
         }
         // The context joins the history only once the API accepted the request.
         if (!contextSent) {
-          emit({ type: 'message', message: context })
+          send({ type: 'message', message: context })
           contextSent = true
         }
         if (event.type === 'text') {
@@ -133,7 +166,7 @@ export async function runAgent(args: RunAgentArgs): Promise<void> {
           sendText(event.text)
           afterText = true
         } else if (event.type === 'toolStart') {
-          emit({ type: 'tool', callId: event.id, name: event.name, status: 'running', summary: RUNNING_SUMMARY[event.name] ?? event.name })
+          send({ type: 'tool', callId: event.id, name: event.name, status: 'running', summary: RUNNING_SUMMARY[event.name] ?? event.name })
           afterText = false
         } else if (event.type === 'toolCall') {
           calls.push({ id: event.id, name: event.name, input: event.input, ...(event.error ? { error: event.error } : {}) })
@@ -153,14 +186,16 @@ export async function runAgent(args: RunAgentArgs): Promise<void> {
 
     if (failure) {
       if (failure.code === 'invalid_output' && outputRetries++ < MAX_OUTPUT_RETRIES) {
+        // The model is called again: the calls of the failed attempt never run.
+        cancelOpen(NOT_RUN.unreadable)
         step--
         continue
       }
-      emit({ type: 'error', code: ERROR_CODES[failure.code] ?? 'api_error', message: failure.message || 'The model call failed.' })
+      send({ type: 'error', code: ERROR_CODES[failure.code] ?? 'api_error', message: failure.message || 'The model call failed.' })
       return
     }
     if (!final) {
-      emit({ type: 'error', code: 'api_error', message: 'The model stream ended without a result.' })
+      send({ type: 'error', code: 'api_error', message: 'The model stream ended without a result.' })
       return
     }
     outputRetries = 0
@@ -168,6 +203,7 @@ export async function runAgent(args: RunAgentArgs): Promise<void> {
     // A refusal can cut a tool call off mid-input: never run that turn's tools, and drop the
     // partial output (it is not a complete answer).
     if (final.refusal || final.stopReason === 'refusal') {
+      cancelOpen(NOT_RUN.declined)
       const explanation = final.refusal?.explanation
       sendText((textSent ? '\n\n' : '') + REFUSAL_TEXT + (explanation ? ` ${explanation}` : ''))
       done('refusal')
@@ -175,19 +211,22 @@ export async function runAgent(args: RunAgentArgs): Promise<void> {
     }
 
     const reply = callsOf(final, calls)
+    // A call that started streaming but is not in the final reply never runs. The Anthropic
+    // refusal fallback drops the calls of the model that declined, for example.
+    cancelOpen(NOT_RUN.dropped, reply.calls.map((call) => call.id))
     const assistant = tag({ role: 'assistant', content: reply.content })
 
     // pause_turn: send the paused turn back as is; the API resumes it.
     if (final.stopReason === 'pause_turn') {
       history.push(assistant)
-      emit({ type: 'message', message: assistant })
+      send({ type: 'message', message: assistant })
       continue
     }
 
     if (reply.calls.length === 0) {
       if (reply.content.length > 0) {
         history.push(assistant)
-        emit({ type: 'message', message: assistant })
+        send({ type: 'message', message: assistant })
       }
       if (final.stopReason === 'max_tokens') sendText((textSent ? '\n\n' : '') + '(The reply hit the length limit.)')
       done(final.stopReason)
@@ -215,7 +254,12 @@ export async function runAgent(args: RunAgentArgs): Promise<void> {
         failed(call, JSON.stringify({ error: call.error }), 'Not run: the tool input could not be read')
         continue
       }
-      const outcome = await runTool(call.name, call.input, workspace, env)
+      // A tool that throws fails alone: its chip and its tool_result still get an error.
+      const outcome: ToolOutcome = await runTool(call.name, call.input, workspace, env).catch((error: unknown) => ({
+        ok: false,
+        content: JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
+        summary: 'The tool failed',
+      }))
       results.push({ type: 'tool_result', tool_use_id: call.id, content: outcome.content, ...(outcome.ok ? {} : { is_error: true }) })
       if (outcome.ops && outcome.ops.length > 0) events.push({ type: 'operations', turnId, ops: outcome.ops })
       events.push({
@@ -229,9 +273,9 @@ export async function runAgent(args: RunAgentArgs): Promise<void> {
     }
     const toolResults = tag({ role: 'user', content: results, kind: 'tool_results' })
     history.push(assistant, toolResults)
-    emit({ type: 'message', message: assistant })
-    for (const event of events) emit(event)
-    emit({ type: 'message', message: toolResults })
+    send({ type: 'message', message: assistant })
+    for (const event of events) send(event)
+    send({ type: 'message', message: toolResults })
 
     if (truncated) {
       sendText((textSent ? '\n\n' : '') + '(The reply hit the length limit before the change was complete.)')

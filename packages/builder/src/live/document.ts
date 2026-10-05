@@ -14,16 +14,18 @@ import { addDataAndFileToRequest, restoreVersionOperation, type Collection, type
 import { TEMPLATE_DEFAULT_FIELD, TEMPLATE_PREVIEW_FIELD, TEMPLATE_TARGET_FIELD } from '../core/bindings'
 import { describeLayoutErrors, summarizeProblems } from '../core/issues'
 import { normalizeLayout } from '../core/tree'
+import { hasPropAccess, type PropAccessInfo } from '../core/fieldAccess'
 import type { FieldRegistry } from '../core/fieldSemantics'
 import type { BlockDefinition, LocaleSettings } from '../core/types'
 import { checkLayout, RAW_LAYOUT_CONTEXT, STORED_LAYOUT_CONTEXT, type BindingCheck } from '../plugin/hook'
 import { documentPath, draftPreviewPath } from '../plugin/links'
 import { payloadErrorMessage, payloadFieldErrors } from './apply'
+import { propAccessFor } from './fieldChecks'
 import { KEEP_LOCK_CONTEXT } from './fieldsGuard'
 import { LIVE_PATH, requestActor, targetOf } from './endpoints'
 import type { LiveRuntime } from './runtime'
 import type { SessionTarget } from './session'
-import type { BuilderDocMeta, DocStatus, LiveError, LivePublishedEvent, PublishAction, PublishResponse } from './types'
+import type { BuilderDocMeta, DocStatus, LiveAccessResponse, LiveError, LivePublishedEvent, PublishAction, PublishResponse } from './types'
 
 /** One builder collection as the server sees it. */
 export type BuilderCollectionServer = {
@@ -82,7 +84,40 @@ export type DocMetaArgs = {
   url?: (doc: Record<string, unknown>) => string
   /** The document is a template (templates collection). */
   isTemplate: boolean
+  /** The document is a saved section (saved sections collection). */
+  isSection?: boolean
   canUpdate: boolean
+  /** Block definitions and field logic: the meta then holds the user's prop access. */
+  access?: FieldAccessArgs
+}
+
+/** What the prop access check needs. `runtime` gives the open session's layout. */
+export type FieldAccessArgs = { blocks: readonly BlockDefinition[]; registry: FieldRegistry; runtime: LiveRuntime }
+
+/**
+ * The request user's prop access in the document (see `propAccessFor`): checked against the open
+ * session's layout, else the saved draft's stored layout. Null without access rules.
+ */
+export async function loadFieldAccess(req: PayloadRequest, target: SessionTarget, access: FieldAccessArgs): Promise<PropAccessInfo | null> {
+  const { blocks, registry, runtime } = access
+  if (!hasPropAccess(registry, 'read') && !hasPropAccess(registry, 'update')) return null
+  let open = runtime.sessions.peek(target.collection, target.id)
+  if (!open) {
+    // The stored layout: access functions read every value, also the ones this user may not read.
+    const doc = await api(req).findByID({
+      collection: target.collection,
+      id: target.id,
+      depth: 0,
+      draft: target.drafts,
+      overrideAccess: false,
+      user: req.user,
+      req,
+      context: { [RAW_LAYOUT_CONTEXT]: true },
+    })
+    const { [target.field]: layout, ...rest } = doc
+    open = { sessionId: '', seq: 0, layout: normalizeLayout(layout), doc: rest }
+  }
+  return propAccessFor(req, { blocks, registry, collection: target.collection, id: target.id, field: target.field, layout: open.layout, doc: open.doc })
 }
 
 /**
@@ -93,6 +128,8 @@ export type DocMetaArgs = {
 export async function loadDocMeta(req: PayloadRequest, args: DocMetaArgs): Promise<BuilderDocMeta> {
   const { target, url, isTemplate, canUpdate } = args
   const payload = api(req)
+  // Unreadable or failing access checks leave the inspector open as before: the server still refuses edits.
+  const fieldAccess = args.access ? loadFieldAccess(req, target, args.access).catch(() => null) : Promise.resolve(null)
   const common = { collection: target.collection, id: target.id, depth: 0, overrideAccess: false, user: req.user, req }
   const draft = await payload.findByID({ ...common, draft: target.drafts })
   const config = payload.collections[target.collection]?.config
@@ -164,6 +201,8 @@ export async function loadDocMeta(req: PayloadRequest, args: DocMetaArgs): Promi
     template: isTemplate
       ? { target: text(draft[TEMPLATE_TARGET_FIELD]), preview: draft[TEMPLATE_PREVIEW_FIELD] ?? null, defaultId }
       : null,
+    section: args.isSection ? { category: text(draft.category) } : null,
+    fieldAccess: await fieldAccess,
   }
 }
 
@@ -443,6 +482,8 @@ export type DocumentEndpointOptions = {
   collections: Record<string, BuilderCollectionServer>
   /** Slug of the templates collection, when templates are on. */
   templates: string | null
+  /** Slug of the saved sections collection, when it is a builder collection. */
+  sections?: string | null
   runtime: LiveRuntime
   /** Publish validates the layout first and names each problem block. */
   check?: PublishCheck
@@ -450,14 +491,37 @@ export type DocumentEndpointOptions = {
 
 const json = (body: unknown, status = 200) => Response.json(body, { status })
 
-export function documentEndpoints({ collections, templates, runtime, check }: DocumentEndpointOptions): Endpoint[] {
+export function documentEndpoints({ collections, templates, sections, runtime, check }: DocumentEndpointOptions): Endpoint[] {
+  const access: FieldAccessArgs | undefined = check?.fieldRegistry ? { blocks: check.blocks, registry: check.fieldRegistry, runtime } : undefined
   const metaOf = async (req: PayloadRequest, target: SessionTarget) =>
     loadDocMeta(req, {
       target,
       url: collections[target.collection]?.url,
       isTemplate: target.collection === templates,
+      isSection: Boolean(sections) && target.collection === sections,
       canUpdate: await runtime.canUpdate(req, target.collection, target.id),
+      access,
     })
+
+  // The editor asks again after edits to blocks with access rules (their data may change the answer).
+  const accessEndpoint: Endpoint = {
+    path: `${LIVE_PATH}/:collection/:id/access`,
+    method: 'get',
+    handler: async (req) => {
+      if (!req.user) return json({ ok: false, error: 'Unauthorized' } satisfies LiveAccessResponse, 401)
+      const target = targetOf(req, collections)
+      if (target instanceof Response) return target
+      if (!(await runtime.canUpdate(req, target.collection, target.id))) {
+        return json({ ok: false, error: 'You are not allowed to change this document.' } satisfies LiveAccessResponse, 403)
+      }
+      try {
+        const fieldAccess = access ? await loadFieldAccess(req, target, access) : null
+        return json({ ok: true, fieldAccess } satisfies LiveAccessResponse)
+      } catch (error) {
+        return json({ ok: false, error: 'Document not found or not readable' } satisfies LiveAccessResponse, statusOf(error) === 403 ? 403 : 404)
+      }
+    },
+  }
 
   const meta: Endpoint = {
     path: `${LIVE_PATH}/:collection/:id/meta`,
@@ -515,5 +579,5 @@ export function documentEndpoints({ collections, templates, runtime, check }: Do
     },
   }
 
-  return [meta, action('publish'), action('unpublish'), action('revert'), restore]
+  return [meta, accessEndpoint, action('publish'), action('unpublish'), action('revert'), restore]
 }

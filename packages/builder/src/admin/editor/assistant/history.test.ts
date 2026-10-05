@@ -5,6 +5,7 @@ import type { AiMessage } from '../../../ai/types'
 import {
   capHistory,
   closeTurn,
+  ENDED_SUMMARY,
   historyKey,
   historyMatches,
   humanizeTool,
@@ -12,6 +13,7 @@ import {
   loadHistory,
   MAX_STORED_CHATS,
   saveHistory,
+  settleTools,
   transcript,
   type ChatHistory,
 } from './history'
@@ -172,4 +174,20 @@ test('capHistory keeps the provider', () => {
   const capped = capHistory(history, 150)
   assert.equal(capped.messages.length, 1)
   assert.equal(capped.provider, 'openrouter:m')
+})
+
+test('settleTools: when a reply ends, its running chips become cancelled', () => {
+  const tools: ChatHistory['tools'] = {
+    a: { name: 'insertSection', status: 'running', summary: 'Inserting a section' },
+    b: { name: 'getLayout', status: 'done', summary: 'Read the page' },
+    c: { name: 'applyOperations', status: 'error', summary: 'Edit failed' },
+    other: { name: 'getLayout', status: 'running', summary: 'Reading the page' },
+  }
+  const settled = settleTools(tools, ['a', 'b', 'c', 'missing'])
+  assert.deepEqual(settled.a, { name: 'insertSection', status: 'cancelled', summary: ENDED_SUMMARY })
+  assert.equal(settled.b, tools.b)
+  assert.equal(settled.c, tools.c)
+  assert.equal(settled.other.status, 'running', 'chips of other replies stay as they are')
+  assert.equal(tools.a.status, 'running', 'the input is not changed')
+  assert.equal(settleTools(tools, ['b', 'c']), tools, 'nothing to settle: same object')
 })

@@ -22,6 +22,7 @@ import {
   historyMatches,
   loadHistory,
   saveHistory,
+  settleTools,
   toolUseIds,
   type ChatHistory,
   type TranscriptPart,
@@ -230,16 +231,9 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
         notice ??= { kind: 'error', message: 'The assistant sent no reply.' }
       }
     }
-    const tools = { ...history.tools }
-    for (const id of toolUseIds(messages.slice(live.turnStart))) {
-      const tool = tools[id]
-      if (tool?.status === 'running') tools[id] = { ...tool, status: 'error', note: tool.note ?? 'Stopped before it finished.' }
-    }
-    // Chips of the live reply that never reached the history (stopped mid-call).
-    for (const part of live.parts) {
-      const tool = part.kind === 'tool' ? tools[part.callId] : undefined
-      if (part.kind === 'tool' && tool?.status === 'running') tools[part.callId] = { ...tool, status: 'error' }
-    }
+    // Chips of this reply that still run (in the history, or live only) will never finish.
+    const replyCalls = [...toolUseIds(history.messages.slice(live.turnStart)), ...live.parts.flatMap((p) => (p.kind === 'tool' ? [p.callId] : []))]
+    const tools = settleTools(history.tools, replyCalls)
     state.set({ ...state.get(), history: { messages, tools }, live: null, streaming: false, notice, failed, draft, setup })
     save()
   }

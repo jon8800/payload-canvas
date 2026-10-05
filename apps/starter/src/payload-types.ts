@@ -1004,7 +1004,7 @@ export interface BuilderSection {
    */
   category?: string | null;
   /**
-   * The section's blocks. To change them, insert the section on a page, edit it there and save it as a section again.
+   * The section's blocks. Edit them in the builder: open the Builder tab. Pages that inserted this section keep their own copy.
    */
   blocks:
     | {
@@ -1015,6 +1015,39 @@ export interface BuilderSection {
     | number
     | boolean
     | null;
+  layout?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  layoutCss?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  layoutRichText?: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  } | null;
   /**
    * Filled by the website builder from the layout on every save.
    */
@@ -2115,6 +2148,9 @@ export interface BuilderSectionsSelect<T extends boolean = true> {
   name?: T;
   category?: T;
   blocks?: T;
+  layout?: T;
+  layoutCss?: T;
+  layoutRichText?: T;
   builderRefs?: T;
   updatedAt?: T;
   createdAt?: T;

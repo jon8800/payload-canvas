@@ -20,6 +20,7 @@ import {
 import { buildStyleTokens } from './tokens'
 
 export { applyFontFamilies, resolveFontValue, type FontFamilies } from './tokens'
+export { BUILDER_CSS_CLASS, withBuilderCssClass } from './marker'
 
 /** Tailwind plugins by the id used in `@plugin "<id>"`, e.g. { '@tailwindcss/typography': typography }. */
 export type TailwindPlugins = Record<string, unknown>
@@ -207,6 +208,8 @@ const cssCache = new Lru<string>(100)
 /**
  * Compiles only the given classes against the app's CSS entry. Output: the utilities plus the
  * @property / @keyframes rules they need. No Preflight, no base layer, never overrides theme vars.
+ * Every rule matches only elements with the `builder-css` class (marker.ts), so the output can
+ * load after the app's own CSS without changing the order of the app's classes.
  * Unknown classes are ignored. A `@plugin` id missing from `plugins` throws.
  * Results are cached (LRU) by entry content, plugin ids and the sorted class set.
  */
@@ -222,7 +225,7 @@ export async function compileClasses(classes: string[], options: CssOptions): Pr
 
   // A new compiler per call: build() remembers every class it has seen.
   const compiler = await compileFromInput(input, options.plugins)
-  const css = extractUtilities(compiler.build(candidates), staticUtilityLayers.get(input) ?? 0)
+  const css = extractUtilities(compiler.build(candidates), staticUtilityLayers.get(input) ?? 0, new Set(candidates))
   cssCache.set(key, css)
   return css
 }

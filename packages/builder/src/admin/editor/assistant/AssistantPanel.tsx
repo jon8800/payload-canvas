@@ -235,17 +235,18 @@ function ToolChip({ name, info }: { name: string; info: ToolInfo | undefined }) 
   const status = info?.status ?? 'done'
   const label = info?.summary || humanizeTool(name)
   // A tool that ran but had changes that did not apply here is a warning, not a failure.
-  const problem = status === 'error' || Boolean(info?.note)
-  const tone = status === 'error' ? 'error' : info?.note ? 'warn' : status
+  const problem = status === 'error' || (status === 'done' && Boolean(info?.note))
+  const tone = status === 'error' ? 'error' : problem ? 'warn' : status
+  const icon = status === 'running' ? null : status === 'cancelled' ? 'minus' : problem ? 'warning' : 'check'
   return (
     <li className={`builder-assistant__chip builder-assistant__chip--${tone}`}>
       <span className="builder-assistant__chip-row">
         <span className="builder-assistant__chip-icon" aria-hidden="true">
-          {status === 'running' ? <span className="builder-assistant__spinner" /> : <Icon name={problem ? 'warning' : 'check'} size={12} />}
+          {icon ? <Icon name={icon} size={12} /> : <span className="builder-assistant__spinner" />}
         </span>
         <span className="builder-assistant__chip-label">{label}</span>
         <span className="builder-assistant__sr-only">
-          {status === 'running' ? ' (running)' : problem ? ' (failed)' : ' (done)'}
+          {status === 'running' ? ' (running)' : status === 'cancelled' ? ' (not run)' : problem ? ' (failed)' : ' (done)'}
         </span>
       </span>
       {info?.note && <span className="builder-assistant__chip-note">{info.note}</span>}

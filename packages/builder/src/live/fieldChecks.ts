@@ -4,7 +4,7 @@
 import type { PayloadRequest } from 'payload'
 
 import { blockName } from '../core/blocks'
-import { deniedPropChanges, denialMessage, hasPropAccess } from '../core/fieldAccess'
+import { deniedPropChanges, denialMessage, hasPropAccess, propAccessInfo, type PropAccessInfo, type PropAccessRule } from '../core/fieldAccess'
 import { EMPTY_FIELD_REGISTRY, type FieldRegistry } from '../core/fieldSemantics'
 import { propPathOf, runPropValidators } from '../core/fieldValidate'
 import { indexLayout, isPlainObject, normalizeLayout } from '../core/tree'
@@ -120,6 +120,64 @@ export async function validateBlockProps(
     if (propPath) problems.push({ propPath, message: error.message, ...(error.locale ? { locale: error.locale } : {}) })
   }
   return problems
+}
+
+const ACCESS_TTL_MS = 30_000
+const ACCESS_CACHE_MAX = 5000
+const accessCache = new Map<string, { rule: PropAccessRule; at: number }>()
+
+const userKey = (user: unknown): string => {
+  const u = user as { id?: unknown; collection?: unknown; _mcpKey?: { keyId?: unknown } } | null
+  return `${String(u?.collection ?? '')}:${String(u?.id ?? '')}:${String(u?._mcpKey?.keyId ?? '')}`
+}
+
+/**
+ * What the request's user may read and change in each block of the document's layout (see
+ * `propAccessInfo`), for the editor. Null when no block field has `access.read` or `access.update`.
+ * Block results are cached for 30 s per user, document and block data, so an editor that asks
+ * again after each burst of edits only runs the functions of the blocks that changed.
+ */
+export async function propAccessFor(
+  req: PayloadRequest,
+  options: {
+    blocks: readonly BlockDefinition[]
+    registry: FieldRegistry
+    collection: string
+    id: string
+    field: string
+    /** The stored layout people edit (the live session's, else the saved draft's). */
+    layout: Layout
+    /** The document without the layout. */
+    doc: Record<string, unknown>
+  },
+): Promise<PropAccessInfo | null> {
+  const { blocks, registry, collection, id, field } = options
+  if (!hasPropAccess(registry, 'read') && !hasPropAccess(registry, 'update')) return null
+  const prefix = `${userKey(req.user)}|${collection}:${id}|`
+  const keyOf = (block: Block) => `${prefix}${block.id}|${block.type}|${JSON.stringify(block.props ?? null)}`
+  const now = Date.now()
+  return propAccessInfo(options.layout, {
+    blocks,
+    registry,
+    doc: options.doc,
+    ctx: { layoutField: field, req, collection: collectionConfigOf(req, collection), operation: 'update', id, overrideAccess: false },
+    cache: {
+      get(block) {
+        const hit = accessCache.get(keyOf(block))
+        return hit && now - hit.at < ACCESS_TTL_MS ? hit.rule : undefined
+      },
+      set(block, rule) {
+        const key = keyOf(block)
+        accessCache.delete(key)
+        accessCache.set(key, { rule, at: now })
+        // Oldest first: drop the oldest entries past the limit.
+        for (const old of accessCache.keys()) {
+          if (accessCache.size <= ACCESS_CACHE_MAX) break
+          accessCache.delete(old)
+        }
+      },
+    },
+  })
 }
 
 /** A block from a request body, or null. Only the parts validation reads. */

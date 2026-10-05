@@ -1,8 +1,8 @@
 // Generates an image with the configured AiImageAdapter and saves it in an upload collection, as
 // the request's user. Shared by the assistant tool, the editor's Generate action (endpoint) and the
-// MCP tool, so they share one hourly limit per user. Server only.
+// MCP tool, so they share one hourly limit per user, kept in Payload's KV store. Server only.
 
-import type { PayloadRequest } from 'payload'
+import type { KVAdapter, PayloadRequest } from 'payload'
 
 import { isPlainObject } from '../../core/tree'
 import type { AiImageAdapter, AiImageAspectRatio, AiImageLimits, AiOptions } from '../types'
@@ -21,48 +21,105 @@ const MAX_ALT = 300
 export const IMAGES_NOT_CONFIGURED =
   'Image generation is not set up on this site. A developer adds an image adapter to the plugin options, for example ai: { images: openRouterImageAdapter({ apiKey: process.env.OPENROUTER_API_KEY }) } from "@payload-toolkit/builder/ai/images/openrouter", and restarts the server. See docs/ai/images.md.'
 
-/** Counts generated images per user in a sliding hour. In memory: one server process. */
+/**
+ * Where the hourly counts live: the part of Payload's key-value store (`payload.kv`) the limiter
+ * uses. Payload's default KV adapter keeps the values in its hidden `payload-kv` collection.
+ */
+export type ImageCountStore = Pick<KVAdapter, 'get' | 'set' | 'delete'>
+
+/** A store in server memory. Used when there is no `payload.kv` (unit tests). */
+export function memoryCountStore(): ImageCountStore {
+  const values = new Map<string, unknown>()
+  return {
+    get: async <T>(key: string) => (values.has(key) ? (structuredClone(values.get(key)) as T) : null),
+    set: async (key, value) => void values.set(key, structuredClone(value)),
+    delete: async (key) => void values.delete(key),
+  }
+}
+
+/** The KV key of one user's count. */
+const storeKey = (user: string) => `website-builder:image-count:${user}`
+
+/** The stored value: when each image of the last hour was reserved (ms since 1970). */
+type HourCount = { at: number[] }
+
+/**
+ * Counts generated images per user in a sliding hour. The count lives in a store (`payload.kv` by
+ * default), so it survives a restart and all app servers share it. Calls for one user run one after
+ * another inside one server process.
+ */
 export class HourlyLimiter {
-  readonly #hits = new Map<string, number[]>()
   readonly perHour: number
   readonly #now: () => number
+  readonly #store: ImageCountStore | null
+  readonly #memory = memoryCountStore()
+  readonly #queues = new Map<string, Promise<unknown>>()
 
-  constructor(perHour: number, now: () => number = Date.now) {
+  /** `store`: a fixed store. Without it each call uses the store it gets, else memory. */
+  constructor(perHour: number, now: () => number = Date.now, store?: ImageCountStore) {
     this.perHour = perHour
     this.#now = now
+    this.#store = store ?? null
   }
 
-  #recent(key: string): number[] {
+  #storeFor(kv?: ImageCountStore | null): ImageCountStore {
+    return this.#store ?? kv ?? this.#memory
+  }
+
+  /** Runs `task` after the earlier tasks for the same user. */
+  #serial<T>(key: string, task: () => Promise<T>): Promise<T> {
+    const result = (this.#queues.get(key) ?? Promise.resolve()).then(task)
+    const tail = result.catch(() => undefined)
+    this.#queues.set(key, tail)
+    void tail.then(() => {
+      if (this.#queues.get(key) === tail) this.#queues.delete(key)
+    })
+    return result
+  }
+
+  async #recent(store: ImageCountStore, key: string): Promise<number[]> {
+    const value = await store.get<HourCount>(storeKey(key))
     const since = this.#now() - HOUR_MS
-    const list = (this.#hits.get(key) ?? []).filter((t) => t > since)
-    if (list.length > 0) this.#hits.set(key, list)
-    else this.#hits.delete(key)
-    return list
+    return (Array.isArray(value?.at) ? value.at : []).filter((t): t is number => typeof t === 'number' && t > since).toSorted((a, b) => a - b)
   }
 
-  remaining(key: string): number {
-    return Math.max(0, this.perHour - this.#recent(key).length)
+  async #write(store: ImageCountStore, key: string, list: number[]): Promise<void> {
+    if (list.length > 0) await store.set(storeKey(key), { at: list } satisfies HourCount)
+    else await store.delete(storeKey(key))
+  }
+
+  async remaining(key: string, kv?: ImageCountStore | null): Promise<number> {
+    return Math.max(0, this.perHour - (await this.#recent(this.#storeFor(kv), key)).length)
   }
 
   /** Minutes until the oldest image of the hour drops out. */
-  minutesUntilFree(key: string): number {
-    const oldest = this.#recent(key)[0]
+  async minutesUntilFree(key: string, kv?: ImageCountStore | null): Promise<number> {
+    const oldest = (await this.#recent(this.#storeFor(kv), key))[0]
     return oldest === undefined ? 0 : Math.max(1, Math.ceil((oldest + HOUR_MS - this.#now()) / 60_000))
   }
 
-  /** Reserves one image. False when the user is at the limit. */
-  take(key: string): boolean {
-    const list = this.#recent(key)
-    if (list.length >= this.perHour) return false
-    this.#hits.set(key, [...list, this.#now()])
-    return true
+  /** Reserves one image. Returns the reservation, or null when the user is at the limit. */
+  take(key: string, kv?: ImageCountStore | null): Promise<number | null> {
+    const store = this.#storeFor(kv)
+    return this.#serial(key, async () => {
+      const list = await this.#recent(store, key)
+      if (list.length >= this.perHour) return null
+      const at = this.#now()
+      await this.#write(store, key, [...list, at])
+      return at
+    })
   }
 
   /** Gives back a reservation (the generation failed). */
-  release(key: string): void {
-    const list = this.#hits.get(key)
-    if (!list || list.length === 0) return
-    list.pop()
+  release(key: string, reservation: number, kv?: ImageCountStore | null): Promise<void> {
+    const store = this.#storeFor(kv)
+    return this.#serial(key, async () => {
+      const list = await this.#recent(store, key)
+      const index = list.lastIndexOf(reservation)
+      if (index === -1) return
+      list.splice(index, 1)
+      await this.#write(store, key, list)
+    })
   }
 }
 
@@ -79,13 +136,20 @@ export type ImageService = {
 
 const positive = (value: number | undefined, fallback: number) => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : fallback)
 
-export function createImageService(ai: Pick<AiOptions, 'images' | 'imageLimits' | 'mediaCollection' | 'imageMarkerField'>, now?: () => number): ImageService {
+/**
+ * `store`: where the hourly counts live. Default: the request's `payload.kv`.
+ * `now`: the clock, for tests.
+ */
+export function createImageService(
+  ai: Pick<AiOptions, 'images' | 'imageLimits' | 'mediaCollection' | 'imageMarkerField'>,
+  { now, store }: { now?: () => number; store?: ImageCountStore } = {},
+): ImageService {
   const limits: AiImageLimits = ai.imageLimits ?? {}
   return {
     adapter: ai.images ?? null,
     collection: ai.mediaCollection ?? 'media',
     perRequest: positive(limits.perRequest, DEFAULT_IMAGES_PER_REQUEST),
-    limiter: new HourlyLimiter(positive(limits.perHour, DEFAULT_IMAGES_PER_HOUR), now),
+    limiter: new HourlyLimiter(positive(limits.perHour, DEFAULT_IMAGES_PER_HOUR), now, store),
     markerField: ai.imageMarkerField === undefined ? 'generatedBy' : ai.imageMarkerField,
   }
 }
@@ -234,22 +298,36 @@ export async function generateImageToMedia(req: PayloadRequest, service: ImageSe
   }
 
   const key = userKey(req)
-  if (service.limiter.perHour === 0) return failure('rate_limited', 429, 'Image generation is turned off on this site (ai.imageLimits.perHour is 0).')
-  if (!service.limiter.take(key)) {
-    const minutes = service.limiter.minutesUntilFree(key)
+  const limiter = service.limiter
+  const kv = (req.payload as { kv?: ImageCountStore }).kv ?? null
+  if (limiter.perHour === 0) return failure('rate_limited', 429, 'Image generation is turned off on this site (ai.imageLimits.perHour is 0).')
+  let reservation: number | null
+  try {
+    reservation = await limiter.take(key, kv)
+  } catch (error) {
+    req.payload.logger.error({ err: error }, 'website builder: could not read the hourly image count')
+    return failure('api_error', 503, 'Could not check the hourly image limit, so no image was generated. Try again in a moment.')
+  }
+  if (reservation === null) {
+    const minutes = await limiter.minutesUntilFree(key, kv).catch(() => 60)
     return failure(
       'rate_limited',
       429,
-      `You reached the limit of ${service.limiter.perHour} generated images per hour. Try again in about ${minutes} minute${minutes === 1 ? '' : 's'}.`,
+      `You reached the limit of ${limiter.perHour} generated images per hour. Try again in about ${minutes} minute${minutes === 1 ? '' : 's'}.`,
     )
   }
+
+  const taken = reservation
+  /** Failed attempts do not count. */
+  const giveBack = () =>
+    limiter.release(key, taken, kv).catch((error: unknown) => req.payload.logger.error({ err: error }, 'website builder: could not give back an image reservation'))
 
   const started = Date.now()
   let result
   try {
     result = await adapter.generate({ prompt, aspectRatio, n: 1, signal: input.signal })
   } catch (error) {
-    service.limiter.release(key)
+    await giveBack()
     if (error instanceof AiImageError) {
       if (error.code === 'aborted') return failure('aborted', 499, error.message)
       if (error.code === 'invalid_request' || error.code === 'no_image') return failure('invalid_request', 400, error.message)
@@ -262,7 +340,7 @@ export async function generateImageToMedia(req: PayloadRequest, service: ImageSe
   const seconds = Math.round((Date.now() - started) / 100) / 10
   const image = result.images[0]
   if (!image || image.data.length === 0) {
-    service.limiter.release(key)
+    await giveBack()
     return failure('invalid_request', 400, `${adapter.model} returned no image. Try another prompt.`)
   }
   const cost = result.usage?.cost
@@ -283,6 +361,8 @@ export async function generateImageToMedia(req: PayloadRequest, service: ImageSe
       req,
     })) as unknown as Record<string, unknown>
   } catch (error) {
+    // The image was made and paid for, so it counts: a broken media collection must not turn the
+    // hourly limit off.
     const message = error instanceof Error ? error.message : String(error)
     return failure('api_error', 500, `The image was generated but could not be saved in "${slug}": ${message}`)
   }
@@ -305,6 +385,7 @@ export async function generateImageToMedia(req: PayloadRequest, service: ImageSe
     { adapter: adapter.name, model: adapter.model, seconds, cost, media: media.id, source: input.source },
     'website builder: generated an AI image',
   )
+  const remainingThisHour = await limiter.remaining(key, kv).catch(() => 0)
   return {
     ok: true,
     media,
@@ -314,6 +395,6 @@ export async function generateImageToMedia(req: PayloadRequest, service: ImageSe
     seconds,
     ...(cost !== undefined ? { cost } : {}),
     ...(result.revisedPrompt ? { revisedPrompt: result.revisedPrompt } : {}),
-    remainingThisHour: service.limiter.remaining(key),
+    remainingThisHour,
   }
 }

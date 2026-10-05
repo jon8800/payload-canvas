@@ -4,7 +4,7 @@ import { describe, it } from 'node:test'
 import { findBlock } from '../core/tree'
 import type { BlockDefinition, Layout, SectionDefinition } from '../core/types'
 import { fakeAdapter, type FakeStep } from './adapters/fake'
-import { adapterIdentity, runAgent } from './loop'
+import { adapterIdentity, NOT_RUN, runAgent } from './loop'
 import { toolDefinitions, Workspace, type ToolEnv } from './tools'
 import type { AiAdapter, AiMessage, AiModelEvent, AiStreamEvent } from './types'
 
@@ -67,6 +67,26 @@ const lastOf = (events: AiStreamEvent[]) => {
   return last?.type === 'done' ? `done:${last.stopReason}` : last?.type === 'error' ? `error:${last.code}` : last?.type
 }
 const messagesOf = (events: AiStreamEvent[]) => events.flatMap((e) => (e.type === 'message' ? [e.message] : []))
+
+/** Every tool call that started has a final status, and it comes before the turn's last event. */
+function assertToolsSettled(events: AiStreamEvent[]) {
+  const end = events.findIndex((e) => e.type === 'done' || e.type === 'error')
+  assert.ok(end >= 0, 'the turn ends with done or error')
+  events.forEach((event, i) => {
+    if (event.type !== 'tool' || event.status !== 'running') return
+    const final = events.findIndex((e, j) => j > i && e.type === 'tool' && e.callId === event.callId && e.status !== 'running')
+    assert.ok(final > i && final < end, `call ${event.callId} gets a final status before the turn ends`)
+  })
+}
+/** An adapter that starts one tool call, then yields `tail`. */
+const started = (tail: AiModelEvent[]): AiAdapter => ({
+  ...fakeAdapter(),
+  async *stream() {
+    yield { type: 'toolStart', id: 'c1', name: 'applyOperations' }
+    yield* tail
+  },
+})
+const chips = (events: AiStreamEvent[]) => events.flatMap((e) => (e.type === 'tool' ? [`${e.callId}:${e.status}`] : []))
 
 describe('runAgent with the fake adapter', () => {
   it('streams a text-only reply and stores it with the identity', async () => {
@@ -249,6 +269,127 @@ describe('runAgent with the fake adapter', () => {
     })
     const { events } = await run(adapter, { signal: controller.signal })
     assert.equal(lastOf(events), 'error:aborted')
+  })
+
+  it('cancels a started call that the final reply dropped, and runs the rest', async () => {
+    // Like the Anthropic refusal fallback: c_old streamed, then the final content holds only c_new.
+    let call = 0
+    const adapter: AiAdapter = {
+      ...fakeAdapter(),
+      async *stream() {
+        if (call++ > 0) {
+          yield { type: 'done', stopReason: 'end_turn', content: [{ type: 'text', text: 'Ok.' }] }
+          return
+        }
+        yield { type: 'toolStart', id: 'c_old', name: 'insertSection' }
+        yield { type: 'toolStart', id: 'c_new', name: 'getLayout' }
+        yield { type: 'toolCall', id: 'c_new', name: 'getLayout', input: {} }
+        yield { type: 'done', stopReason: 'tool_use', content: [{ type: 'tool_use', id: 'c_new', name: 'getLayout', input: {} }] }
+      },
+    }
+    const { events, workspace } = await run(adapter)
+    assert.deepEqual(chips(events), ['c_old:running', 'c_new:running', 'c_old:cancelled', 'c_new:done'])
+    const cancelled = events.find((e) => e.type === 'tool' && e.status === 'cancelled')
+    assert.ok(cancelled?.type === 'tool' && cancelled.name === 'insertSection' && cancelled.summary === NOT_RUN.dropped)
+    assert.equal(workspace.layout.blocks.length, 1, 'the dropped insertSection did not run')
+    assertToolsSettled(events)
+    assert.equal(lastOf(events), 'done:end_turn')
+  })
+
+  it('cancels a dropped call when the reply has no calls left', async () => {
+    const adapter: AiAdapter = {
+      ...fakeAdapter(),
+      async *stream() {
+        yield { type: 'toolStart', id: 'c1', name: 'insertSection' }
+        yield { type: 'text', text: 'Here is my answer instead.' }
+        yield { type: 'done', stopReason: 'end_turn', content: [{ type: 'text', text: 'Here is my answer instead.' }] }
+      },
+    }
+    const { events } = await run(adapter)
+    assert.deepEqual(chips(events), ['c1:running', 'c1:cancelled'])
+    assertToolsSettled(events)
+  })
+
+  it('cancels started calls on a refusal', async () => {
+    const { events } = await run(
+      steps({ content: [{ type: 'tool_use', id: 'c1', name: 'insertSection', input: { sectionId: 'hero' } }], refusal: { explanation: null } }),
+    )
+    assert.deepEqual(chips(events), ['c1:running', 'c1:cancelled'])
+    const cancelled = events.find((e) => e.type === 'tool' && e.status === 'cancelled')
+    assert.ok(cancelled?.type === 'tool' && cancelled.summary === NOT_RUN.declined)
+    assertToolsSettled(events)
+  })
+
+  it('cancels started calls on an error, a stream without done, and a stop', async () => {
+    const failed = await run(started([{ type: 'error', code: 'api_error', message: 'Boom.' }]))
+    assert.deepEqual(chips(failed.events), ['c1:running', 'c1:cancelled'])
+    assert.equal(lastOf(failed.events), 'error:api_error')
+    assertToolsSettled(failed.events)
+
+    const cut = await run(started([]))
+    assert.deepEqual(chips(cut.events), ['c1:running', 'c1:cancelled'])
+    assertToolsSettled(cut.events)
+
+    const controller = new AbortController()
+    const stopped = await run(
+      {
+        ...fakeAdapter(),
+        async *stream() {
+          yield { type: 'toolStart', id: 'c1', name: 'applyOperations' }
+          controller.abort()
+          yield { type: 'text', text: 'more' }
+        },
+      },
+      { signal: controller.signal },
+    )
+    assert.equal(lastOf(stopped.events), 'error:aborted')
+    const cancelled = stopped.events.find((e) => e.type === 'tool' && e.status === 'cancelled')
+    assert.ok(cancelled?.type === 'tool' && cancelled.summary === NOT_RUN.stopped)
+    assertToolsSettled(stopped.events)
+  })
+
+  it('cancels the calls of an attempt that failed with invalid_output', async () => {
+    let call = 0
+    const adapter: AiAdapter = {
+      ...fakeAdapter(),
+      async *stream() {
+        if (call++ === 0) {
+          yield { type: 'toolStart', id: 'c_bad', name: 'applyOperations' }
+          yield { type: 'error', code: 'invalid_output', message: 'Bad tool input.' }
+          return
+        }
+        yield { type: 'done', stopReason: 'end_turn', content: [{ type: 'text', text: 'Fine.' }] }
+      },
+    }
+    const { events } = await run(adapter)
+    assert.deepEqual(chips(events), ['c_bad:running', 'c_bad:cancelled'])
+    assertToolsSettled(events)
+    assert.equal(lastOf(events), 'done:end_turn')
+  })
+
+  it('a tool that throws fails alone', async () => {
+    class BrokenWorkspace extends Workspace {
+      override get view(): Layout {
+        throw new Error('db down')
+      }
+    }
+    const events: AiStreamEvent[] = []
+    await runAgent({
+      adapter: steps({ content: [{ type: 'tool_use', id: 'c1', name: 'getLayout', input: {} }] }, { content: [{ type: 'text', text: 'Sorry.' }] }),
+      system: [{ text: 'SYSTEM' }],
+      tools: toolDefinitions(env),
+      maxSteps: 6,
+      messages: [userMessage],
+      context,
+      workspace: new BrokenWorkspace(structuredClone(startLayout), blocks),
+      env,
+      emit: (event) => events.push(event),
+    })
+    assert.deepEqual(chips(events), ['c1:running', 'c1:error'])
+    const results = messagesOf(events).find((m) => m.kind === 'tool_results')?.content as Array<Record<string, unknown>>
+    assert.match(String(results[0].content), /db down/)
+    assertToolsSettled(events)
+    assert.equal(lastOf(events), 'done:end_turn')
   })
 
   it('adapterIdentity is name:model', () => {

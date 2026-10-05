@@ -8,6 +8,7 @@
 import { createId, findBlock, joinListItem, splitListItem, type ListItemEdit } from '../../core'
 import type { Block, Operation } from '../../core/types'
 import { setPropPath, type InlineKind, type RichCommand, type RichFormatState } from '../../protocol'
+import { lockedMessage, propAccessNow } from './fields/accessRules'
 import type { Runtime } from './runtime'
 import { createValueStore, type ValueStore } from './valueStore'
 
@@ -50,9 +51,25 @@ export function inlineUpdate(block: Block, path: string, value: unknown): Extrac
 export function applyInlineChange(runtime: Runtime, change: { session: string; id: string; path: string; value: unknown }) {
   // The block as the canvas shows it (the editor's locale): the store writes that locale.
   const block = findBlock(runtime.store.getState().view, change.id)
+  // A prop the user may not change (field access): the canvas session was stopped; drop late values.
+  if (block && !propAccessNow(runtime, block, change.path).update) return
   const op = block ? inlineUpdate(block, change.path, change.value) : null
   if (!op) return
   runtime.store.apply(op, { mergeKey: `inline:${change.session}`, mergeWithin: Number.POSITIVE_INFINITY })
+}
+
+/**
+ * The inline start check: the canvas started editing `path` of a block. A prop this user may not
+ * read or change (field `access`) is refused: the canvas stops at once and the editor says why.
+ * Returns true when it refused.
+ */
+export function refuseLockedInline(runtime: Runtime, message: { id: string; path: string }): boolean {
+  const block = findBlock(runtime.store.getState().view, message.id)
+  const text = block ? lockedMessage(runtime, block, message.path) : null
+  if (!text) return false
+  runtime.postToCanvas({ type: 'inlineStop' })
+  runtime.warn(text)
+  return true
 }
 
 /** Starts inline editing of a block's text (Enter on a selected block), optionally `offset` characters in. */

@@ -3,6 +3,7 @@ import { defineBlock } from '../core/blocks'
 import { COLLECTION_LIST_BLOCK, FIELD_BLOCK, LIST_ITEM_SLOT } from '../core/bindings'
 import { TEXT_LIST_BLOCK, TEXT_LIST_ITEM_BLOCK, TEXT_LIST_SLOT } from '../core/textList'
 import type { BlockDefinition } from '../core/types'
+import { BUILDER_CSS_CLASS } from '../css/marker'
 import { linkField, when } from './link'
 
 export type DefaultBlocksOptions = {
@@ -29,12 +30,22 @@ const LINK_CONTENT = ['stack', 'grid', 'heading', 'text', 'image', 'list', 'quot
  */
 const INTERACTIVE = ['link', 'button', 'menu', 'richText', 'video', 'collectionList', 'form']
 
+/** Adds the marker class to every class string of a map (see `BUILDER_CSS_CLASS`). */
+function withMarker<T extends Record<string, string | Record<string, string>>>(map: T): T {
+  const entries = Object.entries(map).map(([key, value]) => [
+    key,
+    typeof value === 'string' ? `${value} ${BUILDER_CSS_CLASS}` : withMarker(value),
+  ])
+  return Object.fromEntries(entries) as T
+}
+
 /**
  * Classes the menu component uses itself (the toggle, the panel and the links). They are listed in
- * the block's `classes`, so the generated CSS has them. Keep in sync with `Menu.tsx` in
+ * the block's `classes`, so the generated CSS has them. Each string also holds `builder-css`:
+ * the generated CSS only styles elements with that class. Keep in sync with `Menu.tsx` in
  * `@payload-toolkit/builder-react`.
  */
-export const MENU_CLASS_MAP = {
+export const MENU_CLASS_MAP = withMarker({
   /** The inline list: its items become children of the <nav>, so the block's className lays them out. */
   list: { md: 'hidden md:contents', lg: 'hidden lg:contents', never: 'contents' },
   toggleWrap: { md: 'md:hidden', lg: 'lg:hidden' },
@@ -53,13 +64,14 @@ export const MENU_CLASS_MAP = {
   panelLink:
     'flex min-h-12 items-center border-b border-border py-3 text-lg ' +
     'aria-[current=page]:font-semibold aria-[current=page]:underline decoration-1 underline-offset-8',
-} as const
+} as const)
 
 const MENU_CLASSES = [
   ...new Set(
     Object.values(MENU_CLASS_MAP)
       .flatMap((value) => (typeof value === 'string' ? [value] : Object.values(value)))
-      .flatMap((value) => value.split(' ')),
+      .flatMap((value) => value.split(' '))
+      .filter((cls) => cls !== BUILDER_CSS_CLASS),
   ),
   'group',
 ]

@@ -376,6 +376,21 @@
     }
   }
 
+  // Started but never ran (the model dropped it, Stop, an error): quiet, not an alarm.
+  .builder-assistant__chip--cancelled {
+    border-style: dashed;
+    background: none;
+
+    .builder-assistant__chip-icon {
+      background: var(--theme-elevation-100);
+      color: var(--theme-elevation-500);
+    }
+
+    .builder-assistant__chip-label {
+      color: var(--theme-elevation-500);
+    }
+  }
+
   .builder-assistant__chip--error {
     border-color: color-mix(in srgb, var(--theme-error-500) 35%, transparent);
 

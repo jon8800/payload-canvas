@@ -38,9 +38,9 @@ describe('every default block has a component', () => {
 
 describe('stack and grid', () => {
   test('stack renders the "as" tag and falls back to div', () => {
-    assert.equal(site({ type: 'stack', props: { as: 'section' }, className: 'flex' }), '<section class="flex"></section>')
+    assert.equal(site({ type: 'stack', props: { as: 'section' }, className: 'flex' }), '<section class="flex builder-css"></section>')
     assert.equal(site({ type: 'stack', props: { as: 'script' } }), '<div></div>')
-    assert.equal(site({ type: 'grid', className: 'grid' }), '<div class="grid"></div>')
+    assert.equal(site({ type: 'grid', className: 'grid' }), '<div class="grid builder-css"></div>')
     assert.match(canvas({ type: 'stack', props: { as: 'header' } }), /^<header data-block-id="b" data-block-type="stack" data-slot-owner="b" data-slot="children">/)
   })
 })
@@ -48,17 +48,17 @@ describe('stack and grid', () => {
 describe('text-like blocks', () => {
   test('heading, text, quote with content', () => {
     assert.equal(site({ type: 'heading', props: { text: 'Hi', level: '1' } }), '<h1>Hi</h1>')
-    assert.equal(site({ type: 'text', props: { text: 'a\nb' }, className: 'x' }), '<p class="x">a<br/>b</p>')
+    assert.equal(site({ type: 'text', props: { text: 'a\nb' }, className: 'x' }), '<p class="x builder-css">a<br/>b</p>')
     assert.equal(
       site({ type: 'quote', props: { quote: 'Great', cite: 'Jane' }, className: 'italic' }),
-      '<blockquote class="italic"><p>Great</p><footer><cite>Jane</cite></footer></blockquote>',
+      '<blockquote class="italic builder-css"><p>Great</p><footer><cite>Jane</cite></footer></blockquote>',
     )
     assert.equal(site({ type: 'quote', props: { quote: 'Great' } }), '<blockquote><p>Great</p></blockquote>')
   })
 
   test('empty blocks: nothing on the site, a muted placeholder in the canvas', () => {
     const cases: Array<[Omit<Block, 'id'>, RegExp]> = [
-      [{ type: 'heading', props: { level: '3' }, className: 'text-3xl' }, /^<h3 data-block-id="b" data-block-type="heading" data-builder-text="text" class="text-3xl"><span data-builder-placeholder="" style="opacity:0.4">Heading<\/span><\/h3>$/],
+      [{ type: 'heading', props: { level: '3' }, className: 'text-3xl' }, /^<h3 data-block-id="b" data-block-type="heading" data-builder-text="text" class="text-3xl builder-css"><span data-builder-placeholder="" style="opacity:0.4">Heading<\/span><\/h3>$/],
       [{ type: 'text', props: { text: '' } }, /^<p [^>]+><span data-builder-placeholder="[^"]*" style="opacity:0.4">Text<\/span><\/p>$/],
       [{ type: 'quote' }, /^<blockquote [^>]+><p data-builder-text="quote"><span data-builder-placeholder[^>]*>Quote<\/span><\/p><\/blockquote>$/],
       [{ type: 'button', props: { link: { type: 'url', url: '/x' } } }, /^<a [^>]*href="\/x"[^>]*><span data-builder-placeholder[^>]*>Button<\/span><\/a>$/],
@@ -90,7 +90,7 @@ describe('links', () => {
   test('button: <a> with href, new tab attributes, <span> without href', () => {
     assert.equal(
       site({ type: 'button', props: { label: 'Go', link: { type: 'url', url: '/go' } }, className: 'btn' }),
-      '<a href="/go" class="btn">Go</a>',
+      '<a href="/go" class="btn builder-css">Go</a>',
     )
     assert.equal(
       site({ type: 'button', props: { label: 'Go', link: { type: 'url', url: 'https://x.dev', newTab: true } } }),
@@ -116,9 +116,9 @@ describe('links', () => {
       className: 'block',
       slots: { children: [{ id: 'h', type: 'heading', props: { text: 'Pricing' } }] },
     }
-    assert.equal(site(block), '<a href="/pricing" class="block"><h2>Pricing</h2></a>')
-    assert.match(canvas(block), /^<a data-block-id="b" data-block-type="link" data-slot-owner="b" data-slot="children" href="\/pricing" class="block">/)
-    assert.equal(site({ ...block, props: {} }), '<div class="block"><h2>Pricing</h2></div>')
+    assert.equal(site(block), '<a href="/pricing" class="block builder-css"><h2>Pricing</h2></a>')
+    assert.match(canvas(block), /^<a data-block-id="b" data-block-type="link" data-slot-owner="b" data-slot="children" href="\/pricing" class="block builder-css">/)
+    assert.equal(site({ ...block, props: {} }), '<div class="block builder-css"><h2>Pricing</h2></div>')
     assert.match(canvas({ type: 'link' }), /<div data-block-id="b"[^>]*><div data-slot-empty=""/)
   })
 })
@@ -130,21 +130,21 @@ describe('list', () => {
   const legacy = [{ id: 'r1', text: 'One' }, { text: '' }, { text: 'Two' }, 'bad']
 
   test('ul or ol of listItem blocks; empty items render nothing on the site', () => {
-    assert.equal(site({ type: 'list', slots, className: 'list-disc' }), '<ul class="list-disc"><li class="font-bold">One</li><li>Two</li></ul>')
-    assert.match(site({ type: 'list', props: { ordered: true }, slots }), /^<ol[^>]*><li class="font-bold">One<\/li><li>Two<\/li><\/ol>$/)
+    assert.equal(site({ type: 'list', slots, className: 'list-disc' }), '<ul class="list-disc builder-css"><li class="font-bold builder-css">One</li><li>Two</li></ul>')
+    assert.match(site({ type: 'list', props: { ordered: true }, slots }), /^<ol[^>]*><li class="font-bold builder-css">One<\/li><li>Two<\/li><\/ol>$/)
     assert.equal(site({ type: 'list' }), '')
   })
 
   test('in the canvas, each item is a block with its own editable text, and the ul holds the slot', () => {
     const out = canvas({ type: 'list', slots })
     assert.match(out, /^<ul data-block-id="b" data-block-type="list" data-slot-owner="b" data-slot="items"/)
-    assert.match(out, /<li data-block-id="i1" data-block-type="listItem" class="font-bold" data-builder-text="text">One<\/li>/)
+    assert.match(out, /<li data-block-id="i1" data-block-type="listItem" class="font-bold builder-css" data-builder-text="text">One<\/li>/)
     assert.match(out, /<li data-block-id="i2"[^>]*><span data-builder-placeholder[^>]*>List item<\/span><\/li>/)
     assert.match(canvas({ type: 'list' }), /^<ul [^>]*><div data-slot-empty="" data-slot-owner="b" data-slot="items"/)
   })
 
   test('the old shape (props.items rows) still renders, skipping empty rows', () => {
-    assert.equal(site({ type: 'list', props: { items: legacy }, className: 'list-disc' }), '<ul class="list-disc"><li>One</li><li>Two</li></ul>')
+    assert.equal(site({ type: 'list', props: { items: legacy }, className: 'list-disc' }), '<ul class="list-disc builder-css"><li>One</li><li>Two</li></ul>')
     assert.match(canvas({ type: 'list', props: { items: legacy } }), /<li data-builder-text="items.0.text">One<\/li><li data-builder-text="items.2.text">Two<\/li>/)
   })
 
@@ -152,11 +152,11 @@ describe('list', () => {
     const className = 'pl-6 space-y-1'
     assert.equal(
       site({ type: 'list', props: { ordered: true }, slots, className }),
-      '<ol class="pl-6 space-y-1" style="list-style-type:decimal"><li class="font-bold">One</li><li>Two</li></ol>',
+      '<ol class="pl-6 space-y-1 builder-css" style="list-style-type:decimal"><li class="font-bold builder-css">One</li><li>Two</li></ol>',
     )
     assert.equal(
       site({ type: 'list', props: { items: legacy }, className }),
-      '<ul class="pl-6 space-y-1" style="list-style-type:disc"><li>One</li><li>Two</li></ul>',
+      '<ul class="pl-6 space-y-1 builder-css" style="list-style-type:disc"><li>One</li><li>Two</li></ul>',
     )
   })
 
@@ -172,8 +172,8 @@ describe('list', () => {
 
 describe('divider and spacer', () => {
   test('divider is an hr, spacer an empty div', () => {
-    assert.equal(site({ type: 'divider', className: 'my-8 border-t' }), '<hr class="my-8 border-t"/>')
-    assert.equal(site({ type: 'spacer', className: 'h-8' }), '<div aria-hidden="true" class="h-8"></div>')
+    assert.equal(site({ type: 'divider', className: 'my-8 border-t' }), '<hr class="my-8 border-t builder-css"/>')
+    assert.equal(site({ type: 'spacer', className: 'h-8' }), '<div aria-hidden="true" class="h-8 builder-css"></div>')
     assert.equal(site({ type: 'spacer' }), '<div aria-hidden="true"></div>')
     assert.match(canvas({ type: 'spacer' }), /style="min-height:16px"/)
     assert.ok(!canvas({ type: 'spacer', className: 'h-8' }).includes('style='))
@@ -201,7 +201,7 @@ describe('rich text', () => {
 
   test('renders Lexical JSON inside a div with the block className', () => {
     const out = site({ type: 'richText', props: { content }, className: 'prose' })
-    assert.match(out, /^<div class="prose"><p>Hello <strong>bold<\/strong><\/p><ul class="list-bullet"><li[^>]*>item<\/li><\/ul><p><a href="\/about">about<\/a><\/p><\/div>$/)
+    assert.match(out, /^<div class="prose builder-css"><p>Hello <strong>bold<\/strong><\/p><ul class="list-bullet"><li[^>]*>item<\/li><\/ul><p><a href="\/about">about<\/a><\/p><\/div>$/)
   })
 
   test('internal links use resolveLink, unresolved ones fall back to #', () => {
@@ -258,7 +258,7 @@ describe('video', () => {
   test('YouTube URL: iframe with 16:9 ratio, pointer-events none only in the canvas', () => {
     const block = { type: 'video', props: { source: 'url', url: 'https://youtu.be/aqz-KE-bpKQ', controls: true }, className: 'w-full' }
     const out = site(block)
-    assert.match(out, /^<iframe class="w-full" src="https:\/\/www.youtube-nocookie.com\/embed\/aqz-KE-bpKQ\?playsinline=1" title="YouTube video"/)
+    assert.match(out, /^<iframe class="w-full builder-css" src="https:\/\/www.youtube-nocookie.com\/embed\/aqz-KE-bpKQ\?playsinline=1" title="YouTube video"/)
     assert.match(out, /style="border:0;aspect-ratio:16 \/ 9;height:auto"/)
     assert.ok(!out.includes('pointer-events'))
     assert.match(canvas(block), /pointer-events:none/)
@@ -272,7 +272,7 @@ describe('video', () => {
       props: { source: 'upload', video: { id: 1, url: '/media/a.mp4' }, poster: { id: 2, url: '/media/p.jpg' }, autoplay: true, muted: true, loop: true, controls: true },
       className: 'w-full',
     })
-    assert.match(out, /^<video class="w-full" src="\/media\/a.mp4" poster="\/media\/p.jpg" autoPlay="" loop="" muted="" controls="" playsInline="" preload="metadata"><\/video>$/)
+    assert.match(out, /^<video class="w-full builder-css" src="\/media\/a.mp4" poster="\/media\/p.jpg" autoPlay="" loop="" muted="" controls="" playsInline="" preload="metadata"><\/video>$/)
     const file = site({ type: 'video', props: { source: 'url', url: 'https://cdn.example.com/a.webm', controls: false } })
     assert.equal(file, '<video src="https://cdn.example.com/a.webm" playsInline="" preload="metadata"></video>')
     // A URL with no source set still plays.

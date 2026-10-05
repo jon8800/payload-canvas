@@ -163,4 +163,21 @@ describe('fromPayloadBlocks: flat site with inline blocks', () => {
     assert.deepEqual(defs.map((b) => b.type), ['section', 'item'])
     assert.deepEqual(defs[0].slots, { items: { allow: ['item'] } })
   })
+
+  it('carries maxRows and minRows over as slot max and min', () => {
+    const heading = { slug: 'heading', fields: [{ name: 'text', type: 'text' as const }] }
+    const defs = fromPayloadBlocks(
+      [
+        {
+          slug: 'ctaContact',
+          fields: [
+            { name: 'headingBlock', type: 'blocks', maxRows: 1, blocks: [heading] },
+            { name: 'cards', type: 'blocks', minRows: 2, maxRows: 4, blocks: [heading] },
+          ],
+        },
+      ],
+      quiet,
+    )
+    assert.deepEqual(defs[0].slots, { headingBlock: { allow: ['heading'], max: 1 }, cards: { allow: ['heading'], max: 4, min: 2 } })
+  })
 })

@@ -1,7 +1,7 @@
 // What the canvas insert picker offers at a spot: the block types and sections that fit there
-// (slot `allow` / `disallow` rules), filtered by the search text. Pure: no DOM, no React.
+// (slot `allow` / `disallow` / `max` rules), filtered by the search text. Pure: no DOM, no React.
 
-import { slotAcceptsAt } from '../../../core/blocks'
+import { slotAcceptsAt, slotRoom } from '../../../core/blocks'
 import type { BlockDefinition, Layout, SectionDefinition } from '../../../core/types'
 
 export type PickerItem =
@@ -32,7 +32,8 @@ const rank = (category: string | undefined) => {
 /**
  * The picker's items for a position: blocks first, then sections. Within each, the best name
  * matches come first; then blocks go by category and sections saved-first. A section fits when
- * each of its top-level blocks, with everything inside, may go into the slot.
+ * each of its top-level blocks, with everything inside, may go into the slot, and the slot has room
+ * for all of them (`max`).
  */
 export function pickerItems(args: {
   blocks: BlockDefinition[]
@@ -43,6 +44,7 @@ export function pickerItems(args: {
   query: string
 }): PickerItem[] {
   const { blocks, layout, parentId, slot, query } = args
+  const room = slotRoom(blocks, layout, parentId, slot)
   const blockItems: PickerItem[] = blocks
     .map((def, order) => ({ def, order, score: matchScore(query, def.label, def.type, def.category, def.ai?.description) }))
     .filter(({ def, score }) => score !== null && slotAcceptsAt(blocks, layout, parentId, slot, def.type))
@@ -51,7 +53,7 @@ export function pickerItems(args: {
   const sectionItems: PickerItem[] = args.sections
     .map((s, order) => ({ s, order, score: matchScore(query, s.label, s.description, s.category, s.savedId === undefined ? undefined : 'saved') }))
     .filter(({ s, score }) => score !== null && s.blocks.length > 0)
-    .filter(({ s }) => s.blocks.every((block) => slotAcceptsAt(blocks, layout, parentId, slot, block)))
+    .filter(({ s }) => s.blocks.length <= room && s.blocks.every((block) => slotAcceptsAt(blocks, layout, parentId, slot, block)))
     .toSorted(
       (a, b) =>
         (a.score ?? 0) - (b.score ?? 0) || Number(a.s.savedId === undefined) - Number(b.s.savedId === undefined) || a.order - b.order,

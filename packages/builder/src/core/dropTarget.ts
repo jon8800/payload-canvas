@@ -3,7 +3,7 @@
 // Coordinates are whatever space the rects are in (iframe viewport for the canvas,
 // admin client coordinates for the outline). No DOM, no React.
 //
-// Slot rules: a slot whose `allow` list rejects the dragged type, or whose `disallow` list (or an
+// Slot rules: a slot whose `allow` list rejects the dragged type, that holds its `max` already, or whose `disallow` list (or an
 // ancestor slot's) refuses any type inside the dragged block, is never a target.
 // The functions then fall through to the next valid option (see each function).
 // The root list accepts every type without a `parents` rule (a list item goes only in a list).

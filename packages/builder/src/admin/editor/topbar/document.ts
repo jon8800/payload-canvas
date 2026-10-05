@@ -11,6 +11,7 @@ import type {
   BuilderDocMeta,
   DocStatus,
   LiveFlushResponse,
+  LiveAccessResponse,
   LivePublishedEvent,
   LiveSavedEvent,
   PublishAction,
@@ -39,6 +40,10 @@ export type DocumentController = {
   openScreen: (screen: DocumentScreen) => void
   /** Loads the header data again. */
   refresh: () => Promise<void>
+  /** Loads the user's prop access again (`meta.fieldAccess`), after edits to blocks with access rules. */
+  refreshAccess: () => Promise<void>
+  /** Saves one top-level field of the document (a section's category). Resolves true on success. */
+  saveField: (name: string, value: string | null) => Promise<boolean>
   /** Publish, unpublish or revert to the published version. Resolves true on success. */
   run: (action: Exclude<PublishAction, 'restore'>) => Promise<boolean>
   /**
@@ -132,6 +137,37 @@ export function createDocumentController(context: DocumentContext, initial: Buil
     }
   }
 
+  const refreshAccess = async () => {
+    try {
+      const response = await fetch(`${endpoint}/access`, { credentials: 'include', headers: { Accept: 'application/json' } })
+      const body = (await response.json().catch(() => null)) as LiveAccessResponse | null
+      if (body?.ok) meta.set({ ...meta.get(), fieldAccess: body.fieldAccess })
+    } catch {
+      // Offline: keep the last answer. The server still refuses edits the user may not make.
+    }
+  }
+
+  /** PATCH one top-level field over REST, as a draft when the collection has drafts. */
+  const patch = async (data: Record<string, unknown>, what: string): Promise<boolean> => {
+    const current = meta.get()
+    const query = `depth=0${current.drafts ? '&draft=true' : ''}`
+    const response = await fetch(`${api}/${path}?${query}`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(data),
+    })
+    if (response.ok) return true
+    const body: unknown = await response.json().catch(() => null)
+    // 423: Payload's document lock. Someone has the Edit view or the settings drawer open.
+    const message =
+      response.status === 423
+        ? `Not ${what}. Someone else is editing this document’s settings right now. Try again when they finish.`
+        : restError(body, `Could not save the document (${response.status}).`)
+    toast.error(message)
+    return false
+  }
+
   const refreshSoon = () => {
     clearTimeout(refreshTimer)
     refreshTimer = setTimeout(() => void refresh(), REFRESH_DELAY_MS)
@@ -146,6 +182,21 @@ export function createDocumentController(context: DocumentContext, initial: Buil
     screenRequest,
     openScreen: (screen) => screenRequest.set({ screen, at: Date.now() }),
     refresh,
+    refreshAccess,
+
+    async saveField(name, value) {
+      busy.set('rename')
+      try {
+        if (!(await patch({ [name]: value }, 'saved'))) return false
+        refreshSoon()
+        return true
+      } catch {
+        toast.error('Could not save the document. Check your connection.')
+        return false
+      } finally {
+        busy.set(null)
+      }
+    },
 
     async run(action) {
       busy.set(action)
@@ -217,23 +268,7 @@ export function createDocumentController(context: DocumentContext, initial: Buil
       if (!current.titleField || !value || value === current.title) return false
       busy.set('rename')
       try {
-        const query = `depth=0${current.drafts ? '&draft=true' : ''}`
-        const response = await fetch(`${api}/${path}?${query}`, {
-          method: 'PATCH',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-          body: JSON.stringify({ [current.titleField]: value }),
-        })
-        const body: unknown = await response.json().catch(() => null)
-        if (!response.ok) {
-          // 423: Payload's document lock. Someone has the Edit view or the settings drawer open.
-          const message =
-            response.status === 423
-              ? 'Not renamed. Someone else is editing this document’s settings right now. Try again when they finish.'
-              : restError(body, `Could not rename the document (${response.status}).`)
-          toast.error(message)
-          return false
-        }
+        if (!(await patch({ [current.titleField]: value }, 'renamed'))) return false
         meta.set({ ...meta.get(), title: value })
         refreshSoon()
         return true

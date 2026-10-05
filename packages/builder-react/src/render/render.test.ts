@@ -35,10 +35,10 @@ test('site mode renders the nested tree with no data attributes', () => {
   const html = render({ layout: nested })
   assert.equal(
     html,
-    '<div class="flex flex-col gap-4">' +
-      '<h3 class="text-xl">Hello</h3>' +
-      '<p class="text-sm">one<br/>two</p>' +
-      '<div class="grid grid-cols-2"><h2>Deep</h2></div>' +
+    '<div class="flex flex-col gap-4 builder-css">' +
+      '<h3 class="text-xl builder-css">Hello</h3>' +
+      '<p class="text-sm builder-css">one<br/>two</p>' +
+      '<div class="grid grid-cols-2 builder-css"><h2>Deep</h2></div>' +
       '</div>',
   )
   assert.ok(!html.includes('data-'))
@@ -46,8 +46,8 @@ test('site mode renders the nested tree with no data attributes', () => {
 
 test('canvas mode adds block and slot attributes', () => {
   const html = render({ layout: nested, mode: 'canvas' })
-  assert.match(html, /<div data-block-id="root" data-block-type="stack" data-slot-owner="root" data-slot="children" class="flex flex-col gap-4">/)
-  assert.match(html, /<h3 data-block-id="h" data-block-type="heading" data-builder-text="text" class="text-xl">Hello<\/h3>/)
+  assert.match(html, /<div data-block-id="root" data-block-type="stack" data-slot-owner="root" data-slot="children" class="flex flex-col gap-4 builder-css">/)
+  assert.match(html, /<h3 data-block-id="h" data-block-type="heading" data-builder-text="text" class="text-xl builder-css">Hello<\/h3>/)
   assert.match(html, /<h2 data-block-id="h2" data-block-type="heading" data-builder-text="text">Deep<\/h2>/)
   assert.ok(!html.includes('data-slot-empty'))
 })
@@ -84,7 +84,7 @@ test('empty slot: nothing on the site, droppable placeholder in the canvas', () 
     version: 1,
     blocks: [{ id: 's', type: 'stack', className: 'flex', slots: { children: [] } }],
   }
-  assert.equal(render({ layout }), '<div class="flex"></div>')
+  assert.equal(render({ layout }), '<div class="flex builder-css"></div>')
   const canvas = render({ layout, mode: 'canvas' })
   assert.match(
     canvas,
@@ -106,7 +106,7 @@ test('className passes through to the root and components add no classes', () =>
       { id: 'b', type: 'text', props: { text: 'y' } },
     ],
   }
-  assert.equal(render({ layout }), '<p class="md:text-lg hover:underline">x</p><p>y</p>')
+  assert.equal(render({ layout }), '<p class="md:text-lg hover:underline builder-css">x</p><p>y</p>')
 })
 
 test('unknown type: nothing on the site, small placeholder in the canvas', () => {
@@ -148,10 +148,10 @@ test('custom components override defaults and receive the slot attributes', () =
     ],
   }
   const components = { card: Card }
-  assert.equal(render({ layout, components }), '<section class="p-4"><div><p>in</p></div></section>')
+  assert.equal(render({ layout, components }), '<section class="p-4 builder-css"><div><p>in</p></div></section>')
   assert.match(
     render({ layout, components, mode: 'canvas' }),
-    /<section data-block-id="c" data-block-type="card" class="p-4"><div data-slot-owner="c" data-slot="body"><p data-block-id="t"/,
+    /<section data-block-id="c" data-block-type="card" class="p-4 builder-css"><div data-slot-owner="c" data-slot="body"><p data-block-id="t"/,
   )
 })
 
@@ -160,7 +160,7 @@ test('image: resolved doc renders an img, unresolved id is empty or a placeholde
   const loaded: Layout = { version: 1, blocks: [imageBlock({ image: doc })] }
   assert.equal(
     render({ layout: loaded }),
-    '<img class="rounded" src="/media/a.jpg" alt="Alt" width="800" height="600" loading="lazy"/>',
+    '<img class="rounded builder-css" src="/media/a.jpg" alt="Alt" width="800" height="600" loading="lazy"/>',
   )
   const fallbackAlt: Layout = {
     version: 1,
@@ -185,5 +185,5 @@ test('image: resolved doc renders an img, unresolved id is empty or a placeholde
 
   const unresolved: Layout = { version: 1, blocks: [imageBlock({ image: 1 })] }
   assert.equal(render({ layout: unresolved }), '')
-  assert.match(render({ layout: unresolved, mode: 'canvas' }), /<div data-block-id="i" data-block-type="image" data-builder-placeholder="" class="rounded" style=/)
+  assert.match(render({ layout: unresolved, mode: 'canvas' }), /<div data-block-id="i" data-block-type="image" data-builder-placeholder="" class="rounded builder-css" style=/)
 })

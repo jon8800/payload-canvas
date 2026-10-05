@@ -2,7 +2,7 @@
 // the rules a schema cannot express (unique ids). Optional props may be `null` (Payload's own
 // "empty" value); the schema leaves that out to keep it simple for AI tools.
 
-import { getBlockDefinition } from './blocks'
+import { getBlockDefinition, slotLabel, slotLimitText } from './blocks'
 import { conditionMet, readCondition } from './conditions'
 import { formatProblem } from './formats'
 import { dataFields, fieldBlocks, optionValues, type DataField, type LooseField } from './fields'
@@ -15,7 +15,7 @@ import type { BlockDefinition, LocaleSettings, SlotDefinition } from './types'
  * - `required` (a required prop is empty), `format` (a text prop does not match its
  *   `admin.custom.builderFormat`, such as a half-typed video URL), `constraint` (a value outside the
  *   field's limits: `minLength`/`maxLength`, `min`/`max`, `minRows`/`maxRows`, an email address
- *   without "@"), `validate` (the field's own `validate` function returned a message), `nesting`
+ *   without "@", or a slot with fewer blocks than its `min` or more than its `max`), `validate` (the field's own `validate` function returned a message), `nesting`
  *   (a block in a slot that refuses it) and `binding` (a binding the prop cannot use): block only
  *   publishing. Each of them can be true while someone is still typing, so drafts, autosave and
  *   live sessions keep saving unfinished work.
@@ -162,6 +162,8 @@ function checkBlock(
     }
   }
 
+  if (def?.slots) checkSlotCounts(def, isPlainObject(value.slots) ? value.slots : {}, path, report)
+
   if (value.slots === undefined) return
   if (!isPlainObject(value.slots)) {
     report(`${path}.slots`, 'slots must be an object')
@@ -183,6 +185,21 @@ function checkBlock(
 }
 
 type Report = (path: string, message: string, code?: LayoutErrorCode) => void
+
+/**
+ * A slot's `min` and `max` (Payload's `minRows`/`maxRows`): publish-only `constraint` problems,
+ * because a slot may be short of blocks while someone is still building it. A slot with no key
+ * holds 0 blocks.
+ */
+function checkSlotCounts(def: BlockDefinition, slots: Record<string, unknown>, path: string, report: Report): void {
+  for (const [name, slot] of Object.entries(def.slots ?? {})) {
+    const list = slots[name]
+    const count = Array.isArray(list) ? list.length : 0
+    const label = `"${slotLabel(def, name)}"`
+    if (typeof slot.min === 'number' && count < slot.min) report(`${path}.slots.${name}`, `${label} ${slotLimitText('min', slot.min)}`, 'constraint')
+    if (typeof slot.max === 'number' && count > slot.max) report(`${path}.slots.${name}`, `${label} ${slotLimitText('max', slot.max)}`, 'constraint')
+  }
+}
 
 /**
  * The own values of each locale: only localized props, with the same checks as the default

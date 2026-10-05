@@ -249,3 +249,175 @@ export function denialMessage(denials: readonly PropDenial[], blockName: (blockI
   const list = parts.length <= 1 ? (parts[0] ?? '') : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`
   return `${ACCESS_DENIED_PREFIX}${list}. Nothing was applied.`
 }
+
+// ---------------------------------------------------------------------------
+// What one user may read and change, for the editor
+// ---------------------------------------------------------------------------
+
+/**
+ * Prop paths without row indexes ("note", "items.label") that the user may not read or may not
+ * change. A path in `read` is never editable either.
+ */
+export type PropAccessRule = { read?: string[]; update?: string[] }
+
+/**
+ * The prop access of one user in one document. `types` holds the rule for a new block of each
+ * type (checked with the type's empty props). `blocks` holds the blocks of the layout whose rule
+ * differs from their type's rule, because the access functions read the block's data.
+ */
+export type PropAccessInfo = { types: Record<string, PropAccessRule>; blocks: Record<string, PropAccessRule> }
+
+/** A prop path without its row indexes: `items.1.label` -> `items.label`. */
+export function accessPath(propPath: string): string {
+  return propPath
+    .split('.')
+    .filter((part) => part !== '' && !/^\d+$/.test(part))
+    .join('.')
+}
+
+/** The rule for a block: its own, else its type's. */
+export function propAccessRuleOf(info: PropAccessInfo | null | undefined, blockId: string, type: string): PropAccessRule | undefined {
+  if (!info) return undefined
+  return info.blocks[blockId] ?? info.types[type]
+}
+
+/** What the user may do with the prop at `propPath` (row indexes allowed) under `rule`. */
+export function propAccessAt(rule: PropAccessRule | undefined, propPath: string): { read: boolean; update: boolean } {
+  if (!rule) return { read: true, update: true }
+  const path = accessPath(propPath)
+  // A group the user may not read hides everything inside it; the same for update.
+  const covers = (list: string[] | undefined) => Boolean(list?.some((p) => path === p || path.startsWith(`${p}.`)))
+  const read = !covers(rule.read)
+  return { read, update: read && !covers(rule.update) }
+}
+
+/** Empty data for every group and one empty row for every array, so a walk reaches nested fields too. */
+function skeletonProps(fields: readonly unknown[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const raw of fields) {
+    if (!isPlainObject(raw)) continue
+    const children = Array.isArray(raw.fields) ? raw.fields : []
+    const name = typeof raw.name === 'string' ? raw.name : ''
+    if (raw.type === 'row' || raw.type === 'collapsible' || (raw.type === 'group' && !name)) {
+      Object.assign(out, skeletonProps(children))
+    } else if (raw.type === 'tabs') {
+      for (const tab of Array.isArray(raw.tabs) ? raw.tabs : []) {
+        if (!isPlainObject(tab)) continue
+        const tabFields = Array.isArray(tab.fields) ? tab.fields : []
+        if (typeof tab.name === 'string' && tab.name) out[tab.name] = skeletonProps(tabFields)
+        else Object.assign(out, skeletonProps(tabFields))
+      }
+    } else if (raw.type === 'group' && name) out[name] = skeletonProps(children)
+    else if (raw.type === 'array' && name) out[name] = [skeletonProps(children)]
+  }
+  return out
+}
+
+type RuleSets = { read: Set<string>; update: Set<string> }
+
+const toRule = (sets: RuleSets): PropAccessRule => ({
+  ...(sets.read.size > 0 ? { read: [...sets.read].toSorted() } : {}),
+  ...(sets.update.size > 0 ? { update: [...sets.update].toSorted() } : {}),
+})
+
+const sameRule = (a: PropAccessRule | undefined, b: PropAccessRule | undefined) =>
+  JSON.stringify(a?.read ?? []) === JSON.stringify(b?.read ?? []) && JSON.stringify(a?.update ?? []) === JSON.stringify(b?.update ?? [])
+
+type BlockResult = { checked: Set<string>; sets: RuleSets }
+
+/**
+ * Runs `access.read` and `access.update` of every prop of the blocks in `layout` (one walk).
+ * Returns, by block id, the paths that were checked and the paths that were refused. A path
+ * counts as refused when any row refuses it.
+ */
+async function blockAccess(
+  layout: Layout,
+  args: AccessOptions & { doc?: Record<string, unknown> | null },
+  kinds: readonly ('read' | 'update')[],
+  only?: ReadonlySet<string>,
+): Promise<Map<string, BlockResult>> {
+  const field = args.ctx.layoutField
+  const docs = { data: { ...args.doc, [field]: layout }, doc: { ...args.doc, [field]: layout } }
+  const out = new Map<string, BlockResult>()
+  await walkPropFields(layout, {
+    blocks: args.blocks,
+    registry: args.registry,
+    types: typesWith(args.registry, ...kinds),
+    visit: async (v) => {
+      if (only && !only.has(v.block.id)) return false
+      const access = v.semantics?.access
+      if (!access) return
+      let entry = out.get(v.block.id)
+      if (!entry) out.set(v.block.id, (entry = { checked: new Set(), sets: { read: new Set(), update: new Set() } }))
+      const path = accessPath(v.propPath)
+      for (const kind of kinds) {
+        if (!access[kind]) continue
+        entry.checked.add(`${kind}:${path}`)
+        if (!(await allowed(kind, v, args.ctx, docs))) entry.sets[kind].add(path)
+      }
+    },
+  })
+  return out
+}
+
+/** Block rules the caller keeps between calls. It keys them by user, document and the block's data. */
+export type PropAccessCache = {
+  get(block: Block): PropAccessRule | undefined
+  set(block: Block, rule: PropAccessRule): void
+}
+
+/**
+ * What the user (`ctx.req`) may read and change in each block of `layout`, for the editor's
+ * inspector and inline editing. Null when no block field has `access.read` or `access.update`.
+ * `access.create` is left out: the editor opens saved documents. The functions get Payload's
+ * arguments (`req`, `id`, `data`, `doc`, `siblingData`, `blockData`) with the stored values of the
+ * default locale. Errors count as "no".
+ */
+export async function propAccessInfo(
+  layout: Layout,
+  args: AccessOptions & { doc?: Record<string, unknown> | null; cache?: PropAccessCache },
+): Promise<PropAccessInfo | null> {
+  const kinds = (['read', 'update'] as const).filter((kind) => hasPropAccess(args.registry, kind))
+  if (kinds.length === 0) return null
+  const types = typesWith(args.registry, ...kinds)
+
+  // A new block of each type: its empty props, with one empty row per array.
+  const samples: Block[] = []
+  for (const type of types) {
+    const def = args.blocks.find((b) => b.type === type)
+    if (def) samples.push({ id: `__new:${type}`, type, props: skeletonProps(def.fields as unknown[]) })
+  }
+  const typeRules: Record<string, PropAccessRule> = {}
+  const sampled = await blockAccess({ version: 1, blocks: samples }, args, kinds)
+  for (const sample of samples) {
+    const entry = sampled.get(sample.id)
+    typeRules[sample.type] = entry ? toRule(entry.sets) : {}
+  }
+
+  // The blocks of the layout. Blocks the cache knows are not checked again.
+  const blockRules: Record<string, PropAccessRule> = {}
+  const unchecked: Block[] = []
+  walkBlocks(layout, (block) => {
+    if (!types.has(block.type)) return
+    const cached = args.cache?.get(block)
+    if (!cached) unchecked.push(block)
+    else if (!sameRule(cached, typeRules[block.type])) blockRules[block.id] = cached
+  })
+  if (unchecked.length === 0) return { types: typeRules, blocks: blockRules }
+  const results = await blockAccess(layout, args, kinds, new Set(unchecked.map((b) => b.id)))
+  for (const block of unchecked) {
+    const entry = results.get(block.id)
+    const base = typeRules[block.type] ?? {}
+    // Paths the walk did not reach (an empty array, a missing group) keep the type's answer.
+    const sets: RuleSets = { read: new Set(base.read), update: new Set(base.update) }
+    for (const key of entry?.checked ?? []) {
+      const [kind, path] = [key.slice(0, key.indexOf(':')) as 'read' | 'update', key.slice(key.indexOf(':') + 1)]
+      if (entry?.sets[kind].has(path)) sets[kind].add(path)
+      else sets[kind].delete(path)
+    }
+    const rule = toRule(sets)
+    args.cache?.set(block, rule)
+    if (!sameRule(rule, base)) blockRules[block.id] = rule
+  }
+  return { types: typeRules, blocks: blockRules }
+}

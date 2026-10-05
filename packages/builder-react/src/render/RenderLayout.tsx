@@ -9,7 +9,7 @@ import {
   type BindingOptions,
   type TemplateContext,
 } from '@payload-toolkit/builder/core'
-import { defaultBlocks, isLinkField } from '@payload-toolkit/builder/blocks'
+import { defaultBlocks, isLinkField, withBuilderCssClass } from '@payload-toolkit/builder/blocks'
 import { defaultComponents } from '../components'
 import { fieldFor } from '../components/Field'
 import { richTextFor } from '../components/RichText'
@@ -177,7 +177,8 @@ function renderBlock(stored: Block, ctx: Context, preview = false): ReactNode {
   const componentProps: BlockComponentProps = {
     block: stored,
     props: componentPropsOf(block, ctx),
-    className: block.className,
+    // The marker class: the generated CSS styles only elements that have it.
+    className: withBuilderCssClass(block.className),
     slots,
     attributes,
     slotAttributes,

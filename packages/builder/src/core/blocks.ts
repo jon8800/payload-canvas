@@ -73,8 +73,9 @@ function subtreeTypes(block: Block, out = new Set<string>()): Set<string> {
 /**
  * Why `block` (a type, or a whole block with its children) cannot go into `slot` of `parentId`,
  * or `null` when it can. Checks the direct slot's `allow` and `disallow`, and the `disallow` of
- * every ancestor slot up to the root, against every type in the placed subtree, and the placed
- * block's own `parents` rule. The root list accepts every type without a `parents` rule. The
+ * every ancestor slot up to the root, against every type in the placed subtree, the placed
+ * block's own `parents` rule, and the direct slot's `max` (a block already in that slot, being
+ * moved within it, does not count as one more). The root list accepts every type without a `parents` rule. The
  * message is readable, e.g. `Button cannot go inside Link`.
  */
 export function placementError(
@@ -108,6 +109,13 @@ export function placementError(
         return `${label(rootType)} cannot go inside ${ownerLabel}`
       }
       if (!fitsParent(blocks, rootType, owner.block.type)) return parentsMessage(blocks, rootType)
+      // A block that already sits in this slot (a move within the list) does not add one.
+      const children = owner.block.slots?.[slotName] ?? []
+      const already = typeof block !== 'string' && children.some((child) => child.id === block.id)
+      if (!already) {
+        const full = slotFullError(blocks, owner.block, slotName)
+        if (full) return full
+      }
     }
     const refused = slotDef?.disallow?.find((type) => types.has(type))
     if (refused) {
@@ -120,6 +128,40 @@ export function placementError(
     ownerId = owner.parentId
   }
   return null
+}
+
+/** The slot's name for people: its `label`, else its name. */
+export function slotLabel(def: BlockDefinition | undefined, slot: string): string {
+  return def?.slots?.[slot]?.label?.trim() || slot
+}
+
+/** "takes at most 1 block" / "takes at least 2 blocks". */
+export function slotLimitText(kind: 'max' | 'min', count: number): string {
+  return `takes at ${kind === 'max' ? 'most' : 'least'} ${count} ${count === 1 ? 'block' : 'blocks'}`
+}
+
+/**
+ * Why one more block cannot go into `slot` of `owner`: the slot holds its `max` already. Null
+ * when it has room or no limit. E.g. `"Heading" in CTA contact takes at most 1 block`.
+ */
+export function slotFullError(blocks: readonly BlockDefinition[], owner: Block, slot: string): string | null {
+  const def = getBlockDefinition(blocks, owner.type)
+  const max = def?.slots?.[slot]?.max
+  if (typeof max !== 'number') return null
+  if ((owner.slots?.[slot]?.length ?? 0) < max) return null
+  return `"${slotLabel(def, slot)}" in ${blockName(owner, blocks)} ${slotLimitText('max', max)}`
+}
+
+/**
+ * How many more blocks fit into `slot` of `parentId` by its `max`. `Infinity` for the root list,
+ * a slot without a limit, or an unknown parent.
+ */
+export function slotRoom(blocks: readonly BlockDefinition[], layout: Layout, parentId: string | null, slot: string): number {
+  if (parentId === null) return Infinity
+  const owner = indexLayout(layout).get(parentId)?.block
+  const max = owner ? getBlockDefinition(blocks, owner.type)?.slots?.[slot]?.max : undefined
+  if (!owner || typeof max !== 'number') return Infinity
+  return Math.max(0, max - (owner.slots?.[slot]?.length ?? 0))
 }
 
 /** True when `block` (a type or a whole block) may go into `slot` of `parentId`. See `placementError`. */
