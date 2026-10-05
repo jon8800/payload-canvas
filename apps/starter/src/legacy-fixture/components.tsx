@@ -6,8 +6,12 @@
 // - TwoColumn is "upgraded": PayloadSlot renders its columns with the builder, so leaves can be
 //   selected and dragged between the columns on the canvas. Outside the builder it falls back to
 //   RenderLeaves.
+// - PageFacts takes `{ block, context }` instead of spread props; `context` is the page data.
+// - The async server components (Latest Posts, Posts Section) are in ./server.tsx.
+// The site's CSS has every class these components use, also on the canvas. The `classes` lists
+// below exist only for Tailwind's order: see `legacyClasses`.
 import type { ComponentType, ReactNode } from 'react'
-import { PayloadSlot, renderRichText, type PayloadBlockProps } from '@payload-toolkit/builder-react'
+import { PayloadSlot, renderRichText, type BlockComponentProps, type PayloadBlockProps } from '@payload-toolkit/builder-react'
 
 type Media = { url?: string | null; alt?: string | null; width?: number | null; height?: number | null }
 type LinkData = {
@@ -90,6 +94,45 @@ export function FaqAccordionLeaf({ heading, faqs }: PayloadBlockProps<{ heading?
         </details>
       ))}
     </div>
+  )
+}
+
+type PageFacts = { postCount?: number; latestPost?: string | null }
+
+/** Written as `<Component block={block} context={context} />`: the block, and the page's data. */
+export function PageFactsLeaf({ block, context }: { block: { label?: string | null }; context: PageFacts }) {
+  return (
+    <div className="rounded-xl bg-indigo-50 p-6 text-indigo-950">
+      <p className="text-sm tracking-wide uppercase">{block.label}</p>
+      <p className="mt-1 text-4xl font-bold">{context.postCount ?? '–'}</p>
+      {context.latestPost && <p className="mt-2 text-sm">Latest: {context.latestPost}</p>}
+    </div>
+  )
+}
+
+/**
+ * The `fieldDemo` block (./fieldSemantics.ts): a builder block, so it spreads `attributes` and uses
+ * only the block's own classes. It lists the props, to check the field logic by eye.
+ */
+export function FieldDemoBlock({ props, className, attributes }: BlockComponentProps) {
+  const items = Array.isArray(props.items) ? (props.items as Array<{ label?: unknown }>) : []
+  const rows: Array<[string, unknown]> = [
+    ['SKU', props.sku],
+    ['Slug', props.slug],
+    ['Headline', props.headline],
+    ['Saved note', props.savedNote],
+    ['Admin only', props.adminOnly],
+    ['Items', items.map((item) => String(item.label ?? '')).join(', ')],
+  ]
+  return (
+    <dl {...attributes} className={className}>
+      {rows.map(([label, value]) => (
+        <div key={label}>
+          <dt>{label}</dt>
+          <dd>{typeof value === 'string' && value !== '' ? value : '–'}</dd>
+        </div>
+      ))}
+    </dl>
   )
 }
 
@@ -183,7 +226,13 @@ export function RenderBlocks({ blocks }: { blocks?: LeafData[] | null }): ReactN
 /** Every component by Payload slug, for `fromPayloadComponents`. */
 export const legacyComponentMap: Record<string, ComponentType<never>> = { ...sectionComponents, ...leafComponents }
 
-/** The Tailwind classes these components use, by slug (the builder's CSS covers only listed classes). */
+/**
+ * Classes by slug that go into the builder's generated CSS as well. Not for the canvas (it loads
+ * the site's CSS): for order. The generated CSS comes after the site's CSS, so its `.flex` (from a
+ * header or footer layout) would beat a component's `md:grid` from the site's CSS. Listing the
+ * component's classes puts them in the same build as the layout's classes, in Tailwind's order.
+ * Components without responsive variants of common classes need no list (see ./server.tsx).
+ */
 export const legacyClasses: Record<string, string[]> = {
   heading: ['text-center', 'text-xs', 'font-semibold', 'tracking-widest', 'text-gray-500', 'uppercase', 'text-3xl', 'font-bold'],
   richText: ['prose', 'max-w-none'],

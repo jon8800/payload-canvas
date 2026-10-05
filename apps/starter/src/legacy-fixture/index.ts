@@ -11,7 +11,7 @@
 import { fromPayloadBlocks } from '@payload-toolkit/builder/blocks'
 import { fromPayloadComponents } from '@payload-toolkit/builder-react'
 
-import { legacyClasses, legacyComponentMap } from './components'
+import { FieldDemoBlock, legacyClasses, legacyComponentMap, PageFactsLeaf } from './components'
 import { legacyBlockConfigs, rootSlugs } from './configs'
 
 export { legacyBlockConfigs } from './configs'
@@ -28,4 +28,16 @@ export const legacyBuilderBlocks = fromPayloadBlocks(legacyBlockConfigs, {
   overrides: Object.fromEntries(Object.entries(legacyClasses).map(([slug, classes]) => [slug, { classes }])),
 })
 
-export const legacyComponents = fromPayloadComponents(legacyComponentMap, legacyBuilderBlocks)
+/**
+ * The client-safe components (the site and the canvas). The async server components are in
+ * ./server.tsx: the canvas renders those blocks on the server.
+ */
+export const legacyComponents = {
+  ...fromPayloadComponents(legacyComponentMap, legacyBuilderBlocks),
+  // `{ block, context }` instead of spread props. `context` is the page data (see ./server.tsx).
+  ...fromPayloadComponents({ pageFacts: PageFactsLeaf }, legacyBuilderBlocks, {
+    props: (block, context) => ({ block, context }),
+  }),
+  // The field logic demo (./fieldSemantics.ts), a builder block.
+  fieldDemo: FieldDemoBlock,
+}

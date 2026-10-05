@@ -76,7 +76,8 @@ export function Overlay() {
   const assistantFlash = useValue(runtime.assistantFlash)
   const selectedId = useEditor(runtime.store, (s) => s.selectedId)
   const hoveredId = useEditor(runtime.store, (s) => s.hoveredId)
-  const layout = useEditor(runtime.store, (s) => s.layout)
+  // Names and text previews in the editor's locale.
+  const layout = useEditor(runtime.store, (s) => s.view)
   const inline = useValue(inlineEditing(runtime))
 
   const rectOf = (id: string | null) => (id ? measurement?.blocks.find((b) => b.id === id)?.rect : undefined)

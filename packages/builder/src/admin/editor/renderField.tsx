@@ -26,6 +26,8 @@ import { ManyValuesField } from './fields/ManyValuesField'
 import { PointField } from './fields/PointField'
 import { RichTextField } from './fields/RichTextField'
 import { asId, formatProblem, fromRelationshipInput, isFieldVisible, isRecord, toRelationshipInput, type FieldShape } from './fields/values'
+import { FieldProblem, FieldProblemsProvider } from './fields/FieldProblems'
+import { LocaleFieldFrame, LocaleFieldsProvider, useInspectorProps, useLocalePlaceholder } from './locale/LocaleField'
 import { useRuntime } from './runtime'
 import { BindingScopeProvider, FieldSlot } from './templates/Bindable'
 import './fields/fields.scss'
@@ -86,6 +88,8 @@ function Unsupported({ label, reason }: { label: string; reason: string }) {
  */
 export function RenderBlockField({ field, onChange, path, value }: Props) {
   const { config } = useConfig()
+  // In another locale, an untranslated text shows the fallback language's text as its placeholder.
+  const placeholder = useLocalePlaceholder(path)
   const label = fieldLabel(field)
   const description = fieldDescription(field)
   const required = 'required' in field ? Boolean(field.required) : false
@@ -115,6 +119,7 @@ export function RenderBlockField({ field, onChange, path, value }: Props) {
           label={label}
           onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
           path={path}
+          placeholder={placeholder}
           required={required}
           value={asString(value)}
         />
@@ -147,6 +152,7 @@ export function RenderBlockField({ field, onChange, path, value }: Props) {
           label={label}
           onChange={(e: ChangeEvent<HTMLTextAreaElement>) => onChange(e.target.value)}
           path={path}
+          placeholder={placeholder}
           required={required}
           rows={field.type === 'code' ? 8 : 4}
           value={asString(value)}
@@ -370,10 +376,17 @@ export function RenderBlockFields({ fields, data, path, onChange, scope = fields
     const fieldPath = `${path}.${name}`
     const onFieldChange = (value: unknown) => setField(name, value)
     out.push(
-      // The slot adds binding controls (templates, collection lists) around the normal input.
-      <FieldSlot key={name} field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} label={fieldLabel(field)}>
-        <RenderBlockField field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} />
-      </FieldSlot>,
+      <Fragment key={name}>
+        {/* In another locale: "Not translated" or "Translated" under a localized field. */}
+        <LocaleFieldFrame path={fieldPath} name={name}>
+          {/* The slot adds binding controls (templates, collection lists) around the normal input. */}
+          <FieldSlot field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} label={fieldLabel(field)}>
+            <RenderBlockField field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} />
+          </FieldSlot>
+        </LocaleFieldFrame>
+        {/* The message of the field's own `validate` function (checked on the server). */}
+        <FieldProblem path={fieldPath} />
+      </Fragment>,
     )
   })
   return <>{out}</>
@@ -386,11 +399,13 @@ export function RenderBlockFields({ fields, data, path, onChange, scope = fields
  */
 export function BlockContentFields({ block }: { readonly block: Block }) {
   const runtime = useRuntime()
+  // `block` is the editor's locale view. Untranslated text props are left out: their fallback is
+  // the placeholder, so typing starts a translation instead of editing the other language's text.
+  const props = useInspectorProps(block)
   const def = getBlockDefinition(runtime.config.blocks, block.type)
   if (!def) return <p className="builder-editor__hint">Unknown block type “{block.type}”.</p>
   if (def.fields.length === 0) return <p className="builder-editor__hint">This block has no content fields.</p>
 
-  const props = block.props ?? {}
   const handleChange = (next: Record<string, unknown> | undefined) => {
     const after = next ?? {}
     const changed = Object.keys(after).filter((key) => after[key] !== props[key])
@@ -412,7 +427,11 @@ export function BlockContentFields({ block }: { readonly block: Block }) {
   return (
     <div className="builder-editor__fields">
       <BindingScopeProvider block={block} prefix={`builder.${block.id}.`}>
-        <RenderBlockFields fields={def.fields} data={props} path={`builder.${block.id}`} onChange={handleChange} />
+        <FieldProblemsProvider block={block}>
+          <LocaleFieldsProvider block={block}>
+            <RenderBlockFields fields={def.fields} data={props} path={`builder.${block.id}`} onChange={handleChange} />
+          </LocaleFieldsProvider>
+        </FieldProblemsProvider>
       </BindingScopeProvider>
     </div>
   )

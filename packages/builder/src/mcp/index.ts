@@ -23,13 +23,19 @@ import {
 } from '../core/bindings'
 import { createId } from '../core/ids'
 import { blockJsonSchema } from '../core/schema'
-import { normalizeLayout, subtreeIds } from '../core/tree'
-import type { BlockDefinition, Layout, Operation, SectionDefinition } from '../core/types'
+import { getBlockDefinition } from '../core/blocks'
+import { localeSettingsOf, localizedKeys, resolveLayoutLocale, stampLocale, untranslatedKeys } from '../core/locale'
+import { normalizeLayout, subtreeIds, walkBlocks } from '../core/tree'
+import type { BlockDefinition, Layout, LocaleSettings, Operation, SectionDefinition } from '../core/types'
+import { runPropValidators } from '../core/fieldValidate'
 import { validateLayout } from '../core/validate'
 import { actorFromUser, splitLayoutErrors, userLabel, type LiveDocStore } from '../live/apply'
+import { fieldRegistryOf, propAccessCheck } from '../live/fieldChecks'
+import { builderConfigOf } from '../live/document'
 import { liveRuntimeOf } from '../live/runtime'
 import type { CommitResult } from '../live/session'
 import type { LiveActor } from '../live/types'
+import { storedLayout } from '../plugin/hook'
 import { builderViewPath, documentPath, draftPreviewPath } from '../plugin/links'
 import { listCollectionsOf } from '../plugin/listCollections'
 import { findSection, loadSavedSections, savedSectionsConfigOf } from '../plugin/sections'
@@ -130,6 +136,10 @@ const operationSchema = z.discriminatedUnion('type', [
         .record(z.string(), z.string().nullable())
         .optional()
         .describe('Merged into the existing bindings: prop path -> document field path. null removes a binding.'),
+      locale: z
+        .string()
+        .optional()
+        .describe('Localized documents: the locale whose values `props` and `unsetProps` change (default: the tool\'s `locale`, else the default locale).'),
     })
     .describe('Change a block in place.'),
 ])
@@ -154,6 +164,38 @@ function errorMessage(error: unknown): string {
 /** A collection's config by slug. Loose: an app's generated types allow only its own slugs. */
 function collectionConfig(req: PayloadRequest, collection: string): SanitizedCollectionConfig | undefined {
   return (req.payload.collections as Record<string, { config: SanitizedCollectionConfig } | undefined>)[collection]?.config
+}
+
+/**
+ * The document's locales: the plugin's setting for the collection (it may turn localization off),
+ * else Payload's `localization`. Null when the layout is not localized.
+ */
+function localizationOf(req: PayloadRequest, collection: string): LocaleSettings | null {
+  const plugin = builderConfigOf(req.payload)?.collections[collection]
+  if (plugin && 'localization' in plugin) return plugin.localization ?? null
+  return localeSettingsOf(req.payload.config.localization)
+}
+
+/** Reads the tool's `locale` argument. A string error when the locale is unknown. */
+function localeArgOf(req: PayloadRequest, collection: string, value: unknown): { settings: LocaleSettings | null; locale: string | null } | string {
+  const settings = localizationOf(req, collection)
+  if (value === undefined || value === null || value === '') return { settings, locale: null }
+  if (typeof value !== 'string') return '`locale` must be a locale code.'
+  if (value === 'all') return { settings, locale: 'all' }
+  if (!settings) return `This document has no locales. Leave out \`locale\`.`
+  if (!settings.locales.includes(value)) return `Unknown locale "${value}". Use one of: ${settings.locales.join(', ')}.`
+  return { settings, locale: value }
+}
+
+/** The localized props of the block types a layout uses: `{ heading: ['text'] }`. */
+function localizedPropsOf(layout: Layout, blocks: readonly BlockDefinition[]): Record<string, string[]> {
+  const out: Record<string, string[]> = {}
+  walkBlocks(layout, (block) => {
+    if (out[block.type]) return
+    const keys = [...localizedKeys(getBlockDefinition(blocks, block.type))]
+    if (keys.length > 0) out[block.type] = keys
+  })
+  return out
 }
 
 function hasDrafts(req: PayloadRequest, collection: string): boolean {
@@ -200,6 +242,10 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
         (templatesSlug ? ` "${templatesSlug}" holds templates (layouts for every document of a collection).` : ''),
     )
   const idArg = z.string().min(1).describe('Document id (from findDocument or searchContent).')
+  const localeArg = z
+    .string()
+    .optional()
+    .describe('Localized sites: the locale to read or write, e.g. "de". Default: the default locale. getLayout also takes "all" (every locale\'s values, as stored).')
 
   /** The AI actor shown in the editor: the API key's name when it has one. */
   const aiActor = async (req: PayloadRequest): Promise<LiveActor> => {
@@ -250,6 +296,16 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       actor: await aiActor(req),
       ops,
       blocks,
+      localization: localizationOf(req, collection),
+      // Field access of block props, as for people's edits.
+      access: propAccessCheck(req, {
+        blocks,
+        registry: fieldRegistryOf(req.payload),
+        collection,
+        id,
+        field: fieldOf(collection),
+        localization: localizationOf(req, collection),
+      }),
     })
   }
 
@@ -259,10 +315,16 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     return saved ? [...sections, ...(await loadSavedSections(req, saved.slug))] : sections
   }
 
-  /** The layout people see now: the open live session's, else the saved draft's. */
-  const currentLayout = (req: PayloadRequest, collection: string, doc: Record<string, unknown>) => {
+  /**
+   * The layout people see now: the open live session's, else the saved draft's. Stored form (every
+   * locale): the draft read gives one locale's view, so a localized layout comes from the database.
+   */
+  const currentLayout = async (req: PayloadRequest, collection: string, doc: Record<string, unknown>) => {
     const open = liveRuntimeOf(req.payload).sessions.peek(collection, String(doc.id))
-    return open ? { layout: open.layout, seq: open.seq } : { layout: normalizeLayout(doc[fieldOf(collection)]) }
+    if (open) return { layout: open.layout, seq: open.seq }
+    const config = collectionConfig(req, collection)
+    const stored = localizationOf(req, collection) && config && doc.id !== undefined ? await storedLayout(req, config, doc.id as string | number, fieldOf(collection)) : null
+    return { layout: stored ?? normalizeLayout(doc[fieldOf(collection)]) }
   }
 
   const listBlocks: BuilderMcpTool = {
@@ -379,11 +441,15 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
   const getLayout: BuilderMcpTool = {
     name: 'getLayout',
     routing: { kind: 'collection', action: 'read' },
-    description:
+    description: [
       'Returns the current DRAFT layout of a document with every block id, including unsaved live edits by people who have the page open, plus `version` (the saved draft\'s updatedAt). Call it before applyOperations to get the ids you target. A person may edit the page at the same time, so read it again before a large change.',
-    parameters: { collection: collectionArg, id: idArg },
+      'Localized sites (the result has `localization`): every locale shares one structure (blocks, order, classes); only localized props (`localizedProps`) differ per locale. Pass `locale` to read that locale\'s values: props it has not translated show the fallback value and are listed in `untranslated` (block id -> props). To translate, call applyOperations with the same `locale` and "update" ops for those props.',
+    ].join('\n\n'),
+    parameters: { collection: collectionArg, id: idArg, locale: localeArg },
     handler: async (args, req) => {
       const collection = String(args.collection)
+      const at = localeArgOf(req, collection, args.locale)
+      if (typeof at === 'string') return fail(at)
       let doc: Record<string, unknown>
       try {
         doc = await loadDraft(req, collection, String(args.id))
@@ -391,13 +457,34 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
         return fail(errorMessage(error))
       }
       const titleField = collectionConfig(req, collection)?.admin?.useAsTitle
+      const current = await currentLayout(req, collection, doc)
+      const { settings } = at
+      let localized: Record<string, unknown> = {}
+      if (settings) {
+        const locale = at.locale ?? settings.defaultLocale
+        const untranslated: Record<string, string[]> = {}
+        if (locale !== 'all') {
+          walkBlocks(current.layout, (block) => {
+            const keys = untranslatedKeys(block, blocks, settings, locale)
+            if (keys.length > 0) untranslated[block.id] = keys
+          })
+        }
+        localized = {
+          locale,
+          localization: { defaultLocale: settings.defaultLocale, locales: settings.locales, fallback: settings.fallback },
+          localizedProps: localizedPropsOf(current.layout, blocks),
+          ...(Object.keys(untranslated).length > 0 ? { untranslated } : {}),
+          ...(locale === 'all' ? {} : { layout: resolveLayoutLocale(current.layout, blocks, settings, locale) }),
+        }
+      }
       return text({
         collection,
         id: doc.id,
         ...(titleField && typeof doc[titleField] === 'string' ? { title: doc[titleField] } : {}),
         ...(doc._status ? { status: doc._status } : {}),
         version: doc.updatedAt,
-        ...currentLayout(req, collection, doc),
+        ...current,
+        ...localized,
       })
     },
   }
@@ -410,6 +497,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       'Operations: insert { block, to }, move { id, to }, remove { id }, duplicate { id, newId? }, update { id, props?, unsetProps?, className?, hidden?, bindings?, label? }. "update" merges props and bindings; className REPLACES all classes, so send the full list.',
       'Templates are edited the same way: collection = the templates collection, id = the template id from listTemplates.',
       'If any operation fails, nothing is saved and the error names the failing operation. Call getLayout for current ids first. The result is validated against the block schemas: missing required props are allowed in drafts (warnings), wrong types are errors. insert and move refuse a block that a slot does not accept, also deeper inside (for example no button or form anywhere inside a link).',
+      'Localized sites: with `locale`, "update" props change that locale\'s values of localized props (a translation); other props and everything else (insert, move, remove, classes) change every locale. Inserted blocks hold the default locale\'s values: insert first, then translate with "update" in the locale.',
       NO_DIRECT_EDIT,
       LAYOUT_GUIDE,
     ].join('\n\n'),
@@ -417,12 +505,17 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       collection: collectionArg,
       id: idArg,
       operations: z.array(operationSchema).min(1).describe('Operations, applied in order.'),
+      locale: localeArg,
     },
     handler: async (args, req) => {
+      const collection = String(args.collection)
+      const at = localeArgOf(req, collection, args.locale)
+      if (typeof at === 'string') return fail(at)
+      if (at.locale === 'all') return fail('`locale` "all" only reads. Write one locale at a time.')
       const ops = (args.operations as Record<string, unknown>[]).map((op) =>
         op.type === 'duplicate' && !op.newId ? { ...op, newId: createId() } : op,
       )
-      const result = await apply(req, String(args.collection), String(args.id), ops)
+      const result = await apply(req, collection, String(args.id), stampLocale(ops as Operation[], at.locale, at.settings))
       if (!result.ok) return fail(result.error, result.errors)
       const changed = new Set<string>()
       for (const op of result.ops) {
@@ -443,7 +536,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     name: 'validateLayout',
     routing: { kind: 'collection', action: 'read' },
     description:
-      'Checks a layout against the block schemas without saving. Pass `layout` (the JSON object) to check a layout you wrote, or only `id` to check the document\'s current draft. Returns `errors` (block a save) and `warnings` (allowed in drafts: missing required props, unknown props).',
+      'Checks a layout against the block schemas without saving. Pass `layout` (the JSON object) to check a layout you wrote, or only `id` to check the document\'s current draft. Returns `errors` (block a save) and `warnings` (allowed in drafts, but they block publishing: missing required props, values outside their limits, messages from the validate functions of props; unknown props never block).',
     parameters: {
       collection: collectionArg,
       id: idArg.optional(),
@@ -458,16 +551,41 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
           return fail('`layout` is not valid JSON')
         }
       }
+      let doc: Record<string, unknown> | null = null
       if (layout === undefined) {
         if (!args.id) return fail('Pass `layout` or `id`.')
         try {
-          const doc = await loadDraft(req, String(args.collection), String(args.id))
-          layout = currentLayout(req, String(args.collection), doc).layout
+          doc = await loadDraft(req, String(args.collection), String(args.id))
+          layout = (await currentLayout(req, String(args.collection), doc)).layout
         } catch (error) {
           return fail(errorMessage(error))
         }
       }
-      const { blocking, warnings } = splitLayoutErrors(withoutBoundRequired(validateLayout(layout, blocks), layout))
+      const localization = localizationOf(req, String(args.collection))
+      const { blocking, warnings } = splitLayoutErrors(withoutBoundRequired(validateLayout(layout, blocks, { localization }), layout))
+      // The props' own `validate` functions (publish only, so they are warnings), on a layout that
+      // has the right shape.
+      if (blocking.length === 0) {
+        const collection = String(args.collection)
+        const field = fieldOf(collection)
+        const normalized = normalizeLayout(layout)
+        warnings.push(
+          ...(await runPropValidators(normalized, {
+            blocks,
+            registry: fieldRegistryOf(req.payload),
+            ctx: {
+              layoutField: field,
+              req,
+              collection: collectionConfig(req, collection) ?? null,
+              operation: 'update',
+              id: args.id === undefined ? undefined : String(args.id),
+              data: { ...doc, [field]: normalized },
+              overrideAccess: false,
+            },
+            localization,
+          })),
+        )
+      }
       return text({ valid: blocking.length === 0, errors: blocking, warnings })
     },
   }

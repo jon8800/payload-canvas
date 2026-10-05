@@ -104,7 +104,8 @@ function visitFields(fields: readonly unknown[] | undefined, props: Record<strin
  * relationship props (also inside groups, arrays and blocks fields), link groups that point at a
  * document, and upload, relationship and internal link nodes in rich text props. Nested slots and
  * hidden blocks count. Bindings read the rendered document at runtime, so they add nothing; a bound
- * prop's own value is its fallback and counts. Populated values (`{ id, … }`) give their ID.
+ * prop's own value is its fallback and counts. Every locale's values count (`block.locales`).
+ * Populated values (`{ id, … }`) give their ID.
  */
 export function collectReferences(layout: Layout, blocks: readonly BlockDefinition[]): Reference[] {
   const definitions = new Map(blocks.map((definition) => [definition.type, definition]))
@@ -118,7 +119,10 @@ export function collectReferences(layout: Layout, blocks: readonly BlockDefiniti
   }
   walkBlocks(layout, (block) => {
     const definition = definitions.get(block.type)
-    if (definition && block.props) visitFields(definition.fields, block.props, add)
+    if (!definition) return
+    if (block.props) visitFields(definition.fields, block.props, add)
+    // Translations hold their own documents (a German image, a German link target).
+    for (const values of Object.values(block.locales ?? {})) visitFields(definition.fields, values, add)
   })
   return [...found.values()]
 }

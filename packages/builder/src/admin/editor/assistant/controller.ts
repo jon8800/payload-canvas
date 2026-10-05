@@ -118,7 +118,8 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
     const errors: string[] = []
     // One by one: an operation that conflicts with a local edit fails alone, the rest still apply.
     for (const op of ops) {
-      if (store.apply(op, { group })) applied.push(op)
+      // The server already gave each prop update its locale.
+      if (store.apply(op, { group, stampLocale: false })) applied.push(op)
       else errors.push((store.getState().lastError ?? 'it could not be applied').replace(/^Operation \d+ \([^)]*\):\s*/, ''))
     }
     if (errors.length > 0) {
@@ -264,6 +265,8 @@ export function createAssistant(runtime: Runtime, endpoint: string) {
       selectedId: editor.selectedId,
       context: templateContext(runtime.template.get()),
       canvasWidth: editor.canvasWidth ?? (Math.round(runtime.frame.get().width) || null),
+      // Localized layouts: the assistant reads and writes the locale the editor shows.
+      ...(editor.locale ? { locale: editor.locale } : {}),
     }
     const controller = new AbortController()
     abort = controller

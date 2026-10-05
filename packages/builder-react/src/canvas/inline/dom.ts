@@ -3,6 +3,7 @@
 
 import type { Block, BlockDefinition } from '@payload-toolkit/builder/core'
 import { EDITABLE_TEXT_ATTRIBUTE } from '../../render/editable'
+import { SERVER_BLOCK_ATTRIBUTE } from '../serverBlocks'
 import { inlineKind, readText } from './model'
 
 /**
@@ -150,7 +151,8 @@ export function editableAt(
 ): EditableTarget | null {
   const blockEl = ownerBlock(target)
   const blockId = blockEl?.dataset.blockId
-  if (!blockEl || !blockId) return null
+  // The server renders this block: React does not own its text the usual way. Edit it in the inspector.
+  if (!blockEl || !blockId || blockEl.hasAttribute(SERVER_BLOCK_ATTRIBUTE)) return null
   const marked = target.closest<HTMLElement>(`[${EDITABLE_TEXT_ATTRIBUTE}]`)
   if (marked && ownerBlock(marked) === blockEl) {
     return { element: marked, blockId, path: marked.getAttribute(EDITABLE_TEXT_ATTRIBUTE) ?? '' }
@@ -176,7 +178,7 @@ export function firstEditable(
   definition: (type: string) => BlockDefinition | undefined,
 ): EditableTarget | null {
   const blockId = blockEl.dataset.blockId
-  if (!blockId) return null
+  if (!blockId || blockEl.hasAttribute(SERVER_BLOCK_ATTRIBUTE)) return null
   const own = (el: Element) => ownerBlock(el) === blockEl
   const candidates = [blockEl, ...blockEl.querySelectorAll<HTMLElement>(`[${EDITABLE_TEXT_ATTRIBUTE}]`)]
   const marked = candidates.find((el) => el.hasAttribute(EDITABLE_TEXT_ATTRIBUTE) && own(el) && el.getClientRects().length > 0)

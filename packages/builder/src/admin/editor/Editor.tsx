@@ -64,15 +64,17 @@ type EditorProps = {
   meta: BuilderDocMeta
   /** The admin's icon graphic, for the top bar. */
   icon: ReactNode
+  /** The locale to open a localized layout in. */
+  locale?: string | null
 }
 
 /**
  * The full-screen editor. The document's live session is the source of truth for the layout: the
  * server loads the draft into it, and every edit goes through it (docs/architecture.md section 12).
  */
-export function Editor({ config, meta, icon }: EditorProps) {
+export function Editor({ config, meta, icon, locale }: EditorProps) {
   const { config: payloadConfig } = useConfig()
-  const [runtime] = useState(() => createRuntime(config, payloadConfig.routes.api, meta))
+  const [runtime] = useState(() => createRuntime(config, payloadConfig.routes.api, meta, { locale }))
   const docId = meta.id
   useMultiplayer(runtime, { docId })
   // Ready once the first session arrived. A reconnect keeps the editor open.

@@ -8,11 +8,14 @@ import { collectClasses, type BlockDefinition, type Layout } from '@payload-tool
 import type { CanvasCssInput } from '@payload-toolkit/builder/css'
 import { createCanvasCompiler, type CanvasCompiler } from '@payload-toolkit/builder/css-browser'
 import { post, unwrap, type AdminToCanvas, type CanvasInit, type CanvasToAdmin, type ThumbnailRequest } from '@payload-toolkit/builder/protocol'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { defaultResolveLink, RenderLayout } from '../../index'
+import { defaultResolveLink, RenderLayout, type PageData } from '../../index'
 import type { BuilderCanvasProps } from '../BuilderCanvas'
 import { resolveCanvasLayout } from '../resolveLayout'
+import { ServerBlocksContext } from '../ServerBlock'
+import { createServerBlocks } from '../serverBlocks'
+import { withServerBlocks } from '../serverComponents'
 import { captureElement } from './capture'
 
 /** No scrollbar (it would narrow the page), hidden blocks left out, empty slots outlined. */
@@ -27,6 +30,10 @@ html { overflow: hidden; scrollbar-width: none; }
 const SETTLE_MS = 40
 /** Longest wait for the theme's font stylesheet. */
 const FONTS_TIMEOUT_MS = 4000
+/** Longest wait for blocks rendered on the server. */
+const SERVER_TIMEOUT_MS = 10000
+
+const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
 
 /** Waits until the theme's font stylesheet (rendered below) has loaded, or failed. */
 function fontsLoaded(): Promise<void> {
@@ -43,13 +50,13 @@ function fontsLoaded(): Promise<void> {
   })
 }
 
-type Job = { request: ThumbnailRequest; layout: Layout; css: string }
+type Job = { request: ThumbnailRequest; layout: Layout; stored: Layout; css: string; pageData: PageData | null }
 
 function send(message: CanvasToAdmin) {
   post(window.parent, message)
 }
 
-export function ThumbnailCanvas({ blocks, components, plugins, resolveLink }: BuilderCanvasProps) {
+export function ThumbnailCanvas({ blocks, components, plugins, resolveLink, server }: BuilderCanvasProps) {
   const [init, setInit] = useState<CanvasInit | null>(null)
   const [job, setJob] = useState<Job | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -61,6 +68,12 @@ export function ThumbnailCanvas({ blocks, components, plugins, resolveLink }: Bu
   /** Resolves when the current job has rendered. */
   const rendered = useRef<(() => void) | null>(null)
   const definitions: BlockDefinition[] | undefined = ownBlocks ?? init?.blocks
+  // Blocks rendered on the server: no debounce, the picture waits for them.
+  const [serverBlocks] = useState(() => (server ? createServerBlocks(server, { debounceMs: 0, maxEntries: 50 }) : null))
+  const canvasComponents = useMemo(
+    () => withServerBlocks(components, definitions, Boolean(serverBlocks)),
+    [components, definitions, serverBlocks],
+  )
 
   // Messages: init once, then thumbnail requests. `ready` repeats until init arrives.
   useEffect(() => {
@@ -95,14 +108,23 @@ export function ThumbnailCanvas({ blocks, components, plugins, resolveLink }: Bu
       return createCanvasCompiler((await res.json()) as CanvasCssInput, pluginsRef.current)
     })
 
+    serverBlocks?.setScope({ document: init.document ?? null, context: null })
+    const pageData: Promise<PageData | null> = serverBlocks ? serverBlocks.pageData() : Promise.resolve(null)
+
     const run = async (request: ThumbnailRequest) => {
-      const layout = await resolveCanvasLayout({ version: 1, blocks: request.blocks }, null, init.api, definitions, linkResolver)
+      const stored: Layout = { version: 1, blocks: request.blocks }
+      const layout = await resolveCanvasLayout(stored, null, init.api, definitions, linkResolver)
       const css = (await compiler).build(collectClasses(layout, definitions))
       const done = new Promise<void>((resolve) => {
         rendered.current = resolve
       })
-      setJob({ request, layout, css })
+      setJob({ request, layout, stored, css, pageData: await pageData })
       await done
+      if (serverBlocks) {
+        await Promise.race([serverBlocks.idle(), new Promise((resolve) => setTimeout(resolve, SERVER_TIMEOUT_MS))])
+        // The server content shows in a transition: let it commit and paint.
+        await nextFrame()
+      }
       await fontsLoaded()
       await new Promise((resolve) => setTimeout(resolve, SETTLE_MS))
       const root = rootRef.current
@@ -148,15 +170,18 @@ export function ThumbnailCanvas({ blocks, components, plugins, resolveLink }: Bu
       {job?.request.theme?.fontsHref ? <link rel="stylesheet" href={job.request.theme.fontsHref} data-builder-thumbnail-fonts="" /> : null}
       <div ref={rootRef} data-builder-thumbnail="">
         {job && definitions && (
-          <RenderLayout
-            key={job.request.key}
-            layout={job.layout}
-            blocks={definitions}
-            components={components}
-            css={job.css}
-            mode="canvas"
-            resolveLink={resolveLink}
-          />
+          <ServerBlocksContext.Provider value={serverBlocks ? { store: serverBlocks, layout: job.stored, version: 0 } : null}>
+            <RenderLayout
+              key={job.request.key}
+              layout={job.layout}
+              blocks={definitions}
+              components={canvasComponents}
+              css={job.css}
+              mode="canvas"
+              resolveLink={resolveLink}
+              pageData={job.pageData}
+            />
+          </ServerBlocksContext.Provider>
         )}
       </div>
     </>

@@ -97,6 +97,8 @@ export type Awareness = {
   cursor: CollaboratorCursor | null
   /** Canvas width in px, so others can see which breakpoint someone is editing. */
   canvasWidth: number | null
+  /** The locale the editor shows and edits (localized documents only). */
+  locale?: string | null
 }
 
 /** Sent to every editor of a document when the session applies operations. */
@@ -218,6 +220,23 @@ export type LiveCommitRequest = {
 export type LiveCommitResponse =
   | { ok: true; seq: number }
   | { ok: false; error: string; seq: number }
+
+/** `POST {liveEndpoint}/:collection/:id/validate`: the block to check, as the editor has it now. */
+export type LiveValidateRequest = { block: unknown }
+
+/**
+ * One message of a prop's own `validate` function. `propPath` is the path below the block's
+ * props, with array indexes as segments: `title`, `items.1.label`.
+ */
+export type LiveFieldProblem = {
+  propPath: string
+  message: string
+  /** The message is about this locale's own value (a translation). Left out for the default locale. */
+  locale?: string
+}
+
+/** The answer of the validate endpoint. */
+export type LiveValidateResponse = { ok: true; problems: LiveFieldProblem[] } | { ok: false; error: string }
 
 /** `POST {liveEndpoint}/:collection/:id/awareness` */
 export type LiveAwarenessRequest = { clientId: string; awareness: Awareness }

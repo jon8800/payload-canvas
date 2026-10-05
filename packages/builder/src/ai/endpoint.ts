@@ -6,8 +6,9 @@
 import { addDataAndFileToRequest, docAccessOperation, type Endpoint, type PayloadRequest, type Where } from 'payload'
 
 import { TEMPLATE_TARGET_FIELD } from '../core/bindings'
+import { knownLocale } from '../core/locale'
 import { indexLayout, isPlainObject, normalizeLayout } from '../core/tree'
-import type { BindingField, BlockDefinition, Layout, SectionDefinition, StyleTokens, TemplateContext } from '../core/types'
+import type { BindingField, BlockDefinition, Layout, LocaleSettings, SectionDefinition, StyleTokens, TemplateContext } from '../core/types'
 import { SSE_HEADERS, sseFrame } from '../live/endpoints'
 import { loadSavedSections } from '../plugin/sections'
 import { anthropicAdapter, type AiClient } from './agent'
@@ -33,7 +34,7 @@ const HEARTBEAT_MS = 15_000
 export type AiEndpointOptions = {
   ai: AiOptions
   /** Builder collections and their layout field names. */
-  collections: Record<string, { field: string }>
+  collections: Record<string, { field: string; localization?: LocaleSettings | null }>
   blocks: BlockDefinition[]
   sections: SectionDefinition[]
   /** Theme tokens for the system prompt (colors, fonts, breakpoints). Null when unavailable. */
@@ -68,7 +69,7 @@ function statusOf(error: unknown): number {
 /** Checks the body. Returns the request or an error message. */
 export function parseChatRequest(body: unknown): AiChatRequest | string {
   if (!isPlainObject(body)) return 'The body must be a JSON object'
-  const { collection, id, messages, layout, selectedId, context, canvasWidth } = body
+  const { collection, id, messages, layout, selectedId, context, canvasWidth, locale } = body
   if (typeof collection !== 'string' || !collection) return '`collection` must be a string'
   if (!(typeof id === 'string' && id) && typeof id !== 'number') return '`id` must be a string or a number'
   if (!Array.isArray(messages) || messages.length === 0) return '`messages` must be a non-empty array'
@@ -95,6 +96,7 @@ export function parseChatRequest(body: unknown): AiChatRequest | string {
   if (canvasWidth !== undefined && canvasWidth !== null && (typeof canvasWidth !== 'number' || !Number.isFinite(canvasWidth))) {
     return '`canvasWidth` must be a number or null'
   }
+  if (locale !== undefined && locale !== null && typeof locale !== 'string') return '`locale` must be a locale code or null'
   return {
     collection,
     id: id as string | number,
@@ -108,6 +110,7 @@ export function parseChatRequest(body: unknown): AiChatRequest | string {
     selectedId: (selectedId as string | null | undefined) ?? null,
     context: (context as TemplateContext | null | undefined) ?? null,
     canvasWidth: (canvasWidth as number | null | undefined) ?? null,
+    locale: typeof locale === 'string' && locale ? locale : null,
   }
 }
 
@@ -339,6 +342,10 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
       if ('code' in adapter) return errorResponse(500, adapter.code, adapter.message)
 
       const layout = normalizeLayout(body.layout)
+      // Localized layouts: the assistant reads and writes the editor's locale.
+      const localization = target.localization ?? null
+      const locale = localization ? knownLocale(localization, body.locale) : null
+      const workspace = new Workspace(layout, blocks, { localization, locale })
       const selectedId = body.selectedId && indexLayout(layout).has(body.selectedId) ? body.selectedId : null
       const titleField = config?.admin?.useAsTitle
       const title = titleField && typeof doc[titleField] === 'string' ? (doc[titleField] as string) : undefined
@@ -358,7 +365,8 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
               collection: body.collection,
               id: body.id,
               title,
-              layout,
+              layout: workspace.view,
+              locale: localization && locale ? { settings: localization, locale, untranslated: workspace.untranslatedCount() } : null,
               selectedId: body.selectedId,
               selectedPath: selectedId ? pathOf(layout, selectedId) : undefined,
               canvasWidth: body.canvasWidth,
@@ -397,7 +405,7 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
               maxSteps: ai.maxSteps ?? DEFAULT_MAX_STEPS,
               messages: body.messages,
               context,
-              workspace: new Workspace(layout, blocks),
+              workspace,
               env: { ...env, sections: [...sections, ...saved], searchMedia: mediaSearch(req, ai.mediaCollection ?? 'media') },
               emit: (event) => write(sseFrame(event.type, event)),
               signal: controller.signal,

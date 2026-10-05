@@ -181,7 +181,27 @@ export const FaqAccordionBlock: Block = {
   ],
 }
 
-export const leafBlocks = [HeadingBlock, RichTextBlock, ImageBlock, ButtonBlock, FaqAccordionBlock]
+/**
+ * A leaf whose component is an async server component that queries Payload (as the model grids
+ * and review carousels of real sites do). The canvas renders it on the server.
+ */
+export const LatestPostsBlock: Block = {
+  slug: 'latestPosts',
+  labels: { singular: 'Latest Posts', plural: 'Latest Posts' },
+  fields: [
+    { name: 'heading', type: 'text', defaultValue: 'Latest posts' },
+    { name: 'count', type: 'number', defaultValue: 3, min: 1, max: 12 },
+  ],
+}
+
+/** A leaf whose component takes `{ block, context }`, where `context` is data the page loads once. */
+export const PageFactsBlock: Block = {
+  slug: 'pageFacts',
+  labels: { singular: 'Page Facts', plural: 'Page Facts' },
+  fields: [{ name: 'label', type: 'text', defaultValue: 'Posts on this site' }],
+}
+
+export const leafBlocks = [HeadingBlock, RichTextBlock, ImageBlock, ButtonBlock, FaqAccordionBlock, LatestPostsBlock, PageFactsBlock]
 // `as never`: the generated `BlockSlug` type does not know the fixture's blocks.
 const leafSlugs = leafBlocks.map((b) => b.slug) as never[]
 
@@ -254,6 +274,20 @@ export const TwoColumnSection: Block = {
   ],
 }
 
+/**
+ * A section whose component is an async server component (it counts the posts) with a nested
+ * blocks field. It renders the field with `PayloadSlot`, so its children stay editable on the canvas.
+ */
+export const PostsSection: Block = {
+  slug: 'postsSection',
+  labels: { singular: 'Posts Section', plural: 'Posts Sections' },
+  admin: { disableBlockName: true },
+  fields: [
+    { name: 'title', type: 'text', defaultValue: 'From the blog' },
+    { name: 'content', type: 'blocks', blockReferences: leafSlugs, blocks: [] },
+  ],
+}
+
 /** A flat block, as on sites without sections: text fields and an array. */
 export const SectionIntroBlock: Block = {
   slug: 'sectionIntro',
@@ -266,7 +300,7 @@ export const SectionIntroBlock: Block = {
 }
 
 /** The page's own blocks field allows these (the sections). */
-export const rootSlugs: string[] = ['fullWidth', 'twoColumn', 'sectionIntro']
+export const rootSlugs: string[] = ['fullWidth', 'twoColumn', 'sectionIntro', 'postsSection']
 
 /** Top-level `config.blocks` of the fixture site. */
-export const legacyBlockConfigs: Block[] = [FullWidthSection, TwoColumnSection, SectionIntroBlock, ...leafBlocks]
+export const legacyBlockConfigs: Block[] = [FullWidthSection, TwoColumnSection, SectionIntroBlock, PostsSection, ...leafBlocks]

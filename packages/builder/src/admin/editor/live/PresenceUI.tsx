@@ -6,6 +6,7 @@
 
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 
+import { localeLabel } from '../../../core'
 import type { Rect } from '../../../core/types'
 import { Icon } from '../icons'
 import { useRuntime } from '../runtime'
@@ -64,6 +65,7 @@ export function Presence({ widths }: { widths: Parameters<typeof breakpointAt>[0
   const peers = useValue(runtime.peers)
   const follow = useValue(runtime.follow)
   const initialsOf = useInitialsOf()
+  const localization = runtime.store.localization
   if (!live) return null
 
   const others = live.collaborators
@@ -75,7 +77,8 @@ export function Presence({ widths }: { widths: Parameters<typeof breakpointAt>[0
     const who = `${nameOf(info)}${ai ? ' (AI)' : ''}`
     const width = peer?.canvasWidth
     const where = width ? ` · editing on ${breakpointAt(widths, width)} (${width}px)` : ''
-    return `${who}${where} · ${follow === peer?.clientId ? 'click to stop following' : 'click to follow'}`
+    const language = peer?.locale && localization ? ` · in ${localeLabel(localization, peer.locale)}` : ''
+    return `${who}${language}${where} · ${follow === peer?.clientId ? 'click to stop following' : 'click to follow'}`
   }
 
   return (
@@ -105,6 +108,10 @@ export function Presence({ widths }: { widths: Parameters<typeof breakpointAt>[0
               onClick={() => runtime.follow.set(follow === c.clientId ? null : c.clientId)}
             >
               {c.type === 'ai' ? <Icon name="sparkle" size={12} /> : initialsOf(c.name)}
+              {/* The collaborator's language, when it is not the default one. */}
+              {localization && peers.get(c.clientId)?.locale && peers.get(c.clientId)?.locale !== localization.defaultLocale && (
+                <span className="builder-presence__locale">{peers.get(c.clientId)?.locale?.toUpperCase()}</span>
+              )}
             </button>
           ))}
           {others.length > MAX_AVATARS && (

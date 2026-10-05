@@ -14,8 +14,9 @@ import { addDataAndFileToRequest, restoreVersionOperation, type Collection, type
 import { TEMPLATE_DEFAULT_FIELD, TEMPLATE_PREVIEW_FIELD, TEMPLATE_TARGET_FIELD } from '../core/bindings'
 import { describeLayoutErrors, summarizeProblems } from '../core/issues'
 import { normalizeLayout } from '../core/tree'
-import type { BlockDefinition } from '../core/types'
-import { checkLayout, type BindingCheck } from '../plugin/hook'
+import type { FieldRegistry } from '../core/fieldSemantics'
+import type { BlockDefinition, LocaleSettings } from '../core/types'
+import { checkLayout, RAW_LAYOUT_CONTEXT, STORED_LAYOUT_CONTEXT, type BindingCheck } from '../plugin/hook'
 import { documentPath, draftPreviewPath } from '../plugin/links'
 import { payloadErrorMessage, payloadFieldErrors } from './apply'
 import { KEEP_LOCK_CONTEXT } from './fieldsGuard'
@@ -30,6 +31,14 @@ export type BuilderCollectionServer = {
   field: string
   /** Public path of a document (the plugin's `url` option). */
   url?: (doc: Record<string, unknown>) => string
+  /**
+   * Fields the builder replaced but the collection still has (the old `blocks` field after
+   * `migrateBlocksField`). Publish from the builder keeps their published value, so a newer draft
+   * of the old field never goes live with it.
+   */
+  legacyFields?: readonly string[]
+  /** The locales of the layout's localized props. Null or left out: not localized. */
+  localization?: LocaleSettings | null
 }
 
 /** The builder collections and the templates collection. Stored on `config.custom` for the admin view. */
@@ -162,8 +171,40 @@ type ActionResult =
   | { ok: true; doc: Record<string, unknown> }
   | { ok: false; status: number; error: string; errors?: LiveError[] }
 
-/** Block definitions and binding rules for the publish check. Without them, Payload's own errors only. */
-export type PublishCheck = { blocks: readonly BlockDefinition[]; bindings?: BindingCheck }
+/**
+ * Block definitions, binding rules and the props' own field logic for the publish check. Without
+ * them, Payload's own errors only.
+ */
+export type PublishCheck = {
+  blocks: readonly BlockDefinition[]
+  bindings?: BindingCheck
+  fieldRegistry?: FieldRegistry
+  /** The document's locales: translations are checked too. */
+  localization?: LocaleSettings | null
+}
+
+/**
+ * The published values of the legacy fields, to send with Publish. Empty when the document was
+ * never published: then the old field has no published value to keep, and its draft goes live.
+ */
+async function publishedLegacyValues(
+  payload: DocApi,
+  target: SessionTarget,
+  legacyFields: readonly string[] | undefined,
+): Promise<Record<string, unknown>> {
+  if (!legacyFields?.length) return {}
+  // The plugin's own read of values it writes back unchanged: no field access, no prop hooks.
+  const published = await payload.findByID({
+    collection: target.collection,
+    id: target.id,
+    depth: 0,
+    draft: false,
+    overrideAccess: true,
+    context: { [RAW_LAYOUT_CONTEXT]: true },
+  })
+  if (published._status !== 'published') return {}
+  return Object.fromEntries(legacyFields.map((name) => [name, published[name] ?? null]))
+}
 
 type FieldLike = { name?: unknown; label?: unknown; fields?: unknown; tabs?: unknown }
 
@@ -243,7 +284,13 @@ export function documentErrorsOf(error: unknown, fields: unknown, layoutField: s
  */
 export async function runPublishAction(
   req: PayloadRequest,
-  { target, action, runtime, check }: { target: SessionTarget; action: PublishAction; runtime: LiveRuntime; check?: PublishCheck },
+  {
+    target,
+    action,
+    runtime,
+    check,
+    legacyFields,
+  }: { target: SessionTarget; action: PublishAction; runtime: LiveRuntime; check?: PublishCheck; legacyFields?: readonly string[] },
 ): Promise<ActionResult> {
   if (action === 'restore') return { ok: false, status: 400, error: 'Restore needs a version: use restoreDocumentVersion.' }
   if (!target.drafts) return { ok: false, status: 400, error: 'This collection has no drafts, so there is nothing to publish.' }
@@ -254,12 +301,14 @@ export async function runPublishAction(
   const common = { collection: target.collection, id: target.id, depth: 0, overrideAccess: false, user: req.user, req }
   // A plugin save: it skips Payload's document lock and keeps it (someone may be in the settings
   // drawer). See fieldsGuard.ts.
-  const save = { ...common, overrideLock: true, context: { [KEEP_LOCK_CONTEXT]: true } }
+  const save = { ...common, overrideLock: true, context: { [KEEP_LOCK_CONTEXT]: true, [STORED_LAYOUT_CONTEXT]: true } }
+  const localization = check?.localization ?? null
   const fields = payload.collections[target.collection]?.config.fields
   try {
     let doc: Record<string, unknown>
     if (action === 'revert') {
-      const published = await payload.findByID({ ...common, draft: false })
+      // The stored layout: Revert saves it again, so props the user may not read must stay in it.
+      const published = await payload.findByID({ ...common, draft: false, context: { [RAW_LAYOUT_CONTEXT]: true } })
       if (published._status !== 'published') return { ok: false, status: 409, error: 'This document has no published version.' }
       await runtime.sessions.reset(target.collection, target.id, normalizeLayout(published[target.field]))
       const { id: _id, ...data } = published
@@ -267,15 +316,39 @@ export async function runPublishAction(
     } else {
       await runtime.sessions.flush(target.collection, target.id)
       if (action === 'publish' && check) {
-        const draft = await payload.findByID({ ...common, draft: true })
+        const draft = await payload.findByID({ ...common, draft: true, context: { [RAW_LAYOUT_CONTEXT]: true } })
         const layout = runtime.sessions.peek(target.collection, target.id)?.layout ?? normalizeLayout(draft[target.field])
-        const { blocking } = checkLayout(layout, { blocks: check.blocks, publishing: true, bindings: check.bindings, doc: draft })
+        const config = (req.payload.collections as Record<string, { config: unknown } | undefined>)[target.collection]?.config
+        const { blocking } = await checkLayout(layout, {
+          blocks: check.blocks,
+          publishing: true,
+          bindings: check.bindings,
+          localization,
+          doc: draft,
+          fields: check.fieldRegistry
+            ? {
+                registry: check.fieldRegistry,
+                ctx: {
+                  layoutField: target.field,
+                  req,
+                  collection: config ?? null,
+                  operation: 'update',
+                  id: target.id,
+                  data: { ...draft, [target.field]: layout, _status: 'published' },
+                  originalDoc: draft,
+                  overrideAccess: false,
+                },
+              }
+            : undefined,
+        })
         if (blocking.length > 0) {
           const errors: LiveError[] = describeLayoutErrors(layout, blocking, check.blocks)
           return { ok: false, status: 422, error: summarizeProblems({ blockIds: errors.map((e) => e.blockId), layoutDamaged: true }), errors }
         }
       }
-      doc = await payload.update({ ...save, data: { _status: action === 'publish' ? 'published' : 'draft' }, draft: false })
+      // A migrated document still has its old field: Publish keeps that field's published value.
+      const legacy = action === 'publish' ? await publishedLegacyValues(payload, target, legacyFields) : {}
+      doc = await payload.update({ ...save, data: { ...legacy, _status: action === 'publish' ? 'published' : 'draft' }, draft: false })
     }
     const event: LivePublishedEvent = {
       type: 'published',
@@ -326,7 +399,8 @@ export async function restoreDocumentVersion(
   const common = { collection: target.collection, depth: 0, overrideAccess: false, user: req.user, req }
   let version: Awaited<ReturnType<NonNullable<DocApi['findVersionByID']>>>
   try {
-    version = await payload.findVersionByID({ ...common, id: versionId })
+    // The stored layout: the session gets it and saves it, so props the user may not read stay in it.
+    version = await payload.findVersionByID({ ...common, id: versionId, context: { [RAW_LAYOUT_CONTEXT]: true } })
   } catch (error) {
     return { ok: false, status: statusOf(error) === 403 ? 403 : 404, error: 'This version was not found.' }
   }
@@ -336,7 +410,7 @@ export async function restoreDocumentVersion(
   await runtime.sessions.reset(target.collection, target.id, normalizeLayout(version.version?.[target.field]))
   try {
     // A plugin save: keep the document lock of someone in the settings drawer (fieldsGuard.ts).
-    req.context = { ...req.context, [KEEP_LOCK_CONTEXT]: true }
+    req.context = { ...req.context, [KEEP_LOCK_CONTEXT]: true, [STORED_LAYOUT_CONTEXT]: true }
     // The operation, not `payload.restoreVersion`: the Local API drops the `draft` flag (Payload
     // 3.90), and a restored published version would go live at once.
     const doc: Record<string, unknown> = await restoreVersionOperation({
@@ -407,7 +481,13 @@ export function documentEndpoints({ collections, templates, runtime, check }: Do
       if (!req.user) return json({ ok: false, error: 'Unauthorized' } satisfies PublishResponse, 401)
       const target = targetOf(req, collections)
       if (target instanceof Response) return target
-      const result = await runPublishAction(req, { target, action: name, runtime, check })
+      const result = await runPublishAction(req, {
+        target,
+        action: name,
+        runtime,
+        check: check ? { ...check, localization: collections[target.collection]?.localization ?? null } : undefined,
+        legacyFields: collections[target.collection]?.legacyFields,
+      })
       if (!result.ok) {
         return json({ ok: false, error: result.error, ...(result.errors ? { errors: result.errors } : {}) } satisfies PublishResponse, result.status)
       }

@@ -5,6 +5,7 @@ import { resolveBindings, type Block, type BlockDefinition, type Layout, type Te
 import { isRecord, mapFieldValues, type FieldLike, type VisitField } from './fields'
 import { attachListItems, listQueries, type ListQuery } from './lists'
 import type { FetchDocs, ResolveLink } from './types'
+import { localeArgs, localizeLayout, type LocaleArgs, type RenderLocale } from './locale'
 
 type Id = string | number
 type Resolve = (collection: string, id: Id) => unknown
@@ -134,7 +135,7 @@ export function urlResolver(resolveLink: ResolveLink): (context: TemplateContext
   return (context) => resolveLink({ type: 'reference', reference: { relationTo: context.collection, value: context.doc } })
 }
 
-export type LoadLayoutOptions = {
+export type LoadLayoutOptions = RenderLocale & {
   /** Load drafts (draft mode). Otherwise collection lists show published documents only. */
   draft?: boolean
   /**
@@ -168,15 +169,18 @@ export async function loadLayoutData(
 ): Promise<Layout> {
   const draft = options?.draft ?? false
   const context = options?.context ?? null
+  // Localized sites: the layout and its documents in the render's locale (render/locale.ts).
+  const locale = localeArgs(options)
+  const localized = localizeLayout(layout, blocks, payload, options)
   const bound = context
-    ? resolveBindings(layout, context, blocks, options?.resolveLink ? { url: urlResolver(options.resolveLink) } : undefined)
-    : layout
+    ? resolveBindings(localized, context, blocks, options?.resolveLink ? { url: urlResolver(options.resolveLink) } : undefined)
+    : localized
 
   const queries = listQueries(bound, context)
   const items = new Map<string, Array<Record<string, unknown>>>()
   await Promise.all(
     queries.map(async (query) => {
-      items.set(query.blockId, await findListItems(payload, query, draft, options?.user ?? null))
+      items.set(query.blockId, await findListItems(payload, query, draft, options?.user ?? null, locale))
     }),
   )
   const withItems = attachListItems(bound, items)
@@ -192,6 +196,7 @@ export async function loadLayoutData(
       pagination: false,
       // Join fields (for example media's "Used in") are not needed to render; skip their subqueries.
       joins: false,
+      ...locale,
     })
     return new Map(
       (result.docs as Array<Record<string, unknown>>).map((doc) => [doc.id as Id, doc]),
@@ -200,7 +205,13 @@ export async function loadLayoutData(
 }
 
 /** One collection list's documents. An unknown collection or a failed query gives an empty list. */
-async function findListItems(payload: Payload, query: ListQuery, draft: boolean, user: unknown): Promise<Array<Record<string, unknown>>> {
+async function findListItems(
+  payload: Payload,
+  query: ListQuery,
+  draft: boolean,
+  user: unknown,
+  locale: LocaleArgs,
+): Promise<Array<Record<string, unknown>>> {
   const config = (payload.collections as Record<string, { config: { versions?: { drafts?: unknown } } } | undefined>)[query.collection]?.config
   if (!config) return []
   const where: Where[] = []
@@ -217,6 +228,7 @@ async function findListItems(payload: Payload, query: ListQuery, draft: boolean,
       // The visitor's access: unreadable documents and relationships stay out (or stay IDs).
       overrideAccess: false,
       user: user as never,
+      ...locale,
     })
     return result.docs as Array<Record<string, unknown>>
   } catch (error) {

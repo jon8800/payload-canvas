@@ -4,8 +4,9 @@
 import type { ComponentType, ElementType, ReactNode } from 'react'
 import { getBlockDefinition, payloadSlugOf, toPayloadBlock, withFieldDefaults, type BlockDefinition } from '@payload-toolkit/builder/core'
 
+import { isAsyncComponent, renderOnServer, withPageData } from './marks'
 import { PayloadRoot } from './PayloadRoot'
-import type { BlockComponentProps, BlockComponents, RenderMode } from './types'
+import type { BlockComponentProps, BlockComponents, PageData, RenderMode } from './types'
 
 /** What the builder adds to a Payload-shaped component's props, under `builder`. */
 export type PayloadBuilderProps = {
@@ -33,6 +34,13 @@ export type PayloadBlockProps<T = Record<string, unknown>> = T & {
   builder?: PayloadBuilderProps
 }
 
+/**
+ * A block as Payload's `blocks` field stores it: `id`, `blockType`, `blockName`, the field values
+ * (uploads and relationships loaded, defaults filled in) and each slot as a nested array of such
+ * blocks under its field name.
+ */
+export type PayloadBlockData = { id: string; blockType: string; blockName?: string } & Record<string, unknown>
+
 export type FromPayloadComponentOptions = {
   /**
    * The block definitions (the same list as the plugin). They give the Payload `blockType` of
@@ -45,7 +53,28 @@ export type FromPayloadComponentOptions = {
    * a `div` with the classes. `'prop'` passes them only as `builder.className`.
    */
   className?: 'wrap' | 'prop'
+  /**
+   * The props the component gets. Default: the block's data spread as props plus `builder`
+   * (`{ ...block, builder }`). For components that take the block as one prop and the page's
+   * data as another, as in `<Component block={block} context={context} />`:
+   *
+   * ```ts
+   * fromPayloadComponent(Hero, { blocks, props: (block, context) => ({ block, context }) })
+   * ```
+   *
+   * `context` is the page data: `RenderLayout`'s `pageData` on the site, and the `pageData`
+   * loader of `createCanvasServer` in the canvas. `{}` when there is none.
+   */
+  props?: (block: PayloadBlockData, context: PageData, builder: PayloadBuilderProps) => object
+  /**
+   * `'server'`: the canvas renders this block on the server (see `createCanvasServer`), even
+   * when the canvas can import the component. Async components (server components that load
+   * data) render on the server without this.
+   */
+  render?: 'server'
 }
+
+const EMPTY_PAGE_DATA: PageData = Object.freeze({}) as PageData
 
 /**
  * Wraps a component written for Payload's blocks data, so `RenderLayout` and the canvas can
@@ -59,27 +88,31 @@ export type FromPayloadComponentOptions = {
  * render the slot with `PayloadSlot` (see there) instead of your own renderer.
  *
  * In the canvas the adapter puts the editor attributes (`data-block-id`) on the component's
- * first element, through a `display: contents` wrapper that adds no box.
+ * first element. It adds no element of its own (see `PayloadRoot`).
+ *
+ * Async components (server components that load data), and `render: 'server'`, render on the
+ * server in the canvas, through the canvas server action (`createCanvasServer`).
  */
 export function fromPayloadComponent<P extends object>(
   Component: ComponentType<P>,
   options: FromPayloadComponentOptions = {},
 ): ComponentType<BlockComponentProps> {
   const blocks = options.blocks ?? []
-  function PayloadBlock({ block, props, className, slots, attributes, slotAttributes, mode }: BlockComponentProps): ReactNode {
+  const mapProps = options.props
+  function PayloadBlock({ block, props, className, slots, attributes, slotAttributes, mode, pageData }: BlockComponentProps): ReactNode {
     const def = getBlockDefinition(blocks, block.type)
     const data: Record<string, unknown> = { ...withFieldDefaults(props, def?.fields ?? []) }
     for (const name of new Set([...Object.keys(def?.slots ?? {}), ...Object.keys(slots)])) {
       data[name] = (block.slots?.[name] ?? []).filter((child) => !child.hidden).map((child) => toPayloadBlock(child, blocks))
     }
     const builder: PayloadBuilderProps = { mode, attributes, slots, slotAttributes, ...(className ? { className } : {}) }
-    const payloadProps = {
+    const payloadBlock: PayloadBlockData = {
       ...data,
       id: block.id,
       blockType: def ? payloadSlugOf(def) : block.type,
       ...(block.label ? { blockName: block.label } : {}),
-      builder,
-    } as unknown as P
+    }
+    const payloadProps = (mapProps ? mapProps(payloadBlock, pageData ?? EMPTY_PAGE_DATA, builder) : { ...payloadBlock, builder }) as P
     let node: ReactNode = <Component {...payloadProps} />
     if (className && options.className !== 'prop') node = <div className={className}>{node}</div>
     if (mode === 'canvas' && attributes['data-block-id']) {
@@ -92,6 +125,8 @@ export function fromPayloadComponent<P extends object>(
     return node
   }
   PayloadBlock.displayName = `Payload(${Component.displayName ?? Component.name ?? 'Block'})`
+  withPageData(PayloadBlock)
+  if (options.render === 'server' || isAsyncComponent(Component)) renderOnServer(PayloadBlock)
   return PayloadBlock
 }
 

@@ -71,7 +71,7 @@ export type LiveState = {
 }
 
 /** Another editor's selection and canvas width (changes rarely). */
-export type Peer = CollaboratorInfo & { selectedId: string | null; canvasWidth: number | null }
+export type Peer = CollaboratorInfo & { selectedId: string | null; canvasWidth: number | null; locale: string | null }
 
 /** Another editor's pointer (changes up to 20 times a second). `at` is when it last moved. */
 export type PeerCursor = { info: CollaboratorInfo; cursor: Awareness['cursor']; at: number }
@@ -130,7 +130,7 @@ export function useMultiplayer(
         new Map(
           [...others.values()].map(({ awareness, ...info }) => [
             info.clientId,
-            { ...info, selectedId: awareness?.selectedId ?? null, canvasWidth: awareness?.canvasWidth ?? null },
+            { ...info, selectedId: awareness?.selectedId ?? null, canvasWidth: awareness?.canvasWidth ?? null, locale: awareness?.locale ?? null },
           ]),
         ),
       )
@@ -149,7 +149,7 @@ export function useMultiplayer(
       if (!entry) return
       const before = entry.awareness
       others.set(clientId, { ...entry, awareness })
-      if (before?.selectedId !== awareness.selectedId || before?.canvasWidth !== awareness.canvasWidth) publishPeers()
+      if (before?.selectedId !== awareness.selectedId || before?.canvasWidth !== awareness.canvasWidth || before?.locale !== awareness.locale) publishPeers()
       const { awareness: _a, ...info } = entry
       const cursors = new Map(runtime.cursors.get())
       const moved = !before || before.cursor?.blockId !== awareness.cursor?.blockId || before.cursor?.x !== awareness.cursor?.x || before.cursor?.y !== awareness.cursor?.y
@@ -241,6 +241,8 @@ export function useMultiplayer(
         hoveredId: hidden ? null : s.hoveredId,
         cursor: hidden ? null : runtime.pointer.get(),
         canvasWidth: width > 0 ? width : null,
+        // Others see which language this editor works in.
+        ...(s.locale ? { locale: s.locale } : {}),
       }
     }
     const sendAwareness = () => {
@@ -275,10 +277,12 @@ export function useMultiplayer(
       else awarenessTimer = setTimeout(sendAwareness, wait)
     }
     let lastSelection = store.getState().selectedId
+    let lastLocale = store.getState().locale
     const offStore = store.subscribe(() => {
-      const { selectedId } = store.getState()
-      if (selectedId !== lastSelection) {
+      const { selectedId, locale } = store.getState()
+      if (selectedId !== lastSelection || locale !== lastLocale) {
         lastSelection = selectedId
+        lastLocale = locale
         sendAwareness()
       } else throttledAwareness()
       const pending = engine.getState().pending > 0

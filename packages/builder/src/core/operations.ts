@@ -128,10 +128,14 @@ function update(layout: Layout, op: Extract<Operation, { type: 'update' }>): App
   const next: Block = { ...before }
   const inverse: Extract<Operation, { type: 'update' }> = { type: 'update', id: before.id }
 
+  if (op.locale !== undefined && (typeof op.locale !== 'string' || op.locale === '')) return fail('`locale` must be a locale code')
   if (op.props !== undefined || op.unsetProps !== undefined) {
     if (op.props !== undefined && !isPlainObject(op.props)) return fail('`props` must be an object')
     if (op.unsetProps !== undefined && !isStringArray(op.unsetProps)) return fail('`unsetProps` must be an array of strings')
-    const oldProps = before.props ?? {}
+    // With a locale, the values are that locale's own values (`block.locales[locale]`).
+    const locale = op.locale
+    if (locale !== undefined) inverse.locale = locale
+    const oldProps = (locale === undefined ? before.props : before.locales?.[locale]) ?? {}
     const props: Record<string, unknown> = { ...oldProps }
     const touched = new Set<string>()
     for (const [key, value] of Object.entries(op.props ?? {})) {
@@ -151,8 +155,16 @@ function update(layout: Layout, op: Extract<Operation, { type: 'update' }>): App
     }
     if (Object.keys(invProps).length > 0) inverse.props = invProps
     if (invUnset.length > 0) inverse.unsetProps = invUnset
-    if (Object.keys(props).length > 0) next.props = props
-    else delete next.props
+    if (locale === undefined) {
+      if (Object.keys(props).length > 0) next.props = props
+      else delete next.props
+    } else {
+      const locales: Record<string, Record<string, unknown>> = { ...before.locales }
+      if (Object.keys(props).length > 0) setOwn(locales, locale, props)
+      else delete locales[locale]
+      if (Object.keys(locales).length > 0) next.locales = locales
+      else delete next.locales
+    }
   }
 
   if (op.className !== undefined) {
@@ -293,6 +305,7 @@ function isStringArray(value: unknown): value is string[] {
 function cloneWithNewIds(block: Block, id: string, used: Set<string>): Block {
   const clone: Block = { ...block, id }
   if (block.props) clone.props = structuredClone(block.props)
+  if (block.locales) clone.locales = structuredClone(block.locales)
   if (block.bindings) clone.bindings = { ...block.bindings }
   if (block.slots) {
     clone.slots = Object.fromEntries(
@@ -318,7 +331,7 @@ function freshId(used: Set<string>): string {
  */
 function checkBlock(value: unknown, used: Set<string>, path = 'block'): Block | string {
   if (!isPlainObject(value)) return `${path} must be an object`
-  const { id, type, props, className, slots, bindings, hidden, label } = value
+  const { id, type, props, className, slots, bindings, hidden, label, locales } = value
   if (typeof id !== 'string' || id === '') return `${path}.id must be a non-empty string`
   if (used.has(id)) return `Block id "${id}" already exists`
   used.add(id)
@@ -362,6 +375,16 @@ function checkBlock(value: unknown, used: Set<string>, path = 'block'): Block | 
   if (label !== undefined && label !== null) {
     if (typeof label !== 'string') return `${path}.label must be a string`
     if (label.trim()) block.label = label.trim()
+  }
+  if (locales !== undefined) {
+    if (!isPlainObject(locales)) return `${path}.locales must be an object of props per locale`
+    const clean: Record<string, Record<string, unknown>> = {}
+    for (const [code, values] of Object.entries(locales)) {
+      if (!isPlainObject(values)) return `${path}.locales.${code} must be an object`
+      const kept = Object.fromEntries(Object.entries(values).filter(([, v]) => v !== undefined))
+      if (Object.keys(kept).length > 0) setOwn(clean, code, kept)
+    }
+    if (Object.keys(clean).length > 0) block.locales = clean
   }
   return block
 }

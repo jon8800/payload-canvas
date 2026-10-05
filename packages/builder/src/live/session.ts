@@ -9,8 +9,9 @@
 // In-process only: with more than one app server, route each document to one server (sticky
 // routing), because the session state lives in memory.
 
-import { normalizeLayout } from '../core/tree'
-import type { BlockDefinition, Layout, Operation } from '../core/types'
+import { sameJson } from '../core/fieldSemantics'
+import { indexLayout, normalizeLayout } from '../core/tree'
+import type { BlockDefinition, Layout, LocaleSettings, Operation } from '../core/types'
 import { validateLayout, type LayoutError } from '../core/validate'
 import { actorFromUser, payloadErrorMessage, resolveOperations, splitLayoutErrors, type LiveDocStore } from './apply'
 import { createKeyedMutex } from './mutex'
@@ -106,6 +107,13 @@ export type CommitArgs = {
   clientId?: string
   batchId?: string
   baseSeq?: number
+  /**
+   * Field access of block props: returns why the user may not make this change, or null. Runs
+   * after the operations apply and before anything changes (the whole batch is refused, 403).
+   */
+  access?: (args: { before: Layout; after: Layout; doc: Record<string, unknown> }) => Promise<string | null>
+  /** The document's locales: `update` operations with a `locale` write that locale's values. */
+  localization?: LocaleSettings | null
 }
 
 export type CommitResult =
@@ -120,8 +128,20 @@ export type CommitResult =
     }
   | { ok: false; status: number; error: string; seq: number; errors?: LayoutError[] }
 
-/** A read-only view of an open session. */
-export type SessionSnapshot = { sessionId: string; seq: number; layout: Layout }
+/**
+ * A read-only view of an open session. `doc` is the document as the session loaded it, without
+ * the layout field (other fields may have changed since).
+ */
+export type SessionSnapshot = { sessionId: string; seq: number; layout: Layout; doc: Record<string, unknown> }
+
+/**
+ * What one save did to the layout through the props' hooks: the layout it got (`input`, the
+ * session's layout at `seq`) and the layout it stored (`output`).
+ */
+export type SavedHookChanges = { input: Layout; output: Layout; seq: number }
+
+/** The actor of the commits that bring hook changes from a save to the editors. */
+export const FIELD_HOOKS_ACTOR: LiveActor = { type: 'user', id: 'system:field-hooks', label: 'Field hooks' }
 
 /** What a save outside the session stored: the saved document's `updatedAt` and `_status`. */
 export type SavedInfo = { updatedAt?: unknown; status?: unknown }
@@ -147,6 +167,12 @@ export interface SessionManager {
    * and tells the editors with a `saved` event.
    */
   markSaved(collection: string, id: string | number, seq: number, info?: SavedInfo): void
+  /**
+   * A save outside the session (the save-hook guard) stored the session's layout at `seq` after
+   * the props' hooks changed it. The changed values go to every editor as a commit; a value someone
+   * changed again since that save keeps their change.
+   */
+  adoptSaved(collection: string, id: string | number, changes: SavedHookChanges): void
   /** Sends an event to every editor of an open session. False when no session is open. */
   broadcast(collection: string, id: string | number, event: MultiplayerEvent): boolean
   /**
@@ -231,11 +257,13 @@ export function sanitizeAwareness(value: unknown): Awareness | null {
   const x = unit(c?.x)
   const y = unit(c?.y)
   const width = unit(v.canvasWidth)
+  const locale = typeof v.locale === 'string' && /^[\w-]{1,20}$/.test(v.locale) ? v.locale : null
   return {
     selectedId: nullableId(v.selectedId),
     hoveredId: nullableId(v.hoveredId),
     cursor: c && typeof c === 'object' && x !== null && y !== null ? { blockId: nullableId(c.blockId), x, y } : null,
     canvasWidth: width !== null && width > 0 ? Math.round(width) : null,
+    ...(locale ? { locale } : {}),
   }
 }
 
@@ -261,6 +289,8 @@ type Session = {
   target: SessionTarget
   store: LiveDocStore
   layout: Layout
+  /** The document as loaded, without the layout field. */
+  doc: Record<string, unknown>
   seq: number
   log: LiveCommitEvent[]
   /** Blocking problems the layout already had, so old data never blocks new commits. Null until the first commit. */
@@ -286,13 +316,64 @@ const realTimers: SessionTimers = {
   clear: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
 }
 
+/** `context` key of the save hook's prop hook changes (`HOOK_CHANGES_CONTEXT` in plugin/hook.ts). */
+const HOOK_CHANGES_KEY = 'builderHookChanges'
+/** `context` flag of reads that need every locale (`ALL_LOCALES_CONTEXT` in plugin/hook.ts). */
+const ALL_LOCALES_KEY = 'builderAllLocales'
+
+function hookChangesIn(context: Record<string, unknown>): { input: Layout; output: Layout } | null {
+  const value = context[HOOK_CHANGES_KEY] as { input?: unknown; output?: unknown } | undefined
+  if (!value || typeof value !== 'object' || !value.input || !value.output) return null
+  return { input: value.input as Layout, output: value.output as Layout }
+}
+
 function errorKey(error: LayoutError): string {
-  return `${error.blockId ?? ''}|${error.message}`
+  return `${error.blockId ?? ''}|${error.locale ?? ''}|${error.message}`
 }
 
 function statusOf(error: unknown): number {
   const status = (error as { status?: unknown })?.status
   return typeof status === 'number' ? status : 500
+}
+
+/**
+ * The `update` operations that bring the values the props' hooks changed in one save (`input` ->
+ * `output`) into `current`. A prop someone changed since the save (its value in `current` is no
+ * longer the `input` value) is left alone; the next save runs the hooks on it again.
+ */
+export function hookChangeOps(input: Layout, output: Layout, current: Layout): Operation[] {
+  const before = indexLayout(input)
+  const now = indexLayout(current)
+  const ops: Operation[] = []
+  for (const [id, entry] of indexLayout(output)) {
+    const was = before.get(id)?.block
+    const cur = now.get(id)?.block
+    if (!was || !cur) continue
+    // The default locale's values, then each translation (hooks run per locale).
+    const locales = new Set([...Object.keys(was.locales ?? {}), ...Object.keys(entry.block.locales ?? {})])
+    for (const locale of [undefined, ...locales]) {
+      const pick = (block: typeof was) => (locale === undefined ? block.props : block.locales?.[locale]) ?? {}
+      const wasProps = pick(was)
+      const outProps = pick(entry.block)
+      const curProps = pick(cur)
+      const props: Record<string, unknown> = {}
+      const unset: string[] = []
+      for (const key of new Set([...Object.keys(wasProps), ...Object.keys(outProps)])) {
+        if (sameJson(wasProps[key], outProps[key]) || !sameJson(curProps[key], wasProps[key])) continue
+        if (outProps[key] === undefined) unset.push(key)
+        else props[key] = outProps[key]
+      }
+      if (Object.keys(props).length === 0 && unset.length === 0) continue
+      ops.push({
+        type: 'update',
+        id,
+        ...(Object.keys(props).length > 0 ? { props } : {}),
+        ...(unset.length > 0 ? { unsetProps: unset } : {}),
+        ...(locale !== undefined ? { locale } : {}),
+      })
+    }
+  }
+  return ops
 }
 
 /** The block a commit changed last, for the AI's awareness. */
@@ -340,14 +421,18 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
           depth: 0,
           draft: target.drafts,
           overrideAccess: true,
+          // Every locale: the session holds the stored layout with its translations.
+          context: { [ALL_LOCALES_KEY]: true },
         })
         const layout = normalizeLayout(doc[target.field])
+        const { [target.field]: _layout, ...rest } = doc
         const session: Session = {
           key,
           sessionId: globalThis.crypto.randomUUID().slice(0, 8),
           target,
           store,
           layout,
+          doc: rest,
           seq: 0,
           log: [],
           knownBlocking: null,
@@ -468,6 +553,9 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     }
     const { layout, seq, target } = session
     session.firstDirtyAt = null
+    // The save hook records here what the props' hooks changed (plugin/hook.ts). The Local API
+    // without `req` uses this object as the request context.
+    const context: Record<string, unknown> = { builderSession: true }
     const run = (async () => {
       try {
         const saved = await session.store.update({
@@ -477,7 +565,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
           depth: 0,
           draft: target.drafts,
           ...(target.drafts && target.autosave ? { autosave: true } : {}),
-          context: { builderSession: true },
+          context,
           user: session.user,
           overrideAccess: false,
           // Never blocked by Payload's document lock; the save hook keeps the lock (fieldsGuard.ts).
@@ -485,7 +573,10 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
         })
         session.persistedSeq = Math.max(session.persistedSeq, seq)
         clearFailure(session)
-        deliver(session, savedEvent(seq, { updatedAt: saved?.updatedAt, status: saved?._status }))
+        const info = { updatedAt: saved?.updatedAt, status: saved?._status }
+        deliver(session, savedEvent(seq, info))
+        const changes = hookChangesIn(context)
+        if (changes) queueAdopt(session, { ...changes, seq }, info)
       } catch (error) {
         session.failures += 1
         // No permission does not fix itself: wait for the next commit or a manual retry.
@@ -515,6 +606,42 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     })
     session.persisting = done
     return done
+  }
+
+  // ---- hook changes ------------------------------------------------------
+
+  /**
+   * Applies what the props' hooks changed in a save as one commit of FIELD_HOOKS_ACTOR, through
+   * the mutex like every commit. When nothing was committed since the save, the document already
+   * holds the result, so the commit counts as saved (no second save, no "Changed" status).
+   */
+  const adopt = (session: Session, changes: SavedHookChanges, info: SavedInfo = {}) => {
+    if (sessions.get(session.key) !== session) return
+    const ops = hookChangeOps(changes.input, changes.output, session.layout)
+    if (ops.length === 0) return
+    const resolved = resolveOperations(session.layout, ops)
+    if (!resolved.ok) return
+    const clean = session.seq === changes.seq && session.persistedSeq >= changes.seq
+    session.layout = resolved.layout
+    session.seq += 1
+    session.knownBlocking = null
+    const event: LiveCommitEvent = { type: 'commit', seq: session.seq, ops: resolved.ops, actor: FIELD_HOOKS_ACTOR, at: new Date(timers.now()).toISOString() }
+    session.log.push(event)
+    if (session.log.length > logSize) session.log.splice(0, session.log.length - logSize)
+    deliver(session, event, eventId(session))
+    if (clean) {
+      session.persistedSeq = session.seq
+      deliver(session, savedEvent(session.seq, info))
+    } else {
+      markDirty(session)
+    }
+  }
+
+  /** Queues `adopt` behind the commits in flight. Never awaited by a save (Revert waits for saves under the mutex). */
+  const queueAdopt = (session: Session, changes: SavedHookChanges, info?: SavedInfo) => {
+    void mutex.run(session.key, async () => adopt(session, changes, info)).catch((error: unknown) => {
+      logger.error(`[websiteBuilder] Could not apply the field hook changes of ${session.key}.`, error)
+    })
   }
 
   const markDirty = (session: Session) => {
@@ -645,14 +772,23 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
         } else {
           ops = args.ops
         }
-        const resolved = resolveOperations(session.layout, ops, blocks)
+        const resolved = resolveOperations(session.layout, ops, blocks, args.localization)
         if (!resolved.ok) {
           maybeEvict(session)
           return reject(409, resolved.error)
         }
-        session.knownBlocking ??= new Set(splitLayoutErrors(validateLayout(session.layout, blocks)).blocking.map(errorKey))
+        if (args.access) {
+          // No other commit runs meanwhile (mutex), and hook changes queue behind this one.
+          const denied = await args.access({ before: session.layout, after: resolved.layout, doc: session.doc })
+          if (denied) {
+            maybeEvict(session)
+            return reject(403, denied)
+          }
+        }
+        const validateOptions = { localization: args.localization ?? null }
+        session.knownBlocking ??= new Set(splitLayoutErrors(validateLayout(session.layout, blocks, validateOptions)).blocking.map(errorKey))
         const known = session.knownBlocking
-        const { blocking, warnings } = splitLayoutErrors(validateLayout(resolved.layout, blocks))
+        const { blocking, warnings } = splitLayoutErrors(validateLayout(resolved.layout, blocks, validateOptions))
         const added = blocking.filter((e) => !known.has(errorKey(e)))
         if (added.length > 0) {
           maybeEvict(session)
@@ -713,7 +849,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
 
     peek(collection, id) {
       const session = sessions.get(channelKey(collection, id))
-      return session ? { sessionId: session.sessionId, seq: session.seq, layout: session.layout } : null
+      return session ? { sessionId: session.sessionId, seq: session.seq, layout: session.layout, doc: session.doc } : null
     },
 
     markSaved(collection, id, seq, info) {
@@ -729,6 +865,11 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
       session.persistTimer = null
       session.firstDirtyAt = null
       maybeEvict(session)
+    },
+
+    adoptSaved(collection, id, changes) {
+      const session = sessions.get(channelKey(collection, id))
+      if (session) queueAdopt(session, changes)
     },
 
     broadcast(collection, id, event) {

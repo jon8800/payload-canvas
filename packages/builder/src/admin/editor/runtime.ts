@@ -154,8 +154,12 @@ function loadCollapsed(): ReadonlySet<string> {
  * `api` is Payload's REST route (`config.routes.api`), used by the iframe to load documents.
  * `document` is the open document as the server loaded it.
  */
-export function createRuntime(config: BuilderClientConfig, api: string, document: BuilderDocMeta): Runtime {
-  const store = createEditorStore(EMPTY_LAYOUT, { sync: { blocks: config.blocks } })
+export function createRuntime(config: BuilderClientConfig, api: string, document: BuilderDocMeta, options: { locale?: string | null } = {}): Runtime {
+  const store = createEditorStore(EMPTY_LAYOUT, {
+    sync: { blocks: config.blocks },
+    // Localized layouts: the editor shows and edits one locale (the `?locale=` of the address, or Payload's locale preference).
+    ...(config.localization ? { localization: { settings: config.localization, blocks: config.blocks, locale: options.locale } } : {}),
+  })
   const iframeRef = createRef<HTMLIFrameElement>()
   const blockLabel = (type: string) => getBlockDefinition(config.blocks, type)?.label ?? type
   const collapsed = createValueStore<ReadonlySet<string>>(typeof window === 'undefined' ? new Set() : loadCollapsed())
@@ -183,7 +187,12 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
     if (next.length !== list.length) problems.set(next)
   })
 
-  const canvasInit: CanvasInit = { blocks: config.blocks, cssEndpoint: config.cssEndpoint, api }
+  const canvasInit: CanvasInit = {
+    blocks: config.blocks,
+    cssEndpoint: config.cssEndpoint,
+    api,
+    document: { collection: document.collection, id: document.id },
+  }
   const runtime: Runtime = {
     config,
     canvasInit,
@@ -277,6 +286,13 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
     },
   }
   store.onWarning((text) => runtime.warn(text))
+  // The first edit of blocks, classes or shared props in another locale says that it changes every language.
+  let sharedNoted = false
+  store.onSharedEdit(() => {
+    if (sharedNoted) return
+    sharedNoted = true
+    runtime.notify('Blocks, styles and fields that are not translated change in every language.')
+  })
   if (config.ai) runtime.assistant = createAssistant(runtime, config.ai.endpoint)
   return runtime
 }

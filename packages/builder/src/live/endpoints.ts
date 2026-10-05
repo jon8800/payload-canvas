@@ -5,17 +5,29 @@
 //   POST {api}/builder/live/:collection/:id/leave       { clientId } -> { ok } (a tab closes: drop its presence now)
 //   POST {api}/builder/live/:collection/:id/flush       -> LiveFlushResponse (save the session now)
 //   POST {api}/builder/live/:collection/:id/operations  { ops, clientId? } -> LiveOperationsResponse
+//   POST {api}/builder/live/:collection/:id/validate    { block } -> LiveValidateResponse (props' own validate functions)
 // Payload passes the handler's Response body through unbuffered, so the stream works inside
 // Next's route handler. `no-transform` stops compression, `X-Accel-Buffering: no` stops nginx
 // from buffering.
 
 import { addDataAndFileToRequest, type Endpoint, type PayloadRequest } from 'payload'
 
-import type { BlockDefinition } from '../core/types'
+import { EMPTY_FIELD_REGISTRY, type FieldRegistry } from '../core/fieldSemantics'
+import { normalizeLayout } from '../core/tree'
+import type { BlockDefinition, LocaleSettings } from '../core/types'
 import { actorFromUser, type LiveDocStore } from './apply'
+import { blockFromBody, propAccessCheck, validateBlockProps } from './fieldChecks'
 import type { LiveRuntime } from './runtime'
 import { collaboratorName, type CommitResult, type SessionTarget } from './session'
-import type { LiveActor, LiveCommitResponse, LiveError, LiveFlushResponse, LiveOperationsResponse, MultiplayerEvent } from './types'
+import type {
+  LiveActor,
+  LiveCommitResponse,
+  LiveError,
+  LiveFlushResponse,
+  LiveOperationsResponse,
+  LiveValidateResponse,
+  MultiplayerEvent,
+} from './types'
 
 /** Path of the live endpoints below the API route. */
 export const LIVE_PATH = '/builder/live'
@@ -34,12 +46,14 @@ export const SSE_HEADERS: Record<string, string> = {
 }
 
 export type LiveEndpointOptions = {
-  /** Builder collections and their layout field names. */
-  collections: Record<string, { field: string }>
+  /** Builder collections, their layout field names and their locales. */
+  collections: Record<string, { field: string; localization?: LocaleSettings | null }>
   blocks: BlockDefinition[]
   runtime: LiveRuntime
   /** Heartbeat interval in ms. Default 10 s. A client that stops reading is dropped after one to two intervals. */
   heartbeatMs?: number
+  /** The `validate`, `hooks` and `access` of block props. Default: none. */
+  fieldRegistry?: FieldRegistry
 }
 
 function json(body: unknown, status = 200): Response {
@@ -116,6 +130,7 @@ function resumePoint(req: PayloadRequest, url: URL): { seq: number; sessionId?: 
 
 export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
   const { collections, blocks, runtime } = options
+  const registry = options.fieldRegistry ?? EMPTY_FIELD_REGISTRY
   const heartbeatMs = options.heartbeatMs ?? HEARTBEAT_MS
 
   /** Shared prelude of the POST endpoints: user, target, update access, body. */
@@ -136,12 +151,16 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
     if (!(await runtime.canUpdate(req, target.collection, target.id))) {
       return { ok: false, status: 403, error: 'You are not allowed to edit this document', seq: runtime.sessions.peek(target.collection, target.id)?.seq ?? 0 }
     }
+    const localization = collections[target.collection]?.localization ?? null
     return runtime.sessions.commit({
       target,
       store: req.payload as unknown as LiveDocStore,
       user: req.user,
       actor: requestActor(req.user),
       blocks,
+      localization,
+      // Field access of block props: a change to a prop the user may not update is refused.
+      access: propAccessCheck(req, { blocks, registry, collection: target.collection, id: target.id, field: target.field, localization }),
       ...input,
     })
   }
@@ -293,7 +312,54 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
     },
   }
 
-  return [events, commitEndpoint, awareness, leave, flush, operations]
+  // The inspector asks this while someone edits a block whose props have `validate` functions.
+  // The functions run on the server, with `req` and the document, as Payload runs them.
+  const validate: Endpoint = {
+    path: `${LIVE_PATH}/:collection/:id/validate`,
+    method: 'post',
+    handler: async (req) => {
+      const prepared = await prepare(req)
+      if (prepared instanceof Response) return prepared
+      const { target, body } = prepared
+      const block = blockFromBody(body.block)
+      if (!block) return json({ ok: false, error: '`block` must be a block with `id` and `type`' } satisfies LiveValidateResponse, 400)
+      if (!registry.types('validate').has(block.type)) return json({ ok: true, problems: [] } satisfies LiveValidateResponse)
+      let doc: Record<string, unknown>
+      try {
+        // Read access, as for the event stream.
+        doc = (await req.payload.findByID({
+          collection: target.collection as never,
+          id: target.id,
+          depth: 0,
+          draft: target.drafts,
+          overrideAccess: false,
+          user: req.user,
+          req,
+        })) as Record<string, unknown>
+      } catch (error) {
+        return json({ ok: false, error: 'Document not found or not readable' } satisfies LiveValidateResponse, statusOf(error) === 403 ? 403 : 404)
+      }
+      const layout = runtime.sessions.peek(target.collection, target.id)?.layout ?? normalizeLayout(doc[target.field])
+      try {
+        const problems = await validateBlockProps(req, {
+          blocks,
+          registry,
+          collection: target.collection,
+          id: target.id,
+          field: target.field,
+          block,
+          doc,
+          layout,
+          localization: collections[target.collection]?.localization ?? null,
+        })
+        return json({ ok: true, problems } satisfies LiveValidateResponse)
+      } catch (error) {
+        return json({ ok: false, error: error instanceof Error ? error.message : String(error) } satisfies LiveValidateResponse, 500)
+      }
+    },
+  }
+
+  return [events, commitEndpoint, awareness, leave, flush, operations, validate]
 }
 
 // ---------------------------------------------------------------------------

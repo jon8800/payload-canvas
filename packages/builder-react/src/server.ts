@@ -15,8 +15,12 @@ import {
 } from '@payload-toolkit/builder/core'
 import { compileClasses } from '@payload-toolkit/builder/css'
 import { isRecord } from './render/fields'
+import { localeArgs, type RenderLocale } from './render/locale'
 
 export { loadLayoutData, type LoadLayoutOptions } from './render/resolve'
+export { localeArgs, localizeLayout, type RenderLocale } from './render/locale'
+export { createCanvasServer, type CanvasServerOptions, type PageDataArgs } from './render/canvasServer'
+export type { CanvasServerRequest, CanvasServerResponse } from './render/canvasServerTypes'
 export { loadTheme, ThemeStyle, type LoadedTheme, type ThemeStyleProps } from './theme/ThemeStyle'
 
 type Doc = Record<string, unknown>
@@ -29,7 +33,7 @@ export type LoadedTemplate = {
   css: string | null
 }
 
-export type LoadTemplateArgs = {
+export type LoadTemplateArgs = RenderLocale & {
   /** Slug of the document's collection, e.g. "posts". */
   collection: string
   /** The document (any generated Payload type). Its `template` field may hold an ID or a loaded template. */
@@ -51,6 +55,7 @@ function usable(template: Doc | null | undefined, collection: string, draft: boo
   if (!template) return null
   if (template[TEMPLATE_TARGET_FIELD] !== collection) return null
   if (!draft && template._status === 'draft') return null
+  // Read with the render's `locale`, so the layout already holds that locale's values.
   const layout = normalizeLayout(template[TEMPLATE_LAYOUT_FIELD])
   if (layout.blocks.length === 0) return null
   return { template, layout, css: cssOf(template) }
@@ -80,12 +85,14 @@ export async function loadTemplate(payload: Payload, args: LoadTemplateArgs): Pr
   const slug = args.templatesSlug ?? DEFAULT_TEMPLATES_SLUG
   const draft = args.draft ?? false
   if (!(payload.collections as Record<string, unknown>)[slug]) return null
+  // Localized sites: the template's localized props in the render's locale.
+  const locale = localeArgs(args)
 
   const own = doc[DOCUMENT_TEMPLATE_FIELD]
   const ownId = isRecord(own) ? own.id : own
   if (typeof ownId === 'string' || typeof ownId === 'number') {
     try {
-      const template = (await payload.findByID({ collection: slug as never, id: ownId, depth: 0, draft })) as Doc
+      const template = (await payload.findByID({ collection: slug as never, id: ownId, depth: 0, draft, ...locale })) as Doc
       const found = usable(template, collection, draft)
       if (found) return found
     } catch {
@@ -106,6 +113,7 @@ export async function loadTemplate(payload: Payload, args: LoadTemplateArgs): Pr
     depth: 0,
     limit: DEFAULT_CANDIDATES,
     draft,
+    ...locale,
   })
   for (const candidate of result.docs as Doc[]) {
     const found = usable(candidate, collection, draft)

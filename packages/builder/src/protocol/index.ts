@@ -15,6 +15,11 @@ export type CanvasInit = {
   cssEndpoint: string
   /** Payload REST API route, e.g. "/api". Used to load upload and relationship documents. */
   api: string
+  /**
+   * The document open in the builder. The canvas sends it to the app's canvas server action
+   * (server-rendered blocks, page data). Missing for section thumbnails.
+   */
+  document?: { collection: string; id: string | number } | null
 }
 
 export type PointerKind = 'move' | 'leave' | 'click'

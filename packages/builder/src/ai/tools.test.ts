@@ -141,3 +141,19 @@ describe('saved sections in the prompts', () => {
     assert.doesNotMatch(off, /saved:<id>/)
   })
 })
+
+describe('Workspace in a locale', () => {
+  const localized: BlockDefinition[] = [{ type: 'heading', label: 'Heading', fields: [{ name: 'text', type: 'text', required: true, localized: true }] }]
+  const settings = { locales: ['en', 'de'], defaultLocale: 'en', fallback: true }
+
+  it('shows the locale view and writes prop updates to that locale', () => {
+    const workspace = new Workspace({ version: 1, blocks: [{ id: 'h', type: 'heading', props: { text: 'Hello' } }] }, localized, { localization: settings, locale: 'de' })
+    assert.equal(workspace.untranslatedCount(), 1)
+    const result = workspace.apply([{ type: 'update', id: 'h', props: { text: 'Hallo' } }])
+    assert.ok(result.ok)
+    assert.deepEqual(result.ops, [{ type: 'update', id: 'h', locale: 'de', props: { text: 'Hallo' } }])
+    assert.deepEqual(workspace.layout.blocks[0], { id: 'h', type: 'heading', props: { text: 'Hello' }, locales: { de: { text: 'Hallo' } } })
+    assert.equal(workspace.view.blocks[0].props?.text, 'Hallo')
+    assert.equal(workspace.untranslatedCount(), 0)
+  })
+})

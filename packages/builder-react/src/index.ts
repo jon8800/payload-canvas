@@ -7,6 +7,7 @@ export type {
   BlockComponents,
   FetchDocs,
   LinkValue,
+  PageData,
   RenderLayoutProps,
   RenderMode,
   ResolvedLink,
@@ -28,9 +29,19 @@ export {
   fromPayloadComponents,
   PayloadSlot,
   type FromPayloadComponentOptions,
+  type PayloadBlockData,
   type PayloadBlockProps,
   type PayloadBuilderProps,
 } from './render/payload'
+export { renderOnServer, withPageData } from './render/marks'
+export type {
+  CanvasDocumentRef,
+  CanvasScope,
+  CanvasServer,
+  CanvasServerRequest,
+  CanvasServerResponse,
+  CanvasServerResult,
+} from './render/canvasServerTypes'
 export { loadLayoutData, resolveLayoutData, urlResolver, type LoadLayoutOptions } from './render/resolve'
 export { attachListItems, listItemsOf, listQueries, type ListQuery } from './render/lists'
 export { fieldFor } from './components/Field'

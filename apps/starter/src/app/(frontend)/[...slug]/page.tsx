@@ -6,6 +6,7 @@ import { partOf, SiteFrame, visitorOf } from '@/components/BuilderContent'
 import { LivePreviewListener } from '@/components/LivePreviewListener'
 import { generateMeta, notFoundMeta } from '@/utilities/generateMeta'
 import { MissingPage } from '@/components/NotFoundContent'
+import { requestLocale } from '@/lib/i18n'
 
 type Props = {
   params: Promise<{ slug: string[] }>
@@ -22,6 +23,8 @@ async function findPage(slugPath: string, draft: boolean, depth = 0) {
     depth,
     overrideAccess: false,
     user: (await visitorOf(payload, draft)) as never,
+    // Translation demo: the layout comes back in the page's language (/de/…).
+    locale: (await requestLocale()) as never,
   })
   return docs[0] ?? null
 }

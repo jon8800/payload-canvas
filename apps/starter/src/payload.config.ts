@@ -32,6 +32,8 @@ import { SiteSettings } from '@/globals/SiteSettings'
 import { LegacyPages } from '@/legacy-fixture/collection'
 import { LEGACY_COLLECTION, legacyDemo } from '@/legacy-fixture/enabled'
 import { legacyBlockConfigs } from '@/legacy-fixture/configs'
+import { i18nDemo } from '@/lib/locales'
+import { demoLocalization, withoutFieldLocalization } from '@/lib/localizationDemo'
 
 /** Collections with the page builder. Shared by the builder plugin and its MCP tools. */
 const builderCollections: WebsiteBuilderOptions['collections'] = {
@@ -40,7 +42,10 @@ const builderCollections: WebsiteBuilderOptions['collections'] = {
   posts: { field: 'builder', url: (doc) => documentPath('posts', doc.slug) ?? '/blog', templates: true },
   'template-parts': { field: 'builder' },
   // Dev fixture: the old content stays in the `layout` blocks field; the builder gets its own field.
-  ...(legacyDemo ? { [LEGACY_COLLECTION]: { field: 'builderLayout', url: (doc) => `/legacy-demo/${String(doc.slug ?? '')}` } } : {}),
+  // `legacyFields`: Publish in the builder keeps the old field's published value.
+  ...(legacyDemo
+    ? { [LEGACY_COLLECTION]: { field: 'builderLayout', legacyFields: ['layout'], url: (doc) => `/legacy-demo/${String(doc.slug ?? '')}` } }
+    : {}),
 }
 
 const filename = fileURLToPath(import.meta.url)
@@ -101,6 +106,8 @@ export default buildConfig({
   // Dev fixture: the legacy pages' blocks, referenced by slug (`blockReferences`).
   ...(legacyDemo ? { blocks: legacyBlockConfigs } : {}),
   globals: [SiteSettings],
+  // Dev demo of translated pages (BUILDER_I18N_DEMO=1): English and German, /de on the site.
+  ...(i18nDemo ? { localization: demoLocalization } : {}),
   jobs: {
     autoRun: [{ cron: '*/5 * * * *', queue: 'default' }],
   },
@@ -212,6 +219,9 @@ export default buildConfig({
         slug: originalDoc?.slug || '',
       }),
     }),
+
+    // Translation demo: only builder layouts translate (see lib/localizationDemo.ts).
+    ...(i18nDemo ? [withoutFieldLocalization] : []),
 
     // Must stay last: it adds top-level fields after other plugins (SEO tabbedUI) move fields into tabs.
     websiteBuilder({

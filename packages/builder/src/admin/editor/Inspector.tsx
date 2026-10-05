@@ -12,6 +12,7 @@ import { renameRequest } from './menu/requests'
 import { blockName, typeName } from './names'
 import { RenameInput } from './Outline'
 import { EditingBanner } from './live/PresenceUI'
+import { LocaleNote } from './locale/LocaleField'
 import { AssistantPanel } from './assistant/AssistantPanel'
 import { BlockContentFields } from './renderField'
 import { useRuntime, type InspectorTab } from './runtime'
@@ -120,7 +121,8 @@ function BlockPane() {
   // Edits to the shown block stay synchronous, so a controlled input never lags behind typing.
   const selectedId = useEditor(runtime.store, (s) => s.selectedId)
   const shownId = useDeferredValue(selectedId)
-  const block = useEditor(runtime.store, (s) => (shownId ? findBlock(s.layout, shownId) : null))
+  // The block in the editor's locale: the inspector shows and edits that locale's values.
+  const block = useEditor(runtime.store, (s) => (shownId ? findBlock(s.view, shownId) : null))
   const [tab, setTab] = useState<'content' | 'styles'>('content')
   const [shownType, setShownType] = useState<string | null>(null)
   const focusRequest = useValue(runtime.focusRequest)
@@ -155,6 +157,7 @@ function BlockPane() {
       <BlockHeader block={block} />
       <BlockProblems blockId={block.id} />
       <EditingBanner blockId={block.id} />
+      <LocaleNote blockId={block.id} tab={tab} />
       <Tabs
         value={tab}
         onChange={setTab}

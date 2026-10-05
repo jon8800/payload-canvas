@@ -125,6 +125,8 @@ export function describeLayoutErrors(layout: Layout, errors: readonly LayoutErro
         message = `${name}: ${lowerFirst(error.message)}`
       }
     }
+    // A translation's problem names its locale: "Heading: fill in text (DE)".
+    if (error.locale) message = `${message} (${error.locale.toUpperCase()})`
     const key = `${error.blockId ?? ''}\0${message}`
     if (seen.has(key)) continue
     seen.add(key)

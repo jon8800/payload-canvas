@@ -31,6 +31,12 @@ export type Block = {
    * Never rendered on the site. Stored only when non-empty.
    */
   label?: string
+  /**
+   * Translations (docs/architecture.md, "Localization"): the values of localized props per locale
+   * other than the default, e.g. `{ de: { text: 'Hallo' } }`. `props` holds the default locale.
+   * A prop missing here falls back as Payload's `fallback` says. Stored only when non-empty.
+   */
+  locales?: Record<string, BlockProps>
 }
 
 export type Layout = {
@@ -194,6 +200,30 @@ export type BuilderClientConfig = {
   themeEndpoint: string | null
   /** Editor behaviour from `websiteBuilder({ editor })`. */
   editor: EditorClientConfig
+  /**
+   * Block types with a prop that has its own `validate` function. The inspector asks the server
+   * (`${liveEndpoint}/${collection}/${id}/validate`) for their messages while someone edits.
+   */
+  validateTypes?: string[]
+  /** The locales of the layout's localized props. Null without Payload localization (or when the collection turns it off). */
+  localization?: LocaleSettings | null
+}
+
+/**
+ * What the builder needs from Payload's `localization` config (`localeSettingsOf`). Plain data, so
+ * it reaches the editor.
+ */
+export type LocaleSettings = {
+  /** Locale codes, in Payload's order. */
+  locales: string[]
+  /** Payload's `defaultLocale`. Its values live in `block.props`. */
+  defaultLocale: string
+  /** Payload's `fallback`: a value missing in a locale shows the fallback locale's value. */
+  fallback: boolean
+  /** A locale's own `fallbackLocale`, when it has one. Otherwise the default locale is the fallback. */
+  fallbacks?: Record<string, string | string[]>
+  /** Locale names for the editor, e.g. `{ en: 'English', de: 'Deutsch' }`. */
+  labels?: Record<string, string>
 }
 
 /**
@@ -276,6 +306,12 @@ export type Operation =
       props?: BlockProps
       /** Prop keys to delete. */
       unsetProps?: string[]
+      /**
+       * A locale other than the default: `props` and `unsetProps` change that locale's values
+       * (`block.locales[locale]`) instead of `props`. Never the default locale (see
+       * `localizeOperations`, which also moves props that are not localized out of such an op).
+       */
+      locale?: string
       /** `null` removes the className. */
       className?: string | null
       hidden?: boolean

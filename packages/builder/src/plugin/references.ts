@@ -392,7 +392,8 @@ export async function backfillReferences(payload: Payload, options: { collection
     const collection = slug as CollectionSlug
 
     for (let page = 1; ; page++) {
-      const batch = await payload.find({ collection, depth: 0, limit: pageSize, page, sort: 'id', draft: false, overrideAccess: true })
+      // The stored layout (every locale), not one locale's view: translations reference documents too.
+      const batch = await payload.find({ collection, depth: 0, limit: pageSize, page, sort: 'id', draft: false, overrideAccess: true, context: { builderRawLayout: true } })
       for (const doc of batch.docs as unknown as Array<Record<string, unknown>>) {
         result.checked++
         const layout = layoutOf(source, doc)
