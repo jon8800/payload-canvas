@@ -1,9 +1,8 @@
-// Sizes of the editor's resizable panels: the left sidebar, the right sidebar and the Add library
-// (the top part of the left sidebar). A size lives in a CSS variable on the editor root, so a
+// Sizes of the editor's resizable panels: the left sidebar and the right sidebar. A size lives in a CSS variable on the editor root, so a
 // drag changes one style property and React does not render. Sizes are kept in local storage.
 // Without a stored size, the default comes from the stylesheet (layout.scss).
 
-export type PanelId = 'left' | 'right' | 'library'
+export type PanelId = 'left' | 'right'
 
 export type PanelSpec = {
   /** CSS variable on the editor root, in px. */
@@ -11,21 +10,16 @@ export type PanelSpec = {
   /** Smallest and largest size, in px. */
   min: number
   max: number
-  /** 'x' resizes a width, 'y' a height. */
-  axis: 'x' | 'y'
   label: string
 }
 
 export const PANELS: Record<PanelId, PanelSpec> = {
-  left: { variable: '--be-left-width', min: 200, max: 480, axis: 'x', label: 'Resize the left sidebar' },
-  right: { variable: '--be-right-width', min: 280, max: 600, axis: 'x', label: 'Resize the right sidebar' },
-  library: { variable: '--be-library-height', min: 96, max: 2000, axis: 'y', label: 'Resize the Add panel' },
+  left: { variable: '--be-left-width', min: 200, max: 480, label: 'Resize the left sidebar' },
+  right: { variable: '--be-right-width', min: 280, max: 600, label: 'Resize the right sidebar' },
 }
 
 /** Space the canvas keeps when a sidebar grows. */
 export const MIN_STAGE_WIDTH = 360
-/** Space the outline keeps when the Add panel grows. */
-export const MIN_OUTLINE_HEIGHT = 120
 /** Keyboard step, and the step with Shift. */
 export const KEY_STEP = 16
 export const KEY_STEP_LARGE = 64

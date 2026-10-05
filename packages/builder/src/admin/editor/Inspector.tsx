@@ -95,8 +95,8 @@ function EmptyState() {
       <Icon name="cursor" size={20} />
       <p>No block selected</p>
       <p className="builder-editor__hint">
-        Click a block on the canvas or in the outline to edit its content and styles. Drag blocks from the Add panel to build
-        the page.
+        Click a block on the canvas or in Layers to edit its content and styles. Drag blocks from the Blocks tab to build the
+        page.
       </p>
       <dl className="builder-editor__tips">
         {tips.map(({ keys, label }) => (

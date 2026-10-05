@@ -28,6 +28,8 @@ The plugin reads no environment variables for the assistant. Your config code pa
 
 No API key at all? Use Claude Code or Codex with your Claude or ChatGPT plan. See [connect-claude-code-and-codex.md](connect-claude-code-and-codex.md).
 
+Image generation has its own adapter (`ai.images`), separate from the chat model. See [images.md](images.md).
+
 To write your own adapter, see the README, [Write your own adapter](../../packages/builder/README.md#write-your-own-adapter).
 
 ## Options for every OpenAI-format adapter

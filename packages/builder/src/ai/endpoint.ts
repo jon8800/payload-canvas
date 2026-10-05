@@ -12,6 +12,7 @@ import type { BindingField, BlockDefinition, Layout, LocaleSettings, SectionDefi
 import { SSE_HEADERS, sseFrame } from '../live/endpoints'
 import { loadSavedSections } from '../plugin/sections'
 import { missingAdapterProblem } from './config'
+import { createImageService, generateImageToMedia, type GenerateImageOutcome, type ImageService } from './images/service'
 import { adapterIdentity, runAgent } from './loop'
 import { breakpointsPx, contextText, systemPrompt } from './prompt'
 import { toolDefinitions, Workspace, type MediaItem, type ToolEnv } from './tools'
@@ -36,6 +37,8 @@ export type AiEndpointOptions = {
   templates: { slug: string; sources: Record<string, BindingField[]> } | null
   /** The saved sections collection. Each request loads the ones the user can read. Null or left out: off. */
   savedSections?: { slug: string } | null
+  /** Image generation, shared with the MCP tools (one hourly limit). Default: built from `ai`. */
+  images?: ImageService
   /** Tests: replaces the update-access check (default: Payload's docAccessOperation). */
   canUpdate?: (req: PayloadRequest, collection: string, id: string | number, field: string) => Promise<boolean>
 }
@@ -184,6 +187,8 @@ export function mediaSearch(req: PayloadRequest, slug: string) {
 export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
   const { ai, collections, blocks, sections, templates } = options
   const savedSections = options.savedSections ?? null
+  const images = options.images ?? createImageService(ai)
+  const mediaCollection = ai.mediaCollection ?? 'media'
   const adapter = ai.adapter ?? null
   const identity = adapter ? adapterIdentity(adapter) : null
   const env: Omit<ToolEnv, 'searchMedia'> = {
@@ -191,6 +196,7 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
     sections,
     savedSections: savedSections !== null,
     bindingSources: templates?.sources ?? null,
+    mediaCollection,
   }
   // Built once, in a fixed order: tools and system prompt are the cached prompt prefix.
   const tools = toolDefinitions({ ...env, searchMedia: async () => [] })
@@ -345,7 +351,12 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
               messages: body.messages,
               context,
               workspace,
-              env: { ...env, sections: [...sections, ...saved], searchMedia: mediaSearch(req, ai.mediaCollection ?? 'media') },
+              env: {
+                ...env,
+                sections: [...sections, ...saved],
+                searchMedia: mediaSearch(req, mediaCollection),
+                generateImage: assistantImageGenerator(req, images, controller.signal),
+              },
               emit: (event) => write(sseFrame(event.type, event)),
               signal: controller.signal,
             })
@@ -373,5 +384,50 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
     },
   }
 
-  return [chat]
+  const image: Endpoint = {
+    path: `${AI_PATH}/image`,
+    method: 'post',
+    handler: async (req) => {
+      if (!req.user) return Response.json({ code: 'forbidden', error: 'Sign in to generate images.' }, { status: 401 })
+      if (req.data === undefined) {
+        try {
+          await addDataAndFileToRequest(req)
+        } catch {
+          return Response.json({ code: 'invalid_request', error: 'The body must be JSON.' }, { status: 400 })
+        }
+      }
+      const body = isPlainObject(req.data) ? req.data : null
+      if (!body) return Response.json({ code: 'invalid_request', error: 'The body must be a JSON object.' }, { status: 400 })
+      const outcome = await generateImageToMedia(req, images, {
+        prompt: body.prompt,
+        aspectRatio: body.aspectRatio,
+        alt: body.alt,
+        collection: body.collection,
+        signal: (req as { signal?: AbortSignal }).signal,
+        source: 'editor',
+      })
+      if (!outcome.ok) return Response.json({ code: outcome.code, error: outcome.message }, { status: outcome.status === 499 ? 400 : outcome.status })
+      return Response.json(outcome)
+    },
+  }
+
+  return [chat, image]
+}
+
+/** The assistant's image generator for one chat request: at most `perRequest` images per reply. */
+export function assistantImageGenerator(req: PayloadRequest, images: ImageService, signal: AbortSignal) {
+  let count = 0
+  return async (input: { prompt: unknown; aspectRatio?: unknown; alt?: unknown }): Promise<GenerateImageOutcome> => {
+    if (images.adapter && count >= images.perRequest) {
+      return {
+        ok: false,
+        code: 'rate_limited',
+        status: 429,
+        message: `This reply already generated ${images.perRequest} image${images.perRequest === 1 ? '' : 's'}, the limit per request. Use them, or ask the user to send another message.`,
+      }
+    }
+    const outcome = await generateImageToMedia(req, images, { ...input, signal, source: 'assistant' })
+    if (outcome.ok) count++
+    return outcome
+  }
 }

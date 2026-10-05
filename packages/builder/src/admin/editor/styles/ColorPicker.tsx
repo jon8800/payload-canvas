@@ -7,6 +7,7 @@ import { useState, type CSSProperties, type RefObject } from 'react'
 
 import type { ThemeToken } from '../../../core'
 import { useRuntime } from '../runtime'
+import { Slider } from '../ui/Slider'
 import { useStyles } from './context'
 import { useProp } from './useProp'
 import { arbitraryText, displayValue } from './model'
@@ -256,15 +257,14 @@ function ColorPicker({
 
       <div className="builder-styles__picker-row">
         <span className="builder-styles__label">Opacity</span>
-        <input
-          type="range"
+        <Slider
+          value={alpha}
           min={0}
           max={100}
           step={5}
-          value={alpha}
           disabled={!current.color}
           aria-label="Opacity"
-          onChange={(e) => onChange(joinColor(current.color, Number(e.target.value)))}
+          onValueChange={(next) => onChange(joinColor(current.color, next))}
         />
         <span className="builder-styles__slider-value">{alpha}%</span>
       </div>

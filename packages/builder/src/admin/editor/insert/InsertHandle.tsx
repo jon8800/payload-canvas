@@ -5,9 +5,13 @@
 // The canvas "+" button: on the edge between blocks next to the pointer, or inside an empty slot.
 // A click opens a small picker (blocks and sections that fit there, searchable, keyboard
 // navigable) that inserts at exactly that position. Hidden while dragging and while text is
-// edited inline. Lives in the overlay (iframe coordinates).
+// edited inline. The button lives in the overlay (iframe coordinates). The picker does not: the
+// overlay takes no pointer events (`pointer-events: none`, which a popover inherits even in the
+// top layer), so a press or a wheel in the picker would go to the canvas iframe under it. The
+// picker renders into the editor root instead.
 
-import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent } from 'react'
+import { createPortal } from 'react-dom'
 
 import { currentPosition, insertBlocks, insertNewBlockAt } from '../actions'
 import { BlockIcon, Icon } from '../icons'
@@ -17,6 +21,10 @@ import { Popover, usePopover } from '../styles/popover'
 import { useValue, useValueSelector } from '../valueStore'
 import { pickerItems, type PickerItem } from './picker'
 import { spotPosition, type InsertSpot } from './spots'
+
+const noSubscription = () => () => {}
+const editorRoot = () => document.querySelector<HTMLElement>('.builder-editor')
+const noRoot = () => null
 
 export const InsertHandle = memo(function InsertHandle() {
   const runtime = useRuntime()
@@ -32,6 +40,8 @@ export const InsertHandle = memo(function InsertHandle() {
   const shown = picker.open && target ? target : (held ?? spot)
   const visible = Boolean(shown) && (picker.open || (!dragging && !locked && !editing))
   const active = picker.open || held !== null
+  // The editor root, outside the zoomed frame and the overlay.
+  const host = useSyncExternalStore(noSubscription, editorRoot, noRoot)
 
   return (
     <>
@@ -62,17 +72,21 @@ export const InsertHandle = memo(function InsertHandle() {
           </button>
         </>
       )}
-      <Popover {...picker.props} className="builder-editor__menu builder-editor__picker" label="Add a block">
-        {picker.open && target && (
-          <InsertPicker
-            spot={target}
-            onDone={() => {
-              picker.hide()
-              setHeld(null)
-            }}
-          />
+      {host &&
+        createPortal(
+          <Popover {...picker.props} className="builder-editor__menu builder-editor__picker" label="Add a block">
+            {picker.open && target && (
+              <InsertPicker
+                spot={target}
+                onDone={() => {
+                  picker.hide()
+                  setHeld(null)
+                }}
+              />
+            )}
+          </Popover>,
+          host,
         )}
-      </Popover>
     </>
   )
 })

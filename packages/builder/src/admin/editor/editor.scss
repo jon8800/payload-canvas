@@ -486,13 +486,12 @@
   // Insert panel (blocks and sections)
   // ---------------------------------------------------------------------------
 
-  // The Add panel fills its resizable wrapper (layout/layout.scss).
+  // The Blocks and Sections tabs of the left panel (layout/LeftPanel.tsx).
   .builder-editor__insert {
     display: flex;
     flex: 1;
     flex-direction: column;
     min-height: 0;
-    border-bottom: 1px solid var(--be-border);
   }
 
   .builder-editor__search {
@@ -1354,7 +1353,12 @@
     justify-content: safe center;
     align-items: flex-start;
     min-height: 0;
-    overflow: auto hidden;
+    // Sideways scrolling only when the frame is wider than the stage (Canvas.tsx sets `data-scroll`).
+    overflow: hidden;
+
+    &[data-scroll] {
+      overflow-x: auto;
+    }
   }
 
   .builder-editor__frame-wrap {
@@ -2374,11 +2378,14 @@
   }
 
   // The insert picker: a search field over one list of blocks and sections.
+  // It renders into the editor root (not the overlay), so it takes the pointer and the wheel.
   .builder-editor__menu.builder-editor__picker {
     width: 280px;
     max-height: min(420px, calc(100vh - 16px));
     padding: 0;
     overflow: hidden;
+    overscroll-behavior: contain;
+    pointer-events: auto;
   }
 
   .builder-editor__picker-body {
@@ -2402,6 +2409,7 @@
     max-height: 340px;
     padding: 0 4px 6px;
     overflow: hidden auto;
+    overscroll-behavior: contain;
     scrollbar-width: thin;
   }
 

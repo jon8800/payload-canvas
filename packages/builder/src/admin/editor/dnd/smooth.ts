@@ -207,12 +207,7 @@ export function startSmoothDrag(
     },
   })
 
-  // The outline: the dragged row becomes the gap; its children hide under it.
-  if (outline) {
-    outline.el.classList.add('builder-dnd-outline--active')
-    if (source.kind === 'block') outline.elements.get(source.id)?.setAttribute('data-dnd-source', '')
-    for (const id of childRows(outline.rows, source.kind === 'block' ? source.id : null)) outline.elements.get(id)?.setAttribute('data-dnd-hidden', '')
-  }
+  if (outline) liftOutline(outline, source)
   applyPreview(runtime, session, null)
 
   controller.view.set({
@@ -235,9 +230,35 @@ export function startSmoothDrag(
   session.stop = () => {
     unsubscribeDrag()
     unsubscribeStore()
-    if (outline) outline.el.removeEventListener('scroll', outline.onScroll)
+    // The outline measured last (`remeasureOutline` may replace it during the drag).
+    if (session.outline) session.outline.el.removeEventListener('scroll', session.outline.onScroll)
   }
   return true
+}
+
+/** The outline: the dragged row becomes the gap; its children hide under it. */
+function liftOutline(outline: OutlineState, source: DragSource) {
+  outline.el.classList.add('builder-dnd-outline--active')
+  if (source.kind === 'block') outline.elements.get(source.id)?.setAttribute('data-dnd-source', '')
+  for (const id of childRows(outline.rows, source.kind === 'block' ? source.id : null)) outline.elements.get(id)?.setAttribute('data-dnd-hidden', '')
+}
+
+/**
+ * The outline came into view during a smooth drag (the Layers tab opened while a block from the
+ * library hovered it). Its rects from the start of the drag are empty: measure it again.
+ */
+export function remeasureOutline(runtime: Runtime) {
+  const session = controllerOf(runtime).session
+  if (!session) return
+  const old = session.outline
+  if (old) {
+    old.el.removeEventListener('scroll', old.onScroll)
+    clearOutline(old, false)
+  }
+  session.outline = measureOutline(runtime, session.source)
+  if (session.outline) liftOutline(session.outline, session.source)
+  session.targetKey = ''
+  applyPreview(runtime, session, null)
 }
 
 /**

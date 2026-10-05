@@ -40,6 +40,8 @@ import { builderViewPath, documentPath, draftPreviewPath } from '../plugin/links
 import { listCollectionsOf } from '../plugin/listCollections'
 import { findSection, loadSavedSections, savedSectionsConfigOf } from '../plugin/sections'
 import { templatesConfigOf } from '../plugin/templates'
+import { generateImageToMedia, imageServiceOf } from '../ai/images/service'
+import { IMAGE_ASPECT_RATIOS } from '../ai/images/ratios'
 import { BINDINGS_GUIDE, describeBlock, layoutGuide, outline, sectionInsertOps, withNewIds } from './shared'
 
 // ---------------------------------------------------------------------------
@@ -52,7 +54,7 @@ export type BuilderMcpTool = {
   name: string
   description: string
   parameters: Record<string, ZodTypeAny>
-  routing: { kind: 'collection'; action: 'read' | 'update' }
+  routing: { kind: 'collection'; action: 'read' | 'update' | 'create' }
   handler: (args: Record<string, unknown>, req: PayloadRequest, extra: unknown) => Promise<McpToolResult>
 }
 
@@ -76,6 +78,8 @@ export type BuilderMcpToolsOptions = {
   apiKeyCollection?: string
   /** The same `templates` options as `websiteBuilder`. Templates are on when a collection sets `templates: true`. */
   templates?: { slug?: string }
+  /** The upload collection `generateImage` saves to: the same as `websiteBuilder({ ai: { mediaCollection } })`. Default "media". */
+  mediaCollection?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -627,7 +631,49 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     },
   }
 
-  const tools = [listBlocks, getBlockSchema, listSections, insertSection, getLayout, applyOperationsTool, validateLayoutTool, getPreviewUrl]
+  const mediaCollection = options.mediaCollection ?? 'media'
+  const generateImage: BuilderMcpTool = {
+    name: 'generateImage',
+    routing: { kind: 'collection', action: 'create' },
+    description: [
+      `Generates a NEW image from a text prompt with the site's own image model and saves it in the media library ("${mediaCollection}"), with alt text. Use it when you cannot make images yourself: the site generates them. It costs the site money and takes 5 to 60 seconds, so first look for an existing image (findDocument or searchContent on "${mediaCollection}") when one could fit. Sites cap images per user per hour.`,
+      'Write the prompt in English as a concrete visual description: subject, setting, light, mood, style ("studio photo", "flat vector illustration") and composition. Leave out text, letters and logos. Pick aspectRatio for the place: hero or banner 16:9 or 21:9, card 4:3 or 3:2, portrait 3:4, avatar or icon 1:1.',
+      'Returns the media `id`, `url`, size and alt text. To show it on a page, set the id as the image prop of a block with applyOperations "update" (getBlockSchema shows the prop name; the default image block uses "image").',
+    ].join('\n\n'),
+    parameters: {
+      collection: z.enum([mediaCollection]).describe(`The upload collection. Always "${mediaCollection}".`),
+      prompt: z.string().min(3).max(4000).describe('What the image shows, in detail.'),
+      aspectRatio: z
+        .enum(IMAGE_ASPECT_RATIOS as unknown as [string, ...string[]])
+        .optional()
+        .describe('Width:height. Default "1:1".'),
+      alt: z.string().max(300).optional().describe('Short alt text for screen readers. Default: from the prompt.'),
+    },
+    handler: async (args, req, extra) => {
+      const outcome = await generateImageToMedia(req, imageServiceOf(req.payload), {
+        prompt: args.prompt,
+        aspectRatio: args.aspectRatio,
+        alt: args.alt,
+        collection: args.collection,
+        signal: (extra as { signal?: AbortSignal } | undefined)?.signal,
+        source: 'mcp',
+      })
+      if (!outcome.ok) return fail(outcome.message)
+      const { media } = outcome
+      return text({
+        ok: true,
+        media: { id: media.id, collection: media.collection, url: media.url, alt: media.alt, width: media.width, height: media.height, filename: media.filename },
+        model: outcome.model,
+        seconds: outcome.seconds,
+        ...(outcome.cost !== undefined ? { costUsd: outcome.cost } : {}),
+        ...(outcome.revisedPrompt ? { revisedPrompt: outcome.revisedPrompt } : {}),
+        imagesLeftThisHour: outcome.remainingThisHour,
+        next: `Place it with applyOperations: {"type":"update","id":"<block id>","props":{"image":${JSON.stringify(media.id)}}}.`,
+      })
+    },
+  }
+
+  const tools = [listBlocks, getBlockSchema, listSections, insertSection, getLayout, applyOperationsTool, validateLayoutTool, getPreviewUrl, generateImage]
   if (!templatesSlug) return tools
 
   const listTemplates: BuilderMcpTool = {

@@ -28,6 +28,7 @@ import { RichTextField } from './fields/RichTextField'
 import { asId, formatProblem, fromRelationshipInput, isFieldVisible, isRecord, toRelationshipInput, type FieldShape } from './fields/values'
 import { FieldProblem, FieldProblemsProvider } from './fields/FieldProblems'
 import { LocaleFieldFrame, LocaleFieldsProvider, useInspectorProps, useLocalePlaceholder } from './locale/LocaleField'
+import { GenerateImage } from './generate/GenerateImage'
 import { useRuntime } from './runtime'
 import { BindingScopeProvider, FieldSlot } from './templates/Bindable'
 import './fields/fields.scss'
@@ -207,6 +208,7 @@ export function RenderBlockField({ field, onChange, path, value }: Props) {
       const polymorphic = Array.isArray(field.relationTo)
       const current = hasMany ? (Array.isArray(value) ? value : []) : polymorphic ? value : asId(value)
       return (
+        <>
         <UploadInput
           allowCreate
           api={config.routes.api}
@@ -224,6 +226,8 @@ export function RenderBlockField({ field, onChange, path, value }: Props) {
           serverURL={config.serverURL}
           value={(current ?? undefined) as never}
         />
+        <GenerateImage hasMany={hasMany} onChange={onChange} relationTo={field.relationTo} value={value} />
+        </>
       )
     }
 

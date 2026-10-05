@@ -13,6 +13,8 @@ import { searchPlugin } from '@payloadcms/plugin-search'
 import { websiteBuilder, type WebsiteBuilderOptions } from '@payload-toolkit/builder'
 import { fakeAdapter } from '@payload-toolkit/builder/ai/fake'
 import { openRouterAdapter } from '@payload-toolkit/builder/ai/openrouter'
+import { fakeImageAdapter } from '@payload-toolkit/builder/ai/images/fake'
+import { openRouterImageAdapter } from '@payload-toolkit/builder/ai/images/openrouter'
 import { builderMcpTools } from '@payload-toolkit/builder/mcp'
 import typography from '@tailwindcss/typography'
 import { createTransport } from 'nodemailer'
@@ -278,6 +280,18 @@ export default buildConfig({
                   siteUrl: process.env.NEXT_PUBLIC_SERVER_URL,
                 })
               : null,
+        // Image generation (assistant, the inspector's "Generate image", the MCP generateImage tool).
+        // Its own adapter, so it works with any chat model and with Claude Code or Codex over MCP.
+        // OPENROUTER_IMAGE_MODEL picks the model; BUILDER_AI_FAKE=1 without a key draws local gradients.
+        images: process.env.OPENROUTER_API_KEY
+          ? openRouterImageAdapter({
+              apiKey: process.env.OPENROUTER_API_KEY,
+              model: process.env.OPENROUTER_IMAGE_MODEL,
+              siteUrl: process.env.NEXT_PUBLIC_SERVER_URL,
+            })
+          : process.env.BUILDER_AI_FAKE === '1' && process.env.NODE_ENV !== 'production'
+            ? fakeImageAdapter({ delayMs: 1500 })
+            : null,
       },
       css: {
         entry: 'src/app/(frontend)/globals.css',

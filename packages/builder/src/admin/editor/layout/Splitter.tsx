@@ -6,11 +6,13 @@
 
 import { useEffect, useRef, type KeyboardEvent, type PointerEvent } from 'react'
 
-import { applySizes, clamp, KEY_STEP, KEY_STEP_LARGE, MIN_OUTLINE_HEIGHT, MIN_STAGE_WIDTH, PANELS, readSizes, writeSize, type PanelId } from './panels'
+import { applySizes, clamp, KEY_STEP, KEY_STEP_LARGE, MIN_STAGE_WIDTH, PANELS, readSizes, writeSize, type PanelId } from './panels'
 
 type Parts = { el: HTMLElement; target: HTMLElement; other: HTMLElement; root: HTMLElement }
 
 type Drag = { pointerId: number; start: number; size: number; max: number; next: number; frame: number }
+
+const sizeOf = (node: HTMLElement) => node.getBoundingClientRect().width
 
 export function Splitter({
   panel,
@@ -18,7 +20,7 @@ export function Splitter({
   onActive,
 }: {
   panel: PanelId
-  /** Where the resized panel is: just `before` the separator (left, above) or `after` it. */
+  /** Where the resized panel is: just `before` the separator (on its left) or `after` it. */
   side: 'before' | 'after'
   /** True while a pointer drags the separator. */
   onActive?: (active: boolean) => void
@@ -26,22 +28,19 @@ export function Splitter({
   const ref = useRef<HTMLHRElement>(null)
   const drag = useRef<Drag | null>(null)
   const spec = PANELS[panel]
-  const horizontal = spec.axis === 'x'
 
   const parts = (): Parts | null => {
     const el = ref.current
     if (!el) return null
     const target = (side === 'before' ? el.previousElementSibling : el.nextElementSibling) as HTMLElement | null
-    // The neighbour on the other side gives up the space (the canvas, or the outline).
+    // The neighbour on the other side gives up the space (the canvas).
     const other = (side === 'before' ? el.nextElementSibling : el.previousElementSibling) as HTMLElement | null
     const root = el.closest<HTMLElement>('.builder-editor')
     return target && other && root ? { el, target, other, root } : null
   }
 
-  const sizeOf = (node: HTMLElement) => (horizontal ? node.getBoundingClientRect().width : node.getBoundingClientRect().height)
-
   /** The largest size: the panel may take the neighbour's space down to its minimum. */
-  const maxOf = (p: Parts) => Math.min(spec.max, sizeOf(p.target) + sizeOf(p.other) - (horizontal ? MIN_STAGE_WIDTH : MIN_OUTLINE_HEIGHT))
+  const maxOf = (p: Parts) => Math.min(spec.max, sizeOf(p.target) + sizeOf(p.other) - MIN_STAGE_WIDTH)
 
   const apply = (p: Parts, px: number, max: number) => {
     const value = Math.round(clamp(px, spec.min, max))
@@ -82,15 +81,15 @@ export function Splitter({
     e.preventDefault()
     e.currentTarget.setPointerCapture(e.pointerId)
     const size = sizeOf(p.target)
-    drag.current = { pointerId: e.pointerId, start: horizontal ? e.clientX : e.clientY, size, max: maxOf(p), next: size, frame: 0 }
-    p.root.dataset.resizing = spec.axis
+    drag.current = { pointerId: e.pointerId, start: e.clientX, size, max: maxOf(p), next: size, frame: 0 }
+    p.root.dataset.resizing = 'x'
     onActive?.(true)
   }
 
   const onPointerMove = (e: PointerEvent<HTMLHRElement>) => {
     const current = drag.current
     if (!current || e.pointerId !== current.pointerId) return
-    const delta = (horizontal ? e.clientX : e.clientY) - current.start
+    const delta = e.clientX - current.start
     current.next = current.size + (side === 'before' ? delta : -delta)
     // One style write per frame, however fast the pointer moves.
     if (current.frame) return
@@ -112,7 +111,7 @@ export function Splitter({
   const onKeyDown = (e: KeyboardEvent<HTMLHRElement>) => {
     const p = parts()
     if (!p) return
-    const keys = horizontal ? { less: 'ArrowLeft', more: 'ArrowRight' } : { less: 'ArrowUp', more: 'ArrowDown' }
+    const keys = { less: 'ArrowLeft', more: 'ArrowRight' }
     const size = sizeOf(p.target)
     const max = maxOf(p)
     const step = e.shiftKey ? KEY_STEP_LARGE : KEY_STEP
@@ -142,13 +141,13 @@ export function Splitter({
       ref={ref}
       // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex
       tabIndex={0}
-      aria-orientation={horizontal ? 'vertical' : 'horizontal'}
+      aria-orientation="vertical"
       aria-label={`${spec.label}. Arrow keys resize, Enter resets.`}
       aria-valuemin={spec.min}
       data-tooltip="Drag to resize · double-click to reset"
-      // Away from the panel, over the canvas or the outline.
-      data-tooltip-side={horizontal ? (side === 'before' ? 'right' : 'left') : 'bottom'}
-      className={`builder-split builder-split--${spec.axis}`}
+      // Away from the panel, over the canvas.
+      data-tooltip-side={side === 'before' ? 'right' : 'left'}
+      className="builder-split"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={end}

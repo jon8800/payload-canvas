@@ -183,7 +183,8 @@ The editor is a full-screen root admin view at `{admin}/builder/:collection/:id`
 - The document's other fields (title, slug, SEO, a template's collection) open in Payload's document drawer (`useDocumentDrawer`, "Page settings"). The drawer's saves go through the save-hook guard, so they never overwrite the session's layout. The drawer hides Payload's Publish button (the plugin's `edit.PublishButton` renders nothing when the drawer slug matches the builder's settings drawer) and its "…" menu (`disableActions`); it saves by autosave or "Save draft".
 - Publish, Unpublish and Revert are plugin endpoints (`{live}/:collection/:id/publish|unpublish|revert`). They call Payload's Local API as the user. Publish first saves the session's unsaved commits. Revert resets the session to the published layout and sends every editor a `session` event with `reset: true`; editors drop their unsent changes and their undo history.
 - Payload's Versions, Version (compare) and API screens open in a drawer over the builder (`admin/editor/topbar/screens/`). Payload renders them through its public `renderDocument` server function with `paramsOverride` set to the screen's path, the same call its document drawer uses. The screens navigate with Next's router; inside the drawer a small router (Next's router contexts, the only Next internals the plugin imports) keeps every navigation in the drawer. Restore is a plugin endpoint (`{live}/:collection/:id/restore`) that works like Revert: it resets the session to the version's layout, then restores with the Local API (as a draft when the collection has drafts). The drawer hides Payload's own Restore button, which would bypass the session.
-- The sidebars and the split between the Add panel and the outline are resizable. Sizes are CSS variables on the editor root, written on each animation frame of a drag (no React render) and kept in local storage (`admin/editor/layout/`).
+- The left sidebar has three full-height tabs: Layers (the outline tree), Blocks and Sections (`admin/editor/layout/LeftPanel.tsx`). Panels stay mounted once opened, so a library item dragged across a tab change stays registered with dnd-kit. A drag that rests on the Layers tab opens it, and the smooth drag mode measures the tree again (`remeasureOutline`).
+- The sidebars are resizable. Sizes are CSS variables on the editor root, written on each animation frame of a drag (no React render) and kept in local storage (`admin/editor/layout/`).
 - The document's "Builder" tab is a link to the view. The tab's own path (`…/:id/builder`) redirects there. In the Edit view the layout field shows a block summary and an "Open builder" button.
 - The plugin adds the layout field at the top level and runs last. Plugins like SEO with `tabbedUI` move fields into tabs.
 
@@ -191,10 +192,10 @@ The editor is a full-screen root admin view at `{admin}/builder/:collection/:id`
 ┌─────────────────────────────────────────────────────────────────┐
 │ Top bar: back · Collection › Title · status │ undo · width │ … │
 ├──────────────┬───────────────────────────────┬──────────────────┤
-│ Outline      │ Canvas (iframe + overlay)     │ Inspector        │
-│ block tree   │                               │ Block | Assistant│
-│ + block      │                               │ Content / Styles │
-│   library    │                               │                  │
+│ Layers |     │ Canvas (iframe + overlay)     │ Inspector        │
+│ Blocks |     │                               │ Block | Assistant│
+│ Sections     │                               │ Content / Styles │
+│ (one tab)    │                               │                  │
 └──────────────┴───────────────────────────────┴──────────────────┘
 ```
 
@@ -217,7 +218,7 @@ The editor is a full-screen root admin view at `{admin}/builder/:collection/:id`
   - Auto-scroll runs on a timer while the pointer holds still at the canvas edge.
 - The iframe repeats its "ready" message until it receives a layout. This avoids a race on reload.
 - `DndContext` gets `id={useId()}` to avoid a hydration mismatch.
-- Device sizes resize the iframe. **Fluid** (the default) fills the free space at 100 %, so the canvas shows the breakpoint of the space the sidebars leave and follows it live while panels or the window resize. Desktop (1280 px), tablet, mobile and a custom width are fixed; a frame wider than the stage zooms out to fit. The toolbar and status bar show the breakpoint the frame width gives. The Styles panel picks the breakpoint it edits on its own; it marks values that a larger breakpoint overrides at the current width.
+- Device sizes resize the iframe. **Fluid** (the default) fills the free space at 100 %, so the canvas shows the breakpoint of the space the sidebars leave and follows it live while panels or the window resize. Desktop (1280 px), tablet, mobile and a custom width are fixed; a frame wider than the stage zooms out to fit. Handles on the frame's edges resize it (`layout/FrameResize.tsx`): the drag writes the width to the DOM on each animation frame and commits a custom width on pointer up. The stage scrolls sideways only when the zoomed frame is wider than the stage (`data-scroll`); otherwise it clips, because the scaled frame is wider for a moment while the zoom eases. The toolbar and status bar show the breakpoint the frame width gives. The Styles panel picks the breakpoint it edits on its own; it marks values that a larger breakpoint overrides at the current width.
 - **Insert between blocks.** Hovering the canvas shows a "+" on the edge nearest the pointer, between two blocks, or in the middle of an empty slot (`admin/editor/insert/spots.ts`, pure). The canvas script already reports the pointer, so the admin computes the spot from the measured rects and the slot rules, and stores it only when it changes. A click opens a picker (blocks and sections that fit, by `slotAcceptsAt`) that inserts at that position. Hidden while dragging and while editing text inline.
 - Inline text editing: double-click text on the canvas (or press Enter on a selected block) to edit it in place. Components mark text elements with `editableText(mode, path)`. Plain text is a `contenteditable` element. Rich text loads a small Lexical editor (the same version as Payload, with Payload-compatible link nodes) and a floating toolbar, only when editing starts. One editing session is one undo step (`mergeWithin`). Edits go through the normal operations, so collaborators see the typing live.
 - **Server-rendered blocks.** Components that load data are async server components that import Payload and the config (model grids, review carousels on the owner's sites), so the client canvas cannot import them. The app adds a server action to the canvas route, made with `createCanvasServer` (`builder-react/src/render/canvasServer.tsx`), and passes it to `BuilderCanvas` as `server`.
@@ -316,8 +317,11 @@ Added to `payload-mcp-toolkit` through `customTools`:
 | `insertSection` | Inserts a ready-made section (hero, features, pricing, …). |
 | `validateLayout` | Checks a layout against the block schemas and returns errors. |
 | `getPreviewUrl` | Returns the draft preview URL. |
+| `generateImage` | Generates an image with the site's image adapter (`ai.images`) and saves it in the media collection. |
 
 Ready-made sections are the main unit the AI should use. AI models build better pages from well-designed sections than from single blocks.
+
+**Image generation.** An `AiImageAdapter` (`ai.images`, `src/ai/images/`) is separate from the chat `AiAdapter`: chat APIs return no images unless the model is an image-output model, and MCP clients bring their own chat model. One `ImageService` (on `config.custom`) serves the assistant tool, the inspector's Generate action (`POST {api}/builder/ai/image`) and the MCP tool. It checks create access before the paid call, uploads as the user (`overrideAccess: false`), and keeps one in-memory hourly count per user. See docs/ai/images.md.
 
 **Saved sections.** Editors save any block (with its children) as a section ("Save as section…"). The plugin owns a `builder-sections` collection (`plugin/sections.ts`; signed-in users by default; `savedSections: false` turns it off). The library lists them under "Saved"; `listSections` / `insertSection` (MCP and the assistant) load them per request, as the user, and accept `saved:<id>`, the document id or the name. The assistant's system prompt stays stable: saved sections go into the per-request context message.
 

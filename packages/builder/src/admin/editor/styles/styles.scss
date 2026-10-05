@@ -166,9 +166,9 @@
     color: var(--bs-muted);
     font-size: 11.5px;
 
-    .builder-styles__select {
-      width: auto;
-      min-width: 96px;
+    // Fixed width: fits "While pressed" and a dot, so the row never moves when the state changes.
+    .builder-select {
+      width: 118px;
     }
   }
 
@@ -235,7 +235,8 @@
     width: 5px;
     height: 5px;
     border-radius: 50%;
-    background: var(--bs-accent);
+    // Also in a select list, which renders outside the panel.
+    background: var(--bs-accent, var(--be-accent, var(--theme-success-500)));
   }
 
   // -------------------------------------------------------------------------
@@ -433,7 +434,6 @@
   }
 
   .builder-styles__input,
-  .builder-styles__select,
   .builder-styles__raw-input {
     width: 100%;
     min-width: 0;
@@ -461,21 +461,23 @@
     }
   }
 
-  .builder-styles__select {
-    padding-right: 2px;
-    cursor: pointer;
-
-    &[data-source='inherited'],
-    &[data-source='shorthand'] {
-      color: var(--bs-dim);
-    }
-  }
-
-  .builder-styles__select--more {
+  // The "…" list next to a segmented control (`Segmented` in controls.tsx). Highlighted like an
+  // active segment while one of its options is the value.
+  .builder-styles__more.builder-select {
     flex: none;
-    width: 44px;
+    width: var(--bs-h);
     margin-left: 3px;
-    padding: 0 0 0 6px;
+
+    &[data-active] {
+      background: var(--theme-elevation-150);
+      color: var(--theme-text);
+    }
+
+    &[data-active][data-source='inherited'],
+    &[data-active][data-source='shorthand'] {
+      background: var(--theme-elevation-50);
+      color: var(--theme-warning-600, #b7791f);
+    }
   }
 
   .builder-styles__reset {
@@ -620,12 +622,6 @@
     align-items: center;
     gap: 8px;
     min-width: 0;
-
-    input[type='range'] {
-      flex: 1;
-      min-width: 0;
-      accent-color: var(--bs-accent);
-    }
   }
 
   .builder-styles__slider-value {

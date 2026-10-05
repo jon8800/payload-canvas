@@ -309,7 +309,11 @@ The top bar, left to right:
 - **Page settings** opens the document's own edit form in a Payload drawer: title, slug, SEO, and for a template its collection and sample document. The top bar updates after each save.
 - The AI assistant (with the `ai` option), the keyboard shortcuts, and **Publish changes**. Its menu has **Unpublish**, **Revert to published** (drops all draft changes, after a confirmation), **Versions** and **API** (Payload's own screens, in a drawer over the builder), and links to the Edit view and the live page. In the Versions drawer, open a version to compare it, then **Restore as draft**: every open editor gets the restored layout, and the site keeps the published version until you publish.
 
-The sidebars and the split between the Add panel and the outline resize: drag the edge, or focus it with Tab and use the arrow keys (Shift for larger steps). A double-click or Enter resets the default size. The sizes are kept in the browser.
+The left sidebar has three tabs: **Layers** (the block tree), **Blocks** and **Sections**. Each fills the sidebar. Alt+1, Alt+2 and Alt+3 (⌥1, ⌥2, ⌥3 on a Mac) open them, and the browser keeps the last tab. To drop a block or section into the tree, drag it onto the **Layers** tab and hold it there for a moment: the tab opens.
+
+The sidebars resize: drag the edge, or focus it with Tab and use the arrow keys (Shift for larger steps). A double-click or Enter resets the default size. The sizes are kept in the browser.
+
+The canvas frame resizes too. Drag the handle on its left or right edge: the frame stays centered and shows its width and breakpoint while you drag. Hold Shift to snap to the breakpoint and device widths. The new width is a custom width. Double-click a handle (or press Enter on it) to go back to the device you started from, or to fluid. The stage scrolls sideways only when the frame is wider than the stage, for example a fixed width at 100 % zoom.
 
 Publishing. All editors of a document share one live session (see [Multiplayer editing](#multiplayer-editing)). The session saves the layout as a draft about a second after each change. **Publish changes** saves what is still unsaved, then publishes with Payload's Local API as the signed-in user, so access control, hooks and versions work as usual. **Unpublish** sets the document back to draft. **Revert to published** loads the published version into the session, so every open editor reloads the canvas, and saves it again. Every open editor sees the new status at once.
 
@@ -317,7 +321,7 @@ Save rules. Every save checks the layout. A broken layout (wrong shape, duplicat
 
 Adding blocks on the canvas. Hover the canvas: a small **+** shows on the edge between two blocks next to the pointer (above or below in a column, left or right in a row), and in the middle of an empty container. Click it to open a picker with the blocks and sections that fit there (slot rules apply). Type to search, use the arrow keys and Enter, or click. The new block goes in exactly that place and is selected. The **+** hides while you drag and while you edit text on the canvas.
 
-Drag and drop. Drag a block by its row in the outline, by the grip on the selected block's bar, or from the **Add** panel. Slot rules apply: a slot that refuses the block is never a target. Escape cancels the drag. One drop is one undo step, and collaborators see the move at once. There are two styles:
+Drag and drop. Drag a block by its row in the outline, by the grip on the selected block's bar, or from the **Blocks** and **Sections** tabs. Slot rules apply: a slot that refuses the block is never a target. Escape cancels the drag. One drop is one undo step, and collaborators see the move at once. There are two styles:
 
 - **Drop line** (`'indicator'`, the default). A line or a box shows where the block lands. Blocks move when you drop.
 - **Smooth** (`'smooth'`). The block lifts and follows the pointer. The other blocks and the outline rows slide out of the way, so a gap shows where the block lands. In a grid, blocks move into the next cell. On drop, the block slides into the gap. On cancel, it slides back.
@@ -1150,7 +1154,7 @@ A value a language does not have falls back, as Payload's `fallback` and `fallba
 - The outline marks blocks with untranslated text with an orange dot.
 - Inline editing on the canvas writes the shown language.
 - Blocks, order, classes and fields that are not localized change every language. The inspector says so, and the first such edit in another language shows a notice.
-- A new block holds its text in the language you add it in. Add a heading in German, and its text is German only: English has no text for it yet. This covers blocks from the Add panel, the "+" between blocks, a new list item (Enter) and blocks the assistant adds. Pasted, duplicated and section content keeps its own languages.
+- A new block holds its text in the language you add it in. Add a heading in German, and its text is German only: English has no text for it yet. This covers blocks from the Blocks tab, the "+" between blocks, a new list item (Enter) and blocks the assistant adds. Pasted, duplicated and section content keeps its own languages.
 - A field that has text in another language but none in the default language says **Missing in English**. In English it has **Copy German**, and the note above the tabs copies every such field at once. The outline dot and the language switcher count these fields in the default language too.
 - Related documents load in the shown language: collection lists, images and relationships, the template's preview document and server-rendered blocks. Switching the language loads them again.
 - Collaborators see each other's language in the avatar (a small "DE") and in its tooltip. Structure changes reach everyone at once; each person sees the text of their own language. Undo stays per person.
@@ -1247,7 +1251,10 @@ You choose the adapter in your own config code, so you decide which environment 
 | `effort` | the adapter's default (Anthropic: `medium`) | How much the model thinks: `low`, `medium`, `high`, `xhigh`, `max`. Anthropic and OpenRouter use it. `openAICompatibleAdapter` sends it as `reasoning_effort` with `reasoningEffort: true`. |
 | `instructions` | none | Extra rules for the assistant, for example your brand voice. Added to the end of the system prompt. |
 | `maxSteps` | `12` | Maximum tool rounds per user message. |
-| `mediaCollection` | `media` | The upload collection the assistant picks images from. |
+| `mediaCollection` | `media` | The upload collection the assistant picks images from, and where generated images go. |
+| `images` | none | The image adapter. See [Image generation](#image-generation). |
+| `imageLimits` | `{ perRequest: 3, perHour: 20 }` | Images per assistant reply, and per user per hour. |
+| `imageMarkerField` | `generatedBy` | A media field that gets a note on generated images, when the collection has it. `false` turns it off. |
 
 The model, the key, `maxTokens` and provider settings belong to the adapter. See [providers.md](https://github.com/jon8800/payload-toolkit/blob/main/docs/ai/providers.md) for each adapter's options.
 
@@ -1328,11 +1335,33 @@ export function myAdapter({ url, apiKey, model }: { url: string; apiKey?: string
 
 For a streaming OpenAI-format API, `createOpenAIFormatAdapter({ name, label, model, url, authHeaders, keyHint })` from the same import does all of this, with streaming, retries and timeouts. The built-in OpenRouter and Cloudflare adapters use it.
 
+### Image generation
+
+The assistant, the inspector (a **Generate image** button under every upload field) and MCP clients can make new images. The site saves each image in the media collection, with alt text. Image generation has its own adapter, so it works with any chat model, and also for Claude Code or Codex over MCP:
+
+```ts
+import { openRouterImageAdapter } from '@payload-toolkit/builder/ai/images/openrouter'
+
+ai: {
+  adapter: openRouterAdapter({ apiKey: process.env.OPENROUTER_API_KEY }),
+  images: openRouterImageAdapter({ apiKey: process.env.OPENROUTER_API_KEY }), // default model: black-forest-labs/flux.2-klein-4b
+}
+```
+
+| Import | Adapter |
+|---|---|
+| `@payload-toolkit/builder/ai/images/openrouter` | `openRouterImageAdapter({ apiKey, model? })`: every image model on OpenRouter. About 1.5 US cents per image with the default model. |
+| `@payload-toolkit/builder/ai/images/openai` | `openAIImageAdapter({ apiKey, model?, baseURL?, quality? })`: the OpenAI Images API and compatible servers. |
+| `@payload-toolkit/builder/ai/images/cloudflare-workers-ai` | `cloudflareWorkersAIImageAdapter({ accountId, apiToken, model? })`: FLUX and other models on Cloudflare. |
+| `@payload-toolkit/builder/ai/images/fake` | `fakeImageAdapter()`: a local gradient PNG for tests. |
+
+A chat model does not return images through the chat API, even when its app can make images. That is why the image adapter is a separate setting. Without it, the Generate button stays hidden and the `generateImage` tool says what to set up. Uploads run as the signed-in user, after a `create` access check. Limits, cost, the "generated by" note and writing your own `AiImageAdapter`: [docs/ai/images.md](https://github.com/jon8800/payload-toolkit/blob/main/docs/ai/images.md).
+
 ### What it can do
 
 - Insert ready-made sections and then change their text, images and classes. It prefers your sections over building from single blocks.
 - Add, move, duplicate, hide and remove blocks, and change props and Tailwind classes. It knows your theme colors, fonts and breakpoints, the selected block and the canvas width.
-- Pick images from the media library (it searches alt text and file names as the signed-in user).
+- Pick images from the media library (it searches alt text and file names as the signed-in user), or generate new ones with `ai.images`.
 - In templates, bind block props to document fields.
 
 Every change goes through the same operations as the editor and is checked against the block schemas. A change that would make the layout invalid is rolled back, and the model gets the error and tries again.
@@ -1382,10 +1411,11 @@ plugins: [
 
 - Agents connect to `POST <your site>/api/mcp` with an API key from **Admin > MCP > API Keys**. Claude Code and Codex setup: [docs/ai/connect-claude-code-and-codex.md](https://github.com/jon8800/payload-toolkit/blob/main/docs/ai/connect-claude-code-and-codex.md).
 - Sign-in with the website account (OAuth, no key to copy) is a `payload-mcp-toolkit` feature: pass `oauth: { canAuthorize, access: 'editor' }` to `mcpToolkitPlugin()` and add the discovery rewrites. The starter shows the setup, and the doc above has the Claude Code and Codex commands. API keys keep working next to it.
-- Tools (`listSections` and `insertSection` include [saved sections](#saved-sections)): `listBlocks`, `getBlockSchema`, `listSections`, `insertSection`, `getLayout`, `applyOperations`, `validateLayout`, `getPreviewUrl`, plus `listTemplates` and `getBindingSources` for templates.
+- Tools (`listSections` and `insertSection` include [saved sections](#saved-sections)): `listBlocks`, `getBlockSchema`, `listSections`, `insertSection`, `getLayout`, `applyOperations`, `validateLayout`, `getPreviewUrl`, `generateImage`, plus `listTemplates` and `getBindingSources` for templates.
+- `generateImage` makes an image with the site's image adapter (`ai.images` in `websiteBuilder`) and saves it in the media collection. Clients that cannot make images (Claude Code with a Claude plan) use the site's adapter this way. The key needs `create` on the media collection.
 - Every tool checks the key's access to the collection. Handlers run as the key's user with `overrideAccess: false`.
 - Writes are commits to the document's live session, like an editor's own changes. Open editors show them at once, and the agent appears in the collaborator list while it works. The draft is saved about a second later. `getLayout` returns the session's layout, unsaved changes included.
-- `builderMcpTools` options: `blocks`, `sections`, `collections` (the same map as the plugin), `siteUrl` (default: Payload `serverURL`, then `NEXT_PUBLIC_SERVER_URL`), `apiKeyCollection`.
+- `builderMcpTools` options: `blocks`, `sections`, `collections` (the same map as the plugin), `siteUrl` (default: Payload `serverURL`, then `NEXT_PUBLIC_SERVER_URL`), `apiKeyCollection`, `mediaCollection` (default `media`, the same as `ai.mediaCollection`).
 
 ## Multiplayer editing
 
