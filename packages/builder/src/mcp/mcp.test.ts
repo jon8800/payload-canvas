@@ -356,11 +356,23 @@ describe('saved sections', () => {
 describe('sectionInsertOps', () => {
   it('checks the target position', () => {
     const layout: Layout = { version: 1, blocks: [] }
-    assert.equal(sectionInsertOps(layout, hero, { parentId: 'missing' }), 'Parent block "missing" not found')
+    assert.equal(
+      sectionInsertOps(layout, hero, { parentId: 'missing' }),
+      'Parent block "missing" not found. Use parentId null for the page root, or a block id from getLayout.',
+    )
     assert.equal(sectionInsertOps(layout, hero, { index: 3 }), 'Index 3 is out of range (0-0)')
     const ops = sectionInsertOps(layout, hero, {})
     assert.ok(Array.isArray(ops))
     assert.deepEqual(ops[0].type === 'insert' && ops[0].to, { parentId: null, slot: 'children', index: 0 })
+  })
+
+  it('reads "", "root" and an empty slot as the page root (models send them under strict schemas)', () => {
+    const layout: Layout = { version: 1, blocks: [] }
+    for (const parentId of ['', ' ', 'root', 'ROOT', 'null', 'page', ':root', '#root', 'body', '/', 'document', '.', ']', '[root]']) {
+      const ops = sectionInsertOps(layout, hero, { parentId, slot: '' })
+      assert.ok(Array.isArray(ops), `parentId ${JSON.stringify(parentId)}`)
+      assert.deepEqual(ops[0].type === 'insert' && ops[0].to, { parentId: null, slot: 'children', index: 0 })
+    }
   })
 })
 

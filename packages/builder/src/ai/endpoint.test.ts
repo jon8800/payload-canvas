@@ -5,7 +5,7 @@ import type { PayloadRequest } from 'payload'
 import type { BlockDefinition, SectionDefinition } from '../core/types'
 import { fakeAdapter } from './adapters/fake'
 import { NO_ADAPTER_PROBLEM, PROVIDER_REMOVED_PROBLEM } from './config'
-import { aiEndpoints, allowsUpdate, parseChatRequest, type AiEndpointOptions } from './endpoint'
+import { aiEndpoints, allowsUpdate, mediaSearch, parseChatRequest, type AiEndpointOptions } from './endpoint'
 import type { AiAdapter, AiModelRequest, AiStreamEvent } from './types'
 
 const blocks: BlockDefinition[] = [
@@ -278,5 +278,37 @@ describe('allowsUpdate', () => {
     assert.equal(allowsUpdate({ update: true, fields: { layout: { read: true } } }, 'layout'), false)
     assert.equal(allowsUpdate({ update: true, fields: { layout: { update: true } } }, 'layout'), true)
     assert.equal(allowsUpdate({ update: true, fields: { title: { read: true } } }, 'layout'), true)
+  })
+})
+
+describe('mediaSearch', () => {
+  it('searches only text fields (a rich text caption would make the database query fail)', async () => {
+    let where: unknown
+    const req = {
+      user: { id: 1 },
+      payload: {
+        collections: {
+          media: {
+            config: {
+              fields: [
+                { name: 'alt', type: 'text' },
+                { name: 'caption', type: 'richText' },
+                { name: 'filename', type: 'text' },
+                { name: 'mimeType', type: 'text' },
+              ],
+            },
+          },
+        },
+        find: async (args: { where: unknown }) => {
+          where = args.where
+          return { docs: [{ id: 7, alt: 'Beans', filename: 'beans.jpg', url: '/beans.jpg', width: 800, height: 600 }] }
+        },
+      },
+    } as unknown as PayloadRequest
+    const items = await mediaSearch(req, 'media')('coffee', 5)
+    assert.deepEqual(where, {
+      and: [{ mimeType: { contains: 'image' } }, { or: [{ alt: { like: 'coffee' } }, { filename: { like: 'coffee' } }] }],
+    })
+    assert.equal(items[0].filename, 'beans.jpg')
   })
 })
