@@ -103,10 +103,14 @@ export class Workspace {
 
   /**
    * Applies operations. Returns the applied operations (duplicates as inserts) and warnings. Prop
-   * updates write the workspace's locale (localized props only).
+   * updates write the workspace's locale (localized props only), and so do inserted blocks (new
+   * content), unless `copies` (a section keeps its own locale data).
    */
-  apply(ops: unknown[]): { ok: true; ops: Operation[]; warnings: LayoutError[] } | { ok: false; error: string; errors?: LayoutError[] } {
-    const prepared = stampLocale(prepareOps(ops, this.layout) as Operation[], this.locale, this.#localization)
+  apply(
+    ops: unknown[],
+    options: { copies?: boolean } = {},
+  ): { ok: true; ops: Operation[]; warnings: LayoutError[] } | { ok: false; error: string; errors?: LayoutError[] } {
+    const prepared = stampLocale(prepareOps(ops, this.layout) as Operation[], this.locale, this.#localization, { inserts: !options.copies })
     const resolved = resolveOperations(this.layout, prepared, this.#blocks, this.#localization)
     if (!resolved.ok) return { ok: false, error: resolved.error }
     const { blocking, warnings } = this.#errors(resolved.layout)
@@ -628,7 +632,7 @@ export async function runTool(name: string, rawInput: unknown, workspace: Worksp
         index: typeof input.index === 'number' ? input.index : undefined,
       })
       if (typeof ops === 'string') return fail(ops, `Could not insert ${section.label}`)
-      const result = workspace.apply(ops)
+      const result = workspace.apply(ops, { copies: true })
       if (!result.ok) return fail(result.error, `Could not insert ${section.label}`, result.errors)
       const inserted = result.ops.flatMap((op) => (op.type === 'insert' ? [op.block] : []))
       return ok(

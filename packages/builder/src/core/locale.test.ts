@@ -7,12 +7,15 @@ import { captureFieldSemantics } from './fieldSemantics'
 import { deniedPropChanges } from './fieldAccess'
 import { runPropValidators } from './fieldValidate'
 import {
+  blockInLocale,
   createLocaleView,
   fallbackChain,
   localeSettingsOf,
+  localeWithValue,
   localizedKeys,
   localizeOperations,
   mergeLocaleView,
+  missingDefaultKeys,
   resolveLayoutLocale,
   stampLocale,
   untranslatedKeys,
@@ -323,5 +326,88 @@ describe('describeLayoutErrors with locales', () => {
       describeLayoutErrors(layout, errors, blocks).map((e) => e.message),
       ['Heading: fill in text (DE)', 'Heading: fill in text (FR)'],
     )
+  })
+})
+
+/** A new card with a child, written in German. */
+const newCard = (): Block => ({
+  id: 'c',
+  type: 'card',
+  props: { items: [{ label: 'Eins' }], count: 2 },
+  slots: { children: [{ id: 'k', type: 'heading', props: { text: 'Kind', level: '2' } }] },
+})
+
+describe('new content written in another locale', () => {
+  const base = layoutOf({ id: 'h', type: 'heading', props: { text: 'Hello' } })
+
+  it('moves the localized props of the block and its children into the locale', () => {
+    const result = localizeOperations(base, [{ type: 'insert', block: newCard(), to: { parentId: null, index: 1 }, locale: 'de' }], blocks, settings)
+    assert.ok(result.ok)
+    assert.deepEqual(result.ops, [
+      {
+        type: 'insert',
+        to: { parentId: null, index: 1 },
+        block: {
+          id: 'c',
+          type: 'card',
+          props: { count: 2 },
+          locales: { de: { items: [{ label: 'Eins' }] } },
+          slots: { children: [{ id: 'k', type: 'heading', props: { level: '2' }, locales: { de: { text: 'Kind' } } }] },
+        },
+      },
+    ])
+    const layout = ok(applyOperations(base, result.ops)).layout
+    // German shows the new text; English has none yet.
+    assert.equal(resolveLayoutLocale(layout, blocks, settings, 'de').blocks[1].slots?.children[0].props?.text, 'Kind')
+    assert.equal(resolveLayoutLocale(layout, blocks, settings, 'en').blocks[1].slots?.children[0].props?.text, undefined)
+    assert.deepEqual(missingDefaultKeys(layout.blocks[1], blocks, settings), ['items'])
+  })
+
+  it('keeps the default locale, the stored form and refuses unknown locales', () => {
+    const plain = localizeOperations(base, [{ type: 'insert', block: newCard(), to: { parentId: null, index: 1 }, locale: 'en' }], blocks, settings)
+    assert.ok(plain.ok)
+    assert.deepEqual(plain.ops, [{ type: 'insert', block: newCard(), to: { parentId: null, index: 1 } }])
+    // A copy with translations (paste, duplicate) keeps its own locale data.
+    const stored: Block = { id: 's', type: 'heading', props: { text: 'Hi' }, locales: { fr: { text: 'Salut' } } }
+    const copied = localizeOperations(base, [{ type: 'insert', block: stored, to: { parentId: null, index: 0 }, locale: 'de' }], blocks, settings)
+    assert.ok(copied.ok)
+    assert.deepEqual(copied.ops, [{ type: 'insert', block: stored, to: { parentId: null, index: 0 } }])
+    const bad = localizeOperations(base, [{ type: 'insert', block: newCard(), to: { parentId: null, index: 0 }, locale: 'it' }], blocks, settings)
+    assert.equal(bad.ok, false)
+  })
+
+  it('stamps inserts only when asked', () => {
+    const op: Operation = { type: 'insert', block: newCard(), to: { parentId: null, index: 0 } }
+    assert.deepEqual(stampLocale([op], 'de', settings), [op])
+    assert.deepEqual(stampLocale([op], 'de', settings, { inserts: true }), [{ ...op, locale: 'de' }])
+    assert.deepEqual(stampLocale([op], 'en', settings, { inserts: true }), [op])
+  })
+
+  it('blockInLocale leaves blocks without localized props alone', () => {
+    const shared: Block = { id: 'x', type: 'card', props: { count: 1 } }
+    assert.equal(blockInLocale(shared, 'de', blocks), shared)
+  })
+
+  it('an API save in German writes a new block in German', () => {
+    const read = resolveLayoutLocale(base, blocks, settings, 'de')
+    const incoming: Layout = { ...read, blocks: [...read.blocks, { id: 'n', type: 'heading', props: { text: 'Neu', level: '1' } }] }
+    const merged = mergeLocaleView(base, incoming, 'de', blocks, settings)
+    assert.deepEqual(merged.blocks[1], { id: 'n', type: 'heading', props: { level: '1' }, locales: { de: { text: 'Neu' } } })
+    // In the default locale a new block stays in props.
+    assert.deepEqual(mergeLocaleView(base, incoming, 'en', blocks, settings).blocks[1], incoming.blocks[1])
+  })
+
+  it('publishing needs the default locale and names it', async () => {
+    const { describeLayoutErrors } = await import('./issues')
+    const layout = layoutOf({ id: 'n', type: 'heading', props: { level: '1' }, locales: { de: { text: 'Neu' } } })
+    assert.equal(localeWithValue(layout.blocks[0], 'text', settings), 'de')
+    const errors = validateLayout(layout, blocks, { localization: settings }).filter((e) => e.code === 'required')
+    assert.equal(errors.length, 1)
+    assert.deepEqual(
+      describeLayoutErrors(layout, errors, blocks, { localization: settings }).map((e) => e.message),
+      ['Heading: fill in text (EN)'],
+    )
+    // Without the settings, the message stays as before.
+    assert.deepEqual(describeLayoutErrors(layout, errors, blocks).map((e) => e.message), ['Heading: fill in text'])
   })
 })

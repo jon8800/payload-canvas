@@ -97,7 +97,8 @@
     font-size: 11.5px;
   }
 
-  .builder-locale-field[data-locale-status='untranslated'] .builder-locale-field__state {
+  .builder-locale-field[data-locale-status='untranslated'] .builder-locale-field__state,
+  .builder-locale-field[data-locale-status='missing'] .builder-locale-field__state {
     color: var(--theme-warning-500, #f59e0b);
   }
 

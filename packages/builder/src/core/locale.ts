@@ -276,6 +276,31 @@ function isEmptyValue(value: unknown): boolean {
   return value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)
 }
 
+/**
+ * The localized props of a block that the default locale does not have (empty or missing) while
+ * another locale has its own value: a block written in another language first. The editor marks
+ * them "Missing in English"; publishing needs them when they are required.
+ */
+export function missingDefaultKeys(block: Block, blocks: readonly BlockDefinition[], settings: LocaleSettings): string[] {
+  if (!block.locales) return []
+  const def = getBlockDefinition(blocks, block.type)
+  const out: string[] = []
+  for (const key of localizedKeys(def)) {
+    if (!isEmptyValue(block.props?.[key])) continue
+    if (localeWithValue(block, key, settings) !== null) out.push(key)
+  }
+  return out
+}
+
+/** The first locale (in the config's order, not the default) with its own value of `key`, or null. */
+export function localeWithValue(block: Block, key: string, settings: LocaleSettings): string | null {
+  for (const code of settings.locales) {
+    if (code === settings.defaultLocale) continue
+    if (!isEmptyValue(block.locales?.[code]?.[key])) return code
+  }
+  return null
+}
+
 /** Locale codes that hold values anywhere in the layout. */
 export function localesIn(layout: Layout | null | undefined): string[] {
   const found = new Set<string>()
@@ -437,17 +462,61 @@ type UpdateOp = Extract<Operation, { type: 'update' }>
 /**
  * Sets `locale` on `update` operations that change props and name no locale. For edits made in a
  * locale (the editor's locale switcher, MCP tools with `locale`). The default locale sets nothing.
+ * `inserts`: `insert` operations without a locale get it too: their blocks are new content written
+ * in that locale (an AI that works in German writes German). Leave it off for copies (paste,
+ * duplicate, sections), which keep their own locale data.
  */
-export function stampLocale(ops: readonly Operation[], locale: string | null | undefined, settings: LocaleSettings | null | undefined): Operation[] {
+export function stampLocale(
+  ops: readonly Operation[],
+  locale: string | null | undefined,
+  settings: LocaleSettings | null | undefined,
+  options?: { inserts?: boolean },
+): Operation[] {
   if (!locale || !settings || locale === settings.defaultLocale) return [...ops]
   return ops.map((op) => {
-    if (!isPlainObject(op) || op.type !== 'update' || 'locale' in op) return op
+    if (!isPlainObject(op) || 'locale' in op) return op
+    if (op.type === 'insert') return options?.inserts ? { ...op, locale } : op
+    if (op.type !== 'update') return op
     if (op.props === undefined && op.unsetProps === undefined) return op
     return { ...op, locale }
   })
 }
 
+/**
+ * The block as new content written in `locale` (not the default), in the stored form: its
+ * localized props move from `props` to `locales[locale]`; shared props stay in `props`. The
+ * default locale gets no values, so it shows the block empty until someone writes it there. Only
+ * this block, not the blocks inside it (`blockInLocale` does those too). Never mutates.
+ */
+function ownBlockInLocale(block: Block, locale: string, blocks: readonly BlockDefinition[]): Block {
+  const keys = localizedKeys(getBlockDefinition(blocks, block.type))
+  if (keys.size === 0 || !isPlainObject(block.props)) return block
+  const shared: Record<string, unknown> = {}
+  const own: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(block.props)) {
+    if (value === undefined) continue
+    if (keys.has(key)) own[key] = value
+    else shared[key] = value
+  }
+  if (Object.keys(own).length === 0) return block
+  const { props: _props, ...rest } = block
+  const out: Block = { ...rest, locales: { [locale]: own } }
+  if (Object.keys(shared).length > 0) out.props = shared
+  return out
+}
+
+/** `ownBlockInLocale` for the block and every block inside it. */
+export function blockInLocale(block: Block, locale: string, blocks: readonly BlockDefinition[]): Block {
+  const out = ownBlockInLocale(block, locale, blocks)
+  if (!block.slots) return out
+  const slots = Object.fromEntries(Object.entries(block.slots).map(([name, list]) => [name, list.map((b) => blockInLocale(b, locale, blocks))]))
+  return { ...out, slots }
+}
+
 type Localized = { ok: true; ops: Operation[] } | { ok: false; error: string }
+
+/** An `update` or `insert` that names its locale. */
+const namesLocale = (op: unknown) => isPlainObject(op) && (op.type === 'update' || op.type === 'insert') && op.locale !== undefined
 
 /**
  * Puts the locale of `update` operations in canonical form, against the layout as the operations
@@ -463,7 +532,7 @@ export function localizeOperations(
   settings: LocaleSettings | null | undefined,
 ): Localized {
   if (!Array.isArray(ops)) return { ok: true, ops: ops as Operation[] }
-  if (!ops.some((op) => isPlainObject(op) && op.type === 'update' && op.locale !== undefined)) return { ok: true, ops: ops as Operation[] }
+  if (!ops.some(namesLocale)) return { ok: true, ops: ops as Operation[] }
   let current = layout
   let tracking = true
   const out: Operation[] = []
@@ -474,6 +543,10 @@ export function localizeOperations(
       const split = splitUpdate(current, op, blocks, settings)
       if (typeof split === 'string') return { ok: false, error: `Operation ${i} (update): ${split}` }
       produced = split
+    } else if (isPlainObject(op) && op.type === 'insert' && op.locale !== undefined) {
+      const placed = insertInLocale(op, blocks, settings)
+      if (typeof placed === 'string') return { ok: false, error: `Operation ${i} (insert): ${placed}` }
+      produced = [placed]
     }
     for (const item of produced) {
       out.push(item)
@@ -487,11 +560,33 @@ export function localizeOperations(
   return { ok: true, ops: out }
 }
 
-function splitUpdate(layout: Layout, op: UpdateOp, blocks: readonly BlockDefinition[], settings: LocaleSettings | null | undefined): Operation[] | string {
-  const { locale, ...rest } = op
+/** Why an operation's `locale` cannot be used, or null. */
+function localeProblem(locale: unknown, settings: LocaleSettings | null | undefined): string | null {
   if (typeof locale !== 'string' || locale === '') return '`locale` must be a locale code'
   if (!settings) return 'This document has no locales. Leave out `locale`.'
   if (!settings.locales.includes(locale)) return `Unknown locale "${locale}". Use one of: ${settings.locales.join(', ')}`
+  return null
+}
+
+type InsertOp = Extract<Operation, { type: 'insert' }>
+
+/**
+ * An insert of new content written in a locale, as an insert without `locale`: the localized props
+ * of its blocks go to that locale (`blockInLocale`). The default locale's content stays in
+ * `props`, and content that already has `locales` (the stored form) stays as it is.
+ */
+function insertInLocale(op: InsertOp, blocks: readonly BlockDefinition[], settings: LocaleSettings | null | undefined): Operation | string {
+  const { locale, ...rest } = op
+  const problem = localeProblem(locale, settings)
+  if (problem || !settings || !locale) return problem ?? '`locale` must be a locale code'
+  if (locale === settings.defaultLocale || !isPlainObject(op.block) || anyLocales([op.block])) return rest
+  return { ...rest, block: blockInLocale(op.block, locale, blocks) }
+}
+
+function splitUpdate(layout: Layout, op: UpdateOp, blocks: readonly BlockDefinition[], settings: LocaleSettings | null | undefined): Operation[] | string {
+  const { locale, ...rest } = op
+  const problem = localeProblem(locale, settings)
+  if (problem || !settings || !locale) return problem ?? '`locale` must be a locale code'
   if (locale === settings.defaultLocale) return [rest]
   const block = typeof op.id === 'string' ? findBlock(layout, op.id) : null
   // A missing block fails in the real apply, with its usual message.
@@ -532,8 +627,8 @@ function splitUpdate(layout: Layout, op: UpdateOp, blocks: readonly BlockDefinit
  * other locales keep their stored values.
  *
  * A value that equals what the reader saw as a fallback (no own value before) stays a fallback, so
- * reading and saving a page in German does not copy the English text into German. A new block
- * keeps its values as the default locale's (like a block added in the editor). Returns `incoming`
+ * reading and saving a page in German does not copy the English text into German. A new block's
+ * localized values go to `locale` (like a block added in the editor in that locale). Returns `incoming`
  * unchanged when it already has `locales` (it is the stored form, for example from `locale=all`).
  */
 export function mergeLocaleView(
@@ -560,7 +655,8 @@ export function mergeLocaleView(
     const old = before.get(block.id)
     const out: Block = { ...block }
     if (block.slots) out.slots = Object.fromEntries(Object.entries(block.slots).map(([name, list]) => [name, list.map(merge)]))
-    if (!old || old.type !== block.type) return out
+    // A new block: its text is written in this locale, as when the editor adds one there.
+    if (!old || old.type !== block.type) return code === settings.defaultLocale ? out : ownBlockInLocale(out, code, blocks)
     if (old.locales) out.locales = structuredClone(old.locales)
     if (code === settings.defaultLocale) return out
     const def = getBlockDefinition(blocks, block.type)

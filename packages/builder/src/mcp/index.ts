@@ -497,7 +497,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       'Operations: insert { block, to }, move { id, to }, remove { id }, duplicate { id, newId? }, update { id, props?, unsetProps?, className?, hidden?, bindings?, label? }. "update" merges props and bindings; className REPLACES all classes, so send the full list.',
       'Templates are edited the same way: collection = the templates collection, id = the template id from listTemplates.',
       'If any operation fails, nothing is saved and the error names the failing operation. Call getLayout for current ids first. The result is validated against the block schemas: missing required props are allowed in drafts (warnings), wrong types are errors. insert and move refuse a block that a slot does not accept, also deeper inside (for example no button or form anywhere inside a link).',
-      'Localized sites: with `locale`, "update" props change that locale\'s values of localized props (a translation); other props and everything else (insert, move, remove, classes) change every locale. Inserted blocks hold the default locale\'s values: insert first, then translate with "update" in the locale.',
+      'Localized sites: with `locale`, "update" props change that locale\'s values of localized props (a translation); other props and everything else (insert, move, remove, classes) change every locale. Blocks you insert with `locale` hold their localized props in that locale only: the default locale stays empty until someone writes it (required props then block publishing). Without `locale` they hold the default locale\'s values. Sections (insertSection) keep their own text.',
       NO_DIRECT_EDIT,
       LAYOUT_GUIDE,
     ].join('\n\n'),
@@ -515,7 +515,8 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       const ops = (args.operations as Record<string, unknown>[]).map((op) =>
         op.type === 'duplicate' && !op.newId ? { ...op, newId: createId() } : op,
       )
-      const result = await apply(req, collection, String(args.id), stampLocale(ops as Operation[], at.locale, at.settings))
+      // New blocks are written in the locale too: an AI that works in German writes German.
+      const result = await apply(req, collection, String(args.id), stampLocale(ops as Operation[], at.locale, at.settings, { inserts: true }))
       if (!result.ok) return fail(result.error, result.errors)
       const changed = new Set<string>()
       for (const op of result.ops) {

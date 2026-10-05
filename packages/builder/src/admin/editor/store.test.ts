@@ -87,3 +87,33 @@ test('in another locale, prop edits write that locale, shared props stay shared,
   store.undo()
   assert.deepEqual(store.getState().layout, layout(block('a', 'Hello')))
 })
+
+test('in another locale, a new block holds its text in that locale; a pasted copy keeps its own locale data', () => {
+  const defs = [
+    {
+      type: 'heading',
+      label: 'Heading',
+      fields: [
+        { name: 'text', type: 'text' as const, localized: true },
+        { name: 'level', type: 'text' as const },
+      ],
+    },
+  ]
+  const settings = { locales: ['en', 'de'], defaultLocale: 'en', fallback: true }
+  const store = createEditorStore(layout(), { localization: { settings, blocks: defs, locale: 'de' } })
+  const fresh: Block = { id: 'n', type: 'heading', props: { text: 'Neu', level: '2' } }
+  store.apply({ type: 'insert', block: fresh, to: { parentId: null, index: 0 } }, { newContent: true })
+  assert.deepEqual(store.getState().layout.blocks[0], { id: 'n', type: 'heading', props: { level: '2' }, locales: { de: { text: 'Neu' } } })
+  assert.equal(textOf(store.getState().view, 0), 'Neu')
+
+  // A copy (paste, section) is not new content: its values stay the default locale's.
+  const copy: Block = { id: 'p', type: 'heading', props: { text: 'Pasted' } }
+  store.apply({ type: 'insert', block: copy, to: { parentId: null, index: 1 } })
+  assert.deepEqual(store.getState().layout.blocks[1], copy)
+
+  store.setLocale('en')
+  assert.equal(store.getState().view.blocks[0].props?.text, undefined)
+  store.undo()
+  store.undo()
+  assert.deepEqual(store.getState().layout, layout())
+})

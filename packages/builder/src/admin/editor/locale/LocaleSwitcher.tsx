@@ -1,13 +1,14 @@
 'use client'
 
 // The top bar's locale switcher: which language the canvas shows and the inspector edits. Each
-// locale says how many props still show the fallback language.
+// locale says how many props still show the fallback language (or, for the default language, how
+// many props only other languages have).
 
 import { Icon } from '../icons'
 import { MenuButton, type MenuEntry } from '../menu/Menu'
 import { useRuntime } from '../runtime'
 import { useEditor } from '../store'
-import { localeName, switchLocale, untranslatedMap } from './locale'
+import { localeName, missingWords, switchLocale, untranslatedMap } from './locale'
 import './locale.scss'
 
 export function LocaleSwitcher() {
@@ -20,7 +21,8 @@ export function LocaleSwitcher() {
     const { layout } = runtime.store.getState()
     return settings.locales.map((code) => {
       const missing = [...untranslatedMap(layout, runtime.config.blocks, settings, code).values()].reduce((sum, keys) => sum + keys.length, 0)
-      const note = code === settings.defaultLocale ? ' · default' : missing > 0 ? ` · ${missing} not translated` : ''
+      const count = missing > 0 ? ` · ${missing} ${missingWords(runtime, code)}` : ''
+      const note = code === settings.defaultLocale ? ` · default${count}` : count
       return {
         label: `${localeName(runtime, code)} (${code})${note}`,
         checked: code === locale,

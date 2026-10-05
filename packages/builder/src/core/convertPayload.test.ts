@@ -3,7 +3,7 @@ import { describe, it } from 'node:test'
 
 import { fromPayloadBlocks } from '../blocks/payload'
 import { flatBlocks, twoLevelConfigBlocks } from '../blocks/payloadFixtures.test-data'
-import { convertPayloadBlocksLayout, toPayloadBlock, withFieldDefaults } from './convertPayload'
+import { convertLocalizedPayloadBlocks, convertPayloadBlocksLayout, payloadFieldIsLocalized, toPayloadBlock, withFieldDefaults } from './convertPayload'
 import { validateLayout } from './validate'
 
 const quiet = { onWarning: false as const }
@@ -191,5 +191,55 @@ describe('withFieldDefaults', () => {
     assert.deepEqual(withFieldDefaults({ heading: 'x' }, fields), { heading: 'x', rating: { score: 5, source: 'Google Reviews' } })
     const full = { heading: 'x', rating: { score: 1, source: 'y' } }
     assert.equal(withFieldDefaults(full, fields), full)
+  })
+})
+
+describe('convertLocalizedPayloadBlocks', () => {
+  const note = { slug: 'note', fields: [{ name: 'text', type: 'text', localized: true }] }
+  // A section whose nested blocks field (a slot) is localized: each locale has its own children.
+  const section = { slug: 'section', fields: [{ name: 'items', type: 'blocks', localized: true, blocks: ['note'] }] }
+  const references = { note, section }
+  const defs = fromPayloadBlocks([section, note] as never, quiet)
+  const settings = { locales: ['en', 'de'], defaultLocale: 'en', fallback: true }
+  const field = { name: 'layout', type: 'blocks', blockReferences: ['section'] }
+
+  it('finds localized fields at any depth, through block references', () => {
+    assert.equal(payloadFieldIsLocalized(field, references), true)
+    assert.equal(payloadFieldIsLocalized({ name: 'layout', type: 'blocks', blocks: [{ slug: 'x', fields: [{ name: 'a', type: 'text' }] }] }), false)
+  })
+
+  it('matches the children of a localized slot and reports the rest', () => {
+    const value = [
+      {
+        id: 's1',
+        blockType: 'section',
+        items: {
+          en: [
+            { id: 'n1', blockType: 'note', text: 'One' },
+            { id: 'n2', blockType: 'note', text: 'Two' },
+          ],
+          de: [
+            { id: 'n2', blockType: 'note', text: 'Zwei' },
+            { id: 'x1', blockType: 'note', text: 'Extra' },
+          ],
+        },
+      },
+    ]
+    const { layout, report } = convertLocalizedPayloadBlocks(value, { field, references }, defs, settings)
+    assert.deepEqual(layout.blocks, [
+      {
+        id: 's1',
+        type: 'section',
+        slots: {
+          items: [
+            { id: 'n1', type: 'note', props: { text: 'One' } },
+            { id: 'n2', type: 'note', props: { text: 'Two' }, locales: { de: { text: 'Zwei' } } },
+          ],
+        },
+      },
+    ])
+    // n1 (position 0) has no German block of its type left: x1 sits at position 1.
+    assert.deepEqual(report.unmatched, [{ locale: 'de', id: 'x1', blockType: 'note' }])
+    assert.equal(report.blocks, 3)
   })
 })

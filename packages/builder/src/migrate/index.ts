@@ -12,8 +12,17 @@ import { readFile } from 'node:fs/promises'
 import type { Payload, Where } from 'payload'
 
 import { collectClasses } from '../core/classes'
-import { convertPayloadBlocksLayout, type PayloadConversionReport } from '../core/convertPayload'
+import {
+  convertLocalizedPayloadBlocks,
+  convertPayloadBlocksLayout,
+  payloadFieldIsLocalized,
+  type LocalizedConversionReport,
+  type PayloadBlockReferences,
+  type PayloadConversionReport,
+  type PayloadSourceField,
+} from '../core/convertPayload'
 import { describeLayoutErrors } from '../core/issues'
+import { localeSettingsOf } from '../core/locale'
 import { normalizeLayout } from '../core/tree'
 import type { BlockDefinition, Layout } from '../core/types'
 import { compileClasses, type CssOptions } from '../css'
@@ -58,6 +67,9 @@ export type MigrateCounts = {
 
 export type MigrateIssue = { id: string | number; version?: string | number; message: string }
 
+/** A block of another locale with no matching block in the default locale (left out). */
+export type MigrateUnmatchedBlock = { id: string | number; version?: string | number; locale: string; block: string; blockType: string }
+
 export type MigrateBlocksReport = {
   collection: string
   from: string
@@ -73,6 +85,21 @@ export type MigrateBlocksReport = {
   unknownTypes: Record<string, number>
   /** Fields with a value that the block definitions do not have (left out), by `blockType`. */
   droppedFields: Record<string, string[]>
+  /**
+   * The locales read, when the old field holds localized content (read with `locale: 'all'`).
+   * The default locale gives the structure; the others give `block.locales`.
+   */
+  locales?: string[]
+  /**
+   * Blocks of other locales with no matching block in the default locale (left out). Blocks match
+   * by Payload block id, then by position and `blockType`.
+   */
+  unmatchedBlocks: MigrateUnmatchedBlock[]
+  /**
+   * Fields whose value differs in another locale, but the block definitions do not localize them
+   * (the default locale's value is kept), by `blockType`. Add `localized: true` to keep them.
+   */
+  notLocalizedFields: Record<string, string[]>
   /**
    * Layouts that were written but need a fix in the builder. `invalid` problems block every save
    * of the layout (for example a select value that is no longer an option); the others block
@@ -115,6 +142,12 @@ type Converted =
  * process.exit(0)
  * ```
  *
+ * Localized content (Payload `localization`, and the old field or fields inside its blocks are
+ * `localized`) is read with `locale: 'all'`. The default locale gives the structure and `props`;
+ * each other locale's values of localized props go to `block.locales[code]` (docs/architecture.md,
+ * "Localization"). When the whole field is localized, other locales' blocks match the default
+ * locale's by Payload block id, then by position and `blockType`; the report lists the ones left out.
+ *
  * Writes go through the database adapter (`updateOne`, `updateVersion`) with only the builder
  * field and its CSS field, so no new versions are made and no hooks run. On MongoDB the versions
  * are left out (not tested there): convert them by saving each document in the builder.
@@ -140,6 +173,12 @@ export async function migrateBlocksField(payload: Payload, options: MigrateBlock
   if (!blocks) throw new Error('[migrateBlocksField] No block definitions. Pass `blocks`, or add the websiteBuilder plugin.')
   const cssField = cssFieldName(to)
   const compile = cssCompiler(site?.css ?? null)
+  // Localized content: read every locale at once (`locale: 'all'`) and keep the translations.
+  const source = fields.find((f) => f.name === from) as unknown as PayloadSourceField
+  const references = ((payload as unknown as { blocks?: PayloadBlockReferences }).blocks ?? {}) as PayloadBlockReferences
+  const settings = localeSettingsOf((payload.config as { localization?: unknown }).localization)
+  const localization = settings && payloadFieldIsLocalized(source, references) ? settings : null
+  const readLocale = localization ? { locale: 'all' as never } : {}
 
   const report: MigrateBlocksReport = {
     collection,
@@ -151,6 +190,9 @@ export async function migrateBlocksField(payload: Payload, options: MigrateBlock
     blocks: 0,
     unknownTypes: {},
     droppedFields: {},
+    ...(localization ? { locales: [...localization.locales] } : {}),
+    unmatchedBlocks: [],
+    notLocalizedFields: {},
     problems: [],
     errors: [],
     references: [],
@@ -162,12 +204,25 @@ export async function migrateBlocksField(payload: Payload, options: MigrateBlock
       for (const name of names) if (!list.includes(name)) list.push(name)
     }
   }
+  const mergeLocales = (part: LocalizedConversionReport, issue: Omit<MigrateIssue, 'message'>) => {
+    for (const b of part.unmatched) report.unmatchedBlocks.push({ ...issue, locale: b.locale, block: b.id, blockType: b.blockType })
+    for (const [type, names] of Object.entries(part.notLocalized)) {
+      const list = (report.notLocalizedFields[type] ??= [])
+      for (const name of names) if (!list.includes(name)) list.push(name)
+    }
+  }
 
   const convert = async (data: Record<string, unknown>, issue: Omit<MigrateIssue, 'message'>): Promise<Converted> => {
     const existing = data[to]
     const hasExisting = normalizeLayout(existing).blocks.length > 0
     if (hasExisting && !options.overwrite) return { status: 'skip' }
-    const { layout, report: part } = convertPayloadBlocksLayout(data[from], blocks)
+    let conversion: { layout: Layout; report: PayloadConversionReport }
+    if (localization) {
+      const localized = convertLocalizedPayloadBlocks(data[from], { field: source, references }, blocks, localization)
+      mergeLocales(localized.report, issue)
+      conversion = localized
+    } else conversion = convertPayloadBlocksLayout(data[from], blocks)
+    const { layout, report: part } = conversion
     if (layout.blocks.length === 0) return { status: 'empty', report: part }
     if (hasExisting && JSON.stringify(normalizeLayout(existing)) === JSON.stringify(layout)) return { status: 'skip', report: part }
     for (const [publishing, blocking] of [[false, 'save'], [true, 'publish']] as const) {
@@ -179,7 +234,17 @@ export async function migrateBlocksField(payload: Payload, options: MigrateBlock
   }
 
   const docs = paged((page) =>
-    payload.find({ collection: collection as never, depth: 0, draft: false, limit: PAGE_SIZE, page, where: options.where, showHiddenFields: true, overrideAccess: true }),
+    payload.find({
+      collection: collection as never,
+      depth: 0,
+      draft: false,
+      limit: PAGE_SIZE,
+      page,
+      where: options.where,
+      showHiddenFields: true,
+      overrideAccess: true,
+      ...readLocale,
+    }),
   )
   const versionsOff = options.versions === false ? 'turned off' : payload.db.name === 'mongoose' ? 'not supported on MongoDB yet' : null
   if (versionsOff) report.versionsSkipped = versionsOff
@@ -215,6 +280,7 @@ export async function migrateBlocksField(payload: Payload, options: MigrateBlock
         where: { parent: { equals: id } },
         showHiddenFields: true,
         overrideAccess: true,
+        ...readLocale,
       }),
     )
     for await (const version of versions) {
@@ -303,10 +369,23 @@ export function formatMigrationReport(report: MigrateBlocksReport): string {
   line(`Documents: ${what(report.documents)}`)
   line(report.versionsSkipped ? `Versions: not converted (${report.versionsSkipped})` : `Versions: ${what(report.versions)}`)
   line(`Blocks: ${report.blocks}`)
+  if (report.locales) line(`Languages: ${report.locales.join(', ')} (the first is the default; it gives the structure)`)
   const unknown = Object.entries(report.unknownTypes)
   if (unknown.length > 0) line(`Block types without a definition (left out): ${unknown.map(([t, n]) => `${t} (${n})`).join(', ')}`)
   const dropped = Object.entries(report.droppedFields)
   if (dropped.length > 0) line(`Fields not in the block definitions (left out): ${dropped.map(([t, names]) => `${t}: ${names.join(', ')}`).join('; ')}`)
+  const shared = Object.entries(report.notLocalizedFields)
+  if (shared.length > 0) {
+    line(
+      `Fields that differ per language but are not localized in the block definitions (default language kept; add localized: true): ${shared.map(([t, names]) => `${t}: ${names.join(', ')}`).join('; ')}`,
+    )
+  }
+  if (report.unmatchedBlocks.length > 0) {
+    line(`Blocks of other languages with no matching block in the default language (left out) (${report.unmatchedBlocks.length}):`)
+    for (const b of report.unmatchedBlocks) {
+      lines.push(`  ${b.version ? `${b.id} version ${b.version}` : b.id}: ${b.locale.toUpperCase()} ${b.blockType} ${b.block}`)
+    }
+  }
   if (report.problems.length > 0) {
     line(`Problems to fix in the builder (${report.problems.length}):`)
     const seen = new Set<string>()

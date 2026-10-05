@@ -75,7 +75,7 @@ export function insertNewBlock(runtime: Runtime, type: string): boolean {
 export function insertNewBlockAt(runtime: Runtime, type: string, to: Position): boolean {
   const block = runtime.createBlock(type)
   if (!block) return false
-  if (!runtime.store.apply({ type: 'insert', block, to }, { select: block.id })) return false
+  if (!runtime.store.apply({ type: 'insert', block, to }, { select: block.id, newContent: true })) return false
   runtime.focusRequest.set(block.id)
   const parent = to.parentId ? findBlock(runtime.store.getState().layout, to.parentId) : null
   const label = runtime.blockLabel(type)

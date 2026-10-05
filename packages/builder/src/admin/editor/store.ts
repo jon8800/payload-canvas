@@ -71,6 +71,13 @@ export type ApplyOptions = {
    * By default, prop updates without a `locale` write the editor's locale.
    */
   stampLocale?: false
+  /**
+   * The inserted blocks are new content (a block from the library, a new list item): in another
+   * locale than the default, their localized props are written in the editor's locale, and the
+   * default locale has no value yet. Copies (paste, duplicate, sections) leave it off and keep
+   * their own locale data.
+   */
+  newContent?: boolean
 }
 
 export type EditorStoreOptions = {
@@ -253,7 +260,8 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
       if (localization) {
         // Prop edits write the shown locale; props that are not localized stay shared. The server
         // runs the same `localizeOperations`, so both apply the same operations.
-        const stamped = applyOptions.stampLocale === false ? list : stampLocale(list, state.locale, localization.settings)
+        const stamped =
+          applyOptions.stampLocale === false ? list : stampLocale(list, state.locale, localization.settings, { inserts: applyOptions.newContent })
         const localized = localizeOperations(state.layout, stamped, localization.blocks, localization.settings)
         if (!localized.ok) {
           set({ lastError: localized.error })

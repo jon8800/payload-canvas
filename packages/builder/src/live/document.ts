@@ -342,7 +342,7 @@ export async function runPublishAction(
             : undefined,
         })
         if (blocking.length > 0) {
-          const errors: LiveError[] = describeLayoutErrors(layout, blocking, check.blocks)
+          const errors: LiveError[] = describeLayoutErrors(layout, blocking, check.blocks, { localization })
           return { ok: false, status: 422, error: summarizeProblems({ blockIds: errors.map((e) => e.blockId), layoutDamaged: true }), errors }
         }
       }

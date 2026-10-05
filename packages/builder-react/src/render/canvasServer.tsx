@@ -2,7 +2,7 @@
 // the canvas iframe, and loads the page data. See `createCanvasServer`.
 
 import { siteCssConfigOf } from '@payload-toolkit/builder'
-import { normalizeLayout, type Block, type BlockDefinition, type TemplateContext } from '@payload-toolkit/builder/core'
+import { knownLocale, localeSettingsOf, normalizeLayout, type Block, type BlockDefinition, type TemplateContext } from '@payload-toolkit/builder/core'
 import { headers } from 'next/headers'
 import { getPayload, type Payload, type SanitizedConfig } from 'payload'
 
@@ -17,6 +17,7 @@ import type {
 import { isRecord } from './fields'
 import { defaultResolveLink } from './link'
 import { renderPreviewBlock } from './RenderLayout'
+import { localeArgs, type LocaleArgs } from './locale'
 import { loadLayoutData } from './resolve'
 import type { BlockComponents, PageData, ResolveLink } from './types'
 
@@ -29,6 +30,11 @@ export type PageDataArgs = {
   document: CanvasDocumentRef | null
   /** In a template: the sample document (`depth: 1`, latest draft). */
   context: TemplateContext | null
+  /**
+   * The locale the editor shows, or null without localization. Load the page
+   * data in it (`payload.find({ locale })`), as the site does for the page's locale.
+   */
+  locale: string | null
 }
 
 export type CanvasServerOptions = {
@@ -63,7 +69,15 @@ function scopeOf(value: unknown): CanvasScope {
   return {
     document: isDocumentRef(scope.document) ? scope.document : null,
     context: isDocumentRef(scope.context) ? scope.context : null,
+    locale: typeof scope.locale === 'string' && scope.locale ? scope.locale : null,
   }
+}
+
+/** The scope's locale, when the Payload config has it. Unknown codes and sites without localization give null. */
+function scopeLocale(payload: Payload, locale: string | null | undefined): string | null {
+  const settings = localeSettingsOf(payload.config.localization)
+  if (!settings || !locale) return null
+  return knownLocale(settings, locale)
 }
 
 const isBlock = (value: unknown): value is Block =>
@@ -80,8 +94,8 @@ async function adminUser(payload: Payload): Promise<unknown> {
   }
 }
 
-/** The template's sample document, with the user's access. */
-async function loadContext(payload: Payload, ref: CanvasDocumentRef | null, user: unknown): Promise<TemplateContext | null> {
+/** The template's sample document, with the user's access, in the editor's locale. */
+async function loadContext(payload: Payload, ref: CanvasDocumentRef | null, user: unknown, locale: LocaleArgs): Promise<TemplateContext | null> {
   if (!ref) return null
   try {
     const doc = await payload.findByID({
@@ -91,6 +105,7 @@ async function loadContext(payload: Payload, ref: CanvasDocumentRef | null, user
       draft: true,
       overrideAccess: false,
       user: user as never,
+      ...locale,
     })
     return { collection: ref.collection, doc: doc as Record<string, unknown> }
   } catch {
@@ -122,7 +137,8 @@ async function loadContext(payload: Payload, ref: CanvasDocumentRef | null, user
  * ```
  *
  * Only signed-in users of the admin collection get an answer. Data loads as on the site
- * (`loadLayoutData`) with the latest drafts and the user's access for collection lists.
+ * (`loadLayoutData`) with the latest drafts and the user's access for collection lists, in the
+ * locale the editor shows (`scope.locale`) with the config's fallback.
  */
 export function createCanvasServer(options: CanvasServerOptions) {
   return async function canvasServer(request: CanvasServerRequest): Promise<CanvasServerResponse> {
@@ -132,12 +148,14 @@ export function createCanvasServer(options: CanvasServerOptions) {
     const blocks = options.blocks ?? siteCssConfigOf(payload)?.blocks ?? []
     const resolveLink = options.resolveLink ?? defaultResolveLink
     const scope = scopeOf(isRecord(request) ? request.scope : null)
+    const locale = scopeLocale(payload, scope.locale)
+    const localeOptions = { locale }
 
-    const context = await loadContext(payload, scope.context, user)
+    const context = await loadContext(payload, scope.context, user, localeArgs(localeOptions))
     let pageData: PageData = {}
     if (options.pageData) {
       try {
-        pageData = await options.pageData({ payload, user, document: scope.document, context })
+        pageData = await options.pageData({ payload, user, document: scope.document, context, locale })
       } catch (error) {
         payload.logger.error({ err: error, msg: '[builder] The canvas page data failed to load.' })
         if (request.kind === 'pageData') return { kind: 'error', error: `Page data: ${message(error)}` }
@@ -154,7 +172,7 @@ export function createCanvasServer(options: CanvasServerOptions) {
     try {
       // One load for every block: one `find` per collection.
       const layout = normalizeLayout({ version: 1, blocks: items.map((item) => item.block) })
-      loaded = (await loadLayoutData(layout, blocks, payload, { draft: true, context, resolveLink, user })).blocks
+      loaded = (await loadLayoutData(layout, blocks, payload, { draft: true, context, resolveLink, user, ...localeOptions })).blocks
     } catch (error) {
       for (const item of items) results[item.key] = { error: `Data failed to load: ${message(error)}` }
       return { kind: 'blocks', results }

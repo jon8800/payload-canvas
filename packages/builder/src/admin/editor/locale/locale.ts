@@ -6,14 +6,17 @@
 
 import { useMemo } from 'react'
 
-import { findBlock, getBlockDefinition, localeLabel, localizedKeys, untranslatedKeys, walkBlocks } from '../../../core'
+import { findBlock, getBlockDefinition, localeLabel, localeWithValue, localizedKeys, missingDefaultKeys, untranslatedKeys, walkBlocks } from '../../../core'
 import type { Block, BlockDefinition, Layout, LocaleSettings } from '../../../core/types'
 import type { Runtime } from '../runtime'
 import { useEditor } from '../store'
 
 const NONE: ReadonlyMap<string, string[]> = new Map()
 
-/** Per settings and locale: the untranslated props of each stored block object. Blocks keep their identity while unchanged. */
+/**
+ * Per settings and locale: the props of each stored block object that need text in the locale.
+ * Blocks keep their identity while unchanged.
+ */
 const caches = new WeakMap<LocaleSettings, Map<string, WeakMap<Block, string[]>>>()
 
 function untranslatedOf(block: Block, blocks: readonly BlockDefinition[], settings: LocaleSettings, locale: string): string[] {
@@ -23,16 +26,19 @@ function untranslatedOf(block: Block, blocks: readonly BlockDefinition[], settin
   if (!cache) byLocale.set(locale, (cache = new WeakMap()))
   let keys = cache.get(block)
   if (!keys) {
-    keys = untranslatedKeys(block, blocks, settings, locale)
+    keys = locale === settings.defaultLocale ? missingDefaultKeys(block, blocks, settings) : untranslatedKeys(block, blocks, settings, locale)
     cache.set(block, keys)
   }
   return keys
 }
 
-/** The untranslated props of every block of the layout in `locale`, by block id. Only blocks that have some. */
+/**
+ * The props of every block that need text in `locale`, by block id (only blocks that have some).
+ * Another locale: props that show the fallback language (not translated). The default locale:
+ * props it does not have while another locale does (a block written in another language first).
+ */
 export function untranslatedMap(layout: Layout, blocks: readonly BlockDefinition[], settings: LocaleSettings, locale: string): Map<string, string[]> {
   const out = new Map<string, string[]>()
-  if (locale === settings.defaultLocale) return out
   walkBlocks(layout, (block) => {
     const keys = untranslatedOf(block, blocks, settings, locale)
     if (keys.length > 0) out.set(block.id, keys)
@@ -40,15 +46,21 @@ export function untranslatedMap(layout: Layout, blocks: readonly BlockDefinition
   return out
 }
 
-/** Untranslated props per block id in the editor's locale. Empty in the default locale. */
+/** The props that need text in the editor's locale, per block id (see `untranslatedMap`). */
 export function useUntranslated(runtime: Runtime): ReadonlyMap<string, string[]> {
   const layout = useEditor(runtime.store, (s) => s.layout)
   const locale = useEditor(runtime.store, (s) => s.locale)
   const settings = runtime.store.localization
   return useMemo(
-    () => (settings && locale && locale !== settings.defaultLocale ? untranslatedMap(layout, runtime.config.blocks, settings, locale) : NONE),
+    () => (settings && locale ? untranslatedMap(layout, runtime.config.blocks, settings, locale) : NONE),
     [layout, locale, settings, runtime],
   )
+}
+
+/** How the outline and the switcher name props that need text: "not translated", or "missing in English" in the default locale. */
+export function missingWords(runtime: Runtime, locale: string | null): string {
+  const settings = runtime.store.localization
+  return settings && locale === settings.defaultLocale ? `missing in ${defaultLocaleName(runtime)}` : 'not translated'
 }
 
 /** The editor's locale when it is not the default one, else null. */
@@ -86,6 +98,28 @@ export function copyFromDefault(runtime: Runtime, id: string, keys?: readonly st
   }
   if (Object.keys(props).length === 0) return false
   return runtime.store.apply({ type: 'update', id, props, locale }, { stampLocale: false })
+}
+
+/**
+ * In the default locale: copies another locale's own values of `keys` (default: every prop the
+ * default locale is missing, see `missingDefaultKeys`) into the default locale. Each prop comes from
+ * the first locale that has it. One undo step. False when nothing changed.
+ */
+export function copyIntoDefault(runtime: Runtime, id: string, keys?: readonly string[]): boolean {
+  const settings = runtime.store.localization
+  const { layout, locale } = runtime.store.getState()
+  if (!settings || locale !== settings.defaultLocale) return false
+  const block = findBlock(layout, id)
+  if (!block) return false
+  const names = keys ?? missingDefaultKeys(block, runtime.config.blocks, settings)
+  const props: Record<string, unknown> = {}
+  for (const key of names) {
+    const from = localeWithValue(block, key, settings)
+    const value = from ? block.locales?.[from]?.[key] : undefined
+    if (value !== undefined) props[key] = structuredClone(value)
+  }
+  if (Object.keys(props).length === 0) return false
+  return runtime.store.apply({ type: 'update', id, props }, { stampLocale: false })
 }
 
 /** Removes the translations of `keys` in the editor's locale: they show the fallback language again. */

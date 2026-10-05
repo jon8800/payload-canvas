@@ -138,6 +138,12 @@ export type AdminToCanvas =
    */
   | { type: 'context'; context: TemplateContext | null }
   /**
+   * The locale the editor shows (Payload's locale code), or null without localization. Related
+   * documents, collection lists, the template's document and server-rendered blocks load in it,
+   * as on the site. Sent before `init`, and again when the editor switches the language.
+   */
+  | { type: 'locale'; locale: string | null }
+  /**
    * Starts inline editing of the block's first editable text, with the caret at the end, or
    * `offset` characters into the text. A block not on the canvas yet starts once it renders.
    */

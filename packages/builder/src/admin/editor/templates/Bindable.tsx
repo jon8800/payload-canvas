@@ -71,7 +71,8 @@ export function useBindingScope(block: Block): BindingScope | null {
   // Same rule as the renderer: a list of the template's own collection leaves out the current document.
   const exclude =
     list?.props?.excludeCurrent !== false && template.isTemplate && template.target === listCollection ? template.sample?.id : undefined
-  const listSample = useListSample(runtime.api, list ? listCollection : null, listSort, exclude)
+  const locale = useEditor(runtime.store, (s) => s.locale)
+  const listSample = useListSample(runtime.api, list ? listCollection : null, listSort, exclude, locale)
 
   if (list) {
     return {

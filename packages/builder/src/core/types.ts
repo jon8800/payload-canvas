@@ -294,7 +294,18 @@ export type Position = {
 }
 
 export type Operation =
-  | { type: 'insert'; block: Block; to: Position }
+  | {
+      type: 'insert'
+      block: Block
+      to: Position
+      /**
+       * New content written in a locale other than the default: the localized props of the block
+       * (and of the blocks inside it) are that locale's values. `localizeOperations` moves them
+       * into `locales[locale]`, so the default locale has no value yet. A block that already has
+       * `locales` (the stored form: pasted, duplicated or section content) keeps its own data.
+       */
+      locale?: string
+    }
   | { type: 'move'; id: string; to: Position }
   | { type: 'remove'; id: string }
   /** `newId` is the id of the copy's root. Child ids are regenerated. */

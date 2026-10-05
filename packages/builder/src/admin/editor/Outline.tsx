@@ -18,7 +18,7 @@ import type { Block, Layout } from '../../core/types'
 import { ancestors, duplicateBlock, removeBlock, renameBlock, toggleHidden } from './actions'
 import { BlockIcon, Icon, type IconName } from './icons'
 import { PeerDots } from './live/PresenceUI'
-import { useUntranslated } from './locale/locale'
+import { missingWords, useUntranslated } from './locale/locale'
 import { BLOCK_KEYS, keyText } from './menu/keys'
 import { openBlockMenu, renameRequest } from './menu/requests'
 import { blockPreview, blockSummary, childrenOf, customLabel, typeName } from './names'
@@ -126,6 +126,8 @@ export function Outline() {
   // The outline shows the text of the editor's locale.
   const layout = useEditor(store, (s) => s.view)
   const untranslated = useUntranslated(runtime)
+  // "not translated", or "missing in English" in the default language.
+  const missing = missingWords(runtime, useEditor(store, (s) => s.locale))
   const collapsed = useValue(runtime.collapsed)
   const rows = useMemo(() => visibleRows(runtime, layout, collapsed), [runtime, layout, collapsed])
   const rowIds = useMemo(() => new Set(rows.map((r) => r.block.id)), [rows])
@@ -296,6 +298,7 @@ export function Outline() {
               text={row.text}
               issues={issues.get(row.block.id) ?? NO_ISSUES}
               untranslated={untranslated.get(row.block.id)?.length ?? 0}
+              missing={missing}
               broken={broken.has(row.block.id)}
               focusable={noSelectedRow && row.block.id === firstId}
               renaming={renaming === row.block.id}
@@ -324,6 +327,8 @@ type OutlineRowProps = Row & {
   issues: string[]
   /** Localized props that show the fallback language's value in the editor's locale. */
   untranslated: number
+  /** How `untranslated` props are named: "not translated" or "missing in English". */
+  missing: string
   /** A binding reads a field the collection does not have. */
   broken: boolean
   /** In the tab order although not selected: the first row while no visible row is selected. */
@@ -342,6 +347,7 @@ const OutlineRow = memo(function OutlineRow({
   text,
   issues,
   untranslated,
+  missing,
   broken,
   focusable,
   renaming,
@@ -404,7 +410,7 @@ const OutlineRow = memo(function OutlineRow({
       aria-label={[
         blockSummary(block, typeLabel),
         block.hidden && 'hidden on the site',
-        untranslated > 0 && `${untranslated} not translated`,
+        untranslated > 0 && `${untranslated} ${missing}`,
         ...issues,
       ]
         .filter(Boolean)
@@ -454,7 +460,7 @@ const OutlineRow = memo(function OutlineRow({
         <span
           className="builder-editor__row-untranslated"
           aria-hidden="true"
-          data-tooltip={`${untranslated} ${untranslated === 1 ? 'field is' : 'fields are'} not translated`}
+          data-tooltip={`${untranslated} ${untranslated === 1 ? 'field is' : 'fields are'} ${missing}`}
           data-tooltip-side="right"
         />
       )}
