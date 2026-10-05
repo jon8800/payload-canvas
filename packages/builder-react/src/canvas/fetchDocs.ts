@@ -2,20 +2,29 @@ import type { FetchDocs, ListQuery } from '../index'
 
 type Doc = Record<string, unknown>
 
-/** One promise per document, shared by every layout render. Key: api + collection + id. */
+/** One promise per document, shared by every layout render. Key: api + locale + collection + id. */
 const cache = new Map<string, Promise<Doc | null>>()
 
-const keyOf = (api: string, collection: string, id: string | number) => `${api}\u0000${collection}\u0000${id}`
+/**
+ * Payload's REST `locale` parameter: documents load in the editor's locale with the config's
+ * fallback, as the site's Local API reads do. Nothing without a locale.
+ */
+function withLocale(params: URLSearchParams, locale: string | null | undefined): URLSearchParams {
+  if (locale) params.set('locale', locale)
+  return params
+}
 
 /**
- * Loads documents over Payload's REST API, one request per collection for the missing ids.
- * Results are cached for the life of the iframe. A failed request is not cached.
+ * Loads documents over Payload's REST API, one request per collection for the missing ids, in
+ * `locale` (the editor's locale). Results are cached for the life of the iframe. A failed request
+ * is not cached.
  */
-export function createRestFetchDocs(api: string): FetchDocs {
+export function createRestFetchDocs(api: string, locale?: string | null): FetchDocs {
+  const keyOf = (collection: string, id: string | number) => `${api}\u0000${locale ?? ''}\u0000${collection}\u0000${id}`
   return async (collection, ids) => {
-    const missing = [...new Set(ids)].filter((id) => !cache.has(keyOf(api, collection, id)))
+    const missing = [...new Set(ids)].filter((id) => !cache.has(keyOf(collection, id)))
     if (missing.length > 0) {
-      const params = new URLSearchParams({ depth: '0', draft: 'true', limit: String(missing.length) })
+      const params = withLocale(new URLSearchParams({ depth: '0', draft: 'true', limit: String(missing.length) }), locale)
       missing.forEach((id, i) => params.set(`where[id][in][${i}]`, String(id)))
       const request = fetch(`${api}/${encodeURIComponent(collection)}?${params}`, { credentials: 'include' })
         .then(async (res) => {
@@ -24,12 +33,12 @@ export function createRestFetchDocs(api: string): FetchDocs {
           return new Map((body.docs ?? []).map((doc) => [String(doc.id), doc]))
         })
         .catch(() => {
-          for (const id of missing) cache.delete(keyOf(api, collection, id))
+          for (const id of missing) cache.delete(keyOf(collection, id))
           return new Map<string, Doc>()
         })
       for (const id of missing) {
         cache.set(
-          keyOf(api, collection, id),
+          keyOf(collection, id),
           request.then((docs) => docs.get(String(id)) ?? null),
         )
       }
@@ -38,7 +47,7 @@ export function createRestFetchDocs(api: string): FetchDocs {
     const result = new Map<string | number, Doc>()
     await Promise.all(
       ids.map(async (id) => {
-        const doc = await cache.get(keyOf(api, collection, id))
+        const doc = await cache.get(keyOf(collection, id))
         if (doc) result.set(id, doc)
       }),
     )
@@ -46,19 +55,20 @@ export function createRestFetchDocs(api: string): FetchDocs {
   }
 }
 
-/** One promise per list query. Key: api + collection + limit + sort. */
+/** One promise per list query. Key: api + locale + collection + limit + sort. */
 const listCache = new Map<string, Promise<Doc[]>>()
 
 /**
- * Loads a collection list's documents over REST (`depth=1`, latest drafts), cached for the life
- * of the iframe. The page's own document is filtered out here, so one request serves every page.
+ * Loads a collection list's documents over REST (`depth=1`, latest drafts, in `locale`), cached
+ * for the life of the iframe. The page's own document is filtered out here, so one request serves
+ * every page.
  */
-export function fetchListItems(api: string, query: ListQuery): Promise<Doc[]> {
+export function fetchListItems(api: string, query: ListQuery, locale?: string | null): Promise<Doc[]> {
   const limit = query.limit + (query.exclude === undefined ? 0 : 1)
-  const key = `${api}\u0000${query.collection}\u0000${limit}\u0000${query.sort}`
+  const key = `${api}\u0000${locale ?? ''}\u0000${query.collection}\u0000${limit}\u0000${query.sort}`
   let request = listCache.get(key)
   if (!request) {
-    const params = new URLSearchParams({ limit: String(limit), sort: query.sort, depth: '1', draft: 'true' })
+    const params = withLocale(new URLSearchParams({ limit: String(limit), sort: query.sort, depth: '1', draft: 'true' }), locale)
     request = fetch(`${api}/${encodeURIComponent(query.collection)}?${params}`, { credentials: 'include' })
       .then(async (res) => {
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)

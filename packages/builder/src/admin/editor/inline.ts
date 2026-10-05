@@ -61,9 +61,12 @@ export function startInlineEditing(runtime: Runtime, id: string, offset?: number
   runtime.postToCanvas({ type: 'inlineStart', id, ...(offset === undefined ? {} : { offset }) })
 }
 
-/** Applies a list item key press as one undo step, selects the item to edit and edits it. */
+/**
+ * Applies a list item key press as one undo step, selects the item to edit and edits it. A new
+ * item's text is typed in the editor's locale.
+ */
 function applyListItemEdit(runtime: Runtime, edit: ListItemEdit | null) {
-  if (!edit || !runtime.store.apply(edit.ops, { select: edit.editId })) return
+  if (!edit || !runtime.store.apply(edit.ops, { select: edit.editId, newContent: true })) return
   startInlineEditing(runtime, edit.editId, edit.offset)
 }
 

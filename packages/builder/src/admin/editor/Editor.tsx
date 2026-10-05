@@ -176,7 +176,7 @@ export function Editor({ config, meta, icon, locale }: EditorProps) {
             if (section) return insertBlocks(runtime, section, target.to)
             if (source.kind === 'block') return runtime.store.apply({ type: 'move', id: source.id, to: target.to }, { select: source.id })
             const block = runtime.createBlock(source.blockType)
-            if (!block || !runtime.store.apply({ type: 'insert', block, to: target.to }, { select: block.id })) return false
+            if (!block || !runtime.store.apply({ type: 'insert', block, to: target.to }, { select: block.id, newContent: true })) return false
             runtime.focusRequest.set(block.id)
             return true
           }

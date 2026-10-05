@@ -527,7 +527,7 @@ The canvas renders a block on the server when:
 | `blocks` | The block definitions. Default: the plugin's `blocks`. |
 | `components` | The server map. |
 | `resolveLink` | The same link resolver as the site. |
-| `pageData` | `({ payload, user, document, context }) => data`: the page data. See below. |
+| `pageData` | `({ payload, user, document, context, locale }) => data`: the page data. `locale` is the language the editor shows (null without localization); load your data in it. See below. |
 
 How it works in the editor:
 
@@ -1148,9 +1148,12 @@ A value a language does not have falls back, as Payload's `fallback` and `fallba
 - The outline marks blocks with untranslated text with an orange dot.
 - Inline editing on the canvas writes the shown language.
 - Blocks, order, classes and fields that are not localized change every language. The inspector says so, and the first such edit in another language shows a notice.
+- A new block holds its text in the language you add it in. Add a heading in German, and its text is German only: English has no text for it yet. This covers blocks from the Add panel, the "+" between blocks, a new list item (Enter) and blocks the assistant adds. Pasted, duplicated and section content keeps its own languages.
+- A field that has text in another language but none in the default language says **Missing in English**. In English it has **Copy German**, and the note above the tabs copies every such field at once. The outline dot and the language switcher count these fields in the default language too.
+- Related documents load in the shown language: collection lists, images and relationships, the template's preview document and server-rendered blocks. Switching the language loads them again.
 - Collaborators see each other's language in the avatar (a small "DE") and in its tooltip. Structure changes reach everyone at once; each person sees the text of their own language. Undo stays per person.
 
-**Saving and publishing.** Every save checks the translations too. The default language must fill every required prop. Another language needs its own value only when it has no fallback (`fallback: false`). The publish problem list names the language: "Heading: fill in text (DE)". Field `validate`, `hooks` and `access` of localized props run for each language's values too, with `req.locale` set to that language.
+**Saving and publishing.** Every save checks the translations too. The default language must fill every required prop. Another language needs its own value only when it has no fallback (`fallback: false`). The publish problem list names the language: "Heading: fill in text (DE)". A required prop that only another language has names the default language: "Heading: fill in text (EN)". So a block added in German blocks Publish until someone writes its English text. Field `validate`, `hooks` and `access` of localized props run for each language's values too, with `req.locale` set to that language.
 
 **The site and the API.** Read a document with a locale and the layout comes back in that language, with fallback, without `locales`:
 
@@ -1168,7 +1171,7 @@ const layout = await loadLayoutData(page.layout, blocks, payload, { draft, local
 
 `loadLayoutData` also resolves a layout in the stored form (`localizeLayout` from `/server` does it alone). The generated CSS is the same for every language, because classes are shared. Bindings read the document you pass, so load it with the same `locale`.
 
-**AI and MCP.** `getLayout` and `applyOperations` take `locale`. `getLayout` returns that language's view, the localized props of each block type and the untranslated props per block. `applyOperations` with a locale writes that language's text; other changes affect every language. In the editor, the assistant works in the language you have open. Operations name their language as `update { id, props, locale }`.
+**AI and MCP.** `getLayout` and `applyOperations` take `locale`. `getLayout` returns that language's view, the localized props of each block type and the untranslated props per block. `applyOperations` with a locale writes that language's text, also the text of blocks it inserts; other changes affect every language. `insertSection` keeps the section's own text. In the editor, the assistant works in the language you have open. Operations name their language as `update { id, props, locale }` and `insert { block, to, locale }` (the block's localized props are that language's).
 
 **References.** Every language's values count: a German image is "used" too.
 
@@ -1177,9 +1180,7 @@ const layout = await loadLayoutData(page.layout, blocks, payload, { draft, local
 **Limits.**
 
 - Classes and structure are always shared.
-- A block added in another language holds its text as the default language's text until someone writes the default language.
-- In the editor canvas, related documents (collection lists, server-rendered blocks) load in the default language. The site loads them in the page's language.
-- `migrateBlocksField` copies the default language of a localized Payload `blocks` field only.
+- `migrateBlocksField` keeps translations. When the old `blocks` field, or a field inside its blocks, is localized, it reads every language and stores each language's own values of localized props in `locales`. When the whole `blocks` field is localized, the default language gives the structure, and other languages' blocks match it by block id, then by position and type. The report lists blocks it could not match, and fields that differ per language but are not marked `localized: true` (add it to keep them).
 
 ## AI assistant
 

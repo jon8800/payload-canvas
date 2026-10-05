@@ -6,6 +6,7 @@ import { createRestFetchDocs, fetchListItems } from './fetchDocs'
 /**
  * The layout as the canvas renders it: bound to the template's document (when there is one),
  * collection lists loaded, and upload and relationship IDs replaced with documents (over REST).
+ * Documents load in `locale` (the editor's locale), as the site loads them in the page's locale.
  */
 export async function resolveCanvasLayout(
   layout: Layout,
@@ -13,10 +14,11 @@ export async function resolveCanvasLayout(
   api: string,
   definitions: BlockDefinition[],
   resolveLink: ResolveLink,
+  locale?: string | null,
 ): Promise<Layout> {
   const bound = context ? resolveBindings(layout, context, definitions, { url: urlResolver(resolveLink) }) : layout
   const queries = listQueries(bound, context)
-  const lists = await Promise.all(queries.map((query) => fetchListItems(api, query)))
+  const lists = await Promise.all(queries.map((query) => fetchListItems(api, query, locale)))
   const withItems = attachListItems(bound, new Map(queries.map((query, i) => [query.blockId, lists[i]])))
-  return resolveLayoutData(withItems, definitions, createRestFetchDocs(api))
+  return resolveLayoutData(withItems, definitions, createRestFetchDocs(api, locale))
 }

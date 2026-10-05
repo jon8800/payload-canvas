@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react'
 
 import { DOCUMENT_TEMPLATE_FIELD, TITLE_KEYS } from '../../../core/bindings'
 import type { Runtime } from '../runtime'
+import { useEditor } from '../store'
 import { useValueSelector } from '../valueStore'
 import { docTitle } from './binding'
 import type { Id, SampleDoc, TemplateState } from './state'
@@ -35,6 +36,9 @@ async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
 }
 
 type FindResult = { docs: Record<string, unknown>[]; totalDocs?: number }
+
+/** `&locale=de` for Payload's REST API, or nothing (the default locale, or no localization). */
+const localeQuery = (locale: string | null | undefined) => (locale ? `&locale=${encodeURIComponent(locale)}` : '')
 
 /** The `useAsTitle` field of a collection, or undefined. */
 export function useTitleField(collection: string | null): string | undefined {
@@ -82,6 +86,8 @@ export function useTemplateController(runtime: Runtime) {
   const target = useValueSelector(runtime.doc.meta, ({ template }) => (isTemplate ? (template?.target ?? null) : null))
   const preferred = useValueSelector(runtime.doc.meta, ({ template }) => previewId(template?.preview, target))
   const titleField = useTitleField(target)
+  // The sample document loads in the editor's locale, as the site loads it in the page's locale.
+  const locale = useEditor(runtime.store, (s) => s.locale)
 
   useEffect(() => {
     if (!isTemplate || runtime.template.get().target === target) return
@@ -105,7 +111,7 @@ export function useTemplateController(runtime: Runtime) {
         return
       }
       const doc = await fetchJson<Record<string, unknown>>(
-        `${api}/${target}/${encodeURIComponent(String(id))}?depth=1&draft=true`,
+        `${api}/${target}/${encodeURIComponent(String(id))}?depth=1&draft=true${localeQuery(locale)}`,
         signal,
       )
       const sample: SampleDoc = { id, title: docTitle(doc, titleField), doc }
@@ -116,7 +122,7 @@ export function useTemplateController(runtime: Runtime) {
       patch(runtime, { status: 'error', error: error instanceof Error ? error.message : String(error) })
     })
     return () => controller.abort()
-  }, [runtime, api, isTemplate, target, choice, preferred, titleField])
+  }, [runtime, api, isTemplate, target, choice, preferred, titleField, locale])
 }
 
 export type DocOption = {
@@ -195,10 +201,10 @@ const listSamples = new Map<string, Promise<Record<string, unknown>[]>>()
 
 /**
  * The first document of a collection list, for binding previews inside list items. Same query as
- * the canvas (latest drafts, same sort, `exclude` left out). Cached per page load.
+ * the canvas (latest drafts, same sort, `exclude` left out, the editor's locale). Cached per page load.
  */
-export function useListSample(api: string, collection: string | null, sort: string | undefined, exclude?: Id) {
-  const base = collection ? `${api}/${collection}?sort=${sort ?? ''}` : null
+export function useListSample(api: string, collection: string | null, sort: string | undefined, exclude?: Id, locale?: string | null) {
+  const base = collection ? `${api}/${collection}?sort=${sort ?? ''}${localeQuery(locale)}` : null
   const key = base ? `${base}&exclude=${exclude ?? ''}` : null
   const [result, setResult] = useState<{ key: string | null; doc: Record<string, unknown> | null }>({ key: null, doc: null })
 
@@ -209,6 +215,7 @@ export function useListSample(api: string, collection: string | null, sort: stri
     if (!pending) {
       const params = new URLSearchParams({ limit: '2', depth: '1', draft: 'true' })
       if (sort) params.set('sort', sort)
+      if (locale) params.set('locale', locale)
       pending = fetchJson<FindResult>(`${api}/${collection}?${params}`).then(
         (r) => r.docs,
         () => [],
@@ -222,7 +229,7 @@ export function useListSample(api: string, collection: string | null, sort: stri
     return () => {
       cancelled = true
     }
-  }, [api, collection, sort, exclude, base, key])
+  }, [api, collection, sort, exclude, base, key, locale])
 
   return { doc: result.key === key ? result.doc : null, loading: Boolean(key) && result.key !== key }
 }

@@ -10,6 +10,7 @@ export { collectClasses } from './classes'
 export { blockJsonSchema, layoutJsonSchema } from './schema'
 export { validateLayout, isBlockingError, isLayoutWarning, PUBLISH_ONLY_CODES, type LayoutError, type LayoutErrorCode, type ValidateOptions } from './validate'
 export {
+  blockInLocale,
   createLocaleView,
   fallbackChain,
   hasLocaleValues,
@@ -18,11 +19,13 @@ export {
   knownLocale,
   localeLabel,
   localeSettingsOf,
+  localeWithValue,
   localesIn,
   localizedKeys,
   localizedValue,
   localizeOperations,
   mergeLocaleView,
+  missingDefaultKeys,
   ownValue,
   resolveLayoutLocale,
   stampLocale,

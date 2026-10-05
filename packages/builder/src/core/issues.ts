@@ -3,8 +3,9 @@
 
 import { blockName, getBlockDefinition } from './blocks'
 import { textOf } from './fields'
+import { missingDefaultKeys } from './locale'
 import { indexLayout, isPlainObject } from './tree'
-import type { BlockDefinition, Layout } from './types'
+import type { Block, BlockDefinition, Layout, LocaleSettings } from './types'
 import type { LayoutError } from './validate'
 
 /** A layout problem with a readable `message`. `where` names the block's parents, e.g. "Hero › Grid". */
@@ -86,8 +87,17 @@ function propPathOf(path: string): string | null {
  * - nesting: "Form cannot go inside Link"
  * - bindings: "Button: a link can use only the page URL or a URL field (bound to "title")"
  * Errors without a block (a damaged layout) keep their message. `path` and `code` stay as they are.
+ * A translation's problem names its locale: "Heading: fill in text (DE)". With `localization`, a
+ * required prop that only another locale has names the default locale: "Heading: fill in text (EN)"
+ * (the block was written in another language first). `layout` is the stored form then.
  */
-export function describeLayoutErrors(layout: Layout, errors: readonly LayoutError[], blocks: readonly BlockDefinition[]): LayoutIssue[] {
+export function describeLayoutErrors(
+  layout: Layout,
+  errors: readonly LayoutError[],
+  blocks: readonly BlockDefinition[],
+  options?: { localization?: LocaleSettings | null },
+): LayoutIssue[] {
+  const localization = options?.localization ?? null
   const index = indexLayout(layout)
   const seen = new Set<string>()
   const out: LayoutIssue[] = []
@@ -127,12 +137,21 @@ export function describeLayoutErrors(layout: Layout, errors: readonly LayoutErro
     }
     // A translation's problem names its locale: "Heading: fill in text (DE)".
     if (error.locale) message = `${message} (${error.locale.toUpperCase()})`
+    else if (localization && entry && error.code === 'required' && missingInDefault(entry.block, error.path, blocks, localization)) {
+      message = `${message} (${localization.defaultLocale.toUpperCase()})`
+    }
     const key = `${error.blockId ?? ''}\0${message}`
     if (seen.has(key)) continue
     seen.add(key)
     out.push({ ...error, message, ...(where ? { where } : {}) })
   }
   return out
+}
+
+/** True when the required prop at `path` is empty in the default locale while another locale has it. */
+function missingInDefault(block: Block, path: string, blocks: readonly BlockDefinition[], localization: LocaleSettings): boolean {
+  const key = propPathOf(path)?.split(/[.[]/)[0]
+  return Boolean(key) && missingDefaultKeys(block, blocks, localization).includes(key as string)
 }
 
 /** "Title", "Title and Slug", "Title, Slug and 2 blocks". */

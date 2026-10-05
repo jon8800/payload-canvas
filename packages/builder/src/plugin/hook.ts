@@ -317,7 +317,7 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
     const reject = (layout: Layout, blocking: LayoutError[]): never => {
       req.payload.logger.info(`[websiteBuilder] ${slug}.${field} not saved:\n${formatErrors(blocking)}`)
       // One entry for the field, so the admin shows every problem under it.
-      const lines = describeLayoutErrors(layout, blocking, blocks).map((issue) => issue.message)
+      const lines = describeLayoutErrors(layout, blocking, blocks, { localization }).map((issue) => issue.message)
       throw new ValidationError({ collection: slug, errors: [{ path: field, message: lines.join('\n') }], req }, req.t)
     }
 

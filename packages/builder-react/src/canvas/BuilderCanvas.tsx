@@ -168,12 +168,13 @@ export function BuilderCanvas(props: BuilderCanvasProps) {
   return null
 }
 
-/** The scope the canvas server action renders for. */
-export function canvasScope(init: CanvasInit | null, context: TemplateContext | null): CanvasScope {
+/** The scope the canvas server action renders for. `locale`: the editor's locale. */
+export function canvasScope(init: CanvasInit | null, context: TemplateContext | null, locale: string | null = null): CanvasScope {
   const id = context?.doc.id
   return {
     document: init?.document ?? null,
     context: context && (typeof id === 'string' || typeof id === 'number') ? { collection: context.collection, id } : null,
+    ...(locale ? { locale } : {}),
   }
 }
 
@@ -182,6 +183,8 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
   const [layout, setLayout] = useState<Layout | null>(null)
   // The document a template renders (the editor's sample document). Null on normal pages.
   const [context, setContext] = useState<TemplateContext | null>(null)
+  // The editor's locale: related documents and server blocks load in it. Null: the default locale.
+  const [locale, setLocale] = useState<string | null>(null)
   const [resolved, setResolved] = useState<Layout | null>(null)
   const [compiler, setCompiler] = useState<Compiler>({ status: 'loading' })
   const rootRef = useRef<HTMLDivElement>(null)
@@ -398,6 +401,9 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
         case 'context':
           setContext(message.context)
           return
+        case 'locale':
+          setLocale(message.locale)
+          return
         case 'inlineStart': {
           const el = document.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(message.id)}"]`)
           const target = el ? firstEditable(el, shownBlock, definitionOf) : null
@@ -547,7 +553,7 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
   useEffect(() => {
     if (!layout || !init || !definitions) return
     const run = ++resolveRun.current
-    resolveCanvasLayout(layout, context, init.api, definitions, linkResolver)
+    resolveCanvasLayout(layout, context, init.api, definitions, linkResolver, locale)
       .then((next) => {
         if (run !== resolveRun.current) return
         resolvedFrom.current = layout
@@ -559,13 +565,13 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
         setResolved(layout)
         send({ type: 'error', message: `Canvas data failed to load: ${String(error)}` })
       })
-  }, [layout, init, definitions, context, linkResolver])
+  }, [layout, init, definitions, context, linkResolver, locale])
 
-  // Server blocks: the scope and the page data.
+  // Server blocks: the scope and the page data. A new locale renders them again.
   useEffect(() => {
     if (!serverBlocks || !init) return
     let cancelled = false
-    serverBlocks.setScope(canvasScope(init, context))
+    serverBlocks.setScope(canvasScope(init, context, locale))
     setServerVersion((version) => version + 1)
     void serverBlocks.pageData().then((data) => {
       if (!cancelled) setPageData(data)
@@ -573,7 +579,7 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     return () => {
       cancelled = true
     }
-  }, [serverBlocks, init, context])
+  }, [serverBlocks, init, context, locale])
   // The stored layout server blocks are sent from. A prop being edited inline keeps its value from
   // the start of editing (as on screen), so the block around it asks again only once editing ends.
   const editing = freeze && freeze.release === null ? freeze : null

@@ -195,7 +195,7 @@ function localeLines(input: { settings: LocaleSettings; locale: string; untransl
   }
   return [
     `Language: the user edits ${name}. The layout below shows the ${localeLabel(settings, locale)} values; text props that are not translated yet show the ${fallback} text.`,
-    `Write every text you add or change in ${localeLabel(settings, locale)}. Your "update" props go to ${localeLabel(settings, locale)} only (localized props). Inserted blocks, moves, removals, classes and props that are not localized change EVERY language, so prefer translating text over changing the structure.`,
+    `Write every text you add or change in ${localeLabel(settings, locale)}. Your "update" props go to ${localeLabel(settings, locale)} only (localized props). Text of blocks you insert is ${localeLabel(settings, locale)} only: the ${fallback} text stays empty until someone writes it (sections keep their own text). Inserts, moves, removals, classes and props that are not localized change the structure of EVERY language, so prefer translating text over changing the structure.`,
     ...(untranslated > 0 ? [`${untranslated} props still show the ${fallback} text. When the user asks to translate, update them with ${localeLabel(settings, locale)} text.`] : []),
   ]
 }

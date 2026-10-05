@@ -15,6 +15,11 @@ export type CanvasScope = {
   document: CanvasDocumentRef | null
   /** The sample document a template previews. Null on normal pages. */
   context: CanvasDocumentRef | null
+  /**
+   * The locale the editor shows. Documents, collection lists and the page data load in it, as the
+   * site loads them in the page's locale. Missing or null: the default locale.
+   */
+  locale?: string | null
 }
 
 export type CanvasServerRequest =
