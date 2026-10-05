@@ -138,18 +138,25 @@ export function fromPayloadComponent<P extends object>(
 }
 
 /**
+ * Any component of any props type: a function component (sync or async) or a class. `never`
+ * props accept every props type, and it avoids `ComponentType<never>`, which rejects
+ * `ComponentType<P>` because of the class `defaultProps`.
+ */
+export type AnyPayloadComponent = ((props: never) => ReactNode | Promise<ReactNode>) | (new (props: never, ...rest: never[]) => object)
+
+/**
  * `fromPayloadComponent` for a whole map of components, keyed by Payload slug (your existing
  * `RenderBlocks` map). The keys become the builder types of the blocks made from those slugs.
  */
 export function fromPayloadComponents(
-  components: Record<string, ComponentType<never>>,
+  components: Readonly<Record<string, AnyPayloadComponent>>,
   blocks: readonly BlockDefinition[],
   options: Omit<FromPayloadComponentOptions, 'blocks'> = {},
 ): BlockComponents {
   const out: BlockComponents = {}
   for (const [slug, Component] of Object.entries(components)) {
     const def = blocks.find((b) => b.payload?.slug === slug) ?? getBlockDefinition(blocks, slug)
-    out[def?.type ?? slug] = fromPayloadComponent(Component as ComponentType<object>, { ...options, blocks })
+    out[def?.type ?? slug] = fromPayloadComponent(Component as unknown as ComponentType<object>, { ...options, blocks })
   }
   return out
 }

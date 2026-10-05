@@ -226,7 +226,8 @@ export const keepOneDefault: CollectionAfterChangeHook = async ({ collection, co
     await req.payload.update({
       collection: slug,
       id,
-      data: { ...published, [TEMPLATE_DEFAULT_FIELD]: false, _status: 'published' },
+      // `as never`: the app's generated types do not know the template fields.
+      data: { ...published, [TEMPLATE_DEFAULT_FIELD]: false, _status: 'published' } as never,
       draft: false,
       depth: 0,
       req,
@@ -239,7 +240,7 @@ export const keepOneDefault: CollectionAfterChangeHook = async ({ collection, co
       await req.payload.update({
         collection: slug,
         id,
-        data: { ...draft, [TEMPLATE_DEFAULT_FIELD]: false },
+        data: { ...draft, [TEMPLATE_DEFAULT_FIELD]: false } as never,
         draft: true,
         depth: 0,
         req,

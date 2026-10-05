@@ -63,6 +63,7 @@ In the repo the starter compiles package source via `transpilePackages`; publish
 Builder rules that are easy to break:
 
 - Layouts are stored in canonical form (no empty `slots`/`props`/`bindings` objects, `hidden` only when true). Always read `block.slots?.[name] ?? []`, and run `normalizeLayout` on load.
+- A prop that is `null` (or `''`) was cleared and stays empty. Only a missing key gets the field's `defaultValue` at render time (`withFieldDefaults`). The inspector stores `null` for a cleared field with a default and removes the key otherwise.
 - `Position.index` is the block's final index in the target list; for a move within the same list, count after the block leaves.
 - Every edit goes through `applyOperation(s)`; undo applies the returned inverse operations.
 - Block components add no Tailwind classes of their own — styling comes only from `block.className`, because the generated CSS covers only classes in the data.

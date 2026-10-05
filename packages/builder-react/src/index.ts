@@ -31,6 +31,7 @@ export {
   fromPayloadComponent,
   fromPayloadComponents,
   PayloadSlot,
+  type AnyPayloadComponent,
   type FromPayloadComponentOptions,
   type PayloadBlockData,
   type PayloadBlockProps,

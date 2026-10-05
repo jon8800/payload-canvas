@@ -20,12 +20,14 @@ import {
   type PayloadBlockReferences,
   type PayloadConversionReport,
   type PayloadSourceField,
+  withLayoutDefaults,
 } from '../core/convertPayload'
 import { describeLayoutErrors } from '../core/issues'
 import { localeSettingsOf } from '../core/locale'
 import { normalizeLayout } from '../core/tree'
 import type { BlockDefinition, Layout } from '../core/types'
 import { compileClasses, type CssOptions } from '../css'
+import { builderConfigOf } from '../live/document'
 import { cssFieldName, siteCssConfigOf } from '../plugin'
 import { checkLayout, type GeneratedCss } from '../plugin/hook'
 import { backfillReferences, type BackfillResult } from '../plugin/references'
@@ -75,6 +77,8 @@ export type MigrateBlocksReport = {
   from: string
   to: string
   dryRun: boolean
+  /** The collection's `legacyFields` in the websiteBuilder options. The report reminds you to add `from`. */
+  legacyFields: string[]
   documents: MigrateCounts
   versions: MigrateCounts
   /** Why versions were not converted, when they were not. */
@@ -113,6 +117,14 @@ export type MigrateBlocksReport = {
    */
   references: BackfillResult[]
 }
+
+/**
+ * Payload's adapters set `updatedAt` to the current time on every write unless it is `null`
+ * (Drizzle: Postgres and SQLite, since 3.x; MongoDB since 3.71 at the latest). `createdAt` is
+ * written only when it is in the data. Without this, every converted document and version would
+ * get the time of the run, and Payload would pick the wrong version as the latest draft.
+ */
+const KEEP_UPDATED_AT = { updatedAt: null }
 
 const counts = (): MigrateCounts => ({ found: 0, converted: 0, skipped: 0, empty: 0, failed: 0 })
 const PAGE_SIZE = 100
@@ -185,6 +197,7 @@ export async function migrateBlocksField(payload: Payload, options: MigrateBlock
     from,
     to,
     dryRun,
+    legacyFields: [...(builderConfigOf(payload)?.collections[collection]?.legacyFields ?? [])],
     documents: counts(),
     versions: counts(),
     blocks: 0,
@@ -222,7 +235,9 @@ export async function migrateBlocksField(payload: Payload, options: MigrateBlock
       mergeLocales(localized.report, issue)
       conversion = localized
     } else conversion = convertPayloadBlocksLayout(data[from], blocks)
-    const { layout, report: part } = conversion
+    const { report: part } = conversion
+    // Fields without a value get their default, as a block made in the editor (a stored `null` stays).
+    const layout = withLayoutDefaults(conversion.layout, blocks)
     if (layout.blocks.length === 0) return { status: 'empty', report: part }
     if (hasExisting && JSON.stringify(normalizeLayout(existing)) === JSON.stringify(layout)) return { status: 'skip', report: part }
     for (const [publishing, blocking] of [[false, 'save'], [true, 'publish']] as const) {
@@ -259,7 +274,7 @@ export async function migrateBlocksField(payload: Payload, options: MigrateBlock
     else {
       try {
         if (!dryRun) {
-          await payload.db.updateOne({ collection: collection as never, id, data: { [to]: result.layout, [cssField]: result.css }, returning: false })
+          await payload.db.updateOne({ collection: collection as never, id, data: { [to]: result.layout, [cssField]: result.css, ...KEEP_UPDATED_AT }, returning: false })
         }
         report.documents.converted++
         report.blocks += result.blocks
@@ -298,7 +313,9 @@ export async function migrateBlocksField(payload: Payload, options: MigrateBlock
           await payload.db.updateVersion({
             collection: collection as never,
             id: versionId,
-            versionData: { version: { [to]: converted.layout, [cssField]: converted.css } },
+            // `updatedAt` of the version row decides which version Payload treats as the latest draft.
+            // Payload's type says `updatedAt: string`, but every adapter reads `null` as "keep".
+            versionData: { version: { [to]: converted.layout, [cssField]: converted.css }, ...KEEP_UPDATED_AT } as never,
             returning: false,
           })
         }
@@ -399,10 +416,12 @@ export function formatMigrationReport(report: MigrateBlocksReport): string {
   for (const r of report.references) {
     line(`"Used in" records: ${r.checked} documents checked, ${r.updated} updated, ${r.draftsChecked} drafts checked, ${r.draftsUpdated} updated`)
   }
-  if (report.dryRun) line('Nothing was written. Run again with dryRun: false to write.')
+  if (report.dryRun) line('Nothing was written. To write, run again with dryRun: false (the script in the README: add the word "write").')
   // Until the old field is removed, Publish in the builder must not publish its newer drafts.
-  line(
-    `While "${report.from}" stays, set websiteBuilder({ collections: { ${report.collection}: { legacyFields: ['${report.from}'] } } }), so Publish in the builder keeps its published value.`,
-  )
+  if (!report.legacyFields.includes(report.from)) {
+    line(
+      `While "${report.from}" stays, set websiteBuilder({ collections: { ${report.collection}: { legacyFields: ['${report.from}'] } } }), so Publish in the builder keeps its published value.`,
+    )
+  }
   return lines.join('\n')
 }

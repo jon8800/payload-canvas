@@ -10,7 +10,8 @@ import { isPlainObject } from './tree'
  * - `equals`: the sibling equals the value (or one of the values, when it is an array),
  * - `notEquals`: the sibling does not equal the value (or none of the values),
  * - `truthy`: the sibling is truthy (`true`) or falsy (`false`).
- * A sibling without a value counts as its field's `defaultValue`.
+ * A sibling that is not there (`undefined`) counts as its field's `defaultValue`. A cleared sibling
+ * (`null` or `''`) is tested as it is, as in Payload.
  */
 export type BuilderCondition = {
   field: string
@@ -40,7 +41,7 @@ export function conditionMet(
   siblingFields: readonly SiblingField[] = [],
 ): boolean {
   let value = siblings[condition.field]
-  if (value === undefined || value === null) {
+  if (value === undefined) {
     const fallback = siblingFields.find((f) => f.name === condition.field)?.defaultValue
     if (typeof fallback !== 'function') value = fallback
   }

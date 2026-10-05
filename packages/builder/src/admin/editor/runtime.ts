@@ -2,10 +2,9 @@
 
 import { createContext, createRef, use, type RefObject } from 'react'
 
-import { canvasDropTarget, createId, EMPTY_LAYOUT, findBlock, getBlockDefinition, outlineDropTarget, starterSlots } from '../../core'
+import { canvasDropTarget, createId, EMPTY_LAYOUT, findBlock, getBlockDefinition, outlineDropTarget, starterSlots, withFieldDefaults } from '../../core'
 import type {
   Block,
-  BlockDefinition,
   BuilderClientConfig,
   CanvasMeasurement,
   DragSource,
@@ -129,17 +128,6 @@ export type Runtime = {
   /** Icon name of a block type: the definition's `icon`, else the type itself. */
   blockIcon: (type: string) => string
   createBlock: (type: string) => Block | null
-}
-
-/** Field default values that are plain data. Function defaults were stripped from the client config. */
-function defaultProps(def: BlockDefinition): Record<string, unknown> {
-  const props: Record<string, unknown> = {}
-  for (const field of def.fields) {
-    if (!('name' in field) || !('defaultValue' in field)) continue
-    const value: unknown = field.defaultValue
-    if (value !== undefined && typeof value !== 'function') props[field.name] = value
-  }
-  return props
 }
 
 const COLLAPSED_KEY = 'payload-builder:collapsed'
@@ -279,7 +267,9 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
       const def = getBlockDefinition(config.blocks, type)
       if (!def) return null
       const block: Block = { id: createId(), type }
-      const props = defaultProps(def)
+      // Field defaults that are plain data, inside groups, rows and tabs too (function defaults
+      // were stripped from the client config). From now on the block stores its own values.
+      const props = withFieldDefaults({}, def.fields)
       if (Object.keys(props).length > 0) block.props = props
       if (def.defaultClassName) block.className = def.defaultClassName
       // A new list starts with one list item (see `starterSlots`).

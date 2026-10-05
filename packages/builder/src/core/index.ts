@@ -47,6 +47,8 @@ export {
   payloadSlugOf,
   toPayloadBlock,
   withFieldDefaults,
+  withLayoutDefaults,
+  hasStaticDefault,
   type ConvertPayloadOptions,
   type PayloadBlockData,
   type PayloadConversion,

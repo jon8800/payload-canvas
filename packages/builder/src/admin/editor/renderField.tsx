@@ -14,7 +14,7 @@ import {
 import { Fragment, useEffect, type ChangeEvent, type FocusEvent, type KeyboardEvent, type ReactNode } from 'react'
 import type { Field, OptionObject } from 'payload'
 
-import { getBlockDefinition } from '../../core'
+import { getBlockDefinition, hasStaticDefault } from '../../core'
 import type { Block } from '../../core/types'
 
 import { ArrayField } from './fields/ArrayField'
@@ -98,6 +98,9 @@ export function RenderBlockField({ field, onChange, path, value }: Props) {
   const label = fieldLabel(field)
   const description = fieldDescription(field)
   const required = 'required' in field ? Boolean(field.required) : false
+  // A missing value renders as the field's default; a cleared one (`null`, `''`) renders empty.
+  const missing = value === undefined
+  const textDefault = missing && 'defaultValue' in field && typeof field.defaultValue === 'string' ? field.defaultValue : undefined
 
   switch (field.type) {
     case 'text':
@@ -124,7 +127,7 @@ export function RenderBlockField({ field, onChange, path, value }: Props) {
           label={label}
           onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
           path={path}
-          placeholder={placeholder}
+          placeholder={placeholder ?? textDefault}
           required={required}
           value={asString(value)}
         />
@@ -142,7 +145,7 @@ export function RenderBlockField({ field, onChange, path, value }: Props) {
           limits={{ min: field.min, max: field.max, required }}
           onChange={onChange}
           path={path}
-          placeholder={typeof field.defaultValue === 'number' ? String(field.defaultValue) : undefined}
+          placeholder={missing && typeof field.defaultValue === 'number' ? String(field.defaultValue) : undefined}
           required={required}
           value={value}
         />
@@ -157,7 +160,7 @@ export function RenderBlockField({ field, onChange, path, value }: Props) {
           label={label}
           onChange={(e: ChangeEvent<HTMLTextAreaElement>) => onChange(e.target.value)}
           path={path}
-          placeholder={placeholder}
+          placeholder={placeholder ?? textDefault}
           required={required}
           rows={field.type === 'code' ? 8 : 4}
           value={asString(value)}
@@ -187,9 +190,7 @@ export function RenderBlockField({ field, onChange, path, value }: Props) {
                 : []
               : typeof value === 'string'
                 ? value
-                : typeof field.defaultValue === 'string'
-                  ? field.defaultValue
-                  : undefined
+                : textDefault
           }
         />
       )
@@ -198,7 +199,7 @@ export function RenderBlockField({ field, onChange, path, value }: Props) {
     case 'checkbox':
       return (
         <CheckboxInput
-          checked={value === undefined || value === null ? field.defaultValue === true : value === true}
+          checked={missing ? field.defaultValue === true : value === true}
           id={domId(path)}
           label={label}
           name={path}
@@ -335,10 +336,13 @@ export function RenderBlockFields({ fields, data, path, onChange, scope = fields
   // Field access of this user: unreadable fields are left out, read-only fields are locked.
   // `setField` copies `record`, so the values of hidden fields stay as they are.
   const accessOf = useFieldAccessCheck()
-  const setField = (name: string, value: unknown) => {
+  const setField = (name: string, value: unknown, field?: { defaultValue?: unknown }) => {
     const next = { ...record }
-    if (value === undefined || value === null || value === '') delete next[name]
-    else next[name] = value
+    if (value !== undefined && value !== null && value !== '') next[name] = value
+    // A cleared field with a default stores `null`: only a missing key gets the default when the
+    // block renders, so the field stays empty (Payload keeps a cleared value too).
+    else if (field && hasStaticDefault(field)) next[name] = null
+    else delete next[name]
     onChange(Object.keys(next).length > 0 ? next : undefined)
   }
 
@@ -390,7 +394,7 @@ export function RenderBlockFields({ fields, data, path, onChange, scope = fields
     const fieldPath = `${path}.${name}`
     const access = accessOf(fieldPath)
     if (!access.read) return
-    const onFieldChange = (value: unknown) => setField(name, value)
+    const onFieldChange = (value: unknown) => setField(name, value, field)
     out.push(
       // `data-builder-field`: the field the focus is in, for collaborators ("Anna is editing this field").
       <div key={name} data-builder-field={fieldPath} style={{ display: 'contents' }}>

@@ -3,7 +3,7 @@ import { describe, it } from 'node:test'
 
 import { fromPayloadBlocks } from '../blocks/payload'
 import { flatBlocks, twoLevelConfigBlocks } from '../blocks/payloadFixtures.test-data'
-import { convertLocalizedPayloadBlocks, convertPayloadBlocksLayout, payloadFieldIsLocalized, toPayloadBlock, withFieldDefaults } from './convertPayload'
+import { convertLocalizedPayloadBlocks, convertPayloadBlocksLayout, payloadFieldIsLocalized, toPayloadBlock, withFieldDefaults, withLayoutDefaults } from './convertPayload'
 import { validateLayout } from './validate'
 
 const quiet = { onWarning: false as const }
@@ -191,6 +191,57 @@ describe('withFieldDefaults', () => {
     assert.deepEqual(withFieldDefaults({ heading: 'x' }, fields), { heading: 'x', rating: { score: 5, source: 'Google Reviews' } })
     const full = { heading: 'x', rating: { score: 1, source: 'y' } }
     assert.equal(withFieldDefaults(full, fields), full)
+  })
+
+  it('keeps cleared values (null and empty text): only missing keys get the default, as in Payload', () => {
+    const fields = flatBlocks[1].fields
+    const cleared = { heading: 'x', rating: { score: null, source: '' } }
+    assert.equal(withFieldDefaults(cleared, fields), cleared)
+    assert.deepEqual(withFieldDefaults({ rating: { score: null } }, fields), { rating: { score: null, source: 'Google Reviews' } })
+  })
+})
+
+describe('defaults and cleared values in the conversion', () => {
+  const data = [
+    {
+      id: 's',
+      blockType: 'fullWidth',
+      paddingTop: null,
+      content: [{ id: 'h', blockType: 'heading', eyebrow: null, text: 'Hi', level: null }],
+    },
+  ]
+
+  it('keeps null for a field with a default and leaves it out for a field without one', () => {
+    const { layout } = convertPayloadBlocksLayout(data, twoLevel)
+    const [section] = layout.blocks
+    assert.equal(section.props?.paddingTop, null)
+    const heading = section.slots?.content?.[0]
+    assert.deepEqual(heading?.props, { text: 'Hi', level: null })
+    // Rendered for a Payload component, the cleared values stay empty.
+    const rendered = toPayloadBlock(section, twoLevel)
+    assert.equal(rendered.paddingTop, null)
+    assert.equal((rendered.content as Array<Record<string, unknown>>)[0].level, null)
+  })
+
+  it('withLayoutDefaults fills missing keys at every depth and keeps cleared ones', () => {
+    const { layout } = convertPayloadBlocksLayout(data, twoLevel)
+    const filled = withLayoutDefaults(layout, twoLevel)
+    const [section] = filled.blocks
+    assert.equal(section.props?.paddingTop, null)
+    assert.equal(section.props?.paddingBottom, 'default')
+    assert.deepEqual(section.slots?.content?.[0].props, { text: 'Hi', level: null })
+    assert.equal(withLayoutDefaults(filled, twoLevel), filled, 'nothing missing: the same layout')
+  })
+
+  it('treats a missing key as its default and a cleared one as empty in validation', () => {
+    const required = fromPayloadBlocks(
+      [{ slug: 'badge', fields: [{ name: 'label', type: 'text', required: true, defaultValue: 'New' }] }],
+      quiet,
+    )
+    const missing = validateLayout({ version: 1, blocks: [{ id: 'a', type: 'badge' }] }, required)
+    assert.deepEqual(missing, [])
+    const cleared = validateLayout({ version: 1, blocks: [{ id: 'a', type: 'badge', props: { label: null } }] }, required)
+    assert.deepEqual(cleared.map((e) => e.code), ['required'])
   })
 })
 
