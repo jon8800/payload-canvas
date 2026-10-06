@@ -1,10 +1,8 @@
 // DOM helpers for inline editing: keep and restore what React rendered, place the caret,
 // find the element that shows a text prop, and a small throttle.
 
-import type { Block, BlockDefinition } from '@payload-toolkit/builder/core'
 import { EDITABLE_TEXT_ATTRIBUTE } from '../../render/editable'
-import { SERVER_BLOCK_ATTRIBUTE } from '../serverBlocks'
-import { inlineKind, readText } from './model'
+import { AUTO_TEXT_ATTRIBUTE, TEXT_MARK_SELECTOR } from './mapper'
 
 /**
  * The element's attributes and its whole subtree as React left it: every element's child list and
@@ -123,71 +121,31 @@ function ownerBlock(el: Element): HTMLElement | null {
   return el.closest<HTMLElement>('[data-block-id]')
 }
 
-/** True when `el` holds only text and line breaks. */
-function textOnly(el: Element): boolean {
-  for (const child of el.childNodes) {
-    if (child.nodeType === Node.ELEMENT_NODE && child.nodeName !== 'BR') return false
-  }
-  return true
-}
+const markPath = (el: Element) => el.getAttribute(EDITABLE_TEXT_ATTRIBUTE) ?? el.getAttribute(AUTO_TEXT_ATTRIBUTE) ?? ''
 
-/** String props a block shows as plain text (text and textarea fields at the top level). */
-function stringProps(block: Block, definition: BlockDefinition | undefined): Array<[string, string]> {
-  return Object.entries(block.props ?? {}).filter(
-    (entry): entry is [string, string] =>
-      typeof entry[1] === 'string' && entry[1].trim() !== '' && inlineKind(definition, entry[0], entry[1]) !== null,
-  )
+/**
+ * Finds the text prop under `target` (a double-click): the nearest element with an `editableText`
+ * mark or a mark of the automatic mapping (see ./mapper) in the same block. Run the mapping of the
+ * block first (`CanvasMapper.ensure`).
+ */
+export function editableAt(target: Element): EditableTarget | null {
+  const blockEl = ownerBlock(target)
+  const blockId = blockEl?.dataset.blockId
+  if (!blockEl || !blockId) return null
+  const marked = target.closest<HTMLElement>(TEXT_MARK_SELECTOR)
+  if (!marked || ownerBlock(marked) !== blockEl) return null
+  return { element: marked, blockId, path: markPath(marked) }
 }
 
 /**
- * Finds the text prop under `target` (a double-click). Elements marked with `data-builder-text`
- * win. For blocks without marks (custom components), an element whose whole text equals a
- * text prop's value counts as that prop.
+ * The first text prop element of a block (Enter on a selected block), or null. Explicit marks
+ * come first, then the marks of the automatic mapping, in document order.
  */
-export function editableAt(
-  target: Element,
-  block: (id: string) => Block | null,
-  definition: (type: string) => BlockDefinition | undefined,
-): EditableTarget | null {
-  const blockEl = ownerBlock(target)
-  const blockId = blockEl?.dataset.blockId
-  // The server renders this block: React does not own its text the usual way. Edit it in the inspector.
-  if (!blockEl || !blockId || blockEl.hasAttribute(SERVER_BLOCK_ATTRIBUTE)) return null
-  const marked = target.closest<HTMLElement>(`[${EDITABLE_TEXT_ATTRIBUTE}]`)
-  if (marked && ownerBlock(marked) === blockEl) {
-    return { element: marked, blockId, path: marked.getAttribute(EDITABLE_TEXT_ATTRIBUTE) ?? '' }
-  }
-  const data = block(blockId)
-  if (!data) return null
-  const props = stringProps(data, definition(data.type))
-  if (props.length === 0) return null
-  for (let el: Element | null = target; el && blockEl.contains(el); el = el.parentElement) {
-    if (!(el instanceof HTMLElement) || !textOnly(el)) continue
-    const text = readText(el, true).trim()
-    const match = props.find(([, value]) => value.trim() === text)
-    if (match) return { element: el, blockId, path: match[0] }
-    if (el === blockEl) break
-  }
-  return null
-}
-
-/** The first text prop element of a block (Enter on a selected block), or null. */
-export function firstEditable(
-  blockEl: HTMLElement,
-  block: (id: string) => Block | null,
-  definition: (type: string) => BlockDefinition | undefined,
-): EditableTarget | null {
+export function firstEditable(blockEl: HTMLElement): EditableTarget | null {
   const blockId = blockEl.dataset.blockId
-  if (!blockId || blockEl.hasAttribute(SERVER_BLOCK_ATTRIBUTE)) return null
-  const own = (el: Element) => ownerBlock(el) === blockEl
-  const candidates = [blockEl, ...blockEl.querySelectorAll<HTMLElement>(`[${EDITABLE_TEXT_ATTRIBUTE}]`)]
-  const marked = candidates.find((el) => el.hasAttribute(EDITABLE_TEXT_ATTRIBUTE) && own(el) && el.getClientRects().length > 0)
-  if (marked) return { element: marked, blockId, path: marked.getAttribute(EDITABLE_TEXT_ATTRIBUTE) ?? '' }
-  // Unmarked custom blocks: the first own element whose text equals a text prop.
-  const elements = [blockEl, ...blockEl.querySelectorAll<HTMLElement>('*')].filter((el) => own(el) && textOnly(el))
-  for (const el of elements) {
-    const found = editableAt(el, block, definition)
-    if (found) return found
-  }
-  return null
+  if (!blockId) return null
+  const usable = (el: HTMLElement) => ownerBlock(el) === blockEl && el.getClientRects().length > 0
+  const all = [blockEl, ...blockEl.querySelectorAll<HTMLElement>(TEXT_MARK_SELECTOR)].filter((el) => el.matches(TEXT_MARK_SELECTOR))
+  const found = all.find((el) => el.hasAttribute(EDITABLE_TEXT_ATTRIBUTE) && usable(el)) ?? all.find(usable)
+  return found ? { element: found, blockId, path: markPath(found) } : null
 }

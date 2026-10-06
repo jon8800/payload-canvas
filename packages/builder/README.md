@@ -20,25 +20,26 @@ Two packages:
 1. [Requirements](#requirements)
 2. [Install](#install)
 3. [The builder view](#the-builder-view)
-4. [Plugin options](#plugin-options)
-5. [Rendering](#rendering)
-6. [Server components in the canvas](#server-components-in-the-canvas)
-7. [Custom blocks](#custom-blocks)
+4. [Inline editing](#inline-editing)
+5. [Plugin options](#plugin-options)
+6. [Rendering](#rendering)
+7. [Server components in the canvas](#server-components-in-the-canvas)
+8. [Custom blocks](#custom-blocks)
    - [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields)
-8. [Using existing Payload blocks](#using-existing-payload-blocks)
-9. [Sections](#sections)
-10. [Styling](#styling)
-11. [Animations](#animations)
-12. [Theme](#theme)
-13. [Templates and binding](#templates-and-binding)
-14. [References and Used in](#references-and-used-in)
-15. [Localization](#localization)
-16. [AI assistant](#ai-assistant)
-17. [AI editing over MCP](#ai-editing-over-mcp)
-18. [Multiplayer editing](#multiplayer-editing)
-19. [Production and Docker](#production-and-docker)
-20. [Deploying](#deploying)
-21. [Troubleshooting](#troubleshooting)
+9. [Using existing Payload blocks](#using-existing-payload-blocks)
+10. [Sections](#sections)
+11. [Styling](#styling)
+12. [Animations](#animations)
+13. [Theme](#theme)
+14. [Templates and binding](#templates-and-binding)
+15. [References and Used in](#references-and-used-in)
+16. [Localization](#localization)
+17. [AI assistant](#ai-assistant)
+18. [AI editing over MCP](#ai-editing-over-mcp)
+19. [Multiplayer editing](#multiplayer-editing)
+20. [Production and Docker](#production-and-docker)
+21. [Deploying](#deploying)
+22. [Troubleshooting](#troubleshooting)
 
 ## Requirements
 
@@ -333,6 +334,73 @@ Set the default with `websiteBuilder({ editor: { dragMode: 'smooth' } })`. Each 
 
 Access. The view sends signed-out visitors to the login page and back. Users without admin access go to Payload's "unauthorized" page. A document that does not exist, or a collection without the builder, shows "not found". A user who can read but not update the document gets the normal Edit view.
 
+## Inline editing
+
+Text and images edit in place on the canvas, in every block: the default blocks, your own components, and existing Payload components adopted with `fromPayloadComponents`. You do not need to change your components.
+
+### Text
+
+- Hover text that can be edited: the cursor turns into a text cursor and a faint dashed outline shows.
+- Double-click the text, or select the block and press Enter. Type. Escape ends editing. In a one-line text field, Enter ends it too. In a textarea, Enter adds a line break and Ctrl+Enter ends editing.
+- Rich text opens a small Lexical editor with a toolbar (paragraph and heading types, lists, bold, italic, links). Ctrl+K adds a link.
+- One editing session is one undo step. Collaborators see the typing live.
+- A prop bound to document data, and a prop the user may not change (field `access`), stay closed: the editor says why.
+
+**How the canvas finds the text.** After a block renders, the canvas compares the block's props with the text of its elements:
+
+- It looks at text, textarea and richText fields, also inside groups, array rows (`headingLines.0.text`, `cards.2.heading`) and `hasMany` text fields (`tags.1`). A field with no value counts as its `defaultValue`, as your component renders it.
+- An element matches a prop when its text equals the prop's value. Runs of whitespace count as one space. Rich text matches without any whitespace, because paragraphs have no separator in the DOM.
+- The smallest element with that text wins. A value split across elements (an accent word in a `<span>`) maps to the element around both parts. Icons and empty decoration inside the element stay out of the editing.
+- Rich text maps to its container (the `<div>` around the paragraphs), never to one paragraph, so the editor can add paragraphs.
+- The canvas does not guess. Nothing is marked when one value shows in two visible elements, when two props have the same text, or when one element matches two props.
+- Blocks rendered on the server ([Server components in the canvas](#server-components-in-the-canvas)) map the same way. When editing ends, the value is saved and the server renders the block again.
+
+**Limits.** The text on screen must equal the prop. These cases stay in the inspector:
+
+- Text your component changes in JavaScript: `.toUpperCase()`, truncation, a heading split into words, markup such as `*accent*` that becomes a `<span>`. (CSS `text-transform: uppercase` is fine: the DOM text is unchanged.)
+- A prop shown inside a sentence with other text in the same element (`<p>Call us on {phone}</p>`).
+- The same text twice on the block (a marquee that repeats its items).
+
+**Mark the element yourself** when the automatic mapping cannot find it. `editableText(mode, path)` returns the attribute in the canvas and nothing on the site. A mark always wins over the automatic mapping.
+
+```tsx
+import { editableText, type PayloadBlockProps } from '@payload-toolkit/builder-react'
+
+export function Hero({ heading, builder }: PayloadBlockProps<HeroBlock>) {
+  // The site shows "*Your* day" with an accent span. The mark tells the canvas which prop it is.
+  return <h1 {...editableText(builder.mode, 'heading')}>{heading}</h1>
+}
+```
+
+Put the mark on the element that holds the text and nothing else.
+
+### Images
+
+Every image that shows an upload prop can be replaced on the canvas:
+
+- Hover the image: a **Replace** chip shows in its top left corner. Text over an image (a hero heading) wins: hover a free part of the image.
+- Double-click the image, or click the chip, to open the media popover:
+  - **Choose from library**: Payload's list drawer for the field's upload collection.
+  - **Upload a file**: a file picker. The file goes to the upload collection with its name as alt text.
+  - **Generate image**: the AI image action. Shown when `ai.images` is set up. See [Image generation](#image-generation).
+  - **Remove**: empties the field. Not shown for required fields.
+  - **Alt text**: saved in the block's own alt prop when it has one next to the upload (`alt`, `altText`, `<field>Alt`). Otherwise it is saved on the media document, so it changes everywhere that file is used.
+- Drag an image file from your computer onto an image on the canvas to upload it and replace the image.
+- When several uploads lie under the pointer (a video and its poster, a background under a photo), the popover has a list to pick one.
+- Every replace is one undo step, and collaborators see it at once. Alt text saved on the media document is not part of the undo history.
+
+**How the canvas finds the images.** It reads the URLs of `<img>` (also `srcset` and `<picture>` sources), `<video>` (the file and the poster), inline `background-image` styles and, for uploads still not found, CSS backgrounds from classes. It compares them with every URL of the block's media documents: the file, the thumbnail and each image size. `next/image` URLs (`/_next/image?url=…`) count as the image they wrap. Uploads in array rows (`photos.3.image`) and `hasMany` uploads (`gallery.2`) work too.
+
+**Limits.** An image whose URL is not one of the block's uploads cannot be replaced on the canvas (an image from page data, a fixed file in `/public`). An empty upload field has no URL to match: mark its placeholder. Images inside rich text are edited in the inspector.
+
+**Mark the element yourself** with `editableImage(mode, path)`. The default Image block marks its image and its empty placeholder this way:
+
+```tsx
+import { editableImage } from '@payload-toolkit/builder-react'
+
+{photo ? <img {...editableImage(builder.mode, 'photo')} src={photo.url} alt="" /> : <div {...editableImage(builder.mode, 'photo')}>Add a photo</div>}
+```
+
 ## Plugin options
 
 ```ts
@@ -547,6 +615,7 @@ How it works in the editor:
 - Only signed-in users of the admin collection get an answer.
 - When a component fails, that block shows "Name: the preview failed" with the error. The other blocks are not affected.
 - Selecting, dragging, the outline and the inspector work as for every block. The editor puts the block id on the first element of the output.
+- Text and images edit on the canvas as in other blocks ([Inline editing](#inline-editing)). When editing ends, the block renders on the server again with the new value.
 
 ### Slots in server-rendered blocks
 
@@ -693,6 +762,7 @@ What carries over:
 - **Components.** `fromPayloadComponents()` renders components written for Payload's data (`{ blockType, ...fields }`) unchanged.
 - **Field logic.** `validate`, field hooks and field `access` of the block fields run in the builder and the API, as in Payload. See [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields).
 - **Content.** `migrateBlocksField()` converts every document, its drafts and its versions.
+- **Canvas editing.** Text and images of your components edit in place on the canvas, with no marks in your code. See [Inline editing](#inline-editing).
 
 ### Step by step
 

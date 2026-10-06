@@ -54,4 +54,5 @@ export {
   type PayloadConversion,
   type PayloadConversionReport,
 } from './convertPayload'
+export { dataFields, fieldAtPropPath, type DataField } from './fields'
 export { collectReferences, readReferences, referenceKey, referenceTargets, sameReferences, type Reference, type ReferenceTargets } from './references'

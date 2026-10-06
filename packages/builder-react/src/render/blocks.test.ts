@@ -64,7 +64,7 @@ describe('text-like blocks', () => {
       [{ type: 'button', props: { link: { type: 'url', url: '/x' } } }, /^<a [^>]*href="\/x"[^>]*><span data-builder-placeholder[^>]*>Button<\/span><\/a>$/],
       [{ type: 'listItem' }, /^<li data-block-id="b" data-block-type="listItem" data-builder-text="text"><span data-builder-placeholder[^>]*>List item<\/span><\/li>$/],
       [{ type: 'richText', props: { content: lexical(paragraph()) } }, /^<div [^>]+><p><span data-builder-placeholder[^>]*>Rich text<\/span><\/p><\/div>$/],
-      [{ type: 'image', props: { image: 5 } }, /^<div data-block-id="b" data-block-type="image" data-builder-placeholder="" style="[^"]*min-height:96px[^"]*">Image<\/div>$/],
+      [{ type: 'image', props: { image: 5 } }, /^<div data-block-id="b" data-block-type="image" data-builder-image="image" data-builder-placeholder="" style="[^"]*min-height:96px[^"]*">Image<\/div>$/],
       [{ type: 'video', props: { source: 'upload' } }, /^<div [^>]*data-builder-placeholder="" style="[^"]*aspect-ratio:16 \/ 9[^"]*">Video<\/div>$/],
       [{ type: 'video', props: { source: 'url', url: 'javascript:alert(1)' } }, /data-builder-placeholder[^>]*>Video</],
     ]

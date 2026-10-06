@@ -10,6 +10,7 @@ import { BlockIcon, Icon } from './icons'
 import { inlineEditing } from './inline'
 import { InlineToolbar } from './InlineToolbar'
 import { InsertHandle } from './insert/InsertHandle'
+import { ImageEditor } from './media/ImageEditor'
 import { BlockContextMenu, blockMenuEntries } from './menu/blockMenu'
 import { MenuButton } from './menu/Menu'
 import { blockName } from './names'
@@ -213,6 +214,7 @@ export function Overlay() {
         </>
       )}
       <InsertHandle />
+      <ImageEditor />
       <BlockContextMenu />
       <Tooltips />
       <PeerCursors />

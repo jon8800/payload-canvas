@@ -21,7 +21,7 @@ export {
   type LinkAttributes,
 } from './render/link'
 export { parseVideoUrl, type VideoEmbed } from './components/videoUrl'
-export { editableText, EDITABLE_TEXT_ATTRIBUTE } from './render/editable'
+export { editableImage, editableText, EDITABLE_IMAGE_ATTRIBUTE, EDITABLE_TEXT_ATTRIBUTE } from './render/editable'
 export { defaultComponents } from './components'
 export { BuilderStyle, RenderLayout } from './render/RenderLayout'
 export { MotionRuntime } from './motion/MotionRuntime'

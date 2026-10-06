@@ -185,5 +185,5 @@ test('image: resolved doc renders an img, unresolved id is empty or a placeholde
 
   const unresolved: Layout = { version: 1, blocks: [imageBlock({ image: 1 })] }
   assert.equal(render({ layout: unresolved }), '')
-  assert.match(render({ layout: unresolved, mode: 'canvas' }), /<div data-block-id="i" data-block-type="image" data-builder-placeholder="" class="rounded builder-css" style=/)
+  assert.match(render({ layout: unresolved, mode: 'canvas' }), /<div data-block-id="i" data-block-type="image" data-builder-image="image" data-builder-placeholder="" class="rounded builder-css" style=/)
 })
