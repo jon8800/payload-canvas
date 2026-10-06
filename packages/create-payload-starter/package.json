@@ -1,22 +1,45 @@
 {
   "name": "create-payload-toolkit",
   "version": "0.1.0",
-  "description": "Scaffold a Payload CMS website builder project from the payload-toolkit starter",
+  "description": "Create a new Payload CMS website from the payload-toolkit starter: the visual page builder, Postgres, a seeded demo and the AI guides.",
+  "keywords": [
+    "payload",
+    "payloadcms",
+    "create",
+    "scaffold",
+    "starter",
+    "template",
+    "website-builder",
+    "page-builder",
+    "nextjs",
+    "cli"
+  ],
   "license": "MIT",
+  "author": "Eugene Lominos <hello@eugenelominos.com>",
+  "homepage": "https://github.com/jon8800/payload-toolkit/tree/main/packages/create-payload-starter#readme",
+  "bugs": "https://github.com/jon8800/payload-toolkit/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jon8800/payload-toolkit.git",
+    "directory": "packages/create-payload-starter"
+  },
   "type": "module",
   "bin": {
     "create-payload-toolkit": "./dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
-  "engines": {
-    "node": ">=20.9"
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc",
     "dev": "tsx src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepack": "pnpm build"
   },
   "dependencies": {
     "@clack/prompts": "^1.8.1",
@@ -30,5 +53,8 @@
     "@types/pg": "^8.23.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=20.9.0"
   }
 }

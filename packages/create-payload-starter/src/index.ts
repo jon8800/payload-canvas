@@ -97,7 +97,9 @@ async function main() {
     spinner.error('Failed.')
     fs.rmSync(targetDir, { recursive: true, force: true })
     throw error
-  }  for (const problem of checkProject(targetDir)) p.log.warn(problem)
+  }
+
+  for (const problem of checkProject(targetDir)) p.log.warn(problem)
   if (!tarballs && !options.install) {
     p.log.warn(`${PACKAGE_NAMES} come from npm. They must be published before "${manager} install" works.`)
   }

@@ -6,24 +6,32 @@ A visual website builder for [Payload CMS](https://payloadcms.com) 3. Install it
 - Developers keep full control: blocks are Payload field configs, components are plain React, styles are Tailwind classes.
 - AI agents build and edit pages over MCP. An open editor shows each AI change as it happens.
 
-![The Builder tab: block library, canvas and Styles panel](docs/screenshots/design/16-light-1440.png)
+## Packages
 
-> Screenshots live in `docs/screenshots/`. That folder is ignored by git for now, so the images show only in a local checkout.
-
-| | |
+| Package | What it is |
 |---|---|
-| ![Sections library](docs/screenshots/design/17-light-1440-sections.png) | ![Styles panel color picker](docs/screenshots/styles-panel/03-color-picker.png) |
-| ![The starter home page](docs/screenshots/starter/site-home.png) | ![Rich text in the inspector](docs/screenshots/blocks/04-richtext-inspector.png) |
+| [`@payload-toolkit/builder`](packages/builder/README.md) | The Payload plugin: the full-screen builder, block definitions, the CSS compiler, live editing, the AI assistant, MCP tools. |
+| [`@payload-toolkit/builder-react`](packages/builder-react/README.md) | `RenderLayout` for your site, the default block components, the canvas runtime. |
+| [`create-payload-toolkit`](packages/create-payload-starter/README.md) | A CLI that creates a new project from the starter app. |
+
+Requirements: Payload 3.90+, Next.js 16.3+, React 19.2+, Tailwind CSS 4.3+, Node.js 20.9+.
 
 ## Features
 
-- **Builder tab** in Payload's document view, for any collection you list. Payload keeps save, drafts, autosave, versions, locking and access control.
-- **15 nestable blocks**: stack, grid, heading, text, rich text (Payload's Lexical editor), image, video, button, link, list, quote, divider, spacer, collection list (documents from any collection), and field (shows a document field in templates). Add your own with `defineBlock`.
-- **Live canvas** in an iframe that renders your real components. Drag and drop on the canvas and in the outline tree. Desktop, tablet, mobile and custom widths.
+- **Full-screen builder** for any collection you list, opened from the document's **Builder** tab. Payload keeps save, drafts, autosave, versions, locking and access control.
+- **16 nestable blocks**: stack, grid, heading, text, rich text (Payload's Lexical editor), image, video, button, link, menu, list, quote, divider, spacer, collection list (documents from any collection), and field (shows a document field in templates). Add your own with `defineBlock`, or reuse your existing Payload blocks with `fromPayloadBlocks`.
+- **Live canvas** in an iframe that renders your real components, including server components. Drag and drop on the canvas and in the layers tree, a "+" between blocks, fluid, desktop, tablet, mobile and custom widths.
+- **Inline editing**: double-click text or an image on the canvas to change it in place, in the default blocks and in your own components.
 - **Styles panel**: visual controls that read and write Tailwind v4 classes, with breakpoints and hover/focus states. Your `@theme` tokens appear in the pickers.
+- **Theme global**: editors pick colors, fonts (any Google Font), radius and spacing. The site gets them as CSS variables.
 - **CSS on save**: only the classes a page uses, compiled against your own Tailwind entry. Works in standalone output and Docker.
-- **Sections**: ready-made block trees (hero, features, pricing, footer) for editors and AI agents.
+- **Sections**: ready-made block trees for editors and AI agents, and sections that editors save themselves.
 - **Templates and binding**: one layout for every post, with block props bound to document fields, plus a collection list block for "latest posts" sections.
+- **Animations**: entrance, hover, press, scroll and loop effects per block, on the `motion` package.
+- **Multiplayer**: several people and AI agents edit one page at the same time, with presence.
+- **Localization**: one shared layout with translated props.
+- **References**: "Used in" lists on media, and delete protection for files a page still uses.
+- **AI assistant** in the editor, with adapters for OpenRouter, Cloudflare, OpenAI-compatible servers and Anthropic, plus image generation.
 - **AI over MCP**: tools for [`payload-mcp-toolkit`](https://www.npmjs.com/package/payload-mcp-toolkit) to list blocks, insert sections and apply edits, with live updates in open editors.
 - **Headless friendly**: the layout is JSON. Render it with `@payload-toolkit/builder-react` or your own code.
 
@@ -56,7 +64,7 @@ Common flags (full list in [`packages/create-payload-starter`](packages/create-p
 | `--seed` / `--no-seed` | Seed demo content, or not. |
 | `--no-install` | Only create the files. |
 | `--reuse-db` / `--skip-db` | Use a database that already exists / do not touch Postgres. |
-| `--packages <path>` | Pack the builder packages from a checkout of this repo. Needed until they are on npm. |
+| `--packages <path>` | Pack the builder packages from a checkout of this repo, instead of using the versions on npm. |
 
 ```bash
 # Non-interactive, for CI and agents
@@ -101,18 +109,30 @@ In the repository, the starter compiles the packages from `src` (`transpilePacka
 | `pnpm test` | Runs the package tests (`node --test`). |
 | `pnpm typecheck` | Type-checks every workspace project. |
 | `pnpm lint` | Runs Oxlint. |
-| `pnpm pack:packages` | Packs both builder packages into `dist-packages/` as `.tgz` files. |
+| `pnpm pack:packages` | Packs the three published packages into `dist-packages/` as `.tgz` files. |
 
 ### Publishing
 
-The packages point their `exports` at `src` for development. `publishConfig` points them at `dist`, and pnpm swaps the fields when it packs or publishes. `prepack` runs the build, so `pnpm publish` always ships a fresh `dist`.
+The packages point their `exports` at `src` for development. `publishConfig` points them at `dist`, and pnpm swaps the fields when it packs or publishes. pnpm also replaces `workspace:*` with the real version. `prepack` runs the build, so a pack or a publish always ships a fresh `dist`.
+
+Always publish with **pnpm**, not `npm publish`: only pnpm applies `publishConfig.exports`.
 
 ```bash
+# 1. Check every package: the build runs, and pnpm lists the files it would publish.
+pnpm --filter @payload-toolkit/builder publish --dry-run --no-git-checks
+pnpm --filter @payload-toolkit/builder-react publish --dry-run --no-git-checks
+pnpm --filter create-payload-toolkit publish --dry-run --no-git-checks
+
+# 2. Publish, builder first: builder-react has it as a peer dependency.
+npm login
 pnpm --filter @payload-toolkit/builder publish
 pnpm --filter @payload-toolkit/builder-react publish
+pnpm --filter create-payload-toolkit publish
 ```
 
-The build (`scripts/build-package.mjs`) compiles each file with TypeScript, adds `.js` to relative imports, copies `.scss` files, and checks that `publishConfig.exports` matches `exports`. When you add an entry to `exports`, add the matching `dist` entry to `publishConfig.exports`; the build prints it for you.
+The `@payload-toolkit` scope must exist on npm as an organization (or a user) that you can publish to. Each package has `publishConfig.access: public`.
+
+The build (`scripts/build-package.mjs`) compiles each file with TypeScript, adds `.js` to relative imports, copies `.scss` files, and checks that `publishConfig.exports` matches `exports`. When you add an entry to `exports`, add the matching `dist` entry to `publishConfig.exports`; the build prints it for you. Test files (`*.test.ts`, `*.test-data.ts`) stay out of `dist`.
 
 ## Docker
 

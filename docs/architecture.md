@@ -392,6 +392,8 @@ The original prototype goals:
 
 ## 16. Build order
 
+Status (2026-10-06): steps 1–15 are done. Version 0.1.0 of `@payload-toolkit/builder`, `@payload-toolkit/builder-react` and `create-payload-toolkit` is ready to publish: the packed tarballs passed a clean install in a blank `create-payload-app` project (dev and production) and `pnpm publish --dry-run`. Not published to npm yet.
+
 1. ~~Prototypes~~ (done, section 14).
 2. ~~**Plugin skeleton**~~ (done 2026-10-03): `websiteBuilder()` config, layout field, operations module with tests, editor tab, 5 blocks (stack, grid, heading, text, image), `RenderLayout`, CSS generation.
    - Save rules: missing required props block only publishing; unknown props/keys are warnings; other errors block (`LayoutError.code`).
@@ -408,3 +410,4 @@ The original prototype goals:
 12. ~~**Field logic of block props.**~~ Done 2026-10-05: `validate`, field hooks and field `access` with Payload's arguments, the inspector's `validate` endpoint, hook changes to every editor, `legacyFields` for Publish (sections 6 and 12).
 13. ~~**Localization.**~~ Done 2026-10-05: one shared structure with translated props (`block.locales`), locale switcher and translation marks in the editor, per-locale validation and field logic, locale-aware API, renderer, MCP and assistant (section 5).
 14. ~~**Animations.**~~ Done 2026-10-05: `block.motion` (entrance with stagger, hover, press, scroll, loop), the Motion tab with Preview and "Play animations", the motion runtime on the `motion` package, MCP and assistant support, motion in the starter's sections (section 8, "Motion").
+15. ~~**Release 0.1.0.**~~ Prepared 2026-10-06: package metadata, peer ranges, `dist` without test files, a pnpm-only publish guard (`scripts/check-publish.mjs`), the install guide tested step by step, `CHANGELOG.md`.
