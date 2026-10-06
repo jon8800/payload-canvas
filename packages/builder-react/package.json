@@ -60,13 +60,24 @@
   "scripts": {
     "build": "node ../../scripts/build-package.mjs",
     "prepack": "node ../../scripts/build-package.mjs",
+    "prepublishOnly": "node ../../scripts/check-publish.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint",
     "test": "node --import tsx --test \"src/**/*.test.ts\""
   },
+  "dependencies": {
+    "@lexical/history": "0.50.0",
+    "@lexical/list": "0.50.0",
+    "@lexical/rich-text": "0.50.0",
+    "@lexical/selection": "0.50.0",
+    "@lexical/utils": "0.50.0",
+    "lexical": "0.50.0",
+    "motion": "^14.0.0"
+  },
   "peerDependencies": {
     "@payload-toolkit/builder": "^0.1.0",
     "@payloadcms/richtext-lexical": "^3.90.0",
+    "next": "^16.3.0",
     "payload": "^3.90.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
@@ -90,14 +101,5 @@
   },
   "engines": {
     "node": ">=20.9.0"
-  },
-  "dependencies": {
-    "@lexical/history": "0.50.0",
-    "@lexical/list": "0.50.0",
-    "@lexical/rich-text": "0.50.0",
-    "@lexical/selection": "0.50.0",
-    "@lexical/utils": "0.50.0",
-    "lexical": "0.50.0",
-    "motion": "^14.0.0"
   }
 }

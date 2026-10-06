@@ -15,6 +15,12 @@ Two packages:
 | `@payload-toolkit/builder` | The Payload plugin, the admin editor, block definitions, the CSS compiler, live editing, MCP tools. |
 | `@payload-toolkit/builder-react` | `RenderLayout`, the default block components, the canvas runtime, server data helpers. |
 
+**Quick start.** Add the builder to an existing Payload app with the [install guide](#install) (about ten minutes). Or create a new project from the starter app:
+
+```bash
+npx create-payload-toolkit my-website
+```
+
 ## Contents
 
 1. [Requirements](#requirements)
@@ -40,24 +46,47 @@ Two packages:
 20. [Production and Docker](#production-and-docker)
 21. [Deploying](#deploying)
 22. [Troubleshooting](#troubleshooting)
+23. [Limits](#limits)
 
 ## Requirements
 
-- `payload`, `@payloadcms/ui`, `@payloadcms/richtext-lexical` 3.90 or later
+- `payload`, `@payloadcms/ui`, `@payloadcms/richtext-lexical` 3.90 or later (Payload 3 only, not the Payload 4 canary)
 - `next` 16.3 or later, `react` and `react-dom` 19.2 or later
 - `tailwindcss` 4.3 or later (the plugin compiles your Tailwind entry CSS)
 - Node.js 20.9 or later
 - Any Payload database adapter. Postgres and SQLite store the layout as `jsonb`/JSON.
 
+You do not need `transpilePackages` or a `sass` install. The packages ship compiled JavaScript. The admin styles are `.scss` files, and Next compiles them with the `sass` that `@payloadcms/next` already installs, the same way it compiles Payload's own admin styles.
+
+Peer dependencies:
+
+| Package | Range | Needed for |
+|---|---|---|
+| `payload`, `@payloadcms/ui`, `@payloadcms/richtext-lexical` | `^3.90.0` | everything |
+| `next` | `^16.3.0` | everything |
+| `react`, `react-dom` | `^19.2.0` | everything |
+| `tailwindcss` | `^4.3.0` | the CSS compile on save and in the canvas |
+| `@anthropic-ai/sdk` | `>=0.131.0`, optional | only the `/ai/anthropic` adapter |
+| `payload-mcp-toolkit` | `>=0.9.0`, optional | only `builderMcpTools()` (`/mcp`) |
+| `zod` | `^3.25 \|\| ^4`, optional | only `builderMcpTools()` (`/mcp`) |
+
 ## Install
 
-These steps start from a blank Payload app (`npx create-payload-app -t blank`). They were tested on a fresh app with Payload 3.90.2, Next.js 16.3.3, React 19.2.6, Tailwind 4.3.3 and pnpm.
+These steps start from a blank Payload app with Postgres:
+
+```bash
+npx create-payload-app@latest -n my-site -t blank --db postgres --use-pnpm
+```
+
+They were tested step by step on such an app with Payload 3.90.2, Next.js 16.3.3, React 19.2.6, Tailwind 4.3.3, TypeScript 5.7 and pnpm 10, in `next dev` and in `next build` + `next start`. An existing Payload app works the same way: skip what you already have.
 
 ### 1. Add the packages
 
 ```bash
 pnpm add @payload-toolkit/builder @payload-toolkit/builder-react tailwindcss @tailwindcss/postcss postcss
 ```
+
+With npm: `npm install` and the same package names.
 
 ### 2. Add a collection with pages
 
@@ -95,13 +124,49 @@ export const blocks = defaultBlocks({ mediaCollection: 'media', linkCollections:
 
 ### 4. Add the Tailwind entry CSS
 
+This file is your site's CSS. The plugin also compiles each page's classes from it. The variables on `:root` are defaults: the plugin's **Theme** global overrides them, so editors can change the colors, fonts and radius in the admin. See [Theme](#theme).
+
 ```css
 /* src/app/(frontend)/globals.css */
 @import "tailwindcss";
 
+/* Defaults. The Theme global (admin > Theme) overrides them. */
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --primary: oklch(0.55 0.2 260);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --border: oklch(0.922 0 0);
+  --radius: 0.625rem;
+}
+
 @theme {
-  --color-primary: oklch(0.55 0.2 260);
-  --color-primary-foreground: oklch(0.98 0 0);
+  --font-sans: ui-sans-serif, system-ui, sans-serif; /* the theme's body font replaces it */
+  --font-heading: var(--font-sans);                   /* `font-heading`; the theme's heading font replaces it */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }
 ```
 
@@ -112,7 +177,7 @@ export default {
 }
 ```
 
-Import the file in your site layout: `import './globals.css'` in `src/app/(frontend)/layout.tsx`.
+The site layout imports this file in [step 7](#7-render-pages-on-the-site). The blank template has `src/app/(frontend)/styles.css` with a dark style for its welcome page, and its rules fight Tailwind's. Delete the file and the `import './styles.css'` line in `src/app/(frontend)/page.tsx`. Step 7 replaces the layout that imports it too.
 
 ### 5. Add the plugin
 
@@ -222,6 +287,32 @@ The default path is `/builder-canvas`. Change it with the `canvasPath` option. I
 
 ### 7. Render pages on the site
 
+The site layout imports your CSS and renders the Theme global's variables and fonts in the `<head>`. Replace the blank template's layout with this one:
+
+```tsx
+// src/app/(frontend)/layout.tsx
+import { ThemeStyle } from '@payload-toolkit/builder-react/server'
+import config from '@payload-config'
+import { getPayload } from 'payload'
+import type { ReactNode } from 'react'
+
+import './globals.css'
+
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const payload = await getPayload({ config })
+  return (
+    <html lang="en">
+      <head>
+        <ThemeStyle payload={payload} />
+      </head>
+      <body className="font-sans antialiased">{children}</body>
+    </html>
+  )
+}
+```
+
+The page route loads a page by its slug and renders its layout:
+
 ```tsx
 // src/app/(frontend)/[slug]/page.tsx
 import type { GeneratedCss } from '@payload-toolkit/builder'
@@ -250,7 +341,7 @@ export default async function Page({ params }: Props) {
 }
 ```
 
-Put `<ThemeStyle payload={payload} />` in the `<head>` of your site's root layout too. See [Theme](#theme).
+`page.layout` and `page.layoutCss` exist in `payload-types.ts` after `generate:types` (step 5). The `draft` flag shows drafts only in Next's draft mode, so the site shows the published version.
 
 ### 8. Add the standalone tracing lines
 
@@ -290,8 +381,16 @@ pnpm dev
 
 1. Open `http://localhost:3000/admin` and create the first user.
 2. Create a page with a title and a slug, for example `about`.
-3. Click the **Builder** tab (or **Open builder** on the layout field). The builder opens full screen. Click or drag blocks from **Add**. Edit content in the right panel. Style blocks in **Styles**.
+3. Click the **Builder** tab (or **Open builder** on the layout field). The builder opens full screen. Click or drag blocks from the **Blocks** tab. Double-click text on the canvas to edit it in place, or edit it in the right panel. Style the selected block in **Styles**.
 4. Click **Publish changes** in the top bar and open `http://localhost:3000/about`.
+
+In development, Payload's Postgres adapter pushes the new tables and columns on `pnpm dev`. Before your first production deploy, create a migration and commit it:
+
+```bash
+pnpm payload migrate:create
+```
+
+Run it in production with `pnpm payload migrate`, or with `prodMigrations` in `postgresAdapter`. Never run `payload migrate` on a development database that uses push. See [Production and Docker](#production-and-docker).
 
 ## The builder view
 
@@ -492,9 +591,13 @@ It also adds these endpoints (signed-in users only):
 | `@payload-toolkit/builder/mcp` | server | `builderMcpTools` |
 | `@payload-toolkit/builder/ai` | server | the `AiAdapter` type and helpers for writing an adapter |
 | `@payload-toolkit/builder/ai/openrouter`, `/ai/cloudflare-gateway`, `/ai/cloudflare-workers-ai`, `/ai/openai-compatible`, `/ai/anthropic`, `/ai/fake` | `payload.config.ts` (server) | one AI adapter each. See [Adapters](#adapters). |
+| `@payload-toolkit/builder/ai/images/openrouter`, `/ai/images/openai`, `/ai/images/cloudflare-workers-ai`, `/ai/images/fake` | `payload.config.ts` (server) | one image adapter each. See [Image generation](#image-generation). |
 | `@payload-toolkit/builder/live` | server | the live sessions and endpoints |
 | `@payload-toolkit/builder/client` | Payload import map only | admin client components (layout field, Builder tab) |
 | `@payload-toolkit/builder/rsc` | Payload import map only | admin server components (the builder view, the tab redirect) |
+| `@payload-toolkit/builder/protocol`, `/css-browser` | used by `@payload-toolkit/builder-react` | the editor–canvas message types, the in-browser CSS compiler. You do not import them yourself. |
+
+Every entry point is ESM with `.d.ts` types. Client components keep their `'use client'` directive in the build.
 
 ## Rendering
 
@@ -519,7 +622,8 @@ import type { ResolveLink } from '@payload-toolkit/builder-react'
 
 export const resolveLink: ResolveLink = (link) => {
   if (link.type !== 'reference') return link.url?.trim() || null
-  const doc = link.reference?.value as { slug?: string } |const post = docs[0]
+  // The loaded document after loadLayoutData, or still an ID.
+  const doc = link.reference?.value as { slug?: string } | null | undefined
   if (!doc?.slug) return null
   return link.reference?.relationTo === 'posts' ? `/blog/${doc.slug}` : `/${doc.slug}`
 }
@@ -1674,6 +1778,17 @@ All entries must show one version. Pin `payload`, `@payloadcms/*` and `next` to 
 **After adding `payload-mcp-toolkit`, `user.email` fails to typecheck.** The toolkit adds an API-key auth strategy, so `req.user` and `payload.auth()` can return an API key. Check `'email' in user` before you read user fields.
 
 **Turbopack.** The packages work with Turbopack (`next dev` and `next build`, the default in Next 16) and webpack. They ship `.scss` files for the admin, which Next compiles the same way it compiles Payload's own SCSS.
+
+## Limits
+
+This is version 0.1. Before 1.0, a minor version can change the API. Known limits:
+
+- **Payload 3 only.** Payload 4 (canary today) changes the admin UI. The builder does not support it yet.
+- **Next.js and React only.** The admin editor and the canvas need a Next.js app (Payload's own requirement). Other frontends can render the stored JSON with their own code.
+- **Tailwind CSS v4 only.** Styles are Tailwind classes, compiled from your Tailwind v4 entry CSS.
+- **One server process.** Live sessions live in memory. See [Multiplayer editing](#multiplayer-editing) and [Deploying](#deploying). Serverless platforms are not supported.
+- **Tested databases.** Postgres is tested end to end. Other Payload adapters store the layout in a JSON field and should work, but are not tested.
+- **The editor's own labels are in English.** Payload's inputs inside it follow the admin language.
 
 ## License
 

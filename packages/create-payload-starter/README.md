@@ -2,6 +2,8 @@
 
 Creates a new Payload CMS website builder project from the payload-toolkit starter.
 
+Requirements: Node.js 20.9 or later, a running PostgreSQL server, and pnpm (npm works too). The starter itself is downloaded from GitHub, so the first run needs network access.
+
 ```bash
 pnpm create payload-toolkit my-website
 # or
@@ -54,7 +56,7 @@ It never runs `payload migrate`. Local development uses `push: true`, so the sch
 | The CLI runs inside a checkout, or you pass `--packages <path>` | `file:./.tarballs/...` tarballs, packed with `pnpm pack` (it builds `dist/` first). Commit `.tarballs/` with the project. |
 | Neither | The version on npm (`^0.1.0`). |
 
-The packages are not on npm yet. Without `--packages`, an install from GitHub fails, so the CLI checks the npm registry first. If the packages are missing, it stops before it writes any file and tells you to use `--packages <path>` or `--no-install`.
+Without `--packages`, and outside a checkout, the CLI checks the npm registry first. If the packages are not on npm (for example, a `--ref` with an unreleased version), it stops before it writes any file and tells you to use `--packages <path>` or `--no-install`.
 
 ## Examples
 
@@ -106,5 +108,5 @@ If the copy or pack step fails, the CLI deletes the half-made folder. If the ins
 
 - The GitHub owner is `GITHUB_OWNER` in `src/config.ts`. The list of files the CLI leaves out is `SKIP_NAMES` and `SKIP_PATHS` in the same file.
 - After copying, the CLI checks the new project for leftovers (`workspace:` links, paths into `packages/`, `baseUrl`, Docker files) and prints a warning for each one it finds.
-- Build with `pnpm build`. Run from the repo with `node dist/index.js`.
+- Build with `pnpm build`. Run from the repo with `node dist/index.js`. `pnpm pack` builds first (`prepack`).
 - `packages/shared` is not used by the CLI.

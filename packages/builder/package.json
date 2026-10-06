@@ -166,6 +166,7 @@
   "scripts": {
     "build": "node ../../scripts/build-package.mjs",
     "prepack": "node ../../scripts/build-package.mjs",
+    "prepublishOnly": "node ../../scripts/check-publish.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint",
     "test": "node --import tsx --test \"src/**/*.test.ts\"",

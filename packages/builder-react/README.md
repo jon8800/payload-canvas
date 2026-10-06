@@ -3,10 +3,12 @@
 The React side of [`@payload-toolkit/builder`](https://github.com/jon8800/payload-toolkit/tree/main/packages/builder). It renders builder layouts on your site and runs the editor's canvas.
 
 ```bash
-pnpm add @payload-toolkit/builder @payload-toolkit/builder-react
+pnpm add @payload-toolkit/builder @payload-toolkit/builder-react tailwindcss @tailwindcss/postcss postcss
 ```
 
-The full setup guide is in the [`@payload-toolkit/builder` README](https://github.com/jon8800/payload-toolkit/tree/main/packages/builder#install).
+The full setup guide is in the [`@payload-toolkit/builder` README](https://github.com/jon8800/payload-toolkit/tree/main/packages/builder#install). Install both packages at the same version.
+
+Peer dependencies: `@payload-toolkit/builder` `^0.1.0`, `payload` and `@payloadcms/richtext-lexical` `^3.90.0`, `next` `^16.3.0`, `react` and `react-dom` `^19.2.0`, `tailwindcss` `^4.3.0`. The package ships ESM JavaScript with `.d.ts` types; the app does not need `transpilePackages`.
 
 ## Entry points
 
@@ -85,6 +87,11 @@ export function Callout({ props, className, attributes, mode }: BlockComponentPr
 ```
 
 `path` is the prop path: `"title"`, or `"items.2.text"` for a field in an array row. The element must show that text and nothing else. On the site, `editableText` returns no attributes. Text, textarea and rich text fields can be edited this way. Props bound to template data are not editable inline.
+
+## Limits
+
+- `RenderLayout` and the `/server` helpers are React Server Components. They need the Next.js App Router (or another RSC framework).
+- The canvas runtime (`/canvas`) runs only inside the builder's iframe route.
 
 ## License
 
