@@ -22,6 +22,7 @@ import {
   setPropPath,
   unwrap,
   type AdminToCanvas,
+  type CanvasImageTarget,
   type CanvasInit,
   type CanvasToAdmin,
   type PointerKind,
@@ -32,7 +33,9 @@ import { flushSync } from 'react-dom'
 import { defaultResolveLink, RenderLayout, type BlockComponents, type PageData, type ResolveLink } from '../index'
 import type { CanvasScope, CanvasServer } from '../render/canvasServerTypes'
 import { createCanvasDrag } from './drag'
+import { forgetDoc } from './fetchDocs'
 import { editableAt, firstEditable, type EditableTarget } from './inline/dom'
+import { createCanvasMapper } from './inline/mapper'
 import { bindingFor, inlineKind, valueAtPath, withPropValue } from './inline/model'
 import { startPlainSession, type InlineSession, type SessionOptions } from './inline/session'
 import { measure, sameMeasurement } from './measure'
@@ -85,6 +88,12 @@ const EDITOR_CSS = `
 [data-builder-editing] { user-select: text; -webkit-user-select: text; cursor: text; outline: none; }
 [data-builder-editing='lines'] { white-space: pre-wrap; }
 [data-builder-editing][data-builder-blank]::before { content: attr(data-builder-hint); opacity: 0.4; pointer-events: none; }
+/* Text that a double-click edits in place: a text cursor and a faint outline on hover. */
+:is([data-builder-text], [data-builder-text-auto]):not([data-builder-editing]):hover {
+  cursor: text;
+  outline: 1px dashed color-mix(in srgb, currentColor 55%, transparent);
+  outline-offset: 2px;
+}
 .builder-lx-underline { text-decoration: underline; }
 .builder-lx-strike { text-decoration: line-through; }
 .builder-lx-underline-strike { text-decoration: underline line-through; }
@@ -139,8 +148,8 @@ type Freeze = { id: string; key: string; value: unknown; release: Layout | null 
 
 type ActiveSession = { session: string; id: string; path: string; inline: InlineSession }
 
-/** The latest render's data, for event handlers and inline editing. */
-type Latest = { layout: Layout | null; resolved: Layout | null; definitions: BlockDefinition[] | undefined }
+/** The latest render's data, for event handlers and inline editing. `shown`: the layout on screen. */
+type Latest = { layout: Layout | null; resolved: Layout | null; shown: Layout | null; definitions: BlockDefinition[] | undefined }
 
 /** The block as the canvas shows it (bindings resolved). */
 const shownBlockIn = (latest: Latest, id: string) => (latest.resolved ? findBlock(latest.resolved, id) : null)
@@ -202,7 +211,7 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
   // Letters typed while that start waits (fast typing after Enter or Backspace in a list). They go
   // into the text once editing starts.
   const typedRef = useRef('')
-  const latest = useRef<Latest>({ layout: null, resolved: null, definitions: undefined })
+  const latest = useRef<Latest>({ layout: null, resolved: null, shown: null, definitions: undefined })
   // The admin's layout the current `resolved` was made from. The drop animation waits for a new one.
   const resolvedFrom = useRef<Layout | null>(null)
   // Layouts from the admin are numbered as they arrive. `resolvedSeq` is the number of the layout
@@ -222,6 +231,24 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
         })
       : null,
   )
+  // Which elements show which props, for blocks without `editableText` / `editableImage` marks.
+  const [mapper] = useState(() =>
+    createCanvasMapper({
+      root: () => rootRef.current,
+      shown: () => latest.current.shown,
+      stored: (id) => (latest.current.layout ? findBlock(latest.current.layout, id) : null),
+      definition: (type) => definitionIn(latest.current, type),
+      skip: (id) => activeRef.current?.id === id,
+    }),
+  )
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return
+    // Development only: the mapping's cost, for performance checks.
+    ;(window as Window & { __builderMapStats?: unknown }).__builderMapStats = mapper.stats
+  }, [mapper])
+  useEffect(() => () => mapper.dispose(), [mapper])
+  // A document changed outside the layout (alt text): load the layout's documents again.
+  const [docsVersion, setDocsVersion] = useState(0)
   // `undefined` while it loads. The canvas waits for it, so blocks never render without it.
   const [pageData, setPageData] = useState<PageData | null | undefined>(server ? undefined : null)
   const [serverVersion, setServerVersion] = useState(0)
@@ -376,8 +403,6 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     let hasInit = false
     let hasLayout = false
     let lastPointer: { x: number; y: number } | null = null
-    const shownBlock = (id: string) => shownBlockIn(latest.current, id)
-    const definitionOf = (type: string) => definitionIn(latest.current, type)
     const sendPointer = (kind: PointerKind, x: number, y: number) => send({ type: 'pointer', kind, x, y })
 
     // Either side may load first, so repeat `ready` until the init data and a layout arrive.
@@ -441,7 +466,8 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
           // The screen must show the admin's newest layout first (a joined list item has new text).
           const current = shownSeq.current === layoutSeq.current
           const el = current ? document.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(message.id)}"]`) : null
-          const target = el ? firstEditable(el, shownBlock, definitionOf) : null
+          if (el) mapper.ensure(el)
+          const target = el ? firstEditable(el) : null
           if (target) void startInline(target, null, message.offset)
           // Not rendered yet (a list item the admin just added): start once it is.
           else pendingStartRef.current = { id: message.id, offset: message.offset, until: Date.now() + 2000 }
@@ -452,6 +478,10 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
           return
         case 'inlineCommand':
           activeRef.current?.inline.command?.(message.command)
+          return
+        case 'docChanged':
+          forgetDoc(message.collection, message.id)
+          setDocsVersion((version) => version + 1)
           return
         case 'dragStart':
           drag.start(message.drag)
@@ -474,13 +504,62 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     }
     const isEditing = (target: EventTarget | null) =>
       Boolean(activeRef.current && target instanceof Node && activeRef.current.inline.element.contains(target))
-    // Double-click on text: edit it in place.
+
+    // Images: the upload props under the pointer. Sent only when they change.
+    let lastImage = ''
+    let imageFrame = 0
+    const imageAt = (x: number, y: number) => (activeRef.current ? null : mapper.imageTarget(x, y))
+    const sendImageHover = (target: CanvasImageTarget | null, dropping = false) => {
+      const key = target ? JSON.stringify([target, dropping]) : ''
+      if (key === lastImage) return
+      lastImage = key
+      send({ type: 'imageHover', target, ...(dropping ? { dropping } : {}) })
+    }
+    const scheduleImageHover = () => {
+      if (imageFrame) return
+      imageFrame = requestAnimationFrame(() => {
+        imageFrame = 0
+        sendImageHover(lastPointer ? imageAt(lastPointer.x, lastPointer.y) : null)
+      })
+    }
+
+    // Double-click on text: edit it in place. On an image: the editor opens the media popover.
     const onDoubleClick = (e: MouseEvent) => {
       if (isEditing(e.target) || !(e.target instanceof Element)) return
-      const target = editableAt(e.target, shownBlock, definitionOf)
-      if (!target) return
+      const blockEl = e.target.closest<HTMLElement>('[data-block-id]')
+      if (blockEl) mapper.ensure(blockEl)
+      const target = editableAt(e.target)
+      if (target) {
+        e.preventDefault()
+        void startInline(target, { x: e.clientX, y: e.clientY })
+        return
+      }
+      const image = imageAt(e.clientX, e.clientY)
+      if (!image) return
       e.preventDefault()
-      void startInline(target, { x: e.clientX, y: e.clientY })
+      send({ type: 'imageEdit', target: image })
+    }
+
+    // A file dragged over the canvas: an image under it shows "drop to replace". Dropping anywhere
+    // else does nothing (the browser would open the file in the canvas).
+    const hasFiles = (e: DragEvent) => Boolean(e.dataTransfer?.types.includes('Files'))
+    const onDragOver = (e: DragEvent) => {
+      if (!hasFiles(e)) return
+      e.preventDefault()
+      const target = imageAt(e.clientX, e.clientY)
+      if (e.dataTransfer) e.dataTransfer.dropEffect = target ? 'copy' : 'none'
+      sendImageHover(target, Boolean(target))
+    }
+    const onDragLeave = (e: DragEvent) => {
+      if (hasFiles(e) && !e.relatedTarget) sendImageHover(null)
+    }
+    const onDrop = (e: DragEvent) => {
+      if (!hasFiles(e)) return
+      e.preventDefault()
+      const target = imageAt(e.clientX, e.clientY)
+      sendImageHover(null)
+      const file = e.dataTransfer?.files[0]
+      if (target && file) send({ type: 'imageDrop', target, file })
     }
     // A press anywhere else ends editing (the click then selects as usual). Every press also
     // tells the editor, which closes its open menus (iframe events never reach the admin).
@@ -501,14 +580,22 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
       scheduleMeasure()
       // The block under a still pointer changes when the page scrolls.
       if (lastPointer) sendPointer('move', lastPointer.x, lastPointer.y)
+      scheduleImageHover()
     }
     const onPointerMove = (e: PointerEvent) => {
       lastPointer = { x: e.clientX, y: e.clientY }
       sendPointer('move', e.clientX, e.clientY)
+      scheduleImageHover()
     }
     const onPointerLeave = () => {
       lastPointer = null
       sendPointer('leave', 0, 0)
+      sendImageHover(null)
+    }
+    // Another canvas width: other elements may show (responsive copies), so map again.
+    const onResize = () => {
+      scheduleMeasure()
+      mapper.invalidate()
     }
     // Edit mode: links, buttons and forms inside blocks must not act.
     const onClick = (e: MouseEvent) => {
@@ -538,7 +625,7 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
 
     window.addEventListener('message', onMessage)
     window.addEventListener('scroll', onScroll, { passive: true })
-    window.addEventListener('resize', scheduleMeasure)
+    window.addEventListener('resize', onResize)
     document.addEventListener('pointermove', onPointerMove)
     document.documentElement.addEventListener('pointerleave', onPointerLeave)
     document.addEventListener('click', onClick, true)
@@ -549,6 +636,9 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     document.addEventListener('dblclick', onDoubleClick)
     document.addEventListener('pointerdown', onPointerDown, true)
     document.addEventListener('contextmenu', onContextMenu)
+    document.addEventListener('dragover', onDragOver)
+    document.addEventListener('dragleave', onDragLeave)
+    document.addEventListener('drop', onDrop)
     observer.current = new ResizeObserver(scheduleMeasure)
     send({ type: 'ready' })
 
@@ -556,7 +646,7 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
       window.clearInterval(readyTimer)
       window.removeEventListener('message', onMessage)
       window.removeEventListener('scroll', onScroll)
-      window.removeEventListener('resize', scheduleMeasure)
+      window.removeEventListener('resize', onResize)
       document.removeEventListener('pointermove', onPointerMove)
       document.documentElement.removeEventListener('pointerleave', onPointerLeave)
       document.removeEventListener('click', onClick, true)
@@ -567,12 +657,16 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
       document.removeEventListener('dblclick', onDoubleClick)
       document.removeEventListener('pointerdown', onPointerDown, true)
       document.removeEventListener('contextmenu', onContextMenu)
+      document.removeEventListener('dragover', onDragOver)
+      document.removeEventListener('dragleave', onDragLeave)
+      document.removeEventListener('drop', onDrop)
+      cancelAnimationFrame(imageFrame)
       stopInline(false)
       drag.dispose()
       observer.current?.disconnect()
       cancelAnimationFrame(frameRequest.current)
     }
-  }, [scheduleMeasure, startInline, stopInline, drag, motion])
+  }, [scheduleMeasure, startInline, stopInline, drag, motion, mapper])
 
   // The CSS endpoint comes from the admin, or from `?cssEndpoint=` when the page is opened alone.
   const cssEndpoint = init?.cssEndpoint ?? null
@@ -620,7 +714,8 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
         setResolvedSeq(seqOf.current.get(layout) ?? 0)
         send({ type: 'error', message: `Canvas data failed to load: ${String(error)}` })
       })
-  }, [layout, init, definitions, context, linkResolver, locale])
+    // `docsVersion`: a document changed outside the layout, so load the documents again.
+  }, [layout, init, definitions, context, linkResolver, locale, docsVersion])
 
   // Server blocks: the scope and the page data. A new locale renders them again.
   useEffect(() => {
@@ -669,7 +764,9 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
   }, [resolved, freeze])
 
   useLayoutEffect(() => {
-    latest.current = { layout, resolved, definitions }
+    latest.current = { layout, resolved, shown, definitions }
+    // Map the blocks that changed (next frame, so typing never waits for it).
+    mapper.schedule()
     shownSeq.current = resolvedSeq
     // The edited element left the page (a collaborator deleted the block): end the session.
     if (activeRef.current && !activeRef.current.inline.element.isConnected) stopInline(false)
@@ -683,9 +780,8 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     }
     if (!pending.id || resolvedSeq !== layoutSeq.current) return
     const el = document.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(pending.id)}"]`)
-    const shownBlock = (id: string) => shownBlockIn(latest.current, id)
-    const definitionOf = (type: string) => definitionIn(latest.current, type)
-    const target = el ? firstEditable(el, shownBlock, definitionOf) : null
+    if (el) mapper.ensure(el)
+    const target = el ? firstEditable(el) : null
     if (!target) return
     pendingStartRef.current = null
     // After this commit: starting flushes a render, which React refuses inside a layout effect.

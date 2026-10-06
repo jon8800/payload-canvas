@@ -16,6 +16,7 @@ import { useCanvasMenus } from './menu/useCanvasMenus'
 import { cursorAt } from './live'
 import { FollowFrame } from './live/PresenceUI'
 import { FrameResize } from './layout/FrameResize'
+import { imageEditor, updateImageEditor, uploadImage } from './media/actions'
 import { EmptyStart } from './empty/EmptyStart'
 import { EDGE_BAND, insertSpotAt, sameSpot } from './insert/spots'
 import { Overlay } from './Overlay'
@@ -193,6 +194,30 @@ export function Canvas() {
         case 'inlineRefused':
           if (message.reason === 'bound') runtime.notify(boundHint(message.field ?? ''))
           else runtime.warn('This rich text has content the canvas cannot edit. Edit it in the inspector.')
+          return
+        case 'imageHover': {
+          const current = imageEditor(runtime).get()
+          const dropping = Boolean(message.dropping)
+          if (JSON.stringify(current.hover) !== JSON.stringify(message.target) || current.dropping !== dropping) {
+            updateImageEditor(runtime, { hover: message.target, dropping })
+          }
+          return
+        }
+        case 'imageEdit':
+          store.select(message.target.id)
+          updateImageEditor(runtime, { hover: message.target, open: { target: message.target, spot: 0, at: Date.now() } })
+          return
+        case 'imageDrop': {
+          const spot = message.target.spots[0]
+          if (!spot) return
+          const accepted = spot.kind === 'video' ? 'video/' : 'image/'
+          if (!message.file.type.startsWith(accepted)) {
+            runtime.warn(spot.kind === 'video' ? 'Drop a video file to replace this video.' : 'Drop an image file to replace this image.')
+            return
+          }
+          store.select(message.target.id)
+          void uploadImage(runtime, message.target.id, spot.path, message.file)
+        }
       }
     }
     // A press anywhere in the admin, outside the rich text toolbar, ends inline editing.

@@ -1,3 +1,4 @@
+import { editableImage } from '../render/editable'
 import type { BlockComponentProps } from '../render/types'
 import { PlaceholderBox } from './placeholder'
 
@@ -47,12 +48,13 @@ export function Image({ props, className, attributes, mode }: BlockComponentProp
   if (!isDoc(doc)) {
     // The upload is not loaded (or not set). Nothing on the site, a placeholder in the editor.
     if (mode !== 'canvas') return null
-    return <PlaceholderBox attributes={attributes} className={className} label="Image" />
+    return <PlaceholderBox attributes={{ ...attributes, ...editableImage(mode, 'image') }} className={className} label="Image" />
   }
   const srcSet = srcSetOf(doc)
   return (
     <img
       {...attributes}
+      {...editableImage(mode, 'image')}
       className={className}
       src={doc.url as string}
       // `sizes="auto"` lets the browser use the rendered width (lazy images); 100vw elsewhere.

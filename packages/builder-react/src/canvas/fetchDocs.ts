@@ -85,3 +85,13 @@ export function fetchListItems(api: string, query: ListQuery, locale?: string | 
     docs.filter((doc) => query.exclude === undefined || String(doc.id) !== String(query.exclude)).slice(0, query.limit),
   )
 }
+
+/**
+ * Drops a document from the cache (every locale) and the list results of its collection, so the
+ * next layout render loads them again. Used when the editor changed a document outside the layout.
+ */
+export function forgetDoc(collection: string, id: string | number) {
+  const suffix = `\u0000${collection}\u0000${id}`
+  for (const key of cache.keys()) if (key.endsWith(suffix)) cache.delete(key)
+  for (const key of listCache.keys()) if (key.split('\u0000')[2] === collection) listCache.delete(key)
+}

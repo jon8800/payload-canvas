@@ -75,6 +75,28 @@ export type RichCommand =
   /** Moves the keyboard focus back into the editor. */
   | { kind: 'focus' }
 
+// ---------------------------------------------------------------------------
+// Images on the canvas
+// ---------------------------------------------------------------------------
+
+/** How an image element shows the upload: an `<img>`, a video file, a video's poster, or a CSS background. */
+export type CanvasImageKind = 'image' | 'video' | 'poster' | 'background'
+
+/** One upload prop shown by an element on the canvas. */
+export type CanvasImageSpot = {
+  /** Prop path of the upload, e.g. "photo", "items.3.image" or "gallery.2" (one value of a hasMany upload). */
+  path: string
+  kind: CanvasImageKind
+  /** The element's box, iframe viewport coordinates. */
+  rect: Rect
+}
+
+/**
+ * The upload props under the pointer, in one block. `spots[0]` is the one on top; the others lie
+ * under it (a video's poster under the video, a background under a photo).
+ */
+export type CanvasImageTarget = { id: string; spots: CanvasImageSpot[] }
+
 export type CanvasToAdmin =
   /** Repeated until the iframe has both `init` and a layout, so a reload never races. */
   | { type: 'ready' }
@@ -123,6 +145,15 @@ export type CanvasToAdmin =
   | { type: 'inlineRefused'; id: string; path: string; reason: 'bound' | 'unsupported'; field?: string }
   /** Thumbnail mode: the picture of a requested section as a data URL, or null with the error. */
   | { type: 'thumbnail'; key: string; url: string | null; width?: number; height?: number; error?: string }
+  /**
+   * The pointer is over an image that shows an upload prop (null: over none). Sent when it changes.
+   * `dropping`: a file is dragged over it (drop to replace).
+   */
+  | { type: 'imageHover'; target: CanvasImageTarget | null; dropping?: boolean }
+  /** A double-click on an image that shows an upload prop: the editor opens the media popover. */
+  | { type: 'imageEdit'; target: CanvasImageTarget }
+  /** A file dropped on an image that shows an upload prop: the editor uploads it and sets it on `target.spots[0]`. */
+  | { type: 'imageDrop'; target: CanvasImageTarget; file: File }
 
 export type AdminToCanvas =
   | { type: 'init'; init: CanvasInit }
@@ -150,6 +181,11 @@ export type AdminToCanvas =
   | { type: 'inlineStart'; id: string; offset?: number }
   /** Ends inline editing (a click outside the canvas, another block selected). */
   | { type: 'inlineStop' }
+  /**
+   * A document changed outside the layout (the editor changed a media document's alt text). The
+   * canvas loads it again.
+   */
+  | { type: 'docChanged'; collection: string; id: string | number }
   /** Rich text: a toolbar command for the current session. */
   | { type: 'inlineCommand'; command: RichCommand }
   /** Thumbnail mode: picture one section. Requests queue up in the iframe. */

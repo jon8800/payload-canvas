@@ -50,6 +50,19 @@ const onDrop = (e: DragEvent) => e.preventDefault()
 const FORMAT_INPUT = /^format/
 
 /**
+ * Elements inside an edited element that show no text (icons, decorative lines): they stay out of
+ * the editing, so the caret skips them and Backspace cannot delete them. Outermost ones only.
+ */
+function decorationsIn(el: HTMLElement): Element[] {
+  const out: Element[] = []
+  for (const child of el.querySelectorAll('*')) {
+    if (child.tagName === 'BR' || out.some((d) => d.contains(child))) continue
+    if (child.tagName === 'svg' || (child.textContent ?? '') === '') out.push(child)
+  }
+  return out
+}
+
+/**
  * Edits a plain text prop in place: the element itself becomes editable. `line` props stay on one
  * line (Enter ends editing, or splits with `onSplit`); `lines` props take line breaks (Enter adds
  * one, Ctrl+Enter ends).
@@ -63,6 +76,8 @@ export function startPlainSession(el: HTMLElement, kind: Exclude<InlineKind, 'ri
   const placeholder = el.querySelector('[data-builder-placeholder]')
   const hint = placeholder?.textContent ?? ''
   if (placeholder) el.replaceChildren()
+  const decorations = decorationsIn(el).filter((d) => !d.hasAttribute('contenteditable'))
+  for (const d of decorations) d.setAttribute('contenteditable', 'false')
 
   el.setAttribute('contenteditable', 'plaintext-only')
   // Browsers without plaintext-only fall back to a normal editable element; paste and format guards still apply.
@@ -188,6 +203,7 @@ export function startPlainSession(el: HTMLElement, kind: Exclude<InlineKind, 'ri
       el.removeEventListener('drop', onDrop)
       if (doc.activeElement === el) el.blur()
       doc.getSelection()?.removeAllRanges()
+      for (const d of decorations) d.removeAttribute('contenteditable')
       restoreDom(el, snapshot)
       return { changed, value }
     },

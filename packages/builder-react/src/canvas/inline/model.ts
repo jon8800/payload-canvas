@@ -2,51 +2,17 @@
 // it is bound to document data, the text an edited element holds, and the layout with one prop
 // held still while it is edited. No DOM globals, so the tests run in Node.
 
-import type { Block, BlockDefinition, Layout } from '@payload-toolkit/builder/core'
+import { fieldAtPropPath, type Block, type BlockDefinition, type DataField, type Layout } from '@payload-toolkit/builder/core'
 import type { InlineKind } from '@payload-toolkit/builder/protocol'
-
-type LooseField = { type?: unknown; name?: unknown; fields?: unknown; tabs?: unknown }
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 
-/** Fields that hold data under their own name. Rows, collapsibles, unnamed groups and unnamed tabs are flattened. */
-function namedFields(fields: unknown): LooseField[] {
-  if (!Array.isArray(fields)) return []
-  const out: LooseField[] = []
-  for (const field of fields as unknown[]) {
-    if (!isObject(field)) continue
-    const named = typeof field.name === 'string' && field.name !== ''
-    if (field.type === 'tabs' && Array.isArray(field.tabs)) {
-      for (const tab of field.tabs as unknown[]) {
-        if (!isObject(tab)) continue
-        if (typeof tab.name === 'string' && tab.name) out.push({ type: 'group', name: tab.name, fields: tab.fields })
-        else out.push(...namedFields(tab.fields))
-      }
-      continue
-    }
-    if (!named && (field.type === 'row' || field.type === 'collapsible' || field.type === 'group')) {
-      out.push(...namedFields(field.fields))
-      continue
-    }
-    if (named) out.push(field)
-  }
-  return out
-}
-
-/** The field a prop path points at ("text", "items.2.text"), or null. Number segments step into array rows. */
-export function fieldAtPath(fields: unknown, path: string): LooseField | null {
-  let list = fields
-  let found: LooseField | null = null
-  for (const segment of path.split('.')) {
-    if (/^\d+$/.test(segment)) {
-      if (found?.type !== 'array') return null
-      continue
-    }
-    found = namedFields(list).find((field) => field.name === segment) ?? null
-    if (!found) return null
-    list = found.fields
-  }
-  return found
+/**
+ * The field a prop path points at ("text", "items.2.text", "paragraphs.1" for one value of a
+ * hasMany field), or null. Number segments step into array rows.
+ */
+export function fieldAtPath(fields: unknown, path: string): DataField | null {
+  return fieldAtPropPath(Array.isArray(fields) ? fields : undefined, path) ?? null
 }
 
 /**
@@ -56,6 +22,8 @@ export function fieldAtPath(fields: unknown, path: string): LooseField | null {
 export function inlineKind(definition: BlockDefinition | undefined, path: string, value: unknown): InlineKind | null {
   if (!definition) return typeof value === 'string' ? 'line' : null
   const field = fieldAtPath(definition.fields, path)
+  // A hasMany text field is edited one value at a time ("tags.2"), never as a whole list.
+  if (field?.hasMany && !/\.\d+$/.test(path)) return null
   if (field?.type === 'text') return 'line'
   if (field?.type === 'textarea') return 'lines'
   if (field?.type === 'richText') return 'rich'

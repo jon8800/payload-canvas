@@ -100,3 +100,34 @@ export function textOf(value: unknown): string | undefined {
   if (typeof value.en === 'string') return value.en
   return Object.values(value).find((v): v is string => typeof v === 'string')
 }
+
+/**
+ * The field a prop path points at: "text", "link.url" (inside a group), "items.2.text" (a field of
+ * an array row) or "photos.1" (one value of a `hasMany` field). Undefined when the path does not
+ * follow the fields. A path that stops at an array (no row number) returns the array field.
+ */
+export function fieldAtPropPath(fields: readonly unknown[] | undefined, path: string): DataField | undefined {
+  let list: readonly unknown[] | undefined = fields
+  let found: DataField | undefined
+  // 'value': the path picked one value of a hasMany field, so nothing may follow.
+  let step: 'name' | 'value' = 'name'
+  let needsRow = false
+  for (const segment of path.split('.')) {
+    if (/^\d+$/.test(segment)) {
+      if (!found || step === 'value') return undefined
+      if (needsRow) {
+        needsRow = false
+        continue
+      }
+      if (!found.hasMany) return undefined
+      step = 'value'
+      continue
+    }
+    if (step === 'value' || needsRow) return undefined
+    found = dataFields(list).find((f) => f.name === segment)
+    if (!found) return undefined
+    list = found.fields
+    needsRow = found.type === 'array'
+  }
+  return found
+}
