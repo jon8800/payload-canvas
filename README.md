@@ -1,4 +1,4 @@
-# payload-toolkit
+# Payload Canvas
 
 A visual website builder for [Payload CMS](https://payloadcms.com) 3. Install it as a plugin in any Payload app, or start from the starter app in this repository.
 
@@ -10,9 +10,8 @@ A visual website builder for [Payload CMS](https://payloadcms.com) 3. Install it
 
 | Package | What it is |
 |---|---|
-| [`@payload-toolkit/builder`](packages/builder/README.md) | The Payload plugin: the full-screen builder, block definitions, the CSS compiler, live editing, the AI assistant, MCP tools. |
-| [`@payload-toolkit/builder-react`](packages/builder-react/README.md) | `RenderLayout` for your site, the default block components, the canvas runtime. |
-| [`create-payload-toolkit`](packages/create-payload-starter/README.md) | A CLI that creates a new project from the starter app. |
+| [`payload-canvas`](packages/payload-canvas/README.md) | The Payload plugin and the React renderer in one package: the full-screen builder, block definitions, the CSS compiler, live editing, the AI assistant, MCP tools, and `RenderLayout` with the default block components and the canvas runtime (`payload-canvas/react`). |
+| [`create-payload-canvas`](packages/create-payload-canvas/README.md) | A CLI that creates a new project from the starter app. |
 
 Requirements: Payload 3.90+, Next.js 16.3+, React 19.2+, Tailwind CSS 4.3+, Node.js 20.9+.
 
@@ -33,29 +32,29 @@ Requirements: Payload 3.90+, Next.js 16.3+, React 19.2+, Tailwind CSS 4.3+, Node
 - **References**: "Used in" lists on media, and delete protection for files a page still uses.
 - **AI assistant** in the editor, with adapters for OpenRouter, Cloudflare, OpenAI-compatible servers and Anthropic, plus image generation.
 - **AI over MCP**: tools for [`payload-mcp-toolkit`](https://www.npmjs.com/package/payload-mcp-toolkit) to list blocks, insert sections and apply edits, with live updates in open editors.
-- **Headless friendly**: the layout is JSON. Render it with `@payload-toolkit/builder-react` or your own code.
+- **Headless friendly**: the layout is JSON. Render it with `payload-canvas/react` or your own code.
 
 ## Quick start
 
 ### Add the builder to your Payload app
 
 ```bash
-pnpm add @payload-toolkit/builder @payload-toolkit/builder-react tailwindcss @tailwindcss/postcss postcss
+pnpm add payload-canvas tailwindcss @tailwindcss/postcss postcss
 ```
 
-Then follow the [install guide](packages/builder/README.md#install): add the plugin, a canvas route and a page route. It takes about ten minutes.
+Then follow the [install guide](packages/payload-canvas/README.md#install): add the plugin, a canvas route and a page route. It takes about ten minutes.
 
 ### Or start a new project from the starter
 
 ```bash
-pnpm create payload-toolkit my-website
+pnpm create payload-canvas my-website
 cd my-website
 pnpm dev
 ```
 
 The CLI copies the starter app, creates a Postgres database, writes `.env`, installs, and can seed demo content. Open http://localhost:3000/admin and create the first user.
 
-Common flags (full list in [`packages/create-payload-starter`](packages/create-payload-starter/README.md)):
+Common flags (full list in [`packages/create-payload-canvas`](packages/create-payload-canvas/README.md)):
 
 | Flag | Meaning |
 |---|---|
@@ -64,11 +63,11 @@ Common flags (full list in [`packages/create-payload-starter`](packages/create-p
 | `--seed` / `--no-seed` | Seed demo content, or not. |
 | `--no-install` | Only create the files. |
 | `--reuse-db` / `--skip-db` | Use a database that already exists / do not touch Postgres. |
-| `--packages <path>` | Pack the builder packages from a checkout of this repo, instead of using the versions on npm. |
+| `--packages <path>` | Pack the `payload-canvas` package from a checkout of this repo, instead of using the version on npm. |
 
 ```bash
 # Non-interactive, for CI and agents
-npx create-payload-toolkit my-website --yes --db-url postgresql://postgres:postgres@localhost:5432/my_website
+npx create-payload-canvas my-website --yes --db-url postgresql://postgres:postgres@localhost:5432/my_website
 ```
 
 The CLI never runs `payload migrate`. Before your first production deploy, run `pnpm payload migrate:create` in your app and commit the files. Migrations belong to the app, not to the plugin.
@@ -80,10 +79,8 @@ payload-toolkit/
   apps/
     starter/                 # Reference app: Payload + Next.js site that uses the builder
   packages/
-    builder/                 # @payload-toolkit/builder: the Payload plugin and admin editor
-    builder-react/           # @payload-toolkit/builder-react: renderer, default blocks, canvas
-    create-payload-starter/  # create-payload-toolkit: CLI that scaffolds the starter
-    shared/                  # deprecated, kept for reference
+    payload-canvas/          # payload-canvas: the Payload plugin, admin editor and React renderer
+    create-payload-canvas/   # create-payload-canvas: CLI that scaffolds the starter
   docs/
     architecture.md          # the design of the plugin
   scripts/
@@ -100,7 +97,7 @@ cp apps/starter/.env.example apps/starter/.env   # set DATABASE_URL and PAYLOAD_
 pnpm --filter payload-starter dev                # http://localhost:3000/admin
 ```
 
-In the repository, the starter compiles the packages from `src` (`transpilePackages`), so edits show without a build step. The schema syncs on `pnpm dev` (Payload's push mode). Do not run `payload migrate` against the development database.
+In the repository, the starter compiles `payload-canvas` from `src` (`transpilePackages`), so edits show without a build step. The schema syncs on `pnpm dev` (Payload's push mode). Do not run `payload migrate` against the development database.
 
 | Command (repo root) | What it does |
 |---|---|
@@ -109,28 +106,26 @@ In the repository, the starter compiles the packages from `src` (`transpilePacka
 | `pnpm test` | Runs the package tests (`node --test`). |
 | `pnpm typecheck` | Type-checks every workspace project. |
 | `pnpm lint` | Runs Oxlint. |
-| `pnpm pack:packages` | Packs the three published packages into `dist-packages/` as `.tgz` files. |
+| `pnpm pack:packages` | Packs the two published packages into `dist-packages/` as `.tgz` files. |
 
 ### Publishing
 
-The packages point their `exports` at `src` for development. `publishConfig` points them at `dist`, and pnpm swaps the fields when it packs or publishes. pnpm also replaces `workspace:*` with the real version. `prepack` runs the build, so a pack or a publish always ships a fresh `dist`.
+The two packages point their `exports` at `src` for development. `publishConfig` points them at `dist`, and pnpm swaps the fields when it packs or publishes. pnpm also replaces `workspace:*` with the real version. `prepack` runs the build, so a pack or a publish always ships a fresh `dist`.
 
 Always publish with **pnpm**, not `npm publish`: only pnpm applies `publishConfig.exports`.
 
 ```bash
-# 1. Check every package: the build runs, and pnpm lists the files it would publish.
-pnpm --filter @payload-toolkit/builder publish --dry-run --no-git-checks
-pnpm --filter @payload-toolkit/builder-react publish --dry-run --no-git-checks
-pnpm --filter create-payload-toolkit publish --dry-run --no-git-checks
+# 1. Check each package: the build runs, and pnpm lists the files it would publish.
+pnpm --filter payload-canvas publish --dry-run --no-git-checks
+pnpm --filter create-payload-canvas publish --dry-run --no-git-checks
 
-# 2. Publish, builder first: builder-react has it as a peer dependency.
+# 2. Publish.
 npm login
-pnpm --filter @payload-toolkit/builder publish
-pnpm --filter @payload-toolkit/builder-react publish
-pnpm --filter create-payload-toolkit publish
+pnpm --filter payload-canvas publish
+pnpm --filter create-payload-canvas publish
 ```
 
-The `@payload-toolkit` scope must exist on npm as an organization (or a user) that you can publish to. Each package has `publishConfig.access: public`.
+Both packages have `publishConfig.access: public`. The names `payload-canvas` and `create-payload-canvas` are unscoped, so you need no npm organization.
 
 The build (`scripts/build-package.mjs`) compiles each file with TypeScript, adds `.js` to relative imports, copies `.scss` files, and checks that `publishConfig.exports` matches `exports`. When you add an entry to `exports`, add the matching `dist` entry to `publishConfig.exports`; the build prints it for you. Test files (`*.test.ts`, `*.test-data.ts`) stay out of `dist`.
 

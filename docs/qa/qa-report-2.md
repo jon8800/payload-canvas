@@ -35,7 +35,7 @@ Screenshots are in `C:\Users\Eugene\AppData\Local\Temp\qa2\`. The scripts that p
   - If you press Escape at once without typing, the joined text survives. Most people keep typing, so they lose text.
   - Reproduced 3 times, with fast and slow typing.
 - **Screenshots:** `19-list-editing.png`, `24-list-merge-slow.png` (canvas "First item", inspector "First itemSecond item")
-- **Likely files:** `packages/builder/src/admin/editor/inline.ts`, the list item join in `packages/builder-react/src/canvas/` (the editing element is not updated after the join).
+- **Likely files:** `packages/payload-canvas/src/admin/editor/inline.ts`, the list item join in `packages/payload-canvas/src/react/canvas/` (the editing element is not updated after the join).
 
 ### M2. Two people can edit Page settings at once, and one edit is lost without a message
 - **Area:** multiplayer, Page settings drawer.
@@ -50,7 +50,7 @@ Screenshots are in `C:\Users\Eugene\AppData\Local\Temp\qa2\`. The scripts that p
   - User 2's autosave gets `409 PATCH /api/pages/189?autosave=true`. The drawer still says "Last saved less than a minute ago" and shows "… renamed U2".
   - The server keeps "… renamed U1". User 2's change is lost, and nothing tells them.
 - **Screenshots:** `78-u2-settings-locked.png` (no lock), `81-u2-stale-save.png` (drawer after the rejected save)
-- **Likely files:** `packages/builder/src/live/fieldsGuard.ts` (sends the 409), `packages/builder/src/admin/editor/topbar/settingsDrawer.tsx` (no handling of the 409, and the lock is not shown for the drawer).
+- **Likely files:** `packages/payload-canvas/src/live/fieldsGuard.ts` (sends the 409), `packages/payload-canvas/src/admin/editor/topbar/settingsDrawer.tsx` (no handling of the 409, and the lock is not shown for the drawer).
 
 ---
 
@@ -63,25 +63,25 @@ Builder and editor:
   - Expected: focus goes to the new block's first field (as report 1, p4, says it was fixed).
   - Actual: focus is on `<body>`. The typed text goes nowhere. After a click-insert from the Blocks tab, focus stays on the library button.
   - Screenshot: `12-after-plus-insert.png`
-  - Files: `packages/builder/src/admin/editor/insert/`, `actions.ts`
+  - Files: `packages/payload-canvas/src/admin/editor/insert/`, `actions.ts`
 - **m2. Undo steps in inspector text fields are unpredictable.**
   - Repro A: in a Menu block, fill 3 labels and 3 URLs, about 0.2 s apart. Press Ctrl+Z once. All six values are undone, and Undo turns grey.
   - Repro B: type " Q1" in a Quote, wait 2.5 s, type " T1" in a Text, wait 2.5 s, press Ctrl+Z. Only the "1" goes. The next Ctrl+Z removes " T".
   - Expected: one undo step per field edit (a pause or a field change starts a new step).
   - Screenshots: `42-menu-after.png`
-  - Files: `packages/builder/src/admin/editor/store.ts` (merge window), `fields/`
+  - Files: `packages/payload-canvas/src/admin/editor/store.ts` (merge window), `fields/`
 - **m3. When two people type in the same field, one person's letters disappear, but the banner says "Changes merge live".**
   - Repro: both users select the same Quote and type in its field at the same time (user 1 "AB", user 2 "ab").
   - Actual: both end with "…ab". User 1's "AB" is gone. The inspector banner says "builder-dev is editing this block. Changes merge live."
   - Last write wins per prop is the documented design, so the problem is the message. Say "Changes to the same field overwrite each other".
   - Screenshot: `77-u2-follow-click.png` (the banner)
-  - File: `packages/builder/src/admin/editor/live/` (presence banner text)
+  - File: `packages/payload-canvas/src/admin/editor/live/` (presence banner text)
 - **m4. Manual zoom stays on when you change the device, and Fluid then shows the wrong breakpoint.**
   - Repro: Desktop, click **Zoom out** twice (33 %). Click **Tablet**, then **Fluid**.
   - Actual: Tablet shows at 33 % with empty space around it. Fluid renders a 2485 px frame (2xl layout) at 33 %, not the 820 px md layout. You must click the zoom chip to get back.
   - Expected: a device button or Fluid resets zoom to Fit.
   - Screenshot: `53-resize-dragging.png` (Tablet at 33 %)
-  - File: `packages/builder/src/admin/editor/Canvas.tsx`
+  - File: `packages/payload-canvas/src/admin/editor/Canvas.tsx`
 - **m5. Version compare shows the whole layout as changed JSON.**
   - Repro: **…** > **Versions** > open an autosave version. "Modified only" is ticked.
   - Actual: the Builder field is two full JSON dumps, hundreds of lines, all highlighted. An editor cannot find the one changed quote.
@@ -92,26 +92,26 @@ Builder and editor:
   - Repro: **…** > **API**.
   - Actual: `http://localhost:3300/api/pages/189?depth=2&draft=false&locale=undefined&trash=false`.
   - Screenshot: `73-api-drawer.png`
-  - File: `packages/builder/src/admin/editor/topbar/screens/`
+  - File: `packages/payload-canvas/src/admin/editor/topbar/screens/`
 - **m7. A post that renders through a template opens in the builder as "This page is empty".**
   - Repro: open `/admin/builder/posts/35` ("Designing with blocks").
   - Actual: empty canvas and "This page is empty. Add a section or a block from the Add panel." Nothing says that the site shows this post through "Post template", or what happens if you add blocks here.
   - Expected: "This post uses Post template" with a link to edit the template, and one line on how own blocks relate to the template.
   - Screenshot: `112-builder-posts.png`
-  - Files: `packages/builder/src/admin/editor/Canvas.tsx` (empty state), `Outline.tsx`
+  - Files: `packages/payload-canvas/src/admin/editor/Canvas.tsx` (empty state), `Outline.tsx`
 - **m8. The "Paste inside or after" menu item is enabled when nothing is copied.**
   - Repro: in a new browser session, right-click a block. Click **Paste inside or after**.
   - Actual: nothing happens and no message shows.
   - Expected: the item is disabled, or a toast says "Nothing to paste. Copy a block first."
-  - File: `packages/builder/src/admin/editor/menu/`
+  - File: `packages/payload-canvas/src/admin/editor/menu/`
 - **m9. Escape during a drag also clears the selection.**
   - Repro: select a block, drag its grip, press Escape before you release.
   - Actual: the drag cancels and the block is no longer selected. The action bar is gone.
   - Screenshot: `60-smooth-cancel.png`
-  - File: `packages/builder/src/admin/editor/shortcuts.ts`
+  - File: `packages/payload-canvas/src/admin/editor/shortcuts.ts`
 - **m10. An intermittent hydration error in the builder.**
   - Seen twice in about 30 builder loads: "Hydration failed because the server rendered HTML didn't match the client". Both times the Sections tab had been opened (the thumbnail iframe loads then). Not reproduced on demand, so the component is not known.
-  - Files: start with `packages/builder-react/src/canvas/thumbnail/` and the `?mode=thumbnail` canvas route.
+  - Files: start with `packages/payload-canvas/src/react/canvas/thumbnail/` and the `?mode=thumbnail` canvas route.
 
 AI assistant (3 real requests and 1 real image):
 
@@ -120,7 +120,7 @@ AI assistant (3 real requests and 1 real image):
   - Actual: the reply lists a red step: `Could not insert FAQ: Parent block "__PAGE_ROOT__" not found. Use parentId null for the page root, or a block id from getLayout.` The model then retried and succeeded.
   - Expected: retries that succeed are hidden, or shown as "Retried". Commit fa6445d ("root parent ids from models") does not cover `__PAGE_ROOT__`.
   - Screenshot: `107-ai-stopped.png` (shows the first reply)
-  - Files: `packages/builder/src/ai/` (parent id repair), `admin/editor/assistant/`
+  - Files: `packages/payload-canvas/src/ai/` (parent id repair), `admin/editor/assistant/`
 - **m12. The assistant's changes happen off screen.**
   - The panel says "The assistant edits this page on the canvas as you watch". The FAQ was added at the end and the image was set lower on the page, but the canvas stayed at the top both times.
   - Expected: the canvas scrolls to each changed block, or offers "Show".
@@ -136,7 +136,7 @@ Accessibility:
   - The Revert confirmation and the "Save as section" form have no `role="dialog"` or `alertdialog`.
   - The upload, array and select controls come from Payload, so some fixes may need wrappers or labels.
   - Files: `fields/renderField.tsx`, `menu/` confirmations, `sections/` save dialog
-- **m16. Two collaborators both show as "BD".** Each user sees the other as "BD", which is also their own initials. The name is only in the tooltip. Report 1 m10 says "BD, BD2"; that did not show here with two people. File: `packages/builder/src/admin/editor/live/PresenceUI.tsx`.
+- **m16. Two collaborators both show as "BD".** Each user sees the other as "BD", which is also their own initials. The name is only in the tooltip. Report 1 m10 says "BD, BD2"; that did not show here with two people. File: `packages/payload-canvas/src/admin/editor/live/PresenceUI.tsx`.
 - **m17. Undo after a list editing session is several steps.** Report 1 and the architecture say one editing session is one undo step. After typing in a list, pressing Enter twice and Backspace, one Ctrl+Z after Escape undid only the last Backspace. Screenshot: `19-list-editing.png`. File: `inline.ts` (`mergeWithin` does not cover the structure operations of a list).
 
 ---
@@ -217,7 +217,7 @@ Accessibility:
 ### Site items (agent D, 2026-10-06)
 
 - **Site findings in this report:** none were open. The site passed this round (see "What worked well").
-- **p8** (Field block rich text without styling): not changed. The post template's Field block already uses `prose prose-lg`; a Field block added without classes shows plain text. Styling it by default belongs in `packages/builder-react/src/components/Field.tsx`, outside the site files.
+- **p8** (Field block rich text without styling): not changed. The post template's Field block already uses `prose prose-lg`; a Field block added without classes shows plain text. Styling it by default belongs in `packages/payload-canvas/src/react/components/Field.tsx`, outside the site files.
 - Site items from `design-critique-2.md` (hero first paint, help texts, images, post page, button and form mismatches): see its "Fix status" section.
 
 ### Editor items (agent B, 2026-10-06)
@@ -277,5 +277,5 @@ Tested in Chrome with real keys and mouse (scripts in `%TEMP%\fix3a\`). All "ZZ 
 
 ### Leftovers (agent E, 2026-10-06)
 
-- **p8** (Field block rich text without styling): fixed. A Field block with rich text and no `prose` class now gets `prose max-w-none` (`FIELD_CLASS_MAP` in `blocks/defaults.ts`, listed in the field block's `classes`; used in `builder-react/src/components/Field.tsx`). A block that has a `prose` class keeps its own. Unit-tested in `templates.test.ts`.
+- **p8** (Field block rich text without styling): fixed. A Field block with rich text and no `prose` class now gets `prose max-w-none` (`FIELD_CLASS_MAP` in `blocks/defaults.ts`, listed in the field block's `classes`; used in `payload-canvas/src/react/components/Field.tsx`). A block that has a `prose` class keeps its own. Unit-tested in `templates.test.ts`.
 - **p3** (name chips cover text): fixed in `Overlay.tsx` and `editor.scss`. A tag sits above the block when there is room (as before). When there is none, it now sits under the block (`builder-editor__tag--below`) instead of inside, so it no longer covers the block's first line. It stays inside only when the bottom edge is out of view or the action bar is under the block (narrow block); a block scrolled up past the view keeps its inside tag at the top of the view. Checked in the browser: the top heading's tag sits under the heading (hover, selection, collaborator and "Editing text" tags share the logic). Not changed: a tag above a block still overlaps the bottom 20 px of the block before it when the two touch. Screenshots: `%TEMP%ix3e\overlay-*.png`.

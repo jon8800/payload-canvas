@@ -39,8 +39,8 @@ Surfaces reviewed: top bar, Add panel (Blocks and Sections), outline, canvas ove
 
 **Deterministic scan.** The CLI found 2 warnings in editor code, and 0 in `apps/starter/src`:
 
-- `layout-transition` at `packages/builder/src/admin/editor/editor.scss:1272` (`transition: width`). This is real but low impact. Animating `width` forces layout on every frame. Use `transform` or remove the transition.
-- `side-tab` at `packages/builder/src/admin/editor/templates/templates.scss:209` (a 2px colored left border on the bound-field sample). This is a false positive in intent: it marks a bound value, it is not a decorative card stripe. It does duplicate meaning, because the binding chip above it already says "Title · title".
+- `layout-transition` at `packages/payload-canvas/src/admin/editor/editor.scss:1272` (`transition: width`). This is real but low impact. Animating `width` forces layout on every frame. Use `transform` or remove the transition.
+- `side-tab` at `packages/payload-canvas/src/admin/editor/templates/templates.scss:209` (a 2px colored left border on the bound-field sample). This is a false positive in intent: it marks a bound value, it is not a decorative card stripe. It does duplicate meaning, because the binding chip above it already says "Title · title".
 
 The overlay ran on the site only, see Part 2.
 
@@ -109,7 +109,7 @@ The editor works and looks native. The problem is volume. Every panel shows ever
 - "Stack", "Grid", "Spacer", "Field" and "Collection list" sit in the Add panel with no descriptions.
 - The heading Level help text says `"1" renders <h1>`. Jordan does not know HTML.
 - The Level select has a ✕ that clears the level to nothing.
-- The empty canvas says "Drag a block here from the library." (`builder-react/src/canvas/BuilderCanvas.tsx:295`). No panel is called "library", and the canvas offers no sections or AI as a start.
+- The empty canvas says "Drag a block here from the library." (`payload-canvas/src/react/canvas/BuilderCanvas.tsx:295`). No panel is called "library", and the canvas offers no sections or AI as a start.
 - "Templates" and "Template Parts" are two separate sidebar entries in the admin.
 
 **Sam (keyboard and screen reader).**

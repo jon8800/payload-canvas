@@ -1,9 +1,9 @@
 ---
-name: payload-toolkit
+name: payload-canvas
 last_updated: 2026-05-04
 ---
 
-# payload-toolkit Strategy
+# Payload Canvas Strategy
 
 ## Target problem
 
@@ -11,15 +11,15 @@ Every new Payload-based website project costs developers days-to-weeks re-wiring
 
 ## Our approach
 
-Win on the block model — composable atomic blocks that nest into anything, not a catalog of pre-built sections. Flexibility comes from composition, so the toolkit stays small while the surface area of what you can build stays large; visual styling, theming, and dynamic binding all serve this bet rather than competing with it.
+Win on the block model — composable atomic blocks that nest into anything, not a catalog of pre-built sections. Flexibility comes from composition, so the product stays small while the surface area of what you can build stays large; visual styling, theming, and dynamic binding all serve this bet rather than competing with it.
 
 ## Who it's for
 
-**Primary:** Freelance developers and small agencies building marketing/content websites for clients (typically 3-10 sites a year). They're hiring payload-toolkit to skip the 1-2 week per-project setup phase, deliver visible work on day one, and hand off an admin that non-technical clients can actually use. The author is one of them — dogfooding is constant.
+**Primary:** Freelance developers and small agencies building marketing/content websites for clients (typically 3-10 sites a year). They are hiring Payload Canvas to skip the 1-2 week per-project setup phase, deliver visible work on day one, and hand off an admin that non-technical clients can actually use. The author is one of them — dogfooding is constant.
 
 ## Key metrics
 
-- **Setup time per new project** — wall-clock from `create-payload-starter` to first content-bearing page deployed. Tracked by per-project notes. Should trend down or stay flat as feature surface grows.
+- **Setup time per new project** — wall-clock from `create-payload-canvas` to first content-bearing page deployed. Tracked by per-project notes. Should trend down or stay flat as feature surface grows.
 - **Composability holds up** — per-project tally of how many times a custom block had to be written instead of composed from existing atoms. Should trend toward zero. This is the load-bearing signal for the approach; if it stays high, the atomic-blocks bet isn't paying off.
 - **Non-developer admin usage** — qualitative post-handoff check: are clients editing content themselves, or emailing the developer to do it? Captured per-project in a handoff retro.
 
@@ -29,7 +29,7 @@ Vanity metrics (GitHub stars, npm downloads) explicitly not tracked. Open-sourci
 
 ### Block system & composition
 
-Atomic blocks, nested composition, JSON storage, the `create-payload-starter` CLI, demo content seeding. Scaffolding/DX folds in here as the delivery mechanism.
+Atomic blocks, nested composition, JSON storage, the `create-payload-canvas` CLI, demo content seeding. Scaffolding/DX folds in here as the delivery mechanism.
 
 _Why it serves the approach:_ this *is* the approach made concrete; everything else exists to make this bet pay off.
 

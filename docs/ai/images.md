@@ -11,8 +11,8 @@ The builder can make new images from a text description. It saves each image in 
 Image generation has its own adapter, next to the chat adapter:
 
 ```ts
-import { openRouterAdapter } from '@payload-toolkit/builder/ai/openrouter'
-import { openRouterImageAdapter } from '@payload-toolkit/builder/ai/images/openrouter'
+import { openRouterAdapter } from 'payload-canvas/ai/openrouter'
+import { openRouterImageAdapter } from 'payload-canvas/ai/images/openrouter'
 
 websiteBuilder({
   // ...
@@ -42,10 +42,10 @@ The plugin does not reuse the chat adapter for images, even when its provider se
 
 | Adapter | Import | Default model | What it is |
 |---|---|---|---|
-| `openRouterImageAdapter` | `@payload-toolkit/builder/ai/images/openrouter` | `black-forest-labs/flux.2-klein-4b` | Every image model on OpenRouter with one key. Easiest start. |
-| `openAIImageAdapter` | `@payload-toolkit/builder/ai/images/openai` | `gpt-image-2.5-flare` | The OpenAI Images API, and servers that copy it. |
-| `cloudflareWorkersAIImageAdapter` | `@payload-toolkit/builder/ai/images/cloudflare-workers-ai` | `@cf/black-forest-labs/flux-2-klein-4b` | Image models on Cloudflare's network. |
-| `fakeImageAdapter` | `@payload-toolkit/builder/ai/images/fake` | `gradient` | Draws a color gradient PNG locally. For tests and demos. No network, no cost. |
+| `openRouterImageAdapter` | `payload-canvas/ai/images/openrouter` | `black-forest-labs/flux.2-klein-4b` | Every image model on OpenRouter with one key. Easiest start. |
+| `openAIImageAdapter` | `payload-canvas/ai/images/openai` | `gpt-image-2.5-flare` | The OpenAI Images API, and servers that copy it. |
+| `cloudflareWorkersAIImageAdapter` | `payload-canvas/ai/images/cloudflare-workers-ai` | `@cf/black-forest-labs/flux-2-klein-4b` | Image models on Cloudflare's network. |
+| `fakeImageAdapter` | `payload-canvas/ai/images/fake` | `gradient` | Draws a color gradient PNG locally. For tests and demos. No network, no cost. |
 
 Every built-in adapter also takes `headers`, `timeoutMs` (default 120 seconds), `maxRetries` (default 1, for 408, 429, 5xx and network errors) and `retryDelayMs`.
 
@@ -187,10 +187,10 @@ The tool runs as the API key's user or the signed-in OAuth user. The key needs `
 
 ## Write your own adapter
 
-An image adapter is a plain object of type `AiImageAdapter` from `@payload-toolkit/builder/ai`:
+An image adapter is a plain object of type `AiImageAdapter` from `payload-canvas/ai`:
 
 ```ts
-import { AiImageError, toGeneratedImage, type AiImageAdapter } from '@payload-toolkit/builder/ai'
+import { AiImageError, toGeneratedImage, type AiImageAdapter } from 'payload-canvas/ai'
 
 export function myImageAdapter({ apiKey }: { apiKey?: string }): AiImageAdapter {
   return {

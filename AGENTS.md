@@ -1,13 +1,13 @@
-# payload-toolkit
+# Payload Canvas
 
-A website builder plugin for Payload CMS v3: composable layout blocks, a visual drag-drop page builder with a Tailwind styles panel, templates with data binding, and AI page building over MCP with live updates. Turborepo monorepo with `apps/starter` (the Payload + Next.js app), `packages/create-payload-starter` (CLI scaffolder), and `packages/shared` (utilities).
+A website builder plugin for Payload CMS v3: composable layout blocks, a visual drag-drop page builder with a Tailwind styles panel, templates with data binding, and AI page building over MCP with live updates. Turborepo monorepo with `apps/starter` (the Payload + Next.js app), `packages/payload-canvas` (the plugin and the React renderer, npm name `payload-canvas`), and `packages/create-payload-canvas` (CLI scaffolder).
 
 ## Direction
 
 - The code so far was written by weaker AI models. Much of it is clunky or half working. **Nothing here is sacred** — any part can be ripped out, replaced, or redesigned. Do not preserve a pattern only because it exists.
 - Goal: a robust, flexible builder that works with **any collection shape and any fields**, likely shipped as a Payload plugin (with the starter as a reference app). Inspiration: Shopify theme customizer, Elementor, Webflow.
 - Later: make it agentic — an AI must be able to read the data model and the available blocks and build pages (MCP and/or skills). The owner's MCP plugin lives at `C:\Projects\sandbox\payload-plugins\payload-mcp-toolkit`.
-- `docs/architecture.md` is the design. Read it before changing any part of the plugin. `packages/builder/README.md` is the user guide.
+- `docs/architecture.md` is the design. Read it before changing any part of the plugin. `packages/payload-canvas/README.md` is the user guide.
 - `STRATEGY.md` holds the earlier product strategy. It predates the plugin direction and will be revised.
 
 ## Tech stack
@@ -37,11 +37,11 @@ A website builder plugin for Payload CMS v3: composable layout blocks, a visual 
 ## Repository layout
 
 ```
-payload-toolkit/
+payload-toolkit/                 # the repo folder
   apps/
     starter/                 # Payload CMS + Next.js app, admin at /admin; reference app for the plugin
   packages/
-    builder/                 # @payload-toolkit/builder — the Payload plugin
+    payload-canvas/          # payload-canvas — the Payload plugin and the React renderer
       src/core/              #   pure: types (the contract), operations + inverse, tree, drop targets, schema, validation
       src/blocks/            #   defaultBlocks() (client-safe entry `/blocks`), linkField()
       src/live/              #   live editing: event bus, SSE events + operations endpoints
@@ -50,15 +50,17 @@ payload-toolkit/
       src/protocol/          #   postMessage protocol between editor and canvas iframe
       src/admin/             #   editor UI (Payload-native, SCSS, no Tailwind); server/ holds the full-screen view (RSC)
       src/plugin/            #   websiteBuilder(): fields, save hook, builder view + tab, templates collection, endpoints
-    builder-react/           # @payload-toolkit/builder-react — RenderLayout, block components, canvas runtime (inline editing), /server loadTemplate + ThemeStyle
-    create-payload-starter/  # CLI scaffolder
-    shared/                  # DB creation and env helpers for the CLI
+      src/ai/                #   AI assistant loop, chat and image adapters
+      src/theme/             #   the Theme global and its CSS output
+      src/migrate/           #   migrating existing Payload `blocks` fields into layouts
+      src/react/             #   `payload-canvas/react`: RenderLayout, block components, canvas runtime (inline editing); react/server: loadTemplate + ThemeStyle
+    create-payload-canvas/   # CLI scaffolder
   docs/architecture.md       # Target design — read before building
   STRATEGY.md                # Earlier product strategy (to be revised)
   AGENTS.md                  # This file (CLAUDE.md is a stub that imports it)
 ```
 
-In the repo the starter compiles package source via `transpilePackages`; published packages ship `dist/` (see `packages/builder/README.md`). `packages/builder/src/core/types.ts` is the shared contract — change it deliberately.
+In the repo the starter compiles the package source via `transpilePackages: ['payload-canvas']`; the published package ships `dist/` (see `packages/payload-canvas/README.md`). `packages/payload-canvas/src/core/types.ts` is the shared contract — change it deliberately.
 
 Builder rules that are easy to break:
 
@@ -70,7 +72,7 @@ Builder rules that are easy to break:
 - `websiteBuilder()` must be the last plugin, so the layout field stays top-level.
 - Block components receive only plain data (links arrive pre-resolved), so custom blocks may be client components. Never pass functions as component props.
 - Generated layout CSS is scoped to block elements (`.flex:where(.builder-css)`); `RenderLayout` adds `builder-css` to every block's `className`. App components need no `classes` list (the app's own CSS covers them). Only a component from a package the app's CSS does not scan lists its classes in `classes` and puts `builder-css` (`BUILDER_CSS_CLASS`) on those elements.
-- Exactly one copy of `@payloadcms/ui` / `next` may be installed. After any dependency change, check that `readlink -f packages/*/node_modules/@payloadcms/ui apps/starter/node_modules/@payloadcms/ui` all point to one `.pnpm` folder. The root `@babel/core` + `babel-plugin-macros` devDependencies exist only for this.
+- Exactly one copy of `@payloadcms/ui` / `next` may be installed. After any dependency change, check that `readlink -f packages/payload-canvas/node_modules/@payloadcms/ui apps/starter/node_modules/@payloadcms/ui` all point to one `.pnpm` folder. The root `@babel/core` + `babel-plugin-macros` devDependencies exist only for this.
 - If Turbopack reports "Module not found" for a file that exists (after renames), restart the dev server.
 
 `apps/starter/AGENTS.md` and `apps/starter/CLAUDE.md` are written by `next dev` itself. Commit them; do not edit them.
@@ -79,16 +81,16 @@ Key places in `apps/starter/src/`:
 
 - `builder.ts` — the blocks list (default blocks + the custom `form` block), shared by site and canvas
 - `data/sections/` — ready-made sections (editor library + seed)
-- `components/BuilderContent.tsx` — site rendering. The theme comes from the plugin: `websiteBuilder({ theme })` and `<ThemeStyle>` from `@payload-toolkit/builder-react/server`
+- `components/BuilderContent.tsx` — site rendering. The theme comes from the plugin: `websiteBuilder({ theme })` and `<ThemeStyle>` from `payload-canvas/react/server`
 - `app/(builder-canvas)/` — the canvas iframe route
 - `globals/` — SiteSettings
 - `proxy.ts` — redirects and the `x-pathname` request header
 
-The editor opens full screen at `/admin/builder/:collection/:id` (a root admin view without Payload's nav; `packages/builder/src/admin/server/BuilderView.tsx`). The document's Builder tab and the layout field link there. Publish, unpublish and revert are live endpoints (`packages/builder/src/live/document.ts`); the top bar is `packages/builder/src/admin/editor/topbar/`.
+The editor opens full screen at `/admin/builder/:collection/:id` (a root admin view without Payload's nav; `packages/payload-canvas/src/admin/server/BuilderView.tsx`). The document's Builder tab and the layout field link there. Publish, unpublish and revert are live endpoints (`packages/payload-canvas/src/live/document.ts`); the top bar is `packages/payload-canvas/src/admin/editor/topbar/`.
 
 ## Commands
 
-In `packages/builder` and `packages/builder-react`: `pnpm test` (node --test), `pnpm typecheck`, `pnpm lint`.
+In `packages/payload-canvas`: `pnpm test` (node --test), `pnpm typecheck`, `pnpm lint`.
 
 Run from `apps/starter/`:
 
@@ -103,7 +105,7 @@ Local DB: Postgres on `localhost:5432`, database `payload_toolkit_dev` (see `app
 
 ## Current status
 
-- **Done:** release 0.1.0 prepared (not published: `pnpm --filter <pkg> publish`, guarded by `scripts/check-publish.mjs`); the plugin with 16 default blocks; the full-screen builder view with one top bar (title rename, status, save state, preview, page settings drawer, publish / unpublish / revert); the visual editor (outline, canvas with zoom and drag-drop, Payload-native inspector, Webflow-like Styles panel over Tailwind classes, sections library, copy/paste, undo); inline text editing on the canvas (plain and rich text); the Theme global in the plugin; generated CSS; templates, data binding, Field and Collection list blocks; multiplayer over SSE (Payload's document lock stays on for non-layout fields); a "+" between blocks on the canvas with an insert picker; saved sections ("Save as section…", `builder-sections` collection, in the library, MCP and the assistant); real section thumbnails (hidden `?mode=thumbnail` canvas, cached in IndexedDB); MCP tools for `payload-mcp-toolkit` (OAuth sign-in on in the starter); the AI assistant panel (`src/ai/` provider-agnostic loop over Payload-style adapters: OpenRouter, Cloudflare Gateway / Workers AI, OpenAI-compatible, Anthropic, fake; `src/admin/editor/assistant/` UI); AI image generation as a separate image adapter (`ai.images`, `generateImage` tool for the assistant and MCP, Generate action on image fields); existing Payload `blocks` configs as builder blocks (`fromPayloadBlocks`, `fromPayloadComponent`, `migrateBlocksField`); server-rendered blocks on the canvas (`createCanvasServer`); Payload field validate/hooks/access on block props; localization (props mode, per-block `locales`); references and "Used in"; the editor's left panel as Layers / Blocks / Sections tabs, resizable panels and canvas, Base UI selects and sliders in `admin/editor/ui/`; animations (`block.motion`: entrance with stagger, hover, press, scroll, loop; the inspector's Motion tab with Preview and a "Play animations" canvas toggle; the runtime in `builder-react/src/motion/` on the `motion` package, loaded only on pages with motion); the starter app with a demo seed.
+- **Done:** release 0.1.0 prepared (not published: `pnpm --filter <pkg> publish`, guarded by `scripts/check-publish.mjs`); the plugin with 16 default blocks; the full-screen builder view with one top bar (title rename, status, save state, preview, page settings drawer, publish / unpublish / revert); the visual editor (outline, canvas with zoom and drag-drop, Payload-native inspector, Webflow-like Styles panel over Tailwind classes, sections library, copy/paste, undo); inline text editing on the canvas (plain and rich text); the Theme global in the plugin; generated CSS; templates, data binding, Field and Collection list blocks; multiplayer over SSE (Payload's document lock stays on for non-layout fields); a "+" between blocks on the canvas with an insert picker; saved sections ("Save as section…", `builder-sections` collection, in the library, MCP and the assistant); real section thumbnails (hidden `?mode=thumbnail` canvas, cached in IndexedDB); MCP tools for `payload-mcp-toolkit` (OAuth sign-in on in the starter); the AI assistant panel (`src/ai/` provider-agnostic loop over Payload-style adapters: OpenRouter, Cloudflare Gateway / Workers AI, OpenAI-compatible, Anthropic, fake; `src/admin/editor/assistant/` UI); AI image generation as a separate image adapter (`ai.images`, `generateImage` tool for the assistant and MCP, Generate action on image fields); existing Payload `blocks` configs as builder blocks (`fromPayloadBlocks`, `fromPayloadComponent`, `migrateBlocksField`); server-rendered blocks on the canvas (`createCanvasServer`); Payload field validate/hooks/access on block props; localization (props mode, per-block `locales`); references and "Used in"; the editor's left panel as Layers / Blocks / Sections tabs, resizable panels and canvas, Base UI selects and sliders in `admin/editor/ui/`; animations (`block.motion`: entrance with stagger, hover, press, scroll, loop; the inspector's Motion tab with Preview and a "Play animations" canvas toggle; the runtime in `payload-canvas/src/react/motion/` on the `motion` package, loaded only on pages with motion); the starter app with a demo seed.
 - **AI testing without a key:** set `BUILDER_AI_FAKE=1` in `apps/starter/.env` (dev only) for a scripted fake model. Remove it afterwards.
 - **Next:** re-seed the shared DB so the demo pages get the sections' motion. Multiplayer runs in one server process only (see docs/architecture.md section 12, "Limits").
 
