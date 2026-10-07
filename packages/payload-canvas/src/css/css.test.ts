@@ -213,7 +213,7 @@ describe('getStyleTokens', () => {
     assert.deepEqual(fallback.classList, [])
   })
 
-  test('caches per entry content: a cache hit is fast', async () => {
+  test('caches per entry content: a cache hit returns the same object', async () => {
     clearCssCache()
     let t0 = performance.now()
     const first = await getStyleTokens(options)
@@ -222,7 +222,8 @@ describe('getStyleTokens', () => {
     const second = await getStyleTokens(options)
     const hit = performance.now() - t0
     assert.equal(second, first, 'same cached object')
-    assert.ok(hit < 10, `cache hit took ${hit.toFixed(1)} ms`)
+    // Relative, not a fixed limit: CI machines are slow, but a hit never compiles again.
+    assert.ok(hit < cold, `cache hit took ${hit.toFixed(1)} ms, cold ${cold.toFixed(1)} ms`)
     console.log(`getStyleTokens: cold ${cold.toFixed(1)} ms, cache hit ${hit.toFixed(2)} ms`)
   })
 })
