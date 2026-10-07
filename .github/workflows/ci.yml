@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TURBO_TELEMETRY_DISABLED: 1
+
+jobs:
+  packages:
+    name: Packages (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Node 20 is end-of-life, and its test runner does not expand the glob in `pnpm test`.
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v5
+
+      # No version here: the action reads `packageManager` from package.json.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm exec turbo run test typecheck lint build --filter=./packages/*
+
+  starter:
+    name: Starter app (Node 24)
+    runs-on: ubuntu-latest
+    # `next build` prerenders pages that read from Payload, so the build needs a database with the
+    # schema. This throwaway Postgres lives only for the job. The values are placeholders, not secrets.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      PAYLOAD_SECRET: ci-build-only
+      NEXT_PUBLIC_SERVER_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm exec turbo run typecheck lint --filter=payload-starter
+
+      # Not in production mode, so Payload pushes the schema first. Then the seed writes the demo
+      # pages, which `next build` prerenders: a smoke test of the plugin inside a real app.
+      - run: pnpm --filter payload-starter seed:demo
+
+      # --env-mode=loose passes the variables above through turbo. Strict mode drops every variable
+      # that turbo.json does not list.
+      - run: pnpm exec turbo run build --filter=payload-starter --env-mode=loose

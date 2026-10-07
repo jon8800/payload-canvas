@@ -8,7 +8,8 @@
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
-    "pack:packages": "pnpm --filter payload-canvas --filter create-payload-canvas exec pnpm pack --pack-destination ../../dist-packages"
+    "pack:packages": "pnpm --filter ./packages/payload-canvas --filter ./packages/create-payload-canvas exec pnpm pack --pack-destination ../../dist-packages",
+    "release:dry": "node -e \"require('node:fs').rmSync('dist-packages',{recursive:true,force:true})\" && pnpm pack:packages && node scripts/publish.mjs --dry-run dist-packages"
   },
   "devDependencies": {
     "turbo": "^2.11.7",

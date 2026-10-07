@@ -1,0 +1,57 @@
+name: Publish to npm
+
+# Runs when a version tag (v0.2.0) is pushed. See docs/releasing.md.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+env:
+  TURBO_TELEMETRY_DISABLED: 1
+
+jobs:
+  publish:
+    if: github.repository == 'jon8800/payload-canvas'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm exec turbo run test typecheck lint --filter=./packages/*
+
+      # `pnpm pack` runs prepack (the build) and applies publishConfig, so the packed
+      # package.json points at dist/. The tarballs go to dist-packages/.
+      - name: Pack
+        run: pnpm pack:packages
+
+      # On a tag run, every package version must equal the tag (v0.2.0 -> 0.2.0).
+      # A manual run from a branch publishes the versions in package.json.
+      - name: Dry run
+        env:
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: node scripts/publish.mjs --dry-run ${TAG:+--expect-version "${TAG#v}"} dist-packages
+
+      # Publishes with a raw authenticated PUT (see scripts/publish.mjs). `npm publish` returns 403
+      # on this account: security-key-only 2FA collides with the CLI's OTP flow. NPM_TOKEN is a
+      # granular token with "bypass 2FA". Versions that are already on npm are skipped.
+      - name: Publish
+        env:
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: node scripts/publish.mjs ${TAG:+--expect-version "${TAG#v}"} dist-packages
