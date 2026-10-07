@@ -114,7 +114,7 @@ export async function resolveOptions(): Promise<Options | null> {
     console.log(HELP)
     return null
   }
-  p.intro('Create Payload Toolkit')
+  p.intro('Create Payload Canvas')
 
   // Without a terminal nobody can answer a prompt, so use the defaults.
   const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY)
