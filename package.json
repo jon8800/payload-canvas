@@ -1,5 +1,5 @@
 {
-  "name": "payload-toolkit",
+  "name": "payload-canvas",
   "private": true,
   "scripts": {
     "build": "turbo run build",
@@ -8,7 +8,7 @@
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
-    "pack:packages": "pnpm --filter @payload-toolkit/builder --filter @payload-toolkit/builder-react --filter create-payload-toolkit exec pnpm pack --pack-destination ../../dist-packages"
+    "pack:packages": "pnpm --filter payload-canvas --filter create-payload-toolkit exec pnpm pack --pack-destination ../../dist-packages"
   },
   "devDependencies": {
     "turbo": "^2.11.7",

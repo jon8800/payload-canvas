@@ -31,12 +31,12 @@ import { MetaTitleComponent as MetaTitleComponent_a8a977ebc872c5d5ea7ee689724c08
 import { MetaDescriptionComponent as MetaDescriptionComponent_a8a977ebc872c5d5ea7ee689724c0860 } from '@payloadcms/plugin-seo/client'
 import { MetaImageComponent as MetaImageComponent_a8a977ebc872c5d5ea7ee689724c0860 } from '@payloadcms/plugin-seo/client'
 import { PreviewComponent as PreviewComponent_a8a977ebc872c5d5ea7ee689724c0860 } from '@payloadcms/plugin-seo/client'
-import { LayoutField as LayoutField_4264ddaffcf8eeec506364d4835aed4d } from '@payload-toolkit/builder/client'
-import { LayoutDiff as LayoutDiff_c0c1af4cd1961baf9cba09efadb7433a } from '@payload-toolkit/builder/rsc'
-import { NoDiff as NoDiff_c0c1af4cd1961baf9cba09efadb7433a } from '@payload-toolkit/builder/rsc'
-import { PublishButton as PublishButton_4264ddaffcf8eeec506364d4835aed4d } from '@payload-toolkit/builder/client'
-import { BuilderRedirect as BuilderRedirect_c0c1af4cd1961baf9cba09efadb7433a } from '@payload-toolkit/builder/rsc'
-import { BuilderTab as BuilderTab_4264ddaffcf8eeec506364d4835aed4d } from '@payload-toolkit/builder/client'
+import { LayoutField as LayoutField_1611a9327f20600aee6a9d537ba4315b } from 'payload-canvas/client'
+import { LayoutDiff as LayoutDiff_57c6923ff8049349bee2a220c5ac4c2a } from 'payload-canvas/rsc'
+import { NoDiff as NoDiff_57c6923ff8049349bee2a220c5ac4c2a } from 'payload-canvas/rsc'
+import { PublishButton as PublishButton_1611a9327f20600aee6a9d537ba4315b } from 'payload-canvas/client'
+import { BuilderRedirect as BuilderRedirect_57c6923ff8049349bee2a220c5ac4c2a } from 'payload-canvas/rsc'
+import { BuilderTab as BuilderTab_1611a9327f20600aee6a9d537ba4315b } from 'payload-canvas/client'
 import { FormatField as FormatField_cdf7e044479f899a31f804427d568b36 } from '@payloadcms/plugin-import-export/rsc'
 import { LimitField as LimitField_cdf7e044479f899a31f804427d568b36 } from '@payloadcms/plugin-import-export/rsc'
 import { Page as Page_cdf7e044479f899a31f804427d568b36 } from '@payloadcms/plugin-import-export/rsc'
@@ -53,7 +53,7 @@ import { CollectionScopesMatrix as CollectionScopesMatrix_60f30f580e97936338e112
 import { GlobalScopesMatrix as GlobalScopesMatrix_60f30f580e97936338e112b8b2cc7161 } from 'payload-mcp-toolkit/client'
 import { LinkToDoc as LinkToDoc_aead06e4cbf6b2620c5c51c9ab283634 } from '@payloadcms/plugin-search/client'
 import { ReindexButton as ReindexButton_aead06e4cbf6b2620c5c51c9ab283634 } from '@payloadcms/plugin-search/client'
-import { TemplateDefaultCell as TemplateDefaultCell_4264ddaffcf8eeec506364d4835aed4d } from '@payload-toolkit/builder/client'
+import { TemplateDefaultCell as TemplateDefaultCell_1611a9327f20600aee6a9d537ba4315b } from 'payload-canvas/client'
 import { FolderTypeField as FolderTypeField_2b8867833a34864a02ddf429b0728a40 } from '@payloadcms/next/client'
 import { QueryPresetsAccessCell as QueryPresetsAccessCell_2b8867833a34864a02ddf429b0728a40 } from '@payloadcms/next/client'
 import { QueryPresetsWhereCell as QueryPresetsWhereCell_2b8867833a34864a02ddf429b0728a40 } from '@payloadcms/next/client'
@@ -62,14 +62,14 @@ import { QueryPresetsColumnsCell as QueryPresetsColumnsCell_2b8867833a34864a02dd
 import { QueryPresetsColumnField as QueryPresetsColumnField_2b8867833a34864a02ddf429b0728a40 } from '@payloadcms/next/client'
 import { QueryPresetsGroupByCell as QueryPresetsGroupByCell_2b8867833a34864a02ddf429b0728a40 } from '@payloadcms/next/client'
 import { QueryPresetsGroupByField as QueryPresetsGroupByField_2b8867833a34864a02ddf429b0728a40 } from '@payloadcms/next/client'
-import { ThemeColorField as ThemeColorField_e0cfbbb020bf87f8280e724d96373a69 } from '@payload-toolkit/builder/theme-client'
-import { ThemeFontField as ThemeFontField_e0cfbbb020bf87f8280e724d96373a69 } from '@payload-toolkit/builder/theme-client'
-import { ThemeSliderField as ThemeSliderField_e0cfbbb020bf87f8280e724d96373a69 } from '@payload-toolkit/builder/theme-client'
-import { ThemeSaveSignal as ThemeSaveSignal_e0cfbbb020bf87f8280e724d96373a69 } from '@payload-toolkit/builder/theme-client'
+import { ThemeColorField as ThemeColorField_d408ea8a7b9c9e7b6f237d6bc68a93d5 } from 'payload-canvas/theme-client'
+import { ThemeFontField as ThemeFontField_d408ea8a7b9c9e7b6f237d6bc68a93d5 } from 'payload-canvas/theme-client'
+import { ThemeSliderField as ThemeSliderField_d408ea8a7b9c9e7b6f237d6bc68a93d5 } from 'payload-canvas/theme-client'
+import { ThemeSaveSignal as ThemeSaveSignal_d408ea8a7b9c9e7b6f237d6bc68a93d5 } from 'payload-canvas/theme-client'
 import { AgentConnectPill as AgentConnectPill_60f30f580e97936338e112b8b2cc7161 } from 'payload-mcp-toolkit/client'
 import { ImportExportProvider as ImportExportProvider_cdf7e044479f899a31f804427d568b36 } from '@payloadcms/plugin-import-export/rsc'
 import { OAuthView as OAuthView_60f30f580e97936338e112b8b2cc7161 } from 'payload-mcp-toolkit/client'
-import { BuilderView as BuilderView_c0c1af4cd1961baf9cba09efadb7433a } from '@payload-toolkit/builder/rsc'
+import { BuilderView as BuilderView_57c6923ff8049349bee2a220c5ac4c2a } from 'payload-canvas/rsc'
 import { CollectionCards as CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1 } from '@payloadcms/next/rsc'
 
 /** @type import('payload').ImportMap */
@@ -107,12 +107,12 @@ export const importMap = {
   "@payloadcms/plugin-seo/client#MetaDescriptionComponent": MetaDescriptionComponent_a8a977ebc872c5d5ea7ee689724c0860,
   "@payloadcms/plugin-seo/client#MetaImageComponent": MetaImageComponent_a8a977ebc872c5d5ea7ee689724c0860,
   "@payloadcms/plugin-seo/client#PreviewComponent": PreviewComponent_a8a977ebc872c5d5ea7ee689724c0860,
-  "@payload-toolkit/builder/client#LayoutField": LayoutField_4264ddaffcf8eeec506364d4835aed4d,
-  "@payload-toolkit/builder/rsc#LayoutDiff": LayoutDiff_c0c1af4cd1961baf9cba09efadb7433a,
-  "@payload-toolkit/builder/rsc#NoDiff": NoDiff_c0c1af4cd1961baf9cba09efadb7433a,
-  "@payload-toolkit/builder/client#PublishButton": PublishButton_4264ddaffcf8eeec506364d4835aed4d,
-  "@payload-toolkit/builder/rsc#BuilderRedirect": BuilderRedirect_c0c1af4cd1961baf9cba09efadb7433a,
-  "@payload-toolkit/builder/client#BuilderTab": BuilderTab_4264ddaffcf8eeec506364d4835aed4d,
+  "payload-canvas/client#LayoutField": LayoutField_1611a9327f20600aee6a9d537ba4315b,
+  "payload-canvas/rsc#LayoutDiff": LayoutDiff_57c6923ff8049349bee2a220c5ac4c2a,
+  "payload-canvas/rsc#NoDiff": NoDiff_57c6923ff8049349bee2a220c5ac4c2a,
+  "payload-canvas/client#PublishButton": PublishButton_1611a9327f20600aee6a9d537ba4315b,
+  "payload-canvas/rsc#BuilderRedirect": BuilderRedirect_57c6923ff8049349bee2a220c5ac4c2a,
+  "payload-canvas/client#BuilderTab": BuilderTab_1611a9327f20600aee6a9d537ba4315b,
   "@payloadcms/plugin-import-export/rsc#FormatField": FormatField_cdf7e044479f899a31f804427d568b36,
   "@payloadcms/plugin-import-export/rsc#LimitField": LimitField_cdf7e044479f899a31f804427d568b36,
   "@payloadcms/plugin-import-export/rsc#Page": Page_cdf7e044479f899a31f804427d568b36,
@@ -129,7 +129,7 @@ export const importMap = {
   "payload-mcp-toolkit/client#GlobalScopesMatrix": GlobalScopesMatrix_60f30f580e97936338e112b8b2cc7161,
   "@payloadcms/plugin-search/client#LinkToDoc": LinkToDoc_aead06e4cbf6b2620c5c51c9ab283634,
   "@payloadcms/plugin-search/client#ReindexButton": ReindexButton_aead06e4cbf6b2620c5c51c9ab283634,
-  "@payload-toolkit/builder/client#TemplateDefaultCell": TemplateDefaultCell_4264ddaffcf8eeec506364d4835aed4d,
+  "payload-canvas/client#TemplateDefaultCell": TemplateDefaultCell_1611a9327f20600aee6a9d537ba4315b,
   "@payloadcms/next/client#FolderTypeField": FolderTypeField_2b8867833a34864a02ddf429b0728a40,
   "@payloadcms/next/client#QueryPresetsAccessCell": QueryPresetsAccessCell_2b8867833a34864a02ddf429b0728a40,
   "@payloadcms/next/client#QueryPresetsWhereCell": QueryPresetsWhereCell_2b8867833a34864a02ddf429b0728a40,
@@ -138,13 +138,13 @@ export const importMap = {
   "@payloadcms/next/client#QueryPresetsColumnField": QueryPresetsColumnField_2b8867833a34864a02ddf429b0728a40,
   "@payloadcms/next/client#QueryPresetsGroupByCell": QueryPresetsGroupByCell_2b8867833a34864a02ddf429b0728a40,
   "@payloadcms/next/client#QueryPresetsGroupByField": QueryPresetsGroupByField_2b8867833a34864a02ddf429b0728a40,
-  "@payload-toolkit/builder/theme-client#ThemeColorField": ThemeColorField_e0cfbbb020bf87f8280e724d96373a69,
-  "@payload-toolkit/builder/theme-client#ThemeFontField": ThemeFontField_e0cfbbb020bf87f8280e724d96373a69,
-  "@payload-toolkit/builder/theme-client#ThemeSliderField": ThemeSliderField_e0cfbbb020bf87f8280e724d96373a69,
-  "@payload-toolkit/builder/theme-client#ThemeSaveSignal": ThemeSaveSignal_e0cfbbb020bf87f8280e724d96373a69,
+  "payload-canvas/theme-client#ThemeColorField": ThemeColorField_d408ea8a7b9c9e7b6f237d6bc68a93d5,
+  "payload-canvas/theme-client#ThemeFontField": ThemeFontField_d408ea8a7b9c9e7b6f237d6bc68a93d5,
+  "payload-canvas/theme-client#ThemeSliderField": ThemeSliderField_d408ea8a7b9c9e7b6f237d6bc68a93d5,
+  "payload-canvas/theme-client#ThemeSaveSignal": ThemeSaveSignal_d408ea8a7b9c9e7b6f237d6bc68a93d5,
   "payload-mcp-toolkit/client#AgentConnectPill": AgentConnectPill_60f30f580e97936338e112b8b2cc7161,
   "@payloadcms/plugin-import-export/rsc#ImportExportProvider": ImportExportProvider_cdf7e044479f899a31f804427d568b36,
   "payload-mcp-toolkit/client#OAuthView": OAuthView_60f30f580e97936338e112b8b2cc7161,
-  "@payload-toolkit/builder/rsc#BuilderView": BuilderView_c0c1af4cd1961baf9cba09efadb7433a,
+  "payload-canvas/rsc#BuilderView": BuilderView_57c6923ff8049349bee2a220c5ac4c2a,
   "@payloadcms/next/rsc#CollectionCards": CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1
 }

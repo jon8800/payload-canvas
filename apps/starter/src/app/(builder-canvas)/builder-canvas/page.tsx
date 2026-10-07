@@ -1,6 +1,6 @@
 'use client'
 
-import { BuilderCanvas } from '@payload-toolkit/builder-react/canvas'
+import { BuilderCanvas } from 'payload-canvas/react/canvas'
 import typography from '@tailwindcss/typography'
 import { builderBlocks, resolveLink } from '@/builder'
 import { blockComponents } from '@/components/blocks'

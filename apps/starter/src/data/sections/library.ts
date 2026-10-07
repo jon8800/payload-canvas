@@ -3,7 +3,7 @@
 // canvas shows placeholders. The Image block's `image` and the Form block's `form` are optional
 // props, so every section publishes as inserted: the site shows nothing for an empty image or
 // form until an editor picks one. Links use plain URLs so they never point to a missing document.
-import type { Block, SectionDefinition } from '@payload-toolkit/builder'
+import type { Block, SectionDefinition } from 'payload-canvas'
 import { cardGrid } from './cardGrid'
 import { url } from './build'
 import { contact } from './contact'

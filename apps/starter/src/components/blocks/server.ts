@@ -1,8 +1,8 @@
 // Server only: the app's block components with the server components that load data. The site
 // renderer (BuilderContent) and the canvas server action use this map. The canvas iframe uses
 // the client-safe `blockComponents` and renders the blocks it lacks through its server action.
-import type { BlockComponents, PageData } from '@payload-toolkit/builder-react'
-import type { PageDataArgs } from '@payload-toolkit/builder-react/server'
+import type { BlockComponents, PageData } from 'payload-canvas/react'
+import type { PageDataArgs } from 'payload-canvas/react/server'
 import { legacyDemo } from '@/legacy-fixture/enabled'
 import { legacyPageData, legacyServerComponents } from '@/legacy-fixture/server'
 import { blockComponents } from '.'

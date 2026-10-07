@@ -11,7 +11,7 @@
 // The site's CSS has every class these components use, also on the canvas. The `classes` lists
 // below exist only for Tailwind's order: see `legacyClasses`.
 import type { ComponentType, ReactNode } from 'react'
-import { PayloadSlot, renderRichText, type BlockComponentProps, type PayloadBlockProps } from '@payload-toolkit/builder-react'
+import { PayloadSlot, renderRichText, type BlockComponentProps, type PayloadBlockProps } from 'payload-canvas/react'
 
 type Media = { url?: string | null; alt?: string | null; width?: number | null; height?: number | null }
 type LinkData = {

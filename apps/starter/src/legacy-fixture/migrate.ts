@@ -3,7 +3,7 @@
 //   pnpm payload run src/legacy-fixture/migrate.ts write      # write (`payload run` drops --flags, so plain words)
 // The same script works for any collection: change `collection`, `from` and `to`.
 import config from '@payload-config'
-import { formatMigrationReport, migrateBlocksField } from '@payload-toolkit/builder'
+import { formatMigrationReport, migrateBlocksField } from 'payload-canvas'
 import { getPayload } from 'payload'
 
 import { LEGACY_COLLECTION } from './enabled'

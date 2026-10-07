@@ -2,8 +2,8 @@
 // one block whose props have `access.read` and `access.update` for one user only. The editor hides
 // and locks them for everyone else. Blocks are JSON, so turning it on changes no database table.
 // Client-safe: the canvas imports the component.
-import { defineBlock } from '@payload-toolkit/builder/blocks'
-import { editableText, type BlockComponentProps } from '@payload-toolkit/builder-react'
+import { defineBlock } from 'payload-canvas/blocks'
+import { editableText, type BlockComponentProps } from 'payload-canvas/react'
 import type { Field, FieldAccess } from 'payload'
 
 export const accessDemo = process.env.NEXT_PUBLIC_BUILDER_ACCESS_DEMO === '1'

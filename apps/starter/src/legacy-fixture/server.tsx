@@ -3,8 +3,8 @@
 // cannot import them: it renders these blocks through its server action (`createCanvasServer`).
 import config from '@payload-config'
 import { getPayload, type Where } from 'payload'
-import { fromPayloadComponents, PayloadSlot, type BlockComponents, type PayloadBlockProps } from '@payload-toolkit/builder-react'
-import type { PageDataArgs } from '@payload-toolkit/builder-react/server'
+import { fromPayloadComponents, PayloadSlot, type BlockComponents, type PayloadBlockProps } from 'payload-canvas/react'
+import type { PageDataArgs } from 'payload-canvas/react/server'
 
 import { RenderLeaves } from './components'
 import { legacyBuilderBlocks } from './index'

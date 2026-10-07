@@ -1,5 +1,5 @@
 // The default layout of a blog post: a template whose blocks bind to the post's fields.
-import type { Block } from '@payload-toolkit/builder/core'
+import type { Block } from 'payload-canvas/core'
 import { bare, bind, field, heading, stack, styles } from './build'
 import { postGrid } from './posts'
 

@@ -3,7 +3,7 @@
 // The "form" block: renders a form-builder form. The renderer loads the form document (the
 // block's `form` relationship) before this runs, on the site and in the canvas.
 // A client component: RenderLayout passes plain data only, so the server can render it directly.
-import type { BlockComponentProps } from '@payload-toolkit/builder-react'
+import type { BlockComponentProps } from 'payload-canvas/react'
 import { formClasses } from './formClasses'
 import { FormView, type FormDoc } from './FormView'
 
