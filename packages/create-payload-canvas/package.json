@@ -16,11 +16,11 @@
   ],
   "license": "MIT",
   "author": "Eugene Lominos <hello@eugenelominos.com>",
-  "homepage": "https://github.com/jon8800/payload-toolkit/tree/main/packages/create-payload-canvas#readme",
-  "bugs": "https://github.com/jon8800/payload-toolkit/issues",
+  "homepage": "https://github.com/jon8800/payload-canvas/tree/main/packages/create-payload-canvas#readme",
+  "bugs": "https://github.com/jon8800/payload-canvas/issues",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jon8800/payload-toolkit.git",
+    "url": "git+https://github.com/jon8800/payload-canvas.git",
     "directory": "packages/create-payload-canvas"
   },
   "type": "module",
