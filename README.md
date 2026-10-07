@@ -1,6 +1,40 @@
 # Payload Canvas
 
-A visual website builder for [Payload CMS](https://payloadcms.com) 3. Install it as a plugin in any Payload app, or start from the starter app in this repository.
+**A visual drag-and-drop website builder for [Payload CMS](https://payloadcms.com) 3.**
+
+<p align="center">
+  <a href="docs/media/drag-and-drop.mp4"><img src="docs/media/drag-and-drop.gif" width="960" alt="Dragging a section on the canvas while the other sections slide out of the way, reordering it in the Layers tree, and dropping a ready-made section onto the page"></a>
+  <br>
+  <sub>Smooth drag and drop: move a section on the canvas, reorder it in Layers, drop in a ready-made section. <a href="docs/media/drag-and-drop.mp4">Watch the MP4</a>.</sub>
+</p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/media/builder-dark.png" alt="The builder in dark theme with a button selected and the Styles panel open"><br><sub>The full-screen builder: Layers, the live canvas, and the Styles panel.</sub></td>
+    <td width="50%"><img src="docs/media/builder-light.png" alt="The builder in light theme"><br><sub>The same editor in Payload's light theme.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/media/ai-assistant.png" alt="The AI assistant after the request 'Make the hero headline punchier'"><br><sub>The AI assistant edits the page from a prompt and lists what it changed.</sub></td>
+    <td><img src="docs/media/multiplayer.png" alt="Another editor's cursor and selection on the canvas"><br><sub>Multiplayer: another editor's cursor and selection show live.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/media/sections.png" alt="The Sections tab with section thumbnails"><br><sub>Ready-made sections with real thumbnails. Drag one onto the page.</sub></td>
+    <td><img src="docs/media/site-desktop.png" alt="The Northwind Studio demo site on desktop"><br><sub>The demo site the starter can seed.</sub></td>
+  </tr>
+</table>
+
+<details>
+<summary>More screenshots: the Styles panel, the demo site on a phone</summary>
+<br>
+<table>
+  <tr>
+    <td width="50%" align="center"><img src="docs/media/styles-panel.png" width="300" alt="The Styles panel with typography, background and border controls"><br><sub>The Styles panel reads and writes Tailwind classes, per breakpoint and state.</sub></td>
+    <td width="50%" align="center"><img src="docs/media/site-mobile.png" width="300" alt="The Northwind Studio demo site on a phone"><br><sub>The demo site on a phone.</sub></td>
+  </tr>
+</table>
+</details>
+
+Install Payload Canvas as a plugin in any Payload app, or start from the starter app in this repository.
 
 - Editors build pages on a live canvas: drag blocks, nest them, style them, publish.
 - Developers keep full control: blocks are Payload field configs, components are plain React, styles are Tailwind classes.
