@@ -28,7 +28,7 @@ FROM base AS source
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/starter/package.json apps/starter/
 COPY packages/payload-canvas/package.json packages/payload-canvas/
-COPY packages/create-payload-starter/package.json packages/create-payload-starter/
+COPY packages/create-payload-canvas/package.json packages/create-payload-canvas/
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile --filter . --filter payload-starter...
 

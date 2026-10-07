@@ -1,7 +1,7 @@
 {
-  "name": "create-payload-toolkit",
+  "name": "create-payload-canvas",
   "version": "0.1.0",
-  "description": "Create a new Payload CMS website from the payload-toolkit starter: the visual page builder, Postgres, a seeded demo and the AI guides.",
+  "description": "Create a new Payload CMS website with Payload Canvas: the visual page builder, Postgres, a seeded demo and the AI guides.",
   "keywords": [
     "payload",
     "payloadcms",
@@ -16,16 +16,16 @@
   ],
   "license": "MIT",
   "author": "Eugene Lominos <hello@eugenelominos.com>",
-  "homepage": "https://github.com/jon8800/payload-toolkit/tree/main/packages/create-payload-starter#readme",
+  "homepage": "https://github.com/jon8800/payload-toolkit/tree/main/packages/create-payload-canvas#readme",
   "bugs": "https://github.com/jon8800/payload-toolkit/issues",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jon8800/payload-toolkit.git",
-    "directory": "packages/create-payload-starter"
+    "directory": "packages/create-payload-canvas"
   },
   "type": "module",
   "bin": {
-    "create-payload-toolkit": "./dist/index.js"
+    "create-payload-canvas": "./dist/index.js"
   },
   "files": [
     "dist",

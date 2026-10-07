@@ -1,4 +1,4 @@
-// The GitHub owner that hosts the payload-toolkit repo. Change it here if the repo moves.
+// The GitHub repo that hosts Payload Canvas. Change it here if the repo moves.
 export const GITHUB_OWNER = 'jon8800'
 export const GITHUB_REPO = 'payload-toolkit'
 export const DEFAULT_REF = 'main'
@@ -10,14 +10,11 @@ export function tarballUrl(ref: string): string {
   return `https://codeload.github.com/${GITHUB_OWNER}/${GITHUB_REPO}/tar.gz/${ref}`
 }
 
-// Version range for the builder packages when they come from npm.
+// Version range for the payload-canvas package when it comes from npm.
 export const PUBLISHED_VERSION = '^0.1.0'
 
-// Builder packages the starter depends on, as folders under `packages/` in the repo.
-export const BUILDER_PACKAGES = [
-  { name: '@payload-toolkit/builder', dir: 'builder' },
-  { name: '@payload-toolkit/builder-react', dir: 'builder-react' },
-] as const
+// The package the starter depends on: its npm name and its folder under `packages/` in the repo.
+export const BUILDER_PACKAGE = { name: 'payload-canvas', dir: 'payload-canvas' } as const
 
 // Files and folders of the starter that only make sense inside the repo. The CLI does not copy them.
 //  - Docker files expect the repo root as build context and the workspace packages.

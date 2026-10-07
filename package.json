@@ -8,7 +8,7 @@
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
-    "pack:packages": "pnpm --filter payload-canvas --filter create-payload-toolkit exec pnpm pack --pack-destination ../../dist-packages"
+    "pack:packages": "pnpm --filter payload-canvas --filter create-payload-canvas exec pnpm pack --pack-destination ../../dist-packages"
   },
   "devDependencies": {
     "turbo": "^2.11.7",

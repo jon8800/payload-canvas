@@ -20,13 +20,13 @@ export type Options = {
   github: boolean
   /** Branch or tag to download. */
   ref: string
-  /** Path to a payload-toolkit checkout. The builder packages are packed from there. */
+  /** Path to a Payload Canvas checkout. The payload-canvas package is packed from there. */
   packages: string | null
 }
 
-export const HELP = `Usage: create-payload-toolkit [project-dir] [flags]
+export const HELP = `Usage: create-payload-canvas [project-dir] [flags]
 
-Creates a Payload CMS website builder project. Nothing is asked when you pass --yes
+Creates a Payload CMS website with the Payload Canvas builder. Nothing is asked when you pass --yes
 or when the input is not a terminal.
 
 Project:
@@ -47,8 +47,8 @@ Database (default user and password: postgres):
 Source:
       --github              Download the starter from GitHub, even inside the repo
       --ref <name>          Branch or tag to download (default: ${DEFAULT_REF})
-      --packages <path>     Path to a payload-toolkit checkout. The builder packages are packed
-                            from there. Use this until they are published to npm.
+      --packages <path>     Path to a Payload Canvas checkout. The payload-canvas package is
+                            packed from there. Use this until it is published to npm.
 
   -h, --help                Show this help
 `
