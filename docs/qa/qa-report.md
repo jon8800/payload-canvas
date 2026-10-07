@@ -32,7 +32,7 @@ Screenshots are not in the repo. `docs/qa/` is not gitignored, so they are in:
 - **Expected:** nothing goes live until someone clicks Publish.
 - **Actual:** autosave runs the hook. The hook writes a new *published* version of "Post template", with the unpublished layout and `isDefault: false`. It also resets that template's sample post (20 back to 19). Ticking Default on template 6 later did the same to template 7.
 - **Screenshots:** `tpl\36-new-template-published.png`, `tpl\37-anon-post-empty-default.png`
-- **Likely file:** `packages/builder/src/plugin/templates.ts:133-153` (`keepOneDefault`). It calls `payload.update` without `draft: true`, and it runs on draft autosaves.
+- **Likely file:** `packages/payload-canvas/src/plugin/templates.ts:133-153` (`keepOneDefault`). It calls `payload.update` without `draft: true`, and it runs on draft autosaves.
 
 ### B2. Pages built from library sections cannot be published, and the error does not say where the problem is
 - **Area:** sections library, publish.
@@ -48,9 +48,9 @@ Screenshots are not in the repo. `docs/qa/` is not gitignored, so they are in:
 - **Screenshots:** `qa\12-sections-inserted.png` (the placeholder), `qa\51-publish-error.png`. The toast closes too fast to capture, so the text above was read from the DOM.
 - **Likely files:**
   - `apps/starter/src/data/sections/library.ts:20,112-114,133,152,260` (`NO_ID`)
-  - `packages/builder/src/core/validate.ts:122` (message format)
-  - `packages/builder/src/admin/editor/topbar/DocumentActions.tsx` (toast)
-  - `packages/builder/src/live/` (publish endpoint)
+  - `packages/payload-canvas/src/core/validate.ts:122` (message format)
+  - `packages/payload-canvas/src/admin/editor/topbar/DocumentActions.tsx` (toast)
+  - `packages/payload-canvas/src/live/` (publish endpoint)
 
 ---
 
@@ -65,7 +65,7 @@ Screenshots are not in the repo. `docs/qa/` is not gitignored, so they are in:
 - **Expected:** the drawer closes. The image is set on the block. You stay in the builder.
 - **Actual:** the browser goes to `/admin/collections/media/24` (and `/25` on the second try). The image is attached to the block, but the user has left the builder. Reproduced 3 times.
 - **Screenshot:** `qa\29-after-upload.png`
-- **Likely file:** `packages/builder/src/admin/screen/BuilderScreen.tsx`. No `EditDepthProvider` exists anywhere in `src/admin/`. Payload uses edit depth to tell a drawer from the main document, so the drawer acts as the top-level document and redirects after create.
+- **Likely file:** `packages/payload-canvas/src/admin/screen/BuilderScreen.tsx`. No `EditDepthProvider` exists anywhere in `src/admin/`. Payload uses edit depth to tell a drawer from the main document, so the drawer acts as the top-level document and redirects after create.
 
 ### M2. "Desktop" mode shows the tablet or mobile layout on normal laptop screens
 - **Area:** canvas, devices.
@@ -76,7 +76,7 @@ Screenshots are not in the repo. `docs/qa/` is not gitignored, so they are in:
   - At 1280x800 it is 660 px, the sm layout: the 3 feature cards stack in one column.
   - Only screens near 2560 px wide show the real desktop layout. The side panels take about 620 px.
 - **Screenshots:** `qa\58-1440-builder.png`, `qa\67-1280.png`
-- **Likely files:** `packages/builder/src/admin/editor/Canvas.tsx:33-50` (zoom only when the frame is *wider* than the stage), `topbar/TopBar.tsx:24` ("Desktop · fill the stage").
+- **Likely files:** `packages/payload-canvas/src/admin/editor/Canvas.tsx:33-50` (zoom only when the frame is *wider* than the stage), `topbar/TopBar.tsx:24` ("Desktop · fill the stage").
 
 ### M3. Style changes on desktop often do nothing visible, because the panel edits "base"
 - **Area:** Styles panel, breakpoints.
@@ -87,7 +87,7 @@ Screenshots are not in the repo. `docs/qa/` is not gitignored, so they are in:
 - **Expected:** the heading gets bigger. Or the panel says the value is overridden at md and offers to edit md.
 - **Actual:** the class becomes `text-5xl`. The canvas stays at 60 px, because `md:text-6xl` wins. The Size box shows "5xl", not the 6xl the user sees. The only hint is a small dot on the "md" chip. The same applies to Grid columns (shows "1" on a 3-column grid).
 - **Screenshot:** `qa\42-crop.png`
-- **Likely files:** `packages/builder/src/admin/editor/styles/VariantBar.tsx`, `styles/StylesPanel.tsx`, `styles/viewport.ts` (the panel does not follow the canvas breakpoint).
+- **Likely files:** `packages/payload-canvas/src/admin/editor/styles/VariantBar.tsx`, `styles/StylesPanel.tsx`, `styles/viewport.ts` (the panel does not follow the canvas breakpoint).
 
 ### M4. Rich text: the toolbar runs off screen, so links cannot be added
 - **Area:** inspector, Rich text block.
@@ -100,7 +100,7 @@ Screenshots are not in the repo. `docs/qa/` is not gitignored, so they are in:
   - Ctrl+K does nothing.
   - The toolbar covers the line below the selection (the second list item).
 - **Screenshot:** `qa\25-richtext-link.png`
-- **Likely files:** `packages/builder/src/admin/editor/fields/RichTextField.tsx`, `fields/fields.scss`
+- **Likely files:** `packages/payload-canvas/src/admin/editor/fields/RichTextField.tsx`, `fields/fields.scss`
 
 ### M5. Publishing a page with an empty title or slug says "This field is required. This field is required."
 - **Area:** publish flow.
@@ -110,7 +110,7 @@ Screenshots are not in the repo. `docs/qa/` is not gitignored, so they are in:
 - **Expected:** "Add a title and a slug in Page settings", with a button that opens the drawer.
 - **Actual:** the toast says "This field is required. This field is required." It names no field and offers no next step.
 - **Screenshot:** `qa\07-publish-untitled.png`
-- **Likely files:** `packages/builder/src/live/` (publish endpoint error mapping), `topbar/DocumentActions.tsx`
+- **Likely files:** `packages/payload-canvas/src/live/` (publish endpoint error mapping), `topbar/DocumentActions.tsx`
 
 ### M6. The Link block accepts buttons, forms, links and lists inside it
 - **Area:** blocks, HTML validity.
@@ -120,7 +120,7 @@ Screenshots are not in the repo. `docs/qa/` is not gitignored, so they are in:
 - **Expected:** these blocks are refused inside a link. Interactive content inside `<a>` is invalid HTML.
 - **Actual:** all three go inside the Link. With a URL set, the site renders a form and a list of links inside one `<a>`. Only the AI hint says "Do not put buttons or other links inside it".
 - **Screenshot:** `qa\38-form-in-link.png`
-- **Likely file:** `packages/builder/src/blocks/defaults.ts:224` (`slots: { children: { label: 'Content' } }` has no `allow`).
+- **Likely file:** `packages/payload-canvas/src/blocks/defaults.ts:224` (`slots: { children: { label: 'Content' } }` has no `allow`).
 
 ### M7. In the outline every section is "Stack <section>", and no block can be renamed
 - **Area:** outline.
@@ -131,7 +131,7 @@ Screenshots are not in the repo. `docs/qa/` is not gitignored, so they are in:
 - **Actual:** five identical rows, "Stack <section> 1". The block menu has no Rename. Breadcrumbs read "Stack > Stack > Stack > Button".
 - **Related:** selecting a section and clicking **Stack** puts the new Stack *inside* the section, not after it, so a user who wants a new section gets nested content.
 - **Screenshots:** `qa\13-select-from-outline.png`, outline at `qa\65-empty-page.png` (before the delete)
-- **Likely files:** `packages/builder/src/admin/editor/Outline.tsx`, `actions.ts` (insert position)
+- **Likely files:** `packages/payload-canvas/src/admin/editor/Outline.tsx`, `actions.ts` (insert position)
 
 ### M8. Keyboard users cannot reach the outline, and two top-bar buttons have no name
 - **Area:** accessibility.
@@ -157,14 +157,14 @@ Screenshots are not in the repo. `docs/qa/` is not gitignored, so they are in:
   - Each page has 3 `<style data-builder-css>` blocks: header part, page, footer part. Each one redeclares the utilities layer.
   - The footer block comes last, so its `.text-lg` beats the page's `md:text-xl`. Any `md:`/`lg:` class loses to a base class that the footer also uses.
 - **Screenshots:** `fe\site-home-1440-viewport.png` vs `fe\canvas-home-1440.png`
-- **Likely files:** `packages/builder-react/src/render/RenderLayout.tsx:198`, `apps/starter/src/app/(frontend)/layout.tsx` (3 `BuilderContent` calls), `packages/builder/src/css/`
+- **Likely files:** `packages/payload-canvas/src/react/render/RenderLayout.tsx:198`, `apps/starter/src/app/(frontend)/layout.tsx` (3 `BuilderContent` calls), `packages/payload-canvas/src/css/`
 
 ### M10. The site has no mobile menu
 - **Area:** site header.
 - **Repro:** open `/` at 390x844.
 - **Actual:** the header wraps into 3 rows (logo / 4 links / Contact) and takes 157 px. There is no menu toggle. No menu or navigation block exists.
 - **Screenshots:** `fe\home-390-header.png`, `fe\p_home-390.png`
-- **Likely folder:** `packages/builder-react/src/components/` (no nav block), the header part in the seed.
+- **Likely folder:** `packages/payload-canvas/src/react/components/` (no nav block), the header part in the seed.
 
 ### M11. Every page has the same title and no description
 - **Area:** site SEO.
@@ -193,7 +193,7 @@ Screenshots are not in the repo. `docs/qa/` is not gitignored, so they are in:
   2. Open `/blog/designing-with-blocks` signed out.
 - **Actual:** the old default is unticked. Empty templates are skipped. Every post falls back to plain title + content, and nothing warns about it.
 - **Screenshots:** `tpl\37-anon-post-empty-default.png`, `tpl\38-empty-template-builder.png`
-- **Likely file:** `packages/builder/src/plugin/templates.ts` (`keepOneDefault`)
+- **Likely file:** `packages/payload-canvas/src/plugin/templates.ts` (`keepOneDefault`)
 
 ### M14. Templates can publish users' private email addresses
 - **Area:** templates, privacy.
@@ -202,7 +202,7 @@ Screenshots are not in the repo. `docs/qa/` is not gitignored, so they are in:
   2. Open the post signed out.
 - **Actual:** the page shows `builder-dev@local.test`. `/api/users` refuses signed-out visitors, but the template output bypasses that. `author` shows the email too, because email is the Users title field.
 - **Screenshot:** `tpl\46-anon-override-email.png`
-- **Likely files:** the field walk in `packages/builder/src/plugin/templates.ts` (around lines 110-125), and `loadLayoutData` in `packages/builder-react/src/render/` (Local API with access checks off).
+- **Likely files:** the field walk in `packages/payload-canvas/src/plugin/templates.ts` (around lines 110-125), and `loadLayoutData` in `packages/payload-canvas/src/react/render/` (Local API with access checks off).
 
 ### M15. A link can be bound to any text field and produces broken URLs
 - **Area:** binding.
@@ -211,7 +211,7 @@ Screenshots are not in the repo. `docs/qa/` is not gitignored, so they are in:
   - The picker offers Title, Slug, Alt and author Name.
   - The canvas renders `href="Designing with blocks"`.
 - **Screenshots:** `tpl\19-button-link-title.png`, `tpl\c19.png`
-- **Likely file:** `packages/builder/src/admin/editor/templates/binding.ts:65` (`LINK_SOURCES` includes `text`).
+- **Likely file:** `packages/payload-canvas/src/admin/editor/templates/binding.ts:65` (`LINK_SOURCES` includes `text`).
 
 ---
 
@@ -228,7 +228,7 @@ Builder and editor:
 - **m2. Escape that closes a menu also clears the block selection.**
   - Repro: select a block, open **More document actions**, press Escape.
   - Actual: the menu closes and the selection is cleared.
-  - File: `packages/builder/src/admin/editor/shortcuts.ts`
+  - File: `packages/payload-canvas/src/admin/editor/shortcuts.ts`
 - **m3. Ctrl+Z does nothing right after picking a value in a Styles combobox.**
   - Repro: pick Size 5xl, press Ctrl+Z.
   - Actual: focus stays in the combobox input, so the input eats the key. Undo works only after you click elsewhere.
@@ -239,7 +239,7 @@ Builder and editor:
   - File: `styles/RawClasses.tsx`
 - **m5. The Font list shows the CSS-entry fonts, not the fonts the site uses.**
   - Actual: Font offers "sans: GeistSans…", but the canvas and site render Inter (`--font-sans: 'Inter'` from the theme global).
-  - Files: `packages/builder/src/css/tokens.ts:127`, starter `ThemeHead.tsx`
+  - Files: `packages/payload-canvas/src/css/tokens.ts:127`, starter `ThemeHead.tsx`
 - **m6. The color picker lists 40 theme tokens with cut-off names.**
   - Actual: names like "card-foregro…" and "secondary-fo…" are cut off. Developer tokens (`sidebar-*`, `chart-1..5`, `ring`, `input`) are offered for text color.
   - Screenshot: `qa\43-crop.png`
@@ -248,7 +248,7 @@ Builder and editor:
   - Repro: Video > Source URL > type `not a url`.
   - Actual: the canvas shows an empty placeholder, and the inspector shows no error.
   - Screenshot: `qa\35-video-bad-url.png`
-  - File: `packages/builder-react/src/components/videoUrl.ts`, Video field description.
+  - File: `packages/payload-canvas/src/react/components/videoUrl.ts`, Video field description.
 - **m8. Out-of-range canvas widths are rejected silently.**
   - Repro: type 100, 99999 or `abc` in the width box.
   - Actual: the box goes empty; on blur it shows the old width. No message or allowed range.
@@ -279,7 +279,7 @@ Builder and editor:
   - Repro: set a heading to one 300-character word.
   - Actual: the canvas scroll width goes from 805 to 2625 px. Heading and Text have no `break-words`/`overflow-wrap`.
   - Screenshot: `qa\64-long-word.png`
-  - Files: `packages/builder-react/src/components/Heading.tsx`, `Text.tsx` (or the default classes)
+  - Files: `packages/payload-canvas/src/react/components/Heading.tsx`, `Text.tsx` (or the default classes)
 - **m15. The Image block's upload field sometimes lacks "Create New".**
   - Actual: the first Image inspector after a page load showed only "Choose from existing", with no drag-and-drop line. A later Image block showed both. Not reliably reproducible.
   - Screenshot: `qa\27-image-inspector.png`
@@ -314,8 +314,8 @@ Front end (from the front-end pass):
 Templates (from the templates pass):
 
 - **m28. A heading can be bound to rich text.** The whole post body collapses into one `<h2>`. Screenshot: `tpl\12-heading-content-bound.png`. File: `binding.ts:63` (`TEXT_SOURCES` includes `richText`).
-- **m29. The Field block offers group fields that render nothing.** "SEO meta" gives an empty `<div>` and ignores the fallback. Screenshot: `tpl\22-field-SEO_meta.png`. Files: `binding.ts:223`, `packages/builder-react/src/components/Field.tsx`.
-- **m30. "Number of items" drops keystrokes silently.** 500 becomes 50, 0 becomes empty, -5 becomes 5, with no 1–100 message. Screenshot: `tpl\30-limit-edge.png`. File: `packages/builder/src/blocks/defaults.ts:399`.
+- **m29. The Field block offers group fields that render nothing.** "SEO meta" gives an empty `<div>` and ignores the fallback. Screenshot: `tpl\22-field-SEO_meta.png`. Files: `binding.ts:223`, `packages/payload-canvas/src/react/components/Field.tsx`.
+- **m30. "Number of items" drops keystrokes silently.** 500 becomes 50, 0 becomes empty, -5 becomes 5, with no 1–100 message. Screenshot: `tpl\30-limit-edge.png`. File: `packages/payload-canvas/src/blocks/defaults.ts:399`.
 - **m31. The outline does not flag broken bindings after the list collection changes.** The inspector warns; the outline shows a normal bound badge. Screenshots: `tpl\31-list-pages.png`, `tpl\c32.png`. File: `Outline.tsx`.
 - **m32. The sample picker shows posts that use a different template, with no hint.** The button says "Post template · previewing X" on every template. Every row says "Updated 4 Oct 2026". `aria-selected` marks the highlighted row, not the chosen one. Screenshot: `tpl\48-1440-sample-picker.png`. File: `templates/SamplePicker.tsx`.
 - **m33. A stale copy of your own presence after reload (unconfirmed).** Once, after a reload, "builder-dev is editing this block" appeared for the user's own earlier selection. Screenshot: `tpl\07-after-reload.png`.
@@ -392,7 +392,7 @@ Templates (from the templates pass):
 
 ## Testing notes
 
-- During the run, someone edited `packages/builder/src/live/apply.ts` and `document.ts`. The canvas once showed a Turbopack "Export payloadErrorMessage doesn't exist" error. It cleared on reload, so it is not counted.
+- During the run, someone edited `packages/payload-canvas/src/live/apply.ts` and `document.ts`. The canvas once showed a Turbopack "Export payloadErrorMessage doesn't exist" error. It cleared on reload, so it is not counted.
 - The browser automation daemon often timed out at 2560x1440. The auto-scroll-while-dragging test is therefore inconclusive: the canvas moved only 55 px while the pointer rested at the top edge. Re-test it by hand. The code is in `Editor.tsx:33-50`.
 
 ---
@@ -434,7 +434,7 @@ Totals: report items 57 fixed, 8 open, 4 won't fix. Design critique: 16 fixed, 2
 - m4 — fixed — whitespace is collapsed on write, and unknown classes are flagged.
 - m5 — fixed — fonts map to `var(--font-<name>)`, and the app can pass `fontFamilies`.
 - m6 — open (partly fixed) — developer tokens are under "More theme colors", but long names such as `secondary-foreground` are still cut off in the 2-column grid. Files: `admin/editor/styles/ColorPicker.tsx`, `styles.scss`.
-- m7 — open — the Video source has no URL check, and the canvas shows an empty placeholder. Files: `blocks/defaults.ts` (Video field `validate`), `builder-react/src/components/Video.tsx`.
+- m7 — open — the Video source has no URL check, and the canvas shows an empty placeholder. Files: `blocks/defaults.ts` (Video field `validate`), `payload-canvas/src/react/components/Video.tsx`.
 - m8 — fixed — the width box clamps to 320–2560 and says so.
 - m9 — fixed — the editor warns "<name> deleted the block you had selected".
 - m10 — fixed — distinct initials (BD, BD2) and "You (another tab)".

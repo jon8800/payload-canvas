@@ -1,24 +1,21 @@
-# @payload-toolkit/builder
+# Payload Canvas
 
 A visual page builder for Payload CMS 3. It adds a full-screen builder to the collections you choose. Editors drag blocks onto a live canvas, nest them without limit, and style them with Tailwind classes. AI agents can build and edit the same pages over MCP, and an open editor shows each AI change as it happens.
 
+The npm package is `payload-canvas`.
+
 - Works in any Payload 3.90+ app on Next.js 16 and React 19.
 - The layout is one JSON field per document. Nothing changes in your other fields.
-- The site renders the layout with `@payload-toolkit/builder-react` (React Server Components), or with your own renderer.
+- The site renders the layout with `payload-canvas/react` (React Server Components), or with your own renderer.
 - Save, drafts, autosave, versions and access control stay Payload's own.
 - Several people (and AI agents) can edit one page at the same time. See [Multiplayer editing](#multiplayer-editing).
 
-Two packages:
-
-| Package | What it holds |
-|---|---|
-| `@payload-toolkit/builder` | The Payload plugin, the admin editor, block definitions, the CSS compiler, live editing, MCP tools. |
-| `@payload-toolkit/builder-react` | `RenderLayout`, the default block components, the canvas runtime, server data helpers. |
+One package holds everything: the Payload plugin and admin editor (`payload-canvas`), and the React renderer and canvas runtime for your site (`payload-canvas/react`). See [Entry points](#entry-points).
 
 **Quick start.** Add the builder to an existing Payload app with the [install guide](#install) (about ten minutes). Or create a new project from the starter app:
 
 ```bash
-npx create-payload-toolkit my-website
+npx create-payload-canvas my-website
 ```
 
 ## Contents
@@ -28,7 +25,8 @@ npx create-payload-toolkit my-website
 3. [The builder view](#the-builder-view)
 4. [Inline editing](#inline-editing)
 5. [Plugin options](#plugin-options)
-6. [Rendering](#rendering)
+6. [Rendering the layout on your site](#rendering-the-layout-on-your-site)
+   - [Custom components](#custom-components)
 7. [Server components in the canvas](#server-components-in-the-canvas)
 8. [Custom blocks](#custom-blocks)
    - [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields)
@@ -56,7 +54,7 @@ npx create-payload-toolkit my-website
 - Node.js 20.9 or later
 - Any Payload database adapter. Postgres and SQLite store the layout as `jsonb`/JSON.
 
-You do not need `transpilePackages` or a `sass` install. The packages ship compiled JavaScript. The admin styles are `.scss` files, and Next compiles them with the `sass` that `@payloadcms/next` already installs, the same way it compiles Payload's own admin styles.
+You do not need `transpilePackages` or a `sass` install. The package ships compiled JavaScript. The admin styles are `.scss` files, and Next compiles them with the `sass` that `@payloadcms/next` already installs, the same way it compiles Payload's own admin styles.
 
 Peer dependencies:
 
@@ -80,13 +78,13 @@ npx create-payload-app@latest -n my-site -t blank --db postgres --use-pnpm
 
 They were tested step by step on such an app with Payload 3.90.2, Next.js 16.3.3, React 19.2.6, Tailwind 4.3.3, TypeScript 5.7 and pnpm 10, in `next dev` and in `next build` + `next start`. An existing Payload app works the same way: skip what you already have.
 
-### 1. Add the packages
+### 1. Add the package
 
 ```bash
-pnpm add @payload-toolkit/builder @payload-toolkit/builder-react tailwindcss @tailwindcss/postcss postcss
+pnpm add payload-canvas tailwindcss @tailwindcss/postcss postcss
 ```
 
-With npm: `npm install` and the same package names.
+With npm: `npm install payload-canvas tailwindcss @tailwindcss/postcss postcss`.
 
 ### 2. Add a collection with pages
 
@@ -113,11 +111,11 @@ export const Pages: CollectionConfig = {
 
 ### 3. Make one block list
 
-The plugin, the site and the canvas must use the same block list. Put it in its own file. Import blocks from `@payload-toolkit/builder/blocks`: that entry has no server code, so client components can import it too.
+The plugin, the site and the canvas must use the same block list. Put it in its own file. Import blocks from `payload-canvas/blocks`: that entry has no server code, so client components can import it too.
 
 ```ts
 // src/builder.ts
-import { defaultBlocks } from '@payload-toolkit/builder/blocks'
+import { defaultBlocks } from 'payload-canvas/blocks'
 
 export const blocks = defaultBlocks({ mediaCollection: 'media', linkCollections: ['pages'] })
 ```
@@ -183,7 +181,7 @@ The site layout imports this file in [step 7](#7-render-pages-on-the-site). The 
 
 ```ts
 // src/payload.config.ts
-import { websiteBuilder } from '@payload-toolkit/builder'
+import { websiteBuilder } from 'payload-canvas'
 import { blocks } from './builder'
 import { Pages } from './collections/Pages'
 
@@ -216,7 +214,7 @@ The editor shows the page in an iframe. The iframe loads a route in your app, so
 
 ```tsx
 // src/app/(builder-canvas)/layout.tsx
-import { ThemeStyle } from '@payload-toolkit/builder-react/server'
+import { ThemeStyle } from 'payload-canvas/react/server'
 import config from '@payload-config'
 import { getPayload } from 'payload'
 import type { ReactNode } from 'react'
@@ -245,7 +243,7 @@ export default async function CanvasLayout({ children }: { children: ReactNode }
 // src/app/(builder-canvas)/builder-canvas/page.tsx
 'use client'
 
-import { BuilderCanvas } from '@payload-toolkit/builder-react/canvas'
+import { BuilderCanvas } from 'payload-canvas/react/canvas'
 import { blocks } from '@/builder'
 import { builderCanvas } from './actions'
 
@@ -259,7 +257,7 @@ export default function CanvasPage() {
 'use server'
 
 import config from '@payload-config'
-import { createCanvasServer, type CanvasServerRequest } from '@payload-toolkit/builder-react/server'
+import { createCanvasServer, type CanvasServerRequest } from 'payload-canvas/react/server'
 import { blocks } from '@/builder'
 
 const canvas = createCanvasServer({ config, blocks })
@@ -291,7 +289,7 @@ The site layout imports your CSS and renders the Theme global's variables and fo
 
 ```tsx
 // src/app/(frontend)/layout.tsx
-import { ThemeStyle } from '@payload-toolkit/builder-react/server'
+import { ThemeStyle } from 'payload-canvas/react/server'
 import config from '@payload-config'
 import { getPayload } from 'payload'
 import type { ReactNode } from 'react'
@@ -315,10 +313,10 @@ The page route loads a page by its slug and renders its layout:
 
 ```tsx
 // src/app/(frontend)/[slug]/page.tsx
-import type { GeneratedCss } from '@payload-toolkit/builder'
-import { normalizeLayout } from '@payload-toolkit/builder/core'
-import { RenderLayout } from '@payload-toolkit/builder-react'
-import { loadLayoutData } from '@payload-toolkit/builder-react/server'
+import type { GeneratedCss } from 'payload-canvas'
+import { normalizeLayout } from 'payload-canvas/core'
+import { RenderLayout } from 'payload-canvas/react'
+import { loadLayoutData } from 'payload-canvas/react/server'
 import config from '@payload-config'
 import { draftMode } from 'next/headers'
 import { notFound } from 'next/navigation'
@@ -463,7 +461,7 @@ Text and images edit in place on the canvas, in every block: the default blocks,
 **Mark the element yourself** when the automatic mapping cannot find it. `editableText(mode, path)` returns the attribute in the canvas and nothing on the site. A mark always wins over the automatic mapping.
 
 ```tsx
-import { editableText, type PayloadBlockProps } from '@payload-toolkit/builder-react'
+import { editableText, type PayloadBlockProps } from 'payload-canvas/react'
 
 export function Hero({ heading, builder }: PayloadBlockProps<HeroBlock>) {
   // The site shows "*Your* day" with an accent span. The mark tells the canvas which prop it is.
@@ -495,7 +493,7 @@ Every image that shows an upload prop can be replaced on the canvas:
 **Mark the element yourself** with `editableImage(mode, path)`. The default Image block marks its image and its empty placeholder this way:
 
 ```tsx
-import { editableImage } from '@payload-toolkit/builder-react'
+import { editableImage } from 'payload-canvas/react'
 
 {photo ? <img {...editableImage(builder.mode, 'photo')} src={photo.url} alt="" /> : <div {...editableImage(builder.mode, 'photo')}>Add a photo</div>}
 ```
@@ -582,26 +580,29 @@ It also adds these endpoints (signed-in users only):
 
 | Import | Use it in | Holds |
 |---|---|---|
-| `@payload-toolkit/builder` | `payload.config.ts` (server) | `websiteBuilder`, `defineBlock`, `defaultBlocks`, `fromPayloadBlocks`, `migrateBlocksField`, types |
-| `@payload-toolkit/builder/blocks` | anywhere | `defaultBlocks`, `defineBlock`, `linkField`, `fromPayloadBlocks`, `BUILDER_CSS_CLASS`, `withBuilderCssClass` |
-| `@payload-toolkit/builder/core` | anywhere | layout types, `normalizeLayout`, `validateLayout`, `applyOperations`, tree helpers, `convertPayloadBlocksLayout`, `toPayloadBlock` |
-| `@payload-toolkit/builder/css` | server | `compileClasses`, `getStyleTokens`, `tracingIncludes` |
-| `@payload-toolkit/builder/theme` | anywhere | `themeCss`, `themeVariables`, `themeOutput`, `deriveColors`, `googleFontsHref`, `themeConfigOf`, theme types |
-| `@payload-toolkit/builder/theme-client` | Payload import map, or your own fields | `ThemeColorField`, `ThemeFontField`, `ThemeSliderField` |
-| `@payload-toolkit/builder/mcp` | server | `builderMcpTools` |
-| `@payload-toolkit/builder/ai` | server | the `AiAdapter` type and helpers for writing an adapter |
-| `@payload-toolkit/builder/ai/openrouter`, `/ai/cloudflare-gateway`, `/ai/cloudflare-workers-ai`, `/ai/openai-compatible`, `/ai/anthropic`, `/ai/fake` | `payload.config.ts` (server) | one AI adapter each. See [Adapters](#adapters). |
-| `@payload-toolkit/builder/ai/images/openrouter`, `/ai/images/openai`, `/ai/images/cloudflare-workers-ai`, `/ai/images/fake` | `payload.config.ts` (server) | one image adapter each. See [Image generation](#image-generation). |
-| `@payload-toolkit/builder/live` | server | the live sessions and endpoints |
-| `@payload-toolkit/builder/client` | Payload import map only | admin client components (layout field, Builder tab) |
-| `@payload-toolkit/builder/rsc` | Payload import map only | admin server components (the builder view, the tab redirect) |
-| `@payload-toolkit/builder/protocol`, `/css-browser` | used by `@payload-toolkit/builder-react` | the editor–canvas message types, the in-browser CSS compiler. You do not import them yourself. |
+| `payload-canvas` | `payload.config.ts` (server) | `websiteBuilder`, `defineBlock`, `defaultBlocks`, `fromPayloadBlocks`, `migrateBlocksField`, types |
+| `payload-canvas/blocks` | anywhere | `defaultBlocks`, `defineBlock`, `linkField`, `fromPayloadBlocks`, `BUILDER_CSS_CLASS`, `withBuilderCssClass` |
+| `payload-canvas/core` | anywhere | layout types, `normalizeLayout`, `validateLayout`, `applyOperations`, tree helpers, `convertPayloadBlocksLayout`, `toPayloadBlock` |
+| `payload-canvas/css` | server | `compileClasses`, `getStyleTokens`, `tracingIncludes` |
+| `payload-canvas/theme` | anywhere | `themeCss`, `themeVariables`, `themeOutput`, `deriveColors`, `googleFontsHref`, `themeConfigOf`, theme types |
+| `payload-canvas/theme-client` | Payload import map, or your own fields | `ThemeColorField`, `ThemeFontField`, `ThemeSliderField` |
+| `payload-canvas/mcp` | server | `builderMcpTools` |
+| `payload-canvas/ai` | server | the `AiAdapter` type and helpers for writing an adapter |
+| `payload-canvas/ai/openrouter`, `/ai/cloudflare-gateway`, `/ai/cloudflare-workers-ai`, `/ai/openai-compatible`, `/ai/anthropic`, `/ai/fake` | `payload.config.ts` (server) | one AI adapter each. See [Adapters](#adapters). |
+| `payload-canvas/ai/images/openrouter`, `/ai/images/openai`, `/ai/images/cloudflare-workers-ai`, `/ai/images/fake` | `payload.config.ts` (server) | one image adapter each. See [Image generation](#image-generation). |
+| `payload-canvas/live` | server | the live sessions and endpoints |
+| `payload-canvas/client` | Payload import map only | admin client components (layout field, Builder tab) |
+| `payload-canvas/rsc` | Payload import map only | admin server components (the builder view, the tab redirect) |
+| `payload-canvas/react` | your site and the canvas (server and client) | `RenderLayout`, `defaultComponents`, `fromPayloadComponent(s)`, `withPageData`, `renderOnServer`, `editableText`, `editableImage`, link helpers, `ThemeLive`, types |
+| `payload-canvas/react/server` | server only | `loadLayoutData`, `loadTemplate`, `loadTheme`, `ThemeStyle`, `createCanvasServer` (they call Payload's Local API) |
+| `payload-canvas/react/canvas` | client only | `BuilderCanvas`, the runtime for the editor's iframe |
+| `payload-canvas/protocol`, `/css-browser` | used by `payload-canvas/react` | the editor–canvas message types, the in-browser CSS compiler. You do not import them yourself. |
 
 Every entry point is ESM with `.d.ts` types. Client components keep their `'use client'` directive in the build.
 
-## Rendering
+## Rendering the layout on your site
 
-`RenderLayout` is a React Server Component. It walks the layout and renders each block with its component.
+`RenderLayout` is a React Server Component. It walks the layout and renders each block with its component. It comes from `payload-canvas/react`. The helpers that call Payload (`loadLayoutData`, `loadTemplate`, `ThemeStyle`, `createCanvasServer`) come from `payload-canvas/react/server`, and the editor's canvas (`BuilderCanvas`) comes from `payload-canvas/react/canvas`. See [Entry points](#entry-points). The full page route is in [Install, step 7](#7-render-pages-on-the-site), the canvas route in [step 6](#6-add-the-canvas-route), and the theme in [Theme](#theme).
 
 | Prop | Type | What it does |
 |---|---|---|
@@ -613,12 +614,12 @@ Every entry point is ESM with `.d.ts` types. Client components keep their `'use 
 | `context` | `{ collection, doc }` | The document a template renders. See [Templates](#templates-and-binding). |
 | `pageData` | `Record<string, unknown>` | Data the page loads once for its blocks. See [Page data](#page-data-and--block-context--components). |
 
-`loadLayoutData(layout, blocks, payload, options)` (from `@payload-toolkit/builder-react/server`) loads the documents that upload and relationship props point to, in one `find` per collection. Options: `draft`, `context`, `resolveLink`.
+`loadLayoutData(layout, blocks, payload, options)` (from `payload-canvas/react/server`) loads the documents that upload and relationship props point to, in one `find` per collection. Options: `draft`, `context`, `resolveLink`.
 
 Write a `resolveLink` when your collections have different routes. Pass the same function to `RenderLayout` and to `BuilderCanvas`:
 
 ```ts
-import type { ResolveLink } from '@payload-toolkit/builder-react'
+import type { ResolveLink } from 'payload-canvas/react'
 
 export const resolveLink: ResolveLink = (link) => {
   if (link.type !== 'reference') return link.url?.trim() || null
@@ -651,7 +652,7 @@ type BlockComponentProps = {
 
 ```tsx
 // src/components/blocks.ts
-import type { BlockComponents } from '@payload-toolkit/builder-react'
+import type { BlockComponents } from 'payload-canvas/react'
 import { PricingTable } from './PricingTable'
 
 export const components: BlockComponents = { pricingTable: PricingTable }
@@ -661,6 +662,8 @@ export const components: BlockComponents = { pricingTable: PricingTable }
 <RenderLayout layout={layout} blocks={blocks} components={components} resolveLink={resolveLink} css={css} />
 <BuilderCanvas blocks={blocks} components={components} resolveLink={resolveLink} />
 ```
+
+`BuilderCanvas` takes the same `blocks`, `components` and `resolveLink` as `RenderLayout`. It also takes `plugins` (your Tailwind plugins map, see [Styling](#styling)) and `server` (a server action made with `createCanvasServer`, see [Server components in the canvas](#server-components-in-the-canvas)).
 
 ## Server components in the canvas
 
@@ -675,7 +678,7 @@ You keep two component maps:
 
 ```ts
 // src/components/blocks.server.ts
-import { fromPayloadComponents } from '@payload-toolkit/builder-react'
+import { fromPayloadComponents } from 'payload-canvas/react'
 import { blocks } from '@/builder'
 import { ModelGridLeaf } from '@/blocks/leaves/modelGrid/component'
 import { components } from './blocks'
@@ -773,7 +776,7 @@ Declare a block with `defineBlock`. Props are Payload field configs. The editor 
 
 ```ts
 // src/builder.ts
-import { defaultBlocks, defineBlock, linkField } from '@payload-toolkit/builder/blocks'
+import { defaultBlocks, defineBlock, linkField } from 'payload-canvas/blocks'
 
 export const pricingTable = defineBlock({
   type: 'pricingTable',
@@ -799,9 +802,9 @@ export const blocks = [...defaultBlocks({ linkCollections: ['pages'] }), pricing
 
 - `slots` declares where child blocks go. `allow` lists the accepted block types, or `['*']`. `max` caps the number of direct children: a full slot refuses insert, move, paste and duplicate (also from MCP and the assistant), and the canvas offers no drop target or "+" there. `min` is the fewest children: fewer block **Publish** but not draft saves.
 - `parents` limits where a block may go: only directly inside the listed block types (never in the root list). The `listItem` block uses `parents: ['list']`. A new block whose slot accepts exactly one such type starts with one child of it, so a new list starts with one item.
-- `classes`: classes your component uses itself that your site's CSS does not have. Components in your app need no list: Tailwind finds their classes in your files, and the site's CSS has them on the site and on the canvas. List classes only for a component in a package that your CSS entry does not scan (no `@source` for it). The generated CSS styles only elements with the class `builder-css` (`BUILDER_CSS_CLASS` from `@payload-toolkit/builder/blocks`), so add that class to each element that uses the listed classes. The built-in Menu block does this for its toggle, panel and links.
+- `classes`: classes your component uses itself that your site's CSS does not have. Components in your app need no list: Tailwind finds their classes in your files, and the site's CSS has them on the site and on the canvas. List classes only for a component in a package that your CSS entry does not scan (no `@source` for it). The generated CSS styles only elements with the class `builder-css` (`BUILDER_CSS_CLASS` from `payload-canvas/blocks`), so add that class to each element that uses the listed classes. The built-in Menu block does this for its toggle, panel and links.
 - Block fields keep Payload's `validate`, `hooks` and `access`. See [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields).
-- `admin.custom.builderFormat` on a `text` field names a value check, for example `custom: { builderFormat: 'videoUrl' }` (the Video block's URL). The inspector shows the message while the user types, and a bad value blocks **Publish** but not draft saves. `videoUrl` is the only built-in format. Formats live in a registry in `@payload-toolkit/builder/core` (`FORMATS`, `formatProblem`). The renderer can use the same parser (`parseVideoUrl`).
+- `admin.custom.builderFormat` on a `text` field names a value check, for example `custom: { builderFormat: 'videoUrl' }` (the Video block's URL). The inspector shows the message while the user types, and a bad value blocks **Publish** but not draft saves. `videoUrl` is the only built-in format. Formats live in a registry in `payload-canvas/core` (`FORMATS`, `formatProblem`). The renderer can use the same parser (`parseVideoUrl`).
 - `linkField()` stores `{ type, url, reference, newTab }`. The component receives it resolved, with `href`, `target` and `rel`.
 - The default blocks are `stack`, `grid`, `heading`, `text`, `richText`, `image`, `video`, `button`, `link`, `menu`, `list` with its `listItem` blocks, `quote`, `divider`, `spacer`, `collectionList` (documents from a collection) and `field` (a field of the document a template renders).
 - The `menu` block folds its links into a "Menu" button and a panel on small screens. Set `ctaLabel` and `cta` (a link) to add a button as the last row of that panel, for example the header's call to action, which a header hides on phones. The inline links, and so the wide-screen header, do not change.
@@ -872,7 +875,7 @@ What carries over:
 
 These steps assume a site like this: `pages.layout` is a `blocks` field that references section blocks (`fullWidth`, `twoColumn`) from `config.blocks`, and the sections have nested `blocks` fields (`content`, `leftColumn`, `rightColumn`) with leaf blocks.
 
-**1. Install** the packages and add the canvas route, as in [Install](#install).
+**1. Install** the package and add the canvas route, as in [Install](#install).
 
 **2. Give the builder its own field.** Keep `layout` as it is.
 
@@ -890,7 +893,7 @@ If you give the builder the name of the existing `blocks` field (`field: 'layout
 
 ```ts
 // src/builder.ts
-import { defaultBlocks, fromPayloadBlocks } from '@payload-toolkit/builder/blocks'
+import { defaultBlocks, fromPayloadBlocks } from 'payload-canvas/blocks'
 import { allLeafBlocks, allSectionBlocks } from './blocks'
 
 const siteBlocks = fromPayloadBlocks([...allSectionBlocks, ...allLeafBlocks], {
@@ -919,7 +922,7 @@ export const blocks = [...defaultBlocks({ linkCollections: ['pages'] }), ...site
 
 ```ts
 // src/components/blocks.ts (client-safe)
-import { fromPayloadComponents } from '@payload-toolkit/builder-react'
+import { fromPayloadComponents } from 'payload-canvas/react'
 import { blocks } from '@/builder'
 import { FullWidthComponent } from '@/blocks/sections/fullWidth/component'
 import { HeadingLeaf } from '@/blocks/leaves/heading/component'
@@ -937,7 +940,7 @@ Each component gets the props it always got: `{ id, blockType, blockName, ...fie
 ```ts
 // scripts/migrate-blocks.ts
 import config from '@payload-config'
-import { formatMigrationReport, migrateBlocksField } from '@payload-toolkit/builder'
+import { formatMigrationReport, migrateBlocksField } from 'payload-canvas'
 import { getPayload } from 'payload'
 
 const payload = await getPayload({ config })
@@ -992,7 +995,7 @@ A component that renders its children itself (`<RenderLeaves blocks={content} />
 To make the children editable on the canvas, render the slot with `PayloadSlot`. In the builder it renders the builder's children (each with its block id) in an element that takes the slot's drop attributes. Outside the builder it renders your old code:
 
 ```tsx
-import { PayloadSlot, type PayloadBlockProps } from '@payload-toolkit/builder-react'
+import { PayloadSlot, type PayloadBlockProps } from 'payload-canvas/react'
 
 export function TwoColumnComponent({ leftColumn, rightColumn, builder }: PayloadBlockProps<TwoColumnBlock>) {
   return (
@@ -1025,7 +1028,7 @@ The `builder` prop holds `mode`, `className`, `slots` (rendered children by slot
 A section is a ready-made block tree: a hero, a feature grid, a footer. Editors insert it from the **Sections** tab. AI agents use sections as their main building unit.
 
 ```ts
-import type { SectionDefinition } from '@payload-toolkit/builder'
+import type { SectionDefinition } from 'payload-canvas'
 
 export const sections: SectionDefinition[] = [
   {
@@ -1073,7 +1076,7 @@ A saved section runs the same field logic as a page save: the `beforeValidate` a
 - **Theme tokens.** Classes compile against your CSS entry, so tokens from your `@theme` work: `bg-primary`, `font-heading`, `rounded-card`. The Styles panel lists your colors, fonts and sizes.
 - **In the editor.** The canvas compiles the classes in the browser with Tailwind's own compiler. A new class shows at once.
 - **On save.** The `beforeChange` hook compiles only the classes the layout uses and stores the CSS in `<field>Css` (`{ hash, css }`). The output holds the utilities, their `@property` and `@keyframes` rules, and the theme variables. It has no Preflight. `RenderLayout` writes it into a `<style>` tag, so the site does not need a Tailwind build of its own. If the site has one, import the same CSS entry in your site layout for Preflight and base styles.
-- **Block elements only.** Every generated rule matches only elements with the class `builder-css` (`.flex:where(.builder-css)`). `RenderLayout` adds it to each block's `className`, so a block component needs nothing. Your own components keep the order of your site's CSS, even when a layout on the page uses the same classes. If you render layouts with your own renderer, add `builder-css` to each element that gets a block's classes (`withBuilderCssClass` from `@payload-toolkit/builder/blocks`).
+- **Block elements only.** Every generated rule matches only elements with the class `builder-css` (`.flex:where(.builder-css)`). `RenderLayout` adds it to each block's `className`, so a block component needs nothing. Your own components keep the order of your site's CSS, even when a layout on the page uses the same classes. If you render layouts with your own renderer, add `builder-css` to each element that gets a block's classes (`withBuilderCssClass` from `payload-canvas/blocks`).
 - **Tailwind plugins.** Pass them as a map on the server and in the canvas page. The canvas page must be a client component, because plugins are functions:
 
 ```ts
@@ -1154,7 +1157,7 @@ A block stores its animations in `motion`. Every kind is optional. Times are mil
 
 - A custom block component spreads `attributes` on its root element, as before. That is all it needs.
 - A component made with `fromPayloadComponent` gets the attributes on its class wrapper (`className: 'wrap'`, the default, for blocks with styles). Without a wrapper, they go on the component's first element after hydration, so an entrance above the fold can flash once on load. Keep the wrapper for animated blocks.
-- Your own renderer: put `motionAttributes(block.motion, isStaggerChild)` (from `@payload-toolkit/builder/core`) on each block's root element, and render `<MotionStyle blocks={layout.blocks} />` and `<MotionRuntime />` from `@payload-toolkit/builder-react` once on pages with motion. Without `blocks`, entrances on load wait for the runtime like entrances on scroll. `startMotion()` and `previewMotion(element)` are exported for other setups.
+- Your own renderer: put `motionAttributes(block.motion, isStaggerChild)` (from `payload-canvas/core`) on each block's root element, and render `<MotionStyle blocks={layout.blocks} />` and `<MotionRuntime />` from `payload-canvas/react` once on pages with motion. Without `blocks`, entrances on load wait for the runtime like entrances on scroll. `startMotion()` and `previewMotion(element)` are exported for other setups.
 - Parallax on an image inside a frame: give the frame `overflow-hidden` and a fixed height, and make the image taller than the frame (for example `h-[120%]`), so the moving image never shows an edge.
 
 ## Theme
@@ -1210,7 +1213,7 @@ A shadcn/ui project already has all of this. Font aliases work too: with `--font
 
 ```tsx
 // src/app/(frontend)/layout.tsx
-import { ThemeStyle } from '@payload-toolkit/builder-react/server'
+import { ThemeStyle } from 'payload-canvas/react/server'
 import config from '@payload-config'
 import { getPayload } from 'payload'
 import type { ReactNode } from 'react'
@@ -1239,7 +1242,7 @@ For about 90 popular families (Inter, Roboto, Newsreader, Hanken Grotesk and oth
 | `fonts` | `true` | `false` leaves the Google Fonts links out (for self-hosted fonts). |
 | `live` | `false` | Reloads the theme in the browser when the global is saved in another tab, or when the page becomes visible again. Use it in the canvas layout. |
 
-Other frontends: `loadTheme(payload)` from `@payload-toolkit/builder-react/server` returns `{ data, css, fontsHref }`. `themeOutput(doc)` from `@payload-toolkit/builder/theme` turns any theme document into the same output. `GET /api/builder/theme` returns it over HTTP.
+Other frontends: `loadTheme(payload)` from `payload-canvas/react/server` returns `{ data, css, fontsHref }`. `themeOutput(doc)` from `payload-canvas/theme` turns any theme document into the same output. `GET /api/builder/theme` returns it over HTTP.
 
 **Caching.** `ThemeStyle` reads the global once per request, never from Next's data cache. After each save the plugin calls `revalidateTag(<cacheTag>, { expire: 0 })` and `revalidatePath('/', 'layout')`, so statically rendered pages render again with the new theme. Tag your own cached theme reads with the cache tag. Saves with `context: { disableRevalidate: true }` (seed scripts) skip this.
 
@@ -1266,9 +1269,9 @@ websiteBuilder({
 **The pickers on other fields.** They work on any text field (the slider also on number fields):
 
 ```ts
-{ name: 'brandColor', type: 'text', admin: { components: { Field: '@payload-toolkit/builder/theme-client#ThemeColorField' } } }
-{ name: 'titleFont', type: 'text', admin: { components: { Field: '@payload-toolkit/builder/theme-client#ThemeFontField' } } }
-{ name: 'gap', type: 'number', admin: { components: { Field: '@payload-toolkit/builder/theme-client#ThemeSliderField' }, custom: { min: 0, max: 64, step: 4, unit: 'px' } } }
+{ name: 'brandColor', type: 'text', admin: { components: { Field: 'payload-canvas/theme-client#ThemeColorField' } } }
+{ name: 'titleFont', type: 'text', admin: { components: { Field: 'payload-canvas/theme-client#ThemeFontField' } } }
+{ name: 'gap', type: 'number', admin: { components: { Field: 'payload-canvas/theme-client#ThemeSliderField' }, custom: { min: 0, max: 64, step: 4, unit: 'px' } } }
 ```
 
 ## Templates and binding
@@ -1302,8 +1305,8 @@ Which template a document uses: its own `template`, else the newest default temp
 ### Render a document through its template
 
 ```tsx
-import { RenderLayout } from '@payload-toolkit/builder-react'
-import { loadLayoutData, loadTemplate } from '@payload-toolkit/builder-react/server'
+import { RenderLayout } from 'payload-canvas/react'
+import { loadLayoutData, loadTemplate } from 'payload-canvas/react/server'
 
 // depth: 1, so bound uploads and relationships are documents, not IDs
 const { docs } = await payload.find({ collection: 'posts', where: { slug: { equals: slug } }, limit: 1, depth: 1, draft })
@@ -1321,7 +1324,7 @@ return <RenderLayout layout={layout} css={found.css} context={context} blocks={b
 
 - `loadTemplate(payload, { collection, doc, templatesSlug?, draft? })` returns `{ template, layout, css }` or `null`. Without `draft` it uses published templates only.
 - `loadLayoutData(layout, blocks, payload, { draft, context, resolveLink })` resolves bindings and Field blocks against `context`, loads collection lists, and loads upload and relationship props. Pass the same `context` to `RenderLayout`.
-- `getByPath(doc, path)` and `resolveBindings(layout, context, blocks)` from `@payload-toolkit/builder/core` do the same work for a custom renderer.
+- `getByPath(doc, path)` and `resolveBindings(layout, context, blocks)` from `payload-canvas/core` do the same work for a custom renderer.
 
 ## References and Used in
 
@@ -1359,8 +1362,8 @@ websiteBuilder({
 ```
 
 - `references: false` turns all of this off.
-- To delete a used document anyway, pass the context flag: `payload.delete({ collection: 'media', id, context: { builderForceDelete: true } })` (`FORCE_DELETE_CONTEXT` from `@payload-toolkit/builder`). Postgres removes the deleted document from every `builderRefs` list.
-- `findReferrers(payload, { relationTo: 'media', value: id })` from `@payload-toolkit/builder` returns the builder documents that use a document (published and latest draft), for your own checks.
+- To delete a used document anyway, pass the context flag: `payload.delete({ collection: 'media', id, context: { builderForceDelete: true } })` (`FORCE_DELETE_CONTEXT` from `payload-canvas`). Postgres removes the deleted document from every `builderRefs` list.
+- `findReferrers(payload, { relationTo: 'media', value: id })` from `payload-canvas` returns the builder documents that use a document (published and latest draft), for your own checks.
 - Search and sitemaps can query the field like any relationship: `where: { builderRefs: { equals: { relationTo: 'media', value: id } } }`.
 
 **Existing documents.** Documents saved before this version have an empty list until their next save. To fill them now, run the backfill once:
@@ -1369,7 +1372,7 @@ websiteBuilder({
 // scripts/backfill-references.ts — run with `pnpm payload run ./scripts/backfill-references.ts`
 import { getPayload } from 'payload'
 import config from '@payload-config'
-import { backfillReferences } from '@payload-toolkit/builder'
+import { backfillReferences } from 'payload-canvas'
 
 const payload = await getPayload({ config })
 console.log(await backfillReferences(payload))
@@ -1453,7 +1456,7 @@ No API key? Claude Code and Codex can edit pages with your Claude or ChatGPT pla
 ### Turn it on
 
 ```ts
-import { openRouterAdapter } from '@payload-toolkit/builder/ai/openrouter'
+import { openRouterAdapter } from 'payload-canvas/ai/openrouter'
 
 websiteBuilder({
   collections,
@@ -1480,12 +1483,12 @@ Without an adapter, or without a key, the panel shows a setup card. The card say
 
 | Import | Adapter | Notes |
 |---|---|---|
-| `@payload-toolkit/builder/ai/openrouter` | `openRouterAdapter({ apiKey, model?, siteUrl? })` | One key for hundreds of models. Easiest start. |
-| `@payload-toolkit/builder/ai/cloudflare-gateway` | `cloudflareGatewayAdapter({ accountId, gatewayId, model, gatewayToken?, apiKey? })` | Cloudflare AI Gateway in front of OpenAI, Anthropic, Google and others. Supports stored keys and unified billing. |
-| `@payload-toolkit/builder/ai/cloudflare-workers-ai` | `cloudflareWorkersAIAdapter({ accountId, apiToken, model?, gatewayId? })` | Models that run on Cloudflare (Workers AI). Only models with function calling work. |
-| `@payload-toolkit/builder/ai/openai-compatible` | `openAICompatibleAdapter({ baseURL, model, apiKey? })` | OpenAI, Groq, Together, Ollama, LM Studio, vLLM and other Chat Completions servers. |
-| `@payload-toolkit/builder/ai/anthropic` | `anthropicAdapter({ apiKey?, model? })` | The Anthropic Messages API with prompt caching, adaptive thinking and the refusal fallback. Needs `pnpm add @anthropic-ai/sdk`. |
-| `@payload-toolkit/builder/ai/fake` | `fakeAdapter()` | A scripted model for tests and demos. No network, no cost. Never use it in production. |
+| `payload-canvas/ai/openrouter` | `openRouterAdapter({ apiKey, model?, siteUrl? })` | One key for hundreds of models. Easiest start. |
+| `payload-canvas/ai/cloudflare-gateway` | `cloudflareGatewayAdapter({ accountId, gatewayId, model, gatewayToken?, apiKey? })` | Cloudflare AI Gateway in front of OpenAI, Anthropic, Google and others. Supports stored keys and unified billing. |
+| `payload-canvas/ai/cloudflare-workers-ai` | `cloudflareWorkersAIAdapter({ accountId, apiToken, model?, gatewayId? })` | Models that run on Cloudflare (Workers AI). Only models with function calling work. |
+| `payload-canvas/ai/openai-compatible` | `openAICompatibleAdapter({ baseURL, model, apiKey? })` | OpenAI, Groq, Together, Ollama, LM Studio, vLLM and other Chat Completions servers. |
+| `payload-canvas/ai/anthropic` | `anthropicAdapter({ apiKey?, model? })` | The Anthropic Messages API with prompt caching, adaptive thinking and the refusal fallback. Needs `pnpm add @anthropic-ai/sdk`. |
+| `payload-canvas/ai/fake` | `fakeAdapter()` | A scripted model for tests and demos. No network, no cost. Never use it in production. |
 
 Examples:
 
@@ -1514,7 +1517,7 @@ The model, the key, `maxTokens` and provider settings belong to the adapter. See
 
 ### Write your own adapter
 
-An adapter is a plain object of type `AiAdapter` from `@payload-toolkit/builder/ai`. You do not need to change the plugin.
+An adapter is a plain object of type `AiAdapter` from `payload-canvas/ai`. You do not need to change the plugin.
 
 ```ts
 type AiAdapter = {
@@ -1543,7 +1546,7 @@ Stored messages use the block types `text`, `tool_use` and `tool_result`. The ag
 This example wraps a Chat Completions endpoint without streaming, in about 40 lines:
 
 ```ts
-import { chatTools, parseArguments, toChatMessages, type AiAdapter, type AiContentBlock } from '@payload-toolkit/builder/ai'
+import { chatTools, parseArguments, toChatMessages, type AiAdapter, type AiContentBlock } from 'payload-canvas/ai'
 
 export function myAdapter({ url, apiKey, model }: { url: string; apiKey?: string; model: string }): AiAdapter {
   return {
@@ -1594,7 +1597,7 @@ For a streaming OpenAI-format API, `createOpenAIFormatAdapter({ name, label, mod
 The assistant, the inspector (a **Generate image** button under every upload field) and MCP clients can make new images. The site saves each image in the media collection, with alt text. Image generation has its own adapter, so it works with any chat model, and also for Claude Code or Codex over MCP:
 
 ```ts
-import { openRouterImageAdapter } from '@payload-toolkit/builder/ai/images/openrouter'
+import { openRouterImageAdapter } from 'payload-canvas/ai/images/openrouter'
 
 ai: {
   adapter: openRouterAdapter({ apiKey: process.env.OPENROUTER_API_KEY }),
@@ -1604,10 +1607,10 @@ ai: {
 
 | Import | Adapter |
 |---|---|
-| `@payload-toolkit/builder/ai/images/openrouter` | `openRouterImageAdapter({ apiKey, model? })`: every image model on OpenRouter. About 1.5 US cents per image with the default model. |
-| `@payload-toolkit/builder/ai/images/openai` | `openAIImageAdapter({ apiKey, model?, baseURL?, quality? })`: the OpenAI Images API and compatible servers. |
-| `@payload-toolkit/builder/ai/images/cloudflare-workers-ai` | `cloudflareWorkersAIImageAdapter({ accountId, apiToken, model? })`: FLUX and other models on Cloudflare. |
-| `@payload-toolkit/builder/ai/images/fake` | `fakeImageAdapter()`: a local gradient PNG for tests. |
+| `payload-canvas/ai/images/openrouter` | `openRouterImageAdapter({ apiKey, model? })`: every image model on OpenRouter. About 1.5 US cents per image with the default model. |
+| `payload-canvas/ai/images/openai` | `openAIImageAdapter({ apiKey, model?, baseURL?, quality? })`: the OpenAI Images API and compatible servers. |
+| `payload-canvas/ai/images/cloudflare-workers-ai` | `cloudflareWorkersAIImageAdapter({ accountId, apiToken, model? })`: FLUX and other models on Cloudflare. |
+| `payload-canvas/ai/images/fake` | `fakeImageAdapter()`: a local gradient PNG for tests. |
 
 A chat model does not return images through the chat API, even when its app can make images. That is why the image adapter is a separate setting. Without it, the Generate button stays hidden and the `generateImage` tool says what to set up. Uploads run as the signed-in user, after a `create` access check. Limits, cost, the "generated by" note and writing your own `AiImageAdapter`: [docs/ai/images.md](https://github.com/jon8800/payload-toolkit/blob/main/docs/ai/images.md).
 
@@ -1639,7 +1642,7 @@ The page content goes to the provider you pick (and through OpenRouter or Cloudf
 
 ### Testing without a key
 
-`fakeAdapter()` from `@payload-toolkit/builder/ai/fake` is a scripted model with no network calls. It lists the sections, inserts a hero section at the top of the page, changes its heading, and streams a few sentences. In the starter, set `BUILDER_AI_FAKE=1` in `.env` (ignored when `NODE_ENV=production`) and restart the server. For your own tests, pass `fakeAdapter({ steps: [...] })` with one scripted reply per model call.
+`fakeAdapter()` from `payload-canvas/ai/fake` is a scripted model with no network calls. It lists the sections, inserts a hero section at the top of the page, changes its heading, and streams a few sentences. In the starter, set `BUILDER_AI_FAKE=1` in `.env` (ignored when `NODE_ENV=production`) and restart the server. For your own tests, pass `fakeAdapter({ steps: [...] })` with one scripted reply per model call.
 
 ## AI editing over MCP
 
@@ -1651,7 +1654,7 @@ pnpm add payload-mcp-toolkit zod
 
 ```ts
 import { mcpToolkitPlugin } from 'payload-mcp-toolkit'
-import { builderMcpTools } from '@payload-toolkit/builder/mcp'
+import { builderMcpTools } from 'payload-canvas/mcp'
 
 const collections = { pages: { url: (doc) => `/${doc.slug}` } }
 
@@ -1777,7 +1780,7 @@ All entries must show one version. Pin `payload`, `@payloadcms/*` and `next` to 
 
 **After adding `payload-mcp-toolkit`, `user.email` fails to typecheck.** The toolkit adds an API-key auth strategy, so `req.user` and `payload.auth()` can return an API key. Check `'email' in user` before you read user fields.
 
-**Turbopack.** The packages work with Turbopack (`next dev` and `next build`, the default in Next 16) and webpack. They ship `.scss` files for the admin, which Next compiles the same way it compiles Payload's own SCSS.
+**Turbopack.** The package works with Turbopack (`next dev` and `next build`, the default in Next 16) and webpack. It ships `.scss` files for the admin, which Next compiles the same way it compiles Payload's own SCSS.
 
 ## Limits
 
@@ -1785,6 +1788,8 @@ This is version 0.1. Before 1.0, a minor version can change the API. Known limit
 
 - **Payload 3 only.** Payload 4 (canary today) changes the admin UI. The builder does not support it yet.
 - **Next.js and React only.** The admin editor and the canvas need a Next.js app (Payload's own requirement). Other frontends can render the stored JSON with their own code.
+- **`RenderLayout` needs React Server Components.** `RenderLayout` and the `payload-canvas/react/server` helpers need the Next.js App Router (or another RSC framework).
+- **The canvas runtime runs only in the editor's iframe.** `payload-canvas/react/canvas` belongs on the canvas route and nowhere else.
 - **Tailwind CSS v4 only.** Styles are Tailwind classes, compiled from your Tailwind v4 entry CSS.
 - **One server process.** Live sessions live in memory. See [Multiplayer editing](#multiplayer-editing) and [Deploying](#deploying). Serverless platforms are not supported.
 - **Tested databases.** Postgres is tested end to end. Other Payload adapters store the layout in a JSON field and should work, but are not tested.

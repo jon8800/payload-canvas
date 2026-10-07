@@ -3,7 +3,7 @@
 The **Assistant** panel in the page builder talks to one model API on your server. An **adapter** makes that connection. You pick it in `payload.config.ts`, the same way you pick a database or storage adapter in Payload:
 
 ```ts
-import { openRouterAdapter } from '@payload-toolkit/builder/ai/openrouter'
+import { openRouterAdapter } from 'payload-canvas/ai/openrouter'
 
 websiteBuilder({
   // ...
@@ -15,12 +15,12 @@ Each adapter has its own import path. Your site loads only the adapter you impor
 
 | Adapter | Import | What it is |
 |---|---|---|
-| `openRouterAdapter` | `@payload-toolkit/builder/ai/openrouter` | One key for hundreds of models (OpenAI, Google, Anthropic, DeepSeek, …). Easiest start. |
-| `cloudflareGatewayAdapter` | `@payload-toolkit/builder/ai/cloudflare-gateway` | Cloudflare AI Gateway in front of many providers: logs, caching, rate limits, spend limits, unified billing. |
-| `cloudflareWorkersAIAdapter` | `@payload-toolkit/builder/ai/cloudflare-workers-ai` | Models that run on Cloudflare's network (Workers AI). |
-| `openAICompatibleAdapter` | `@payload-toolkit/builder/ai/openai-compatible` | Any server that speaks the OpenAI Chat Completions format: OpenAI, Groq, Together, Ollama, LM Studio, vLLM. |
-| `anthropicAdapter` | `@payload-toolkit/builder/ai/anthropic` | The Anthropic Messages API, with prompt caching and adaptive thinking. Needs the `@anthropic-ai/sdk` package. |
-| `fakeAdapter` | `@payload-toolkit/builder/ai/fake` | A scripted model for tests and demos. No network, no cost. |
+| `openRouterAdapter` | `payload-canvas/ai/openrouter` | One key for hundreds of models (OpenAI, Google, Anthropic, DeepSeek, …). Easiest start. |
+| `cloudflareGatewayAdapter` | `payload-canvas/ai/cloudflare-gateway` | Cloudflare AI Gateway in front of many providers: logs, caching, rate limits, spend limits, unified billing. |
+| `cloudflareWorkersAIAdapter` | `payload-canvas/ai/cloudflare-workers-ai` | Models that run on Cloudflare's network (Workers AI). |
+| `openAICompatibleAdapter` | `payload-canvas/ai/openai-compatible` | Any server that speaks the OpenAI Chat Completions format: OpenAI, Groq, Together, Ollama, LM Studio, vLLM. |
+| `anthropicAdapter` | `payload-canvas/ai/anthropic` | The Anthropic Messages API, with prompt caching and adaptive thinking. Needs the `@anthropic-ai/sdk` package. |
+| `fakeAdapter` | `payload-canvas/ai/fake` | A scripted model for tests and demos. No network, no cost. |
 
 The first four need no extra package: they call the API with `fetch` and read the streamed reply themselves.
 
@@ -30,7 +30,7 @@ No API key at all? Use Claude Code or Codex with your Claude or ChatGPT plan. Se
 
 Image generation has its own adapter (`ai.images`), separate from the chat model. See [images.md](images.md).
 
-To write your own adapter, see the README, [Write your own adapter](../../packages/builder/README.md#write-your-own-adapter).
+To write your own adapter, see the README, [Write your own adapter](../../packages/payload-canvas/README.md#write-your-own-adapter).
 
 ## Options for every OpenAI-format adapter
 
@@ -57,7 +57,7 @@ OpenRouter, both Cloudflare adapters and `openAICompatibleAdapter` also take the
 3. Add the adapter and restart the server:
 
    ```ts
-   import { openRouterAdapter } from '@payload-toolkit/builder/ai/openrouter'
+   import { openRouterAdapter } from 'payload-canvas/ai/openrouter'
 
    ai: {
      adapter: openRouterAdapter({
@@ -104,7 +104,7 @@ https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_id}/compat/chat/compl
 Model ids are `provider/model`, for example `openai/gpt-5.2`, `anthropic/claude-4-5-sonnet`, `google/gemini-2.5-pro` or `workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast`. See Cloudflare's [OpenAI compatibility](https://developers.cloudflare.com/ai-gateway/usage/chat-completion/) page for the list.
 
 ```ts
-import { cloudflareGatewayAdapter } from '@payload-toolkit/builder/ai/cloudflare-gateway'
+import { cloudflareGatewayAdapter } from 'payload-canvas/ai/cloudflare-gateway'
 
 ai: {
   adapter: cloudflareGatewayAdapter({
@@ -141,7 +141,7 @@ https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1/chat/completion
 2. Add the adapter:
 
    ```ts
-   import { cloudflareWorkersAIAdapter } from '@payload-toolkit/builder/ai/cloudflare-workers-ai'
+   import { cloudflareWorkersAIAdapter } from 'payload-canvas/ai/cloudflare-workers-ai'
 
    ai: {
      adapter: cloudflareWorkersAIAdapter({
@@ -166,7 +166,7 @@ Only models with **function calling** work. Find them in the [model catalog](htt
 ## Any OpenAI-compatible API
 
 ```ts
-import { openAICompatibleAdapter } from '@payload-toolkit/builder/ai/openai-compatible'
+import { openAICompatibleAdapter } from 'payload-canvas/ai/openai-compatible'
 
 ai: {
   adapter: openAICompatibleAdapter({
@@ -203,7 +203,7 @@ pnpm add @anthropic-ai/sdk
 ```
 
 ```ts
-import { anthropicAdapter } from '@payload-toolkit/builder/ai/anthropic'
+import { anthropicAdapter } from 'payload-canvas/ai/anthropic'
 
 ai: { adapter: anthropicAdapter({ apiKey: process.env.ANTHROPIC_API_KEY }) }
 ```
@@ -222,7 +222,7 @@ This adapter uses prompt caching, adaptive thinking and `ai.effort` (default `me
 ## The fake adapter
 
 ```ts
-import { fakeAdapter } from '@payload-toolkit/builder/ai/fake'
+import { fakeAdapter } from 'payload-canvas/ai/fake'
 
 ai: { adapter: fakeAdapter() }
 ```
