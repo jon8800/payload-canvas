@@ -25,7 +25,7 @@ const AGENTS: { id: Agent; label: string }[] = [
   { id: 'claude', label: 'Claude Code' },
   { id: 'codex', label: 'Codex' },
 ]
-export const CONNECT_DOCS = 'https://github.com/jon8800/payload-toolkit/blob/main/docs/ai/connect-claude-code-and-codex.md'
+export const CONNECT_DOCS = 'https://github.com/jon8800/payload-canvas/blob/main/docs/ai/connect-claude-code-and-codex.md'
 
 export function ConnectAgents({ onClose }: { onClose?: () => void }) {
   const { config } = useConfig()

@@ -17,7 +17,7 @@ The CLI asks for the project name, your Postgres details, and whether to seed de
 1. Checks Postgres first: the server must be reachable, and the database must not exist yet. If something is wrong, it stops before it writes any file.
 2. Copies the starter app (`apps/starter`) and the AI guides it links to (`docs/ai`).
    - Inside a checkout of the repo, it copies from the checkout.
-   - Anywhere else, it downloads the repo from GitHub (`jon8800/payload-toolkit`).
+   - Anywhere else, it downloads the repo from GitHub (`jon8800/payload-canvas`).
 3. Leaves out repo-only files: `node_modules`, `.next`, `.turbo`, `.env`, `next-env.d.ts`, Docker files (they expect the monorepo), `scripts/setup.ts`, `scripts/lib`, `scripts/_*`, `docs/qa`, screenshots, and uploaded files in `public/media`.
 4. Sets the package name, removes the repo-only scripts and the dev dependencies they needed, and points `payload-canvas` at a source (see below).
 5. Writes `.env` from `.env.example` with your `DATABASE_URL` and a new random `PAYLOAD_SECRET`.
@@ -71,7 +71,7 @@ npx create-payload-canvas my-website --yes --db-url postgresql://postgres:postgr
 npx create-payload-canvas my-website --yes --no-install --skip-db
 
 # From GitHub, with the package from a local checkout (before it is published)
-npx create-payload-canvas my-website --yes --github --packages C:\code\payload-toolkit
+npx create-payload-canvas my-website --yes --github --packages C:\code\payload-canvas
 
 # Use a database that already exists
 npx create-payload-canvas my-website --yes --db-name my_site --reuse-db

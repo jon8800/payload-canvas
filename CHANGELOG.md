@@ -46,4 +46,4 @@ First public release as two packages: `payload-canvas` (the plugin, the admin ed
 - Peer dependencies: `payload`, `@payloadcms/ui`, `@payloadcms/richtext-lexical` `^3.90.0`, `next` `^16.3.0`, `react` and `react-dom` `^19.2.0`, `tailwindcss` `^4.3.0`. Optional: `@anthropic-ai/sdk`, `payload-mcp-toolkit`, `zod`.
 - Tested with a blank `create-payload-app` project (Payload 3.90.2, Next.js 16.3.3, React 19.2.6, Postgres) in `next dev` and `next build` + `next start`.
 
-[0.1.0]: https://github.com/jon8800/payload-toolkit/releases/tag/v0.1.0
+[0.1.0]: https://github.com/jon8800/payload-canvas/releases/tag/v0.1.0

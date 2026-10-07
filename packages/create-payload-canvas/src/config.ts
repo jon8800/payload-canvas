@@ -1,6 +1,6 @@
 // The GitHub repo that hosts Payload Canvas. Change it here if the repo moves.
 export const GITHUB_OWNER = 'jon8800'
-export const GITHUB_REPO = 'payload-toolkit'
+export const GITHUB_REPO = 'payload-canvas'
 export const DEFAULT_REF = 'main'
 export const STARTER_SUBDIR = 'apps/starter'
 // Guides that the starter's .env.example points to. They live at the repo root.

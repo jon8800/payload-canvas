@@ -20,7 +20,7 @@ import { Markdown } from './MarkdownView'
 
 import './assistant.scss'
 
-const PROVIDER_DOCS = 'https://github.com/jon8800/payload-toolkit/blob/main/docs/ai/providers.md'
+const PROVIDER_DOCS = 'https://github.com/jon8800/payload-canvas/blob/main/docs/ai/providers.md'
 /** Distance from the bottom (px) within which new content keeps the list scrolled to the end. */
 const STICK_DISTANCE = 48
 const MAX_INPUT_HEIGHT = 168
