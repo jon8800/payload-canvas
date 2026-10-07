@@ -43,6 +43,12 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 const settle = async () => {
   for (let i = 0; i < 5; i++) await new Promise((resolve) => setImmediate(resolve))
 }
+/** Polls until `check` is true (or 2 s pass), so slow CI machines do not fail fixed delays. */
+const waitFor = async (check: () => boolean) => {
+  const end = Date.now() + 2000
+  while (!check() && Date.now() < end) await delay(5)
+  await settle()
+}
 const logger = { info() {}, warn() {}, error() {} }
 const css = { entry: 'does-not-exist.css' }
 const target: SessionTarget = { collection: 'pages', id: 'p1', field: 'layout', drafts: true, autosave: true }
@@ -161,8 +167,7 @@ describe('hook changes reach every editor', () => {
     await db.commit([{ type: 'update', id: 'p', props: { slug: 'A B' } }])
     // Publish before the session's own save: the guard gives the save the session's layout.
     await db.store.update({ collection: 'pages', id: 'p1', data: { _status: 'published' }, draft: false, context: {}, user: admin })
-    await delay(30)
-    await settle()
+    await waitFor(() => db.latest._status === 'published' && propsOf(db.latest.layout).slug === 'a-b')
     assert.equal(propsOf(db.latest.layout).slug, 'a-b')
     assert.equal(db.latest._status, 'published')
     const fromHooks = events.find((e): e is LiveCommitEvent => e.type === 'commit' && e.actor.id === FIELD_HOOKS_ACTOR.id)
