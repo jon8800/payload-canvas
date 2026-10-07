@@ -30,7 +30,6 @@ COPY apps/starter/package.json apps/starter/
 COPY packages/builder/package.json packages/builder/
 COPY packages/builder-react/package.json packages/builder-react/
 COPY packages/create-payload-starter/package.json packages/create-payload-starter/
-COPY packages/shared/package.json packages/shared/
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile --filter . --filter payload-starter...
 
