@@ -4,42 +4,39 @@ import * as p from '@clack/prompts'
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { BUILDER_PACKAGES } from './config.js'
+import { BUILDER_PACKAGE } from './config.js'
 import { buildDatabaseUrl, checkDatabase, createDatabase, type DbState } from './database.js'
 import { resolveOptions, type Options } from './options.js'
 import {
-  builderPackagesArePublished,
+  builderPackageIsPublished,
   checkProject,
-  hasBuilderPackages,
-  packBuilderPackages,
+  hasBuilderPackage,
+  packBuilderPackage,
   updatePackageJson,
   writeEnv,
-  type Tarballs,
 } from './project.js'
 import { hasCommand, run } from './run.js'
 import { copyStarterFromRepo, downloadRepo, findRepoRoot, isRepoRoot } from './source.js'
 
-const PACKAGE_NAMES = BUILDER_PACKAGES.map((pkg) => pkg.name).join(' and ')
-
-/** Works out where the starter files and the builder packages come from. Stops early if the install cannot work. */
+/** Works out where the starter files and the payload-canvas package come from. Stops early if the install cannot work. */
 async function resolveSource(options: Options) {
-  if (options.packages && !hasBuilderPackages(options.packages)) {
-    throw new Error(`--packages "${options.packages}" is not a payload-toolkit checkout (no packages/builder folder).`)
+  if (options.packages && !hasBuilderPackage(options.packages)) {
+    throw new Error(`--packages "${options.packages}" is not a Payload Canvas checkout (no packages/${BUILDER_PACKAGE.dir} folder).`)
   }
   // A repo checkout also holds the matching starter, so use it unless --github says otherwise.
   const checkout = options.packages && isRepoRoot(options.packages) ? options.packages : null
   const localRepo = options.github ? null : (findRepoRoot() ?? checkout)
-  // Where `pnpm pack` finds the builder packages. Null means: use the version on npm.
+  // Where `pnpm pack` finds the payload-canvas package. Null means: use the version on npm.
   const packagesRoot = options.packages ?? localRepo
 
   if (!packagesRoot && options.install) {
-    const published = await builderPackagesArePublished()
+    const published = await builderPackageIsPublished()
     if (published === false) {
       throw new Error(
         [
-          `${PACKAGE_NAMES} are not published to npm yet, so the install would fail.`,
+          `${BUILDER_PACKAGE.name} is not published to npm yet, so the install would fail.`,
           'Pick one:',
-          '  --packages <path-to-a-payload-toolkit-checkout>   pack them from a local checkout',
+          '  --packages <path-to-a-payload-canvas-checkout>    pack it from a local checkout',
           '  --no-install                                      only create the files, install later',
         ].join('\n'),
       )
@@ -68,10 +65,10 @@ async function main() {
     }
   }
 
-  // 1. Copy the starter. 2. Point the builder packages at local tarballs or at npm. Write .env.
+  // 1. Copy the starter. 2. Point payload-canvas at a local tarball or at npm. Write .env.
   // If this part fails, delete the half-made folder so the command can run again.
   const spinner = p.spinner()
-  let tarballs: Tarballs | null = null
+  let tarball: string | null = null
   try {
     fs.mkdirSync(targetDir, { recursive: true })
     if (localRepo) {
@@ -88,9 +85,9 @@ async function main() {
     }
     spinner.stop('Starter files ready.')
 
-    spinner.start(packagesRoot ? 'Packing the builder packages...' : 'Writing package.json and .env...')
-    tarballs = packagesRoot ? packBuilderPackages(packagesRoot, targetDir) : null
-    updatePackageJson(targetDir, name, tarballs, manager)
+    spinner.start(packagesRoot ? `Packing ${BUILDER_PACKAGE.name}...` : 'Writing package.json and .env...')
+    tarball = packagesRoot ? packBuilderPackage(packagesRoot, targetDir) : null
+    updatePackageJson(targetDir, name, tarball, manager)
     writeEnv(targetDir, buildDatabaseUrl(db))
     spinner.stop('package.json and .env written.')
   } catch (error) {
@@ -100,8 +97,8 @@ async function main() {
   }
 
   for (const problem of checkProject(targetDir)) p.log.warn(problem)
-  if (!tarballs && !options.install) {
-    p.log.warn(`${PACKAGE_NAMES} come from npm. They must be published before "${manager} install" works.`)
+  if (!tarball && !options.install) {
+    p.log.warn(`${BUILDER_PACKAGE.name} comes from npm. It must be published before "${manager} install" works.`)
   }
 
   // 3. Create the database.

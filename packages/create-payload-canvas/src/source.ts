@@ -23,7 +23,7 @@ export function isRepoRoot(dir: string): boolean {
   return fs.existsSync(path.join(dir, 'pnpm-workspace.yaml')) && fs.existsSync(path.join(dir, STARTER_SUBDIR, 'package.json'))
 }
 
-/** Finds the repo root when the CLI file lives inside the payload-toolkit repo. */
+/** Finds the repo root when the CLI file lives inside the Payload Canvas repo. */
 export function findRepoRoot(): string | null {
   let dir = path.dirname(fileURLToPath(import.meta.url))
   for (;;) {
@@ -57,7 +57,7 @@ export async function downloadRepo(ref: string): Promise<string> {
     response = await fetch(url, { signal: AbortSignal.timeout(60_000) })
   } catch (error) {
     throw new Error(
-      `Could not reach GitHub (${error instanceof Error ? error.message : String(error)}). Check your network, or run the CLI from a payload-toolkit checkout.`,
+      `Could not reach GitHub (${error instanceof Error ? error.message : String(error)}). Check your network, or run the CLI from a Payload Canvas checkout.`,
       { cause: error },
     )
   }
@@ -66,7 +66,7 @@ export async function downloadRepo(ref: string): Promise<string> {
   }
   if (!response.ok || !response.body) throw new Error(`Download failed (HTTP ${response.status}) from ${url}`)
 
-  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'create-payload-toolkit-'))
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'create-payload-canvas-'))
   try {
     // GitHub puts everything in one top folder, `strip: 1` removes it.
     const wanted = [`${STARTER_SUBDIR}/`, `${DOCS_SUBDIR}/`]
