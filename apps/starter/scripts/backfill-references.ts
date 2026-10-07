@@ -3,7 +3,7 @@
 // Run with `pnpm payload run ./scripts/backfill-references.ts`.
 import { getPayload } from 'payload'
 import config from '@payload-config'
-import { backfillReferences } from '@payload-toolkit/builder'
+import { backfillReferences } from 'payload-canvas'
 
 try {
   const payload = await getPayload({ config })

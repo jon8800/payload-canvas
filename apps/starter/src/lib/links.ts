@@ -1,5 +1,5 @@
 // Maps documents to frontend paths. Safe on the server and in the client canvas.
-import type { ResolveLink } from '@payload-toolkit/builder-react'
+import type { ResolveLink } from 'payload-canvas/react'
 
 /** The page with this slug is served at "/". The site settings home page must use it too. */
 export const HOME_SLUG = 'home'

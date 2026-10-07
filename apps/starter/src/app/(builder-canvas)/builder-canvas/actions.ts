@@ -4,7 +4,7 @@
 // components that load data. It sends those blocks here; they render with the site's own
 // components and go back as React Server Component output. It also loads the page data.
 import config from '@payload-config'
-import { createCanvasServer, type CanvasServerRequest } from '@payload-toolkit/builder-react/server'
+import { createCanvasServer, type CanvasServerRequest } from 'payload-canvas/react/server'
 import { builderBlocks, resolveLink } from '@/builder'
 import { loadPageData, serverBlockComponents } from '@/components/blocks/server'
 

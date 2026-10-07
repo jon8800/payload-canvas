@@ -7,7 +7,7 @@ import type { ReactNode } from 'react'
 
 import { getServerSideURL } from '@/utilities/getURL'
 import { mergeOpenGraph } from '@/utilities/mergeOpenGraph'
-import { ThemeStyle } from '@payload-toolkit/builder-react/server'
+import { ThemeStyle } from 'payload-canvas/react/server'
 import config from '@payload-config'
 import { getPayload } from 'payload'
 

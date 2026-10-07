@@ -1,6 +1,6 @@
 // Website builder blocks: one list for payload.config.ts, the site renderer, the canvas iframe and
-// the seed. Client-safe: `@payload-toolkit/builder/blocks` has no server code.
-import { defaultBlocks, defineBlock } from '@payload-toolkit/builder/blocks'
+// the seed. Client-safe: `payload-canvas/blocks` has no server code.
+import { defaultBlocks, defineBlock } from 'payload-canvas/blocks'
 import { formClassList } from '@/components/blocks/formClasses'
 import { legacyBuilderBlocks, legacyDemo } from '@/legacy-fixture'
 import { fieldSemanticsBlocks } from '@/legacy-fixture/fieldSemantics'

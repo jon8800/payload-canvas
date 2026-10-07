@@ -1,0 +1,248 @@
+{
+  "name": "payload-canvas",
+  "version": "0.1.0",
+  "description": "Payload Canvas: a visual drag-and-drop website builder for Payload CMS 3. Nested layout blocks, Tailwind styling, sections, templates, live AI editing over MCP, and the React renderer for your site.",
+  "keywords": [
+    "payload",
+    "payloadcms",
+    "payload-plugin",
+    "page-builder",
+    "website-builder",
+    "drag-and-drop",
+    "tailwindcss",
+    "react",
+    "react-server-components",
+    "nextjs",
+    "mcp",
+    "claude",
+    "ai-assistant",
+    "openrouter",
+    "cloudflare",
+    "image-generation"
+  ],
+  "license": "MIT",
+  "author": "Eugene Lominos <hello@eugenelominos.com>",
+  "homepage": "https://github.com/jon8800/payload-toolkit/tree/main/packages/payload-canvas#readme",
+  "bugs": "https://github.com/jon8800/payload-toolkit/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jon8800/payload-toolkit.git",
+    "directory": "packages/payload-canvas"
+  },
+  "type": "module",
+  "sideEffects": [
+    "*.scss",
+    "*.css"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./core": "./src/core/index.ts",
+    "./blocks": "./src/blocks/index.ts",
+    "./protocol": "./src/protocol/index.ts",
+    "./css": "./src/css/index.ts",
+    "./css-browser": "./src/css/browser.ts",
+    "./client": "./src/admin/client.ts",
+    "./rsc": "./src/admin/rsc.ts",
+    "./live": "./src/live/index.ts",
+    "./mcp": "./src/mcp/index.ts",
+    "./theme": "./src/theme/index.ts",
+    "./theme-client": "./src/theme/client.ts",
+    "./ai": "./src/ai/index.ts",
+    "./ai/openrouter": "./src/ai/adapters/openrouter.ts",
+    "./ai/cloudflare-gateway": "./src/ai/adapters/cloudflare-gateway.ts",
+    "./ai/cloudflare-workers-ai": "./src/ai/adapters/cloudflare-workers-ai.ts",
+    "./ai/openai-compatible": "./src/ai/adapters/openai-compatible.ts",
+    "./ai/anthropic": "./src/ai/adapters/anthropic.ts",
+    "./ai/fake": "./src/ai/adapters/fake.ts",
+    "./ai/images/openrouter": "./src/ai/images/openrouter.ts",
+    "./ai/images/openai": "./src/ai/images/openai.ts",
+    "./ai/images/cloudflare-workers-ai": "./src/ai/images/cloudflare-workers-ai.ts",
+    "./ai/images/fake": "./src/ai/images/fake.ts",
+    "./react": "./src/react/index.ts",
+    "./react/canvas": "./src/react/canvas/index.ts",
+    "./react/server": "./src/react/server.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./core": {
+        "types": "./dist/core/index.d.ts",
+        "default": "./dist/core/index.js"
+      },
+      "./blocks": {
+        "types": "./dist/blocks/index.d.ts",
+        "default": "./dist/blocks/index.js"
+      },
+      "./protocol": {
+        "types": "./dist/protocol/index.d.ts",
+        "default": "./dist/protocol/index.js"
+      },
+      "./css": {
+        "types": "./dist/css/index.d.ts",
+        "default": "./dist/css/index.js"
+      },
+      "./css-browser": {
+        "types": "./dist/css/browser.d.ts",
+        "default": "./dist/css/browser.js"
+      },
+      "./client": {
+        "types": "./dist/admin/client.d.ts",
+        "default": "./dist/admin/client.js"
+      },
+      "./rsc": {
+        "types": "./dist/admin/rsc.d.ts",
+        "default": "./dist/admin/rsc.js"
+      },
+      "./live": {
+        "types": "./dist/live/index.d.ts",
+        "default": "./dist/live/index.js"
+      },
+      "./mcp": {
+        "types": "./dist/mcp/index.d.ts",
+        "default": "./dist/mcp/index.js"
+      },
+      "./theme": {
+        "types": "./dist/theme/index.d.ts",
+        "default": "./dist/theme/index.js"
+      },
+      "./theme-client": {
+        "types": "./dist/theme/client.d.ts",
+        "default": "./dist/theme/client.js"
+      },
+      "./ai": {
+        "types": "./dist/ai/index.d.ts",
+        "default": "./dist/ai/index.js"
+      },
+      "./ai/openrouter": {
+        "types": "./dist/ai/adapters/openrouter.d.ts",
+        "default": "./dist/ai/adapters/openrouter.js"
+      },
+      "./ai/cloudflare-gateway": {
+        "types": "./dist/ai/adapters/cloudflare-gateway.d.ts",
+        "default": "./dist/ai/adapters/cloudflare-gateway.js"
+      },
+      "./ai/cloudflare-workers-ai": {
+        "types": "./dist/ai/adapters/cloudflare-workers-ai.d.ts",
+        "default": "./dist/ai/adapters/cloudflare-workers-ai.js"
+      },
+      "./ai/openai-compatible": {
+        "types": "./dist/ai/adapters/openai-compatible.d.ts",
+        "default": "./dist/ai/adapters/openai-compatible.js"
+      },
+      "./ai/anthropic": {
+        "types": "./dist/ai/adapters/anthropic.d.ts",
+        "default": "./dist/ai/adapters/anthropic.js"
+      },
+      "./ai/fake": {
+        "types": "./dist/ai/adapters/fake.d.ts",
+        "default": "./dist/ai/adapters/fake.js"
+      },
+      "./ai/images/openrouter": {
+        "types": "./dist/ai/images/openrouter.d.ts",
+        "default": "./dist/ai/images/openrouter.js"
+      },
+      "./ai/images/openai": {
+        "types": "./dist/ai/images/openai.d.ts",
+        "default": "./dist/ai/images/openai.js"
+      },
+      "./ai/images/cloudflare-workers-ai": {
+        "types": "./dist/ai/images/cloudflare-workers-ai.d.ts",
+        "default": "./dist/ai/images/cloudflare-workers-ai.js"
+      },
+      "./ai/images/fake": {
+        "types": "./dist/ai/images/fake.d.ts",
+        "default": "./dist/ai/images/fake.js"
+      },
+      "./react": {
+        "types": "./dist/react/index.d.ts",
+        "default": "./dist/react/index.js"
+      },
+      "./react/canvas": {
+        "types": "./dist/react/canvas/index.d.ts",
+        "default": "./dist/react/canvas/index.js"
+      },
+      "./react/server": {
+        "types": "./dist/react/server.d.ts",
+        "default": "./dist/react/server.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node ../../scripts/build-package.mjs",
+    "prepack": "node ../../scripts/build-package.mjs",
+    "prepublishOnly": "node ../../scripts/check-publish.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint",
+    "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "generate:fonts": "node scripts/generate-google-fonts.mjs"
+  },
+  "dependencies": {
+    "@base-ui/react": "^1.8.0",
+    "@dnd-kit/core": "6.3.1",
+    "@lexical/history": "0.50.0",
+    "@lexical/list": "0.50.0",
+    "@lexical/rich-text": "0.50.0",
+    "@lexical/selection": "0.50.0",
+    "@lexical/utils": "0.50.0",
+    "lexical": "0.50.0",
+    "motion": "^14.0.0",
+    "react-colorful": "^5.8.1"
+  },
+  "peerDependencies": {
+    "@anthropic-ai/sdk": ">=0.131.0",
+    "@payloadcms/richtext-lexical": "^3.90.0",
+    "@payloadcms/ui": "^3.90.0",
+    "next": "^16.3.0",
+    "payload": "^3.90.0",
+    "payload-mcp-toolkit": ">=0.9.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tailwindcss": "^4.3.0",
+    "zod": "^3.25 || ^4"
+  },
+  "peerDependenciesMeta": {
+    "@anthropic-ai/sdk": {
+      "optional": true
+    },
+    "payload-mcp-toolkit": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
+    "@payloadcms/richtext-lexical": "^3.90.2",
+    "@payloadcms/ui": "^3.90.2",
+    "@types/node": "^24",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "google-font-metadata": "^6.0.8",
+    "next": "16.3.8",
+    "oxlint": "^1.86.0",
+    "payload": "^3.90.2",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
+    "typescript": "7.0.2",
+    "zod": "^3.25.76"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  }
+}

@@ -1,6 +1,6 @@
 // Small helpers that build canonical layout blocks (new ids, no empty props or slots).
 // The ready-made sections in this folder use them.
-import { createId, type Block, type BlockMotion } from '@payload-toolkit/builder/core'
+import { createId, type Block, type BlockMotion } from 'payload-canvas/core'
 
 /** A link group value as stored in block props. */
 export type LinkInput =

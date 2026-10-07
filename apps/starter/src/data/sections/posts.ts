@@ -1,4 +1,4 @@
-import type { Block } from '@payload-toolkit/builder/core'
+import type { Block } from 'payload-canvas/core'
 import {
   bare,
   bind,

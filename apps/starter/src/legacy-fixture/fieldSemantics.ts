@@ -1,7 +1,7 @@
 // Dev fixture for Payload field logic on block props (NEXT_PUBLIC_BUILDER_LEGACY_DEMO=1): one block
 // whose props have a custom `validate`, field hooks and field-level `access`. Used to check the
 // builder by hand and with scripts. Client-safe: the functions use no server code.
-import { defineBlock } from '@payload-toolkit/builder/blocks'
+import { defineBlock } from 'payload-canvas/blocks'
 import type { Field, FieldAccess } from 'payload'
 
 /** The user who counts as "admin" for the access demo (the dev user of the agents). */

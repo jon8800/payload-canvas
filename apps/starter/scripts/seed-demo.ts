@@ -3,8 +3,8 @@
 // Run with `pnpm seed:demo`.
 import { getPayload, type Payload } from 'payload'
 import config from '@payload-config'
-import { FORCE_DELETE_CONTEXT } from '@payload-toolkit/builder'
-import { validateLayout, withoutBoundRequired, type Block, type Layout } from '@payload-toolkit/builder/core'
+import { FORCE_DELETE_CONTEXT } from 'payload-canvas'
+import { validateLayout, withoutBoundRequired, type Block, type Layout } from 'payload-canvas/core'
 
 import { builderBlocks } from '@/builder'
 import { HOME_SLUG } from '@/lib/links'

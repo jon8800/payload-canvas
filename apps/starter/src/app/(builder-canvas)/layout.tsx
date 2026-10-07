@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { GeistMono } from 'geist/font/mono'
 import { GeistSans } from 'geist/font/sans'
 import type { ReactNode } from 'react'
-import { ThemeStyle } from '@payload-toolkit/builder-react/server'
+import { ThemeStyle } from 'payload-canvas/react/server'
 import config from '@payload-config'
 import { getPayload } from 'payload'
 

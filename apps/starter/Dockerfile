@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 #
 # Production image for the starter app. The build context is the REPOSITORY ROOT, because the app
-# uses the workspace packages in packages/builder and packages/builder-react:
+# uses the workspace package in packages/payload-canvas:
 #
 #   docker build -f apps/starter/Dockerfile -t payload-starter \
 #     --build-arg DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/payload_starter \
@@ -27,15 +27,13 @@ FROM base AS source
 # Manifests first, so the install layer is cached until a dependency changes.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/starter/package.json apps/starter/
-COPY packages/builder/package.json packages/builder/
-COPY packages/builder-react/package.json packages/builder-react/
+COPY packages/payload-canvas/package.json packages/payload-canvas/
 COPY packages/create-payload-starter/package.json packages/create-payload-starter/
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile --filter . --filter payload-starter...
 
-# Sources. The app compiles the builder packages from source (transpilePackages).
-COPY packages/builder packages/builder
-COPY packages/builder-react packages/builder-react
+# Sources. The app compiles the payload-canvas package from source (transpilePackages).
+COPY packages/payload-canvas packages/payload-canvas
 COPY apps/starter apps/starter
 WORKDIR /repo/apps/starter
 

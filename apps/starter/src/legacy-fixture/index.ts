@@ -1,4 +1,4 @@
-// Dev fixture for "Using existing Payload blocks" (packages/builder/README.md): a `legacy-pages`
+// Dev fixture for "Using existing Payload blocks" (packages/payload-canvas/README.md): a `legacy-pages`
 // collection with a Payload `blocks` field, its block configs used as builder blocks, and
 // components written for Payload's data. Off by default. Turn it on with
 // NEXT_PUBLIC_BUILDER_LEGACY_DEMO=1 (dev only), then:
@@ -8,8 +8,8 @@
 //   pnpm payload run src/legacy-fixture/cleanup.ts      # deletes the fixture documents
 // Delete the documents before you turn the flag off: the dev schema push then drops the empty tables.
 // Client-safe.
-import { fromPayloadBlocks } from '@payload-toolkit/builder/blocks'
-import { fromPayloadComponents } from '@payload-toolkit/builder-react'
+import { fromPayloadBlocks } from 'payload-canvas/blocks'
+import { fromPayloadComponents } from 'payload-canvas/react'
 
 import { FieldDemoBlock, legacyClasses, legacyComponentMap, PageFactsLeaf } from './components'
 import { legacyBlockConfigs, rootSlugs } from './configs'
