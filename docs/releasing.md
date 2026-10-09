@@ -40,7 +40,16 @@ The first publish creates both packages on npm. Nothing else is needed on npm.
    git push origin v0.2.0
    ```
 
-5. Watch the run: `gh run watch --repo jon8800/payload-canvas`. Check the result with `npm view payload-canvas version`.
+5. Watch the run: `gh run watch --repo jon8800/payload-canvas`.
+6. Approve the release on npm. npm stages every publish that a 2FA-bypass token sends: the package shows a placeholder version (`0.0.0-stage` on a first publish) until the owner approves it with 2FA:
+
+   ```sh
+   npm login
+   npm stage list
+   npm stage approve <stage-id>   # once per package
+   ```
+
+   Check the result with `npm view payload-canvas version`.
 
 The workflow stops before it publishes anything when a package version is not equal to the tag (`v0.2.0` needs `0.2.0` in both files). A version with a hyphen, such as `0.2.0-beta.1`, gets the `next` dist-tag, so `npm install payload-canvas` keeps the last stable version.
 
