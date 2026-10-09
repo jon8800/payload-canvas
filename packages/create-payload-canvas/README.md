@@ -1,5 +1,9 @@
 # create-payload-canvas
 
+<p align="center">
+  <a href="https://github.com/jon8800/payload-canvas/blob/main/docs/media/drag-and-drop.mp4"><img src="https://raw.githubusercontent.com/jon8800/payload-canvas/main/docs/media/drag-and-drop.gif" width="960" alt="Dragging a section on the canvas while the other sections slide out of the way, reordering it in the Layers tree, and dropping a ready-made section onto the page"></a>
+</p>
+
 Creates a new Payload CMS website builder project from the Payload Canvas starter.
 
 Requirements: Node.js 20.9 or later, a running PostgreSQL server, and pnpm (npm works too). The starter itself is downloaded from GitHub, so the first run needs network access.

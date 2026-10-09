@@ -1,5 +1,20 @@
 # Payload Canvas
 
+<p align="center">
+  <a href="https://github.com/jon8800/payload-canvas/blob/main/docs/media/drag-and-drop.mp4"><img src="https://raw.githubusercontent.com/jon8800/payload-canvas/main/docs/media/drag-and-drop.gif" width="960" alt="Dragging a section on the canvas while the other sections slide out of the way, reordering it in the Layers tree, and dropping a ready-made section onto the page"></a>
+</p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="https://raw.githubusercontent.com/jon8800/payload-canvas/main/docs/media/builder-dark.png" alt="The builder with a button selected and the Styles panel open"><br><sub>The full-screen builder: Layers, the live canvas, and the Styles panel.</sub></td>
+    <td width="50%"><img src="https://raw.githubusercontent.com/jon8800/payload-canvas/main/docs/media/ai-assistant.png" alt="The AI assistant after the request 'Make the hero headline punchier'"><br><sub>The AI assistant edits the page from a prompt.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="https://raw.githubusercontent.com/jon8800/payload-canvas/main/docs/media/multiplayer.png" alt="Another editor's cursor and selection on the canvas"><br><sub>Multiplayer: another editor's cursor and selection show live.</sub></td>
+    <td><img src="https://raw.githubusercontent.com/jon8800/payload-canvas/main/docs/media/sections.png" alt="The Sections tab with section thumbnails"><br><sub>Ready-made sections with real thumbnails.</sub></td>
+  </tr>
+</table>
+
 A visual page builder for Payload CMS 3. It adds a full-screen builder to the collections you choose. Editors drag blocks onto a live canvas, nest them without limit, and style them with Tailwind classes. AI agents can build and edit the same pages over MCP, and an open editor shows each AI change as it happens.
 
 The npm package is `payload-canvas`.

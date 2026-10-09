@@ -1,6 +1,6 @@
 {
   "name": "create-payload-canvas",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Create a new Payload CMS website with Payload Canvas: the visual page builder, Postgres, a seeded demo and the AI guides.",
   "keywords": [
     "payload",
