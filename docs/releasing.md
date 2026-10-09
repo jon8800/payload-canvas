@@ -41,13 +41,7 @@ The first publish creates both packages on npm. Nothing else is needed on npm.
    ```
 
 5. Watch the run: `gh run watch --repo jon8800/payload-canvas`.
-6. Approve the release on npm. npm stages every publish that a 2FA-bypass token sends: the package shows a placeholder version (`0.0.0-stage` on a first publish) until the owner approves it with 2FA:
-
-   ```sh
-   npm login
-   npm stage list
-   npm stage approve <stage-id>   # once per package
-   ```
+6. Wait about 2 minutes. npm stages every publish that a 2FA-bypass token sends: the new version goes through a short review, then npm releases it by itself. Nothing needs approving. If a version stays missing, `npm login` and `npm stage list` show what is still waiting.
 
    Check the result with `npm view payload-canvas version`.
 
