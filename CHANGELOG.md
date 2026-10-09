@@ -2,6 +2,10 @@
 
 All notable changes to `payload-canvas` and `create-payload-canvas`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The packages use [semantic versioning](https://semver.org/). Before 1.0, a minor version can break the API.
 
+## [0.1.1] - 2026-10-09
+
+- The npm READMEs show the drag-and-drop GIF and screenshots.
+
 ## [0.1.0] - 2026-10-06
 
 First public release as two packages: `payload-canvas` (the plugin, the admin editor and the React renderer in one package) and the CLI `create-payload-canvas`.

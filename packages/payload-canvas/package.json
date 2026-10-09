@@ -1,6 +1,6 @@
 {
   "name": "payload-canvas",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Payload Canvas: a visual drag-and-drop website builder for Payload CMS 3. Nested layout blocks, Tailwind styling, sections, templates, live AI editing over MCP, and the React renderer for your site.",
   "keywords": [
     "payload",
