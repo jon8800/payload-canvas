@@ -42,7 +42,7 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks'
 
-import { APIError, type CollectionAfterErrorHook, type CollectionAfterOperationHook, type CollectionBeforeOperationHook } from 'payload'
+import { APIError, type CollectionAfterErrorHook, type CollectionAfterOperationHook, type CollectionBeforeOperationHook, type Config } from 'payload'
 
 /** How long a save waits for the gate before it gives up with a 409. */
 const WAIT_MS = 30_000
@@ -482,6 +482,29 @@ export function installLocalApiBoundary(payload: LocalApi, gate: WriteGate): voi
   target[BOUNDARY] = true
   const update = payload.update.bind(payload)
   payload.update = (options) => gate.localCall(() => update(options))
+}
+
+/**
+ * Payload's `config.db` with the gate's signals installed as soon as the adapter exists. Payload
+ * calls `config.db.init({ payload })` first thing in `payload.init`, before the adapter's own
+ * `init` and `connect`, before migrations (`payload migrate` runs without `onInit`, and migrations
+ * on connect run before it) and before any operation. So the adapter's commit and rollback, and
+ * `payload.update` (failed Local API saves without a transaction), report to the gate from the
+ * first save on. The adapter object itself is returned unchanged; the plugin's `onInit` and the
+ * gate's first update install the same signals again as fallbacks (each install runs once).
+ */
+export function withGateSignals(db: Config['db'], gate: WriteGate): Config['db'] {
+  const init = db.init
+  return {
+    ...db,
+    init: (args) => {
+      const adapter = init.call(db, args)
+      if (adapter && typeof adapter === 'object') installTransactionSignals(adapter as TransactionAdapter, gate)
+      const payload = args?.payload as unknown as Partial<LocalApi> | undefined
+      if (payload && typeof payload.update === 'function') installLocalApiBoundary(payload as LocalApi, gate)
+      return adapter
+    },
+  }
 }
 
 const GATE_KEY = Symbol.for('payload-canvas/write-gate-v4')
