@@ -77,7 +77,7 @@ type LooseField = {
   hidden?: boolean
   access?: { read?: (args: Record<string, unknown>) => unknown }
   fields?: LooseField[]
-  tabs?: { name?: string; fields: LooseField[] }[]
+  tabs?: (Omit<LooseField, 'type'> & { fields: LooseField[] })[]
   blocks?: { slug: string; fields: LooseField[] }[]
   blockReferences?: (string | { slug: string; fields: LooseField[] })[]
 }
@@ -86,7 +86,7 @@ type LooseField = {
 function topField(fields: readonly LooseField[], name: string): LooseField | undefined {
   for (const f of fields) {
     if (f.name === name) return f
-    if ((f.type === 'row' || f.type === 'collapsible') && f.fields) {
+    if ((f.type === 'row' || f.type === 'collapsible' || (f.type === 'group' && !f.name)) && f.fields) {
       const found = topField(f.fields, name)
       if (found) return found
     }
@@ -118,7 +118,7 @@ export async function canReadBlocksValue(
   const references = new Map<string, { slug: string; fields: LooseField[] }>()
   for (const block of (req.payload.config as { blocks?: { slug: string; fields: LooseField[] }[] }).blocks ?? []) references.set(block.slug, block)
   const doc = { ...args.doc, [args.field]: args.value }
-  const readable = async (field: LooseField, value: unknown, sibling: Record<string, unknown>, blockData?: Record<string, unknown>) => {
+  const readable = async (field: Pick<LooseField, 'hidden' | 'access'>, value: unknown, sibling: Record<string, unknown>, blockData?: Record<string, unknown>) => {
     if (value === undefined) return true
     if (field.hidden) return false
     if (field.access?.read) {
@@ -130,12 +130,13 @@ export async function canReadBlocksValue(
   const walk = async (fields: readonly LooseField[], data: unknown, blockData?: Record<string, unknown>): Promise<boolean> => {
     if (!isRecord(data)) return true
     for (const f of fields) {
-      if ((f.type === 'row' || f.type === 'collapsible') && f.fields) {
+      if ((f.type === 'row' || f.type === 'collapsible' || (f.type === 'group' && !f.name)) && f.fields) {
         if (!(await walk(f.fields, data, blockData))) return false
         continue
       }
       if (f.type === 'tabs') {
         for (const tab of f.tabs ?? []) {
+          if (tab.name && !(await readable(tab, data[tab.name], data, blockData))) return false
           if (!(await walk(tab.fields, tab.name ? data[tab.name] : data, blockData))) return false
         }
         continue

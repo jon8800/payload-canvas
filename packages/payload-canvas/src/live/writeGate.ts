@@ -9,7 +9,8 @@
 // When a save ends comes from the database's own answer, never from a guess:
 // - With a transaction: when the adapter's `commitTransaction` or `rollbackTransaction` for that
 //   transaction settles. `installTransactionSignals` wraps the two methods of `payload.db` once (the
-//   plugin's `onInit`) and tells the gate the outcome: committed, or not.
+//   plugin's `onInit`, and the first gated update, for runs without `onInit` such as
+//   `payload migrate`) and tells the gate the outcome: committed, or not.
 // - Without a transaction (an adapter without them): the write is stored when the operation
 //   succeeds, so its `afterOperation` ends it. A failed REST request ends it in `afterError`. A
 //   failed Local API call has no hook, so `installLocalApiBoundary` wraps `payload.update` (the
@@ -20,14 +21,17 @@
 //   works as in Payload. A failed GraphQL request ends in the config's `afterError` (`failRequest`).
 //   Only a request abandoned with neither signal ends when it is garbage collected (a
 //   `FinalizationRegistry`), which can only happen after its operation is over; the gate keeps no
-//   strong reference to a request for that reason.
+//   strong reference to a request for that reason. A save with a transaction never ends that way:
+//   the transaction may outlive its request objects, and only the adapter's answer ends it (a
+//   transaction nobody commits or rolls back keeps its documents' gates, as it keeps its locks).
 // Nothing ends a hold by time. A save that waits gives up after a while with a 409 ("another save
 // of this document is still running"): the waiter fails clearly, the owner keeps the gate.
 //
 // One request may hold the gates of several documents (a hook that saves another document with the
 // same `req`, in the same transaction). An update joins a hold only within the same active
-// transaction, or the same running operation without one, or inside `run`; a later update on a
-// reused request takes the gate again. A wait that would close a cycle is refused at once (409).
+// transaction (also from another request object that carries that transaction), or the same
+// running operation without one, or inside `run`; a later update on a reused request takes the
+// gate again. A wait that would close a cycle is refused at once (409).
 //
 // `afterCommit` queues work on the operation that runs it: with a transaction it runs when that
 // transaction committed, never after a rollback or a failed commit; without one, when the
@@ -45,7 +49,7 @@ const WAIT_MS = 30_000
 
 type Hold = {
   key: string
-  /** The request that holds it. Weak: a collected request ends its hold. */
+  /** The request that holds it. Weak: a collected request ends its hold, when it has no transaction. */
   req: WeakRef<object>
   /** The transaction the hold belongs to, or null. */
   transaction: unknown
@@ -160,7 +164,10 @@ export function createWriteGate(options: WriteGateOptions = {}): WriteGate {
   const byArgs = new WeakMap<object, Op>()
   /** Per open transaction: its holds, its running operations, and the work of its finished ones. */
   const transactions = new Map<unknown, { holds: Set<Hold>; ops: Set<Op>; callbacks: Array<() => void> }>()
-  /** A request collected while it held a gate: its save is over (a failed Local API call). */
+  /**
+   * A request collected while it held a gate without a transaction: its save is over (a failed
+   * Local API call). Holds with a transaction are never registered here.
+   */
   const collected = new FinalizationRegistry<Hold>((hold) => finish(hold))
 
   const runAll = (callbacks: Array<() => void>) => {
@@ -258,23 +265,54 @@ export function createWriteGate(options: WriteGateOptions = {}): WriteGate {
         const held = byReq.get(req) ?? new Map<string, Hold>()
         held.set(key, hold)
         byReq.set(req, held)
-        if (kind === 'op') collected.register(req, hold, hold)
+        // Only a save without a transaction ends when its request is collected. A transaction can
+        // outlive every request object that carried it (`req: { transactionID }` per call): only the
+        // adapter's commit or rollback ends its holds.
+        if (kind === 'op' && transaction === null) collected.register(req, hold, hold)
         if (transaction !== null) transactionRecord(transaction).holds.add(hold)
         resolve(hold)
       })
     })
   }
 
-  /** The live hold an update of `key` may join: the same transaction, the same running operation, or `run`. */
+  /**
+   * The live hold an update of `key` may join: the request's own hold in the same transaction, the
+   * same running operation, or `run`; or the hold of another request in the same open transaction
+   * (Payload's `req: { transactionID }` pattern: a new request object per call, one transaction).
+   * Its writes are that transaction's, and the hold ends with its commit or rollback.
+   */
   const joinable = (req: object, key: string, transaction: unknown): Hold | null => {
     const hold = byReq.get(req)?.get(key)
-    if (!hold || hold.released) return null
-    if (hold.kind === 'run') return hold
-    if (transaction !== null) return hold.transaction === transaction ? hold : null
-    return hold.transaction === null && hold.owner !== null && !hold.owner.ended ? hold : null
+    if (hold && !hold.released) {
+      if (hold.kind === 'run') return hold
+      if (transaction !== null && hold.transaction === transaction) return hold
+      if (transaction === null && hold.transaction === null && hold.owner !== null && !hold.owner.ended) return hold
+    }
+    if (transaction === null) return null
+    const holder = holders.get(key)
+    return holder && !holder.released && holder.transaction === transaction ? holder : null
   }
 
-  return {
+  /** Records that `req` takes part in `hold` (it joined the hold of another request). */
+  const remember = (req: object, hold: Hold) => {
+    const held = byReq.get(req) ?? new Map<string, Hold>()
+    held.set(hold.key, hold)
+    byReq.set(req, held)
+  }
+
+  /**
+   * Wraps the adapter's commit and rollback and `payload.update` (both once per instance), from
+   * the first gated update on. The plugin's `onInit` does it too, but `payload migrate` runs
+   * without `onInit` (`disableOnInit`), and migrations on connect run before it: their commits
+   * must end their holds as well.
+   */
+  const learnFrom = (req: object) => {
+    const payload = (req as { payload?: { db?: unknown; update?: unknown } }).payload
+    if (payload?.db && typeof payload.db === 'object') installTransactionSignals(payload.db as TransactionAdapter, gate)
+    if (payload && typeof payload.update === 'function') installLocalApiBoundary(payload as LocalApi, gate)
+  }
+
+  const gate: WriteGate = {
     async run(key, req, task) {
       if (joinable(req, key, transactionOf(req))) return task()
       const hold = await take(key, req, null, 'run')
@@ -341,9 +379,12 @@ export function createWriteGate(options: WriteGateOptions = {}): WriteGate {
           if (operation === 'restoreVersion') id = await versionParent(req, collection, id)
           // Updates by id only: a bulk update (`where`) has no single document to wait for.
           if ((operation !== 'update' && operation !== 'restoreVersion') || (typeof id !== 'string' && typeof id !== 'number')) return args
+          learnFrom(req)
           const key = writeKey(collection, id)
           const transaction = transactionOf(req)
-          const hold = joinable(req, key, transaction) ?? (await take(key, req, transaction, 'op'))
+          const joined = joinable(req, key, transaction)
+          if (joined) remember(req, joined)
+          const hold = joined ?? (await take(key, req, transaction, 'op'))
           const op: Op = { key, req: new WeakRef(req), hold, transaction, ended: false, callbacks: [] }
           if (hold.kind === 'op' && hold.owner === null) hold.owner = op
           if (transaction !== null) transactionRecord(transaction).ops.add(op)
@@ -384,6 +425,7 @@ export function createWriteGate(options: WriteGateOptions = {}): WriteGate {
 
     size: () => tails.size,
   }
+  return gate
 }
 
 /** The part of a database adapter the signals wrap. */

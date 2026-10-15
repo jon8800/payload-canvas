@@ -202,6 +202,8 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
   const nextTag = () => `t${++tagCounter}`
   let fieldWriter: FieldWriter | null = null
   let historyBusy = false
+  let historyGeneration = 0
+  let editGeneration = 0
   const historyQueue: Array<() => void> = []
 
   /**
@@ -211,7 +213,9 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
     historyBusy = true
     const source = direction === 'undo' ? 'undoStack' : 'redoStack'
     const destination = direction === 'undo' ? 'redoStack' : 'undoStack'
-    const index = state[source].indexOf(entry)
+    const earlier = new Set(state[source])
+    const generation = historyGeneration
+    const edits = editGeneration
     set({ [source]: state[source].filter((e) => e !== entry), [destination]: [...state[destination], entry], lastError: null })
     const drop = () => set({ undoStack: state.undoStack.filter((e) => e !== entry), redoStack: state.redoStack.filter((e) => e !== entry) })
     void (async () => {
@@ -230,9 +234,13 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
       }
       if (result === false) drop()
       if (result === 'retry') {
-        const present = state[destination].includes(entry)
         drop()
-        if (present) set({ [source]: [...state[source].slice(0, index), entry, ...state[source].slice(index)] })
+        // New edits clear redo, but an undo that failed still belongs before those edits.
+        if (generation === historyGeneration && (direction === 'undo' || edits === editGeneration)) {
+          const newerIndex = state[source].findIndex((e) => !earlier.has(e))
+          const index = newerIndex < 0 ? state[source].length : newerIndex
+          set({ [source]: [...state[source].slice(0, index), entry, ...state[source].slice(index)].slice(-HISTORY_LIMIT) })
+        }
         historyQueue.length = 0
       }
       historyBusy = false
@@ -264,6 +272,8 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
     const selectedBefore = state.selectedId
     if (update.reset) {
       // The layout was replaced as a whole: the history no longer applies to it.
+      historyGeneration++
+      historyQueue.length = 0
       set({ layout: update.layout, undoStack: [], redoStack: [] })
       return
     }
@@ -302,7 +312,7 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
     }
   }
 
-  return {
+  const store = {
     /** The sync engine. The live hook connects it to the server. */
     sync,
     getState: () => state,
@@ -400,6 +410,7 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
                   at: now,
                 },
               ].slice(-HISTORY_LIMIT)
+      editGeneration++
       set({
         layout: result.layout,
         undoStack,
@@ -412,7 +423,7 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
 
     undo() {
       if (historyBusy) {
-        historyQueue.push(() => this.undo())
+        historyQueue.push(store.undo)
         return
       }
       const entry = state.undoStack.at(-1)
@@ -437,7 +448,7 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
 
     redo() {
       if (historyBusy) {
-        historyQueue.push(() => this.redo())
+        historyQueue.push(store.redo)
         return
       }
       const entry = state.redoStack.at(-1)
@@ -465,6 +476,7 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
      */
     recordFields(edits: FieldEdit[], locale: string | null = null, saved?: Promise<FieldEdit[] | null>) {
       if (edits.length === 0) return
+      editGeneration++
       const entry: HistoryEntry = { ops: [], fields: edits, fieldLocale: locale, selectedId: state.selectedId, tags: [], at: Date.now() }
       if (saved) entry.fieldsReady = saved.then((fields) => {
         if (fields) entry.fields = fields
@@ -513,6 +525,7 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
     /** The locales, or null without localization. */
     localization: localization?.settings ?? null,
   }
+  return store
 }
 
 /**

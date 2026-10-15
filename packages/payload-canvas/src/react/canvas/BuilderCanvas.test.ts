@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url'
 import { act, createElement, lazy, Suspense, type ReactNode } from 'react'
 
 import type { BlockDefinition } from '../../core'
-import { wrap, type AdminToCanvas } from '../../protocol'
+import { wrap, type AdminToCanvas, type CanvasToAdmin } from '../../protocol'
 import { LayoutOutlet } from '../render/LayoutOutlet'
 import type { CanvasServer, CanvasServerResponse } from '../render/canvasServerTypes'
 import type { BlockComponentProps } from '../render/types'
@@ -41,7 +41,8 @@ function frame(title = 'Old'): CanvasServerResponse {
 
 async function setup(t: TestContext, getFrame: () => Promise<CanvasServerResponse>) {
   const window = new DOMWindow({ url: 'http://localhost:3000/builder-canvas' }) as Window & { happyDOM: { abort(): Promise<void> } }
-  Object.defineProperty(window, 'parent', { configurable: true, value: { postMessage() {} } })
+  const outbox: CanvasToAdmin[] = []
+  Object.defineProperty(window, 'parent', { configurable: true, value: { postMessage(message: { payload: CanvasToAdmin }) { outbox.push(message.payload) } } })
   const saved = new Map<string, PropertyDescriptor | undefined>()
   const set = (key: string, value: unknown) => {
     saved.set(key, Object.getOwnPropertyDescriptor(globalThis, key))
@@ -86,10 +87,73 @@ async function setup(t: TestContext, getFrame: () => Promise<CanvasServerRespons
     regions: [{ name: 'header', label: 'Header', fields: [{ path: 'title', label: 'Title', tabs: [], field: { name: 'title', type: 'text' } }] }],
   } })
   await send({ type: 'layout', layout: { version: 1, blocks: [{ id: 'one', type: 'test' }] } })
-  return { window, container, send, layouts: () => container.querySelectorAll('[data-test-layout]') }
+  return { window, container, send, outbox, layouts: () => container.querySelectorAll('[data-test-layout]') }
 }
 
 describe('canvas frame lifecycle', () => {
+  it('uses the retained value when a region is edited again before its saved frame arrives', async (t) => {
+    let answer = frame()
+    const canvas = await setup(t, async () => answer)
+    await canvas.send({ type: 'inlineStart', id: '', region: 'header' })
+    canvas.container.querySelector<HTMLElement>('[data-builder-editing]')!.textContent = 'One'
+    await canvas.send({ type: 'inlineStop' })
+    await canvas.send({ type: 'inlineStart', id: '', region: 'header' })
+    const start = canvas.outbox.filter((message) => message.type === 'inlineStart').at(-1)!
+    assert.equal(start.base, 'One')
+    canvas.container.querySelector<HTMLElement>('[data-builder-editing]')!.textContent = 'One more'
+    await canvas.send({ type: 'inlineStop' })
+    assert.equal(canvas.outbox.filter((message) => message.type === 'inlineChange').at(-1)?.value, 'One more')
+    // A refused save or server hook can return the original value. Retained DOM must restore fully.
+    answer = frame('Old')
+    await canvas.send({ type: 'frameRefresh' })
+    assert.equal(canvas.container.querySelector('header:not([hidden]) h1')?.textContent, 'Old')
+    await canvas.send({ type: 'inlineStart', id: '', region: 'header' })
+    assert.equal(canvas.outbox.filter((message) => message.type === 'inlineStart').at(-1)?.base, 'Old')
+  })
+
+  it('accepts the saved frame after a second region session with no typing', async (t) => {
+    const saved = deferred<CanvasServerResponse>()
+    let calls = 0
+    const canvas = await setup(t, async () => ++calls === 1 ? frame() : saved.promise)
+    await canvas.send({ type: 'inlineStart', id: '', region: 'header' })
+    canvas.container.querySelector<HTMLElement>('[data-builder-editing]')!.textContent = 'One'
+    await canvas.send({ type: 'inlineStop' })
+    await canvas.send({ type: 'frameRefresh' })
+    await canvas.send({ type: 'inlineStart', id: '', region: 'header' })
+    await canvas.send({ type: 'inlineStop' })
+    await act(async () => saved.resolve(frame('One')))
+    assert.equal(canvas.container.querySelector('header[hidden] h1')?.textContent, 'One', 'the new frame replaced both copies')
+    assert.equal(canvas.outbox.filter((message) => message.type === 'inlineChange').length, 1)
+  })
+
+  it('keeps an empty retained value and accepts a saved frame that arrives during re-entry', async (t) => {
+    let answer = frame()
+    const canvas = await setup(t, async () => answer)
+    await canvas.send({ type: 'inlineStart', id: '', region: 'header' })
+    canvas.container.querySelector<HTMLElement>('[data-builder-editing]')!.textContent = ''
+    await canvas.send({ type: 'inlineStop' })
+    await canvas.send({ type: 'inlineStart', id: '', region: 'header' })
+    assert.equal(canvas.outbox.filter((message) => message.type === 'inlineStart').at(-1)?.base, '')
+    answer = frame('')
+    await canvas.send({ type: 'frameRefresh' })
+    await canvas.send({ type: 'inlineStop' })
+    assert.equal(canvas.container.querySelector('header[hidden] h1')?.textContent, '')
+    assert.equal(canvas.outbox.filter((message) => message.type === 'inlineChange').length, 1)
+  })
+
+  it('drops retained values when the accepted frame changes locale', async (t) => {
+    let answer = frame('English')
+    const canvas = await setup(t, async () => answer)
+    await canvas.send({ type: 'inlineStart', id: '', region: 'header' })
+    canvas.container.querySelector<HTMLElement>('[data-builder-editing]')!.textContent = 'Unsaved English'
+    await canvas.send({ type: 'inlineStop' })
+    answer = frame('Français')
+    await canvas.send({ type: 'locale', locale: 'fr' })
+    await canvas.send({ type: 'inlineStart', id: '', region: 'header' })
+    assert.equal(canvas.outbox.filter((message) => message.type === 'inlineStart').at(-1)?.base, 'Français')
+    assert.equal(canvas.container.querySelector('[data-builder-editing]')?.textContent, 'Français')
+  })
+
   it('keeps the error fallback layout mounted while a frame retry is pending', async (t) => {
     const retry = deferred<CanvasServerResponse>()
     let calls = 0

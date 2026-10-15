@@ -19,7 +19,7 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 ### Changed
 
 - New projects created by `create-payload-canvas` install `payload-canvas` 0.2.x.
-- Custom implementations of the exported `SessionManager` interface must implement `currentDoc` and `withCurrentDoc`.
+- Custom implementations of the exported `SessionManager` interface must implement `currentDoc`, `withCurrentDoc` and `resetFor`. Live document ids now accept `string | number`; `sessionTargetOf` still supports callers that supply only `collections`.
 
 - `migrateBlocksField` is now only for sites that want builder-only features (classes, animations, bindings, templates): the README no longer tells sites to copy their blocks to edit them in the builder.
 
@@ -28,10 +28,13 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 ### Fixed
 
 - Native Payload version restores update an open builder after the transaction commits. Revert and restore require access to the full source layout.
+- Failed builder restores keep the previous unsaved edits available to save. Nested template saves keep each document's save sequence and hook changes separate.
 - Live streams check every intermediate edit with its original block ancestors and sibling values. Protected values cannot escape in a batch that later removes them. Published-only readers cannot receive live drafts.
 - Live draft access is checked before each streamed event in both storage modes, including unsaved edits. Access checks use the document's current fields after every committed save, including saves that leave the layout unchanged. Failed refreshes refuse access.
 - Publish and unpublish stop when saving pending edits fails. A queued save no longer creates an identical draft after publication. Startup updates inside `onInit` release the write gate correctly.
+- Saves before `onInit`, including data migrations, install the write gate's database signals on their first update. Repeated updates with separate requests in one transaction share that transaction's gate.
 - Region undo records pending edits before saving, orders undo and redo requests, preserves retryable history, and restores a missing translation without copying its fallback. Reconnecting reloads region fields.
+- Re-entering region text before its saved frame arrives uses the latest edit. Queued image changes use the preceding save as their base. Undo and redo buttons work while a field save runs, and retryable undo survives a newer edit.
 - Escape in drawer popups preserves the focus trap, including portalled row menus. Open drawers renew their protection; abandoned holders expire after Payload's lock duration.
 - Page frames keep fallback content during retries, follow delayed layout outlets, select visible region copies, and discard stale renders after inline edits.
 
@@ -40,6 +43,7 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 - Payload blocks field: copied rows from another page or a saved section get new ids. A page keeps its own row ids through remove, save, undo and save. Duplicates within a page also get new ids.
 - Payload blocks field: a cleared prop, a cleared block name and a value removed inside an array row are cleared in Payload too, instead of coming back from the stored value.
+- Payload blocks field: named tabs enforce their read access, and unnamed groups preserve field clearing and copied row-id protection.
 - Labels in the builder's settings drawer point at their inputs again. Payload names drawer labels with the edit depth (`field-title-2`) while several of its inputs keep `field-title`. Selects and relationships (react-select inputs) there get their field's label as their name, as in the inspector.
 - A publish problem of a document field goes away when that field is saved (settings drawer, page region, rename). Problems of other fields and of blocks stay until the next publish checks them.
 

@@ -159,9 +159,6 @@ type ActiveSession = { session: string; id: string; path: string; inline: Inline
 /** Equal values of a text field: empty text, null and a missing value are one value. */
 const sameText = (a: unknown, b: unknown) => JSON.stringify(a === '' || a === undefined ? null : a) === JSON.stringify(b === '' || b === undefined ? null : b)
 
-/** How long kept region text waits for the new frame before React's DOM comes back anyway. */
-const REGION_KEEP_MS = 5000
-
 /** The latest render's data, for event handlers and inline editing. `shown`: the layout on screen. */
 type Latest = { layout: Layout | null; resolved: Layout | null; shown: Layout | null; definitions: BlockDefinition[] | undefined }
 
@@ -280,7 +277,7 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
   const pendingFrame = useRef<FrameView | null>(null)
   // Region text kept on screen after editing, until the frame with the new value replaces it.
   const keptRegions = useRef<Array<() => void>>([])
-  const keptTimer = useRef(0)
+  const keptRegionValues = useRef(new Map<string, unknown>())
   const regionsRef = useRef(regionData(undefined, null))
 
   // Coalesce every trigger (render, resize, scroll) into one measurement per frame. An unchanged
@@ -318,20 +315,15 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
       // text stays on screen, so the old text never flashes.
       const region = active.region
       const { changed, value, restore } = inline.finish({ keep: sync && connected })
+      const edited = !sameText(value, active.start)
+      if (edited) keptRegionValues.current.set(JSON.stringify([region, path]), value)
       if (changed) send({ type: 'inlineChange', session, id: '', path, value, region })
       send({ type: 'inlineEnd', session, id: '', region })
       // Nothing changed: no save follows, so React's DOM comes back now.
-      if (restore && sameText(value, active.start)) restore()
-      else if (restore) {
-        keptRegions.current.push(restore)
-        window.clearTimeout(keptTimer.current)
-        keptTimer.current = window.setTimeout(() => {
-          for (const undo of keptRegions.current.splice(0)) undo()
-        }, REGION_KEEP_MS)
-      }
+      if (restore && !edited) restore()
+      else if (restore) keptRegions.current.push(restore)
       // A frame requested before the edit ended still holds the old text. Keep the edited DOM
       // until the save requests a new frame, including when an older request is still in flight.
-      const edited = !sameText(value, active.start)
       const next = edited ? null : pendingFrame.current
       if (edited) frameRun.current++
       pendingFrame.current = null
@@ -357,8 +349,9 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
 
   /** Shows a new frame. Region text kept from editing goes back to React's DOM first, in the same task. */
   const showFrameRef = useRef((next: FrameView) => {
-    window.clearTimeout(keptTimer.current)
-    for (const undo of keptRegions.current.splice(0)) undo()
+    // Re-entering a field captures its previous retained DOM. Restore those snapshots in reverse.
+    for (const undo of keptRegions.current.splice(0).toReversed()) undo()
+    keptRegionValues.current.clear()
     flushSync(() => setFrame(next))
   })
 
@@ -371,7 +364,9 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     const data = region ? regionsRef.current.get(region) : undefined
     if (!region || !data) return
     const { path, element } = target
-    const value = valueAtPath(data.block.props, path)
+    const key = JSON.stringify([region, path])
+    const retained = keptRegionValues.current.has(key)
+    const value = retained ? keptRegionValues.current.get(key) : valueAtPath(data.block.props, path)
     const kind = inlineKind(data.definition, path, value)
     if (!kind) return
     startingRef.current = true
@@ -395,8 +390,8 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
       }
       if (!inline) return
       activeRef.current = { session, id: '', path, inline, region, start: value }
-      // Plain text: the text on screen is the base of the save. (Rich text: the editor's own value.)
-      send({ type: 'inlineStart', session, id: '', path, kind, region, ...(kind === 'rich' ? {} : { base: value ?? null }) })
+      // A retained value is the exact prior edit. Other rich text uses the admin's unpopulated value.
+      send({ type: 'inlineStart', session, id: '', path, kind, region, ...(kind === 'rich' && !retained ? {} : { base: value ?? null }) })
     } finally {
       startingRef.current = false
     }

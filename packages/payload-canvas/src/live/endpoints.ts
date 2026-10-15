@@ -72,20 +72,21 @@ function statusOf(error: unknown): number {
  * collection. The route gives the id as text; Payload's `parseDocumentID` turns it into a number
  * for collections with number ids (the Postgres default), so Local API calls, the lock rows and
  * the publish check get the id type the database uses. Collections with text ids keep the text.
+ * Without `payload.db` (0.1.x callers passed only `{ collections }`), the id stays as given.
  */
 export function sessionTargetOf(
-  payload: Pick<Payload, 'collections' | 'db'>,
+  payload: { collections: unknown; db?: unknown },
   collections: LiveEndpointOptions['collections'],
   collection: string,
   id: string,
 ): SessionTarget | null {
   const options = collections[collection]
   if (!options || !id) return null
-  const config = payload.collections[collection as CollectionSlug]?.config
+  const config = (payload.collections as Payload['collections'])[collection as CollectionSlug]?.config
   const drafts = config?.versions?.drafts
   return {
     collection,
-    id: parseDocumentID({ collectionSlug: collection as CollectionSlug, id, payload: payload as Payload }) ?? id,
+    id: payload.db ? (parseDocumentID({ collectionSlug: collection as CollectionSlug, id, payload: payload as Payload }) ?? id) : id,
     field: options.field,
     drafts: Boolean(drafts),
     autosave: typeof drafts === 'object' && Boolean(drafts.autosave),
