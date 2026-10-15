@@ -8,6 +8,7 @@ import { layoutAfterChange, layoutBeforeChange } from '../plugin/hook'
 import { actorFromUser, resolveOperations, type LiveDocStore } from './apply'
 import { requestActor, sessionStream, sseFrame } from './endpoints'
 import { createKeyedMutex } from './mutex'
+import { payloadBlocksCodec } from './storage'
 import { createWriteGate, writeKey } from './writeGate'
 import {
   COLLABORATOR_COLORS,
@@ -152,6 +153,7 @@ function setup(options: SessionManagerOptions = {}, layout: Layout = base) {
 }
 
 const heading = (id: string, text = 'New') => ({ id, type: 'heading', props: { text } })
+const headingRows = (text: string) => [{ id: 'h1', blockType: 'heading', text }]
 
 describe('reset failure after a queued save', () => {
   for (const editDuringReset of [false, true]) {
@@ -181,6 +183,110 @@ describe('reset failure after a queued save', () => {
       assert.equal(db.writes.length, editDuringReset ? 2 : 0, 'only a completed intervening write needs correction')
     })
   }
+
+  it('corrects a committed Payload blocks save whose next read fails', async () => {
+    const codec = payloadBlocksCodec({ blocks, rootTypes: ['heading'] })
+    const blockTarget = { ...target, codec }
+    const original = headingRows('Hi')
+    const clock = fakeTimers()
+    const gate = createWriteGate()
+    const sessions = createSessionManager({ timers: clock.timers, gate, logger: { error: () => {} } })
+    let doc = { id: 'p1', layout: original } as Record<string, unknown>
+    let writes = 0
+    let failRead = false
+    const store: LiveDocStore = {
+      async findByID() {
+        if (failRead) {
+          failRead = false
+          throw new Error('Read after save failed')
+        }
+        return structuredClone(doc)
+      },
+      async update(args) {
+        writes += 1
+        doc = { ...doc, ...structuredClone(args.data as Record<string, unknown>) }
+        failRead = writes === 1
+        return structuredClone(doc)
+      },
+    }
+    await sessions.connect({ target: blockTarget, store, clientId: 'a', user: ana, send: () => {} })
+    let fail!: (error: Error) => void
+    const held = new Promise<never>((_, reject) => { fail = reject })
+    const resetting = sessions.resetFor(target.collection, target.id, codec.decode(headingRows('RESET')), headingRows('RESET'), () =>
+      gate.run(writeKey(target.collection, target.id), {}, () => held),
+    )
+    await settle()
+    const result = await sessions.commit({
+      target: blockTarget, store, user: ana, actor: actorFromUser(ana), blocks,
+      ops: [{ type: 'update', id: 'h1', props: { text: 'RESET+EDIT' } }],
+    })
+    assert.equal(result.ok, true)
+    await clock.advance(1000)
+    assert.equal(writes, 0, 'the session save waits for the action')
+    fail(new Error('refused'))
+    await assert.rejects(resetting, /refused/)
+    assert.deepEqual(doc.layout, headingRows('RESET+EDIT'), 'the write committed before its read failed')
+    assert.deepEqual(sessions.peek(target.collection, target.id)!.layout, codec.decode(original))
+    assert.equal(sessions.unsaved(), 1, 'the restored layout still needs saving')
+    assert.deepEqual(await sessions.flush(target.collection, target.id), { ok: true })
+    assert.deepEqual(doc.layout, original)
+    assert.equal(writes, 2, 'the second write corrects storage')
+    assert.equal(sessions.unsaved(), 0)
+  })
+
+  it('corrects an outside save acknowledged at the reset sequence', async () => {
+    const gate = createWriteGate()
+    const { sessions, db, connect } = setup({ gate })
+    await connect('a')
+    const resetLayout = structuredClone(base)
+    resetLayout.blocks[0].slots!.children[0].props!.text = 'RESET'
+    let fail!: (error: Error) => void
+    const held = new Promise<never>((_, reject) => { fail = reject })
+    const resetting = sessions.resetFor(target.collection, target.id, resetLayout, resetLayout, () => held)
+    await settle()
+    await gate.run(writeKey(target.collection, target.id), {}, async () => {
+      await db.store.update({ collection: target.collection, id: target.id, data: { layout: resetLayout } })
+      sessions.markSaved(target.collection, target.id, sessions.peek(target.collection, target.id)!.seq)
+    })
+    fail(new Error('refused'))
+    await assert.rejects(resetting, /refused/)
+    assert.equal(sessions.unsaved(), 1)
+    assert.deepEqual(await sessions.flush(target.collection, target.id), { ok: true })
+    assert.deepEqual(db.doc.layout, base)
+    assert.equal(db.writes.length, 2)
+  })
+
+  it('keeps an outside layout change pending when a reset fails', async () => {
+    const gate = createWriteGate()
+    const { sessions, db, connect } = setup({ gate })
+    await connect('a')
+    let fail!: (error: Error) => void
+    const resetting = sessions.resetFor(target.collection, target.id, base, base, () =>
+      new Promise<never>((_, reject) => { fail = reject }),
+    )
+    await settle()
+    const external = structuredClone(base)
+    external.blocks[0].slots!.children[0].props!.text = 'EXTERNAL'
+    let release!: () => void
+    const held = new Promise<void>((resolve) => { release = resolve })
+    const saving = gate.run(writeKey(target.collection, target.id), {}, async () => {
+      await db.store.update({ collection: target.collection, id: target.id, data: { layout: external } })
+      sessions.externalSaved(target.collection, target.id, { layoutChanged: true })
+      await held
+    })
+    await settle()
+    fail(new Error('refused'))
+    await assert.rejects(resetting, /refused/)
+    assert.equal(sessions.unsaved(), 1, 'the outside layout has not been read yet')
+    release()
+    await saving
+    await settle()
+    assert.deepEqual(await sessions.flush(target.collection, target.id), { ok: true })
+    assert.deepEqual(sessions.peek(target.collection, target.id)!.layout, external)
+    assert.deepEqual(db.doc.layout, external)
+    assert.equal(db.writes.length, 1, 'the outside save is kept')
+    assert.equal(sessions.unsaved(), 0)
+  })
 })
 
 const insertAt = (id: string, index = 0) => ({ type: 'insert', block: heading(id), to: { parentId: null, slot: 'children', index } })

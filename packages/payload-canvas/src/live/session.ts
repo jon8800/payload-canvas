@@ -348,6 +348,8 @@ type Session = {
   /** User of the last commit. The draft is saved as this user. */
   user: unknown
   persistedSeq: number
+  /** Completed writes, including a save whose following read or reconciliation fails. */
+  completedWrites: number
   firstDirtyAt: number | null
   persistTimer: unknown
   persisting: Promise<void> | null
@@ -402,7 +404,7 @@ type ResetUndo = {
   stored: unknown
   unsaved: { seq: number; ops: Operation[] }[]
   persistedSeq: number
-  resetSeq: number
+  completedWrites: number
   dirty: boolean
   externalPending: boolean
 }
@@ -554,6 +556,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
           members: new Map(),
           user: null,
           persistedSeq: 0,
+          completedWrites: 0,
           firstDirtyAt: null,
           persistTimer: null,
           persisting: null,
@@ -724,6 +727,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
         // The same request as the gate's hold: the update joins it.
         ...(req ? { req } : {}),
       })
+      session.completedWrites += 1
       if (codec.kind === 'payload-blocks') {
         // Still holding the gate, so no other save lands in between. What Payload's hooks stored
         // (other values, added, removed or moved blocks) becomes the session's base, with the
@@ -1036,11 +1040,11 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
    */
   const putBack = (session: Session, undo: ResetUndo) => {
     // A queued save may already have stored the reset layout before the action failed.
-    const needsSave = undo.dirty || session.persistedSeq > undo.resetSeq
+    const needsSave = undo.dirty || session.completedWrites > undo.completedWrites
     session.layout = undo.layout
     session.stored = undo.stored
     session.unsaved = undo.unsaved
-    session.externalPending = undo.externalPending
+    session.externalPending = session.externalPending || undo.externalPending
     session.persistedSeq = needsSave ? undo.persistedSeq : session.seq
     if (needsSave) markDirty(session)
   }
@@ -1279,6 +1283,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     markSaved(collection, id, seq, info) {
       const session = sessions.get(channelKey(collection, id))
       if (!session) return
+      session.completedWrites += 1
       // A committed save from outside: its other fields are read again.
       refreshDoc(session)
       // A session save that is writing may finish after this save and store an older layout as the
@@ -1307,6 +1312,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     externalSaved(collection, id, info) {
       const session = sessions.get(channelKey(collection, id))
       if (!session) return
+      session.completedWrites += 1
       // Every committed save from outside, also one that left the layout alone (a region, the
       // settings drawer, REST): its other fields may change who may read what.
       refreshDoc(session)
@@ -1351,7 +1357,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
           stored: session.stored,
           unsaved: session.unsaved,
           persistedSeq: session.persistedSeq,
-          resetSeq: session.seq,
+          completedWrites: session.completedWrites,
           dirty: prior.dirty,
           externalPending: session.externalPending,
         }

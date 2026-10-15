@@ -39,15 +39,8 @@ const page = (props: Doc): Layout => ({ version: 1, blocks: [{ id: 'p', type: 'p
 const propsOf = (layout: unknown) => findBlock(layout as Layout, 'p')?.props ?? {}
 const admin = { id: 1, email: 'admin@x.test', name: 'Ana' }
 const editor = { id: 2, email: 'editor@x.test', name: 'Bob' }
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 const settle = async () => {
   for (let i = 0; i < 5; i++) await new Promise((resolve) => setImmediate(resolve))
-}
-/** Polls until `check` is true (or 2 s pass), so slow CI machines do not fail fixed delays. */
-const waitFor = async (check: () => boolean) => {
-  const end = Date.now() + 2000
-  while (!check() && Date.now() < end) await delay(5)
-  await settle()
 }
 /** A manual clock: the session's timers run only inside `advance`, so no test depends on machine speed. */
 function manualTimers() {
@@ -215,12 +208,14 @@ describe('hook changes reach every editor', () => {
   })
 
   it('a save from outside the session (Publish, REST) brings its hook changes to the editors', async () => {
-    const db = hookedPayload(page({ title: 'Shoe' }))
+    const clock = manualTimers()
+    const db = hookedPayload(page({ title: 'Shoe' }), { timers: clock.timers })
     const events = await db.connect('tab-a', admin)
     await db.commit([{ type: 'update', id: 'p', props: { slug: 'A B' } }])
     // Publish before the session's own save: the guard gives the save the session's layout.
     await db.store.update({ collection: 'pages', id: 'p1', data: { _status: 'published' }, draft: false, context: {}, user: admin })
-    await waitFor(() => db.latest._status === 'published' && propsOf(db.latest.layout).slug === 'a-b')
+    await settle()
+    await clock.advance(10_000)
     assert.equal(propsOf(db.latest.layout).slug, 'a-b')
     assert.equal(db.latest._status, 'published')
     const fromHooks = events.find((e): e is LiveCommitEvent => e.type === 'commit' && e.actor.id === FIELD_HOOKS_ACTOR.id)
