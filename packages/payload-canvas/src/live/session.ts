@@ -406,7 +406,6 @@ type ResetUndo = {
   persistedSeq: number
   completedWrites: number
   dirty: boolean
-  externalPending: boolean
 }
 
 /** How often `withCurrentDoc` runs a check while saves keep changing the document. */
@@ -431,6 +430,8 @@ function rememberRows(session: { target: SessionTarget; stored: unknown; ownRowI
 
 /** The answer of a session save that found nothing left to write. */
 const SKIPPED = Symbol('skipped')
+/** A reset action owns the layout until its save or rollback finishes. */
+const PAUSED = Symbol('paused')
 
 /** How a session's field stores its layout. */
 const codecOfTarget = (target: SessionTarget) => target.codec ?? JSON_CODEC
@@ -514,8 +515,10 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
   const gate = options.gate ?? null
 
   const sessions = new Map<string, Session>()
-  const loading = new Map<string, Promise<Session>>()
+  const loading = new Map<string, { promise: Promise<Session>; invalidate: () => void }>()
   const mutex = createKeyedMutex()
+  const resetMutex = createKeyedMutex()
+  const activeActions = new Map<string, Promise<void>>()
   let tokens = 0
 
   // ---- loading ----------------------------------------------------------
@@ -529,60 +532,68 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     }
     let pending = loading.get(key)
     if (!pending) {
-      pending = (async () => {
-        // The session state is shared by everyone, so it is read without one user's field access.
-        // Each request checks its own document access before it connects or commits.
-        const doc = await store.findByID({
-          collection: target.collection,
-          id: target.id,
-          depth: 0,
-          draft: target.drafts,
-          overrideAccess: true,
-          // Every locale: the session holds the stored layout with its translations.
-          context: { [ALL_LOCALES_KEY]: true },
-        })
-        const layout = codecOfTarget(target).decode(doc[target.field])
-        const { [target.field]: _layout, ...rest } = doc
-        const session: Session = {
-          key,
-          sessionId: globalThis.crypto.randomUUID().slice(0, 8),
-          target,
-          store,
-          layout,
-          doc: rest,
-          seq: 0,
-          log: [],
-          knownBlocking: null,
-          members: new Map(),
-          user: null,
-          persistedSeq: 0,
-          completedWrites: 0,
-          firstDirtyAt: null,
-          persistTimer: null,
-          persisting: null,
-          failures: 0,
-          saveError: null,
-          evictTimer: null,
-          externalPending: false,
-          unsaved: [],
-          stored: doc[target.field],
-          ownRowIds: codecOfTarget(target).rowIds?.(doc[target.field]) ?? new Set(),
-          writing: false,
-          docRefresh: null,
-          docGen: 0,
-          docFailed: false,
-          docVersion: 0,
+      let invalidated = false
+      const promise = (async () => {
+        for (;;) {
+          while (activeActions.has(key)) await activeActions.get(key)
+          invalidated = false
+          // The session state is shared by everyone, so it is read without one user's field access.
+          // Each request checks its own document access before it connects or commits.
+          const doc = await store.findByID({
+            collection: target.collection,
+            id: target.id,
+            depth: 0,
+            draft: target.drafts,
+            overrideAccess: true,
+            // Every locale: the session holds the stored layout with its translations.
+            context: { [ALL_LOCALES_KEY]: true },
+          })
+          // An action may have started and finished while this read was in flight.
+          if (invalidated) continue
+          const layout = codecOfTarget(target).decode(doc[target.field])
+          const { [target.field]: _layout, ...rest } = doc
+          const session: Session = {
+            key,
+            sessionId: globalThis.crypto.randomUUID().slice(0, 8),
+            target,
+            store,
+            layout,
+            doc: rest,
+            seq: 0,
+            log: [],
+            knownBlocking: null,
+            members: new Map(),
+            user: null,
+            persistedSeq: 0,
+            completedWrites: 0,
+            firstDirtyAt: null,
+            persistTimer: null,
+            persisting: null,
+            failures: 0,
+            saveError: null,
+            evictTimer: null,
+            externalPending: false,
+            unsaved: [],
+            stored: doc[target.field],
+            ownRowIds: codecOfTarget(target).rowIds?.(doc[target.field]) ?? new Set(),
+            writing: false,
+            docRefresh: null,
+            docGen: 0,
+            docFailed: false,
+            docVersion: 0,
+          }
+          sessions.set(key, session)
+          return session
         }
-        sessions.set(key, session)
-        return session
       })()
+      pending = { promise, invalidate: () => { invalidated = true } }
       loading.set(key, pending)
-      void pending.then(
+      void promise.then(
         () => loading.delete(key),
         () => loading.delete(key),
       )
     }
-    const session = await pending
+    const session = await pending.promise
     session.store = store
     return session
   }
@@ -629,7 +640,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
 
   // ---- persistence ------------------------------------------------------
 
-  const dirty = (session: Session) => session.seq > session.persistedSeq
+  const dirty = (session: Session) => session.seq > session.persistedSeq || session.externalPending
 
   const cancelEvict = (session: Session) => {
     if (session.evictTimer === null) return
@@ -638,10 +649,10 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
   }
 
   const maybeEvict = (session: Session) => {
-    if (session.members.size > 0 || dirty(session) || session.persisting || session.evictTimer !== null) return
+    if (session.members.size > 0 || dirty(session) || session.persisting || activeActions.has(session.key) || session.evictTimer !== null) return
     session.evictTimer = timers.set(() => {
       session.evictTimer = null
-      if (session.members.size > 0 || dirty(session) || session.persisting) return
+      if (session.members.size > 0 || dirty(session) || session.persisting || activeActions.has(session.key)) return
       if (sessions.get(session.key) === session) sessions.delete(session.key)
     }, evictAfterMs)
   }
@@ -674,6 +685,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
 
   const persist = (session: Session): Promise<void> => {
     if (session.persisting) return session.persisting
+    if (activeActions.has(session.key)) return Promise.resolve()
     if (!dirty(session)) {
       session.firstDirtyAt = null
       maybeEvict(session)
@@ -695,8 +707,10 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     let rebased = false
     /** The save itself. Reads the layout only now: with the gate, after every save before it committed. */
     const save = async (req?: object) => {
+      if (activeActions.has(session.key)) return PAUSED
       // A save outside the session changed the stored value meanwhile: take it first.
       if (session.externalPending) await syncExternal(session)
+      if (activeActions.has(session.key)) return PAUSED
       // A save outside the session stored this layout while this one waited (Publish): nothing to write.
       if (!dirty(session)) return SKIPPED
       seq = session.seq
@@ -750,6 +764,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
       try {
         const req = {}
         const saved = gate ? await gate.run(writeKey(target.collection, target.id), req, () => save(req)) : await save()
+        if (saved === PAUSED) return
         if (saved === SKIPPED) {
           clearFailure(session)
           return
@@ -777,7 +792,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     })()
     const done = run.then(() => {
       session.persisting = null
-      if (dirty(session)) {
+      if (dirty(session) && !activeActions.has(session.key)) {
         if (session.failures === 0) {
           // Commits arrived during the save.
           session.firstDirtyAt ??= timers.now()
@@ -884,11 +899,13 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     const base = codecOfTarget(target).decode(doc[target.field])
     await mutex.run(session.key, async () => {
       if (sessions.get(session.key) !== session) return
-      // A reset invalidates an outside read that started on the previous session.
-      if (expectedSessionId !== undefined && session.sessionId !== expectedSessionId) {
+      // Outside reads wait for the action's outcome; an older session's read must be repeated.
+      if (expectedSessionId !== undefined && (activeActions.has(session.key) || session.sessionId !== expectedSessionId)) {
         session.externalPending = true
+        markDirty(session)
         return
       }
+      if (expectedSessionId !== undefined) session.externalPending = false
       session.stored = doc[target.field]
       rememberRows(session)
       if (savedSeq !== undefined) session.persistedSeq = Math.max(session.persistedSeq, savedSeq)
@@ -929,9 +946,14 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
    * view, REST and the Local API write the field itself).
    */
   const syncExternal = async (session: Session) => {
+    if (activeActions.has(session.key)) return
     const sessionId = session.sessionId
-    session.externalPending = false
-    await rebaseOn(session, await readStored(session), undefined, sessionId)
+    try {
+      await rebaseOn(session, await readStored(session), undefined, sessionId)
+    } catch (error) {
+      session.externalPending = true
+      throw error
+    }
   }
 
   // ---- hook changes ------------------------------------------------------
@@ -975,7 +997,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     session.firstDirtyAt ??= timers.now()
     // A save in flight reschedules itself when it ends. While saves fail, the backoff timer stays:
     // new commits do not hammer a broken database.
-    if (session.persisting) return
+    if (session.persisting || activeActions.has(session.key)) return
     if (session.failures > 0 && session.persistTimer !== null) return
     schedulePersist(session)
   }
@@ -992,6 +1014,8 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
    */
   const replaceState = async (key: string, change: (session: Session, prior: { dirty: boolean }) => void): Promise<boolean> => {
     for (;;) {
+      // A load holds the mutex while it waits for this action. It will read the final document.
+      if (!sessions.has(key)) return false
       const running = sessions.get(key)?.persisting
       if (running) {
         await running
@@ -1030,7 +1054,6 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
   /** A new layout that the caller saves next (Revert, Restore): no unsaved commits. */
   const resetTo = (session: Session, layout: Layout, stored: unknown) => {
     session.layout = codecOfTarget(session.target).kind === 'json' ? normalizeLayout(layout) : layout
-    session.externalPending = false
     session.unsaved = []
     // The value the caller stores next: what the next save builds on.
     if (stored !== undefined) {
@@ -1045,8 +1068,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
    * unsaved (the next save stores them), never counted as saved.
    */
   const putBack = (session: Session, undo: ResetUndo) => {
-    // A queued save may already have stored the reset layout before the action failed.
-    session.externalPending = session.externalPending || undo.externalPending
+    // A guarded outside save may have stored the reset layout before the action failed.
     const needsSave = undo.dirty || session.completedWrites > undo.completedWrites || session.externalPending
     session.layout = undo.layout
     session.stored = undo.stored
@@ -1054,6 +1076,23 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     session.persistedSeq = needsSave ? undo.persistedSeq : session.seq
     if (needsSave) markDirty(session)
   }
+
+  const resetAction = <T>(key: string, change: () => Promise<T>): Promise<T> => resetMutex.run(key, async () => {
+    let resume!: () => void
+    activeActions.set(key, new Promise<void>((resolve) => { resume = resolve }))
+    loading.get(key)?.invalidate()
+    try {
+      return await change()
+    } finally {
+      activeActions.delete(key)
+      resume()
+      const session = sessions.get(key)
+      if (session) {
+        if (dirty(session)) markDirty(session)
+        else maybeEvict(session)
+      }
+    }
+  })
 
   // ---- AI collaborators -------------------------------------------------
 
@@ -1325,10 +1364,12 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
       deliver(session, savedEvent(session.persistedSeq, info))
       if (!info.layoutChanged) return
       session.externalPending = true
+      if (activeActions.has(session.key)) return
       // Now, so open editors see the change at once (the next save takes it too, see `persist`).
       const take = () => (session.externalPending ? syncExternal(session) : Promise.resolve())
       void (gate ? gate.run(writeKey(collection, id), {}, take) : take()).catch((error: unknown) => {
         session.externalPending = true
+        markDirty(session)
         logger.error(`[websiteBuilder] Could not take the saved layout of ${session.key} into the live session.`, error)
       })
     },
@@ -1351,52 +1392,62 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     },
 
     reset(collection, id, layout, stored) {
-      return replaceState(channelKey(collection, id), (session) => resetTo(session, layout, stored))
+      const key = channelKey(collection, id)
+      return resetAction(key, () => replaceState(key, (session) => resetTo(session, layout, stored)))
     },
 
     async resetFor(collection, id, layout, stored, save) {
       const key = channelKey(collection, id)
-      let before: ResetUndo | null = null
-      await replaceState(key, (session, prior) => {
-        before = {
-          layout: session.layout,
-          stored: session.stored,
-          unsaved: session.unsaved,
-          persistedSeq: session.persistedSeq,
-          completedWrites: session.completedWrites,
-          dirty: prior.dirty,
-          externalPending: session.externalPending,
+      return resetAction(key, async () => {
+        let before: ResetUndo | null = null
+        await replaceState(key, (session, prior) => {
+          before = {
+            layout: session.layout,
+            stored: session.stored,
+            unsaved: session.unsaved,
+            persistedSeq: session.persistedSeq,
+            completedWrites: session.completedWrites,
+            dirty: prior.dirty,
+          }
+          resetTo(session, layout, stored)
+        })
+        try {
+          return await save()
+        } catch (error) {
+          // Set inside the reset (a closure): no open session leaves it null.
+          const undo = before as ResetUndo | null
+          if (undo) await replaceState(key, (session) => putBack(session, undo))
+          throw error
         }
-        resetTo(session, layout, stored)
       })
-      try {
-        return await save()
-      } catch (error) {
-        // Set inside the reset (a closure): no open session leaves it null.
-        const undo = before as ResetUndo | null
-        if (undo) await replaceState(key, (session) => putBack(session, undo))
-        throw error
-      }
     },
 
     async flush(collection, id) {
-      const session = sessions.get(channelKey(collection, id))
-      if (!session) return { ok: true }
-      if (session.persisting) await session.persisting
-      const save = async () => {
-        if (session.persistTimer !== null) timers.clear(session.persistTimer)
-        session.persistTimer = null
-        // A manual save counts as one more try for the backoff.
-        await persist(session)
+      const key = channelKey(collection, id)
+      for (;;) {
+        while (activeActions.has(key)) await activeActions.get(key)
+        const session = sessions.get(key)
+        if (!session) return { ok: true }
+        if (session.persisting) await session.persisting
+        if (activeActions.has(key)) continue
+        const save = async () => {
+          if (session.persistTimer !== null) timers.clear(session.persistTimer)
+          session.persistTimer = null
+          // A manual save counts as one more try for the backoff.
+          await persist(session)
+        }
+        await save()
+        if (activeActions.has(key)) continue
+        // A save that started before the last commits leaves them dirty: save once more.
+        if (dirty(session) && session.failures === 0) await save()
+        if (activeActions.has(key)) continue
+        if (!dirty(session)) return { ok: true }
+        return { ok: false, error: session.saveError?.message ?? 'The draft could not be saved.' }
       }
-      await save()
-      // A save that started before the last commits leaves them dirty: save once more.
-      if (dirty(session) && session.failures === 0) await save()
-      if (!dirty(session)) return { ok: true }
-      return { ok: false, error: session.saveError?.message ?? 'The draft could not be saved.' }
     },
 
     async flushAll() {
+      while (activeActions.size > 0) await Promise.all(activeActions.values())
       await Promise.all([...sessions.values()].map((s) => this.flush(s.target.collection, s.target.id)))
     },
 
