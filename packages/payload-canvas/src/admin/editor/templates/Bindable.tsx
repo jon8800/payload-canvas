@@ -491,7 +491,7 @@ function ScopeBanner({ block, scope }: { block: Block; scope: BindingScope | nul
         <Icon name="warning" size={14} />
         <div>
           <p>Choose which collection this template is for. Then you can bind this block to its fields.</p>
-          <button type="button" className="builder-bind__link" onClick={runtime.doc.openSettings}>
+          <button type="button" className="builder-bind__link" onClick={() => runtime.doc.openSettings()}>
             Open the template settings
           </button>
         </div>

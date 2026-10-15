@@ -8,15 +8,36 @@
 // reverts someone else's edit. Undo applies the inverse as NEW local operations, so it syncs like
 // any edit. Parts of it that no longer apply (someone else changed or deleted the block) are skipped.
 
-import { applyOperation, BASE_VARIANT, createLocaleView, findBlock, knownLocale, localizeOperations, stampLocale, type Variant } from '../../core'
+import { applyOperation, applyOperations, BASE_VARIANT, createLocaleView, findBlock, knownLocale, localizeOperations, stampLocale, type Variant } from '../../core'
 import type { Block, BlockDefinition, Layout, LocaleSettings, Operation } from '../../core/types'
 import { ACCESS_DENIED_PREFIX } from '../../core/fieldAccess'
+import type { LiveFieldChange } from '../../live/types'
 import { createSyncEngine, type SyncOptions, type SyncUpdate } from './live/sync'
 import { useSelector, type Equality } from './valueStore'
+
+/** One change of a document field outside the layout (a page region's field). */
+export type FieldEdit = { path: string; before: unknown; after: unknown }
+
+/**
+ * Saves field changes for undo and redo, in `locale` (the locale the step was made in, null
+ * without localization). Resolves false when the server refused them.
+ */
+export type FieldWriter = (changes: LiveFieldChange[], locale: string | null) => Promise<boolean>
 
 type HistoryEntry = {
   /** Applied in order, these undo (or redo) one user action. */
   ops: Operation[]
+  /**
+   * A step of document field changes (a region's text or image), saved to the document instead of
+   * applied to the layout. Undo writes `before` back, redo `after`; each expects the other value
+   * there, so a field someone else changed since is never overwritten.
+   */
+  fields?: FieldEdit[]
+  /**
+   * The locale a field step was made in. Undo and redo write that locale, whatever the editor
+   * shows now, as layout operations keep their own `locale`.
+   */
+  fieldLocale?: string | null
   /** Selection to restore when this entry is applied. */
   selectedId: string | null
   /**
@@ -91,6 +112,11 @@ export type EditorStoreOptions = {
    * the locale to start in (default: the default locale).
    */
   localization?: { settings: LocaleSettings; blocks: readonly BlockDefinition[]; locale?: string | null }
+  /**
+   * What the layout field cannot store (a Payload blocks field): the reason, or null. An own edit
+   * whose result it refuses is not applied, so nothing shows that the server would refuse.
+   */
+  storageProblem?: (layout: Layout) => string | null
 }
 
 const HISTORY_LIMIT = 200
@@ -171,6 +197,31 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
   const sharedEdits = new Set<() => void>()
   let tagCounter = 0
   const nextTag = () => `t${++tagCounter}`
+  let fieldWriter: FieldWriter | null = null
+
+  /**
+   * Undoes or redoes a step of field changes. The step moves to the other stack at once (the next
+   * Ctrl+Z goes on with the step before); the save follows. When the server refuses it, the step
+   * goes: the field changed since, and the writer already said so.
+   */
+  const fieldStep = (entry: HistoryEntry, direction: 'undo' | 'redo') => {
+    const edits = entry.fields ?? []
+    const changes: LiveFieldChange[] = edits.map((e) =>
+      direction === 'undo' ? { path: e.path, value: e.before, base: e.after } : { path: e.path, value: e.after, base: e.before },
+    )
+    const moved: HistoryEntry = { ...entry, at: Date.now() }
+    if (direction === 'undo') set({ undoStack: state.undoStack.slice(0, -1), redoStack: [...state.redoStack, moved], lastError: null })
+    else set({ redoStack: state.redoStack.slice(0, -1), undoStack: [...state.undoStack, moved], lastError: null })
+    const drop = () => set({ undoStack: state.undoStack.filter((e) => e !== moved), redoStack: state.redoStack.filter((e) => e !== moved) })
+    if (!fieldWriter) {
+      warn(UNDO_NONE)
+      drop()
+      return
+    }
+    void fieldWriter(changes, entry.fieldLocale ?? null).then((ok) => {
+      if (!ok) drop()
+    })
+  }
 
   const warn = (text: string) => {
     for (const listener of warnings) listener(text)
@@ -272,6 +323,14 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
         }
         list = localized.ops
       }
+      if (options.storageProblem) {
+        const next = applyOperations(state.layout, list)
+        const problem = next.ok ? options.storageProblem(next.layout) : null
+        if (problem) {
+          set({ lastError: problem })
+          return false
+        }
+      }
       const tag = nextTag()
       const result = sync.local(list, tag)
       if (!result.ok) {
@@ -334,6 +393,10 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
     undo() {
       const entry = state.undoStack.at(-1)
       if (!entry) return
+      if (entry.fields) {
+        fieldStep(entry, 'undo')
+        return
+      }
       const done = replay(entry)
       if (!done) {
         set({ undoStack: state.undoStack.slice(0, -1) })
@@ -351,6 +414,10 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
     redo() {
       const entry = state.redoStack.at(-1)
       if (!entry) return
+      if (entry.fields) {
+        fieldStep(entry, 'redo')
+        return
+      }
       const done = replay(entry)
       if (!done) {
         set({ redoStack: state.redoStack.slice(0, -1) })
@@ -363,6 +430,20 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
         selectedId: entry.selectedId,
         lastError: null,
       })
+    },
+
+    /**
+     * Records one undo step of document field changes that are already saved (a region's text
+     * or image). Undo and redo save them back through the writer set with `setFieldWriter`.
+     */
+    recordFields(edits: FieldEdit[], locale: string | null = null) {
+      if (edits.length === 0) return
+      const entry: HistoryEntry = { ops: [], fields: edits, fieldLocale: locale, selectedId: state.selectedId, tags: [], at: Date.now() }
+      set({ undoStack: [...state.undoStack, entry].slice(-HISTORY_LIMIT), redoStack: [] })
+    },
+    /** Saves the field changes of undo and redo. Without one, field steps cannot be undone. */
+    setFieldWriter(writer: FieldWriter | null) {
+      fieldWriter = writer
     },
 
     /**

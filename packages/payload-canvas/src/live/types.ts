@@ -167,6 +167,12 @@ export type LiveSavedEvent = {
   updatedAt?: string
   /** `_status` of the saved document (collections with drafts). */
   status?: string
+  /**
+   * Top-level fields other than the layout that this save changed (the settings drawer, the
+   * region fields endpoint, REST). Left out when only the layout changed. The editor shows the
+   * page frame again when a region's field is among them.
+   */
+  fields?: string[]
 }
 
 /**
@@ -317,6 +323,44 @@ export type BuilderDocMeta = {
  * change the document). `released`: the user's lock is gone.
  */
 export type SettingsLockResponse = { ok: true; lock: 'taken' | 'other' | 'off' | 'released' } | { ok: false; error: string }
+
+// ---------------------------------------------------------------------------
+// Page regions: document fields outside the layout (the collection's `regions` option).
+//
+//   GET  {liveEndpoint}/:collection/:id/regions?locale=   -> LiveRegionsResponse
+//   POST {liveEndpoint}/:collection/:id/fields            LiveFieldsRequest -> LiveFieldsResponse
+// ---------------------------------------------------------------------------
+
+/**
+ * What the user may do with each field of the regions, by path without row numbers ("title",
+ * "links", "links.label"). A path that is not listed follows the nearest listed path above it.
+ */
+export type RegionAccess = Record<string, { read: boolean; update: boolean }>
+
+/** The regions' values (the document's shape, ids instead of documents) in one locale, and the user's access. */
+export type LiveRegionsResponse =
+  | { ok: true; values: Record<string, unknown>; access: RegionAccess; updatedAt: string | null }
+  | { ok: false; error: string }
+
+/**
+ * One field change. `path` is a document path inside a region's field ("title", "links.0.label").
+ * `base` is the value the editor showed before the change: when someone else changed the field
+ * since, the server refuses the whole request (409) instead of overwriting their change.
+ */
+export type LiveFieldChange = { path: string; value: unknown; base?: unknown }
+
+export type LiveFieldsRequest = {
+  changes: LiveFieldChange[]
+  /** The locale the editor shows. Localized fields change in it. */
+  locale?: string | null
+}
+
+/** A change the server refused because the field changed since the editor read it. */
+export type LiveFieldConflict = { path: string; value: unknown }
+
+export type LiveFieldsResponse =
+  | { ok: true; values: Record<string, unknown>; updatedAt: string | null }
+  | { ok: false; error: string; conflicts?: LiveFieldConflict[]; errors?: LiveError[] }
 
 /** `GET {live}/:collection/:id/access`: the user's prop access, as in `BuilderDocMeta.fieldAccess`. */
 export type LiveAccessResponse = { ok: true; fieldAccess: PropAccessInfo | null } | { ok: false; error: string }

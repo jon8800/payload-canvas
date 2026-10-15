@@ -69,7 +69,8 @@ function normalize(value: unknown): unknown {
   return String(value)
 }
 
-function sameValue(a: unknown, b: unknown): boolean {
+/** True when two stored or form values are the same value (see `normalize`). */
+export function sameValue(a: unknown, b: unknown): boolean {
   return JSON.stringify(normalize(a)) === JSON.stringify(normalize(b))
 }
 
@@ -144,6 +145,93 @@ export function defaultFieldClock(): FieldClock {
 }
 
 // ---------------------------------------------------------------------------
+// A field that two editors write: the values a form may have loaded
+// ---------------------------------------------------------------------------
+
+/**
+ * The values one field had, by the document's `updatedAt`. A form sends back every field it
+ * loaded, also the ones nobody touched in it. With the value the form loaded, a save can tell
+ * "left as loaded" (keep the newer stored value) from "changed in this form".
+ */
+export type FieldHistory = {
+  remember(collection: string, id: string | number, field: string, at: unknown, value: unknown): void
+  /** The value the field had when the document's `updatedAt` was `at`. Undefined: not known. */
+  at(collection: string, id: string | number, field: string, at: string): { value: unknown } | undefined
+}
+
+const historyKey = (collection: string, id: unknown, field: string) => `${docKey(collection, id)}:${field}`
+
+/** An in-memory field history: the last `perDoc` values of the last `maxDocs` documents. */
+export function createFieldHistory(maxDocs = 1000, perDoc = 20): FieldHistory {
+  const docs = new Map<string, Map<number, unknown>>()
+  return {
+    remember(collection, id, field, at, value) {
+      const time = typeof at === 'string' ? Date.parse(at) : Number.NaN
+      if (!Number.isFinite(time)) return
+      const key = historyKey(collection, id, field)
+      const entry = docs.get(key) ?? new Map<number, unknown>()
+      docs.delete(key)
+      entry.set(time, structuredClone(value))
+      while (entry.size > perDoc) entry.delete(entry.keys().next().value as number)
+      docs.set(key, entry)
+      if (docs.size > maxDocs) docs.delete(docs.keys().next().value as string)
+    },
+    at(collection, id, field, at) {
+      const entry = docs.get(historyKey(collection, id, field))
+      const time = Date.parse(at)
+      if (!entry || !entry.has(time)) return undefined
+      return { value: entry.get(time) }
+    },
+  }
+}
+
+const HISTORY_KEY = Symbol.for('payload-canvas/field-history')
+
+/** The process-wide field history. Kept on `globalThis`, so a dev hot reload keeps it. */
+export function defaultFieldHistory(): FieldHistory {
+  const store = globalThis as unknown as Record<symbol, FieldHistory | undefined>
+  store[HISTORY_KEY] ??= createFieldHistory()
+  return store[HISTORY_KEY]
+}
+
+/**
+ * Runs in beforeChange of an update from a form (not the plugin's own save), for a field the
+ * builder and Payload's editor both write (a Payload blocks field). A form loaded before the
+ * field's last change, the builder's settings drawer for example, sends the field back as it
+ * loaded it:
+ * - left as loaded: the save keeps the newer stored value (`data[field]` becomes it);
+ * - changed in the form, and the field changed since: a conflict, also when the same person made
+ *   both changes (the save would undo their own newer edit on the canvas);
+ * - changed in the form, and the field did not change since: the form's value is saved.
+ * Returns the conflicts. Remembers the stored value for later forms.
+ */
+export function keepNewerField(args: {
+  history: FieldHistory
+  clock: FieldClock
+  collection: string
+  id: string | number
+  field: string
+  data: Doc
+  originalDoc: Doc | undefined
+}): FieldConflict[] {
+  const { history, clock, collection, id, field, data, originalDoc } = args
+  if (!originalDoc) return []
+  const current = originalDoc[field]
+  history.remember(collection, id, field, originalDoc.updatedAt, current)
+  const base = data.updatedAt
+  if (!(field in data) || typeof base !== 'string' || base === originalDoc.updatedAt) return []
+  if (sameValue(data[field], current)) return []
+  const loaded = history.at(collection, id, field, base)
+  if (loaded && sameValue(data[field], loaded.value)) {
+    data[field] = current
+    return []
+  }
+  if (loaded && sameValue(loaded.value, current)) return []
+  // Changed in the form: a conflict when anyone (this person too) changed the field since.
+  return clock.conflicts(collection, id, [field], { base, by: 'payload-canvas:anyone' })
+}
+
+// ---------------------------------------------------------------------------
 // Stale-save check (beforeChange) and record (afterChange)
 // ---------------------------------------------------------------------------
 
@@ -203,6 +291,12 @@ export function checkStaleSave(args: StaleCheckArgs): FieldConflict[] {
     pending[docKey(collection, id)] = changed
   }
   return []
+}
+
+/** The top-level fields `checkStaleSave` saw change in this save (the layout and the plugin's own fields left out). */
+export function changedFieldsOf(context: Context | undefined, collection: string, id: unknown): string[] {
+  const pending = context?.[CHANGED_FIELDS_CONTEXT] as Record<string, string[]> | undefined
+  return pending?.[docKey(collection, id)] ?? []
 }
 
 /** Runs in afterChange: records the fields `checkStaleSave` saw change, with the new `updatedAt`. */

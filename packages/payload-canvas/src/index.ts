@@ -38,6 +38,14 @@ export {
 export { defaultBlocks, fromPayloadBlocks, type DefaultBlocksOptions, type FromPayloadBlocksOptions, type PayloadBlockOverride } from './blocks'
 export { convertPayloadBlocksLayout, type PayloadConversion, type PayloadConversionReport } from './core/convertPayload'
 export {
+  decodePayloadBlocks,
+  encodePayloadBlocks,
+  payloadBlocksProblems,
+  payloadBlocksStorage,
+  type PayloadBlocksDecode,
+  type PayloadBlocksStorage,
+} from './core/payloadBlocks'
+export {
   formatMigrationReport,
   migrateBlocksField,
   type MigrateBlocksOptions,

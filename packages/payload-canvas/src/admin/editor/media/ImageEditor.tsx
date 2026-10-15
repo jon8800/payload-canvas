@@ -17,11 +17,12 @@ import type { CanvasImageKind, CanvasImageTarget } from '../../../protocol'
 import { GenerateImage } from '../generate/GenerateImage'
 import { Icon } from '../icons'
 import { inlineEditing } from '../inline'
+import { ownerKey, selectOwner, type CanvasOwner } from '../regions/select'
 import { useRuntime } from '../runtime'
 import { useEditor } from '../store'
 import { Popover, usePopover } from '../styles/popover'
 import { Select } from '../ui/Select'
-import { useValue, useValueSelector } from '../valueStore'
+import { useOptionalValue, useValue, useValueSelector } from '../valueStore'
 import {
   imageEditor,
   imageSpotContext,
@@ -69,7 +70,7 @@ export const ImageEditor = memo(function ImageEditor() {
   // The target under the pointer while the pointer is on the chip (the canvas reports none then).
   const [held, setHeld] = useState<CanvasImageTarget | null>(null)
   // The library drawer and the image a pick replaces (the popover closes when the drawer opens).
-  const [library, setLibrary] = useState<{ collection: string; id: string; path: string; at: number } | null>(null)
+  const [library, setLibrary] = useState<{ collection: string; owner: CanvasOwner; path: string; at: number } | null>(null)
   const host = useSyncExternalStore(noSubscription, editorRoot, noRoot)
   const viewport = useValueSelector(runtime.measurement, (m) => m?.viewport ?? null, sameSize)
 
@@ -77,7 +78,7 @@ export const ImageEditor = memo(function ImageEditor() {
   const target = open?.target ?? held ?? state.hover
   const spotIndex = open && target === open.target ? Math.min(open.spot, target.spots.length - 1) : 0
   const spot = target?.spots[spotIndex] ?? null
-  const busy = Boolean(state.busy && target && state.busy.id === target.id && spot && state.busy.path === spot.path)
+  const busy = Boolean(state.busy && target && state.busy.key === ownerKey(target) && spot && state.busy.path === spot.path)
   const visible = Boolean(target && spot) && (Boolean(open) || state.dropping || busy || (!dragging && !locked && !editing))
 
   // An open request (double-click, chip, Enter): show the popover under the chip.
@@ -127,7 +128,7 @@ export const ImageEditor = memo(function ImageEditor() {
                 popover.hide()
                 return
               }
-              runtime.store.select(target.id)
+              selectOwner(runtime, target)
               updateImageEditor(runtime, { open: { target, spot: spotIndex, at: Date.now() } })
             }}
           >
@@ -145,7 +146,7 @@ export const ImageEditor = memo(function ImageEditor() {
               onSpot={(index) => updateImageEditor(runtime, { open: { ...open, spot: index } })}
               onLibrary={(collection, path) => {
                 popover.hide()
-                setLibrary({ collection, id: open.target.id, path, at: Date.now() })
+                setLibrary({ collection, owner: open.target, path, at: Date.now() })
               }}
               onDone={() => popover.hide()}
             />
@@ -158,7 +159,7 @@ export const ImageEditor = memo(function ImageEditor() {
           key={library.at}
           collection={library.collection}
           onSelect={(collection, docId) => {
-            if (setImage(runtime, library.id, library.path, collection, docId)) runtime.notify('Image replaced')
+            if (setImage(runtime, library.owner, library.path, collection, docId)) runtime.notify('Image replaced')
           }}
           onClose={() => setLibrary(null)}
         />
@@ -221,9 +222,10 @@ function MediaPanel({
   const fileRef = useRef<HTMLInputElement>(null)
   const spot = target.spots[spotIndex]
   const path = spot?.path ?? ''
-  // Renders again when the block changes (a pick, an undo, a collaborator).
-  const block = useEditor(runtime.store, (s) => findBlock(s.view, target.id))
-  const context = block && spot ? imageSpotContext(runtime, target.id, path) : null
+  // Renders again when the block changes (a pick, an undo, a collaborator), or the region's values.
+  const block = useEditor(runtime.store, (s) => (target.region ? null : findBlock(s.view, target.id)))
+  const regionValues = useOptionalValue(runtime.regions?.state ?? null)?.values ?? null
+  const context = (block || (target.region && regionValues)) && spot ? imageSpotContext(runtime, target, path) : null
   const value = context ? propAt(context.block.props, path) : undefined
   const ref = context ? mediaRef(context.spot, value) : null
   const refKey = ref ? `${ref.collection}:${ref.id}` : ''
@@ -231,7 +233,7 @@ function MediaPanel({
   const [alt, setAlt] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const busy = useValueSelector(imageEditor(runtime), (s) => Boolean(s.busy && s.busy.id === target.id && s.busy.path === path))
+  const busy = useValueSelector(imageEditor(runtime), (s) => Boolean(s.busy && s.busy.key === ownerKey(target) && s.busy.path === path))
 
   useEffect(() => {
     if (!ref) return
@@ -256,7 +258,7 @@ function MediaPanel({
   const altValue = altPath ? asString(propAt(context.block.props, altPath)) : asString(doc?.alt)
   const preview = asString(doc?.thumbnailURL) || (asString(doc?.mimeType).startsWith('image/') ? asString(doc?.url) : '')
   const options = target.spots.map((s, i) => {
-    const label = imageSpotContext(runtime, target.id, s.path)?.label ?? s.path
+    const label = imageSpotContext(runtime, target, s.path)?.label ?? s.path
     return { value: String(i), label: `${label}${KIND_NOTE[s.kind]}` }
   })
 
@@ -264,7 +266,7 @@ function MediaPanel({
     if (alt === null || alt === altValue) return
     setError(null)
     if (altPath) {
-      setAltProp(runtime, target.id, altPath, alt)
+      setAltProp(runtime, target, altPath, alt)
       return
     }
     if (!ref) return
@@ -335,7 +337,7 @@ function MediaPanel({
             className="builder-editor__menu-item builder-editor__menu-item--danger"
             disabled={busy}
             onClick={() => {
-              if (removeImage(runtime, target.id, path)) onDone()
+              if (removeImage(runtime, target, path)) onDone()
             }}
           >
             <Icon name="delete" size={14} />
@@ -350,7 +352,7 @@ function MediaPanel({
           onChange={(e) => {
             const file = e.target.files?.[0]
             e.target.value = ''
-            if (file) void uploadImage(runtime, target.id, path, file)
+            if (file) void uploadImage(runtime, target, path, file)
           }}
         />
       </div>
@@ -360,7 +362,7 @@ function MediaPanel({
           relationTo={context.spot.field.relationTo ?? collection}
           hasMany={false}
           value={value}
-          onChange={(next) => setImageValue(runtime, target.id, path, next)}
+          onChange={(next) => setImageValue(runtime, target, path, next)}
         />
       )}
 
@@ -383,7 +385,11 @@ function MediaPanel({
             }}
           />
           <p className="builder-media__note">
-            {altPath ? 'Saved on this block.' : `Saved on the ${collection} document: it changes everywhere this file is used.`}
+            {altPath
+              ? target.region
+                ? 'Saved on this page.'
+                : 'Saved on this block.'
+              : `Saved on the ${collection} document: it changes everywhere this file is used.`}
           </p>
         </div>
       )}

@@ -1,0 +1,969 @@
+// One source of truth, through the real Payload Local API: a collection whose builder field is its
+// own Payload blocks field. Payload's operations, field hooks, validation, access, locales and
+// versions run as in an app; only the database is in memory (memoryAdapter.test-data.ts).
+
+import assert from 'node:assert/strict'
+import { after, before, describe, it } from 'node:test'
+import { buildConfig, createLocalReq, getPayload, handleEndpoints, type Block, type CollectionConfig, type Payload, type PayloadRequest } from 'payload'
+
+import { autosaveAction } from '../admin/editor/topbar/closeSave'
+import { fromPayloadBlocks } from '../blocks/payload'
+import { encodePayloadBlocks, type PayloadBlocksStorage } from '../core/payloadBlocks'
+import type { Layout } from '../core/types'
+import { BUILDER_CONFIG_KEY, runPublishAction, type BuilderServerConfig } from '../live/document'
+import { builderMcpTools } from '../mcp'
+import { LIVE_PATH, sessionTargetOf } from '../live/endpoints'
+import { liveRuntimeOf } from '../live/runtime'
+import type { LiveDocStore } from '../live/apply'
+import type { MultiplayerEvent } from '../live/types'
+import { memoryAdapter } from './memoryAdapter.test-data'
+import { websiteBuilder } from './index'
+
+/** How often the heading's `text` hook ran: Payload's own field hooks run once per save. */
+let textHookRuns = 0
+/** While set, the heading's `text` read access waits for it (tests hold an event stream's check). */
+let holdTextRead: Promise<void> | null = null
+
+const heading: Block = {
+  slug: 'heading',
+  fields: [
+    {
+      name: 'text',
+      type: 'text',
+      localized: true,
+      access: {
+        read: async () => {
+          if (holdTextRead) await holdTextRead
+          return true
+        },
+      },
+      hooks: {
+        beforeChange: [
+          ({ value }) => {
+            textHookRuns += 1
+            return value
+          },
+        ],
+      },
+    },
+    { name: 'level', type: 'select', options: ['h2', 'h3'] },
+    // Not in the builder's inspector: kept as stored.
+    { name: 'note', type: 'text', admin: { hidden: true } },
+    // Only admins and reviewers may read it.
+    { name: 'secret', type: 'text', access: { read: ({ req }) => ['admin', 'reviewer'].includes(String((req.user as { role?: string } | null)?.role)) } },
+    // Payload's hook stores it in capitals.
+    {
+      name: 'tone',
+      type: 'text',
+      hooks: { beforeChange: [({ value }) => (typeof value === 'string' ? value.toUpperCase() : value)] },
+    },
+  ],
+}
+const gallery: Block = {
+  slug: 'gallery',
+  fields: [
+    {
+      name: 'items',
+      type: 'array',
+      fields: [
+        { name: 'caption', type: 'text' },
+        { name: 'image', type: 'relationship', relationTo: 'media' },
+      ],
+    },
+    {
+      name: 'settings',
+      type: 'group',
+      fields: [
+        { name: 'columns', type: 'number' },
+        { name: 'tagline', type: 'text' },
+      ],
+    },
+  ],
+}
+const section: Block = {
+  slug: 'section',
+  fields: [
+    { name: 'background', type: 'text' },
+    { name: 'content', type: 'blocks', blocks: [heading, gallery] },
+  ],
+}
+
+const signedIn = ({ req }: { req: { user?: unknown } }) => Boolean(req.user)
+const users: CollectionConfig = { slug: 'users', auth: true, fields: [{ name: 'role', type: 'text' }] }
+const media: CollectionConfig = { slug: 'media', access: { read: () => true }, fields: [{ name: 'name', type: 'text' }] }
+const pages: CollectionConfig = {
+  slug: 'pages',
+  versions: { drafts: true },
+  access: { read: signedIn, create: signedIn, update: signedIn, delete: signedIn },
+  hooks: {
+    // Tests hold a save here (inside the write gate) with `context.hold`.
+    beforeChange: [
+      async ({ context, data }) => {
+        const hold = context.hold as { entered: () => void; wait: Promise<void> } | undefined
+        if (hold) {
+          hold.entered()
+          await hold.wait
+        }
+        return data
+      },
+    ],
+  },
+  fields: [
+    { name: 'title', type: 'text', required: true },
+    { name: 'heroTitle', type: 'text', localized: true },
+    {
+      name: 'layout',
+      type: 'blocks',
+      blocks: [section, heading],
+      // A heading that says "ADD GENERATED" makes the hook add a generated heading at the end, once.
+      hooks: {
+        beforeChange: [
+          ({ value }) => {
+            if (!Array.isArray(value)) return value
+            const rowsOf = (list: Row[]): Row[] => list.flatMap((r) => [r, ...(Array.isArray(r.content) ? rowsOf(r.content as Row[]) : [])])
+            const all = rowsOf(value as Row[])
+            if (!all.some((r) => r.text === 'ADD GENERATED') || all.some((r) => r.note === 'generated')) return value
+            return [...value, { blockType: 'heading', text: 'Generated', note: 'generated' }]
+          },
+        ],
+      },
+      // Reviewers may update the page, but not its blocks.
+      access: { update: ({ req }) => (req.user as { role?: string } | null)?.role !== 'reviewer' },
+    },
+  ],
+}
+
+const admin = { id: 1, collection: 'users', email: 'admin@example.test', role: 'admin' }
+const editor = { id: 2, collection: 'users', email: 'editor@example.test', role: 'editor' }
+const reviewer = { id: 3, collection: 'users', email: 'reviewer@example.test', role: 'reviewer' }
+
+const mem = memoryAdapter()
+let payload: Payload
+let mediaId: number
+
+/** The stored page as Payload reads it (draft, depth 0, the given locale). */
+const read = async (id: number, locale = 'en') =>
+  (await payload.findByID({ collection: 'pages', id, depth: 0, draft: true, locale: locale as never, overrideAccess: true })) as unknown as Record<string, unknown>
+
+/** The rows of the stored layout without Payload's read-only extras. */
+type Row = Record<string, unknown>
+const rows = (doc: Record<string, unknown>) => doc.layout as Row[]
+
+const settle = async () => {
+  for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve))
+}
+
+async function createPage(options: { secret?: boolean } = {}): Promise<number> {
+  const doc = await payload.create({
+    collection: 'pages',
+    draft: true,
+    overrideAccess: true,
+    data: {
+      title: 'Home',
+      heroTitle: 'Welcome',
+      layout: [
+        {
+          blockType: 'section',
+          blockName: 'Intro',
+          background: 'dark',
+          content: [
+            { blockType: 'heading', text: 'Hello', level: 'h2', note: 'keep me', ...(options.secret === false ? {} : { secret: 's3cret' }) },
+            {
+              blockType: 'gallery',
+              items: [
+                { caption: 'First', image: mediaId },
+                { caption: null, image: null },
+              ],
+              settings: { columns: 3, tagline: null },
+            },
+          ],
+        },
+        { blockType: 'heading', text: 'Bottom', level: null },
+      ],
+    } as never,
+  })
+  const id = doc.id as number
+  // A French translation of the headings, through Payload's editor (same block ids).
+  const en = rows(await read(id))
+  const fr = structuredClone(en)
+  ;((fr[0].content as Row[])[0] as Row).text = 'Bonjour'
+  fr[1].text = 'Bas'
+  await payload.update({ collection: 'pages', id, draft: true, locale: 'fr', overrideAccess: true, data: { layout: fr, heroTitle: 'Bienvenue' } as never })
+  return id
+}
+
+function openSession(id: number, user: unknown = editor) {
+  const server = payload.config.custom?.[BUILDER_CONFIG_KEY] as BuilderServerConfig
+  const target = sessionTargetOf(payload, server.collections as never, 'pages', String(id))
+  assert.ok(target)
+  const events: MultiplayerEvent[] = []
+  const runtime = liveRuntimeOf(payload)
+  const store = payload as unknown as LiveDocStore
+  return {
+    target,
+    events,
+    runtime,
+    connect: () => runtime.sessions.connect({ target, store, clientId: `c-${id}-${String((user as { id: number }).id)}`, user, send: (event) => events.push(event) }),
+    commit: (ops: unknown[]) =>
+      runtime.sessions.commit({ target, store, user, actor: { type: 'user', id: 'users:2', label: 'Editor' }, ops, blocks: [...server.collections.pages.payloadBlocks!.blocks] }),
+    flush: () => runtime.sessions.flush('pages', id),
+    layout: () => runtime.sessions.peek('pages', id)?.layout as Layout,
+  }
+}
+
+before(async () => {
+  const config = await buildConfig({
+    secret: 'test-secret-not-used-anywhere',
+    telemetry: false,
+    typescript: { autoGenerate: false },
+    db: mem.adapter,
+    localization: { locales: ['en', 'fr'], defaultLocale: 'en', fallback: true },
+    collections: [users, media, pages],
+    plugins: [
+      websiteBuilder({
+        collections: { pages: { regions: [{ name: 'hero', fields: ['heroTitle'] }] } },
+        blocks: fromPayloadBlocks([section, heading, gallery], { onWarning: false }),
+        css: { entry: 'globals.css' },
+        theme: false,
+      }),
+    ],
+  })
+  payload = await getPayload({ config })
+  mediaId = (await payload.create({ collection: 'media', data: { name: 'Photo' } as never, overrideAccess: true })).id as number
+})
+
+after(async () => {
+  await liveRuntimeOf(payload).sessions.flushAll?.()
+})
+
+describe('Payload blocks field: the plugin keeps the collection as it is', () => {
+  it('adds no second copy of the body: the blocks field is the only layout field, unchanged', () => {
+    const config = payload.collections.pages.config
+    const layout = config.fields.find((f) => 'name' in f && f.name === 'layout') as { type: string; blocks: unknown[]; admin?: { components?: unknown } }
+    assert.equal(layout.type, 'blocks')
+    assert.deepEqual(
+      layout.blocks.map((b) => (b as { slug: string }).slug),
+      ['section', 'heading'],
+    )
+    assert.equal(layout.admin?.components, undefined, "Payload's own blocks editor")
+    const names = config.flattenedFields.map((f) => f.name)
+    assert.ok(!names.includes('layoutCss'), 'no CSS copy')
+    // The builder's config travels in a virtual field: no column, nothing stored.
+    const builder = config.flattenedFields.find((f) => f.name === 'layoutBuilder') as { type: string; virtual?: unknown }
+    assert.equal(builder.type, 'json')
+    assert.equal(builder.virtual, true)
+    const server = payload.config.custom?.[BUILDER_CONFIG_KEY] as BuilderServerConfig
+    assert.deepEqual(server.collections.pages.payloadBlocks?.rootTypes, ['section', 'heading'])
+    assert.equal(server.collections.pages.localization, null, "translations are edited in Payload's editor")
+  })
+})
+
+describe('Payload blocks field: one source of truth through the Local API', () => {
+  it('opens what Payload stored, losslessly, and opening alone saves nothing', async () => {
+    const id = await createPage()
+    const writes = mem.writes('pages')
+    const versions = mem.versions('pages').length
+    const session = openSession(id)
+    await session.connect()
+    const layout = session.layout()
+    const stored = rows(await read(id))
+    const [intro, bottom] = layout.blocks
+    assert.equal(intro.type, 'section')
+    assert.equal(intro.id, stored[0].id)
+    assert.equal(intro.label, 'Intro')
+    assert.equal(intro.props?.background, 'dark')
+    const [hello, photos] = intro.slots?.content ?? []
+    assert.deepEqual(hello.props, { text: 'Hello', level: 'h2', note: 'keep me', secret: 's3cret' })
+    assert.equal(photos.type, 'gallery')
+    const items = photos.props?.items as Row[]
+    assert.equal(items[0].image, mediaId, 'relationships stay ids')
+    assert.equal(items[1].caption, null, 'empty values stay')
+    assert.equal(typeof items[0].id, 'string', 'array rows keep their ids')
+    assert.deepEqual(photos.props?.settings, { columns: 3, tagline: null })
+    assert.equal(bottom.props?.level, null)
+    await settle()
+    assert.equal(mem.writes('pages'), writes, 'no save on open')
+    assert.equal(mem.versions('pages').length, versions, 'no version on open')
+  })
+
+  it('saves a canvas edit into the same field, keeping everything else, every locale and the hooks once', async () => {
+    const id = await createPage()
+    const original = rows(await read(id))
+    const session = openSession(id)
+    await session.connect()
+    const hello = session.layout().blocks[0].slots!.content[0]
+    textHookRuns = 0
+    const result = await session.commit([{ type: 'update', id: hello.id, props: { text: 'Hello there' } }])
+    assert.equal(result.ok, true)
+    assert.deepEqual(await session.flush(), { ok: true })
+    const saved = rows(await read(id))
+    const expected = structuredClone(original)
+    ;((expected[0].content as Row[])[0] as Row).text = 'Hello there'
+    assert.deepEqual(saved, expected, 'ids, order, blockName, nulls, array rows, groups and relationship ids as they were')
+    const fr = rows(await read(id, 'fr'))
+    assert.equal(((fr[0].content as Row[])[0] as Row).text, 'Bonjour', 'the French text stays')
+    assert.equal(fr[1].text, 'Bas')
+    assert.equal(textHookRuns, 2, "Payload's field hook ran once for each heading")
+    const stored = mem.stored('pages', id) as Record<string, unknown>
+    assert.ok(stored.layoutBuilder == null && !('layoutCss' in stored), `nothing else stored: ${JSON.stringify(stored.layoutBuilder)}`)
+    // Payload's own editor reads the canvas edit at once.
+    const native = await payload.findByID({ collection: 'pages', id, draft: true, depth: 0, user: editor, overrideAccess: false })
+    assert.equal(((native.layout as Row[])[0].content as Row[])[0].text, 'Hello there')
+  })
+
+  it('saves a block added on the canvas as a Payload block, nested in its section', async () => {
+    const id = await createPage()
+    const session = openSession(id)
+    await session.connect()
+    const intro = session.layout().blocks[0]
+    const result = await session.commit([
+      { type: 'insert', block: { id: 'new-heading', type: 'heading', props: { text: 'Added', level: 'h3' } }, to: { parentId: intro.id, slot: 'content', index: 1 } },
+    ])
+    assert.equal(result.ok, true, JSON.stringify(result))
+    assert.deepEqual(await session.flush(), { ok: true })
+    const content = rows(await read(id))[0].content as Row[]
+    assert.deepEqual(
+      content.map((r) => [r.blockType, r.id]),
+      [
+        ['heading', content[0].id],
+        ['heading', 'new-heading'],
+        ['gallery', content[2].id],
+      ],
+    )
+    assert.equal(content[1].text, 'Added')
+  })
+
+  it('takes a save from Payload while the canvas is open, and keeps the canvas edit made meanwhile', async () => {
+    const id = await createPage()
+    const session = openSession(id)
+    await session.connect()
+    const [intro, bottom] = session.layout().blocks
+    const photos = intro.slots!.content[1]
+    // A canvas edit, not saved yet.
+    assert.equal((await session.commit([{ type: 'update', id: photos.id, props: { settings: { columns: 4, tagline: null } } }])).ok, true)
+    // Someone saves the page in Payload's editor (the Local API as that user).
+    const native = rows(await read(id))
+    native[1].text = 'Bottom, edited in Payload'
+    await payload.update({ collection: 'pages', id, draft: true, user: admin, overrideAccess: false, data: { layout: native } as never })
+    await settle()
+    // The canvas shows it at once, without dropping its own edit…
+    const shown = session.layout()
+    assert.equal(shown.blocks[1].id, bottom.id)
+    assert.equal(shown.blocks[1].props?.text, 'Bottom, edited in Payload')
+    assert.deepEqual(shown.blocks[0].slots!.content[1].props?.settings, { columns: 4, tagline: null })
+    assert.ok(
+      session.events.some((e) => e.type === 'session'),
+      'editors get the new state',
+    )
+    // …and its next save writes both.
+    assert.deepEqual(await session.flush(), { ok: true })
+    const stored = rows(await read(id))
+    assert.equal(stored[1].text, 'Bottom, edited in Payload')
+    assert.deepEqual(((stored[0].content as Row[])[1] as Row).settings, { columns: 4, tagline: null })
+  })
+
+  it('saves the hero region and the body of one document without undoing each other', async () => {
+    const id = await createPage()
+    const session = openSession(id)
+    await session.connect()
+    const hello = session.layout().blocks[0].slots!.content[0]
+    assert.equal((await session.commit([{ type: 'update', id: hello.id, props: { text: 'Body edit' } }])).ok, true)
+    // The hero region saves its field alone (as the region endpoint does).
+    await payload.update({ collection: 'pages', id, draft: true, user: editor, overrideAccess: false, data: { heroTitle: 'New hero' } as never })
+    await settle()
+    // Editors hear which field changed (its old publish problem goes, admin/editor/topbar/problems.ts).
+    assert.ok(session.events.some((e) => e.type === 'saved' && (e as { fields?: string[] }).fields?.includes('heroTitle')))
+    assert.deepEqual(await session.flush(), { ok: true })
+    const doc = await read(id)
+    assert.equal(doc.heroTitle, 'New hero')
+    assert.equal(((rows(doc)[0].content as Row[])[0] as Row).text, 'Body edit')
+    assert.equal((await read(id, 'fr')).heroTitle, 'Bienvenue')
+  })
+
+  it('refuses what the field cannot store, and saves nothing of it', async () => {
+    const id = await createPage()
+    const session = openSession(id)
+    await session.connect()
+    const hello = session.layout().blocks[0].slots!.content[0]
+    for (const op of [
+      { type: 'update', id: hello.id, className: 'text-red-500' },
+      { type: 'update', id: hello.id, hidden: true },
+      { type: 'insert', block: { id: 'x1', type: 'gallery' }, to: { parentId: null, index: 0 } },
+    ]) {
+      const result = await session.commit([op])
+      assert.equal(result.ok, false, JSON.stringify(op))
+      assert.equal((result as { status: number }).status, 422, JSON.stringify(result))
+    }
+    assert.equal(session.layout().blocks.length, 2)
+  })
+
+  it("a stale form that left the blocks as loaded keeps the canvas edit; one that changed them is refused", async () => {
+    const id = await createPage()
+    // The settings drawer loads the page…
+    const form = await read(id)
+    const session = openSession(id)
+    await session.connect()
+    const hello = session.layout().blocks[0].slots!.content[0]
+    // …the same person edits the canvas, which saves…
+    assert.equal((await session.commit([{ type: 'update', id: hello.id, props: { text: 'Canvas edit' } }])).ok, true)
+    assert.deepEqual(await session.flush(), { ok: true })
+    // …then the drawer autosaves the title, sending the blocks it loaded.
+    await payload.update({
+      collection: 'pages',
+      id,
+      draft: true,
+      user: editor,
+      overrideAccess: false,
+      data: { ...form, title: 'Renamed', layout: form.layout } as never,
+    })
+    let doc = await read(id)
+    assert.equal(doc.title, 'Renamed')
+    assert.equal(((rows(doc)[0].content as Row[])[0] as Row).text, 'Canvas edit', 'the blocks left as loaded keep the newer blocks')
+    // A form that changed the blocks after they changed elsewhere is refused (409).
+    const changed = structuredClone(form.layout) as Row[]
+    changed[1].text = 'Stale edit'
+    await assert.rejects(
+      payload.update({ collection: 'pages', id, draft: true, user: editor, overrideAccess: false, data: { ...form, layout: changed } as never }),
+      (error: { status?: number }) => error.status === 409,
+    )
+    doc = await read(id)
+    assert.equal(rows(doc)[1].text, 'Bottom')
+  })
+
+  it("keeps fields the user may not read, and Payload's own access refuses users without update access", async () => {
+    const id = await createPage()
+    // Payload's editor as the editor, who cannot read `secret`: the stored secret stays.
+    const seen = (await payload.findByID({ collection: 'pages', id, draft: true, depth: 0, user: editor, overrideAccess: false })) as Record<string, unknown>
+    const hello = ((seen.layout as Row[])[0].content as Row[])[0]
+    assert.equal(hello.secret, undefined, 'hidden from the editor')
+    hello.text = 'Edited without the secret'
+    await payload.update({ collection: 'pages', id, draft: true, user: editor, overrideAccess: false, data: { layout: seen.layout } as never })
+    const stored = ((rows(await read(id))[0].content as Row[])[0] as Row)
+    assert.equal(stored.text, 'Edited without the secret')
+    assert.equal(stored.secret, 's3cret', 'kept by Payload')
+    // No user: Payload refuses.
+    await assert.rejects(payload.update({ collection: 'pages', id, draft: true, overrideAccess: false, data: { title: 'x' } as never }))
+  })
+})
+
+/** A request as `user`, for the live endpoint of page `id` when given. */
+const requestAs = async (user: unknown, id?: number) => {
+  const req = (await createLocalReq({ user: user as never }, payload)) as PayloadRequest
+  if (id !== undefined) {
+    req.routeParams = { collection: 'pages', id: String(id) }
+    ;(req as { url?: string }).url = `http://localhost/api${LIVE_PATH}/pages/${id}/events?clientId=client-${String((user as { id: number }).id)}`
+  }
+  return req
+}
+/** The published page. */
+const published = async (id: number) =>
+  (await payload.findByID({ collection: 'pages', id, depth: 0, draft: false, overrideAccess: true })) as unknown as Record<string, unknown>
+
+describe('Payload blocks field: publish, revert and who may open the builder', () => {
+  it('publishes the canvas edit and reverts to it, in the same field, keeping hidden values', async () => {
+    const id = await createPage()
+    const session = openSession(id, admin)
+    await session.connect()
+    const hello = session.layout().blocks[0].slots!.content[0]
+    assert.equal((await session.commit([{ type: 'update', id: hello.id, props: { text: 'Published text' } }])).ok, true)
+    const runtime = liveRuntimeOf(payload)
+    const publish = await runPublishAction(await requestAs(admin), { target: session.target, action: 'publish', runtime })
+    assert.equal(publish.ok, true, JSON.stringify(publish))
+    let live = await published(id)
+    assert.equal(live._status, 'published')
+    assert.equal(((rows(live)[0].content as Row[])[0] as Row).text, 'Published text')
+    assert.equal(((rows(live)[0].content as Row[])[0] as Row).secret, 's3cret')
+    // A later draft edit, then Revert to published.
+    assert.equal((await session.commit([{ type: 'update', id: hello.id, props: { text: 'Draft text' } }])).ok, true)
+    assert.deepEqual(await session.flush(), { ok: true })
+    assert.equal(((rows(await read(id))[0].content as Row[])[0] as Row).text, 'Draft text')
+    const revert = await runPublishAction(await requestAs(admin), { target: session.target, action: 'revert', runtime })
+    assert.equal(revert.ok, true, JSON.stringify(revert))
+    assert.equal(session.layout().blocks[0].slots!.content[0].props?.text, 'Published text', 'the canvas shows the published blocks')
+    const draft = await read(id)
+    assert.equal(((rows(draft)[0].content as Row[])[0] as Row).text, 'Published text')
+    live = await published(id)
+    assert.deepEqual(rows(draft), rows(live))
+    // Every version holds the blocks field only: no second copy of the body.
+    for (const record of mem.versions('pages').filter((r) => r.parent === id)) {
+      assert.ok(Array.isArray(record.version.layout))
+      assert.equal(record.version.layoutCss, undefined)
+    }
+  })
+
+  it('opens the builder only for users who may read every block field', async () => {
+    const id = await createPage()
+    const events = (payload.config.endpoints ?? []).find((e) => e.path === `${LIVE_PATH}/:collection/:id/events` && e.method === 'get')
+    assert.ok(events)
+    const refused = await events.handler(await requestAs(editor, id))
+    assert.equal(refused.status, 403)
+    assert.match(String(((await refused.json()) as { error: string }).error), /Payload's editor/)
+    const opened = await events.handler(await requestAs(admin, id))
+    assert.equal(opened.status, 200)
+    await opened.body?.cancel()
+  })
+})
+
+/** A live endpoint (`/builder/live/:collection/:id/<name>`) called as `user` with `body`. */
+async function callLive(name: string, user: unknown, id: number, body: Record<string, unknown> = {}): Promise<Response> {
+  const endpoint = (payload.config.endpoints ?? []).find((e) => e.path === `${LIVE_PATH}/:collection/:id/${name}` && e.method === 'post')
+  assert.ok(endpoint, name)
+  const req = await requestAs(user, id)
+  req.data = body
+  return endpoint.handler(req)
+}
+
+const headingOf = (layout: Layout) => layout.blocks[0].slots!.content[0]
+const storedHeading = async (id: number) => (rows(await read(id))[0].content as Row[])[0] as Row
+
+describe('Payload blocks field: review regressions', () => {
+  it('keeps an unsaved canvas edit through two saves from Payload before the canvas saves', async () => {
+    const id = await createPage()
+    const session = openSession(id, admin)
+    await session.connect()
+    const hello = headingOf(session.layout())
+    assert.equal((await session.commit([{ type: 'update', id: hello.id, props: { text: 'Canvas' } }])).ok, true)
+    for (const text of ['Native one', 'Native two']) {
+      const native = rows(await read(id))
+      native[1].text = text
+      await payload.update({ collection: 'pages', id, draft: true, user: admin, overrideAccess: false, data: { layout: native } as never })
+      await settle()
+      assert.equal(headingOf(session.layout()).props?.text, 'Canvas', `after "${text}"`)
+    }
+    assert.deepEqual(await session.flush(), { ok: true })
+    assert.equal((await storedHeading(id)).text, 'Canvas')
+    assert.equal(rows(await read(id))[1].text, 'Native two')
+  })
+
+  it("shows what Payload's hooks stored, and a later edit keeps it", async () => {
+    const id = await createPage()
+    const session = openSession(id, admin)
+    await session.connect()
+    const hello = headingOf(session.layout())
+    assert.equal((await session.commit([{ type: 'update', id: hello.id, props: { tone: 'Mixed Case' } }])).ok, true)
+    assert.deepEqual(await session.flush(), { ok: true })
+    await settle()
+    assert.equal((await storedHeading(id)).tone, 'MIXED CASE')
+    assert.equal(headingOf(session.layout()).props?.tone, 'MIXED CASE', 'the session holds the stored value')
+    assert.ok(
+      session.events.some((e) => e.type === 'session' && JSON.stringify(e).includes('MIXED CASE')),
+      'editors get the stored state',
+    )
+    assert.equal((await session.commit([{ type: 'update', id: hello.id, props: { text: 'Later' } }])).ok, true)
+    assert.deepEqual(await session.flush(), { ok: true })
+    const stored = await storedHeading(id)
+    assert.equal(stored.text, 'Later')
+    assert.equal(stored.tone, 'MIXED CASE')
+  })
+
+  it('refuses changes from a user who may update the page but not its blocks field', async () => {
+    const id = await createPage()
+    const hello = await storedHeading(id)
+    const ops = [{ type: 'update', id: hello.id, props: { text: 'Denied' } }]
+    assert.equal((await callLive('operations', reviewer, id, { ops })).status, 403)
+    assert.equal((await callLive('commit', reviewer, id, { clientId: 'client-reviewer-1', batchId: 'b1', ops })).status, 403)
+    assert.equal((await callLive('flush', reviewer, id)).status, 403)
+    const open = liveRuntimeOf(payload).sessions.peek('pages', id)
+    if (open) assert.notEqual(headingOf(open.layout).props?.text, 'Denied', 'nothing in the session')
+    assert.equal((await storedHeading(id)).text, 'Hello')
+  })
+
+  it('never returns stored values the user may not read from the operations endpoint', async () => {
+    const id = await createPage()
+    const hello = await storedHeading(id)
+    const ops = [{ type: 'update', id: hello.id, props: { text: 'Public' } }]
+    const refused = await callLive('operations', editor, id, { ops })
+    assert.equal(refused.status, 403)
+    assert.ok(!(await refused.text()).includes('s3cret'))
+    assert.equal(liveRuntimeOf(payload).sessions.peek('pages', id), null, 'no session opened for it')
+    const allowed = await callLive('operations', admin, id, { ops })
+    assert.equal(allowed.status, 200)
+    const body = (await allowed.json()) as { layout: Layout }
+    assert.equal(headingOf(body.layout).props?.text, 'Public')
+  })
+
+  it('does not lock when Revert starts while a canvas save waits behind a save from Payload', { timeout: 10_000 }, async () => {
+    const id = await createPage()
+    const session = openSession(id, admin)
+    await session.connect()
+    const hello = headingOf(session.layout())
+    assert.equal((await session.commit([{ type: 'update', id: hello.id, props: { text: 'Canvas' } }])).ok, true)
+    let entered!: () => void
+    let release!: () => void
+    const inside = new Promise<void>((resolve) => (entered = resolve))
+    const wait = new Promise<void>((resolve) => (release = resolve))
+    const native = rows(await read(id))
+    native[1].text = 'Native'
+    // A save from Payload holds the write gate…
+    const nativeSave = payload.update({
+      collection: 'pages',
+      id,
+      draft: true,
+      user: admin,
+      overrideAccess: false,
+      data: { layout: native } as never,
+      context: { hold: { entered, wait } },
+    })
+    await inside
+    // …the canvas save waits for it, and Revert starts.
+    const flushed = session.flush()
+    const reset = liveRuntimeOf(payload).sessions.reset('pages', id, session.layout())
+    release()
+    await nativeSave
+    assert.deepEqual(await flushed, { ok: true })
+    assert.equal(await reset, true)
+    // The gate is free: the next saves go through.
+    await payload.update({ collection: 'pages', id, draft: true, user: admin, overrideAccess: false, data: { title: 'After' } as never })
+    assert.equal((await read(id)).title, 'After')
+  })
+})
+
+/** Reads SSE frames from a stream until `stop` says so or the stream ends. Returns every frame's text. */
+async function readFrames(response: Response, stop: (frames: string[]) => boolean): Promise<string[]> {
+  const reader = response.body!.getReader()
+  const decoder = new TextDecoder()
+  const frames: string[] = []
+  let buffer = ''
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const parts = buffer.split('\n\n')
+    buffer = parts.pop() ?? ''
+    frames.push(...parts)
+    if (stop(frames)) break
+  }
+  await reader.cancel().catch(() => undefined)
+  return frames
+}
+
+describe('Payload blocks field: r2 review regressions', () => {
+  it('never sends a value the user may not read that exists only in the live session', { timeout: 10_000 }, async () => {
+    const id = await createPage({ secret: false })
+    const hello = await storedHeading(id)
+    assert.equal(hello.secret, undefined, 'nothing secret stored')
+    // The editor connects first (nothing secret anywhere yet).
+    const events = (payload.config.endpoints ?? []).find((e) => e.path === `${LIVE_PATH}/:collection/:id/events` && e.method === 'get')!
+    const stream = await events.handler(await requestAs(editor, id))
+    assert.equal(stream.status, 200)
+    const frames = readFrames(stream, (all) => all.some((f) => f.startsWith('event: error')))
+    // An admin types a secret on the canvas; it is not saved yet.
+    const session = openSession(id, admin)
+    await session.connect()
+    assert.equal((await session.commit([{ type: 'update', id: String(hello.id), props: { secret: 'live-only' } }])).ok, true)
+    assert.equal((await storedHeading(id)).secret, undefined, 'still not stored')
+    // The editor's stream ends with an error instead of the commit.
+    const sent = await frames
+    assert.ok(sent.some((f) => f.startsWith('event: error')), 'the stream ends')
+    assert.ok(!sent.some((f) => f.includes('live-only')), 'the live value never went out')
+    // A public edit through the operations endpoint is refused, without the value.
+    const operations = await callLive('operations', editor, id, { ops: [{ type: 'update', id: String(hello.id), props: { text: 'Public' } }] })
+    assert.equal(operations.status, 403)
+    assert.ok(!(await operations.text()).includes('live-only'))
+    assert.notEqual(headingOf(session.layout()).props?.text, 'Public', 'not applied')
+    // A new stream and MCP are refused too.
+    assert.equal((await events.handler(await requestAs(editor, id))).status, 403)
+    const server = payload.config.custom![BUILDER_CONFIG_KEY] as BuilderServerConfig
+    const tools = builderMcpTools({ blocks: [...server.collections.pages.payloadBlocks!.blocks], collections: { pages: { field: 'layout' } } })
+    const getLayout = tools.find((t) => t.name === 'getLayout')!
+    const mcp = await getLayout.handler({ collection: 'pages', id: String(id) }, await requestAs(editor), {})
+    assert.ok(!JSON.stringify(mcp).includes('live-only'))
+    assert.equal((mcp as { isError?: boolean }).isError, true)
+    // People who may read it keep working.
+    const allowed = await callLive('operations', admin, id, { ops: [{ type: 'update', id: String(hello.id), props: { text: 'Public' } }] })
+    assert.equal(allowed.status, 200)
+  })
+
+  it("takes what Payload's hooks did to the blocks themselves, and a later edit keeps it", async () => {
+    const id = await createPage()
+    const session = openSession(id, admin)
+    await session.connect()
+    const hello = headingOf(session.layout())
+    // The layout field's hook adds a generated block once, when a heading asks for it.
+    assert.equal((await session.commit([{ type: 'update', id: hello.id, props: { text: 'ADD GENERATED' } }])).ok, true)
+    assert.deepEqual(await session.flush(), { ok: true })
+    await settle()
+    const stored = rows(await read(id))
+    assert.equal(stored.length, 3, 'the hook added a block')
+    assert.equal(stored[2].note, 'generated')
+    const shown = session.layout()
+    assert.deepEqual(
+      shown.blocks.map((b) => b.id),
+      stored.map((r) => r.id),
+      'the session holds the stored blocks, in order',
+    )
+    assert.ok(
+      session.events.some((e) => e.type === 'session'),
+      'editors get the stored state',
+    )
+    // A later canvas edit keeps the generated block.
+    assert.equal((await session.commit([{ type: 'update', id: hello.id, props: { text: 'Later' } }])).ok, true)
+    assert.deepEqual(await session.flush(), { ok: true })
+    const later = rows(await read(id))
+    assert.equal(later.length, 3)
+    assert.equal(later[2].note, 'generated')
+    assert.equal(((later[0].content as Row[])[0] as Row).text, 'Later')
+  })
+
+  it('keeps a canvas edit made while the save ran on top of what the hooks stored', async () => {
+    const id = await createPage()
+    const session = openSession(id, admin)
+    await session.connect()
+    const [intro, bottom] = session.layout().blocks
+    const hello = intro.slots!.content[0]
+    assert.equal((await session.commit([{ type: 'update', id: hello.id, props: { text: 'ADD GENERATED' } }])).ok, true)
+    const flushed = session.flush()
+    // An edit while the save runs.
+    assert.equal((await session.commit([{ type: 'update', id: bottom.id, props: { text: 'During the save' } }])).ok, true)
+    assert.deepEqual(await flushed, { ok: true })
+    await settle()
+    const shown = session.layout()
+    assert.equal(shown.blocks.length, 3, 'the generated block')
+    assert.equal(shown.blocks[1].props?.text, 'During the save', 'the edit made meanwhile')
+    assert.deepEqual(await session.flush(), { ok: true })
+    const stored = rows(await read(id))
+    assert.equal(stored.length, 3)
+    assert.equal(stored[1].text, 'During the save')
+  })
+})
+
+/** The JSON data of each SSE frame of `type`. */
+const framesOf = (frames: string[], type: string) =>
+  frames.filter((f) => f.includes(`event: ${type}`)).map((f) => JSON.parse(f.split('\n').find((l) => l.startsWith('data: '))!.slice(6)) as Record<string, unknown>)
+
+/** The live event stream endpoint. */
+const eventsEndpoint = () => (payload.config.endpoints ?? []).find((e) => e.path === `${LIVE_PATH}/:collection/:id/events` && e.method === 'get')!
+
+describe('Payload blocks field: r3 review regressions (event stream)', () => {
+  it('checks each queued event as it was, so a value added and removed again never goes out', { timeout: 10_000 }, async () => {
+    const id = await createPage({ secret: false })
+    const hello = String((await storedHeading(id)).id)
+    const session = openSession(id, admin)
+    await session.connect()
+    const stream = await eventsEndpoint().handler(await requestAs(editor, id))
+    assert.equal(stream.status, 200)
+    const frames = readFrames(stream, (all) => all.some((f) => f.includes('event: error')))
+    await settle()
+    // The editor's check of the next events waits…
+    let release!: () => void
+    holdTextRead = new Promise<void>((resolve) => (release = resolve))
+    try {
+      // …while an admin edits, adds a secret and removes it again.
+      assert.equal((await session.commit([{ type: 'update', id: hello, props: { text: 'Benign' } }])).ok, true)
+      assert.equal((await session.commit([{ type: 'update', id: hello, props: { secret: 'queued-secret' } }])).ok, true)
+      assert.equal((await session.commit([{ type: 'update', id: hello, unsetProps: ['secret'] }])).ok, true)
+      assert.equal(headingOf(session.layout()).props?.secret, undefined, 'gone from the current layout')
+    } finally {
+      holdTextRead = null
+      release()
+    }
+    const sent = await frames
+    assert.ok(!sent.some((f) => f.includes('queued-secret')), 'the old value never went out')
+    assert.ok(sent.some((f) => f.includes('event: error')), 'the stream ended')
+    assert.deepEqual(
+      framesOf(sent, 'commit').map((c) => (c.ops as { props?: Record<string, unknown> }[])[0]?.props),
+      [{ text: 'Benign' }],
+      'only the benign commit went out',
+    )
+  })
+
+  it('a check that holds a commit with a value inserted and removed in one batch refuses it too', { timeout: 10_000 }, async () => {
+    const id = await createPage({ secret: false })
+    const intro = rows(await read(id))[0]
+    const session = openSession(id, admin)
+    await session.connect()
+    const stream = await eventsEndpoint().handler(await requestAs(editor, id))
+    const frames = readFrames(stream, (all) => all.some((f) => f.includes('event: error')))
+    await settle()
+    const ops = [
+      { type: 'insert', block: { id: 'batch-secret', type: 'heading', props: { text: 'x', secret: 'batch-secret-value' } }, to: { parentId: String(intro.id), slot: 'content', index: 0 } },
+      { type: 'remove', id: 'batch-secret' },
+    ]
+    assert.equal((await session.commit(ops)).ok, true)
+    const sent = await frames
+    assert.ok(!sent.some((f) => f.includes('batch-secret-value')))
+    assert.ok(sent.some((f) => f.includes('event: error')))
+  })
+
+  it('never replays old commits to a reconnect: it gets the current state', { timeout: 10_000 }, async () => {
+    const id = await createPage({ secret: false })
+    const hello = String((await storedHeading(id)).id)
+    const session = openSession(id, admin)
+    await session.connect()
+    // The editor connects and remembers where it was.
+    const first = await eventsEndpoint().handler(await requestAs(editor, id))
+    const opened = framesOf(await readFrames(first, (all) => all.some((f) => f.includes('event: session'))), 'session')[0]
+    const resume = { seq: Number(opened.seq), session: String(opened.sessionId) }
+    // While it is away, an admin adds a secret and removes it again.
+    assert.equal((await session.commit([{ type: 'update', id: hello, props: { secret: 'old-secret' } }])).ok, true)
+    assert.equal((await session.commit([{ type: 'update', id: hello, unsetProps: ['secret'] }])).ok, true)
+    // It reconnects from the old seq.
+    const req = await requestAs(editor, id)
+    ;(req as { url?: string }).url = `http://localhost/api${LIVE_PATH}/pages/${id}/events?clientId=client-2-reconnect&seq=${resume.seq}&session=${resume.session}`
+    const again = await eventsEndpoint().handler(req)
+    assert.equal(again.status, 200)
+    const sent = await readFrames(again, (all) => all.some((f) => f.includes('event: session') || f.includes('event: error')))
+    assert.ok(!sent.some((f) => f.includes('old-secret')), 'no old commit with the value')
+    assert.equal(framesOf(sent, 'commit').length, 0, 'no replay')
+    assert.equal(framesOf(sent, 'session').length, 1, 'the current state')
+  })
+})
+
+/** The blocks field's storage as the plugin set it up. */
+const storageOf = () => (payload.config.custom![BUILDER_CONFIG_KEY] as BuilderServerConfig).collections.pages.payloadBlocks as PayloadBlocksStorage
+
+/** Every `id` of an object at any depth of `value`. */
+function allIds(value: unknown, into: string[] = []): string[] {
+  if (Array.isArray(value)) value.forEach((v) => allIds(v, into))
+  else if (value && typeof value === 'object') {
+    const o = value as Record<string, unknown>
+    if (typeof o.id === 'string') into.push(o.id)
+    Object.values(o).forEach((v) => allIds(v, into))
+  }
+  return into
+}
+const repeated = (ids: string[]) => ids.filter((x, i) => ids.indexOf(x) !== i)
+
+describe('Payload blocks field: copies, clears and undo', () => {
+  it('gives the rows of a duplicated block new ids, also nested deeper, and keeps the original rows', async () => {
+    const id = await createPage()
+    const original = rows(await read(id))
+    const originalItems = ((original[0].content as Row[])[1].items as Row[]).map((r) => r.id)
+    const session = openSession(id, admin)
+    await session.connect()
+    const intro = session.layout().blocks[0]
+    assert.equal((await session.commit([{ type: 'duplicate', id: intro.id, newId: 'intro-copy' }])).ok, true)
+    assert.deepEqual(await session.flush(), { ok: true })
+    const stored = rows(await read(id))
+    assert.deepEqual(repeated(allIds(stored)), [], 'every id once')
+    assert.deepEqual(((stored[0].content as Row[])[1].items as Row[]).map((r) => r.id), originalItems, 'the original keeps its rows')
+    const copy = stored.find((r) => r.id === 'intro-copy')!
+    const copyItems = (copy.content as Row[])[1].items as Row[]
+    assert.deepEqual(copyItems.map((r) => r.caption), ['First', null], 'the copy keeps the values')
+    // The editors hold the same ids as the database.
+    assert.deepEqual(allIds(encodePayloadBlocks(session.layout(), storageOf())), allIds(stored))
+  })
+
+  it('gives a pasted block new row ids, and an undone removal its own rows back', async () => {
+    const id = await createPage()
+    const session = openSession(id, admin)
+    await session.connect()
+    const photos = session.layout().blocks[0].slots!.content[1]
+    const intro = session.layout().blocks[0]
+    // A paste: the block with new block ids and the rows it was copied with.
+    const pasted = { ...structuredClone(photos), id: 'pasted' }
+    assert.equal((await session.commit([{ type: 'insert', block: pasted, to: { parentId: intro.id, slot: 'content', index: 2 } }])).ok, true)
+    const shown = session.layout().blocks[0].slots!.content
+    assert.notDeepEqual(
+      (shown[2].props!.items as Row[]).map((r) => r.id),
+      (shown[1].props!.items as Row[]).map((r) => r.id),
+    )
+    // Remove the original, then undo (insert it back as it was).
+    assert.equal((await session.commit([{ type: 'remove', id: photos.id }])).ok, true)
+    assert.equal((await session.commit([{ type: 'insert', block: photos, to: { parentId: intro.id, slot: 'content', index: 1 } }])).ok, true)
+    const back = session.layout().blocks[0].slots!.content[1]
+    assert.deepEqual(back.props?.items, photos.props?.items, 'its own row ids')
+    assert.deepEqual(await session.flush(), { ok: true })
+    assert.deepEqual(repeated(allIds(rows(await read(id)))), [])
+  })
+
+  it('clears a prop, a block name and a value inside an array row in Payload too', async () => {
+    const id = await createPage()
+    const session = openSession(id, admin)
+    await session.connect()
+    const intro = session.layout().blocks[0]
+    const [hello, photos] = intro.slots!.content
+    const items = structuredClone(photos.props?.items as Row[])
+    delete items[0].caption
+    assert.equal(
+      (
+        await session.commit([
+          { type: 'update', id: hello.id, unsetProps: ['note'] },
+          { type: 'update', id: intro.id, label: null },
+          { type: 'update', id: photos.id, props: { items } },
+        ])
+      ).ok,
+      true,
+    )
+    assert.deepEqual(await session.flush(), { ok: true })
+    await settle()
+    const stored = rows(await read(id))
+    const content = stored[0].content as Row[]
+    assert.equal(content[0].note ?? null, null, 'the cleared prop')
+    assert.equal(stored[0].blockName ?? null, null, 'the cleared name')
+    assert.equal((content[1].items as Row[])[0].caption ?? null, null, 'the cleared value in the row')
+    assert.equal((content[1].items as Row[])[0].image, mediaId, 'the rest of the row stays')
+    assert.equal(content[0].text, 'Hello', 'other props stay')
+    assert.equal(content[0].secret, 's3cret')
+    // The session shows what is stored: the values stay cleared.
+    const now = session.layout().blocks[0]
+    assert.equal(now.label, undefined)
+    assert.equal(now.slots!.content[0].props?.note ?? null, null)
+  })
+})
+
+/** The autosave request Payload's form `submit` sends: multipart, the values as `_payload`. */
+async function drawerAutosave(id: number, token: string, data: Record<string, unknown>): Promise<Response> {
+  const body = new FormData()
+  body.set('_payload', JSON.stringify({ ...data, _status: 'draft' }))
+  return handleEndpoints({
+    config: payload.config,
+    request: new Request(`http://localhost${autosaveAction({ api: '/api', collection: 'pages', id, locale: 'en' })}`, {
+      method: 'PATCH',
+      body,
+      headers: { Authorization: `JWT ${token}` },
+    }),
+  })
+}
+
+/** A signed-in admin's token: REST checks the session as Payload does. */
+async function adminToken(name: string): Promise<string> {
+  const email = `${name}@example.test`
+  await payload.create({ collection: 'users', data: { email, password: 'drawer-pass-1', role: 'admin' } as never, overrideAccess: true })
+  return (await payload.login({ collection: 'users', data: { email, password: 'drawer-pass-1' } })).token as string
+}
+
+describe("Payload blocks field: the settings drawer's save before it closes", () => {
+  it('saves a pending edit (any script, any size) as a draft and keeps the canvas edit', { timeout: 10_000 }, async () => {
+    const id = await createPage()
+    const token = await adminToken(`drawer-${id}`)
+    // The drawer's form loads the page, the canvas edits and saves meanwhile…
+    const form = await read(id)
+    const session = openSession(id, admin)
+    await session.connect()
+    const hello = headingOf(session.layout())
+    assert.equal((await session.commit([{ type: 'update', id: hello.id, props: { text: 'Canvas edit' } }])).ok, true)
+    assert.deepEqual(await session.flush(), { ok: true })
+    // …the user typed a long multilingual title and closes: the form saves it first.
+    const typed = `Ünïcödé 日本語 العربية 🎉 ${'😀'.repeat(20_000)}`
+    assert.ok(new TextEncoder().encode(typed).byteLength > 64_000, 'larger than a keepalive request may be')
+    const response = await drawerAutosave(id, token, { ...form, heroTitle: typed })
+    assert.equal(response.status, 200, await response.clone().text())
+    await settle()
+    const doc = await read(id)
+    assert.equal(doc.heroTitle, typed)
+    assert.equal(doc._status, 'draft', 'never published')
+    assert.equal(((rows(doc)[0].content as Row[])[0] as Row).text, 'Canvas edit', 'the blocks it left as loaded keep the canvas edit')
+    assert.ok(session.events.some((e) => e.type === 'saved' && (e as { fields?: string[] }).fields?.includes('heroTitle')))
+  })
+
+  it('answers a refused save with an error, so the drawer stays open with the input', { timeout: 10_000 }, async () => {
+    const id = await createPage()
+    const token = await adminToken(`drawer-refused-${id}`)
+    const form = await read(id)
+    const session = openSession(id, admin)
+    await session.connect()
+    const hello = headingOf(session.layout())
+    assert.equal((await session.commit([{ type: 'update', id: hello.id, props: { text: 'Canvas edit' } }])).ok, true)
+    assert.deepEqual(await session.flush(), { ok: true })
+    // The form changed the blocks the canvas changed meanwhile: a conflict, not a save.
+    const changed = structuredClone(form.layout) as Row[]
+    changed[1].text = 'Changed in the old form'
+    const response = await drawerAutosave(id, token, { ...form, heroTitle: 'Kept in the form', layout: changed })
+    assert.equal(response.ok, false)
+    assert.equal(response.status, 409)
+    const doc = await read(id)
+    assert.equal(doc.heroTitle, 'Welcome', 'nothing saved')
+    assert.equal(((rows(doc)[0].content as Row[])[0] as Row).text, 'Canvas edit')
+  })
+})

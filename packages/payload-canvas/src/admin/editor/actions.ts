@@ -7,6 +7,7 @@ import { createId, findBlock, findLocation, getBlockDefinition, slotAcceptsAt, s
 import type { Block, CanvasMeasurement, Layout, Operation, Position } from '../../core/types'
 import { normalizeClasses, parseStyles, setStylesOps, stylesText, type CopiedStyles } from './menu/styleClipboard'
 import type { Runtime } from './runtime'
+import { countText } from './counts'
 
 /**
  * Where a click-inserted block goes: into the selected container's first slot, else after the
@@ -116,8 +117,21 @@ export function removeBlock(runtime: Runtime, id: string) {
 }
 
 export function toggleHidden(runtime: Runtime, id: string) {
+  // A Payload blocks field has no "hidden" for a block: the change would not survive a reload.
+  if (!storesBuilderData(runtime)) {
+    runtime.notify('Blocks of this page cannot be hidden: its blocks field has no place for it.')
+    return
+  }
   const block = findBlock(runtime.store.getState().layout, id)
   if (block) runtime.store.apply({ type: 'update', id, hidden: !block.hidden })
+}
+
+/**
+ * True when the layout field stores the builder's own block data (Tailwind classes, animations,
+ * bindings, hidden blocks). False for a Payload blocks field: its blocks hold their fields only.
+ */
+export function storesBuilderData(runtime: Pick<Runtime, 'config'>): boolean {
+  return runtime.config.storage !== 'payload-blocks'
 }
 
 /** Gives a block its own name in the outline and the breadcrumbs. An empty name removes it. */
@@ -248,7 +262,7 @@ export function pasteBlocks(runtime: Runtime, blocks: Block[]): boolean {
   const first = blocks[0]
   if (!first) return false
   const done = insertBlocks(runtime, blocks, insertPosition(runtime, first))
-  if (done) runtime.notify(blocks.length === 1 ? `Pasted ${runtime.blockLabel(first.type)}` : `Pasted ${blocks.length} blocks`)
+  if (done) runtime.notify(blocks.length === 1 ? `Pasted ${runtime.blockLabel(first.type)}` : `Pasted ${countText(blocks.length, { one: 'block', many: 'blocks' })}`)
   return done
 }
 
@@ -271,6 +285,10 @@ export function storedStyles(): CopiedStyles | null {
 
 /** Copies the block's classes (all breakpoints and states) and animations. Other tabs and pages can paste them. */
 export function copyStyles(runtime: Runtime, id: string): boolean {
+  if (!storesBuilderData(runtime)) {
+    runtime.notify('Blocks of this page have no styles: their blocks field has no place for them.')
+    return false
+  }
   const block = findBlock(runtime.store.getState().layout, id)
   if (!block) return false
   const text = stylesText(block.className, block.motion)
@@ -304,6 +322,11 @@ export function resetStyles(runtime: Runtime, ids: readonly string[]): boolean {
 }
 
 function applyStyles(runtime: Runtime, ids: readonly string[], styles: CopiedStyles, notice: string): boolean {
+  // A Payload blocks field stores no classes or animations: the change would not be saved.
+  if (!storesBuilderData(runtime)) {
+    runtime.notify('Blocks of this page have no styles: their blocks field has no place for them.')
+    return false
+  }
   const ops = setStylesOps(runtime.store.getState().layout, runtime.config.blocks, ids, styles)
   if (ops.length === 0) {
     runtime.notify('The styles are the same already.')

@@ -2,6 +2,37 @@
 
 All notable changes to `payload-canvas` and `create-payload-canvas`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The packages use [semantic versioning](https://semver.org/). Before 1.0, a minor version can break the API.
 
+## [Unreleased]
+
+### Added
+
+- One source of truth for existing Payload blocks: when a collection's builder `field` is its own Payload `blocks` field, the builder edits that field itself. Canvas, Payload's editor, REST and the Local API read and write the same value, with Payload's hooks, validation, access, versions and locales. No second copy, no migration, no per-document switch. The round trip keeps every stored value. Data the field cannot hold (classes, animations, bindings, hidden blocks, other block types) is refused with a reason. See the README's "Using existing Payload blocks".
+- `decodePayloadBlocks`, `encodePayloadBlocks`, `payloadBlocksProblems` and `payloadBlocksStorage` in `payload-canvas`.
+- With a Payload blocks field, what Payload's hooks store shows in the builder after each save, and every live endpoint and MCP tool checks read access to the stored blocks and update access to the field.
+
+- Whole-page editing with page regions: the collection option `regions` names document fields that the page shows outside the layout. The canvas shows the whole page through the app's page frame (`createCanvasServer({ frame })`, `siteRegion`, `LayoutOutlet`), and editors select a region, edit its text and images in place, and edit every field in the settings drawer at that field. Changes save to the document as the user, with field access, conflict checks, drafts, undo and redo. Regions are never dragged, duplicated or deleted. Sites without regions see no change.
+- `GET {api}/builder/live/:collection/:id/regions` and `POST {api}/builder/live/:collection/:id/fields` (only for collections with regions).
+- `saved` events list the other fields a save changed (`fields`).
+
+### Changed
+
+- `migrateBlocksField` is now only for sites that want builder-only features (classes, animations, bindings, templates): the README no longer tells sites to copy their blocks to edit them in the builder.
+
+- The canvas route is a server page that imports the canvas server action and passes it to a small client component with `BuilderCanvas` (README, Install step 6). A `'use client'` page that imports the action leaves the client components of server-rendered blocks out of the route's client manifest in an installed package.
+
+### Fixed
+
+- Closing the builder's settings drawer right after an edit no longer loses it. Its Close button and Escape closed the form before autosave ran. With draft autosave, the drawer now saves the edit first, through the form's own autosave request (access, hooks, the write gate and the stale-form checks apply; it never publishes), and closes when that worked. A refused save keeps the drawer open with the input and the errors. Escape inside an open select menu, listbox, menu, dialog or popup in the drawer closes only that popup: Payload's modal provider closes the topmost modal on every Escape that reaches the document, so the drawer sends that Escape to the popup alone. Without autosave nothing changes: "Save draft" and Payload's "Leave without saving?" stay as they are.
+- The Layers count groups digits in the browser's locale ("1,001 blocks").
+
+- Payload blocks field: a duplicated, pasted or inserted block gets new ids for the rows of its array fields and nested blocks fields, as in Payload's editor, so they no longer repeat the rows of the original. Rows with unique ids keep them.
+- Payload blocks field: a cleared prop, a cleared block name and a value removed inside an array row are cleared in Payload too, instead of coming back from the stored value.
+- Labels in the builder's settings drawer point at their inputs again. Payload names drawer labels with the edit depth (`field-title-2`) while several of its inputs keep `field-title`. Selects and relationships (react-select inputs) there get their field's label as their name, as in the inspector.
+- A publish problem of a document field goes away when that field is saved (settings drawer, page region, rename). Problems of other fields and of blocks stay until the next publish checks them.
+
+- Overlapping saves of one builder document no longer lose a change: a session save and a settings drawer autosave run one after the other (the write gate). A save that cannot get its turn fails with a 409 instead. `saved` events go out after the database committed the save, never after a rollback or a failed commit.
+- Live endpoints pass the document id in the collection's id type (Payload's `parseDocumentID`), so Publish and the other actions work on databases with number ids. Collections with text ids keep text.
+
 ## [0.1.1] - 2026-10-09
 
 - The npm READMEs show the drag-and-drop GIF and screenshots.

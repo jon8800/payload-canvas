@@ -1,4 +1,6 @@
-import type { Axis, CanvasMeasurement, Rect, SlotRect } from '../../core'
+import type { Axis, CanvasMeasurement, Rect, RegionRect, SlotRect } from '../../core'
+
+import { LAYOUT_ROOT_ATTRIBUTE, REGION_ATTRIBUTE } from '../render/regions'
 
 const sameRect = (a: Rect, b: Rect) => a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
 
@@ -15,6 +17,13 @@ export function sameMeasurement(a: CanvasMeasurement | null, b: CanvasMeasuremen
     const x = a.slots[i]
     const y = b.slots[i]
     if (x.ownerId !== y.ownerId || x.slot !== y.slot || x.axis !== y.axis || x.empty !== y.empty || !sameRect(x.rect, y.rect)) return false
+  }
+  if (Boolean(a.root) !== Boolean(b.root) || (a.root && b.root && !sameRect(a.root, b.root))) return false
+  const ra = a.regions ?? []
+  const rb = b.regions ?? []
+  if (ra.length !== rb.length) return false
+  for (let i = 0; i < ra.length; i++) {
+    if (ra[i].name !== rb[i].name || !sameRect(ra[i].rect, rb[i].rect)) return false
   }
   return true
 }
@@ -56,10 +65,24 @@ export function measure(root: HTMLElement): CanvasMeasurement {
     slots.set(key, { ownerId, slot, rect: toRect(el.getBoundingClientRect()), axis, empty })
   }
 
+  // In a page frame the layout fills its outlet, not the whole canvas: the root list's axis and
+  // box come from the outlet, so fixed regions never count as part of the layout.
+  const outlet = root.querySelector<HTMLElement>(`[${LAYOUT_ROOT_ATTRIBUTE}]`)
+  const regions: RegionRect[] = []
+  if (outlet) {
+    for (const el of root.querySelectorAll<HTMLElement>(`[${REGION_ATTRIBUTE}]`)) {
+      const rect = el.getBoundingClientRect()
+      // Hidden copies (a mobile and a desktop version of one header) are left out.
+      if (rect.width === 0 && rect.height === 0) continue
+      regions.push({ name: el.getAttribute(REGION_ATTRIBUTE) ?? '', rect: toRect(rect) })
+    }
+  }
+
   return {
     blocks,
     slots: [...slots.values()],
-    rootAxis: axisOf(root),
+    rootAxis: axisOf(outlet ?? root),
+    ...(outlet ? { root: toRect(outlet.getBoundingClientRect()), regions } : {}),
     viewport: { width: window.innerWidth, height: window.innerHeight },
     scroll: { x: window.scrollX, y: window.scrollY },
     documentHeight: document.documentElement.scrollHeight,

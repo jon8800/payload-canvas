@@ -15,6 +15,7 @@ import { BlockContextMenu, blockMenuEntries } from './menu/blockMenu'
 import { MenuButton } from './menu/Menu'
 import { blockName } from './names'
 import { PeerCursors, PeerSelections } from './live/PresenceUI'
+import { RegionOverlay } from './regions/RegionOverlay'
 import { shortName } from './live/presence'
 import { toRect, useRuntime, type DragData, type DragState } from './runtime'
 import { useEditor } from './store'
@@ -213,6 +214,7 @@ export function Overlay() {
           {editing && editRect && inline?.kind === 'rich' && <InlineToolbar inline={inline} rect={editRect} zoom={zoom} />}
         </>
       )}
+      <RegionOverlay tagProps={tagProps} editedRect={inline?.region ? editedRect(runtime.iframeRef.current) : null} zoom={zoom} />
       <InsertHandle />
       <ImageEditor />
       <BlockContextMenu />

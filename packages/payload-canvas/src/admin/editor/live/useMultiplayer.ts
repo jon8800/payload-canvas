@@ -427,6 +427,7 @@ export function useMultiplayer(
         publish({ savedSeq: Math.max(state.savedSeq, data.seq), savedAt: data.at, saveError: null })
         publishSaveState()
         runtime.doc.handleEvent(data)
+        runtime.regions?.handleEvent(data)
       })
       es.addEventListener('saveFailed', (e) => {
         const data = parse<LiveSaveFailedEvent>(e)
@@ -434,7 +435,9 @@ export function useMultiplayer(
       })
       es.addEventListener('published', (e) => {
         const data = parse<LivePublishedEvent>(e)
-        if (data) runtime.doc.handleEvent(data)
+        if (!data) return
+        runtime.doc.handleEvent(data)
+        runtime.regions?.handleEvent(data)
       })
       es.addEventListener('collaborators', (e) => {
         const data = parse<LiveCollaboratorsEvent>(e)

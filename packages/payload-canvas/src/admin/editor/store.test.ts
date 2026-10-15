@@ -149,3 +149,47 @@ test('in another locale, a new block holds its text in that locale; a pasted cop
   store.undo()
   assert.deepEqual(store.getState().layout, layout())
 })
+
+test('field steps (page regions) undo and redo through the writer, in order with layout steps', async () => {
+  const store = createEditorStore(layout(block('a')))
+  const written: unknown[] = []
+  store.setFieldWriter(async (changes) => {
+    written.push(changes)
+    return true
+  })
+  store.apply({ type: 'update', id: 'a', props: { text: 'A!' } })
+  store.recordFields([{ path: 'title', before: 'Old', after: 'New' }])
+  assert.equal(store.getState().undoStack.length, 2)
+
+  // The newest step first: the field goes back, and expects the value the step wrote.
+  store.undo()
+  assert.deepEqual(written, [[{ path: 'title', value: 'Old', base: 'New' }]])
+  assert.equal(textOf(store.getState().layout, 0), 'A!', 'the layout is not touched by a field step')
+  store.undo()
+  assert.equal(textOf(store.getState().layout, 0), 'a')
+
+  store.redo()
+  store.redo()
+  assert.deepEqual(written.at(-1), [{ path: 'title', value: 'New', base: 'Old' }])
+  assert.equal(store.getState().redoStack.length, 0)
+  assert.equal(store.getState().undoStack.length, 2)
+})
+
+test('a field step the server refuses (someone changed the field) leaves the history', async () => {
+  const store = createEditorStore(layout(block('a')))
+  store.setFieldWriter(async () => false)
+  store.recordFields([{ path: 'title', before: 'Old', after: 'New' }])
+  store.undo()
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(store.getState().undoStack.length, 0)
+  assert.equal(store.getState().redoStack.length, 0)
+})
+
+test('a new field step clears the redo stack, as any edit does', () => {
+  const store = createEditorStore(layout(block('a')))
+  store.apply({ type: 'update', id: 'a', props: { text: 'A!' } })
+  store.undo()
+  assert.equal(store.getState().redoStack.length, 1)
+  store.recordFields([{ path: 'title', before: 'Old', after: 'New' }])
+  assert.equal(store.getState().redoStack.length, 0)
+})

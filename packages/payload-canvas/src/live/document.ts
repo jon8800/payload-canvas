@@ -18,7 +18,9 @@ import { describeLayoutErrors, summarizeProblems } from '../core/issues'
 import { normalizeLayout } from '../core/tree'
 import { hasPropAccess, type PropAccessInfo } from '../core/fieldAccess'
 import type { FieldRegistry } from '../core/fieldSemantics'
-import type { BlockDefinition, LocaleSettings } from '../core/types'
+import type { PayloadBlocksStorage } from '../core/payloadBlocks'
+import type { BlockDefinition, LocaleSettings, RegionConfig } from '../core/types'
+import { codecOf } from './storage'
 import { checkLayout, RAW_LAYOUT_CONTEXT, STORED_LAYOUT_CONTEXT, type BindingCheck } from '../plugin/hook'
 import { documentPath, draftPreviewPath } from '../plugin/links'
 import { payloadErrorMessage, payloadFieldErrors } from './apply'
@@ -52,6 +54,13 @@ export type BuilderCollectionServer = {
   legacyFields?: readonly string[]
   /** The locales of the layout's localized props. Null or left out: not localized. */
   localization?: LocaleSettings | null
+  /** Fixed regions of the page outside the layout (the collection's `regions` option). Left out: none. */
+  regions?: RegionConfig[]
+  /**
+   * The layout field is the collection's own Payload `blocks` field: the block types it holds.
+   * Left out: the builder's JSON layout field.
+   */
+  payloadBlocks?: PayloadBlocksStorage
 }
 
 /** The builder collections and the templates collection. Stored on `config.custom` for the admin view. */
@@ -126,7 +135,7 @@ export async function loadFieldAccess(req: PayloadRequest, target: SessionTarget
       context: { [RAW_LAYOUT_CONTEXT]: true },
     })
     const { [target.field]: layout, ...rest } = doc
-    open = { sessionId: '', seq: 0, layout: normalizeLayout(layout), doc: rest }
+    open = { sessionId: '', seq: 0, layout: (target.codec ?? codecOf(undefined)).decode(layout), doc: rest }
   }
   return propAccessFor(req, { blocks, registry, collection: target.collection, id: target.id, field: target.field, layout: open.layout, doc: open.doc })
 }
@@ -197,8 +206,8 @@ export async function loadDocMeta(req: PayloadRequest, args: DocMetaArgs): Promi
   const titleField = useAsTitle && useAsTitle !== 'id' ? useAsTitle : null
   return {
     collection: target.collection,
-    id: target.id,
-    title: (titleField ? text(draft[titleField]) : null) ?? target.id,
+    id: String(target.id),
+    title: (titleField ? text(draft[titleField]) : null) ?? String(target.id),
     titleField,
     drafts: target.drafts,
     status,
@@ -360,12 +369,13 @@ export async function runPublishAction(
       // The stored layout: Revert saves it again, so props the user may not read must stay in it.
       const published = await payload.findByID({ ...common, draft: false, context: { [RAW_LAYOUT_CONTEXT]: true } })
       if (published._status !== 'published') return { ok: false, status: 409, error: 'This document has no published version.' }
-      await runtime.sessions.reset(target.collection, target.id, normalizeLayout(published[target.field]))
+      await runtime.sessions.reset(target.collection, target.id, (target.codec ?? codecOf(undefined)).decode(published[target.field]))
       const { id: _id, ...data } = published
       doc = await payload.update({ ...save, data: { ...data, _status: 'published' }, draft: false })
     } else {
       await runtime.sessions.flush(target.collection, target.id)
-      if (action === 'publish' && check) {
+      // A Payload blocks field: Payload validates its own field when it publishes.
+      if (action === 'publish' && check && target.codec?.kind !== 'payload-blocks') {
         const draft = await payload.findByID({ ...common, draft: true, context: { [RAW_LAYOUT_CONTEXT]: true } })
         const layout = runtime.sessions.peek(target.collection, target.id)?.layout ?? normalizeLayout(draft[target.field])
         const config = (req.payload.collections as Record<string, { config: unknown } | undefined>)[target.collection]?.config
@@ -457,7 +467,7 @@ export async function restoreDocumentVersion(
   if (idOf(version.parent) !== String(target.id)) return { ok: false, status: 404, error: 'This version belongs to another document.' }
 
   const before = runtime.sessions.peek(target.collection, target.id)?.layout
-  await runtime.sessions.reset(target.collection, target.id, normalizeLayout(version.version?.[target.field]))
+  await runtime.sessions.reset(target.collection, target.id, (target.codec ?? codecOf(undefined)).decode(version.version?.[target.field]))
   try {
     // A plugin save: keep the document lock of someone in the settings drawer (fieldsGuard.ts).
     req.context = { ...req.context, [KEEP_LOCK_CONTEXT]: true, [STORED_LAYOUT_CONTEXT]: true }
@@ -603,10 +613,9 @@ export function documentEndpoints({ collections, templates, sections, runtime, c
       }
       const target = targetOf(req, collections)
       if (target instanceof Response) return target
-      const payload = req.payload as unknown as LockWritePayload & { db: { defaultIDType?: string } }
-      // The lock row stores the id in the collection's id type.
-      const id = payload.db.defaultIDType === 'number' && /^\d+$/.test(target.id) ? Number(target.id) : target.id
-      const args = { payload, req, collection: target.collection, id, holders }
+      const payload = req.payload as unknown as LockWritePayload
+      // The lock row stores the id in the collection's id type, as `targetOf` parsed it.
+      const args = { payload, req, collection: target.collection, id: target.id, holders }
       try {
         if (method === 'delete') {
           await releaseSettingsLock({ ...args, user: { id: user.id } })

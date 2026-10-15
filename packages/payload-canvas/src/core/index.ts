@@ -54,5 +54,27 @@ export {
   type PayloadConversion,
   type PayloadConversionReport,
 } from './convertPayload'
+export {
+  decodePayloadBlocks,
+  encodePayloadBlocks,
+  payloadBlocksProblems,
+  payloadBlocksStorage,
+  type PayloadBlocksDecode,
+  type PayloadBlocksStorage,
+} from './payloadBlocks'
 export { dataFields, fieldAtPropPath, type DataField } from './fields'
+export {
+  pathWithoutIndexes,
+  regionAccessAt,
+  regionDefinition,
+  regionFieldOf,
+  regionSelect,
+  regionsTouched,
+  regionType,
+  regionValues,
+  resolveRegions,
+  setDocPath,
+  valueAtDocPath,
+  type RegionOption,
+} from './regions'
 export { collectReferences, readReferences, referenceKey, referenceTargets, sameReferences, type Reference, type ReferenceTargets } from './references'

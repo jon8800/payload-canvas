@@ -15,6 +15,9 @@ import type { BlockDefinition, Layout, LocaleSettings, Operation } from '../core
 import { validateLayout, type LayoutError } from '../core/validate'
 import { actorFromUser, payloadErrorMessage, resolveOperations, splitLayoutErrors, type LiveDocStore } from './apply'
 import { createKeyedMutex } from './mutex'
+import { sameValue } from './fieldsGuard'
+import { JSON_CODEC, type LayoutCodec } from './storage'
+import { writeKey, type WriteGate } from './writeGate'
 import type {
   Awareness,
   CollaboratorInfo,
@@ -36,13 +39,19 @@ import type {
 /** The document a session belongs to. */
 export type SessionTarget = {
   collection: string
-  id: string
+  /** The document id, in the type the collection uses (a number for number ids, else text). */
+  id: string | number
   /** Name of the layout field. */
   field: string
   /** The collection has drafts: the session saves drafts. */
   drafts: boolean
   /** The collection has draft autosave: the session updates the autosave version in place. */
   autosave?: boolean
+  /**
+   * How the field stores the layout. Left out: the builder's JSON layout. A Payload blocks field
+   * is read and written with its codec (live/storage.ts), so it stays the one source of truth.
+   */
+  codec?: LayoutCodec
 }
 
 /** Timers and clock. Tests pass fakes. */
@@ -70,6 +79,11 @@ export type SessionManagerOptions = {
    */
   retryDelaysMs?: number[]
   logger?: { error(message: string, error?: unknown): void }
+  /**
+   * The write gate (live/writeGate.ts). The session's save holds it from before it reads the
+   * layout to the commit, so a save of the document outside the session never lands in between.
+   */
+  gate?: WriteGate
 }
 
 /** Sends one event to one connection. `id` is the SSE event id (set on session and commit events). */
@@ -144,7 +158,7 @@ export type SavedHookChanges = { input: Layout; output: Layout; seq: number }
 export const FIELD_HOOKS_ACTOR: LiveActor = { type: 'user', id: 'system:field-hooks', label: 'Field hooks' }
 
 /** What a save outside the session stored: the saved document's `updatedAt` and `_status`. */
-export type SavedInfo = { updatedAt?: unknown; status?: unknown }
+export type SavedInfo = { updatedAt?: unknown; status?: unknown; fields?: readonly string[] }
 
 export interface SessionManager {
   /** Opens the session (loading the draft) and adds a connection. Initial events go to `send` first. */
@@ -175,6 +189,13 @@ export interface SessionManager {
   adoptSaved(collection: string, id: string | number, changes: SavedHookChanges): void
   /** Sends an event to every editor of an open session. False when no session is open. */
   broadcast(collection: string, id: string | number, event: MultiplayerEvent): boolean
+  /**
+   * A save outside the session committed (the Edit view, REST, the Local API). Editors hear of it.
+   * With `layoutChanged` (a field that stores its own layout, a Payload blocks field), that save is
+   * the truth: the session reads the stored value again and replays its own unsaved commits on top,
+   * before its next save. No-op without an open session.
+   */
+  externalSaved(collection: string, id: string | number, info: SavedInfo & { layoutChanged?: boolean }): void
   /**
    * Replaces the layout of an open session as a whole (Revert to published). Unsaved commits are
    * dropped: the caller saves the new layout. The session gets a new id, and every editor gets a
@@ -309,6 +330,16 @@ type Session = {
   /** The last failed save, until a save works. Sent to editors that connect meanwhile. */
   saveError: LiveSaveFailedEvent | null
   evictTimer: unknown
+  /** A save outside the session changed the stored layout: read it again before the next save. */
+  externalPending: boolean
+  /**
+   * The operations of the commits not saved yet (seq above `persistedSeq`), as they apply to the
+   * current layout. A save from outside replays them on the stored layout, as often as needed;
+   * the commit log is for reconnects and is cleared then.
+   */
+  unsaved: { seq: number; ops: Operation[] }[]
+  /** The field's value as last read from the database (load, outside saves, own saves). */
+  stored: unknown
 }
 
 const realTimers: SessionTimers = {
@@ -322,6 +353,9 @@ const realTimers: SessionTimers = {
 const HOOK_CHANGES_KEY = 'builderHookChanges'
 /** `context` flag of reads that need every locale (`ALL_LOCALES_CONTEXT` in plugin/hook.ts). */
 const ALL_LOCALES_KEY = 'builderAllLocales'
+
+/** How a session's field stores its layout. */
+const codecOfTarget = (target: SessionTarget) => target.codec ?? JSON_CODEC
 
 function hookChangesIn(context: Record<string, unknown>): { input: Layout; output: Layout } | null {
   const value = context[HOOK_CHANGES_KEY] as { input?: unknown; output?: unknown } | undefined
@@ -397,6 +431,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
   const logSize = options.logSize ?? 500
   const retryDelays = options.retryDelaysMs?.length ? options.retryDelaysMs : [2000, 5000, 15_000, 30_000]
   const logger = options.logger ?? { error: (message: string, error?: unknown) => console.error(message, error) }
+  const gate = options.gate ?? null
 
   const sessions = new Map<string, Session>()
   const loading = new Map<string, Promise<Session>>()
@@ -426,7 +461,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
           // Every locale: the session holds the stored layout with its translations.
           context: { [ALL_LOCALES_KEY]: true },
         })
-        const layout = normalizeLayout(doc[target.field])
+        const layout = codecOfTarget(target).decode(doc[target.field])
         const { [target.field]: _layout, ...rest } = doc
         const session: Session = {
           key,
@@ -447,6 +482,9 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
           failures: 0,
           saveError: null,
           evictTimer: null,
+          externalPending: false,
+          unsaved: [],
+          stored: doc[target.field],
         }
         sessions.set(key, session)
         return session
@@ -488,6 +526,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     at: new Date(timers.now()).toISOString(),
     ...(typeof info.updatedAt === 'string' ? { updatedAt: info.updatedAt } : {}),
     ...(typeof info.status === 'string' ? { status: info.status } : {}),
+    ...(info.fields && info.fields.length > 0 ? { fields: [...info.fields] } : {}),
   })
 
   const sessionEvent = (session: Session, self: CollaboratorInfo, reset = false): LiveSessionEvent => ({
@@ -553,30 +592,67 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
       maybeEvict(session)
       return Promise.resolve()
     }
-    const { layout, seq, target } = session
+    const { target } = session
     session.firstDirtyAt = null
     // The save hook records here what the props' hooks changed (plugin/hook.ts). The Local API
     // without `req` uses this object as the request context.
     const context: Record<string, unknown> = { builderSession: true }
+    const codec = codecOfTarget(target)
+    let seq = session.seq
+    /** The layout the save sent. */
+    let sent = session.layout
+    /**
+     * A Payload blocks field whose stored value differs from what the save sent (Payload's hooks
+     * changed values or blocks): the session took the stored value as its base.
+     */
+    let rebased = false
+    /** The save itself. Reads the layout only now: with the gate, after every save before it committed. */
+    const save = async (req?: object) => {
+      // A save outside the session changed the stored value meanwhile: take it first.
+      if (session.externalPending) await syncExternal(session)
+      seq = session.seq
+      const layout = session.layout
+      sent = layout
+      const problems = codec.problems(layout)
+      if (problems.length > 0) throw Object.assign(new Error(problems.join(' ')), { status: 422 })
+      const saved = await session.store.update({
+        collection: target.collection,
+        id: target.id,
+        data: { [target.field]: codec.encode(layout, session.stored) },
+        depth: 0,
+        draft: target.drafts,
+        ...(target.drafts && target.autosave ? { autosave: true } : {}),
+        context,
+        user: session.user,
+        overrideAccess: false,
+        // Never blocked by Payload's document lock; the save hook keeps the lock (fieldsGuard.ts).
+        overrideLock: true,
+        // The same request as the gate's hold: the update joins it.
+        ...(req ? { req } : {}),
+      })
+      if (codec.kind === 'payload-blocks') {
+        // Still holding the gate, so no other save lands in between. What Payload's hooks stored
+        // (other values, added, removed or moved blocks) becomes the session's base, with the
+        // commits made during the save on top.
+        const doc = await readStored(session)
+        const before = session.stored
+        session.stored = doc[target.field]
+        if (!sameValue(codec.encode(sent, before), doc[target.field])) {
+          await rebaseOn(session, doc, seq)
+          rebased = true
+        }
+      }
+      return saved
+    }
     const run = (async () => {
       try {
-        const saved = await session.store.update({
-          collection: target.collection,
-          id: target.id,
-          data: { [target.field]: layout },
-          depth: 0,
-          draft: target.drafts,
-          ...(target.drafts && target.autosave ? { autosave: true } : {}),
-          context,
-          user: session.user,
-          overrideAccess: false,
-          // Never blocked by Payload's document lock; the save hook keeps the lock (fieldsGuard.ts).
-          overrideLock: true,
-        })
+        const req = {}
+        const saved = gate ? await gate.run(writeKey(target.collection, target.id), req, () => save(req)) : await save()
         session.persistedSeq = Math.max(session.persistedSeq, seq)
+        session.unsaved = session.unsaved.filter((entry) => entry.seq > session.persistedSeq)
         clearFailure(session)
         const info = { updatedAt: saved?.updatedAt, status: saved?._status }
-        deliver(session, savedEvent(seq, info))
+        deliver(session, savedEvent(rebased ? session.persistedSeq : seq, info))
         const changes = hookChangesIn(context)
         if (changes) queueAdopt(session, { ...changes, seq }, info)
       } catch (error) {
@@ -610,6 +686,76 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     return done
   }
 
+  // ---- saves outside the session ------------------------------------------
+
+  /** The stored document, every value (the session holds values some editors may not read). */
+  const readStored = (session: Session) =>
+    session.store.findByID({
+      collection: session.target.collection,
+      id: session.target.id,
+      depth: 0,
+      draft: session.target.drafts,
+      overrideAccess: true,
+      context: { [ALL_LOCALES_KEY]: true },
+    })
+
+  /**
+   * Makes a stored document the session's base: its layout as stored, then the session's unsaved
+   * commits on top (each operation that still applies). Every editor gets the new state; the
+   * session id stays, so editors rebase their unsent changes instead of dropping them.
+   * `savedSeq`: the session's own save that stored this document (its commits up to that seq are
+   * in it). Throws when the stored value cannot be read as a layout.
+   */
+  const rebaseOn = async (session: Session, doc: Record<string, unknown>, savedSeq?: number) => {
+    const { target } = session
+    const base = codecOfTarget(target).decode(doc[target.field])
+    const { [target.field]: _layout, ...rest } = doc
+    await mutex.run(session.key, async () => {
+      if (sessions.get(session.key) !== session) return
+      session.stored = doc[target.field]
+      if (savedSeq !== undefined) session.persistedSeq = Math.max(session.persistedSeq, savedSeq)
+      let layout = base
+      const pending: { seq: number; ops: Operation[] }[] = []
+      for (const entry of session.unsaved) {
+        if (entry.seq <= session.persistedSeq) continue
+        const ops: Operation[] = []
+        for (const op of entry.ops) {
+          const result = resolveOperations(layout, [op])
+          if (!result.ok) continue
+          layout = result.layout
+          ops.push(...result.ops)
+        }
+        if (ops.length > 0) pending.push({ seq: entry.seq, ops })
+      }
+      session.unsaved = pending
+      session.layout = layout
+      session.doc = rest
+      session.seq += 1
+      session.knownBlocking = null
+      // The commit log no longer leads to this state: a reconnect gets a fresh session.
+      session.log = []
+      if (pending.length === 0) session.persistedSeq = session.seq
+      else markDirty(session)
+      for (const member of session.members.values()) {
+        if (!member.send) continue
+        try {
+          member.send(sessionEvent(session, member.info), eventId(session))
+        } catch {
+          // A closed stream must not stop the others.
+        }
+      }
+    })
+  }
+
+  /**
+   * Takes a stored layout that a save outside the session wrote (a Payload blocks field: the Edit
+   * view, REST and the Local API write the field itself).
+   */
+  const syncExternal = async (session: Session) => {
+    session.externalPending = false
+    await rebaseOn(session, await readStored(session))
+  }
+
   // ---- hook changes ------------------------------------------------------
 
   /**
@@ -635,6 +781,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
       session.persistedSeq = session.seq
       deliver(session, savedEvent(session.seq, info))
     } else {
+      session.unsaved.push({ seq: session.seq, ops: resolved.ops })
       markDirty(session)
     }
   }
@@ -710,7 +857,10 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
       }
 
       const firstLogged = session.log[0]?.seq ?? session.seq + 1
+      // A Payload blocks field never replays old commits: they may hold values that are gone now
+      // and that this user may not read. The reconnect gets the current state instead.
       const replayed =
+        codecOfTarget(target).kind === 'json' &&
         after !== undefined &&
         Number.isInteger(after.seq) &&
         (after.sessionId === undefined || after.sessionId === session.sessionId) &&
@@ -774,10 +924,20 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
         } else {
           ops = args.ops
         }
-        const resolved = resolveOperations(session.layout, ops, blocks, args.localization)
+        let resolved = resolveOperations(session.layout, ops, blocks, args.localization)
         if (!resolved.ok) {
           maybeEvict(session)
           return reject(409, resolved.error)
+        }
+        // The field's own rules for what it stores (copied rows of a Payload blocks field get new
+        // ids). Editors get these operations, so every copy of the layout matches.
+        const prepared = codecOfTarget(session.target).prepare?.(session.layout, resolved.ops)
+        if (prepared && prepared !== resolved.ops) {
+          resolved = resolveOperations(session.layout, prepared, blocks, args.localization)
+          if (!resolved.ok) {
+            maybeEvict(session)
+            return reject(409, resolved.error)
+          }
         }
         if (args.access) {
           // No other commit runs meanwhile (mutex), and hook changes queue behind this one.
@@ -786,6 +946,12 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
             maybeEvict(session)
             return reject(403, denied)
           }
+        }
+        // What the field cannot store is refused, never saved in part (a Payload blocks field).
+        const storageProblems = codecOfTarget(session.target).problems(resolved.layout)
+        if (storageProblems.length > 0) {
+          maybeEvict(session)
+          return reject(422, storageProblems.join(' '))
         }
         const validateOptions = { localization: args.localization ?? null }
         session.knownBlocking ??= new Set(splitLayoutErrors(validateLayout(session.layout, blocks, validateOptions)).blocking.map(errorKey))
@@ -812,6 +978,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
         }
         session.log.push(event)
         if (session.log.length > logSize) session.log.splice(0, session.log.length - logSize)
+        session.unsaved.push({ seq: session.seq, ops: resolved.ops })
 
         const afterCommit = actor.type === 'ai' ? touchAi(session, actor, lastChangedId(resolved.ops)) : null
         deliver(session, event, eventId(session))
@@ -856,9 +1023,14 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
 
     markSaved(collection, id, seq, info) {
       const session = sessions.get(channelKey(collection, id))
+      if (!session) return
       // A session save in flight may finish after this save and store an older layout as the
-      // newest version. Then the session must save again, so it stays dirty.
-      if (!session || session.persisting) return
+      // newest version. Then the session must save again, so it stays dirty. Editors still hear
+      // of the save (its time, its status and the other fields it changed), with the seq already saved.
+      if (session.persisting) {
+        deliver(session, savedEvent(session.persistedSeq, info))
+        return
+      }
       session.persistedSeq = Math.max(session.persistedSeq, seq)
       deliver(session, savedEvent(Math.min(seq, session.seq), info))
       if (dirty(session)) return
@@ -874,6 +1046,20 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
       if (session) queueAdopt(session, changes)
     },
 
+    externalSaved(collection, id, info) {
+      const session = sessions.get(channelKey(collection, id))
+      if (!session) return
+      deliver(session, savedEvent(session.persistedSeq, info))
+      if (!info.layoutChanged) return
+      session.externalPending = true
+      // Now, so open editors see the change at once (the next save takes it too, see `persist`).
+      const take = () => (session.externalPending ? syncExternal(session) : Promise.resolve())
+      void (gate ? gate.run(writeKey(collection, id), {}, take) : take()).catch((error: unknown) => {
+        session.externalPending = true
+        logger.error(`[websiteBuilder] Could not take the saved layout of ${session.key} into the live session.`, error)
+      })
+    },
+
     broadcast(collection, id, event) {
       const session = sessions.get(channelKey(collection, id))
       if (!session) return false
@@ -883,32 +1069,44 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
 
     async reset(collection, id, layout) {
       const key = channelKey(collection, id)
-      return mutex.run(key, async () => {
-        const session = sessions.get(key)
-        if (!session) return false
-        // A save in flight must not land after the caller's save of the new layout.
-        if (session.persisting) await session.persisting
-        if (session.persistTimer !== null) timers.clear(session.persistTimer)
-        session.persistTimer = null
-        session.firstDirtyAt = null
-        session.layout = normalizeLayout(layout)
-        // A new id: commits made on the old layout can no longer be replayed or rebased.
-        session.sessionId = globalThis.crypto.randomUUID().slice(0, 8)
-        session.seq += 1
-        session.persistedSeq = session.seq
-        clearFailure(session)
-        session.log = []
-        session.knownBlocking = null
-        for (const member of session.members.values()) {
-          if (!member.send) continue
-          try {
-            member.send(sessionEvent(session, member.info, true), eventId(session))
-          } catch {
-            // A closed stream must not stop the others.
-          }
+      // A save in flight must not land after the caller's save of the new layout. It is awaited
+      // outside the mutex: a save may need the mutex itself (it takes a save from outside first).
+      for (;;) {
+        const running = sessions.get(key)?.persisting
+        if (running) {
+          await running
+          continue
         }
-        return true
-      })
+        const done = await mutex.run(key, async () => {
+          const session = sessions.get(key)
+          if (!session) return false
+          // A save started while this waited for the mutex: wait for it outside, then try again.
+          if (session.persisting) return null
+          if (session.persistTimer !== null) timers.clear(session.persistTimer)
+          session.persistTimer = null
+          session.firstDirtyAt = null
+          session.layout = codecOfTarget(session.target).kind === 'json' ? normalizeLayout(layout) : layout
+          session.externalPending = false
+          session.unsaved = []
+          // A new id: commits made on the old layout can no longer be replayed or rebased.
+          session.sessionId = globalThis.crypto.randomUUID().slice(0, 8)
+          session.seq += 1
+          session.persistedSeq = session.seq
+          clearFailure(session)
+          session.log = []
+          session.knownBlocking = null
+          for (const member of session.members.values()) {
+            if (!member.send) continue
+            try {
+              member.send(sessionEvent(session, member.info, true), eventId(session))
+            } catch {
+              // A closed stream must not stop the others.
+            }
+          }
+          return true
+        })
+        if (done !== null) return done
+      }
     },
 
     async flush(collection, id) {

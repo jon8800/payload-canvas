@@ -30,12 +30,21 @@ export type CanvasServerRequest =
    * loaded documents). `key` names the result.
    */
   | { kind: 'blocks'; scope: CanvasScope; blocks: Array<{ key: string; block: Block }> }
+  /** The page frame of the scope's document: the app's page around the layout, with its regions. */
+  | { kind: 'frame'; scope: CanvasScope }
 
 /** One rendered block, or why it failed. */
 export type CanvasServerResult = { node: ReactNode } | { error: string }
 
 export type CanvasServerResponse =
   | { kind: 'pageData'; data: PageData }
+  /**
+   * The page frame. `node`: the frame's output, with a layout outlet where the canvas puts the
+   * live layout; null when the frame shows the layout alone. `values`: the regions' values, as the
+   * frame got them (documents loaded), for the canvas's text and image editing. `missing`: the
+   * collection has regions, but `createCanvasServer` has no `frame` option.
+   */
+  | { kind: 'frame'; node: ReactNode | null; values: Record<string, unknown>; missing?: true }
   | { kind: 'blocks'; results: Record<string, CanvasServerResult> }
   /** The request failed as a whole (for example: not signed in). */
   | { kind: 'error'; error: string }

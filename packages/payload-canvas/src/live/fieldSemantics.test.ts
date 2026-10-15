@@ -83,6 +83,7 @@ function hookedPayload(initial: Layout, options: { writeMs?: number } = {}) {
   let stamp = 0
   const store = {
     collections: { pages: { config: { versions: { drafts: { autosave: true } } } } },
+    db: { defaultIDType: 'text' },
     async findByID(args: Doc) {
       return structuredClone(args.draft ? latest : main)
     },
@@ -321,6 +322,7 @@ describe('publishing a migrated document', () => {
     let latest: Doc = { ...main, layout: [{ blockType: 'old', text: 'newer draft' }], builder: page({ title: 'New' }), _status: 'draft' }
     const payload = {
       collections: { pages: { config: { versions: { drafts: true } } } },
+      db: { defaultIDType: 'text' },
       async findByID(args: Doc) {
         return structuredClone(args.draft ? latest : main)
       },
@@ -348,6 +350,7 @@ describe('publishing a migrated document', () => {
     const doc: Doc = { id: 'p1', layout: [{ blockType: 'old' }], builder: page({}), _status: 'draft' }
     const payload = {
       collections: { pages: { config: { versions: { drafts: true } } } },
+      db: { defaultIDType: 'text' },
       findByID: async () => structuredClone(doc),
       async update({ req: _req, user: _user, ...args }: Doc) {
         writes.push(structuredClone(args))
