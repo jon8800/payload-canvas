@@ -8,6 +8,7 @@ import { layoutAfterChange, layoutBeforeChange } from '../plugin/hook'
 import { actorFromUser, resolveOperations, type LiveDocStore } from './apply'
 import { requestActor, sessionStream, sseFrame } from './endpoints'
 import { createKeyedMutex } from './mutex'
+import { createWriteGate, writeKey } from './writeGate'
 import {
   COLLABORATOR_COLORS,
   collaboratorColor,
@@ -151,6 +152,37 @@ function setup(options: SessionManagerOptions = {}, layout: Layout = base) {
 }
 
 const heading = (id: string, text = 'New') => ({ id, type: 'heading', props: { text } })
+
+describe('reset failure after a queued save', () => {
+  for (const editDuringReset of [false, true]) {
+    it(`keeps storage consistent when an edit during the reset is ${editDuringReset}`, async () => {
+      const gate = createWriteGate()
+      const { sessions, clock, db, connect, commit } = setup({ gate })
+      await connect('a')
+      const resetLayout = structuredClone(base)
+      resetLayout.blocks[0].slots!.children[0].props!.text = 'RESET'
+      let fail!: (error: Error) => void
+      const held = new Promise<never>((_, reject) => { fail = reject })
+      const resetting = sessions.resetFor(target.collection, target.id, resetLayout, resetLayout, () =>
+        gate.run(writeKey(target.collection, target.id), {}, () => held),
+      )
+      await settle()
+      if (editDuringReset) {
+        assert.equal((await commit([{ type: 'update', id: 'h1', props: { text: 'RESET+EDIT' } }])).ok, true)
+        await clock.advance(1000)
+        assert.equal(db.writes.length, 0, 'the session save waits for the action')
+      }
+      fail(new Error('refused'))
+      await assert.rejects(resetting, /refused/)
+      assert.deepEqual(sessions.peek(target.collection, target.id)!.layout, base)
+      assert.deepEqual(await sessions.flush(target.collection, target.id), { ok: true })
+      assert.deepEqual(db.doc.layout, base, 'saved content matches the restored screen')
+      assert.equal(sessions.unsaved(), 0)
+      assert.equal(db.writes.length, editDuringReset ? 2 : 0, 'only a completed intervening write needs correction')
+    })
+  }
+})
+
 const insertAt = (id: string, index = 0) => ({ type: 'insert', block: heading(id), to: { parentId: null, slot: 'children', index } })
 const commitsOf = (events: MultiplayerEvent[]) => events.filter((e): e is LiveCommitEvent => e.type === 'commit')
 

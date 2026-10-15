@@ -402,6 +402,7 @@ type ResetUndo = {
   stored: unknown
   unsaved: { seq: number; ops: Operation[] }[]
   persistedSeq: number
+  resetSeq: number
   dirty: boolean
   externalPending: boolean
 }
@@ -1034,12 +1035,14 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
    * unsaved (the next save stores them), never counted as saved.
    */
   const putBack = (session: Session, undo: ResetUndo) => {
+    // A queued save may already have stored the reset layout before the action failed.
+    const needsSave = undo.dirty || session.persistedSeq > undo.resetSeq
     session.layout = undo.layout
     session.stored = undo.stored
     session.unsaved = undo.unsaved
     session.externalPending = undo.externalPending
-    session.persistedSeq = undo.dirty ? undo.persistedSeq : session.seq
-    if (undo.dirty) markDirty(session)
+    session.persistedSeq = needsSave ? undo.persistedSeq : session.seq
+    if (needsSave) markDirty(session)
   }
 
   // ---- AI collaborators -------------------------------------------------
@@ -1348,6 +1351,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
           stored: session.stored,
           unsaved: session.unsaved,
           persistedSeq: session.persistedSeq,
+          resetSeq: session.seq,
           dirty: prior.dirty,
           externalPending: session.externalPending,
         }
