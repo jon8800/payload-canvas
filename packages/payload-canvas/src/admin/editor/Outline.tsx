@@ -15,7 +15,8 @@ import {
 
 import { describeMotion, findLocation, getBlockDefinition, slotNames, walkBlocks } from '../../core'
 import type { Block, Layout } from '../../core/types'
-import { ancestors, renameBlock, toggleHidden } from './actions'
+import { ancestors, renameBlock, storesBuilderData, toggleHidden } from './actions'
+import { countText } from './counts'
 import { BlockIcon, Icon, type IconName } from './icons'
 import { PeerDots } from './live/PresenceUI'
 import { missingWords, useUntranslated } from './locale/locale'
@@ -23,6 +24,7 @@ import { BLOCK_KEYS, keyText } from './menu/keys'
 import { openBlockMenu, renameRequest } from './menu/requests'
 import { blockPreview, blockSummary, childrenOf, customLabel, typeName } from './names'
 import { OUTLINE_INDENT, useRuntime, type DragData, type Runtime } from './runtime'
+import { RegionRows } from './regions/RegionRows'
 import { useEditor } from './store'
 import { findBindingField, listAncestor, URL_PATH } from './templates/binding'
 import { useValue, useValueSelector } from './valueStore'
@@ -246,7 +248,7 @@ export function Outline() {
     <div className="builder-editor__panel builder-editor__panel--grow builder-editor__outline-panel">
       {/* The Layers tab names the panel: the head shows the block count and the tree tools. */}
       <div className="builder-editor__panel-head builder-left__tools">
-        <span className="builder-left__note">{total === 0 ? 'No blocks' : total === 1 ? '1 block' : `${total} blocks`}</span>
+        <span className="builder-left__note">{countText(total, { none: 'No blocks', one: 'block', many: 'blocks' })}</span>
         <span className="builder-editor__panel-tools">
           <button
             type="button"
@@ -274,6 +276,7 @@ export function Outline() {
           </button>
         </span>
       </div>
+      <RegionRows />
       {rows.length === 0 ? (
         <div ref={outlineRef} className="builder-editor__outline">
           <div className="builder-editor__empty">
@@ -379,12 +382,16 @@ const OutlineRow = memo(function OutlineRow({
   // Two hover actions, so the row keeps room for its name. Rename, duplicate and delete are in
   // the menu and on their keys.
   const actions: { icon: IconName; label: string; tooltip: string; run: (button: HTMLElement) => void }[] = [
-    {
-      icon: block.hidden ? 'eye' : 'eyeOff',
-      label: block.hidden ? 'Show on the site' : 'Hide on the site',
-      tooltip: `${block.hidden ? 'Show on the site' : 'Hide on the site'} · ${keyText(BLOCK_KEYS.hide)}`,
-      run: () => toggleHidden(runtime, block.id),
-    },
+    ...(storesBuilderData(runtime)
+      ? [
+          {
+            icon: (block.hidden ? 'eye' : 'eyeOff') as IconName,
+            label: block.hidden ? 'Show on the site' : 'Hide on the site',
+            tooltip: `${block.hidden ? 'Show on the site' : 'Hide on the site'} · ${keyText(BLOCK_KEYS.hide)}`,
+            run: () => toggleHidden(runtime, block.id),
+          },
+        ]
+      : []),
     {
       icon: 'more',
       label: 'More actions',

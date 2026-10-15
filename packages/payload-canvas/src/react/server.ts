@@ -19,7 +19,8 @@ import { localeArgs, type RenderLocale } from './render/locale'
 
 export { loadLayoutData, type LoadLayoutOptions } from './render/resolve'
 export { localeArgs, localizeLayout, type RenderLocale } from './render/locale'
-export { createCanvasServer, type CanvasServerOptions, type PageDataArgs } from './render/canvasServer'
+export { createCanvasServer, type CanvasFrameArgs, type CanvasServerOptions, type PageDataArgs } from './render/canvasServer'
+export { siteRegion, type RegionMark } from './render/regions'
 export type { CanvasServerRequest, CanvasServerResponse } from './render/canvasServerTypes'
 export { loadTheme, ThemeStyle, type LoadedTheme, type ThemeStyleProps } from './theme/ThemeStyle'
 

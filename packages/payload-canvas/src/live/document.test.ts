@@ -47,6 +47,7 @@ function fakePayload(options: { drafts?: boolean; published?: boolean } = {}) {
     collections: {
       pages: { config: { admin: { useAsTitle: 'title' }, versions: drafts ? { drafts: { autosave: true } } : false } },
     },
+    db: { defaultIDType: 'text' },
     async findByID(args: Doc) {
       if (args.id !== 'p1') throw Object.assign(new Error('Not Found'), { status: 404 })
       return structuredClone(args.draft ? latest : main)

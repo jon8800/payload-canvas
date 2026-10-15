@@ -20,8 +20,10 @@ import {
   siblingCount,
   storedClipboard,
   storedStyles,
+  storesBuilderData,
   toggleHidden,
 } from '../actions'
+import type { IconName } from '../icons'
 import { useRuntime, type Runtime } from '../runtime'
 import { requestSaveSection } from '../sections/SectionDialog'
 import { useEditor } from '../store'
@@ -60,7 +62,8 @@ export function blockMenuEntries(runtime: Runtime, id: string, origin: MenuOrigi
   const parentId = location?.parentId ?? null
   const siblings = location ? siblingCount(layout, location.parentId, location.slot) : 0
   const row = inRow(layout, runtime.measurement.get(), id)
-  const styled = hasStyles(runtime.config.blocks, block.type)
+  // A Payload blocks field stores no styles (storesBuilderData), whatever the definition says.
+  const styled = storesBuilderData(runtime) && hasStyles(runtime.config.blocks, block.type)
 
   return [
     { icon: 'parent', label: 'Select parent', keys: keys('parent'), disabled: !parentId, run: () => parentId && runtime.store.select(parentId) },
@@ -102,12 +105,16 @@ export function blockMenuEntries(runtime: Runtime, id: string, origin: MenuOrigi
     },
     { icon: ERASER, label: 'Reset styles', disabled: !styled || normalizeClasses(block.className) === '', run: () => resetStyles(runtime, [id]) },
     'separator',
-    {
-      icon: block.hidden ? 'eye' : 'eyeOff',
-      label: block.hidden ? 'Show on the site' : 'Hide on the site',
-      keys: keys('hide'),
-      run: () => toggleHidden(runtime, id),
-    },
+    ...(storesBuilderData(runtime)
+      ? [
+          {
+            icon: (block.hidden ? 'eye' : 'eyeOff') as IconName,
+            label: block.hidden ? 'Show on the site' : 'Hide on the site',
+            keys: keys('hide'),
+            run: () => toggleHidden(runtime, id),
+          },
+        ]
+      : []),
     ...(runtime.sections.enabled
       ? [{ icon: 'section' as const, label: 'Save as section…', ownFocus: true, run: () => requestSaveSection(runtime, block) }]
       : []),

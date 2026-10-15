@@ -11,7 +11,7 @@ export function tarballUrl(ref: string): string {
 }
 
 // Version range for the payload-canvas package when it comes from npm.
-export const PUBLISHED_VERSION = '^0.1.0'
+export const PUBLISHED_VERSION = '^0.2.0'
 
 // The package the starter depends on: its npm name and its folder under `packages/` in the repo.
 export const BUILDER_PACKAGE = { name: 'payload-canvas', dir: 'payload-canvas' } as const

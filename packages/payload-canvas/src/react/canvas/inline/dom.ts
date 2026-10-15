@@ -2,7 +2,7 @@
 // find the element that shows a text prop, and a small throttle.
 
 import { EDITABLE_TEXT_ATTRIBUTE } from '../../render/editable'
-import { AUTO_TEXT_ATTRIBUTE, TEXT_MARK_SELECTOR } from './mapper'
+import { AUTO_TEXT_ATTRIBUTE, ownerOf, TEXT_MARK_SELECTOR } from './mapper'
 
 /**
  * The element's attributes and its whole subtree as React left it: every element's child list and
@@ -32,6 +32,11 @@ export function snapshotDom(el: HTMLElement): DomSnapshot {
 export function restoreDom(el: HTMLElement, snapshot: DomSnapshot) {
   for (const [node, list] of snapshot.children) node.replaceChildren(...list)
   for (const [node, data] of snapshot.texts) if (node.data !== data) node.data = data
+  restoreAttributes(el, snapshot)
+}
+
+/** Puts back only the element's own attributes (the editing marks go); the edited text stays. */
+export function restoreAttributes(el: HTMLElement, snapshot: DomSnapshot) {
   const keep = new Map(snapshot.attributes)
   for (const name of el.getAttributeNames()) if (!keep.has(name)) el.removeAttribute(name)
   for (const [name, value] of keep) if (el.getAttribute(name) !== value) el.setAttribute(name, value)
@@ -113,12 +118,23 @@ export function createThrottle(fn: () => void, ms: number): Throttle {
   }
 }
 
-/** An element that shows a text prop of a block. */
-export type EditableTarget = { element: HTMLElement; blockId: string; path: string }
+/**
+ * An element that shows a text prop of a block, or a field of a region. For a region `blockId`
+ * is empty, `region` names it and `path` is a document path.
+ */
+export type EditableTarget = { element: HTMLElement; blockId: string; path: string; region?: string }
 
-/** The block element `el` belongs to (its own `data-block-id` or the nearest one above it). */
+/** The block or region element `el` belongs to (its own or the nearest one above it). */
 function ownerBlock(el: Element): HTMLElement | null {
-  return el.closest<HTMLElement>('[data-block-id]')
+  return ownerOf(el)?.element ?? null
+}
+
+function targetOf(owner: HTMLElement, element: HTMLElement): EditableTarget | null {
+  const found = ownerOf(owner)
+  if (!found) return null
+  return found.kind === 'region'
+    ? { element, blockId: '', path: markPath(element), region: found.name }
+    : { element, blockId: found.id, path: markPath(element) }
 }
 
 const markPath = (el: Element) => el.getAttribute(EDITABLE_TEXT_ATTRIBUTE) ?? el.getAttribute(AUTO_TEXT_ATTRIBUTE) ?? ''
@@ -130,11 +146,10 @@ const markPath = (el: Element) => el.getAttribute(EDITABLE_TEXT_ATTRIBUTE) ?? el
  */
 export function editableAt(target: Element): EditableTarget | null {
   const blockEl = ownerBlock(target)
-  const blockId = blockEl?.dataset.blockId
-  if (!blockEl || !blockId) return null
+  if (!blockEl) return null
   const marked = target.closest<HTMLElement>(TEXT_MARK_SELECTOR)
   if (!marked || ownerBlock(marked) !== blockEl) return null
-  return { element: marked, blockId, path: markPath(marked) }
+  return targetOf(blockEl, marked)
 }
 
 /**
@@ -142,10 +157,9 @@ export function editableAt(target: Element): EditableTarget | null {
  * come first, then the marks of the automatic mapping, in document order.
  */
 export function firstEditable(blockEl: HTMLElement): EditableTarget | null {
-  const blockId = blockEl.dataset.blockId
-  if (!blockId) return null
+  if (!ownerOf(blockEl) || ownerOf(blockEl)?.element !== blockEl) return null
   const usable = (el: HTMLElement) => ownerBlock(el) === blockEl && el.getClientRects().length > 0
   const all = [blockEl, ...blockEl.querySelectorAll<HTMLElement>(TEXT_MARK_SELECTOR)].filter((el) => el.matches(TEXT_MARK_SELECTOR))
   const found = all.find((el) => el.hasAttribute(EDITABLE_TEXT_ATTRIBUTE) && usable(el)) ?? all.find(usable)
-  return found ? { element: found, blockId, path: markPath(found) } : null
+  return found ? targetOf(blockEl, found) : null
 }

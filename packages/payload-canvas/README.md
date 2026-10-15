@@ -43,6 +43,7 @@ npx create-payload-canvas my-website
 6. [Rendering the layout on your site](#rendering-the-layout-on-your-site)
    - [Custom components](#custom-components)
 7. [Server components in the canvas](#server-components-in-the-canvas)
+   - [Whole-page editing: regions outside the layout](#whole-page-editing-regions-outside-the-layout)
 8. [Custom blocks](#custom-blocks)
    - [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields)
 9. [Using existing Payload blocks](#using-existing-payload-blocks)
@@ -254,18 +255,31 @@ export default async function CanvasLayout({ children }: { children: ReactNode }
 }
 ```
 
-```tsx
-// src/app/(builder-canvas)/builder-canvas/page.tsx
-'use client'
+The page is a server component that imports the server action, and passes it to a small client component that renders `BuilderCanvas`:
 
-import { BuilderCanvas } from 'payload-canvas/react/canvas'
-import { blocks } from '@/builder'
+```tsx
+// src/app/(builder-canvas)/builder-canvas/page.tsx (a server component: no 'use client')
 import { builderCanvas } from './actions'
+import { CanvasClient } from './CanvasClient'
 
 export default function CanvasPage() {
-  return <BuilderCanvas blocks={blocks} server={builderCanvas} />
+  return <CanvasClient server={builderCanvas} />
 }
 ```
+
+```tsx
+// src/app/(builder-canvas)/builder-canvas/CanvasClient.tsx
+'use client'
+
+import { BuilderCanvas, type BuilderCanvasProps } from 'payload-canvas/react/canvas'
+import { blocks } from '@/builder'
+
+export function CanvasClient({ server }: { server: BuilderCanvasProps['server'] }) {
+  return <BuilderCanvas blocks={blocks} server={server} />
+}
+```
+
+Keep the page a server component. The server action returns React Server Component output that holds client components: yours inside server-rendered blocks (an image, a carousel), and the builder's own (slot outlets, the page frame's layout). Next registers them in the route's client manifest only when a server component of the route imports the action. When a `'use client'` page imports it, they are missing, and the canvas shows "Could not find the module … in the React Client Manifest". Client-only props (`plugins`, `components`, `resolveLink`) belong in `CanvasClient`.
 
 ```ts
 // src/app/(builder-canvas)/builder-canvas/actions.ts
@@ -541,10 +555,11 @@ websiteBuilder({
 | Option | Type | What it does |
 |---|---|---|
 | `collections` | `Record<slug, { field?, url?, templates? }>` | The collections that get the builder. Required. |
-| `collections[slug].field` | `string` | Name of the layout JSON field. Default `layout`. The generated CSS goes in `<field>Css`. If a `json` field with this name exists (also inside rows, collapsibles or unnamed tabs), the plugin reuses it and moves it to the top level. |
+| `collections[slug].field` | `string` | Name of the builder's field. Default `layout`. Its type decides the storage. A Payload `blocks` field of the collection: the builder edits that field itself, the one source of truth (see [Using existing Payload blocks](#using-existing-payload-blocks)). Otherwise the builder's JSON layout: the generated CSS goes in `<field>Css`, and a `json` field with this name (also inside rows, collapsibles or unnamed tabs) is reused and moved to the top level. |
 | `collections[slug].url` | `(doc) => string` | The frontend path of a document. AI tools use it for preview links. The collection list block uses it for links. |
 | `collections[slug].templates` | `boolean` | Documents render through templates. See [Templates](#templates-and-binding). |
 | `collections[slug].legacyFields` | `string[]` | Top-level fields the builder replaced but the collection still has (the old `blocks` field after `migrateBlocksField`). **Publish** in the builder keeps their published value, so only the builder content goes live. See [Using existing Payload blocks](#using-existing-payload-blocks), step 7. |
+| `collections[slug].regions` | `{ name, label?, fields }[]` | Fixed parts of the page that show ordinary document fields outside the layout (a header made of the title and an image). The builder shows and edits the whole page. Left out: the layout alone. See [Whole-page editing](#whole-page-editing-regions-outside-the-layout). |
 | `collections[slug].localization` | `'props' \| false` | With Payload `localization` on: `'props'` (the default) translates localized props in one shared layout; `false` keeps one set of values. See [Localization](#localization). |
 | `blocks` | `BlockDefinition[]` | The blocks editors can use. Default `defaultBlocks()`. |
 | `sections` | `SectionDefinition[]` | Ready-made sections. See [Sections](#sections). |
@@ -727,6 +742,8 @@ The canvas renders a block on the server when:
 | `components` | The server map. |
 | `resolveLink` | The same link resolver as the site. |
 | `pageData` | `({ payload, user, document, context, locale }) => data`: the page data. `locale` is the language the editor shows (null without localization); load your data in it. See below. |
+| `frame` | `({ doc, layout, region, … }) => ReactNode`: the page around the layout, for collections with `regions`. See [Whole-page editing](#whole-page-editing-regions-outside-the-layout). |
+| `frameDepth` | The `depth` of the document `frame` gets. Default 1. |
 
 How it works in the editor:
 
@@ -784,6 +801,112 @@ createCanvasServer({ config, blocks, components: serverComponents, pageData: ({ 
 The loader also gets `user`, `document` (the document open in the builder, `{ collection, id }`) and `context` (a template's sample document). The canvas loads the page data once, before its first render, and server-rendered blocks get it on every render. The page data must be plain data.
 
 Only components that ask for the page data get it: every `fromPayloadComponent` component, and components marked with `withPageData(Component)` (they get it as `pageData`). So a client component does not carry the page data in the page's payload.
+
+## Whole-page editing: regions outside the layout
+
+Many pages show more than their layout. A header shows the page's `title` and `coverImage` fields; a post shows its author above the body. These fields are ordinary Payload fields, rendered by your own component before or after the layout. Without regions, the canvas shows the layout alone, so these parts are missing in the editor.
+
+Regions make the canvas show the whole page and let editors edit those fields in place. The fields stay where they are: the builder never copies them into the layout, and no sync runs. A region is fixed: it can be selected and edited, but never dragged, duplicated or deleted.
+
+Regions are optional. A site that builds its pages from blocks alone needs none of this, and the editor does no extra work without them.
+
+**1. Name the regions** of a collection. Each region lists the document fields it shows, by dot path. Fields in rows, collapsibles and unnamed tabs are named directly; a path goes through groups and named tabs (`header.title`). Name an array or upload field as a whole.
+
+```ts
+websiteBuilder({
+  collections: {
+    pages: {
+      field: 'layout',
+      regions: [{ name: 'header', label: 'Header', fields: ['title', 'subtitle', 'coverImage', 'links'] }],
+    },
+  },
+  // ...
+})
+```
+
+The plugin checks the paths when it starts. It refuses the layout field and its own fields, Payload's `id`, `_status` and timestamps, `legacyFields`, join and virtual fields, paths through arrays, and a field in two regions.
+
+**2. Put the page around the layout in one component**, used by the site and by the canvas. It gets the document, the layout to render, and `region`, which marks the part that shows a region:
+
+```tsx
+// src/components/PageFrame.tsx (a server component)
+import type { ReactNode } from 'react'
+import type { RegionMark } from 'payload-canvas/react'
+import type { Page } from '@/payload-types'
+import { PageHeader } from './PageHeader'
+
+export function PageFrame({ page, layout, region }: { page: Page; layout: ReactNode; region: RegionMark }) {
+  return (
+    <>
+      {region('header', <PageHeader title={page.title} subtitle={page.subtitle} image={page.coverImage} links={page.links} />)}
+      <main>{layout}</main>
+    </>
+  )
+}
+```
+
+`region(name, node)` adds no element. In the canvas it puts the region's mark on the first element of `node`. On the site you pass `siteRegion`, which returns `node` as it is. The frame's output holds client components (the layout outlet, the region mark), so the canvas page must be a server page that imports the action ([step 6 of Install](#6-add-the-canvas-route)).
+
+**3. Render it on the site** with `siteRegion`:
+
+```tsx
+import { siteRegion } from 'payload-canvas/react'
+
+<PageFrame page={page} region={siteRegion} layout={<RenderLayout layout={layout} css={css} components={serverComponents} />} />
+```
+
+**4. Render it in the canvas** with the `frame` option of `createCanvasServer`. The action file then holds JSX, so name it `actions.tsx`:
+
+```tsx
+// src/app/(builder-canvas)/builder-canvas/actions.tsx
+'use server'
+
+import config from '@payload-config'
+import { createCanvasServer, type CanvasServerRequest } from 'payload-canvas/react/server'
+import { blocks } from '@/builder'
+import { serverComponents } from '@/components/blocks.server'
+import { PageFrame } from '@/components/PageFrame'
+import type { Page } from '@/payload-types'
+
+const canvas = createCanvasServer({
+  config,
+  blocks,
+  components: serverComponents,
+  frame: ({ document, doc, layout, region }) =>
+    document.collection === 'pages' ? <PageFrame page={doc as Page} layout={layout} region={region} /> : layout,
+})
+
+export async function builderCanvas(request: CanvasServerRequest) {
+  return canvas(request)
+}
+```
+
+`frame` gets the document's latest draft, read as the signed-in user, at `frameDepth` (default 1, so uploads and relationships arrive as documents), in the language the editor shows. It also gets `pageData`, `user`, `locale`, `context` and `mode`. Put `layout` where the page shows the layout: the canvas renders the live layout there, so every block stays selectable, draggable and editable at once. Return `layout` alone (or `null`) to show the layout without a frame.
+
+**What editors can do with a region:**
+
+- Hover or click it on the canvas, or click it in the **Layers** panel above the tree. The inspector shows its fields; **Edit fields** opens the page settings drawer at the region's first field. The drawer is Payload's own form, so every field type works with Payload's validation, hooks and access.
+- Double-click its text to edit it in place: text, textarea and rich text fields, also inside array rows and groups. Double-click an image (or drop a file on it) to replace it, as in blocks. The automatic mapping finds the elements by their values, as for blocks. For elements it cannot find, `frame` gets `mode` (`'canvas'`): pass it on and mark them with `editableText(mode, path)` and `editableImage(mode, path)`, with the field's document path (`links.0.label`). On the site, pass `'site'`.
+- Each change saves to the document when editing ends, as the user: a draft on collections with drafts, so **Publish** publishes it with the layout. One Ctrl+Z undoes it, and redo works too.
+- Saves from anywhere show on every open canvas: a region edit, the settings drawer, REST, another editor. The `saved` event lists the fields a save changed, and the canvas asks for the frame again.
+
+**What protects the fields:**
+
+- The fields endpoint (`POST {api}/builder/live/:collection/:id/fields`) takes only paths inside the regions. It checks the user's update access to the document and to each field (Payload's own document access) and says no with 403, instead of dropping the change without a word.
+- Each change carries the value the editor saw, also through a long inline edit. When someone else changed the field since, the save is refused (409) and the canvas shows their value. The answer never holds values the user may not read, also inside groups and array rows, and a save keeps those fields as they are.
+- Undo and redo of a region change write the language the change was made in, and expect the value the server stored after the fields' hooks.
+- Someone else's document lock (the Edit view or the settings drawer) refuses the save with 423. While your own settings drawer is open, canvas edits of region fields wait: the drawer's form holds its own copy of the fields.
+- An open settings drawer renews its protection. If a close or renewal request is lost, protection expires after the configured document-lock duration (300 seconds by default).
+- Saves of one document never overlap. Payload's update reads the newest version and writes the whole version back, so two overlapping saves (a layout save and a settings autosave) could lose one of the changes. The plugin lets one update of a builder document run at a time, from Payload's read to the commit of its transaction. This applies to every builder collection, with or without regions. A save that cannot get its turn (a wait that would never end) fails with a clear 409 instead. Editors hear of a save only after the database committed it: a rollback or a failed commit announces nothing.
+
+**When the frame cannot show,** the canvas says so above the layout, and the layout stays editable: no `server` on `BuilderCanvas`, no `frame` option, a frame that throws, or a frame that never renders `layout`.
+
+Limits:
+
+- The canvas edits text, textarea, rich text and upload fields of a region. Edit other field types (selects, checkboxes, relationships, dates) in the settings drawer.
+- Typing in a region reaches other editors when the editing ends, not letter by letter.
+- AI tools (MCP and the assistant) edit the layout only.
+- Templates show no frame: a template's regions would be its sample document's fields.
 
 ## Custom blocks
 
@@ -874,7 +997,17 @@ Limits:
 
 ## Using existing Payload blocks
 
-A site that already has a Payload `blocks` field (for example `pages.layout` with sections and nested blocks) can keep its block configs and its components. The builder gets a field of its own, one script copies the content over, and the old field stays until you remove it.
+A site that already has a Payload `blocks` field (for example `pages.layout` with sections and nested blocks) keeps its field, its block configs, its components and its content. Point the builder at that field. The builder then edits the field itself: there is one source of truth, no second copy of the page, and nothing to migrate.
+
+```ts
+websiteBuilder({
+  collections: { pages: { field: 'layout', url: (doc) => `/${doc.slug}` } },
+  blocks,
+  css: { entry: 'src/app/(frontend)/globals.css' },
+})
+```
+
+The type of the field decides how the builder stores the layout. A `blocks` field: the builder reads and writes that field. A `json` field, or no field with that name: the builder's own JSON layout, with every feature. There is no switch per document.
 
 What carries over:
 
@@ -883,7 +1016,7 @@ What carries over:
 - **Conditions.** An `admin.condition` that tests one sibling field, such as `(_, siblingData) => siblingData?.type === 'custom'`, becomes a JSON condition. The inspector hides the field, and an empty required field that is hidden does not block publishing.
 - **Components.** `fromPayloadComponents()` renders components written for Payload's data (`{ blockType, ...fields }`) unchanged.
 - **Field logic.** `validate`, field hooks and field `access` of the block fields run in the builder and the API, as in Payload. See [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields).
-- **Content.** `migrateBlocksField()` converts every document, its drafts and its versions.
+- **Content.** Nothing to convert: the builder edits the blocks field itself.
 - **Canvas editing.** Text and images of your components edit in place on the canvas, with no marks in your code. See [Inline editing](#inline-editing).
 
 ### Step by step
@@ -892,17 +1025,7 @@ These steps assume a site like this: `pages.layout` is a `blocks` field that ref
 
 **1. Install** the package and add the canvas route, as in [Install](#install).
 
-**2. Give the builder its own field.** Keep `layout` as it is.
-
-```ts
-websiteBuilder({
-  collections: { pages: { field: 'builderLayout', url: (doc) => `/${doc.slug}` } },
-  blocks,
-  css: { entry: 'src/app/(frontend)/globals.css' },
-})
-```
-
-If you give the builder the name of the existing `blocks` field (`field: 'layout'`), the app does not start, and the error points here.
+**2. Point the builder at your blocks field** (`field: 'layout'`, as above). Keep the field as it is: its place, its admin options, its hooks, its access and its versions do not change. The plugin adds a Builder tab, and a hidden virtual field (`layoutBuilder`, no database column) that carries the editor's config.
 
 **3. Make builder blocks from your block configs.** Put them in the client-safe blocks file:
 
@@ -933,6 +1056,8 @@ export const blocks = [...defaultBlocks({ linkCollections: ['pages'] }), ...site
 
 `labels.singular` becomes the label, and `admin.group` the library category. `interfaceName`, `dbName`, `imageURL` and the block's own admin components are not used.
 
+Every block type the field holds, at any depth and through `blockReferences`, needs a builder block. The app does not start without one, and the error names the missing slugs.
+
 **4. Wrap your components.** Use the same map as your `RenderBlocks`, keyed by Payload slug:
 
 ```ts
@@ -950,7 +1075,32 @@ Each component gets the props it always got: `{ id, blockType, blockName, ...fie
 - **Components that take `{ block, context }`** instead of the fields as props: add `{ props: (block, context) => ({ block, context }) }` as the third argument. `context` is the page data. See [Page data](#page-data-and--block-context--components).
 - **Components that load data** (async server components, or components that import Payload): leave them out of this client-safe map and put them in the server map. The canvas renders them on the server. See [Server components in the canvas](#server-components-in-the-canvas). A section whose file imports such a component (through its own `RenderLeaves`) goes in the server map too.
 
-**5. Convert the content.** Run a dry run first. It writes nothing and lists what it would do:
+**5. Keep your page route.** The site renders `page.layout` with its own `RenderBlocks`, as before. Canvas edits are in that field right after each save.
+
+### How the builder edits a Payload blocks field
+
+- **One field.** When the builder opens a page, it reads the stored blocks (`depth: 0`) into the editor. Each save writes them back to the same field through Payload's Local API, as the editor's user (`overrideAccess: false`). Payload's field hooks, validation, access, versions and locales run once per save, as for a save in Payload's editor. Opening the builder saves nothing.
+- **Nothing lost.** A round trip keeps every stored value: fields the inspector does not show, unknown keys, `null` and empty values, block ids and order, `blockName` (the block's name in the builder), array rows with their ids, groups, nested blocks fields inside groups and arrays, and upload and relationship ids. No HTML is read back and no defaults are added. Data the builder cannot keep exactly (a block type without a builder block, two blocks with one id) is not changed: the builder refuses to open the page (422) and says why. Payload's editor still opens it.
+- **Saves from elsewhere win.** A save from Payload's editor, the REST API or the Local API is the stored truth. An open builder shows it at once and replays its own unsaved edits on top, after every such save until the builder saves.
+- **Copied rows.** Rows pasted from another page or inserted from a saved section get new ids. The page keeps its own row ids through remove, save, undo and save.
+- **Hooks.** After each save the builder reads the stored blocks again. What Payload's hooks stored becomes the builder's state at once: changed values and also added, removed or moved blocks. Edits made while the save ran stay on top. So a later edit or undo keeps what the hooks did.
+- **Old forms.** A form that loaded the page before its blocks last changed (the builder's settings drawer, a second tab) sends the blocks back as it loaded them. When the form did not change them, the save keeps the newer blocks. When it did, the save is refused (409, "Not saved. … changed Layout after you opened this form"), also when the same person made both changes.
+- **Publish, revert and restore** work on the same field. Publish stops if pending edits cannot be saved. Revert and restore require read access to every source value and update access to the blocks field. Payload's own version restore also updates an open builder after the transaction commits.
+
+### Limits of a Payload blocks field
+
+- **One language in the builder.** The builder edits the default locale. Translations stay in Payload's editor, and a canvas save keeps every other locale's values.
+- **No builder-only block data.** A Payload block has no place for Tailwind classes, animations, bindings or hidden blocks. The builder turns off the Styles and Motion tabs, Copy, Paste and Reset styles, and "Hide", also for blocks whose definition sets `styles: true` for JSON layouts. The editor refuses a change that carries such data before it shows it, and the server refuses it too (422): nothing of it is saved. The library lists only the sections and saved sections the field can store.
+- **No templates.** Templates hold builder JSON layouts. The plugin refuses `templates: true` on a collection whose builder field is a `blocks` field.
+- **Access.** The live session holds every value of the blocks, also values not saved yet. Payload's field `access.read` decides on those values themselves: stored ones and the open session's. A user who may not read one of them, or may not update the blocks field itself, cannot open, change or save the page in the builder or through MCP (403). The check runs on every request, and an open event stream checks each event before it goes out, against the values that event carried when it was sent: when the user may not read one, the stream ends instead. A reconnect gets the current state, never old changes. They edit in Payload's editor, which keeps the hidden values.
+
+### Copying into a builder JSON field (opt-in)
+
+Copy the content into a builder field of its own only when you want what a Payload block cannot hold: Tailwind classes, animations, bindings, hidden blocks, translations in the builder, or templates. The copy is one-way. After it, the builder field is the page's content, and the old field stays only until you remove it.
+
+Give the builder a field of its own (`field: 'builderLayout'`), then convert the content:
+
+**Convert the content.** Run a dry run first. It writes nothing and lists what it would do:
 
 ```ts
 // scripts/migrate-blocks.ts
@@ -990,9 +1140,9 @@ Close every builder tab while it runs. An open builder keeps its own copy of the
 - It writes through the database adapter (`updateOne`, `updateVersion`), so no hooks run. It compiles the CSS itself. Tested on Postgres. On MongoDB it converts the documents but not the versions.
 - Options: `where` (only some documents), `versions: false`, `overwrite`, `blocks` (default: the plugin's blocks), `log`.
 
-**6. Render pages with the builder.** Change the page route to `RenderLayout` with `page.builderLayout` and `page.builderLayoutCss` (see [step 7 of Install](#7-render-pages-on-the-site)). Pass your wrapped `components` to `RenderLayout` and to `BuilderCanvas`.
+**Render pages with the builder.** Change the page route to `RenderLayout` with `page.builderLayout` and `page.builderLayoutCss` (see [step 7 of Install](#7-render-pages-on-the-site)). Pass your wrapped `components` to `RenderLayout` and to `BuilderCanvas`.
 
-**7. Keep the old field out of Publish, and remove it later.** Payload publishes the whole document. Without more setup, **Publish** in the builder would also publish the old field's latest draft (for example an edit someone made in the Edit view after the migration). List the old field in `legacyFields`:
+**Keep the old field out of Publish, and remove it later.** Payload publishes the whole document. Without more setup, **Publish** in the builder would also publish the old field's latest draft (for example an edit someone made in the Edit view after the migration). List the old field in `legacyFields`:
 
 ```ts
 websiteBuilder({
@@ -1035,7 +1185,7 @@ The `builder` prop holds `mode`, `className`, `slots` (rendered children by slot
 - **Custom admin components** on fields (a custom `Field`) need Payload's form, so the inspector shows the default input for the field type. `fromPayloadBlocks` lists them in a warning.
 - **Conditions** that read the document, the user or several fields are not converted: the field always shows (also listed in a warning). Function `defaultValue`s of block fields do not run in the builder. `validate`, field hooks and field `access` do run: see [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields).
 - **Loaded data** is one level deep. A component that needs deeper data loads it itself.
-- **Blocks fields inside a group, a named tab or an array** stay props, edited as JSON. Localized block fields are not supported.
+- **Blocks fields inside a group, a named tab or an array** stay props, edited as JSON. With a Payload blocks field as the builder field, localized fields inside blocks keep every locale, and the builder edits the default locale. A copied JSON layout does not support localized block fields.
 - A Payload slug `list` with an `items` array is read as the old built-in list (`normalizeLayout`). Use `prefix` to avoid that.
 
 ## Sections
@@ -1696,9 +1846,14 @@ Several people can have the same page open in the builder. Each change shows for
 How it works:
 
 - The server keeps one live session per open document, in memory. The session holds the layout and a sequence number `seq`.
+- Live editing requires access to the newest draft. Read access limited to published documents does not grant access to the live draft.
+- This also applies before the first draft save. The server checks collection read access on every streamed event and live edit. Query rules on the layout field cannot be checked against unsaved edits, so they refuse live editing. Other query rules use Payload's current stored document. A user role change applies after reconnecting.
+- After each committed save, the session reads the document's other fields again. Block access checks use those current fields, including for events still waiting to be sent. If the read fails, the check refuses access.
 - An editor applies its own change at once, then sends it to `commit`. The server applies changes in the order they arrive, raises `seq` by 1, and sends each change to every open editor. A change that no longer applies (for example, someone deleted its block) is rejected, and that editor drops it.
 - The server saves the session as a draft about 1 second after the last change (at the latest every 5 seconds). The save runs as the person who made the last change, with their access rules, and the normal save hook compiles the CSS.
-- While a session is open, the session owns the layout. Any other save of the document gets the session's layout: a stale autosave from another tab, a REST update, or **Publish**. Publish therefore publishes what everyone sees in the editor.
+- For native JSON layouts, an open session protects its unsaved layout from other document saves. Publish first saves pending edits and stops if that save fails. Payload's own version restore replaces the session from the restored version after commit. Existing Payload blocks fields follow the authoritative stored field, as described above.
+- Builder Restore and Revert pause background layout saves and outside layout sync until their save finishes. Concurrent actions run in order. Flush waits for an active action. Other JSON document saves during the action return 409; retry after it finishes. This includes Publish if the action starts after its flush. A failed action keeps earlier unsaved edits, and outside saves remain authoritative.
+- Flush also waits for a committed save's field-hook changes to reach the live session. Other guarded JSON saves return 409 while those changes wait. Retry after they apply. Background saves resume automatically.
 - Every editor gets a `saved` event after each save and a `published` event after Publish, Unpublish or Revert, so the top bar shows the same status for everyone.
 - The session closes 60 seconds after the last editor leaves and its draft is saved.
 
@@ -1709,9 +1864,12 @@ The other fields (title, slug, SEO, …) are edited in Payload's Edit view or in
 
 To turn the lock off for a collection, set `lockDocuments: false` on it. The out-of-date check still runs.
 
+Saves of one document never overlap: Payload's update reads the newest version and writes the whole version back, so a session save and a settings autosave that overlap could put back the other one's old values. The plugin lets one update of a builder document run at a time, from Payload's read to the commit of its database transaction. Saves of different documents still run at the same time. Like the sessions, this works inside one server process.
+
 Limits:
 
 - Sessions live in the memory of one server process. With more than one app server, route all requests for a document to the same server (sticky routing), or keep one app server.
+- Builder collections disable bulk editing. Bulk updates (`payload.update` with `where`) return 403 or 409. Update each document by ID. This keeps every update inside the write gate. Bulk publish, unpublish, trash changes and folder moves are unavailable; use the document's Edit view. Permanent bulk delete still works.
 - Two people who change the same prop at the same time: the later change wins.
 - On SIGINT/SIGTERM the plugin saves unsaved session edits before the process exits. To make that possible, it holds back `process.exit` for at most 3 seconds, and only while unsaved edits exist. A hard kill (`SIGKILL`, a crash) can still lose the last 1–5 seconds of edits.
 - Two people typing in the same text field at the same moment: the later value wins for the whole field.
@@ -1789,7 +1947,9 @@ All entries must show one version. Pin `payload`, `@payloadcms/*` and `next` to 
 
 **Saving fails with "Tailwind plugin "x" is used by @plugin in the CSS entry but is not in the plugins map".** Add the plugin to `css.plugins` and to the canvas page's `plugins`.
 
-**"Collection "pages" already has a "blocks" field named "layout"".** The builder needs a `json` field. Give it its own name (`field: 'builderLayout'`) and convert the content: see [Using existing Payload blocks](#using-existing-payload-blocks).
+**""pages.layout" is a Payload blocks field, and the builder has no definition for its block "x"".** Every block type of the field needs a builder block. Add its config to `fromPayloadBlocks()` (with `references` for `blockReferences`): see [Using existing Payload blocks](#using-existing-payload-blocks).
+
+**"The builder cannot open these blocks without changing them: …".** The stored blocks hold data the builder cannot keep exactly, for example a block type without a builder block. The message names it. Add the block, or fix the page in Payload's editor.
 
 **"Two blocks have the type "heading"".** A block made with `fromPayloadBlocks` has the same type as another block. Set `prefix` in `fromPayloadBlocks`.
 
@@ -1799,7 +1959,7 @@ All entries must show one version. Pin `payload`, `@payloadcms/*` and `next` to 
 
 ## Limits
 
-This is version 0.1. Before 1.0, a minor version can change the API. Known limits:
+This is version 0.2. Before 1.0, a minor version can change the API. Known limits:
 
 - **Payload 3 only.** Payload 4 (canary today) changes the admin UI. The builder does not support it yet.
 - **Next.js and React only.** The admin editor and the canvas need a Next.js app (Payload's own requirement). Other frontends can render the stored JSON with their own code.
@@ -1807,6 +1967,7 @@ This is version 0.1. Before 1.0, a minor version can change the API. Known limit
 - **The canvas runtime runs only in the editor's iframe.** `payload-canvas/react/canvas` belongs on the canvas route and nowhere else.
 - **Tailwind CSS v4 only.** Styles are Tailwind classes, compiled from your Tailwind v4 entry CSS.
 - **One server process.** Live sessions live in memory. See [Multiplayer editing](#multiplayer-editing) and [Deploying](#deploying). Serverless platforms are not supported.
+- **Updates by ID.** Builder collections disable bulk editing and refuse bulk updates with 403 or 409. Update each document by ID to preserve the order of saves.
 - **Tested databases.** Postgres is tested end to end. Other Payload adapters store the layout in a JSON field and should work, but are not tested.
 - **The editor's own labels are in English.** Payload's inputs inside it follow the admin language.
 

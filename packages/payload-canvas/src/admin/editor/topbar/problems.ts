@@ -9,6 +9,8 @@ export type PublishProblem = {
   blockId: string | null
   /** The document field for a document-level problem ("title", "slug"). */
   field: string | null
+  /** The whole path of a document field's problem ("header.title"): a page region may show it. */
+  path?: string
   message: string
 }
 
@@ -105,7 +107,7 @@ export function publishProblems(layout: Layout, failure: PublishFailure): Publis
     const message = tidy(e.message ?? '', prop)
     if (!message) return []
     if (block) return [{ blockId: block.id, field: null, message }]
-    return [{ blockId: null, field, message }]
+    return [{ blockId: null, field, ...(field && path ? { path } : {}), message }]
   })
   if (listed.length > 0) return unique(listed)
   const text = failure.error ?? ''
@@ -116,6 +118,20 @@ export function publishProblems(layout: Layout, failure: PublishFailure): Publis
 }
 
 /** "2 blocks need attention" / "1 setting needs attention". */
+/**
+ * The problems left after a save changed the top-level document fields `fields`: a problem of
+ * such a field is gone (its value changed, so the old message no longer says anything about it;
+ * the next publish checks it again). Problems of blocks and of other fields stay. Returns `list`
+ * itself when nothing goes.
+ */
+export function withoutSavedFields(list: PublishProblem[], fields: readonly string[]): PublishProblem[] {
+  if (list.length === 0 || fields.length === 0) return list
+  const saved = new Set(fields)
+  const topOf = (problem: PublishProblem) => (problem.path ?? problem.field ?? '').split('.')[0]
+  const next = list.filter((problem) => problem.blockId !== null || !saved.has(topOf(problem)))
+  return next.length === list.length ? list : next
+}
+
 export function problemSummary(problems: PublishProblem[]): string {
   const blocks = new Set(problems.flatMap((p) => (p.blockId ? [p.blockId] : []))).size
   const other = problems.filter((p) => !p.blockId).length

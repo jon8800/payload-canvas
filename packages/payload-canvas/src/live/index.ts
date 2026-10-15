@@ -58,3 +58,16 @@ export {
   type FieldClock,
   type FieldConflict,
 } from './fieldsGuard'
+export {
+  loadRegionAccess,
+  loadRegionValues,
+  regionAccessFrom,
+  regionAccessAt,
+  regionEndpoints,
+  writeRegionFields,
+  REGION_SAVE_CONTEXT,
+  type RegionEndpointOptions,
+  type RegionWriteOptions,
+  type RegionWriteResult,
+} from './regions'
+export { createWriteGate, defaultWriteGate, writeKey, type WriteGate, type WriteGateOptions } from './writeGate'

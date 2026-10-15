@@ -34,7 +34,8 @@ import { Tags } from '@/collections/Tags'
 import { TemplateParts } from '@/collections/TemplateParts'
 import { SiteSettings } from '@/globals/SiteSettings'
 import { LegacyPages } from '@/legacy-fixture/collection'
-import { LEGACY_COLLECTION, legacyDemo } from '@/legacy-fixture/enabled'
+import { SharedBlocksPages } from '@/legacy-fixture/sharedCollection'
+import { LEGACY_COLLECTION, legacyDemo, SHARED_BLOCKS_COLLECTION } from '@/legacy-fixture/enabled'
 import { legacyBlockConfigs } from '@/legacy-fixture/configs'
 import { i18nDemo } from '@/lib/locales'
 import { demoLocalization, withoutFieldLocalization } from '@/lib/localizationDemo'
@@ -45,10 +46,15 @@ const builderCollections: WebsiteBuilderOptions['collections'] = {
   // Posts render through templates (Templates collection): a default "Post template" or the post's own.
   posts: { field: 'builder', url: (doc) => documentPath('posts', doc.slug) ?? '/blog', templates: true },
   'template-parts': { field: 'builder' },
-  // Dev fixture: the old content stays in the `layout` blocks field; the builder gets its own field.
-  // `legacyFields`: Publish in the builder keeps the old field's published value.
+  // Dev fixtures for existing Payload blocks.
+  // - One source of truth: the builder edits the collection's own `layout` blocks field.
+  // - Opt-in copy: the old content stays in `layout`, and the builder gets its own JSON field.
+  //   `legacyFields`: Publish in the builder keeps the old field's published value.
   ...(legacyDemo
-    ? { [LEGACY_COLLECTION]: { field: 'builderLayout', legacyFields: ['layout'], url: (doc) => `/legacy-demo/${String(doc.slug ?? '')}` } }
+    ? {
+        [SHARED_BLOCKS_COLLECTION]: { field: 'layout', url: (doc) => `/legacy-demo/shared/${String(doc.slug ?? '')}` },
+        [LEGACY_COLLECTION]: { field: 'builderLayout', legacyFields: ['layout'], url: (doc) => `/legacy-demo/${String(doc.slug ?? '')}` },
+      }
     : {}),
 }
 
@@ -129,7 +135,7 @@ export default buildConfig({
     Categories,
     Tags,
     TemplateParts,
-    ...(legacyDemo ? [LegacyPages] : []),
+    ...(legacyDemo ? [LegacyPages, SharedBlocksPages] : []),
   ],
   // Dev fixture: the legacy pages' blocks, referenced by slug (`blockReferences`).
   ...(legacyDemo ? { blocks: legacyBlockConfigs } : {}),

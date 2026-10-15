@@ -4,16 +4,18 @@
 // (`imageHover`), a double-click (`imageEdit`) and a dropped file (`imageDrop`). Every change of
 // the layout is one `update` operation through the store, so it is one undo step and syncs to
 // collaborators like any edit. Alt text of a media document is the one change outside the layout:
-// it is saved on the document over REST.
+// it is saved on the document over REST. An image of a page region shows a document field: its
+// change is saved to the document (`runtime.regions`), also one undo step.
 
 import { dataFields, findBlock, getBlockDefinition } from '../../../core'
 import { textOf } from '../../../core/fields'
 import type { Block, BlockDefinition } from '../../../core/types'
 import type { CanvasImageTarget } from '../../../protocol'
 import { lockedMessage } from '../fields/accessRules'
+import { ownerKey, type CanvasOwner } from '../regions/select'
 import type { Runtime } from '../runtime'
 import { createValueStore, type ValueStore } from '../valueStore'
-import { altFromFileName, removeOp, uploadFieldAt, uploadValue, type UploadSpotField } from './model'
+import { altFromFileName, removeChange, removeOp, uploadFieldAt, uploadValue, type UploadSpotField } from './model'
 import { inlineUpdate } from '../inline'
 
 export type ImageEditorState = {
@@ -23,8 +25,8 @@ export type ImageEditorState = {
   dropping: boolean
   /** The media popover: its target, the spot it edits (index into `target.spots`), and when it was asked for. */
   open: { target: CanvasImageTarget; spot: number; at: number } | null
-  /** An upload in progress, shown on the image. */
-  busy: { id: string; path: string } | null
+  /** An upload in progress, shown on the image. `key`: the owner's key (`ownerKey`). */
+  busy: { key: string; path: string } | null
 }
 
 const stores = new WeakMap<Runtime, ValueStore<ImageEditorState>>()
@@ -44,25 +46,40 @@ export function updateImageEditor(runtime: Runtime, change: Partial<ImageEditorS
   store.set({ ...store.get(), ...change })
 }
 
-/** What the editor needs to edit the upload at `path` of a block. */
+/** What the editor needs to edit the upload at `path` of a block or a region. */
 export type ImageSpotContext = {
+  /** The block, or for a region its values as block props (no id). */
   block: Block
   definition: BlockDefinition
   spot: UploadSpotField
   /** "Photo", or "Image · Gallery Items 4" inside an array row. */
   label: string
+  /** The region, when the image shows a document field. */
+  region?: string
 }
 
 const humanize = (name: string) => name.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase())
 const labelOf = (field: { label?: unknown; name?: string }) => textOf(field.label) ?? humanize(field.name ?? '')
 
-/** The block, its definition and the upload field behind a canvas image, or null when one is gone. */
-export function imageSpotContext(runtime: Runtime, blockId: string, path: string): ImageSpotContext | null {
+/** The block (or the region's values) and the definition behind a canvas image owner. */
+function ownerData(runtime: Runtime, owner: CanvasOwner): { block: Block; definition: BlockDefinition } | null {
+  if (owner.region) {
+    const definition = runtime.regions?.definition(owner.region)
+    const values = runtime.regions?.state.get().values
+    return definition && values ? { block: { id: '', type: definition.type, props: values }, definition } : null
+  }
   // The block as the canvas shows it (the editor's locale): the store writes that locale.
-  const block = findBlock(runtime.store.getState().view, blockId)
+  const block = findBlock(runtime.store.getState().view, owner.id)
   const definition = block ? getBlockDefinition(runtime.config.blocks, block.type) : undefined
-  const spot = definition ? uploadFieldAt(definition, path) : null
-  if (!block || !definition || !spot) return null
+  return block && definition ? { block, definition } : null
+}
+
+/** The block, its definition and the upload field behind a canvas image, or null when one is gone. */
+export function imageSpotContext(runtime: Runtime, owner: CanvasOwner, path: string): ImageSpotContext | null {
+  const data = ownerData(runtime, owner)
+  const spot = data ? uploadFieldAt(data.definition, path) : null
+  if (!data || !spot) return null
+  const { block, definition } = data
   // The deepest array row on the path names the item ("Gallery Items 4").
   const segments = path.split('.')
   let row = ''
@@ -76,53 +93,79 @@ export function imageSpotContext(runtime: Runtime, blockId: string, path: string
     fields = field.fields ?? []
   }
   const own = labelOf(spot.field)
-  return { block, definition, spot, label: row ? `${own} · ${row}` : own }
+  return { block, definition, spot, label: row ? `${own} · ${row}` : own, ...(owner.region ? { region: owner.region } : {}) }
+}
+
+/** Why the user may not change `path` of the owner now, or null. */
+function lockedFor(runtime: Runtime, context: Pick<ImageSpotContext, 'block' | 'region'>, path: string): string | null {
+  // `null` from `lockedMessage` means allowed: only a missing regions controller is a refusal.
+  if (context.region) return runtime.regions ? runtime.regions.lockedMessage(path) : 'This page has no regions.'
+  return lockedMessage(runtime, context.block, path)
 }
 
 /** Refuses a change the user may not make (field access) and says why. True when it refused. */
 function refused(runtime: Runtime, context: ImageSpotContext, path: string): boolean {
-  const text = lockedMessage(runtime, context.block, path)
+  const text = lockedFor(runtime, context, path)
   if (text) runtime.warn(text)
   return Boolean(text)
 }
 
+/** Writes one value: an `update` operation for a block, a document field save for a region. One undo step. */
+function writeValue(runtime: Runtime, context: ImageSpotContext, path: string, value: unknown): boolean {
+  if (context.region) {
+    if (!runtime.regions) return false
+    void runtime.regions.write([{ path, value }])
+    return true
+  }
+  const op = inlineUpdate(context.block, path, value)
+  return op ? runtime.store.apply(op) : true
+}
+
 /** Sets the stored value of the upload at `path` (an id, or `{ relationTo, value }`): one undo step. */
-export function setImageValue(runtime: Runtime, blockId: string, path: string, value: unknown): boolean {
-  const context = imageSpotContext(runtime, blockId, path)
+export function setImageValue(runtime: Runtime, owner: CanvasOwner, path: string, value: unknown): boolean {
+  const context = imageSpotContext(runtime, owner, path)
   if (!context) {
     runtime.warn('That image is gone: someone changed the page. Try again.')
     return false
   }
   if (refused(runtime, context, path)) return false
-  const op = inlineUpdate(context.block, path, value)
-  return op ? runtime.store.apply(op) : true
+  return writeValue(runtime, context, path, value)
 }
 
 /** Sets a media document on the upload at `path`: one undo step. */
-export function setImage(runtime: Runtime, blockId: string, path: string, collection: string, id: string | number): boolean {
-  const context = imageSpotContext(runtime, blockId, path)
-  return context ? setImageValue(runtime, blockId, path, uploadValue(context.spot, collection, id)) : false
+export function setImage(runtime: Runtime, owner: CanvasOwner, path: string, collection: string, id: string | number): boolean {
+  const context = imageSpotContext(runtime, owner, path)
+  return context ? setImageValue(runtime, owner, path, uploadValue(context.spot, collection, id)) : false
 }
 
 /** Empties the upload at `path` (removes the item of a hasMany upload): one undo step. */
-export function removeImage(runtime: Runtime, blockId: string, path: string): boolean {
-  const context = imageSpotContext(runtime, blockId, path)
+export function removeImage(runtime: Runtime, owner: CanvasOwner, path: string): boolean {
+  const context = imageSpotContext(runtime, owner, path)
   if (!context || refused(runtime, context, path)) return false
+  if (context.region) {
+    const change = removeChange(context.block.props, path, context.spot)
+    return change ? writeValue(runtime, context, change.path, change.value) : false
+  }
   const op = removeOp(context.block, path, context.spot)
   return op ? runtime.store.apply(op) : false
 }
 
 /** Sets a text prop (alt text next to the upload). Typing in one field merges into one undo step. */
-export function setAltProp(runtime: Runtime, blockId: string, path: string, value: string): void {
-  const block = findBlock(runtime.store.getState().view, blockId)
-  if (!block) return
-  const text = lockedMessage(runtime, block, path)
+export function setAltProp(runtime: Runtime, owner: CanvasOwner, path: string, value: string): void {
+  const data = ownerData(runtime, owner)
+  if (!data) return
+  const text = lockedFor(runtime, { block: data.block, region: owner.region }, path)
   if (text) {
     runtime.warn(text)
     return
   }
-  const op = inlineUpdate(block, path, value)
-  if (op) runtime.store.apply(op, { mergeKey: `alt:${blockId}:${path}` })
+  // A region's alt text is a document field: saved when the input is done (blur or Enter).
+  if (owner.region) {
+    void runtime.regions?.write([{ path, value }])
+    return
+  }
+  const op = inlineUpdate(data.block, path, value)
+  if (op) runtime.store.apply(op, { mergeKey: `alt:${owner.id}:${path}` })
 }
 
 type Doc = Record<string, unknown> & { id: string | number }
@@ -145,15 +188,15 @@ export async function uploadMedia(runtime: Runtime, collection: string, file: Fi
 }
 
 /** Uploads `file` and sets it on the upload at `path`. Shows progress on the image and the result. */
-export async function uploadImage(runtime: Runtime, blockId: string, path: string, file: File): Promise<boolean> {
-  const context = imageSpotContext(runtime, blockId, path)
+export async function uploadImage(runtime: Runtime, owner: CanvasOwner, path: string, file: File): Promise<boolean> {
+  const context = imageSpotContext(runtime, owner, path)
   if (!context || refused(runtime, context, path)) return false
   const collection = context.spot.collections[0]
   if (!collection) return false
-  updateImageEditor(runtime, { busy: { id: blockId, path } })
+  updateImageEditor(runtime, { busy: { key: ownerKey(owner), path } })
   try {
     const doc = await uploadMedia(runtime, collection, file)
-    if (!setImage(runtime, blockId, path, collection, doc.id)) return false
+    if (!setImage(runtime, owner, path, collection, doc.id)) return false
     runtime.notify(`Uploaded ${file.name}`)
     return true
   } catch (error) {

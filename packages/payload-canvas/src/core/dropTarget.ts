@@ -216,9 +216,11 @@ export function canvasDropTarget(
   if (!hit) {
     if (!accepts(null, DEFAULT_SLOT)) return null
     if (layout.blocks.length === 0) {
+      // In a page frame the empty layout is its outlet, between the fixed regions.
+      const root = measurement.root
       return finalize(index, source, null, DEFAULT_SLOT, 0, {
         kind: 'box',
-        rect: { x: 0, y: 0, width: measurement.viewport.width, height: 80 },
+        rect: root ? { ...root, height: Math.max(root.height, 80) } : { x: 0, y: 0, width: measurement.viewport.width, height: 80 },
       })
     }
     return betweenChildren(null, DEFAULT_SLOT)

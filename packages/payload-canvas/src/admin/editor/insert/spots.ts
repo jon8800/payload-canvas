@@ -178,8 +178,10 @@ export function insertSpotAt(
   }
 
   if (layout.blocks.length === 0) {
-    const rect = { x: 0, y: 0, width: measurement.viewport.width, height: EMPTY_PAGE_HEIGHT }
-    return { parentId: null, slot: DEFAULT_SLOT, index: 0, kind: 'empty', axis: measurement.rootAxis, at: { x: rect.width / 2, y: rect.height / 2 }, rect }
+    // In a page frame the empty layout sits in its outlet, between the fixed regions.
+    const root = measurement.root
+    const rect = root ? { ...root, height: Math.max(root.height, EMPTY_PAGE_HEIGHT) } : { x: 0, y: 0, width: measurement.viewport.width, height: EMPTY_PAGE_HEIGHT }
+    return { parentId: null, slot: DEFAULT_SLOT, index: 0, kind: 'empty', axis: measurement.rootAxis, at: { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }, rect }
   }
 
   const hitId = deepestBlockAt(layout, measurement, p)

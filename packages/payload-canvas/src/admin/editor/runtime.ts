@@ -2,7 +2,16 @@
 
 import { createContext, createRef, use, type RefObject } from 'react'
 
-import { canvasDropTarget, createId, EMPTY_LAYOUT, findBlock, getBlockDefinition, outlineDropTarget, starterSlots, withFieldDefaults } from '../../core'
+import {
+  canvasDropTarget,
+  createId,
+  EMPTY_LAYOUT,
+  findBlock,
+  getBlockDefinition,
+  outlineDropTarget,
+  starterSlots,
+  withFieldDefaults,
+} from '../../core'
 import type {
   Block,
   BuilderClientConfig,
@@ -16,10 +25,11 @@ import type {
 import type { BuilderDocMeta } from '../../live/types'
 import { post, rectContains, type AdminToCanvas, type CanvasInit, type KeyAction } from '../../protocol'
 import { removeBlock } from './actions'
+import { storageProblemOf } from './storage'
 import { createAssistant, type AssistantController } from './assistant/controller'
 import { createEditorStore, type EditorStore } from './store'
 import { createDocumentController, type DocumentController } from './topbar/document'
-import { problemSummary, publishProblems, type PublishProblem } from './topbar/problems'
+import { problemSummary, publishProblems, withoutSavedFields, type PublishProblem } from './topbar/problems'
 import { createValueStore, type ValueStore } from './valueStore'
 import type { InsertSpot } from './insert/spots'
 import { readLeftTab, type LeftTab } from './layout/leftTabs'
@@ -27,6 +37,7 @@ import { createSectionsController, type SectionsController } from './sections/co
 import { createThumbnailService, type ThumbnailService } from './sections/thumbnails'
 import type { CollaboratorCursor, LiveState, Peer, PeerCursor } from './live'
 import { initialTemplateState, type TemplateState } from './templates/state'
+import { createRegionsController, type RegionsController } from './regions/controller'
 
 export const OUTLINE_INDENT = 16
 
@@ -102,6 +113,11 @@ export type Runtime = {
   problemsRequest: ValueStore<number>
   /** The AI assistant chat. Null when the plugin has no `ai` option. */
   assistant: AssistantController | null
+  /**
+   * The page's fixed regions (the collection's `regions` option): document fields outside the
+   * layout, shown by the page frame. Null without regions: the editor works on the layout alone.
+   */
+  regions: RegionsController | null
   /** Blocks the assistant just changed, with the time of the change. The overlay flashes them. */
   assistantFlash: ValueStore<ReadonlyMap<string, number>>
   /** Set to the current time to focus the assistant's input (the panel opened). */
@@ -146,7 +162,9 @@ function loadCollapsed(): ReadonlySet<string> {
  * `document` is the open document as the server loaded it.
  */
 export function createRuntime(config: BuilderClientConfig, api: string, document: BuilderDocMeta, options: { locale?: string | null } = {}): Runtime {
+  const storageProblem = storageProblemOf(config)
   const store = createEditorStore(EMPTY_LAYOUT, {
+    ...(storageProblem ? { storageProblem } : {}),
     sync: { blocks: config.blocks },
     // Localized layouts: the editor shows and edits one locale (the `?locale=` of the address, or Payload's locale preference).
     ...(config.localization ? { localization: { settings: config.localization, blocks: config.blocks, locale: options.locale } } : {}),
@@ -183,6 +201,7 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
     cssEndpoint: config.cssEndpoint,
     api,
     document: { collection: document.collection, id: document.id },
+    ...(config.regions?.length ? { regions: config.regions } : {}),
   }
   const runtime: Runtime = {
     config,
@@ -218,12 +237,15 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
           return problemSummary(list) || null
         },
         onPublished: () => problems.set([]),
+        // The settings drawer, a region or a rename saved a field: its old problem is gone.
+        onFieldsSaved: (fields) => problems.set(withoutSavedFields(problems.get(), fields)),
       },
       document,
     ),
     problems,
     problemsRequest,
     assistant: null,
+    regions: null,
     assistantFlash: createValueStore<ReadonlyMap<string, number>>(new Map()),
     assistantFocus: createValueStore(0),
     toggleAssistant(open) {
@@ -236,7 +258,11 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
       runtime.assistantFocus.set(Date.now())
     },
     insertSpot: createValueStore<InsertSpot | null>(null),
-    sections: createSectionsController(api, config.savedSections?.collection ?? null),
+    sections: createSectionsController(
+      api,
+      config.savedSections?.collection ?? null,
+      storageProblem ? (section) => storageProblem({ version: 1, blocks: section.blocks }) === null : undefined,
+    ),
     thumbnails: createThumbnailService({
       canvasPath: config.canvasPath,
       init: canvasInit,
@@ -255,9 +281,13 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
       if (key === 'escape') {
         if (runtime.help.get()) runtime.help.set(false)
         else if (runtime.follow.get()) runtime.follow.set(null)
+        else if (runtime.regions?.selected.get()) runtime.regions.selected.set(null)
         else store.select(null)
       }
       if (key === 'delete' && selectedId) removeBlock(runtime, selectedId)
+      // A fixed region is part of the page frame, never of the layout.
+      const region = runtime.regions?.region(runtime.regions.selected.get())
+      if (key === 'delete' && !selectedId && region) runtime.notify(`${region.label} is a fixed part of the page. It cannot be deleted or moved.`)
     },
     notify: (text) => notice.set({ text, at: Date.now() }),
     warn: (text) => notice.set({ text, at: Date.now(), tone: 'warning' }),
@@ -271,7 +301,8 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
       // were stripped from the client config). From now on the block stores its own values.
       const props = withFieldDefaults({}, def.fields)
       if (Object.keys(props).length > 0) block.props = props
-      if (def.defaultClassName) block.className = def.defaultClassName
+      // A Payload blocks field stores no classes: a new block there starts without them.
+      if (def.defaultClassName && config.storage !== 'payload-blocks') block.className = def.defaultClassName
       // A new list starts with one list item (see `starterSlots`).
       const slots = starterSlots(config.blocks, type, createId)
       if (slots) block.slots = slots
@@ -288,6 +319,33 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
     runtime.notify('Blocks, styles and fields that are not translated change in every language.')
   })
   if (config.ai) runtime.assistant = createAssistant(runtime, config.ai.endpoint)
+  if (config.regions?.length) {
+    const regions = createRegionsController({
+      regions: config.regions,
+      endpoint: `${config.liveEndpoint}/${encodeURIComponent(document.collection)}/${encodeURIComponent(document.id)}`,
+      locale: () => store.getState().locale,
+      settingsOpen: () => runtime.doc.settingsOpen.get(),
+      refreshFrame: () => runtime.postToCanvas({ type: 'frameRefresh' }),
+      record: (edits, locale, saved) => store.recordFields(edits, locale, saved),
+      warn: (text) => runtime.warn(text),
+    })
+    runtime.regions = regions
+    store.setFieldWriter((changes, locale) => regions.writeEdits(changes, locale))
+    // A selected block and a selected region exclude each other.
+    store.subscribe(() => {
+      if (store.getState().selectedId && regions.selected.get()) regions.selected.set(null)
+    })
+    regions.selected.subscribe(() => {
+      if (regions.selected.get()) store.select(null)
+    })
+    // Another language: the fields load in it (the canvas asks for the frame by itself).
+    let locale = store.getState().locale
+    store.subscribe(() => {
+      if (store.getState().locale === locale) return
+      locale = store.getState().locale
+      void regions.load()
+    })
+  }
   return runtime
 }
 

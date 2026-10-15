@@ -5,7 +5,7 @@ import type { CollectionBeforeChangeHook } from 'payload'
 
 import { sameJson } from '../core/fieldSemantics'
 import { isPlainObject, normalizeLayout } from '../core/tree'
-import { GUARD_SEQ_CONTEXT, SESSION_SAVE_CONTEXT } from './hook'
+import { guardSeqOf, SESSION_SAVE_CONTEXT } from './hook'
 import { SECTION_LAYOUT_FIELD } from './sections'
 
 /**
@@ -15,10 +15,10 @@ import { SECTION_LAYOUT_FIELD } from './sections'
  * guard put the session's layout in (the session owns the blocks while it is open), and when it
  * differs from the stored blocks. Otherwise the incoming `blocks` stay (REST, MCP, the library).
  */
-export const syncSectionBlocks: CollectionBeforeChangeHook = ({ context, data, originalDoc }) => {
+export const syncSectionBlocks: CollectionBeforeChangeHook = ({ collection, context, data, originalDoc }) => {
   const layout: unknown = data?.[SECTION_LAYOUT_FIELD]
   if (!isPlainObject(layout) || !Array.isArray(layout.blocks)) return data
-  const session = Boolean(context?.[SESSION_SAVE_CONTEXT] || context?.[GUARD_SEQ_CONTEXT] !== undefined)
+  const session = Boolean(context?.[SESSION_SAVE_CONTEXT] || guardSeqOf(context, collection.slug, originalDoc?.id) !== undefined)
   const stored = normalizeLayout({ version: 1, blocks: isPlainObject(originalDoc) ? originalDoc.blocks : [] }).blocks
   if (session || !sameJson(normalizeLayout({ version: 1, blocks: layout.blocks }).blocks, stored)) data.blocks = layout.blocks
   return data

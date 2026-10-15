@@ -368,6 +368,7 @@ export function useMultiplayer(
         others.set(collaborator.clientId, collaborator)
       }
       engine.session(data.seq, normalizeLayout(data.layout), data.sessionId ?? null, data.reset === true)
+      runtime.regions?.reload()
       const savedSeq = data.savedSeq ?? data.seq
       // A save error still current follows this event.
       publish({ self: data.self ?? null, status: 'open', lastError: null, savedSeq, unsaved: data.seq > savedSeq, saveError: null })
@@ -403,6 +404,8 @@ export function useMultiplayer(
         if (!resuming) return
         resuming = false
         engine.resumed()
+        // Saved events are not replayed, so region fields may have changed while disconnected.
+        runtime.regions?.reload()
         publish({ status: 'open' })
         publishOffline()
         lastSent = null
@@ -427,6 +430,7 @@ export function useMultiplayer(
         publish({ savedSeq: Math.max(state.savedSeq, data.seq), savedAt: data.at, saveError: null })
         publishSaveState()
         runtime.doc.handleEvent(data)
+        runtime.regions?.handleEvent(data)
       })
       es.addEventListener('saveFailed', (e) => {
         const data = parse<LiveSaveFailedEvent>(e)
@@ -434,7 +438,9 @@ export function useMultiplayer(
       })
       es.addEventListener('published', (e) => {
         const data = parse<LivePublishedEvent>(e)
-        if (data) runtime.doc.handleEvent(data)
+        if (!data) return
+        runtime.doc.handleEvent(data)
+        runtime.regions?.handleEvent(data)
       })
       es.addEventListener('collaborators', (e) => {
         const data = parse<LiveCollaboratorsEvent>(e)

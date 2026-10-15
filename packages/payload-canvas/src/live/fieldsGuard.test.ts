@@ -24,6 +24,7 @@ import {
 } from './fieldsGuard'
 import { createSessionManager } from './session'
 import { staleFieldAuthor } from './staleMessages'
+import type { LiveSavedEvent, MultiplayerEvent } from './types'
 
 type Doc = Record<string, unknown>
 
@@ -232,7 +233,7 @@ function fakeCollection(settingsLocks: SettingsLocks = createSettingsLocks()) {
   const locks = fakeLocks()
   const clock = createFieldClock()
   const sessions = createSessionManager()
-  const options = { collection: 'pages', field: 'layout', cssField: 'layoutCss', blocks: [], css: { entry: 'missing.css' }, fieldClock: clock }
+  const options = { collection: 'pages', field: 'layout', cssField: 'layoutCss', blocks: [], css: { entry: 'missing.css' }, fieldClock: clock, sessions }
   const beforeOperation = keepLockBeforeOperation({ collection: 'pages', settingsLocks })
   const beforeChange = layoutBeforeChange(options)
   const afterChange = layoutAfterChange({ collection: 'pages', sessions, fieldClock: clock })
@@ -257,10 +258,25 @@ function fakeCollection(settingsLocks: SettingsLocks = createSettingsLocks()) {
     await afterChange({ collection, context, doc, operation: 'update', previousDoc: originalDoc, req } as never)
     return doc
   }
-  return { locks, update, doc: () => doc }
+  return { locks, update, doc: () => doc, sessions }
 }
 
 describe('the plugin hooks', () => {
+
+  it('tells open editors which other fields a settings save changed, so the page frame shows them', async () => {
+    const { update, sessions, doc } = fakeCollection()
+    const events: MultiplayerEvent[] = []
+    const target = { collection: 'pages', id: 1, field: 'layout', drafts: true }
+    const store = { findByID: async () => structuredClone(doc()), update: async () => doc() }
+    await sessions.connect({ target, store: store as never, clientId: 'tab', user: ana, send: (e) => events.push(e) })
+    await update({ data: { title: 'Changed', updatedAt: doc().updatedAt as string }, user: ben })
+    const saved = events.filter((e): e is LiveSavedEvent => e.type === 'saved')
+    assert.deepEqual(saved.at(-1)?.fields, ['title'])
+    // A save that changes only the layout lists no fields.
+    await update({ data: { layout: { version: 1, blocks: [] } }, user: ben, context: { [KEEP_LOCK_CONTEXT]: true } })
+    const last = events.filter((e): e is LiveSavedEvent => e.type === 'saved').at(-1)
+    assert.equal(last?.fields, undefined)
+  })
 
   it('a session save and a publish keep the lock of the person in the settings drawer', async () => {
     const { locks, update } = fakeCollection()
@@ -358,5 +374,27 @@ describe('the settings drawer lock', () => {
     assert.equal(locks.rows().length, 1)
     assert.equal(await releaseSettingsLock({ ...args, user: ben }), 1)
     assert.equal(locks.rows().length, 0)
+  })
+})
+
+describe('settings drawer holders', () => {
+  it('end after their time unless the drawer renews them, so a lost close does not block the user for good', () => {
+    let now = 0
+    const holders = createSettingsLocks({ ttlMs: 1000, now: () => now })
+    holders.add('pages', 1, 7)
+    assert.equal(holders.has('pages', 1, 7), true)
+    now = 900
+    holders.renew('pages', 1, 7)
+    now = 1500
+    assert.equal(holders.has('pages', 1, 7), true, 'renewed')
+    now = 2000
+    assert.equal(holders.has('pages', 1, 7), false, 'expired: the close never came')
+    holders.renew('pages', 1, 7)
+    assert.equal(holders.has('pages', 1, 7), false, 'renew does not bring an expired entry back')
+    holders.add('pages', 1, 7, 5000)
+    now = 6000
+    assert.equal(holders.has('pages', 1, 7), true, 'the lock duration of the collection')
+    holders.remove('pages', 1, 7)
+    assert.equal(holders.has('pages', 1, 7), false)
   })
 })

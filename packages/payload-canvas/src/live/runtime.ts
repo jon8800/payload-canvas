@@ -1,12 +1,13 @@
 import { docAccessOperation, type PayloadRequest } from 'payload'
 
 import { createSessionManager, type SessionManager } from './session'
+import { defaultWriteGate } from './writeGate'
 
 /**
  * Checks that the request's user may update a document. The endpoints and the MCP tools call it
  * before a commit, because a commit changes the session at once and the draft is saved later.
  */
-export type UpdateAccessCheck = (req: PayloadRequest, collection: string, id: string) => Promise<boolean>
+export type UpdateAccessCheck = (req: PayloadRequest, collection: string, id: string | number) => Promise<boolean>
 
 /** The document sessions and the access check. The endpoints, the save hook and the MCP tools share one. */
 export type LiveRuntime = { sessions: SessionManager; canUpdate: UpdateAccessCheck }
@@ -17,7 +18,9 @@ export const LIVE_RUNTIME_KEY = 'websiteBuilderLive'
 // v6: commits put locale operations in canonical form, sessions load every locale, and awareness
 // carries the editor's locale. A dev hot reload from an older runtime must not reuse its object.
 // v8: awareness carries the field the editor types in.
-const GLOBAL_KEY = Symbol.for('payload-canvas/live-runtime-v8')
+// v9: the session's save holds the write gate, and a Payload blocks field has its codec.
+// v10: sessions read the document's other fields again after every committed save (`currentDoc`).
+const GLOBAL_KEY = Symbol.for('payload-canvas/live-runtime-v10')
 
 const ACCESS_TTL_MS = 30_000
 
@@ -59,7 +62,7 @@ export function defaultLiveRuntime(): LiveRuntime {
   const store = globalThis as unknown as Record<symbol, LiveRuntime | undefined>
   let runtime = store[GLOBAL_KEY]
   if (!runtime) {
-    runtime = { sessions: createSessionManager(), canUpdate: createUpdateAccessCheck() }
+    runtime = { sessions: createSessionManager({ gate: defaultWriteGate() }), canUpdate: createUpdateAccessCheck() }
     store[GLOBAL_KEY] = runtime
   }
   return runtime

@@ -15,10 +15,23 @@
 // back as a 409 with an error on each such field. Payload's form keeps what the user typed and
 // shows the field errors. The banner says who changed what and offers to load their version.
 
-import { Button, PublishButton as PayloadPublishButton, useAllFormFields, useDocumentDrawerContext, useDocumentInfo } from '@payloadcms/ui'
+import {
+  Button,
+  PublishButton as PayloadPublishButton,
+  useAllFormFields,
+  useConfig,
+  useDocumentDrawerContext,
+  useDocumentInfo,
+  useForm,
+  useFormModified,
+  useLocale,
+  useModal,
+} from '@payloadcms/ui'
 import type { PublishButtonClientProps } from 'payload'
-import { createContext, use, useLayoutEffect, useRef, useState } from 'react'
+import { createContext, use, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+
+import { autosaveAction, closeMustSave, closesDrawerAtOnce, escapeRoute, keepEscapeInPopup, trackDrawerPopups } from './closeSave'
 
 import { staleFieldAuthor, topFieldLabel } from '../../../live/staleMessages'
 import './settingsDrawer.scss'
@@ -33,8 +46,92 @@ export function PublishButton(props: PublishButtonClientProps & { label?: string
   const settingsSlug = use(SettingsDrawerSlug)
   const { drawerSlug } = useDocumentDrawerContext()
   // In the settings drawer: no button, only the banner after a rejected save.
-  if (settingsSlug !== null && drawerSlug === settingsSlug) return <StaleSaveBanner />
+  if (settingsSlug !== null && drawerSlug === settingsSlug) {
+    return (
+      <>
+        <SaveBeforeClose />
+        <StaleSaveBanner />
+      </>
+    )
+  }
   return <PayloadPublishButton {...props} />
+}
+
+/**
+ * Holds a close of the drawer while autosave has an edit to save (see closeSave.ts). Renders
+ * nothing: it listens, in the capture phase, for the clicks and keys that close the drawer at once.
+ */
+function SaveBeforeClose() {
+  const { submit } = useForm()
+  const modified = useFormModified()
+  const { id, collectionSlug, docConfig } = useDocumentInfo()
+  const { drawerSlug } = useDocumentDrawerContext()
+  const { closeModal } = useModal()
+  const {
+    config: { routes },
+  } = useConfig()
+  const { code: locale } = useLocale()
+  const drafts = (docConfig as { versions?: { drafts?: { autosave?: unknown; validate?: unknown } | boolean } } | undefined)?.versions?.drafts
+  const autosave = typeof drafts === 'object' && Boolean(drafts.autosave)
+  const validate = typeof drafts === 'object' && Boolean(drafts.validate)
+  const saving = useRef(false)
+  const latest = useRef({ modified, submit, id, collectionSlug, locale, api: routes.api, validate, closeModal })
+  // After every render: the listener reads the form as it is shown.
+  useLayoutEffect(() => {
+    latest.current = { modified, submit, id, collectionSlug, locale, api: routes.api, validate, closeModal }
+  })
+  useEffect(() => {
+    if (!drawerSlug) return
+    const drawer = document.getElementById(`close-drawer__${drawerSlug}`)?.closest('.drawer')
+    if (!drawer) return
+    const trackPopups = trackDrawerPopups(drawer)
+    const hold = (event: Event) => {
+      const state = latest.current
+      const modals = document.querySelectorAll('.payload__modal-item')
+      const topmost = modals.length === 0 || modals[modals.length - 1] === drawer
+      const target = event.target instanceof Element ? event.target : null
+      const key = (event as KeyboardEvent).key
+      const popupOpen = trackPopups({ type: event.type, key, target })
+      // Escape in an open menu, listbox or popup closes that popup only, never the drawer.
+      if (escapeRoute({ type: event.type, key, target }, topmost, drawer, popupOpen) === 'popup') {
+        keepEscapeInPopup(event as KeyboardEvent)
+        return
+      }
+      if (!autosave || state.id === undefined || state.id === null || !state.collectionSlug) return
+      if (!closesDrawerAtOnce({ type: event.type, key, target }, drawerSlug, topmost, drawer)) return
+      if (!closeMustSave({ modified: state.modified, autosave, saving: saving.current })) return
+      // The form keeps the edit until its save worked.
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      if (saving.current) return
+      saving.current = true
+      void (async () => {
+        try {
+          const result = (await state.submit({
+            action: autosaveAction({ api: state.api, collection: state.collectionSlug as string, id: state.id as string | number, locale: state.locale }),
+            method: 'PATCH',
+            overrides: { _status: 'draft' },
+            skipValidation: !state.validate,
+            disableSuccessStatus: true,
+            acceptValues: { overrideLocalChanges: false },
+          })) as { res?: Response } | undefined
+          // Saved: close as asked. Not saved: the drawer stays open with the input and Payload's errors.
+          if (result?.res?.ok) state.closeModal(drawerSlug)
+        } finally {
+          saving.current = false
+        }
+      })()
+    }
+    window.addEventListener('click', hold, true)
+    window.addEventListener('keydown', hold, true)
+    window.addEventListener('mouseover', hold, true)
+    return () => {
+      window.removeEventListener('click', hold, true)
+      window.removeEventListener('keydown', hold, true)
+      window.removeEventListener('mouseover', hold, true)
+    }
+  }, [autosave, drawerSlug])
+  return null
 }
 
 function listText(items: string[]): string {

@@ -11,7 +11,7 @@ import { actorFromUser, type LiveDocStore } from './apply'
 import { documentEndpoints } from './document'
 import { propAccessCheck, validateBlockProps } from './fieldChecks'
 import type { LiveRuntime } from './runtime'
-import { createSessionManager, FIELD_HOOKS_ACTOR, hookChangeOps, type SessionTarget } from './session'
+import { createSessionManager, FIELD_HOOKS_ACTOR, hookChangeOps, type SessionTarget, type SessionTimers } from './session'
 import type { LiveCommitEvent, LiveSavedEvent, MultiplayerEvent, PublishResponse } from './types'
 
 type Doc = Record<string, unknown>
@@ -39,16 +39,54 @@ const page = (props: Doc): Layout => ({ version: 1, blocks: [{ id: 'p', type: 'p
 const propsOf = (layout: unknown) => findBlock(layout as Layout, 'p')?.props ?? {}
 const admin = { id: 1, email: 'admin@x.test', name: 'Ana' }
 const editor = { id: 2, email: 'editor@x.test', name: 'Bob' }
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 const settle = async () => {
   for (let i = 0; i < 5; i++) await new Promise((resolve) => setImmediate(resolve))
 }
-/** Polls until `check` is true (or 2 s pass), so slow CI machines do not fail fixed delays. */
-const waitFor = async (check: () => boolean) => {
-  const end = Date.now() + 2000
-  while (!check() && Date.now() < end) await delay(5)
-  await settle()
+/** A manual clock: the session's timers run only inside `advance`, so no test depends on machine speed. */
+function manualTimers() {
+  let now = 0
+  let next = 1
+  const pending = new Map<number, { at: number; fn: () => void }>()
+  const timers: SessionTimers = {
+    now: () => now,
+    set(fn, ms) {
+      const id = next++
+      pending.set(id, { at: now + ms, fn })
+      return id
+    },
+    clear(handle) {
+      pending.delete(handle as number)
+    },
+  }
+  return {
+    timers,
+    /** Runs every timer due within `ms`, in time order, letting promise chains finish after each. */
+    async advance(ms: number) {
+      const end = now + ms
+      for (;;) {
+        let due: [number, { at: number; fn: () => void }] | null = null
+        for (const entry of pending) if (entry[1].at <= end && (!due || entry[1].at < due[1].at)) due = entry
+        if (!due) break
+        pending.delete(due[0])
+        now = due[1].at
+        due[1].fn()
+        await settle()
+      }
+      now = end
+      await settle()
+    },
+  }
 }
+
+/** A write the test holds until it says so. */
+function heldWrite() {
+  let release!: () => void
+  let started!: () => void
+  const running = new Promise<void>((resolve) => (started = resolve))
+  const done = new Promise<void>((resolve) => (release = resolve))
+  return { running, release, wait: () => (started(), done) }
+}
+
 const logger = { info() {}, warn() {}, error() {} }
 const css = { entry: 'does-not-exist.css' }
 const target: SessionTarget = { collection: 'pages', id: 'p1', field: 'layout', drafts: true, autosave: true }
@@ -73,8 +111,8 @@ describe('hookChangeOps', () => {
  * A fake Local API whose `update` runs the real save hook and the after-change hook, with the
  * caller's `context` object as the request context (what Payload does without `req`).
  */
-function hookedPayload(initial: Layout, options: { writeMs?: number } = {}) {
-  const sessions = createSessionManager({ persistDebounceMs: 5, logger: { error() {} } })
+function hookedPayload(initial: Layout, options: { timers?: SessionTimers; hold?: () => Promise<void> } = {}) {
+  const sessions = createSessionManager({ persistDebounceMs: 5, logger: { error() {} }, ...(options.timers ? { timers: options.timers } : {}) })
   const before = layoutBeforeChange({ collection: 'pages', field: 'layout', cssField: 'layoutCss', blocks, css, sessions, fieldRegistry: registry })
   const after = layoutAfterChange({ collection: 'pages', sessions, props: { field: 'layout', blocks, registry } })
   let latest: Doc = { id: 'p1', layout: structuredClone(initial), _status: 'published', updatedAt: 't0' }
@@ -83,11 +121,12 @@ function hookedPayload(initial: Layout, options: { writeMs?: number } = {}) {
   let stamp = 0
   const store = {
     collections: { pages: { config: { versions: { drafts: { autosave: true } } } } },
+    db: { defaultIDType: 'text' },
     async findByID(args: Doc) {
       return structuredClone(args.draft ? latest : main)
     },
     async update(args: Doc) {
-      if (options.writeMs) await delay(options.writeMs)
+      if (options.hold) await options.hold()
       const context = (args.context as Doc) ?? {}
       const req = { user: args.user ?? null, payload: { logger }, t: (s: string) => s }
       const collection = { slug: 'pages', fields: [], versions: { drafts: true } }
@@ -128,13 +167,13 @@ function hookedPayload(initial: Layout, options: { writeMs?: number } = {}) {
 
 describe('hook changes reach every editor', () => {
   it('a session save runs beforeChange, and both editors get the stored value without a second save', async () => {
-    const db = hookedPayload(page({ title: 'Shoe' }))
+    const clock = manualTimers()
+    const db = hookedPayload(page({ title: 'Shoe' }), { timers: clock.timers })
     const ana = await db.connect('tab-a', admin)
     const bob = await db.connect('tab-b', editor)
     const result = await db.commit([{ type: 'update', id: 'p', props: { slug: 'Red Shoe!' } }])
     assert.ok(result.ok)
-    await delay(30)
-    await settle()
+    await clock.advance(5)
     assert.equal(db.writes.length, 1)
     assert.equal(propsOf(db.latest.layout).slug, 'red-shoe')
     for (const events of [ana, bob]) {
@@ -144,30 +183,39 @@ describe('hook changes reach every editor', () => {
       assert.deepEqual(saved, [1, 2], 'the hook commit counts as saved')
     }
     assert.equal(propsOf(db.sessions.peek('pages', 'p1')?.layout).slug, 'red-shoe')
-    await delay(30)
+    await clock.advance(10_000)
     assert.equal(db.writes.length, 1, 'no second save of the same state')
   })
 
   it('keeps an edit made while the save ran, and saves again', async () => {
-    const db = hookedPayload(page({ title: 'Shoe' }), { writeMs: 20 })
+    const clock = manualTimers()
+    const first = heldWrite()
+    let writes = 0
+    const db = hookedPayload(page({ title: 'Shoe' }), { timers: clock.timers, hold: () => (writes++ === 0 ? first.wait() : Promise.resolve()) })
     await db.connect('tab-a', admin)
     await db.commit([{ type: 'update', id: 'p', props: { slug: 'First Try' } }])
-    await delay(10) // the save is running
+    await clock.advance(5)
+    await first.running // the save is running
     await db.commit([{ type: 'update', id: 'p', props: { slug: 'Second Try' } }])
-    await delay(120)
-    await settle()
+    first.release()
+    // The first save ends, then the session saves again after its pause: steps of the manual clock
+    // until it did (bounded by steps, never by the machine's speed).
+    for (let step = 0; step < 100 && db.writes.length < 2; step++) await clock.advance(5)
+    await clock.advance(10_000)
     assert.equal(propsOf(db.sessions.peek('pages', 'p1')?.layout).slug, 'second-try')
     assert.equal(propsOf(db.latest.layout).slug, 'second-try')
     assert.equal(db.writes.length, 2)
   })
 
   it('a save from outside the session (Publish, REST) brings its hook changes to the editors', async () => {
-    const db = hookedPayload(page({ title: 'Shoe' }))
+    const clock = manualTimers()
+    const db = hookedPayload(page({ title: 'Shoe' }), { timers: clock.timers })
     const events = await db.connect('tab-a', admin)
     await db.commit([{ type: 'update', id: 'p', props: { slug: 'A B' } }])
     // Publish before the session's own save: the guard gives the save the session's layout.
     await db.store.update({ collection: 'pages', id: 'p1', data: { _status: 'published' }, draft: false, context: {}, user: admin })
-    await waitFor(() => db.latest._status === 'published' && propsOf(db.latest.layout).slug === 'a-b')
+    await settle()
+    await clock.advance(10_000)
     assert.equal(propsOf(db.latest.layout).slug, 'a-b')
     assert.equal(db.latest._status, 'published')
     const fromHooks = events.find((e): e is LiveCommitEvent => e.type === 'commit' && e.actor.id === FIELD_HOOKS_ACTOR.id)
@@ -188,7 +236,7 @@ describe('hook changes reach every editor', () => {
       originalDoc: { id: 'p1', layout: page({}) },
       req: { payload: { logger }, t: (s: string) => s },
     })
-    const changes = context[HOOK_CHANGES_CONTEXT] as { input: Layout; output: Layout }
+    const changes = (context[HOOK_CHANGES_CONTEXT] as Record<string, { input: Layout; output: Layout }>)['pages:p1']
     assert.equal(propsOf(changes.input).slug, 'X Y')
     assert.equal(propsOf(changes.output).slug, 'x-y')
   })
@@ -321,6 +369,7 @@ describe('publishing a migrated document', () => {
     let latest: Doc = { ...main, layout: [{ blockType: 'old', text: 'newer draft' }], builder: page({ title: 'New' }), _status: 'draft' }
     const payload = {
       collections: { pages: { config: { versions: { drafts: true } } } },
+      db: { defaultIDType: 'text' },
       async findByID(args: Doc) {
         return structuredClone(args.draft ? latest : main)
       },
@@ -348,6 +397,7 @@ describe('publishing a migrated document', () => {
     const doc: Doc = { id: 'p1', layout: [{ blockType: 'old' }], builder: page({}), _status: 'draft' }
     const payload = {
       collections: { pages: { config: { versions: { drafts: true } } } },
+      db: { defaultIDType: 'text' },
       findByID: async () => structuredClone(doc),
       async update({ req: _req, user: _user, ...args }: Doc) {
         writes.push(structuredClone(args))
