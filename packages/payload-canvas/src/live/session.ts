@@ -879,11 +879,16 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
    * in it). Throws when the stored value cannot be read as a layout. The document's other fields
    * come from the read every committed save starts (`refreshDoc`), not from here.
    */
-  const rebaseOn = async (session: Session, doc: Record<string, unknown>, savedSeq?: number) => {
+  const rebaseOn = async (session: Session, doc: Record<string, unknown>, savedSeq?: number, expectedSessionId?: string) => {
     const { target } = session
     const base = codecOfTarget(target).decode(doc[target.field])
     await mutex.run(session.key, async () => {
       if (sessions.get(session.key) !== session) return
+      // A reset invalidates an outside read that started on the previous session.
+      if (expectedSessionId !== undefined && session.sessionId !== expectedSessionId) {
+        session.externalPending = true
+        return
+      }
       session.stored = doc[target.field]
       rememberRows(session)
       if (savedSeq !== undefined) session.persistedSeq = Math.max(session.persistedSeq, savedSeq)
@@ -924,8 +929,9 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
    * view, REST and the Local API write the field itself).
    */
   const syncExternal = async (session: Session) => {
+    const sessionId = session.sessionId
     session.externalPending = false
-    await rebaseOn(session, await readStored(session))
+    await rebaseOn(session, await readStored(session), undefined, sessionId)
   }
 
   // ---- hook changes ------------------------------------------------------
@@ -1040,11 +1046,11 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
    */
   const putBack = (session: Session, undo: ResetUndo) => {
     // A queued save may already have stored the reset layout before the action failed.
-    const needsSave = undo.dirty || session.completedWrites > undo.completedWrites
+    session.externalPending = session.externalPending || undo.externalPending
+    const needsSave = undo.dirty || session.completedWrites > undo.completedWrites || session.externalPending
     session.layout = undo.layout
     session.stored = undo.stored
     session.unsaved = undo.unsaved
-    session.externalPending = session.externalPending || undo.externalPending
     session.persistedSeq = needsSave ? undo.persistedSeq : session.seq
     if (needsSave) markDirty(session)
   }
