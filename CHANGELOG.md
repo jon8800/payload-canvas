@@ -4,6 +4,8 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-15
+
 ### Added
 
 - One source of truth for existing Payload blocks: when a collection's builder `field` is its own Payload `blocks` field, the builder edits that field itself. Canvas, Payload's editor, REST and the Local API read and write the same value, with Payload's hooks, validation, access, versions and locales. No second copy, no migration, no per-document switch. The round trip keeps every stored value. Data the field cannot hold (classes, animations, bindings, hidden blocks, other block types) is refused with a reason. See the README's "Using existing Payload blocks".
@@ -16,16 +18,25 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ### Changed
 
+- New projects created by `create-payload-canvas` install `payload-canvas` 0.2.x.
+
 - `migrateBlocksField` is now only for sites that want builder-only features (classes, animations, bindings, templates): the README no longer tells sites to copy their blocks to edit them in the builder.
 
 - The canvas route is a server page that imports the canvas server action and passes it to a small client component with `BuilderCanvas` (README, Install step 6). A `'use client'` page that imports the action leaves the client components of server-rendered blocks out of the route's client manifest in an installed package.
 
 ### Fixed
 
+- Native Payload version restores update an open builder after the transaction commits. Revert and restore require access to the full source layout.
+- Live streams check every intermediate edit with its original block ancestors and sibling values. Protected values cannot escape in a batch that later removes them. Published-only readers cannot receive live drafts.
+- Publish and unpublish stop when saving pending edits fails. A queued save no longer creates an identical draft after publication. Startup updates inside `onInit` release the write gate correctly.
+- Region undo records pending edits before saving, orders undo and redo requests, preserves retryable history, and restores a missing translation without copying its fallback. Reconnecting reloads region fields.
+- Escape in drawer popups preserves the focus trap, including portalled row menus. Open drawers renew their protection; abandoned holders expire after Payload's lock duration.
+- Page frames keep fallback content during retries, follow delayed layout outlets, select visible region copies, and discard stale renders after inline edits.
+
 - Closing the builder's settings drawer right after an edit no longer loses it. Its Close button and Escape closed the form before autosave ran. With draft autosave, the drawer now saves the edit first, through the form's own autosave request (access, hooks, the write gate and the stale-form checks apply; it never publishes), and closes when that worked. A refused save keeps the drawer open with the input and the errors. Escape inside an open select menu, listbox, menu, dialog or popup in the drawer closes only that popup: Payload's modal provider closes the topmost modal on every Escape that reaches the document, so the drawer sends that Escape to the popup alone. Without autosave nothing changes: "Save draft" and Payload's "Leave without saving?" stay as they are.
 - The Layers count groups digits in the browser's locale ("1,001 blocks").
 
-- Payload blocks field: a duplicated, pasted or inserted block gets new ids for the rows of its array fields and nested blocks fields, as in Payload's editor, so they no longer repeat the rows of the original. Rows with unique ids keep them.
+- Payload blocks field: copied rows from another page or a saved section get new ids. A page keeps its own row ids through remove, save, undo and save. Duplicates within a page also get new ids.
 - Payload blocks field: a cleared prop, a cleared block name and a value removed inside an array row are cleared in Payload too, instead of coming back from the stored value.
 - Labels in the builder's settings drawer point at their inputs again. Payload names drawer labels with the edit depth (`field-title-2`) while several of its inputs keep `field-title`. Selects and relationships (react-select inputs) there get their field's label as their name, as in the inspector.
 - A publish problem of a document field goes away when that field is saved (settings drawer, page region, rename). Problems of other fields and of blocks stay until the next publish checks them.
