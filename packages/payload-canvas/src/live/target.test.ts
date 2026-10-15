@@ -41,6 +41,14 @@ describe('session target ids', () => {
     assert.equal(sessionTargetOf(payloadWith('number'), collections, 'pages', 'draft-1')?.id, 'draft-1')
   })
 
+  it('keeps the id as given for a 0.1.x call that passes only the collections (no database)', () => {
+    const { collections: configs } = payloadWith('number') as unknown as { collections: unknown }
+    const target = sessionTargetOf({ collections: configs }, collections, 'pages', '12')
+    assert.equal(target?.id, '12')
+    assert.equal(target?.drafts, true)
+    assert.equal(target?.autosave, true)
+  })
+
   it('refuses collections the builder does not edit, and empty ids', () => {
     assert.equal(sessionTargetOf(payloadWith('number'), collections, 'media', '1'), null)
     assert.equal(sessionTargetOf(payloadWith('number'), collections, 'pages', ''), null)

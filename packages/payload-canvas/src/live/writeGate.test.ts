@@ -468,3 +468,97 @@ describe('afterCommit outside a gated update', () => {
     assert.equal(runs.join(','), 'committed,no transaction', 'without a transaction: at once')
   })
 })
+
+/**
+ * A FinalizationRegistry stand-in: the test says when requests count as collected
+ * (`collectAll`), instead of waiting for the garbage collector.
+ */
+class CapturedRegistry<H> {
+  static last: CapturedRegistry<unknown> | null = null
+  readonly held = new Map<unknown, H>()
+  constructor(readonly callback: (held: H) => void) {
+    CapturedRegistry.last = this as CapturedRegistry<unknown>
+  }
+  register(_target: object, held: H, token?: object) {
+    this.held.set(token ?? {}, held)
+  }
+  unregister(token: object) {
+    return this.held.delete(token)
+  }
+  /** Every request registered so far is collected now. */
+  collectAll() {
+    // A copy: a callback may register new requests.
+    const entries = Array.from(this.held.entries())
+    for (const [token, held] of entries) {
+      this.held.delete(token)
+      this.callback(held)
+    }
+  }
+}
+
+/** A gate built with the captured registry. */
+function gateWithCapturedRegistry() {
+  const real = globalThis.FinalizationRegistry
+  globalThis.FinalizationRegistry = CapturedRegistry as unknown as typeof FinalizationRegistry
+  try {
+    const gate = createWriteGate({ waitMs: 2000 })
+    return { gate, registry: CapturedRegistry.last! }
+  } finally {
+    globalThis.FinalizationRegistry = real
+  }
+}
+
+describe('collected requests', () => {
+  it('never ends the hold of an open transaction when its request is collected: only the commit does', async () => {
+    const { gate, registry } = gateWithCapturedRegistry()
+    const hooks = gate.hooks('pages')
+    // A save in transaction A (Payload's `req: { transactionID }`): it ends, the transaction stays open.
+    const first = { transactionID: 'tx-a' }
+    const args = { id: 1 }
+    await hooks.beforeOperation({ args, operation: 'update', req: first } as never)
+    await hooks.afterOperation({ args, operation: 'updateByID', req: first, result: {} } as never)
+    // Another request object in the same transaction joins it.
+    const joined = { transactionID: 'tx-a' }
+    const joinedArgs = { id: 1 }
+    await hooks.beforeOperation({ args: joinedArgs, operation: 'update', req: joined } as never)
+    await hooks.afterOperation({ args: joinedArgs, operation: 'updateByID', req: joined, result: {} } as never)
+    // A save of the same document in transaction B waits.
+    let other = false
+    const waiting = Promise.resolve(hooks.beforeOperation({ args: { id: 1 }, operation: 'update', req: { transactionID: 'tx-b' } } as never)).then(() => {
+      other = true
+    })
+    await ticks(5)
+    assert.equal(other, false)
+    // Both request objects of transaction A are collected while it is still open.
+    registry.collectAll()
+    await ticks(5)
+    assert.equal(other, false, 'transaction B still waits: transaction A is open')
+    assert.equal(gate.holds(first), true)
+    // Only the adapter's answer ends it.
+    gate.transactionEnded('tx-a', true)
+    await waiting
+    assert.equal(other, true)
+    gate.transactionEnded('tx-b', false)
+    assert.equal(gate.size(), 0)
+  })
+
+  it('ends an orphaned save without a transaction once its request is collected', async () => {
+    const { gate, registry } = gateWithCapturedRegistry()
+    const hooks = gate.hooks('pages')
+    // A Local API save that failed with no signal (no afterOperation, no transaction).
+    await hooks.beforeOperation({ args: { id: 2 }, operation: 'update', req: {} } as never)
+    let next = false
+    const nextArgs = { id: 2 }
+    const nextReq = {}
+    const waiting = Promise.resolve(hooks.beforeOperation({ args: nextArgs, operation: 'update', req: nextReq } as never)).then(() => {
+      next = true
+    })
+    await ticks(5)
+    assert.equal(next, false)
+    registry.collectAll()
+    await waiting
+    assert.equal(next, true, 'the orphan ended')
+    await hooks.afterOperation({ args: nextArgs, operation: 'updateByID', req: nextReq, result: {} } as never)
+    assert.equal(gate.size(), 0)
+  })
+})

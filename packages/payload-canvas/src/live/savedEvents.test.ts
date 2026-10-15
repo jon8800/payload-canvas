@@ -58,7 +58,7 @@ it('announces a guarded save only after its transaction committed, and never aft
     const req: Record<string, unknown> = { transactionID: `tx-${outcome}`, payload: { db: { find: async () => ({ docs: [] }) }, collections: {} } }
     const args = { id: 1, req }
     await hooks.beforeOperation({ args, operation: 'update', req } as never)
-    await afterChange({ collection: { slug: 'pages' }, context: { [GUARD_SEQ_CONTEXT]: 0 }, doc, operation: 'create', previousDoc: doc, req } as never)
+    await afterChange({ collection: { slug: 'pages' }, context: { [GUARD_SEQ_CONTEXT]: { 'pages:1': 0 } }, doc, operation: 'create', previousDoc: doc, req } as never)
     // Inside the transaction: nobody hears of the save yet, so nobody reloads uncommitted values.
     await new Promise((resolve) => setTimeout(resolve, 10))
     assert.equal(saved(), outcome === 'commit' ? 0 : 1)

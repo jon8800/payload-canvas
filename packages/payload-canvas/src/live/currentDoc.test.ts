@@ -137,10 +137,13 @@ describe('currentDoc: the fields access checks read', () => {
     assert.equal(sessions.peek('pages', 'p1')?.layout.blocks[0].props?.text, 'Hi')
   })
 
-  it('refuses a check that saves keep overtaking, and gives no answer for a closed document', async () => {
-    const { sessions, connect, commit } = setup()
+  it('refuses a check that saves changing a value keep overtaking, and gives no answer for a closed document', async () => {
+    const { sessions, db, connect, commit } = setup()
     await connect()
+    let saves = 0
     const always = async () => {
+      // Each save changes a field a check may read.
+      db.state.doc = { ...db.state.doc, title: `Home ${++saves}` }
       sessions.externalSaved('pages', 'p1', {})
       return null
     }
@@ -150,6 +153,71 @@ describe('currentDoc: the fields access checks read', () => {
     assert.equal((result as { status: number }).status, 503)
     assert.equal(await sessions.withCurrentDoc('pages', 'other', async () => null), null)
     assert.equal(await sessions.currentDoc('pages', 'other'), null)
+  })
+
+  it('keeps the answer of a slow check when the reads during it find exactly the same values', async () => {
+    const { sessions, db, connect, commit } = setup()
+    await connect()
+    let runs = 0
+    const slow = async (doc: Record<string, unknown>) => {
+      runs += 1
+      // Reads after three committed saves find every value as it was (also `updatedAt`).
+      for (let i = 0; i < 3; i++) {
+        sessions.externalSaved('pages', 'p1', {})
+        await settle()
+      }
+      return doc.private ? 'private' : null
+    }
+    const result = await commit(slow)
+    assert.equal(result.ok, true, JSON.stringify(result))
+    assert.equal(runs, 1, 'the check ran once')
+    assert.equal(db.state.reads > 3, true, 'the fields were read again')
+  })
+
+  it('runs a check again when a save changes only `updatedAt`, so a rule that reads it decides on the new value', async () => {
+    const { sessions, db, connect, commit } = setup()
+    await connect()
+    db.state.doc = { ...db.state.doc, updatedAt: 'T1' }
+    sessions.externalSaved('pages', 'p1', {})
+    // The rule allows the old `updatedAt` and refuses the new one; a save lands while it waits.
+    const rule = (seen: unknown[]) => async (doc: Record<string, unknown>) => {
+      seen.push(doc.updatedAt)
+      if (seen.length === 1) {
+        db.state.doc = { ...db.state.doc, updatedAt: 'T2' }
+        sessions.externalSaved('pages', 'p1', {})
+        await settle()
+      }
+      return doc.updatedAt === 'T1' ? null : 'stale'
+    }
+    const seen: unknown[] = []
+    assert.deepEqual(await sessions.withCurrentDoc('pages', 'p1', rule(seen)), { value: 'stale' })
+    assert.deepEqual(seen, ['T1', 'T2'], 'run again on the new value')
+    // Inside a commit: refused, nothing applies.
+    db.state.doc = { ...db.state.doc, updatedAt: 'T1' }
+    sessions.externalSaved('pages', 'p1', {})
+    const inCommit: unknown[] = []
+    const result = await commit(rule(inCommit))
+    assert.equal(result.ok, false)
+    assert.equal((result as { status: number }).status, 403)
+    assert.deepEqual(inCommit, ['T1', 'T2'])
+    assert.equal(sessions.peek('pages', 'p1')?.layout.blocks[0].props?.text, 'Hi', 'not applied')
+  })
+
+  it('refuses (503) a slow check that three saves changing `updatedAt` overtake', async () => {
+    const { sessions, db, connect, commit } = setup()
+    await connect()
+    let saves = 0
+    const slow = async () => {
+      db.state.doc = { ...db.state.doc, updatedAt: `T${++saves}` }
+      sessions.externalSaved('pages', 'p1', {})
+      await settle()
+      return null
+    }
+    const result = await commit(slow)
+    assert.equal(result.ok, false)
+    assert.equal((result as { status: number }).status, 503)
+    assert.equal(saves, 3)
+    assert.equal(sessions.peek('pages', 'p1')?.seq, 0, 'not applied')
   })
 
   it("reads the fields again after the session's own save of a JSON layout (its hooks may change them)", async () => {

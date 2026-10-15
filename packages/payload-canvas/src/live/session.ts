@@ -220,6 +220,14 @@ export interface SessionManager {
    */
   reset(collection: string, id: string | number, layout: Layout, stored?: unknown): Promise<boolean>
   /**
+   * `reset`, then `save` (the caller's save of that layout, for example a version restore). When
+   * `save` throws, the session gets back what the reset replaced: its layout, its stored value and
+   * its unsaved commits, still unsaved (the next save stores them, they never count as saved), and
+   * every editor gets that layout again (`reset: true`). Commits made on the new layout meanwhile
+   * go. The error is thrown on. Without an open session it only runs `save`.
+   */
+  resetFor<T>(collection: string, id: string | number, layout: Layout, stored: unknown, save: () => Promise<T>): Promise<T>
+  /**
    * Saves now if the session has unsaved commits (also during a retry wait). Resolves when the
    * save ends: `ok: false` with the reason when it failed (the session keeps retrying).
    */
@@ -373,6 +381,28 @@ type Session = {
   docGen: number
   /** The newest read failed: `doc` may be older than the stored document, so checks may not use it. */
   docFailed: boolean
+  /** Raised each time a read finds any value of `doc` changed (`updatedAt` included). */
+  docVersion: number
+}
+
+/**
+ * True when two reads of the document's other fields hold exactly the same values (`sameJson`),
+ * `updatedAt` included: an access rule may read any of them, so a save that changed only
+ * `updatedAt` is a change too. Not the form comparison of fieldsGuard.ts (`sameValue`): it treats
+ * '' and null, or 1 and '1', as one value, and two documents with one id and timestamp as equal.
+ */
+function sameFields(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  return sameJson(a, b)
+}
+
+/** What a reset replaced, for `resetFor` when the caller's save fails. */
+type ResetUndo = {
+  layout: Layout
+  stored: unknown
+  unsaved: { seq: number; ops: Operation[] }[]
+  persistedSeq: number
+  dirty: boolean
+  externalPending: boolean
 }
 
 /** How often `withCurrentDoc` runs a check while saves keep changing the document. */
@@ -401,8 +431,10 @@ const SKIPPED = Symbol('skipped')
 /** How a session's field stores its layout. */
 const codecOfTarget = (target: SessionTarget) => target.codec ?? JSON_CODEC
 
-function hookChangesIn(context: Record<string, unknown>): { input: Layout; output: Layout } | null {
-  const value = context[HOOK_CHANGES_KEY] as { input?: unknown; output?: unknown } | undefined
+/** The prop hook changes the save hook recorded for the session's document (per document, see plugin/hook.ts). */
+function hookChangesIn(context: Record<string, unknown>, target: SessionTarget): { input: Layout; output: Layout } | null {
+  const entries = context[HOOK_CHANGES_KEY] as Record<string, unknown> | undefined
+  const value = (entries && typeof entries === 'object' ? entries[writeKey(target.collection, target.id)] : undefined) as { input?: unknown; output?: unknown } | undefined
   if (!value || typeof value !== 'object' || !value.input || !value.output) return null
   return { input: value.input as Layout, output: value.output as Layout }
 }
@@ -534,6 +566,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
           docRefresh: null,
           docGen: 0,
           docFailed: false,
+          docVersion: 0,
         }
         sessions.set(key, session)
         return session
@@ -720,7 +753,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
         clearFailure(session)
         const info = { updatedAt: saved?.updatedAt, status: saved?._status }
         deliver(session, savedEvent(rebased ? session.persistedSeq : seq, info))
-        const changes = hookChangesIn(context)
+        const changes = hookChangesIn(context, target)
         if (changes) queueAdopt(session, { ...changes, seq }, info)
       } catch (error) {
         session.failures += 1
@@ -766,10 +799,15 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
       context: { [ALL_LOCALES_KEY]: true },
     })
 
-  /** The document's other fields from a stored document, unless a newer read already set them. */
+  /**
+   * The document's other fields from a stored document, unless a newer read already set them.
+   * `docVersion` counts changes of their values: only a read that finds every value exactly as it
+   * was (`updatedAt` included) leaves a check that ran meanwhile valid.
+   */
   const setDoc = (session: Session, doc: Record<string, unknown>, gen: number) => {
     if (gen !== session.docGen) return
     const { [session.target.field]: _layout, ...rest } = doc
+    if (!sameFields(session.doc, rest)) session.docVersion += 1
     session.doc = rest
     session.docFailed = false
   }
@@ -812,13 +850,17 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     }
   }
 
-  /** `check` on the doc as stored when it returns: again when a save changed the doc meanwhile. */
+  /**
+   * `check` on the doc as stored when it returns: the reads of saves that committed meanwhile are
+   * awaited, and when they changed a value the check runs again (at most CURRENT_DOC_TRIES times).
+   */
   const withCurrent = async <T>(session: Session, check: (doc: Record<string, unknown>) => Promise<T>): Promise<T> => {
     for (let i = 0; i < CURRENT_DOC_TRIES; i++) {
       const doc = await freshDoc(session)
+      const version = session.docVersion
       const value = await check(doc)
-      // Every read sets a new object, so the same object means no save committed since.
-      if (session.doc === doc && !session.docRefresh && !session.docFailed) return value
+      await freshDoc(session)
+      if (session.docVersion === version) return value
     }
     throw new Error(`The document ${session.key} kept changing during an access check.`)
   }
@@ -924,6 +966,76 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     if (session.persisting) return
     if (session.failures > 0 && session.persistTimer !== null) return
     schedulePersist(session)
+  }
+
+  // ---- reset (Revert, Restore) ---------------------------------------------
+
+  /**
+   * Changes an open session's state as a whole (`change`), then sends every editor a fresh
+   * `session` event with `reset: true` and a new session id: commits made on the old state can no
+   * longer be replayed or rebased. A save in flight must not land after the caller's save of the
+   * new layout: it is awaited outside the mutex (a save may need the mutex itself, it takes a save
+   * from outside first). False when no session is open.
+   */
+  const replaceState = async (key: string, change: (session: Session) => void): Promise<boolean> => {
+    for (;;) {
+      const running = sessions.get(key)?.persisting
+      if (running) {
+        await running
+        continue
+      }
+      const done = await mutex.run(key, async () => {
+        const session = sessions.get(key)
+        if (!session) return false
+        // A save started while this waited for the mutex: wait for it outside, then try again.
+        if (session.persisting) return null
+        if (session.persistTimer !== null) timers.clear(session.persistTimer)
+        session.persistTimer = null
+        session.firstDirtyAt = null
+        clearFailure(session)
+        session.sessionId = globalThis.crypto.randomUUID().slice(0, 8)
+        session.seq += 1
+        session.log = []
+        session.knownBlocking = null
+        change(session)
+        for (const member of session.members.values()) {
+          if (!member.send) continue
+          try {
+            member.send(sessionEvent(session, member.info, true), eventId(session))
+          } catch {
+            // A closed stream must not stop the others.
+          }
+        }
+        return true
+      })
+      if (done !== null) return done
+    }
+  }
+
+  /** A new layout that the caller saves next (Revert, Restore): no unsaved commits. */
+  const resetTo = (session: Session, layout: Layout, stored: unknown) => {
+    session.layout = codecOfTarget(session.target).kind === 'json' ? normalizeLayout(layout) : layout
+    session.externalPending = false
+    session.unsaved = []
+    // The value the caller stores next: what the next save builds on.
+    if (stored !== undefined) {
+      session.stored = stored
+      rememberRows(session)
+    }
+    session.persistedSeq = session.seq
+  }
+
+  /**
+   * The state before a reset whose save failed: its layout, stored value and unsaved commits, still
+   * unsaved (the next save stores them), never counted as saved.
+   */
+  const putBack = (session: Session, undo: ResetUndo) => {
+    session.layout = undo.layout
+    session.stored = undo.stored
+    session.unsaved = undo.unsaved
+    session.externalPending = undo.externalPending
+    session.persistedSeq = undo.dirty ? undo.persistedSeq : session.seq
+    if (undo.dirty) markDirty(session)
   }
 
   // ---- AI collaborators -------------------------------------------------
@@ -1219,50 +1331,31 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
       return true
     },
 
-    async reset(collection, id, layout, stored) {
+    reset(collection, id, layout, stored) {
+      return replaceState(channelKey(collection, id), (session) => resetTo(session, layout, stored))
+    },
+
+    async resetFor(collection, id, layout, stored, save) {
       const key = channelKey(collection, id)
-      // A save in flight must not land after the caller's save of the new layout. It is awaited
-      // outside the mutex: a save may need the mutex itself (it takes a save from outside first).
-      for (;;) {
-        const running = sessions.get(key)?.persisting
-        if (running) {
-          await running
-          continue
+      let before: ResetUndo | null = null
+      await replaceState(key, (session) => {
+        before = {
+          layout: session.layout,
+          stored: session.stored,
+          unsaved: session.unsaved,
+          persistedSeq: session.persistedSeq,
+          dirty: dirty(session),
+          externalPending: session.externalPending,
         }
-        const done = await mutex.run(key, async () => {
-          const session = sessions.get(key)
-          if (!session) return false
-          // A save started while this waited for the mutex: wait for it outside, then try again.
-          if (session.persisting) return null
-          if (session.persistTimer !== null) timers.clear(session.persistTimer)
-          session.persistTimer = null
-          session.firstDirtyAt = null
-          session.layout = codecOfTarget(session.target).kind === 'json' ? normalizeLayout(layout) : layout
-          session.externalPending = false
-          session.unsaved = []
-          // The value the caller stores next (Revert, Restore): what the next save builds on.
-          if (stored !== undefined) {
-            session.stored = stored
-            rememberRows(session)
-          }
-          // A new id: commits made on the old layout can no longer be replayed or rebased.
-          session.sessionId = globalThis.crypto.randomUUID().slice(0, 8)
-          session.seq += 1
-          session.persistedSeq = session.seq
-          clearFailure(session)
-          session.log = []
-          session.knownBlocking = null
-          for (const member of session.members.values()) {
-            if (!member.send) continue
-            try {
-              member.send(sessionEvent(session, member.info, true), eventId(session))
-            } catch {
-              // A closed stream must not stop the others.
-            }
-          }
-          return true
-        })
-        if (done !== null) return done
+        resetTo(session, layout, stored)
+      })
+      try {
+        return await save()
+      } catch (error) {
+        // Set inside the reset (a closure): no open session leaves it null.
+        const undo = before as ResetUndo | null
+        if (undo) await replaceState(key, (session) => putBack(session, undo))
+        throw error
       }
     },
 

@@ -199,7 +199,7 @@ function clearRemoved(rows: readonly Record<string, unknown>[], previous: readon
 function clearFields(fields: readonly RowField[], old: unknown, next: unknown, storage: PayloadBlocksStorage): void {
   if (!isPlainObject(old) || !isPlainObject(next)) return
   for (const f of fields) {
-    if ((f.type === 'row' || f.type === 'collapsible') && f.fields) {
+    if ((f.type === 'row' || f.type === 'collapsible' || (f.type === 'group' && !f.name)) && f.fields) {
       clearFields(f.fields, old, next, storage)
       continue
     }
@@ -290,7 +290,7 @@ type RowField = {
 function eachRow(fields: readonly RowField[], data: unknown, storage: PayloadBlocksStorage, visit: (row: Record<string, unknown>) => void): void {
   if (!isPlainObject(data)) return
   for (const f of fields) {
-    if ((f.type === 'row' || f.type === 'collapsible') && f.fields) {
+    if ((f.type === 'row' || f.type === 'collapsible' || (f.type === 'group' && !f.name)) && f.fields) {
       eachRow(f.fields, data, storage, visit)
       continue
     }

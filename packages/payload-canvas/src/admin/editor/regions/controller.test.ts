@@ -176,22 +176,155 @@ async function editorWith(titles: Record<string, string>, options: { trim?: bool
   const { createEditorStore } = await import('../store')
   const store = createEditorStore({ version: 1, blocks: [] })
   let locale = 'en'
+  let refreshed = 0
   const warnings: string[] = []
   const controller = createRegionsController({
     regions,
     endpoint: '/api/builder/live/pages/5',
     locale: () => locale,
     settingsOpen: () => false,
-    refreshFrame: () => {},
+    refreshFrame: () => { refreshed++ },
     record: (edits, at, saved) => store.recordFields(edits, at, saved),
     warn: (text) => warnings.push(text),
   })
   store.setFieldWriter((changes, at) => controller.writeEdits(changes, at))
   await controller.load()
-  return { store, controller, posts, warnings, setLocale: (next: string) => (locale = next) }
+  return { store, controller, posts, warnings, refreshes: () => refreshed, setLocale: (next: string) => (locale = next) }
 }
 
 describe('region history', () => {
+  it('does not clear redo for unchanged text or hide a pending edit behind a repeated blur', async () => {
+    const titles = { en: 'Old' }
+    const { store, controller, refreshes } = await editorWith(titles)
+    await controller.write([{ path: 'title', value: 'One' }])
+    store.undo()
+    await settle()
+    assert.equal(store.getState().redoStack.length, 1)
+    await controller.write([{ path: 'title', value: 'Old' }])
+    assert.equal(store.getState().redoStack.length, 1)
+    const before = refreshes()
+    const first = controller.write([{ path: 'title', value: 'Two' }])
+    const repeated = controller.write([{ path: 'title', value: 'Two' }])
+    assert.equal(refreshes(), before, 'a duplicate blur cannot refresh an old frame while its save is queued')
+    assert.equal(store.getState().undoStack.length, 1)
+    store.undo()
+    await Promise.all([first, repeated])
+    await settle()
+    assert.equal(titles.en, 'Old')
+  })
+
+  it('saves two rapid image choices with the preceding choice as each base', async () => {
+    const { store, controller, warnings } = await editorWith({ en: 'Old' })
+    let cover = 3
+    const bases: number[] = []
+    globalThis.fetch = (async (_url, init) => {
+      if (init?.body) {
+        const body = JSON.parse(String(init.body)) as { changes: Array<{ path: string; base: number; value: number }> }
+        assert.equal(body.changes[0].path, 'cover')
+        assert.equal(body.changes[0].base, cover)
+        bases.push(body.changes[0].base)
+        cover = body.changes[0].value
+      }
+      return new Response(JSON.stringify({ ok: true, values: { title: 'Old', cover }, storedValues: { title: 'Old', cover }, access: { ...access, cover: { read: true, update: true } }, updatedAt: 't' }))
+    }) as typeof fetch
+    await controller.load()
+    const first = controller.write([{ path: 'cover', value: 4 }])
+    const second = controller.write([{ path: 'cover', value: 5 }])
+    assert.deepEqual(await Promise.all([first, second]), [true, true])
+    assert.equal(cover, 5)
+    assert.deepEqual(bases, [3, 4])
+    store.undo()
+    await settle()
+    assert.equal(cover, 4)
+    assert.deepEqual(warnings, [])
+  })
+
+  for (const next of ['Two', 'Old']) {
+    it(`queues edits without explicit bases, including a return to ${next}`, async () => {
+      const titles = { en: 'Old' }
+      const { store, controller, posts, warnings } = await editorWith(titles)
+      const first = controller.write([{ path: 'title', value: 'One' }])
+      const second = controller.write([{ path: 'title', value: next }])
+      assert.deepEqual(await Promise.all([first, second]), [true, true])
+      assert.equal(titles.en, next)
+      assert.deepEqual(posts.map((post) => post.changes[0].base), ['Old', 'One'])
+      store.undo()
+      await settle()
+      assert.equal(titles.en, 'One')
+      store.redo()
+      await settle()
+      assert.equal(titles.en, next)
+      assert.deepEqual(warnings, [])
+    })
+  }
+
+  it('preserves an explicit base when another queued write has changed that field', async () => {
+    const titles = { en: 'Old' }
+    const { controller, warnings } = await editorWith(titles)
+    const first = controller.write([{ path: 'title', value: 'One' }])
+    const second = controller.write([{ path: 'title', value: 'Two', base: 'Old' }])
+    assert.deepEqual(await Promise.all([first, second]), [true, false])
+    assert.equal(titles.en, 'One')
+    assert.match(warnings[0], /someone else changed/)
+  })
+
+  for (const retrySucceeds of [true, false]) {
+    it(`never uses another locale's own value when the target load fails (retry ${retrySucceeds ? 'succeeds' : 'fails'})`, async () => {
+      const { controller, store, setLocale } = await editorWith({ en: 'Hello' })
+      let french: string | null = null
+      let reads = 0
+      let posts = 0
+      globalThis.fetch = (async (_url, init) => {
+        if (!init?.body && (++reads === 1 || !retrySucceeds)) return new Response('{}', { status: 500 })
+        if (init?.body) {
+          posts++
+          const body = JSON.parse(String(init.body)) as { changes: Array<{ value: string | null; base: unknown }> }
+          assert.equal(body.changes[0].base, french ?? 'Hello')
+          french = body.changes[0].value
+        }
+        return new Response(JSON.stringify({ ok: true, values: { title: french ?? 'Hello' }, storedValues: { title: french }, access, updatedAt: `t${posts}` }))
+      }) as typeof fetch
+      setLocale('fr')
+      await controller.load()
+      assert.equal(await controller.write([{ path: 'title', value: 'Bonjour', base: 'Hello' }]), retrySucceeds)
+      if (!retrySucceeds) {
+        assert.equal(posts, 0)
+        assert.equal(store.getState().undoStack.length, 0)
+        return
+      }
+      store.undo()
+      await settle()
+      assert.equal(french, null, 'undo restores the missing French value, not English text')
+    })
+  }
+
+  it('waits for the target locale values before saving while its first read is pending', async () => {
+    const { controller, store, setLocale } = await editorWith({ en: 'Hello' })
+    let french: string | null = null
+    let posts = 0
+    let release!: () => void
+    const held = new Promise<void>((resolve) => { release = resolve })
+    globalThis.fetch = (async (_url, init) => {
+      if (!init?.body) await held
+      else {
+        posts++
+        french = (JSON.parse(String(init.body)) as { changes: Array<{ value: string | null }> }).changes[0].value
+      }
+      return new Response(JSON.stringify({ ok: true, values: { title: french ?? 'Hello' }, storedValues: { title: french }, access, updatedAt: `t${posts}` }))
+    }) as typeof fetch
+    setLocale('fr')
+    const loading = controller.load()
+    const saving = controller.write([{ path: 'title', value: 'Bonjour', base: 'Hello' }])
+    await new Promise((resolve) => setImmediate(resolve))
+    const earlyPosts = posts
+    release()
+    await Promise.all([loading, saving])
+    assert.equal(earlyPosts, 0, 'a save cannot invent its old locale value')
+    store.undo()
+    await settle()
+    assert.equal(french, null)
+  })
+
   for (const scenario of [
     { name: 'two queued edits', locale: 'en', initial: 'Old', first: 'One', pendingUndo: false, switchLocale: false },
     { name: 'undo while both edits are pending', locale: 'en', initial: 'Old', first: 'One', pendingUndo: true, switchLocale: false },

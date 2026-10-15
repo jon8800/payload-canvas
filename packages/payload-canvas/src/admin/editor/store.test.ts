@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import type { Block, Layout, Operation } from '../../core/types'
-import { createEditorStore } from './store'
+import { createEditorStore, type FieldWriteResult } from './store'
 
 const block = (id: string, text = id): Block => ({ id, type: 'heading', props: { text } })
 const layout = (...blocks: Block[]): Layout => ({ version: 1, blocks })
@@ -194,4 +194,149 @@ test('a new field step clears the redo stack, as any edit does', () => {
   assert.equal(store.getState().redoStack.length, 1)
   store.recordFields([{ path: 'title', before: 'Old', after: 'New' }])
   assert.equal(store.getState().redoStack.length, 0)
+})
+
+const historySettled = () => new Promise<void>((resolve) => setImmediate(resolve))
+
+test('detached undo and redo callbacks run in order while a field write is pending', async () => {
+  const store = createEditorStore(layout(block('a')))
+  const pending = Promise.withResolvers<FieldWriteResult>()
+  const written: unknown[] = []
+  store.setFieldWriter(async (changes) => {
+    written.push(changes)
+    return written.length === 1 ? pending.promise : true
+  })
+  store.apply({ type: 'update', id: 'a', props: { text: 'A!' } })
+  store.recordFields([{ path: 'title', before: 'Old', after: 'New' }])
+  const { undo, redo } = store
+  undo()
+  undo()
+  redo()
+  redo()
+  assert.equal(written.length, 1)
+  pending.resolve(true)
+  await historySettled()
+  assert.deepEqual(written, [
+    [{ path: 'title', value: 'Old', base: 'New' }],
+    [{ path: 'title', value: 'New', base: 'Old' }],
+  ])
+  assert.equal(textOf(store.getState().layout, 0), 'A!')
+  assert.equal(store.getState().undoStack.length, 2)
+  assert.equal(store.getState().redoStack.length, 0)
+})
+
+for (const newerEdit of ['layout', 'region'] as const) {
+  test(`a failed field undo remains retryable before a newer ${newerEdit} edit`, async () => {
+    const store = createEditorStore(layout(block('a')))
+    const pending = Promise.withResolvers<FieldWriteResult>()
+    const written: unknown[] = []
+    store.setFieldWriter(async (changes) => {
+      written.push(changes)
+      return written.length === 1 ? pending.promise : true
+    })
+    store.apply({ type: 'update', id: 'a', props: { text: 'A!' } })
+    store.recordFields([{ path: 'title', before: 'Old', after: 'New' }])
+    const originalHistory = store.getState().undoStack
+    store.undo()
+    store.undo()
+    if (newerEdit === 'layout') store.apply({ type: 'update', id: 'a', props: { text: 'Newest' } })
+    else store.recordFields([{ path: 'description', before: 'Before', after: 'After' }])
+    const latestEntry = store.getState().undoStack.at(-1)!
+    pending.resolve('retry')
+    await historySettled()
+    assert.deepEqual(store.getState().undoStack, [...originalHistory, latestEntry])
+    assert.equal(store.getState().redoStack.length, 0)
+    assert.equal(written.length, 1, 'the failed write cancels queued undo clicks')
+
+    store.undo()
+    await historySettled()
+    assert.equal(textOf(store.getState().layout, 0), 'A!')
+    store.undo()
+    await historySettled()
+    assert.deepEqual(written.at(-1), [{ path: 'title', value: 'Old', base: 'New' }])
+    store.undo()
+    assert.equal(textOf(store.getState().layout, 0), 'a')
+    store.redo()
+    store.redo()
+    store.redo()
+    await historySettled()
+    assert.equal(store.getState().undoStack.length, 3)
+    assert.equal(store.getState().redoStack.length, 0)
+    assert.equal(textOf(store.getState().layout, 0), newerEdit === 'layout' ? 'Newest' : 'A!')
+    assert.deepEqual(written.at(-1), newerEdit === 'layout'
+      ? [{ path: 'title', value: 'New', base: 'Old' }]
+      : [{ path: 'description', value: 'After', base: 'Before' }])
+  })
+}
+
+test('a newer edit still abandons redo when a pending field redo fails', async () => {
+  const store = createEditorStore(layout(block('a')))
+  const pending = Promise.withResolvers<FieldWriteResult>()
+  let writes = 0
+  store.setFieldWriter(async () => ++writes === 1 ? true : pending.promise)
+  store.recordFields([{ path: 'title', before: 'Old', after: 'New' }])
+  store.undo()
+  await historySettled()
+  store.redo()
+  store.apply({ type: 'update', id: 'a', props: { text: 'Newest' } })
+  pending.resolve('retry')
+  await historySettled()
+  assert.equal(store.getState().redoStack.length, 0)
+  assert.equal(store.getState().undoStack.length, 1)
+  store.undo()
+  assert.equal(textOf(store.getState().layout, 0), 'a')
+})
+
+test('a field redo remains retryable without a newer edit', async () => {
+  const store = createEditorStore(layout(block('a')))
+  let writes = 0
+  store.setFieldWriter(async () => ++writes === 2 ? 'retry' : true)
+  store.recordFields([{ path: 'title', before: 'Old', after: 'New' }])
+  store.undo()
+  await historySettled()
+  store.redo()
+  await historySettled()
+  assert.equal(store.getState().redoStack.length, 1)
+  assert.equal(store.getState().undoStack.length, 0)
+  store.redo()
+  await historySettled()
+  assert.equal(writes, 3)
+  assert.equal(store.getState().redoStack.length, 0)
+  assert.equal(store.getState().undoStack.length, 1)
+})
+
+for (const result of [true, 'retry'] as const) {
+  test(`a reset discards pending history and queued clicks when the field write returns ${result}`, async () => {
+    const store = createEditorStore(layout(block('a')))
+    const pending = Promise.withResolvers<FieldWriteResult>()
+    store.setFieldWriter(() => pending.promise)
+    store.apply({ type: 'update', id: 'a', props: { text: 'A!' } })
+    store.recordFields([{ path: 'title', before: 'Old', after: 'New' }])
+    store.undo()
+    store.undo()
+    store.sync.session(1, layout(block('r')), 'reset', true)
+    store.apply({ type: 'update', id: 'r', props: { text: 'Fresh' } })
+    pending.resolve(result)
+    await historySettled()
+    assert.equal(store.getState().undoStack.length, 1)
+    assert.equal(store.getState().redoStack.length, 0)
+    assert.equal(textOf(store.getState().layout, 0), 'Fresh')
+  })
+}
+
+test('restoring a failed field undo keeps its order when newer edits reach the history limit', async () => {
+  const store = createEditorStore(layout(block('a')))
+  const pending = Promise.withResolvers<FieldWriteResult>()
+  store.setFieldWriter(() => pending.promise)
+  for (let i = 0; i < 200; i++) store.apply({ type: 'update', id: 'a', props: { text: String(i) } })
+  store.recordFields([{ path: 'title', before: 'Old', after: 'New' }])
+  const fieldEntry = store.getState().undoStack.at(-1)!
+  store.undo()
+  store.apply({ type: 'update', id: 'a', props: { text: 'Newer' } })
+  store.apply({ type: 'update', id: 'a', props: { text: 'Newest' } })
+  const newerEntries = store.getState().undoStack.slice(-2)
+  pending.resolve('retry')
+  await historySettled()
+  assert.equal(store.getState().undoStack.length, 200)
+  assert.deepEqual(store.getState().undoStack.slice(-3), [fieldEntry, ...newerEntries])
 })

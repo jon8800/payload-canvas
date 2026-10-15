@@ -83,14 +83,44 @@ export const SESSION_SAVE_CONTEXT = 'builderSession'
  * plugin clears another template's "Default" flag). The session guard leaves them alone.
  */
 export const KEEP_LAYOUT_CONTEXT = 'builderKeepLayout'
-/** `context` key where the guard records the session seq it wrote. */
+/**
+ * `context` key where the guard records the session seq it wrote, per document (`docEntry`).
+ * Saves that a hook runs with the same `req` (another template's "Default" flag) share the
+ * request's `context`: one document's seq must never mark another document's session as saved.
+ */
 export const GUARD_SEQ_CONTEXT = 'builderSessionSeq'
 /**
  * `context` key where the save hook puts the layout before and after the prop hooks
- * (`{ input, output }`), when the hooks changed a value. The live session reads it after its save
- * and sends the changed values to every editor (session.ts, `adoptSaved`).
+ * (`{ input, output }`), when the hooks changed a value, per document (`docEntry`). The live
+ * session reads it after its save and sends the changed values to every editor (session.ts,
+ * `adoptSaved`).
  */
 export const HOOK_CHANGES_CONTEXT = 'builderHookChanges'
+
+/** The entry of `collection`/`id` in a per-document `context` value (GUARD_SEQ_CONTEXT, HOOK_CHANGES_CONTEXT). */
+export function docEntry(context: Record<string, unknown> | undefined, name: string, collection: string, id: unknown): unknown {
+  const entries = context?.[name]
+  return isPlainObject(entries) && (typeof id === 'string' || typeof id === 'number') ? entries[writeKey(collection, id)] : undefined
+}
+
+/**
+ * Sets (or with `undefined`, removes) the entry of `collection`/`id`. A new object each time: the
+ * copies of the context that nested saves made keep their own entries.
+ */
+function setDocEntry(context: Record<string, unknown> | undefined, name: string, collection: string, id: string | number, value: unknown) {
+  if (!context) return
+  const entries = isPlainObject(context[name]) ? (context[name] as Record<string, unknown>) : {}
+  const key = writeKey(collection, id)
+  if (value === undefined && !(key in entries)) return
+  const { [key]: _old, ...rest } = entries
+  context[name] = value === undefined ? rest : { ...rest, [key]: value }
+}
+
+/** The session seq the guard wrote into this save of `collection`/`id`, or undefined. */
+export function guardSeqOf(context: Record<string, unknown> | undefined, collection: string, id: unknown): number | undefined {
+  const seq = docEntry(context, GUARD_SEQ_CONTEXT, collection, id)
+  return typeof seq === 'number' ? seq : undefined
+}
 /**
  * `context` key where the layout field's `beforeValidate` hook records the operation's
  * `overrideAccess` (collection hooks do not get it). Field access applies only when it is false.
@@ -149,9 +179,9 @@ function requestLocale(req: unknown, settings: LocaleSettings): { locale: string
 /** The layout before and after the prop hooks of one save. */
 export type HookChanges = { input: Layout; output: Layout }
 
-/** The prop hook changes a save recorded in its `context`, or null. */
-export function hookChangesOf(context: Record<string, unknown> | undefined): HookChanges | null {
-  const value = context?.[HOOK_CHANGES_CONTEXT]
+/** The prop hook changes a save of `collection`/`id` recorded in its `context`, or null. */
+export function hookChangesOf(context: Record<string, unknown> | undefined, collection: string, id: unknown): HookChanges | null {
+  const value = docEntry(context, HOOK_CHANGES_CONTEXT, collection, id)
   return isPlainObject(value) && isPlainObject(value.input) && isPlainObject(value.output) ? (value as HookChanges) : null
 }
 
@@ -296,9 +326,11 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
       if (open) {
         data[field] = structuredClone(open.layout)
         guarded = true
-        if (context) context[GUARD_SEQ_CONTEXT] = open.seq
+        setDocEntry(context, GUARD_SEQ_CONTEXT, slug, docId, open.seq)
       }
     }
+    // An earlier guarded save of this document in the same request does not make this one guarded.
+    if (!guarded && docId !== undefined) setDocEntry(context, GUARD_SEQ_CONTEXT, slug, docId, undefined)
 
     // Stale-save check for the other fields (title, slug, SEO, …): a form loaded before someone
     // else changed a field must not undo that change. See live/fieldsGuard.ts.
@@ -389,7 +421,10 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
         const input = structuredClone(layout)
         await runPropHooks('beforeValidate', layout, { blocks, registry, previous: savedLayout, ctx, localization })
         await runPropHooks('beforeChange', layout, { blocks, registry, previous: savedLayout, ctx, localization })
-        if (context && !sameJson(input, layout)) context[HOOK_CHANGES_CONTEXT] = { input, output: structuredClone(layout) } satisfies HookChanges
+        if (docId !== undefined) {
+          const changes = sameJson(input, layout) ? undefined : ({ input, output: structuredClone(layout) } satisfies HookChanges)
+          setDocEntry(context, HOOK_CHANGES_CONTEXT, slug, docId, changes)
+        }
       }
     }
     const { blocking, warnings } = await checkLayout(layout, { blocks, publishing, bindings, doc: merged, fields: fieldCheck(savedLayout), localization })
@@ -446,16 +481,17 @@ export function layoutAfterChange(options: {
   const props = options.props
   return async ({ collection, context, data, doc, operation, previousDoc, req }) => {
     if (doc?.id === undefined) return doc
-    const seq = context?.[GUARD_SEQ_CONTEXT]
+    // This document's own entry: a save another document's hook ran with the same `req` never counts.
+    const seq = guardSeqOf(context, options.collection, doc.id)
     // Only after the save committed (never after a rollback): editors that hear of it reload the
     // values, and must find them stored.
     const afterCommit = (fn: () => void) => gate.afterCommit(req, writeKey(options.collection, doc.id as string | number), fn)
-    if (typeof seq === 'number') {
+    if (seq !== undefined) {
       // Editors show the page frame again when this save changed a region's field.
       const fields = operation === 'update' ? changedFieldsOf(context, options.collection, doc.id) : []
       const info = { updatedAt: doc.updatedAt, status: doc._status, fields }
       // The save ran the prop hooks on the session's layout. Every editor gets the changed values.
-      const changes = hookChangesOf(context)
+      const changes = hookChangesOf(context, options.collection, doc.id)
       const docId = doc.id as string | number
       afterCommit(() => {
         options.sessions.markSaved(options.collection, docId, seq, info)
@@ -486,10 +522,13 @@ export function layoutAfterChange(options: {
     // The work keeps no reference to `req`: the gate ends a hold when its request is collected.
     const recorded = { ...doc }
     const user = req.user
-    // Payload's Restore (not the builder's, which resets the session itself): editors take the restored layout.
-    if (isRestore(context) && !context?.[STORED_LAYOUT_CONTEXT]) {
+    // A restore of a version, after its commit. Payload's Restore: editors take the restored layout.
+    // The builder's Restore (STORED_LAYOUT) reset the session to that layout itself, so it stays:
+    // the session only reads the other fields again (they are the version's now).
+    if (isRestore(context)) {
       const docId = doc.id as string | number
-      const info = { updatedAt: doc.updatedAt, status: doc._status, fields: changedFieldsOf(context, options.collection, docId), layoutChanged: true }
+      const layoutChanged = !context?.[STORED_LAYOUT_CONTEXT]
+      const info = { updatedAt: doc.updatedAt, status: doc._status, fields: changedFieldsOf(context, options.collection, docId), layoutChanged }
       afterCommit(() => options.sessions.externalSaved(options.collection, docId, info))
     }
     afterCommit(() => recordFieldChanges({ clock, collection: options.collection, doc: recorded, user, context }))

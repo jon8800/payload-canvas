@@ -2,8 +2,8 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import { fromPayloadBlocks } from '../blocks/payload'
-import { decodePayloadBlocks, encodePayloadBlocks, payloadBlocksProblems, payloadBlocksStorage, withUniqueRowIds } from './payloadBlocks'
-import type { Layout } from './types'
+import { decodePayloadBlocks, encodePayloadBlocks, payloadBlocksProblems, payloadBlocksStorage, payloadRowIds, withUniqueRowIds } from './payloadBlocks'
+import type { Layout, Operation } from './types'
 
 const blocks = fromPayloadBlocks(
   [
@@ -199,5 +199,40 @@ describe('Payload blocks codec: row ids of copies and cleared values', () => {
     assert.deepEqual((row.extra as { inner: unknown[] }).inner, [{ id: 'i1', blockType: 'card', title: null }])
     // Without the stored value, or for keys it does not have: no nulls.
     assert.equal('raw' in encodePayloadBlocks(cleared, withJson)[0], false)
+  })
+})
+
+describe('Payload blocks codec: unnamed groups', () => {
+  const grouped = payloadBlocksStorage(['card'], fromPayloadBlocks([{
+    slug: 'card',
+    fields: [{ type: 'group', fields: [
+      { name: 'caption', type: 'text' },
+      { name: 'items', type: 'array', fields: [{ type: 'group', fields: [{ name: 'label', type: 'text' }] }] },
+      { name: 'raw', type: 'json' },
+    ] }],
+  }], { onWarning: false }), 'pages.layout')
+  const row = { id: 'card-1', blockType: 'card', caption: 'Before', items: [{ id: 'row-1', label: 'Before' }], raw: { id: 'keep' } }
+
+  it('clears fields inside unnamed groups, including groups inside array rows', () => {
+    const layout: Layout = { version: 1, blocks: [{ id: 'card-1', type: 'card', props: { items: [{ id: 'row-1' }], raw: row.raw } }] }
+    const [saved] = encodePayloadBlocks(layout, grouped, [row])
+    assert.equal(saved.caption, null)
+    assert.deepEqual(saved.items, [{ id: 'row-1', label: null }])
+    assert.deepEqual(saved.raw, row.raw)
+  })
+
+  it('renews unowned array row ids in unnamed groups, while undo keeps owned ids', () => {
+    const decoded = decodePayloadBlocks([row], grouped)
+    assert.ok(decoded.ok)
+    assert.deepEqual(payloadRowIds([row], grouped), new Set(['row-1']))
+    const ops: Operation[] = [{ type: 'insert', block: { ...decoded.layout.blocks[0], id: 'copy' }, to: { parentId: null, index: 0 } }]
+    const [copy] = withUniqueRowIds({ version: 1, blocks: [] }, ops, grouped, new Set())
+    assert.equal(copy.type, 'insert')
+    if (copy.type !== 'insert') return
+    const items = copy.block.props?.items as { id: string; label: string }[]
+    assert.notEqual(items[0].id, 'row-1')
+    assert.equal(items[0].label, 'Before')
+    assert.deepEqual(copy.block.props?.raw, { id: 'keep' })
+    assert.equal(withUniqueRowIds({ version: 1, blocks: [] }, ops, grouped, new Set(['row-1'])), ops)
   })
 })

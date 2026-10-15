@@ -500,26 +500,28 @@ export async function restoreDocumentVersion(
     if (version.version) version.version[target.field] = full?.[target.field]
   }
 
-  const before = runtime.sessions.peek(target.collection, target.id)?.layout
-  await runtime.sessions.reset(
-    target.collection,
-    target.id,
-    (target.codec ?? codecOf(undefined)).decode(version.version?.[target.field]),
-    version.version?.[target.field],
-  )
   try {
     // A plugin save: keep the document lock of someone in the settings drawer (fieldsGuard.ts).
     req.context = { ...req.context, [KEEP_LOCK_CONTEXT]: true, [STORED_LAYOUT_CONTEXT]: true }
-    // The operation, not `payload.restoreVersion`: the Local API drops the `draft` flag (Payload
-    // 3.90), and a restored published version would go live at once.
-    const doc: Record<string, unknown> = await restoreVersionOperation({
-      collection,
-      id: versionId,
-      depth: 0,
-      draft: target.drafts,
-      overrideAccess: false,
-      req,
-    })
+    // The session shows the version while it is restored. When the restore fails, the document
+    // did not change: the session gets back its layout and its unsaved edits, still unsaved.
+    const doc: Record<string, unknown> = await runtime.sessions.resetFor(
+      target.collection,
+      target.id,
+      (target.codec ?? codecOf(undefined)).decode(version.version?.[target.field]),
+      version.version?.[target.field],
+      // The operation, not `payload.restoreVersion`: the Local API drops the `draft` flag (Payload
+      // 3.90), and a restored published version would go live at once.
+      () =>
+        restoreVersionOperation({
+          collection,
+          id: versionId,
+          depth: 0,
+          draft: target.drafts,
+          overrideAccess: false,
+          req,
+        }),
+    )
     const event: LivePublishedEvent = {
       type: 'published',
       action: 'restore',
@@ -531,8 +533,6 @@ export async function restoreDocumentVersion(
     runtime.sessions.broadcast(target.collection, target.id, event)
     return { ok: true, doc }
   } catch (error) {
-    // The document did not change: give the editors their layout back.
-    if (before) await runtime.sessions.reset(target.collection, target.id, before)
     const status = statusOf(error)
     return { ok: false, status: status >= 400 && status < 600 ? status : 500, error: payloadErrorMessage(error, target.field) }
   }

@@ -26,7 +26,7 @@ export type RegionsState = {
 
 /**
  * One change. `base`: the value the change replaces, as the editor showed it when the edit began
- * (an inline session keeps it from its start). Left out: the value the editor shows now.
+ * (an inline session keeps it from its start). Left out: the value before this queued save starts.
  */
 export type RegionWrite = { path: string; value: unknown; base?: unknown }
 
@@ -77,6 +77,17 @@ export type RegionsContext = {
 
 /** Equal field values: empty text, null and a missing value are one value. */
 const sameValue = (a: unknown, b: unknown) => JSON.stringify(a === '' || a === undefined ? null : a) === JSON.stringify(b === '' || b === undefined ? null : b)
+type LocaleFields = { values: Record<string, unknown>; storedValues: Record<string, unknown>; access: RegionAccess }
+type SaveResult = { ok: boolean; retryable?: boolean; values: Record<string, unknown> | null; storedValues?: Record<string, unknown> }
+const fieldKey = (locale: string | null, path: string) => JSON.stringify([locale, path])
+
+function historyBefore(edits: RegionWrite[], fields?: LocaleFields): FieldEdit[] {
+  return edits.map((edit) => {
+    const before = valueAtDocPath(fields?.storedValues, edit.path) ?? null
+    const shown = 'base' in edit ? edit.base : valueAtDocPath(fields?.values, edit.path)
+    return { path: edit.path, before, after: edit.value, ...(!sameValue(before, shown) ? { beforeShown: shown } : {}) }
+  })
+}
 
 export function createRegionsController(context: RegionsContext): RegionsController {
   const { regions, endpoint } = context
@@ -89,27 +100,30 @@ export function createRegionsController(context: RegionsContext): RegionsControl
   let ownSave: string | null = null
   let writes: Promise<unknown> = Promise.resolve()
   // Queued saves may finish after the editor switches locale. History still needs their own values.
-  const storedByLocale = new Map<string | null, Record<string, unknown>>()
+  const fieldsByLocale = new Map<string | null, LocaleFields>()
+  // Repeated blur/Enter for an already queued value is not another edit or history step.
+  const queuedValues = new Map<string, { value: unknown; request: symbol }>()
+
+  const readFields = async (locale: string | null): Promise<LocaleFields> => {
+    const response = await fetch(`${endpoint}/regions${locale ? `?locale=${encodeURIComponent(locale)}` : ''}`, {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    })
+    const body = (await response.json().catch(() => null)) as LiveRegionsResponse | null
+    if (!body?.ok) throw new Error(body && !body.ok ? body.error : `Could not load the page fields (${response.status}).`)
+    return { values: body.values, storedValues: body.storedValues ?? body.values, access: body.access }
+  }
 
   const load = async () => {
     const run = ++loadRun
     const locale = context.locale()
     try {
-      const response = await fetch(`${endpoint}/regions${locale ? `?locale=${encodeURIComponent(locale)}` : ''}`, {
-        credentials: 'include',
-        headers: { Accept: 'application/json' },
-      })
-      const body = (await response.json().catch(() => null)) as LiveRegionsResponse | null
+      const fields = await readFields(locale)
       if (run !== loadRun) return
-      if (!body?.ok) {
-        state.set({ ...state.get(), status: 'error', error: body && !body.ok ? body.error : `Could not load the page fields (${response.status}).` })
-        return
-      }
-      const storedValues = body.storedValues ?? body.values
-      storedByLocale.set(locale, storedValues)
-      state.set({ values: body.values, storedValues, access: body.access, status: 'ready', error: null })
-    } catch {
-      if (run === loadRun) state.set({ ...state.get(), status: 'error', error: 'Could not load the page fields. Check your connection.' })
+      fieldsByLocale.set(locale, fields)
+      if (locale === context.locale()) state.set({ ...fields, status: 'ready', error: null })
+    } catch (error) {
+      if (run === loadRun && locale === context.locale()) state.set({ ...state.get(), status: 'error', error: error instanceof Error ? error.message : 'Could not load the page fields. Check your connection.' })
     }
   }
 
@@ -117,7 +131,7 @@ export function createRegionsController(context: RegionsContext): RegionsControl
    * Saves changes in `locale`. Effective display values and own stored values replace the
    * current ones only while the editor still shows that locale.
    */
-  const send = async (changes: LiveFieldChange[], locale: string | null): Promise<{ ok: boolean; retryable?: boolean; values: Record<string, unknown> | null; storedValues?: Record<string, unknown> }> => {
+  const send = async (changes: LiveFieldChange[], locale: string | null, before: LocaleFields): Promise<SaveResult> => {
     try {
       const response = await fetch(`${endpoint}/fields`, {
         method: 'POST',
@@ -135,7 +149,7 @@ export function createRegionsController(context: RegionsContext): RegionsControl
       }
       ownSave = body.updatedAt
       const storedValues = body.storedValues ?? body.values
-      storedByLocale.set(locale, storedValues)
+      fieldsByLocale.set(locale, { ...before, values: body.values, storedValues })
       if (locale === context.locale()) {
         loadRun++
         state.set({ ...state.get(), values: body.values, storedValues, status: 'ready', error: null })
@@ -149,22 +163,55 @@ export function createRegionsController(context: RegionsContext): RegionsControl
       return { ok: false, retryable: true, values: null }
     }
   }
-  const post = (changes: LiveFieldChange[], locale: string | null) => {
+  const post = (changes: RegionWrite[], locale: string | null) => {
+    const request = Symbol()
+    for (const change of changes) queuedValues.set(fieldKey(locale, change.path), { value: change.value, request })
     const result = writes.then(async () => {
-      // Earlier queued saves have completed. Capture what this save replaces, before sending it.
-      const beforeValues = storedByLocale.get(locale)
-      return { ...await send(changes, locale), beforeValues }
+      let before = fieldsByLocale.get(locale)
+      if (!before) {
+        // A new locale may still be loading or its read may have failed. Never borrow another locale.
+        try {
+          before = await readFields(locale)
+          fieldsByLocale.set(locale, before)
+          if (locale === context.locale()) {
+            loadRun++
+            state.set({ ...before, status: 'ready', error: null })
+          }
+        } catch (error) {
+          context.warn(error instanceof Error ? error.message : 'Could not load the page fields. Check your connection.')
+          context.refreshFrame()
+          return { ok: false, retryable: true, values: null, changes: [], before } satisfies SaveResult & { changes: LiveFieldChange[]; before?: LocaleFields }
+        }
+      }
+      const blocked = changes.map((change) => lockedMessage(change.path, before.access)).find((text) => text !== null)
+      if (blocked) {
+        context.warn(blocked)
+        context.refreshFrame()
+        return { ok: false, retryable: context.settingsOpen(), values: null, changes: [], before }
+      }
+      // Only omitted bases follow earlier queued saves. An inline session's explicit base stays fixed.
+      const real = changes.map((change) => ({ ...change, base: 'base' in change ? change.base : valueAtDocPath(before.values, change.path) }))
+        .filter((change) => !sameValue(change.value, change.base))
+      if (real.length === 0) {
+        context.refreshFrame()
+        return { ok: true, values: before.values, storedValues: before.storedValues, changes: real, before }
+      }
+      return { ...await send(real, locale, before), changes: real, before }
+    }).finally(() => {
+      for (const change of changes) {
+        const key = fieldKey(locale, change.path)
+        if (queuedValues.get(key)?.request === request) queuedValues.delete(key)
+      }
     })
     writes = result.catch(() => undefined)
     return result
   }
 
-  const lockedMessage = (path: string): string | null => {
+  const lockedMessage = (path: string, access = state.get().access, allowUnloaded = false): string | null => {
     const found = regionFieldOf(regions, path)
     if (!found) return 'This is not a field of the page.'
     if (context.settingsOpen()) return 'Close the page settings first: they hold their own copy of these fields.'
-    const access = state.get().access
-    if (!access) return state.get().status === 'error' ? (state.get().error ?? 'The page fields are not loaded.') : 'The page fields are still loading.'
+    if (!access) return allowUnloaded ? null : state.get().status === 'error' ? (state.get().error ?? 'The page fields are not loaded.') : 'The page fields are still loading.'
     const right = regionAccessAt(access, path)
     if (!right.read) return `You may not see ${found.field.label}.`
     if (!right.update) return `You may not change ${found.field.label}.`
@@ -184,31 +231,31 @@ export function createRegionsController(context: RegionsContext): RegionsControl
 
     async write(changes, options = {}) {
       const locale = options.locale !== undefined ? options.locale : context.locale()
-      const values = state.get().values
-      const blocked = changes.map((c) => lockedMessage(c.path)).find((text) => text !== null)
+      const known = fieldsByLocale.get(locale)
+      const blocked = changes.map((c) => lockedMessage(c.path, known?.access ?? null, true)).find((text) => text !== null)
       if (blocked) {
         context.warn(blocked)
         context.refreshFrame()
         return false
       }
-      const edits = changes.map((c) => ({ path: c.path, value: c.value, base: 'base' in c ? c.base : valueAtDocPath(values, c.path) }))
-      const real = edits.filter((e) => !sameValue(e.value, e.base))
-      if (real.length === 0) {
-        context.refreshFrame()
+      const edits = changes.filter((change) => {
+        if ('base' in change) return !sameValue(change.value, change.base)
+        const queued = queuedValues.get(fieldKey(locale, change.path))
+        if (queued) return !sameValue(change.value, queued.value)
+        return !known || !sameValue(change.value, valueAtDocPath(known.values, change.path))
+      })
+      if (edits.length === 0) {
+        // A duplicate blur must not request an old frame before its queued save has finished.
+        if (!changes.some((change) => queuedValues.has(fieldKey(locale, change.path)))) context.refreshFrame()
         return true
       }
-      const ownValues = storedByLocale.get(locale) ?? state.get().storedValues ?? values
-      const historyBefore = (storedValues: Record<string, unknown> | null): FieldEdit[] => real.map((e) => {
-        const before = valueAtDocPath(storedValues, e.path) ?? null
-        return { path: e.path, before, after: e.value, ...(!sameValue(before, e.base) ? { beforeShown: e.base } : {}) }
-      })
       let finish: ((edits: FieldEdit[] | null) => void) | undefined
       if (options.history !== false) {
         const saved = new Promise<FieldEdit[] | null>((resolve) => { finish = resolve })
-        context.record(historyBefore(ownValues), locale, saved)
+        context.record(historyBefore(edits, known), locale, saved)
       }
-      const result = await post(real, locale)
-      finish?.(result.ok ? historyBefore(result.beforeValues ?? ownValues).map((edit) => {
+      const result = await post(edits, locale)
+      finish?.(result.ok && result.changes.length > 0 ? historyBefore(result.changes, result.before).map((edit) => {
         const shown = valueAtDocPath(result.values, edit.path)
         const own = valueAtDocPath(result.storedValues, edit.path) ?? null
         return { ...edit, after: own, ...(!sameValue(own, shown) ? { afterShown: shown } : {}) }
@@ -217,12 +264,6 @@ export function createRegionsController(context: RegionsContext): RegionsControl
     },
 
     async writeEdits(changes, locale) {
-      const blocked = changes.map((c) => lockedMessage(c.path)).find((text) => text !== null)
-      if (blocked) {
-        context.warn(blocked)
-        const access = state.get().access
-        return access && !context.settingsOpen() && changes.some((c) => !regionAccessAt(access, c.path).update) ? false : 'retry'
-      }
       const result = await post(changes, locale)
       return result.ok || (result.retryable ? 'retry' : false)
     },

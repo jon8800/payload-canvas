@@ -241,7 +241,7 @@ describe('hook changes reach every editor', () => {
       originalDoc: { id: 'p1', layout: page({}) },
       req: { payload: { logger }, t: (s: string) => s },
     })
-    const changes = context[HOOK_CHANGES_CONTEXT] as { input: Layout; output: Layout }
+    const changes = (context[HOOK_CHANGES_CONTEXT] as Record<string, { input: Layout; output: Layout }>)['pages:p1']
     assert.equal(propsOf(changes.input).slug, 'X Y')
     assert.equal(propsOf(changes.output).slug, 'x-y')
   })
