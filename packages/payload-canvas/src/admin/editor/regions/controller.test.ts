@@ -192,6 +192,59 @@ async function editorWith(titles: Record<string, string>, options: { trim?: bool
 }
 
 describe('region history', () => {
+  for (const scenario of [
+    { name: 'two queued edits', locale: 'en', initial: 'Old', first: 'One', pendingUndo: false, switchLocale: false },
+    { name: 'undo while both edits are pending', locale: 'en', initial: 'Old', first: 'One', pendingUndo: true, switchLocale: false },
+    { name: 'a missing translation followed by two edits', locale: 'fr', initial: null, first: 'One', pendingUndo: true, switchLocale: false },
+    { name: 'a queued edit after clearing a translation', locale: 'fr', initial: 'Old', first: null, pendingUndo: true, switchLocale: false },
+    { name: 'a locale switch before queued saves finish', locale: 'fr', initial: null, first: 'One', pendingUndo: true, switchLocale: true },
+  ] as const) {
+    it(`undo restores the preceding own value for ${scenario.name}`, async () => {
+      const { store, controller, setLocale, warnings } = await editorWith({ en: 'English fallback' })
+      const titles: Record<string, string | null> = { en: 'English fallback', [scenario.locale]: scenario.initial }
+      const posted: Array<{ changes: Array<{ path: string; value: string | null; base: unknown }>; locale: string }> = []
+      let release!: () => void
+      const held = new Promise<void>((resolve) => { release = resolve })
+      globalThis.fetch = (async (url: string, init?: RequestInit) => {
+        const body = init?.body ? JSON.parse(String(init.body)) as (typeof posted)[number] : null
+        const locale = body?.locale ?? new URL(url, 'http://x').searchParams.get('locale') ?? 'en'
+        if (body) {
+          posted.push(body)
+          if (posted.length === 1) await held
+          assert.equal(body.changes[0].base, titles[locale] ?? titles.en)
+          titles[locale] = body.changes[0].value
+        }
+        return new Response(JSON.stringify({
+          ok: true, values: { title: titles[locale] ?? titles.en }, storedValues: { title: titles[locale] }, access, updatedAt: `t${posted.length}`,
+        }))
+      }) as typeof fetch
+      setLocale(scenario.locale)
+      await controller.load()
+      const first = controller.write([{ path: 'title', value: scenario.first, base: scenario.initial ?? titles.en }])
+      const second = controller.write([{ path: 'title', value: 'Two', base: scenario.first ?? titles.en }])
+      assert.equal(store.getState().undoStack.length, 2, 'both edits enter history before either save completes')
+      if (scenario.switchLocale) {
+        setLocale('en')
+        await controller.load()
+      }
+      if (scenario.pendingUndo) store.undo()
+      release()
+      assert.deepEqual(await Promise.all([first, second]), [true, true])
+      if (!scenario.pendingUndo) store.undo()
+      await settle()
+      assert.equal(titles[scenario.locale], scenario.first, 'one undo returns to the immediately preceding own value')
+      assert.deepEqual(posted.at(-1)?.changes, [{ path: 'title', value: scenario.first, base: 'Two' }])
+      store.undo()
+      await settle()
+      assert.equal(titles[scenario.locale], scenario.initial, 'the second undo restores the initial own value, including null')
+      store.redo()
+      store.redo()
+      await settle()
+      assert.equal(titles[scenario.locale], 'Two')
+      assert.deepEqual(warnings, [])
+    })
+  }
+
   it('records before the save completes, so immediate undo waits for hooks and never undoes the previous layout action', async () => {
     const titles = { en: 'Old' }
     const { store, controller, warnings } = await editorWith(titles, { trim: true })

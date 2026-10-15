@@ -14,7 +14,7 @@ import { addDataAndFileToRequest, parseDocumentID, type CollectionSlug, type End
 
 import { EMPTY_FIELD_REGISTRY, type FieldRegistry } from '../core/fieldSemantics'
 import type { PayloadBlocksStorage } from '../core/payloadBlocks'
-import { draftReadProblem } from './draftAccess'
+import { DRAFT_NOT_READABLE_MESSAGE, liveReadProblem, withLiveReadCheck } from './draftAccess'
 import { blocksAccessProblem, codecOf, statesThrough, UNREADABLE_BLOCKS_MESSAGE, withBlocksReadCheck } from './storage'
 import type { BlockDefinition, Layout, LocaleSettings, Operation } from '../core/types'
 import { actorFromUser, type LiveDocStore } from './apply'
@@ -135,17 +135,23 @@ function resumePoint(req: PayloadRequest, url: URL): { seq: number; sessionId?: 
 
 export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
   /**
-   * The event stream of a Payload blocks field. Each event is checked, one after the other, against
-   * every state it shows the user, in place (each block with its real parents and siblings, as
-   * Payload's read access sees it): a `session` event its layout; a `commit` each state after each
-   * of its operations, applied to the state the previous event left (the stream's own copy). So a
-   * value one operation writes and a later one removes counts, and so does a value that a sibling
-   * value would hide. The first value the user may not read ends the stream with an `error` event,
-   * before that event or any later one goes out. Reconnects never replay old commits for such
-   * fields (session.ts). The builder's JSON layout: `send` as it is.
+   * The event stream. Each event (of every kind, for every storage) is checked, one after the
+   * other, when its turn comes and before it goes out:
+   * - the user may read the document as the session holds it (a draft): Payload's read access and
+   *   query, run again for each event (draftAccess.ts), so a change of access or of the stored
+   *   document (a save in the drawer, a region, REST) applies to the events still waiting too;
+   * - a Payload blocks field: every value the event shows, in place (each block with its real
+   *   parents and siblings, as Payload's read access sees it). A `session` event its layout; a
+   *   `commit` each state after each of its operations, applied to the state the previous event
+   *   left (the stream's own copy, taken when each event was sent). So a value one operation
+   *   writes and a later one removes counts, and so does a value a sibling value hides.
+   * Both run on the document's other fields as stored when the check ends (`withCurrentDoc`: a
+   * save that commits during the check runs it again). The first refusal ends the stream with an
+   * `error` event, before that event or any later one goes out; a check that fails closes it.
+   * Reconnects of a Payload blocks field never replay old commits (session.ts).
    */
   const readCheckedSend = (req: PayloadRequest, target: SessionTarget, send: SessionSend, close: () => void): SessionSend => {
-    if (target.codec?.kind !== 'payload-blocks') return send
+    const blocksField = target.codec?.kind === 'payload-blocks'
     let queue: Promise<void> = Promise.resolve()
     let ended = false
     /** The layout as the events sent so far left it (taken when each event was sent). */
@@ -158,19 +164,28 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
     return (event, id) => {
       // The states this event shows, from the events before it: taken now, in send order.
       let layouts: Layout[] | null = []
-      if (event.type === 'session') {
+      if (blocksField && event.type === 'session') {
         shown = (event as { layout: Layout }).layout
         layouts = [shown]
-      } else if (event.type === 'commit') {
+      } else if (blocksField && event.type === 'commit') {
         layouts = shown ? statesThrough(shown, (event as { ops: Operation[] }).ops) : null
         if (layouts && layouts.length > 0) shown = layouts[layouts.length - 1]
       }
-      const doc = options.runtime.sessions.peek(target.collection, target.id)?.doc
       queue = queue
         .then(async () => {
           if (ended) return
           // Operations that do not apply to the stream's copy: the stream cannot tell what they show.
-          const problem = layouts === null ? UNREADABLE_BLOCKS_MESSAGE : await blocksAccessProblem(req, target, { write: false, stored: false, layouts, doc })
+          const states = layouts
+          let problem: string | null = UNREADABLE_BLOCKS_MESSAGE
+          if (states) {
+            const checked = await options.runtime.sessions.withCurrentDoc(target.collection, target.id, async (doc) => {
+              const unreadable = await liveReadProblem(req, target)
+              if (unreadable || states.length === 0) return unreadable
+              return blocksAccessProblem(req, target, { write: false, stored: false, layouts: states, doc })
+            })
+            // No open session: nothing to check against, so nothing goes out.
+            problem = checked ? checked.value : DRAFT_NOT_READABLE_MESSAGE
+          }
           if (ended) return
           if (problem) {
             end(problem)
@@ -207,8 +222,8 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
     if (!(await runtime.canUpdate(req, target.collection, target.id))) {
       return { ok: false, status: 403, error: 'You are not allowed to edit this document', seq: runtime.sessions.peek(target.collection, target.id)?.seq ?? 0 }
     }
-    // The session holds the newest draft: only users who may read it change it (the result goes back to them).
-    const stale = await draftReadProblem(req, target).catch(() => 'Document not found or not readable')
+    // The session holds the document as a draft: only users who may read it so change it (the result goes back to them).
+    const stale = await liveReadProblem(req, target).catch(() => DRAFT_NOT_READABLE_MESSAGE)
     if (stale) return { ok: false, status: 403, error: stale, seq: 0 }
     // A Payload blocks field: only users who may read all of it and update it use the session.
     const live = () => runtime.sessions.peek(target.collection, target.id)
@@ -222,12 +237,17 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
       actor: requestActor(req.user),
       blocks,
       localization,
-      // Field access of block props: a change to a prop the user may not update is refused.
-      // A Payload blocks field: and no value the user may not read, in any state of the batch.
-      access: withBlocksReadCheck(
+      // Inside the commit, on the document as stored then: the user may still read the draft;
+      // field access of block props (a change to a prop the user may not update is refused);
+      // a Payload blocks field: and no value the user may not read, in any state of the batch.
+      access: withLiveReadCheck(
         req,
         target,
-        propAccessCheck(req, { blocks, registry, collection: target.collection, id: target.id, field: target.field, localization }),
+        withBlocksReadCheck(
+          req,
+          target,
+          propAccessCheck(req, { blocks, registry, collection: target.collection, id: target.id, field: target.field, localization }),
+        ),
       ),
       ...input,
     })
@@ -255,8 +275,8 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
         return json({ ok: false, error: 'Document not found or not readable' }, statusOf(error) === 403 ? 403 : 404)
       }
       // A Payload blocks field: only users who may read all of it (the session holds every value).
-      // The session holds the newest draft: a user who may read only an older version gets nothing.
-      const stale = await draftReadProblem(req, target)
+      // The session holds the document as a draft: a user who may read only other versions gets nothing.
+      const stale = await liveReadProblem(req, target).catch(() => DRAFT_NOT_READABLE_MESSAGE)
       if (stale) return json({ ok: false, error: stale }, 403)
       const unreadable = await blocksAccessProblem(req, target, { write: false, layouts: [runtime.sessions.peek(target.collection, target.id)?.layout] })
       if (unreadable) return json({ ok: false, error: unreadable }, 403)
@@ -356,6 +376,9 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
       if (!(await runtime.canUpdate(req, target.collection, target.id))) {
         return json({ ok: false, error: 'You are not allowed to edit this document' } satisfies LiveFlushResponse, 403)
       }
+      // The session holds the document as a draft: only users who may read it so save it.
+      const stale = await liveReadProblem(req, target).catch(() => DRAFT_NOT_READABLE_MESSAGE)
+      if (stale) return json({ ok: false, error: stale } satisfies LiveFlushResponse, 403)
       const denied = await blocksAccessProblem(req, target, { write: true, layouts: [runtime.sessions.peek(target.collection, target.id)?.layout] })
       if (denied) return json({ ok: false, error: denied } satisfies LiveFlushResponse, 403)
       const result = await runtime.sessions.flush(target.collection, target.id)
@@ -415,7 +438,7 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
       } catch (error) {
         return json({ ok: false, error: 'Document not found or not readable' } satisfies LiveValidateResponse, statusOf(error) === 403 ? 403 : 404)
       }
-      const stale = await draftReadProblem(req, target)
+      const stale = await liveReadProblem(req, target).catch(() => DRAFT_NOT_READABLE_MESSAGE)
       if (stale) return json({ ok: false, error: stale } satisfies LiveValidateResponse, 403)
       const hidden = await blocksAccessProblem(req, target, { write: false, layouts: [runtime.sessions.peek(target.collection, target.id)?.layout] })
       if (hidden) return json({ ok: false, error: hidden } satisfies LiveValidateResponse, 403)

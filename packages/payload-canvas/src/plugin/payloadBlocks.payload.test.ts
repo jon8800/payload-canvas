@@ -3,8 +3,8 @@
 // versions run as in an app; only the database is in memory (memoryAdapter.test-data.ts).
 
 import assert from 'node:assert/strict'
-import { after, before, describe, it } from 'node:test'
-import { buildConfig, createLocalReq, getPayload, handleEndpoints, type Block, type CollectionConfig, type Payload, type PayloadRequest } from 'payload'
+import { after, afterEach, before, describe, it } from 'node:test'
+import { buildConfig, createLocalReq, getPayload, handleEndpoints, type Block, type CollectionConfig, type Payload, type PayloadRequest, type Where } from 'payload'
 
 import { autosaveAction } from '../admin/editor/topbar/closeSave'
 import { fromPayloadBlocks } from '../blocks/payload'
@@ -32,9 +32,11 @@ const heading: Block = {
       type: 'text',
       localized: true,
       access: {
-        read: async () => {
-          if (holdTextRead) await holdTextRead
-          return true
+        read: async ({ req, doc }) => {
+          // A test holds the editor's checks here (an admin's own reads go on).
+          if (holdTextRead && (req.user as { role?: string } | null)?.role === 'editor') await holdTextRead
+          // Private pages show their headings to admins only.
+          return (req.user as { role?: string } | null)?.role === 'admin' || !(doc as { private?: boolean } | undefined)?.private
         },
       },
       hooks: {
@@ -47,8 +49,9 @@ const heading: Block = {
       },
     },
     { name: 'level', type: 'select', options: ['h2', 'h3'] },
-    // Not in the builder's inspector: kept as stored.
-    { name: 'note', type: 'text', admin: { hidden: true } },
+    // Not in the builder's inspector: kept as stored. Its own validate function (always valid)
+    // makes the live validate endpoint run for headings.
+    { name: 'note', type: 'text', admin: { hidden: true }, validate: () => true as const },
     // Only admins and reviewers may read it.
     { name: 'secret', type: 'text', access: { read: ({ req }) => ['admin', 'reviewer'].includes(String((req.user as { role?: string } | null)?.role)) } },
     // Hidden from everyone while its sibling flag says so.
@@ -94,7 +97,9 @@ const section: Block = {
 const signedIn = ({ req }: { req: { user?: unknown } }) => Boolean(req.user)
 /** Viewers may read published pages only (Payload's draft read then falls back to the published version). */
 const readPages = ({ req }: { req: { user?: unknown } }) =>
-  (req.user as { role?: string } | null)?.role === 'viewer' ? { _status: { equals: 'published' } } : Boolean(req.user)
+  (req.user as { role?: string } | null)?.role === 'viewer' ? (viewerReadsDrafts ? true : { _status: { equals: 'published' } }) : Boolean(req.user)
+/** While set, viewers may read drafts too (a test takes it away again). */
+let viewerReadsDrafts = false
 /** While set, the live session's own saves fail (a hook refuses them). */
 let failSessionSaves = false
 const users: CollectionConfig = { slug: 'users', auth: true, fields: [{ name: 'role', type: 'text' }] }
@@ -120,6 +125,7 @@ const pages: CollectionConfig = {
   fields: [
     { name: 'title', type: 'text', required: true },
     { name: 'heroTitle', type: 'text', localized: true },
+    { name: 'private', type: 'checkbox' },
     {
       name: 'layout',
       type: 'blocks',
@@ -146,6 +152,29 @@ const admin = { id: 1, collection: 'users', email: 'admin@example.test', role: '
 const editor = { id: 2, collection: 'users', email: 'editor@example.test', role: 'editor' }
 const reviewer = { id: 3, collection: 'users', email: 'reviewer@example.test', role: 'reviewer' }
 const viewer = { id: 4, collection: 'users', email: 'viewer@example.test', role: 'viewer' }
+
+type RuleUser = { role?: string; tenant?: string; email?: string }
+/** Notes: a tenant rule (no status in it) and an "author or published" rule. */
+const notes: CollectionConfig = {
+  slug: 'notes',
+  versions: { drafts: true },
+  access: {
+    read: ({ req }): Where | boolean => {
+      const user = req.user as RuleUser | null
+      if (user?.role === 'tenant') return { tenant: { equals: user.tenant } }
+      if (user?.role === 'author') return { or: [{ _status: { equals: 'published' } }, { author: { equals: user.email } }] }
+      return Boolean(user)
+    },
+    create: signedIn,
+    update: signedIn,
+    delete: signedIn,
+  },
+  fields: [
+    { name: 'title', type: 'text' },
+    { name: 'tenant', type: 'text' },
+    { name: 'author', type: 'text' },
+  ],
+}
 
 /** A collection with the builder's own JSON layout, for the JSON-mode regressions. */
 const posts: CollectionConfig = {
@@ -248,10 +277,10 @@ before(async () => {
     typescript: { autoGenerate: false },
     db: mem.adapter,
     localization: { locales: ['en', 'fr'], defaultLocale: 'en', fallback: true },
-    collections: [users, media, pages, posts],
+    collections: [users, media, pages, posts, notes],
     plugins: [
       websiteBuilder({
-        collections: { pages: { regions: [{ name: 'hero', fields: ['heroTitle'] }] }, posts: {} },
+        collections: { pages: { regions: [{ name: 'hero', fields: ['heroTitle'] }] }, posts: {}, notes: {} },
         blocks: fromPayloadBlocks([section, heading, gallery], { onWarning: false }),
         css: { entry: 'globals.css' },
         theme: false,
@@ -1208,5 +1237,347 @@ describe('independent review: region values in their own locale', () => {
     ;(en as { url?: string }).url = `http://localhost/api${LIVE_PATH}/pages/${id}/regions?locale=en`
     const own = (await (await regions.handler(en)).json()) as { values: Record<string, unknown>; storedValues: Record<string, unknown> }
     assert.equal(own.storedValues.heroTitle, 'Welcome')
+  })
+})
+
+/** A live request as `user` for `collection`/`id`, with `query` on the URL. */
+async function liveRequest(user: unknown, collection: string, id: number, name: string, query = '') {
+  const req = await requestAs(user)
+  req.routeParams = { collection, id: String(id) }
+  ;(req as { url?: string }).url = `http://localhost/api${LIVE_PATH}/${collection}/${id}/${name}${query}`
+  return req
+}
+
+/** A POST live endpoint (`/builder/live/:collection/:id/<name>`) of any collection, as `user`. */
+async function postLive(name: string, user: unknown, collection: string, id: number, body: Record<string, unknown> = {}): Promise<Response> {
+  const endpoint = (payload.config.endpoints ?? []).find((e) => e.path === `${LIVE_PATH}/:collection/:id/${name}` && e.method === 'post')
+  assert.ok(endpoint, name)
+  const req = await liveRequest(user, collection, id, name)
+  req.data = body
+  return endpoint.handler(req)
+}
+
+let streams = 0
+/** Cancels the streams the tests below opened, also after a failed assertion. */
+const openStreams: (() => Promise<void>)[] = []
+afterEach(async () => {
+  for (const cancel of openStreams.splice(0)) await cancel()
+})
+
+/**
+ * Opens the event stream as `user`. `frames(...secrets)` reads it to its first error frame, the
+ * first frame with one of `secrets` (a leak fails at once, not by a timeout) or its end.
+ */
+async function streamAs(user: unknown, collection: string, id: number) {
+  const clientId = `s-${collection}-${id}-${(user as { id: number }).id}-${++streams}`
+  const response = await eventsEndpoint().handler(await liveRequest(user, collection, id, 'events', `?clientId=${clientId}`))
+  const reader = response.status === 200 ? response.body!.getReader() : null
+  const close = async () => {
+    await reader?.cancel().catch(() => undefined)
+  }
+  if (reader) openStreams.push(close)
+  const frames = async (...secrets: string[]) => {
+    if (!reader) return []
+    const decoder = new TextDecoder()
+    const all: string[] = []
+    let buffer = ''
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const parts = buffer.split('\n\n')
+      buffer = parts.pop() ?? ''
+      all.push(...parts)
+      if (all.some((f) => f.includes('event: error') || secrets.some((secret) => f.includes(secret)))) break
+    }
+    await close()
+    return all
+  }
+  return { status: response.status, frames, close }
+}
+
+/** The text a refusal or a stream sent, for "never sent" checks. */
+const sentText = (frames: string[]) => frames.join('\n')
+
+const server = () => payload.config.custom?.[BUILDER_CONFIG_KEY] as BuilderServerConfig
+const actorAdmin = { type: 'user' as const, id: 'users:1', label: 'Admin' }
+
+/** A JSON-layout document with an open session (as `admin`), and a commit helper. Published with `publish`. */
+async function jsonDoc(collection: 'posts' | 'notes', data: Record<string, unknown>, options: { publish?: boolean } = {}) {
+  const created = await payload.create({
+    collection,
+    draft: !options.publish,
+    overrideAccess: true,
+    data: { ...data, ...(options.publish ? { _status: 'published' } : {}), layout: { version: 1, blocks: [] } } as never,
+  })
+  const id = created.id as number
+  const target = sessionTargetOf(payload, server().collections as never, collection, String(id))!
+  const runtime = liveRuntimeOf(payload)
+  const store = payload as unknown as LiveDocStore
+  await runtime.sessions.connect({ target, store, clientId: `admin-${collection}-${id}`, user: admin, send: () => {} })
+  const insert = (text: string, blockId = `h-${text}`) =>
+    runtime.sessions.commit({ target, store, user: admin, actor: actorAdmin, ops: [{ type: 'insert', block: { id: blockId, type: 'heading', props: { text } }, to: { parentId: null, index: 0 } }], blocks: [...storageOf().blocks] })
+  const layout = () => runtime.sessions.peek(collection, id)?.layout as Layout
+  return { id, insert, layout }
+}
+
+/** A published page (nothing secret stored) with an open session as `admin`. */
+async function publishedPage() {
+  const id = await createPage({ secret: false })
+  await payload.update({ collection: 'pages', id, draft: false, overrideAccess: true, data: { _status: 'published' } as never })
+  const session = openSession(id, admin)
+  await session.connect()
+  return { id, session }
+}
+
+const mcpTools = (collection: 'pages' | 'posts') => builderMcpTools({ blocks: [...storageOf().blocks], collections: { [collection]: { field: 'layout' } } })
+
+const tenantA = { id: 21, collection: 'users', email: 'tenant-a@example.test', role: 'tenant', tenant: 'a' }
+const tenantB = { id: 22, collection: 'users', email: 'tenant-b@example.test', role: 'tenant', tenant: 'b' }
+const author = { id: 23, collection: 'users', email: 'author@example.test', role: 'author' }
+const otherAuthor = { id: 24, collection: 'users', email: 'other@example.test', role: 'author' }
+
+describe('live draft read access (second review)', () => {
+  it('a published-only reader gets no stream of a JSON layout, also before anything is saved as a draft', { timeout: 10_000 }, async () => {
+    const post = await jsonDoc('posts', { title: 'Published' }, { publish: true })
+    // The newest stored version is the published one, and Payload gives the viewer that one.
+    const asViewer = await payload.findByID({ collection: 'posts', id: post.id, draft: true, depth: 0, user: viewer, overrideAccess: false })
+    assert.deepEqual((asViewer.layout as Layout).blocks, [])
+    assert.equal((await streamAs(viewer, 'posts', post.id)).status, 403, 'nothing saved yet')
+    // An unsaved edit: Payload's draft read still gives the viewer the published, empty layout.
+    assert.equal((await post.insert('UNPUBLISHED_SECRET')).ok, true)
+    const stream = await streamAs(viewer, 'posts', post.id)
+    assert.equal(stream.status, 403)
+    const again = await payload.findByID({ collection: 'posts', id: post.id, draft: true, depth: 0, user: viewer, overrideAccess: false })
+    assert.ok(!JSON.stringify(again).includes('UNPUBLISHED_SECRET'), "Payload's own read hides it")
+  })
+
+  it('a published-only reader gets no stream of a Payload blocks field with an unsaved edit', { timeout: 10_000 }, async () => {
+    const { id, session } = await publishedPage()
+    assert.equal((await session.commit([{ type: 'update', id: headingOf(session.layout()).id, props: { text: 'UNPUBLISHED_BLOCK_SECRET' } }])).ok, true)
+    const stream = await streamAs(viewer, 'pages', id)
+    assert.equal(stream.status, 403)
+    const operations = await postLive('operations', viewer, 'pages', id, { ops: [{ type: 'update', id: headingOf(session.layout()).id, props: { level: 'h3' } }] })
+    assert.equal(operations.status, 403)
+    assert.ok(!(await operations.text()).includes('UNPUBLISHED_BLOCK_SECRET'))
+    assert.equal(headingOf(session.layout()).props?.level, 'h2', 'not applied')
+    const mcpRead = await mcpTools('pages').find((t) => t.name === 'getLayout')!.handler({ collection: 'pages', id: String(id) }, await requestAs(viewer), {})
+    assert.ok(!JSON.stringify(mcpRead).includes('UNPUBLISHED_BLOCK_SECRET'))
+    assert.equal((mcpRead as { isError?: boolean }).isError, true)
+  })
+
+  it('ends an open JSON stream at the next event once the rule allows published versions only', { timeout: 10_000 }, async () => {
+    const post = await jsonDoc('posts', { title: 'Published' }, { publish: true })
+    viewerReadsDrafts = true
+    try {
+      const stream = await streamAs(viewer, 'posts', post.id)
+      assert.equal(stream.status, 200)
+      const frames = stream.frames('REVOKED_SECRET')
+      await settle()
+      viewerReadsDrafts = false
+      assert.equal((await post.insert('REVOKED_SECRET')).ok, true)
+      const sent = await frames
+      assert.ok(!sentText(sent).includes('REVOKED_SECRET'), 'the pending draft never went out')
+      assert.ok(sent.some((f) => f.includes('event: error')))
+    } finally {
+      viewerReadsDrafts = false
+    }
+  })
+
+  it('ends an open blocks stream at the next event once the rule allows published versions only', { timeout: 10_000 }, async () => {
+    const { id, session } = await publishedPage()
+    viewerReadsDrafts = true
+    try {
+      const stream = await streamAs(viewer, 'pages', id)
+      assert.equal(stream.status, 200)
+      const frames = stream.frames('REVOKED_BLOCK_SECRET')
+      await settle()
+      viewerReadsDrafts = false
+      assert.equal((await session.commit([{ type: 'update', id: headingOf(session.layout()).id, props: { text: 'REVOKED_BLOCK_SECRET' } }])).ok, true)
+      const sent = await frames
+      assert.ok(!sentText(sent).includes('REVOKED_BLOCK_SECRET'))
+      assert.ok(sent.some((f) => f.includes('event: error')))
+    } finally {
+      viewerReadsDrafts = false
+    }
+  })
+
+  it("a tenant rule: the newest draft's tenant decides, not an older version that matches", { timeout: 10_000 }, async () => {
+    const note = await jsonDoc('notes', { title: 'N', tenant: 'a' }, { publish: true })
+    const a = await streamAs(tenantA, 'notes', note.id)
+    assert.equal(a.status, 200, 'tenant A matches')
+    const frames = a.frames('TENANT_B_DRAFT')
+    assert.notEqual((await streamAs(tenantB, 'notes', note.id)).status, 200, 'tenant B does not')
+    // A native draft save (the settings drawer, REST) moves the note to tenant B; the published
+    // version still says A, and Payload's draft read gives tenant A that older version.
+    await payload.update({ collection: 'notes', id: note.id, draft: true, user: admin, overrideAccess: false, data: { tenant: 'b' } as never })
+    const main = await payload.findByID({ collection: 'notes', id: note.id, draft: false, overrideAccess: true })
+    assert.equal(main.tenant, 'a', 'the published document keeps tenant A')
+    const older = await payload.findByID({ collection: 'notes', id: note.id, draft: true, depth: 0, user: tenantA, overrideAccess: false })
+    assert.equal(older.tenant, 'a', "Payload's draft read falls back to the published version")
+    assert.equal((await streamAs(tenantA, 'notes', note.id)).status, 403, 'not from an older version that matches')
+    assert.equal((await postLive('operations', tenantA, 'notes', note.id, { ops: [] })).status, 403)
+    // Tenant A's open stream ends at its next event, before the draft goes out.
+    assert.equal((await note.insert('TENANT_B_DRAFT')).ok, true)
+    const sent = await frames
+    assert.ok(!sentText(sent).includes('TENANT_B_DRAFT'))
+    assert.ok(sent.some((f) => f.includes('event: error')))
+    // Tenant B: Payload's own read of the document refuses too (its published row is tenant A's).
+    assert.notEqual((await streamAs(tenantB, 'notes', note.id)).status, 200)
+  })
+
+  it('an "author or published" rule: the author may use the builder, another reader of the published version may not', { timeout: 10_000 }, async () => {
+    const note = await jsonDoc('notes', { title: 'N', author: 'author@example.test' }, { publish: true })
+    assert.equal((await note.insert('AUTHOR_DRAFT')).ok, true)
+    const own = await streamAs(author, 'notes', note.id)
+    assert.equal(own.status, 200)
+    await own.close()
+    const other = await streamAs(otherAuthor, 'notes', note.id)
+    assert.equal(other.status, 403, 'published only for them')
+    const operations = await postLive('operations', otherAuthor, 'notes', note.id, { ops: [{ type: 'remove', id: 'h-AUTHOR_DRAFT' }] })
+    assert.equal(operations.status, 403)
+    assert.ok(!(await operations.text()).includes('AUTHOR_DRAFT'))
+    assert.ok(note.layout().blocks.some((b) => b.id === 'h-AUTHOR_DRAFT'), 'nothing removed')
+    const allowed = await postLive('operations', author, 'notes', note.id, { ops: [{ type: 'update', id: 'h-AUTHOR_DRAFT', props: { level: 'h3' } }] })
+    assert.equal(allowed.status, 200)
+  })
+
+  it('refuses operations, flush, validate and MCP to a published-only reader while a session is open, before anything changes', { timeout: 10_000 }, async () => {
+    const post = await jsonDoc('posts', { title: 'Published' }, { publish: true })
+    assert.equal((await post.insert('PENDING_TEXT')).ok, true)
+    const operations = await postLive('operations', viewer, 'posts', post.id, { ops: [{ type: 'remove', id: 'h-PENDING_TEXT' }] })
+    assert.equal(operations.status, 403)
+    assert.ok(!(await operations.text()).includes('PENDING_TEXT'))
+    const commit = await postLive('commit', viewer, 'posts', post.id, { clientId: 'viewer-1', batchId: 'b1', ops: [{ type: 'remove', id: 'h-PENDING_TEXT' }] })
+    assert.equal(commit.status, 403)
+    const flush = await postLive('flush', viewer, 'posts', post.id)
+    assert.equal(flush.status, 403)
+    assert.equal(liveRuntimeOf(payload).sessions.unsaved() > 0, true, 'the flush saved nothing')
+    // `note` has its own validate function, so the endpoint runs (and reads) for headings.
+    const validate = await postLive('validate', viewer, 'posts', post.id, { block: { id: 'h-PENDING_TEXT', type: 'heading', props: { text: 'x' } } })
+    assert.equal(validate.status, 403)
+    assert.ok(!(await validate.text()).includes('PENDING_TEXT'))
+    const tools = mcpTools('posts')
+    const mcpRead = await tools.find((t) => t.name === 'getLayout')!.handler({ collection: 'posts', id: String(post.id) }, await requestAs(viewer), {})
+    assert.ok(!JSON.stringify(mcpRead).includes('PENDING_TEXT'))
+    assert.equal((mcpRead as { isError?: boolean }).isError, true)
+    const write = await tools.find((t) => t.name === 'applyOperations')!.handler(
+      { collection: 'posts', id: String(post.id), operations: [{ type: 'remove', id: 'h-PENDING_TEXT' }] },
+      await requestAs(viewer),
+      {},
+    )
+    assert.equal((write as { isError?: boolean }).isError, true)
+    assert.ok(!JSON.stringify(write).includes('PENDING_TEXT'))
+    const validateTool = await tools.find((t) => t.name === 'validateLayout')!.handler({ collection: 'posts', id: String(post.id) }, await requestAs(viewer), {})
+    assert.ok(!JSON.stringify(validateTool).includes('PENDING_TEXT'))
+    assert.ok(post.layout().blocks.some((b) => b.id === 'h-PENDING_TEXT'), 'nothing removed')
+  })
+
+  it('people who may read drafts work as before, and get every pending edit', { timeout: 10_000 }, async () => {
+    const post = await jsonDoc('posts', { title: 'Published' }, { publish: true })
+    const stream = await streamAs(admin, 'posts', post.id)
+    assert.equal(stream.status, 200)
+    const frames = stream.frames('ADMIN_PENDING')
+    await settle()
+    assert.equal((await post.insert('ADMIN_PENDING')).ok, true)
+    const sent = await frames
+    assert.ok(!sent.some((f) => f.includes('event: error')))
+    assert.ok(framesOf(sent, 'commit').some((c) => JSON.stringify(c).includes('ADMIN_PENDING')), 'the commit went out')
+    // The operations endpoint and MCP, with the pending text in the answer.
+    const operations = await postLive('operations', admin, 'posts', post.id, { ops: [{ type: 'update', id: 'h-ADMIN_PENDING', props: { level: 'h3' } }] })
+    assert.equal(operations.status, 200)
+    assert.ok((await operations.text()).includes('ADMIN_PENDING'))
+    const mcpRead = await mcpTools('posts').find((t) => t.name === 'getLayout')!.handler({ collection: 'posts', id: String(post.id) }, await requestAs(admin), {})
+    assert.ok(JSON.stringify(mcpRead).includes('ADMIN_PENDING'))
+    assert.equal((await postLive('flush', admin, 'posts', post.id)).status, 200)
+  })
+})
+
+describe('the document fields field access reads, after a save from outside (second review)', () => {
+  it('a page made private in a save of another field hides its headings from the open stream at once', { timeout: 10_000 }, async () => {
+    const id = await createPage({ secret: false })
+    const session = openSession(id, admin)
+    await session.connect()
+    const stream = await streamAs(editor, 'pages', id)
+    assert.equal(stream.status, 200)
+    const frames = stream.frames('NEW_PRIVATE_SECRET')
+    await settle()
+    // A save of another field (not the blocks): the page becomes private.
+    await payload.update({ collection: 'pages', id, draft: true, user: admin, overrideAccess: false, data: { private: true } as never })
+    assert.equal((await session.commit([{ type: 'update', id: headingOf(session.layout()).id, props: { text: 'NEW_PRIVATE_SECRET' } }])).ok, true)
+    const sent = await frames
+    assert.ok(!sentText(sent).includes('NEW_PRIVATE_SECRET'), 'never sent')
+    assert.ok(sent.some((f) => f.includes('event: error')))
+    // Payload's own read hides it from the editor too.
+    const rest = await payload.findByID({ collection: 'pages', id, draft: true, depth: 0, user: editor, overrideAccess: false })
+    assert.equal(((rest.layout as Row[])[0].content as Row[])[0].text, undefined)
+    // The operations endpoint and MCP refuse before anything applies.
+    const response = await callLive('operations', editor, id, { ops: [{ type: 'update', id: headingOf(session.layout()).id, props: { level: 'h3' } }] })
+    assert.equal(response.status, 403)
+    assert.ok(!(await response.text()).includes('NEW_PRIVATE_SECRET'))
+    assert.equal(headingOf(session.layout()).props?.level, 'h2', 'not applied')
+    const mcpRead = await mcpTools('pages').find((t) => t.name === 'getLayout')!.handler({ collection: 'pages', id: String(id) }, await requestAs(editor), {})
+    assert.ok(!JSON.stringify(mcpRead).includes('NEW_PRIVATE_SECRET'))
+  })
+
+  it("an editor's own commit is checked against the fields as stored now, not as the session loaded them", { timeout: 10_000 }, async () => {
+    // A page without any heading text: nothing the editor may not read is stored, now or later.
+    const created = await payload.create({ collection: 'pages', draft: true, overrideAccess: true, data: { title: 'Plain', layout: [{ blockType: 'heading', level: 'h2' }] } as never })
+    const id = created.id as number
+    const session = openSession(id, admin)
+    await session.connect()
+    // The session read the page while it was public; then a save of another field makes it private.
+    await payload.update({ collection: 'pages', id, draft: true, user: admin, overrideAccess: false, data: { private: true } as never })
+    // The editor may not read heading text on a private page: a batch that adds some is refused before it applies.
+    const response = await callLive('operations', editor, id, {
+      ops: [{ type: 'insert', block: { id: 'editor-heading', type: 'heading', props: { text: 'EDITOR_PRIVATE' } }, to: { parentId: null, index: 0 } }],
+    })
+    assert.equal(response.status, 403)
+    assert.ok(!session.layout().blocks.some((b) => b.id === 'editor-heading'), 'not applied')
+    // The same batch on a public page goes through.
+    await payload.update({ collection: 'pages', id, draft: true, user: admin, overrideAccess: false, data: { private: false } as never })
+    const allowed = await callLive('operations', editor, id, {
+      ops: [{ type: 'insert', block: { id: 'editor-heading', type: 'heading', props: { text: 'EDITOR_PUBLIC' } }, to: { parentId: null, index: 0 } }],
+    })
+    assert.equal(allowed.status, 200, await allowed.clone().text())
+  })
+
+  it('an event waiting in the queue is checked against the document as it is when its check ends', { timeout: 10_000 }, async () => {
+    const id = await createPage({ secret: false })
+    const session = openSession(id, admin)
+    await session.connect()
+    const stream = await streamAs(editor, 'pages', id)
+    assert.equal(stream.status, 200)
+    const frames = stream.frames('QUEUED_PRIVATE_SECRET')
+    await settle()
+    let release!: () => void
+    holdTextRead = new Promise<void>((resolve) => (release = resolve))
+    try {
+      // The commit goes out while the page is public; its check waits inside the field's access.
+      assert.equal((await session.commit([{ type: 'update', id: headingOf(session.layout()).id, props: { text: 'QUEUED_PRIVATE_SECRET' } }])).ok, true)
+      await settle()
+      // Meanwhile the page becomes private.
+      await payload.update({ collection: 'pages', id, draft: true, user: admin, overrideAccess: false, data: { private: true } as never })
+    } finally {
+      holdTextRead = null
+      release()
+    }
+    const sent = await frames
+    assert.ok(!sentText(sent).includes('QUEUED_PRIVATE_SECRET'), 'checked again with the current document')
+    assert.ok(sent.some((f) => f.includes('event: error')))
+  })
+
+  it('a JSON layout: a save of another field applies to the commit checks at once', { timeout: 10_000 }, async () => {
+    const note = await jsonDoc('notes', { title: 'N', tenant: 'a' })
+    const stream = await streamAs(tenantA, 'notes', note.id)
+    assert.equal(stream.status, 200)
+    const frames = stream.frames('MOVED_SECRET')
+    await settle()
+    // The settings drawer moves the draft to tenant B (the session's layout is not touched).
+    await payload.update({ collection: 'notes', id: note.id, draft: true, user: admin, overrideAccess: false, data: { tenant: 'b' } as never })
+    assert.equal((await note.insert('MOVED_SECRET')).ok, true)
+    const sent = await frames
+    assert.ok(!sentText(sent).includes('MOVED_SECRET'))
+    assert.ok(sent.some((f) => f.includes('event: error')))
   })
 })

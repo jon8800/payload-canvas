@@ -136,6 +136,9 @@ export async function loadFieldAccess(req: PayloadRequest, target: SessionTarget
     })
     const { [target.field]: layout, ...rest } = doc
     open = { sessionId: '', seq: 0, layout: (target.codec ?? codecOf(undefined)).decode(layout), doc: rest }
+  } else {
+    // The other fields as stored now (a save may have changed them since the session read them).
+    open = { ...open, doc: (await runtime.sessions.currentDoc(target.collection, target.id)) ?? open.doc }
   }
   return propAccessFor(req, { blocks, registry, collection: target.collection, id: target.id, field: target.field, layout: open.layout, doc: open.doc })
 }

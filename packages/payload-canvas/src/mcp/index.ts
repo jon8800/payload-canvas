@@ -32,7 +32,7 @@ import { validateLayout } from '../core/validate'
 import { actorFromUser, splitLayoutErrors, userLabel, type LiveDocStore } from '../live/apply'
 import { fieldRegistryOf, propAccessCheck } from '../live/fieldChecks'
 import { builderConfigOf } from '../live/document'
-import { draftReadProblem } from '../live/draftAccess'
+import { DRAFT_NOT_READABLE_MESSAGE, liveReadProblem, withLiveReadCheck } from '../live/draftAccess'
 import { blocksAccessProblem, codecOf, withBlocksReadCheck } from '../live/storage'
 import { liveRuntimeOf } from '../live/runtime'
 import type { CommitResult } from '../live/session'
@@ -312,8 +312,8 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       codec: codecOf(builderConfigOf(req.payload)?.collections[collection]),
     }
     // A Payload blocks field: only users who may read all of it and update it use the session.
-    // The session holds the newest draft: only users who may read it change it.
-    const stale = await draftReadProblem(req, target).catch(() => 'Not allowed to read this document (or it does not exist).')
+    // The session holds the document as a draft: only users who may read it so change it.
+    const stale = await liveReadProblem(req, target).catch(() => DRAFT_NOT_READABLE_MESSAGE)
     if (stale) return { ok: false, status: 403, error: stale, seq: 0 }
     const denied = await blocksAccessProblem(req, target, { write: true, layouts: [runtime.sessions.peek(collection, id)?.layout] })
     if (denied) return { ok: false, status: 403, error: denied, seq: 0 }
@@ -325,19 +325,23 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       ops,
       blocks,
       localization: localizationOf(req, collection),
-      // Field access of block props, as for people's edits.
-      // A Payload blocks field: and no value the user may not read, in any state of the batch.
-      access: withBlocksReadCheck(
+      // As for people's edits, inside the commit: the user may still read the draft; field access
+      // of block props; a Payload blocks field: and no value the user may not read, in any state.
+      access: withLiveReadCheck(
         req,
         target,
-        propAccessCheck(req, {
-          blocks,
-          registry: fieldRegistryOf(req.payload),
-          collection,
-          id,
-          field: fieldOf(collection),
-          localization: localizationOf(req, collection),
-        }),
+        withBlocksReadCheck(
+          req,
+          target,
+          propAccessCheck(req, {
+            blocks,
+            registry: fieldRegistryOf(req.payload),
+            collection,
+            id,
+            field: fieldOf(collection),
+            localization: localizationOf(req, collection),
+          }),
+        ),
       ),
     })
     return result
@@ -356,9 +360,10 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
   const currentLayout = async (req: PayloadRequest, collection: string, doc: Record<string, unknown>) => {
     const codec = codecOf(builderConfigOf(req.payload)?.collections[collection])
     const open = liveRuntimeOf(req.payload).sessions.peek(collection, String(doc.id))
-    // The session holds the newest draft: a user who may read only an older version gets nothing from it.
+    // The session holds the document as a draft: a user who may read only other versions gets nothing from it.
     if (open) {
-      const stale = await draftReadProblem(req, { collection, id: doc.id as string | number, drafts: hasDrafts(req, collection) })
+      const target = { collection, id: doc.id as string | number, field: fieldOf(collection), drafts: hasDrafts(req, collection) }
+      const stale = await liveReadProblem(req, target).catch(() => DRAFT_NOT_READABLE_MESSAGE)
       if (stale) throw new Error(stale)
     }
     // A Payload blocks field: the session holds every value, also ones this user may not read.

@@ -88,6 +88,8 @@ export function createRegionsController(context: RegionsContext): RegionsControl
   /** `updatedAt` of this editor's own last save: its `saved` event needs no reload. */
   let ownSave: string | null = null
   let writes: Promise<unknown> = Promise.resolve()
+  // Queued saves may finish after the editor switches locale. History still needs their own values.
+  const storedByLocale = new Map<string | null, Record<string, unknown>>()
 
   const load = async () => {
     const run = ++loadRun
@@ -103,7 +105,9 @@ export function createRegionsController(context: RegionsContext): RegionsControl
         state.set({ ...state.get(), status: 'error', error: body && !body.ok ? body.error : `Could not load the page fields (${response.status}).` })
         return
       }
-      state.set({ values: body.values, storedValues: body.storedValues ?? body.values, access: body.access, status: 'ready', error: null })
+      const storedValues = body.storedValues ?? body.values
+      storedByLocale.set(locale, storedValues)
+      state.set({ values: body.values, storedValues, access: body.access, status: 'ready', error: null })
     } catch {
       if (run === loadRun) state.set({ ...state.get(), status: 'error', error: 'Could not load the page fields. Check your connection.' })
     }
@@ -130,13 +134,15 @@ export function createRegionsController(context: RegionsContext): RegionsControl
         return { ok: false, retryable: response.status !== 403 && response.status !== 409, values: null }
       }
       ownSave = body.updatedAt
+      const storedValues = body.storedValues ?? body.values
+      storedByLocale.set(locale, storedValues)
       if (locale === context.locale()) {
         loadRun++
-        state.set({ ...state.get(), values: body.values, storedValues: body.storedValues ?? body.values, status: 'ready', error: null })
+        state.set({ ...state.get(), values: body.values, storedValues, status: 'ready', error: null })
       }
       else void load()
       context.refreshFrame()
-      return { ok: true, values: body.values, storedValues: body.storedValues ?? body.values }
+      return { ok: true, values: body.values, storedValues }
     } catch {
       context.warn('Not saved. Check your connection.')
       context.refreshFrame()
@@ -144,7 +150,11 @@ export function createRegionsController(context: RegionsContext): RegionsControl
     }
   }
   const post = (changes: LiveFieldChange[], locale: string | null) => {
-    const result = writes.then(() => send(changes, locale))
+    const result = writes.then(async () => {
+      // Earlier queued saves have completed. Capture what this save replaces, before sending it.
+      const beforeValues = storedByLocale.get(locale)
+      return { ...await send(changes, locale), beforeValues }
+    })
     writes = result.catch(() => undefined)
     return result
   }
@@ -187,18 +197,18 @@ export function createRegionsController(context: RegionsContext): RegionsControl
         context.refreshFrame()
         return true
       }
-      const ownValues = state.get().storedValues ?? values
-      const editsForHistory: FieldEdit[] = real.map((e) => {
-        const before = valueAtDocPath(ownValues, e.path) ?? null
+      const ownValues = storedByLocale.get(locale) ?? state.get().storedValues ?? values
+      const historyBefore = (storedValues: Record<string, unknown> | null): FieldEdit[] => real.map((e) => {
+        const before = valueAtDocPath(storedValues, e.path) ?? null
         return { path: e.path, before, after: e.value, ...(!sameValue(before, e.base) ? { beforeShown: e.base } : {}) }
       })
       let finish: ((edits: FieldEdit[] | null) => void) | undefined
       if (options.history !== false) {
         const saved = new Promise<FieldEdit[] | null>((resolve) => { finish = resolve })
-        context.record(editsForHistory, locale, saved)
+        context.record(historyBefore(ownValues), locale, saved)
       }
       const result = await post(real, locale)
-      finish?.(result.ok ? editsForHistory.map((edit) => {
+      finish?.(result.ok ? historyBefore(result.beforeValues ?? ownValues).map((edit) => {
         const shown = valueAtDocPath(result.values, edit.path)
         const own = valueAtDocPath(result.storedValues, edit.path) ?? null
         return { ...edit, after: own, ...(!sameValue(own, shown) ? { afterShown: shown } : {}) }
