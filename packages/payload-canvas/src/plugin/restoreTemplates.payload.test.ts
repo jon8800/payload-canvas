@@ -4,7 +4,7 @@
 
 import assert from 'node:assert/strict'
 import { before, describe, it } from 'node:test'
-import { buildConfig, createLocalReq, getPayload, type Block, type CollectionConfig, type Payload, type PayloadRequest } from 'payload'
+import { buildConfig, createLocalReq, getPayload, handleEndpoints, type Block, type CollectionConfig, type Payload, type PayloadRequest } from 'payload'
 
 import { fromPayloadBlocks } from '../blocks/payload'
 import type { Layout } from '../core/types'
@@ -20,9 +20,17 @@ import { websiteBuilder } from './index'
 let failRestores = false
 /** While set, a hook refuses every Revert (the plugin's save of the stored published layout). */
 let failReverts = false
-const refuseRestores = ({ context, data }: { context: Record<string, unknown>; data: unknown }) => {
+/** While set, the next save with this title waits in the first hook: it holds the write gate, before the session guard. */
+let holdTitle: { title: string; started: () => void; until: Promise<void> } | null = null
+const refuseRestores = async ({ context, data }: { context: Record<string, unknown>; data: unknown }) => {
   if (failRestores && context.isRestoringVersion) throw new Error('The restore was refused by a hook.')
   if (failReverts && context.builderStoredLayout && !context.isRestoringVersion) throw new Error('The revert was refused by a hook.')
+  const held = holdTitle
+  if (held && (data as { title?: unknown } | undefined)?.title === held.title) {
+    holdTitle = null
+    held.started()
+    await held.until
+  }
   return data
 }
 
@@ -325,3 +333,89 @@ for (const collection of ['posts', 'articles'] as const) {
     })
   })
 }
+
+describe('a save from outside while a builder Restore runs (posts)', () => {
+  it('is refused before it can publish the restored layout, and works once the Restore failed', { timeout: 10_000 }, async () => {
+    const id = await publishedDoc('posts', 'v1')
+    await payload.update({ collection: 'posts' as never, id, draft: false, overrideAccess: true, data: { ...kinds.posts.data('v2'), _status: 'published' } as never })
+    const v1 = await versionWhere('posts', id, (v) => kinds.posts.storedText(v) === 'v1')
+    const session = await openSession('posts', id)
+    let started!: () => void
+    const saving = new Promise<void>((resolve) => { started = resolve })
+    let release!: () => void
+    holdTitle = { title: 'Outside', started, until: new Promise<void>((resolve) => { release = resolve }) }
+    // Another editor publishes from the Edit view. The save has the write gate before the session
+    // guard runs, and reaches the guard after the Restore started.
+    const publish = () => payload.update({ collection: 'posts' as never, id, draft: false, overrideAccess: true, data: { title: 'Outside', _status: 'published' } as never })
+    const outside = publish().then(() => null, (error: { status?: number }) => error)
+    await saving
+    failRestores = true
+    try {
+      const restoring = restoreDocumentVersion(await asAdmin(), { target: session.target, versionId: v1, runtime: runtime() })
+      for (let i = 0; i < 400 && !runtime().sessions.peek('posts', id)?.resetting; i++) await new Promise((resolve) => setTimeout(resolve, 5))
+      assert.equal(runtime().sessions.peek('posts', id)?.resetting, true, 'the Restore has started')
+      assert.equal(textOf(session.layout()), 'v2', 'it waits for the save that holds the write gate')
+      release()
+      assert.equal((await outside)?.status, 409, 'the outside save is refused')
+      assert.equal((await restoring).ok, false)
+    } finally {
+      failRestores = false
+      holdTitle = null
+      release()
+    }
+    assert.equal(textOf(session.layout()), 'v2')
+    const live = (await payload.findByID({ collection: 'posts' as never, id, draft: false, overrideAccess: true, depth: 0 })) as unknown as Record<string, unknown>
+    assert.equal(kinds.posts.storedText(live), 'v2', 'the failed Restore never goes live')
+    assert.equal(live.title, 'P')
+    // The same save works after the Restore.
+    await publish()
+    const after = (await payload.findByID({ collection: 'posts' as never, id, draft: false, overrideAccess: true, depth: 0 })) as unknown as Record<string, unknown>
+    assert.equal(after.title, 'Outside')
+    assert.equal(kinds.posts.storedText(after), 'v2')
+    assert.deepEqual(await session.flush(), { ok: true })
+  })
+})
+
+/** The error a call fails with, or null. */
+const failure = (run: () => Promise<unknown>) => run().then(() => null, (error: { status?: number; message?: string }) => error)
+
+describe('bulk updates of a builder collection', () => {
+  for (const collection of ['posts', 'articles'] as const) {
+    it(`are refused before anything is written, also with overrideAccess, and updates by ID still work (${collection})`, { timeout: 10_000 }, async () => {
+      const id = await publishedDoc(collection, 'v1')
+      const versions = await versionCount(collection, id)
+      const stored = await storedDraft(collection, id)
+      const where = { id: { equals: id } }
+      // The Local API, with overrideAccess (its default): Payload's own `disableBulkEdit` check does not run.
+      const local = await failure(() => payload.update({ collection: collection as never, where, data: { title: 'Bulk' } as never }))
+      assert.equal(local?.status, 409)
+      assert.match(local?.message ?? '', /Update each document by ID\./)
+      // An id of 0 runs the bulk update in the Local API.
+      const zero = await failure(() => payload.update({ collection, id: 0, where, data: { title: 'Bulk' } } as never))
+      assert.equal(zero?.status, 409)
+      // A user's bulk update: Payload refuses it first (`disableBulkEdit`).
+      const asUser = await failure(() => payload.update({ collection: collection as never, where, data: { title: 'Bulk' } as never, overrideAccess: false, user: admin as never }))
+      assert.equal(asUser?.status, 403)
+      // REST: one refusal for the whole request, not a 200 with an error per document.
+      const response = await handleEndpoints({
+        config: payload.config,
+        request: new Request(`http://localhost/api/${collection}?where[id][equals]=${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: 'Bulk' }),
+        }),
+      })
+      assert.equal(response.status, 403)
+      assert.match(JSON.stringify(await response.json()), /disabled bulk edit/)
+      assert.equal(payload.collections[collection as never].config.disableBulkEdit, true, 'the list view offers no bulk edit')
+      // Nothing was written.
+      assert.equal(await versionCount(collection, id), versions)
+      const after = await storedDraft(collection, id)
+      assert.equal(after.title, stored.title)
+      assert.equal(after.updatedAt, stored.updatedAt)
+      // An update by ID works as before.
+      await payload.update({ collection: collection as never, id, draft: true, data: { title: 'By ID' } as never })
+      assert.equal((await storedDraft(collection, id)).title, 'By ID')
+    })
+  }
+})

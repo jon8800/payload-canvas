@@ -754,6 +754,8 @@ function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): Collect
   } as EditViews
   return {
     ...collection,
+    // The write gate refuses bulk updates (live/writeGate.ts): the list view does not offer them.
+    disableBulkEdit: true,
     fields: [...fields, layoutField, generatedCssField, ...(richText ? [richText] : [])],
     // Payload's document lock stays on: it protects the other fields in the Edit view and the
     // settings drawer. The builder view never takes it; the plugin's own saves keep it.
@@ -830,6 +832,8 @@ function addPayloadBlocksBuilder(collection: CollectionConfig, args: AddBuilderA
   const skip = [builderConfigFieldName(field), ...(richText ? [richText.name] : []), ...ownFields]
   return {
     ...collection,
+    // The write gate refuses bulk updates (live/writeGate.ts): the list view does not offer them.
+    disableBulkEdit: true,
     fields: [...collection.fields, configField, ...(richText ? [richText] : [])],
     hooks: {
       ...collection.hooks,

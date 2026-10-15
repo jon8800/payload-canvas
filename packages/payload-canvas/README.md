@@ -1852,7 +1852,7 @@ How it works:
 - An editor applies its own change at once, then sends it to `commit`. The server applies changes in the order they arrive, raises `seq` by 1, and sends each change to every open editor. A change that no longer applies (for example, someone deleted its block) is rejected, and that editor drops it.
 - The server saves the session as a draft about 1 second after the last change (at the latest every 5 seconds). The save runs as the person who made the last change, with their access rules, and the normal save hook compiles the CSS.
 - For native JSON layouts, an open session protects its unsaved layout from other document saves. Publish first saves pending edits and stops if that save fails. Payload's own version restore replaces the session from the restored version after commit. Existing Payload blocks fields follow the authoritative stored field, as described above.
-- Builder Restore and Revert pause background layout saves and outside layout sync until their save finishes. Concurrent actions run in order. Publish waits for an active action. A failed action keeps earlier unsaved edits, and outside saves remain authoritative.
+- Builder Restore and Revert pause background layout saves and outside layout sync until their save finishes. Concurrent actions run in order. Flush waits for an active action. Other JSON document saves during the action return 409; retry after it finishes. This includes Publish if the action starts after its flush. A failed action keeps earlier unsaved edits, and outside saves remain authoritative.
 - Every editor gets a `saved` event after each save and a `published` event after Publish, Unpublish or Revert, so the top bar shows the same status for everyone.
 - The session closes 60 seconds after the last editor leaves and its draft is saved.
 
@@ -1868,6 +1868,7 @@ Saves of one document never overlap: Payload's update reads the newest version a
 Limits:
 
 - Sessions live in the memory of one server process. With more than one app server, route all requests for a document to the same server (sticky routing), or keep one app server.
+- Builder collections disable bulk editing. Bulk updates (`payload.update` with `where`) return 403 or 409. Update each document by ID. This keeps every update inside the write gate. Bulk publish, unpublish, trash changes and folder moves are unavailable; use the document's Edit view. Permanent bulk delete still works.
 - Two people who change the same prop at the same time: the later change wins.
 - On SIGINT/SIGTERM the plugin saves unsaved session edits before the process exits. To make that possible, it holds back `process.exit` for at most 3 seconds, and only while unsaved edits exist. A hard kill (`SIGKILL`, a crash) can still lose the last 1–5 seconds of edits.
 - Two people typing in the same text field at the same moment: the later value wins for the whole field.
@@ -1957,7 +1958,7 @@ All entries must show one version. Pin `payload`, `@payloadcms/*` and `next` to 
 
 ## Limits
 
-This is version 0.1. Before 1.0, a minor version can change the API. Known limits:
+This is version 0.2. Before 1.0, a minor version can change the API. Known limits:
 
 - **Payload 3 only.** Payload 4 (canary today) changes the admin UI. The builder does not support it yet.
 - **Next.js and React only.** The admin editor and the canvas need a Next.js app (Payload's own requirement). Other frontends can render the stored JSON with their own code.
@@ -1965,6 +1966,7 @@ This is version 0.1. Before 1.0, a minor version can change the API. Known limit
 - **The canvas runtime runs only in the editor's iframe.** `payload-canvas/react/canvas` belongs on the canvas route and nowhere else.
 - **Tailwind CSS v4 only.** Styles are Tailwind classes, compiled from your Tailwind v4 entry CSS.
 - **One server process.** Live sessions live in memory. See [Multiplayer editing](#multiplayer-editing) and [Deploying](#deploying). Serverless platforms are not supported.
+- **Updates by ID.** Builder collections disable bulk editing and refuse bulk updates with 403 or 409. Update each document by ID to preserve the order of saves.
 - **Tested databases.** Postgres is tested end to end. Other Payload adapters store the layout in a JSON field and should work, but are not tested.
 - **The editor's own labels are in English.** Payload's inputs inside it follow the admin language.
 

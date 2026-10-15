@@ -4,7 +4,7 @@ import { describe, it } from 'node:test'
 import { applyOperations } from '../core/operations'
 import { findBlock } from '../core/tree'
 import type { BlockDefinition, Layout } from '../core/types'
-import { layoutAfterChange, layoutBeforeChange } from '../plugin/hook'
+import { layoutAfterChange, layoutBeforeChange, STORED_LAYOUT_CONTEXT } from '../plugin/hook'
 import { actorFromUser, resolveOperations, type LiveDocStore } from './apply'
 import { requestActor, sessionStream, sseFrame } from './endpoints'
 import { createKeyedMutex } from './mutex'
@@ -16,6 +16,7 @@ import {
   collaboratorName,
   createSessionManager,
   sanitizeAwareness,
+  type CommitArgs,
   type SessionManagerOptions,
   type SessionTarget,
 } from './session'
@@ -378,7 +379,7 @@ describe('reset failure after a queued save', () => {
 
 describe('reset with an outside read in flight', () => {
   for (const codec of [JSON_CODEC, payloadBlocksCodec({ blocks, rootTypes: ['heading'] })]) {
-    it(`keeps the outside ${codec.kind} save when a reset fails with an autosave queued`, async () => {
+    it(`waits for the read of an outside ${codec.kind} save, then drops the transient edit of a failed reset`, async () => {
       const clock = fakeTimers()
       const gate = createWriteGate()
       const sessions = createSessionManager({ timers: clock.timers, gate })
@@ -417,18 +418,26 @@ describe('reset with an outside read in flight', () => {
         holdNextRead = true
       })
       await reading
+      const action = hold()
       const resetting = sessions.resetFor(target.collection, target.id, reset, codec.encode(reset), () =>
-        gate.run(key, {}, async () => { throw new Error('action refused') }),
+        gate.run(key, {}, async () => {
+          await action.promise
+          throw new Error('action refused')
+        }),
       )
       const rejected = assert.rejects(resetting, /action refused/)
       await settle()
+      assert.deepEqual(sessions.peek(target.collection, target.id)!.layout, initial, 'the reset waits for the read that holds the write gate')
+      releaseRead()
+      await settle()
+      assert.deepEqual(sessions.peek(target.collection, target.id)!.layout, reset)
       assert.equal((await sessions.commit({
         target: codecTarget, store, user: ana, actor: actorFromUser(ana), blocks,
         ops: [{ type: 'update', id: 'h1', props: { text: 'RESET+EDIT' } }],
       })).ok, true)
       await clock.advance(1000)
       assert.equal(writes, 1, 'the action has not finished')
-      releaseRead()
+      action.release()
       await rejected
       assert.deepEqual(await sessions.flush(target.collection, target.id), { ok: true })
       assert.deepEqual(sessions.peek(target.collection, target.id)!.layout, external, 'the transient reset edit is discarded')
@@ -438,7 +447,7 @@ describe('reset with an outside read in flight', () => {
     })
 
     for (const automatic of [false, true]) {
-      it(`resumes an older ${codec.kind} read after reset times out (${automatic ? 'automatic' : 'flush'})`, async () => {
+      it(`takes an outside ${codec.kind} read in flight when a reset times out at the write gate (${automatic ? 'automatic' : 'flush'})`, async () => {
         const clock = fakeTimers()
         const gate = createWriteGate({ waitMs: 15 })
         const sessions = createSessionManager({ timers: clock.timers, gate })
@@ -484,6 +493,7 @@ describe('reset with an outside read in flight', () => {
           await assert.rejects(sessions.resetFor(target.collection, target.id, reset, codec.encode(reset), () =>
             gate.run(key, {}, async () => assert.fail('the reset must time out before it can write')),
           ), /another save/)
+          assert.deepEqual(sessions.peek(target.collection, target.id)!.layout, initial, 'the reset never started')
           assert.equal(sessions.unsaved(), 1, 'the outside read is still pending')
           if (!automatic) {
             let finished = false
@@ -499,10 +509,8 @@ describe('reset with an outside read in flight', () => {
           releaseRead()
         }
         await settle()
-        if (automatic) {
-          assert.equal(sessions.unsaved(), 1, 'the discarded read still needs a refresh')
-          await clock.advance(1000)
-        } else assert.deepEqual(await flushing, { ok: true })
+        if (automatic) await clock.advance(1000)
+        else assert.deepEqual(await flushing, { ok: true })
         assert.deepEqual(sessions.peek(target.collection, target.id)!.layout, external)
         assert.deepEqual(doc.layout, codec.encode(external))
         assert.equal(writes, 1, 'the refresh does not write another draft')
@@ -510,7 +518,7 @@ describe('reset with an outside read in flight', () => {
       })
     }
 
-    it(`keeps a successful reset after an older ${codec.kind} read returns`, async () => {
+    it(`starts a successful reset after the read of an outside ${codec.kind} save, which never comes back`, async () => {
       const initial: Layout = { version: 1, blocks: [heading('h1', 'ORIGINAL')] }
       const reset: Layout = { version: 1, blocks: [heading('h1', 'RESET')] }
       const external: Layout = { version: 1, blocks: [heading('h1', 'EXTERNAL'), heading('outside', 'EXTERNAL ONLY')] }
@@ -558,10 +566,10 @@ describe('reset with an outside read in flight', () => {
         }),
       )
       await settle()
-      assert.deepEqual(sessions.peek(target.collection, target.id)!.layout, reset)
+      assert.deepEqual(sessions.peek(target.collection, target.id)!.layout, initial, 'the reset waits for the read that holds the write gate')
       releaseRead()
       await resetting
-      assert.deepEqual(sessions.peek(target.collection, target.id)!.layout, reset, 'the older read cannot replace the reset')
+      assert.deepEqual(sessions.peek(target.collection, target.id)!.layout, reset, 'the outside layout read before cannot replace the reset')
       assert.deepEqual(doc.layout, codec.encode(reset))
       assert.deepEqual(await sessions.flush(target.collection, target.id), { ok: true })
       assert.equal(sessions.unsaved(), 0)
@@ -882,6 +890,520 @@ describe('reset action boundaries', () => {
       assert.equal(reads, 2)
       assert.deepEqual(h.sessions.peek(target.collection, target.id)!.layout, h.layout('RESET'))
       assert.deepEqual(h.db.doc.layout, codec.encode(h.layout('RESET')))
+    })
+  }
+})
+
+/**
+ * A JSON layout document saved through the real save hooks (the session guard and its after-commit
+ * report). Payload with drafts: the published document and the newest draft are stored apart.
+ */
+function guardSetup() {
+  const clock = fakeTimers()
+  const gate = createWriteGate()
+  const sessions = createSessionManager({ timers: clock.timers, gate, logger: { error: () => {} } })
+  let published: Record<string, unknown> = { id: 'p1', layout: headingLayout('ORIGINAL'), _status: 'published' }
+  let draft = structuredClone(published)
+  const writes: { draft: boolean; layout: unknown }[] = []
+  const store: LiveDocStore = {
+    async findByID() {
+      return structuredClone(draft)
+    },
+    async update(args) {
+      const data = structuredClone(args.data as Record<string, unknown>)
+      draft = { ...draft, ...data }
+      if (args.draft === false) published = structuredClone(draft)
+      writes.push({ draft: args.draft !== false, layout: data.layout })
+      return structuredClone(draft)
+    },
+  }
+  const key = writeKey(target.collection, target.id)
+  const req = { payload: { logger: { info() {}, warn() {}, error() {} } }, t: (s: string) => s }
+  const before = layoutBeforeChange({ collection: 'pages', field: 'layout', cssField: 'layoutCss', blocks, css: { entry: 'does-not-exist.css' }, sessions }) as unknown as (
+    args: unknown,
+  ) => Promise<Record<string, unknown>>
+  const after = layoutAfterChange({ collection: 'pages', sessions, writeGate: gate }) as unknown as (args: unknown) => Promise<unknown>
+  /**
+   * One update as Payload runs it: it takes the write gate, reads the document (`reading`), runs the
+   * guard, writes (`writing`), and reports the save after its commit.
+   */
+  const save = (
+    data: Record<string, unknown>,
+    options: { publish?: boolean; context?: Record<string, unknown>; reading?: Promise<void>; writing?: Promise<void> } = {},
+  ) =>
+    gate.run(key, {}, async () => {
+      await options.reading
+      const context: Record<string, unknown> = { ...options.context }
+      const out = await before({ collection: { versions: { drafts: true } }, context, data, operation: 'update', originalDoc: { ...draft, id: 'p1' }, req })
+      await options.writing
+      const saved = await store.update({ collection: target.collection, id: target.id, data: out, draft: !options.publish })
+      await after({ context, doc: saved })
+      return saved
+    })
+  const connect = (clientId = 'a') => sessions.connect({ target, store, clientId, user: ana, send: () => {} })
+  const edit = (text: string, access?: CommitArgs['access']) =>
+    sessions.commit({ target, store, user: ana, actor: actorFromUser(ana), blocks, ops: [{ type: 'update', id: 'h1', props: { text } }], ...(access ? { access } : {}) })
+  const peek = () => sessions.peek(target.collection, target.id)!
+  const flush = () => sessions.flush(target.collection, target.id)
+  return {
+    clock, gate, sessions, key, save, connect, edit, peek, flush, writes,
+    get published() { return published },
+    get draft() { return draft },
+  }
+}
+
+/** The answer of a promise, or the error it failed with. */
+const outcome = <T>(promise: Promise<T>) => promise.then((value) => ({ value, error: null }), (error: { status?: number }) => ({ value: null, error }))
+
+describe('guarded saves during a reset action', () => {
+  it('refuses a Publish that reaches the guard during a Restore, and publishes the restored screen after the Restore fails', async () => {
+    const h = guardSetup()
+    await h.connect()
+    // Publish saved the session first (nothing to save) and holds the gate; it still reads the document.
+    assert.deepEqual(await h.flush(), { ok: true })
+    const reading = hold()
+    const publishing = outcome(h.save({ _status: 'published' }, { publish: true, reading: reading.promise }))
+    await settle()
+    const restoring = h.sessions.resetFor(target.collection, target.id, headingLayout('OLD VERSION'), headingLayout('OLD VERSION'), () =>
+      h.gate.run(h.key, {}, async () => {
+        throw new Error('restore refused')
+      }),
+    )
+    const restored = assert.rejects(restoring, /restore refused/)
+    await settle()
+    const during = h.peek().resetting
+    reading.release()
+    const published = await publishing
+    await restored
+    assert.equal(published.error?.status, 409, 'Publish is refused while the Restore runs')
+    assert.deepEqual(h.published.layout, headingLayout('ORIGINAL'), 'the failed Restore never goes live')
+    assert.equal(during, true)
+    assert.equal(h.peek().resetting, undefined)
+    // Publish again: it publishes what the editors see.
+    await h.save({ _status: 'published' }, { publish: true })
+    assert.deepEqual(h.published.layout, headingLayout('ORIGINAL'))
+    assert.deepEqual(await h.flush(), { ok: true })
+    assert.deepEqual(h.draft.layout, headingLayout('ORIGINAL'))
+    assert.deepEqual(h.writes.map((w) => w.draft), [false], 'nothing else was written')
+    assert.equal(h.sessions.unsaved(), 0)
+  })
+
+  it('refuses a settings save that gets the gate between a failed Revert and its rollback, and saves it after', async () => {
+    const h = guardSetup()
+    await h.connect()
+    const action = hold()
+    const reverting = h.sessions.resetFor(target.collection, target.id, headingLayout('RESET'), headingLayout('RESET'), () =>
+      h.gate.run(h.key, {}, async () => {
+        await action.promise
+        throw new Error('revert refused')
+      }),
+    )
+    const reverted = assert.rejects(reverting, /revert refused/)
+    await settle()
+    // An edit on the reset layout holds the session lock while its access check runs.
+    const access = hold()
+    const editing = h.edit('RESET+EDIT', async () => {
+      await access.promise
+      return null
+    })
+    await settle()
+    // The settings drawer's autosave waits for the gate behind the Revert.
+    const drawer = outcome(h.save({ title: 'New title' }))
+    await settle()
+    action.release()
+    await settle()
+    access.release()
+    assert.equal((await editing).ok, true)
+    await reverted
+    assert.equal((await drawer).error?.status, 409, 'the drawer is refused before it copies the reset layout')
+    await h.clock.advance(10_000)
+    assert.deepEqual(await h.flush(), { ok: true })
+    assert.deepEqual(h.peek().layout, headingLayout('ORIGINAL'))
+    assert.deepEqual(h.draft.layout, headingLayout('ORIGINAL'), 'the reset layout never reaches storage')
+    assert.equal(h.writes.length, 0)
+    // The drawer keeps its values and saves them again.
+    await h.save({ title: 'New title' })
+    assert.equal(h.draft.title, 'New title')
+    assert.deepEqual(h.draft.layout, headingLayout('ORIGINAL'))
+    assert.equal(h.sessions.unsaved(), 0)
+  })
+
+  it("lets the Revert's own save through the guard, and refuses another save with the same context", async () => {
+    const h = guardSetup()
+    await h.connect()
+    const action = hold()
+    const context = { [STORED_LAYOUT_CONTEXT]: true }
+    const reverting = h.sessions.resetFor(target.collection, target.id, headingLayout('PUBLISHED'), headingLayout('PUBLISHED'), async () => {
+      await action.promise
+      return h.save({ layout: headingLayout('PUBLISHED'), _status: 'published' }, { publish: true, context })
+    })
+    await settle()
+    // A plugin save of this document from another request (for example a template's "Default" flag).
+    const other = await outcome(h.save({ title: 'Other' }, { context }))
+    action.release()
+    await reverting
+    assert.equal(other.error?.status, 409)
+    assert.deepEqual(h.published.layout, headingLayout('PUBLISHED'))
+    assert.deepEqual(await h.flush(), { ok: true })
+    assert.deepEqual(h.writes.map((w) => w.draft), [false])
+    assert.equal(h.sessions.unsaved(), 0)
+  })
+
+  for (const succeeds of [false, true]) {
+    it(`a Revert waits for a guarded save that read the session before it (Revert ${succeeds ? 'works' : 'fails'})`, async () => {
+      const h = guardSetup()
+      await h.connect()
+      // The drawer read the session before the Revert started, and still holds the write gate.
+      const writing = hold()
+      const drawer = h.save({ title: 'New title' }, { writing: writing.promise })
+      await settle()
+      const action = hold()
+      const reverting = h.sessions.resetFor(target.collection, target.id, headingLayout('PUBLISHED'), headingLayout('PUBLISHED'), async () => {
+        await action.promise
+        if (!succeeds) throw new Error('revert refused')
+        return h.save({ layout: headingLayout('PUBLISHED'), _status: 'published' }, { publish: true, context: { [STORED_LAYOUT_CONTEXT]: true } })
+      })
+      const reverted = succeeds ? reverting : assert.rejects(reverting, /revert refused/)
+      await settle()
+      assert.deepEqual(h.peek().layout, headingLayout('ORIGINAL'), 'the Revert waits for the save that holds the write gate')
+      writing.release()
+      await drawer
+      await settle()
+      assert.deepEqual(h.peek().layout, headingLayout('PUBLISHED'))
+      assert.equal((await h.edit('PUBLISHED+EDIT')).ok, true)
+      action.release()
+      await reverted
+      await h.clock.advance(10_000)
+      assert.deepEqual(await h.flush(), { ok: true })
+      const expected = succeeds ? headingLayout('PUBLISHED+EDIT') : headingLayout('ORIGINAL')
+      assert.deepEqual(h.peek().layout, expected)
+      assert.deepEqual(h.draft.layout, expected)
+      assert.equal(h.draft.title, 'New title')
+      assert.equal(h.sessions.unsaved(), 0)
+    })
+  }
+
+  it('refuses a save that an earlier action started when it runs during a later action', async () => {
+    const h = guardSetup()
+    await h.connect()
+    const late = hold()
+    let child!: ReturnType<typeof outcome>
+    await h.sessions.resetFor(target.collection, target.id, headingLayout('FIRST'), headingLayout('FIRST'), async () => {
+      // A save the first Revert starts and does not wait for.
+      child = outcome((async () => {
+        await late.promise
+        return h.save({ title: 'Late' })
+      })())
+      return h.save({ layout: headingLayout('FIRST'), _status: 'published' }, { publish: true, context: { [STORED_LAYOUT_CONTEXT]: true } })
+    })
+    const second = hold()
+    const reverting = h.sessions.resetFor(target.collection, target.id, headingLayout('SECOND'), headingLayout('SECOND'), async () => {
+      await second.promise
+      throw new Error('second refused')
+    })
+    const reverted = assert.rejects(reverting, /second refused/)
+    await settle()
+    late.release()
+    const result = await child
+    second.release()
+    await reverted
+    assert.equal(result.error?.status, 409, "the first Revert's late save is not the second one's")
+    await h.clock.advance(10_000)
+    assert.deepEqual(await h.flush(), { ok: true })
+    assert.deepEqual(h.peek().layout, headingLayout('FIRST'))
+    assert.deepEqual(h.draft.layout, headingLayout('FIRST'))
+    assert.equal(h.draft.title, undefined)
+    assert.equal(h.sessions.unsaved(), 0)
+  })
+
+  it("a guarded save that read a closed session never marks the next session's edits as saved", async () => {
+    const h = guardSetup()
+    const first = await h.connect('a')
+    assert.equal((await h.edit('FIRST')).ok, true)
+    assert.deepEqual(await h.flush(), { ok: true })
+    const writing = hold()
+    const drawer = h.save({ title: 'New title' }, { writing: writing.promise })
+    await settle()
+    first.leave()
+    await h.clock.advance(60_000)
+    assert.equal(h.sessions.size(), 0)
+    await h.connect('b')
+    assert.equal((await h.edit('SECOND')).ok, true)
+    writing.release()
+    await drawer
+    assert.equal(h.sessions.unsaved(), 1, "the new session's edit is not saved yet")
+    assert.deepEqual(await h.flush(), { ok: true })
+    assert.deepEqual(h.draft.layout, headingLayout('SECOND'))
+    assert.equal(h.draft.title, 'New title')
+  })
+})
+
+describe('hook changes of a guarded save and a reset', () => {
+  it('applies the hook changes of a save that committed before a reset, before the reset replaces the state', async () => {
+    const { sessions, db, connect } = setup({}, headingLayout('ORIGINAL'))
+    await connect('a')
+    // A guarded save read the session before the Revert started. Its write is still running.
+    const read = sessions.peek(target.collection, target.id)!
+    const access = hold()
+    const action = hold()
+    // An edit holds the session lock while its access check runs, and is refused.
+    const editing = sessions.commit({
+      target, store: db.store, user: ana, actor: actorFromUser(ana), blocks,
+      ops: [{ type: 'update', id: 'h1', props: { text: 'REFUSED' } }],
+      access: async () => {
+        await access.promise
+        return 'refused'
+      },
+    })
+    await settle()
+    const reverting = sessions.resetFor(target.collection, target.id, headingLayout('RESET'), headingLayout('RESET'), async () => {
+      await action.promise
+      throw new Error('revert refused')
+    })
+    const reverted = assert.rejects(reverting, /revert refused/)
+    await settle()
+    // The guarded save commits: the layout its prop hooks changed, then the after-commit pair.
+    await db.store.update({ collection: target.collection, id: target.id, data: { layout: headingLayout('HOOKED') } })
+    sessions.markSaved(target.collection, target.id, read.seq, { sessionId: read.sessionId })
+    sessions.adoptSaved(target.collection, target.id, { input: read.layout, output: headingLayout('HOOKED'), seq: read.seq, sessionId: read.sessionId })
+    access.release()
+    assert.equal((await editing).ok, false)
+    await settle()
+    action.release()
+    await reverted
+    assert.deepEqual(sessions.peek(target.collection, target.id)!.layout, headingLayout('HOOKED'))
+    assert.equal(sessions.unsaved(), 0)
+    assert.deepEqual(await sessions.flush(target.collection, target.id), { ok: true })
+    assert.deepEqual(db.doc.layout, headingLayout('HOOKED'))
+    assert.equal(db.writes.length, 1, 'only the guarded save wrote')
+  })
+
+  it('waits for a guarded save that holds the write gate: a failed reset puts back its hook changes', async () => {
+    const gate = createWriteGate()
+    const { sessions, clock, db, connect } = setup({ gate }, headingLayout('ORIGINAL'))
+    await connect('a')
+    const read = sessions.peek(target.collection, target.id)!
+    const key = writeKey(target.collection, target.id)
+    // A guarded save copied the session before the Revert started. It still holds the write gate.
+    const writing = hold()
+    const saving = gate.run(key, {}, async () => {
+      await writing.promise
+      await db.store.update({ collection: target.collection, id: target.id, data: { layout: headingLayout('HOOKED') } })
+      sessions.markSaved(target.collection, target.id, read.seq, { sessionId: read.sessionId })
+      sessions.adoptSaved(target.collection, target.id, { input: read.layout, output: headingLayout('HOOKED'), seq: read.seq, sessionId: read.sessionId })
+    })
+    await settle()
+    const reverting = sessions.resetFor(target.collection, target.id, headingLayout('RESET'), headingLayout('RESET'), () =>
+      gate.run(key, {}, async () => {
+        throw new Error('revert refused')
+      }),
+    )
+    const reverted = assert.rejects(reverting, /revert refused/)
+    await settle()
+    assert.deepEqual(sessions.peek(target.collection, target.id)!.layout, headingLayout('ORIGINAL'), 'the Revert waits for the save')
+    writing.release()
+    await saving
+    await reverted
+    await clock.advance(10_000)
+    assert.deepEqual(await sessions.flush(target.collection, target.id), { ok: true })
+    assert.deepEqual(db.doc.layout, headingLayout('HOOKED'), 'the committed hook change stays stored')
+    assert.deepEqual(sessions.peek(target.collection, target.id)!.layout, headingLayout('HOOKED'))
+    assert.equal(db.writes.length, 1, 'nothing writes over it')
+    assert.equal(sessions.unsaved(), 0)
+  })
+
+  it('applies the hook changes of a save that read another session, and saves them again', async () => {
+    const { sessions, clock, db, connect } = setup({}, headingLayout('ORIGINAL'))
+    const first = await connect('a')
+    const read = sessions.peek(target.collection, target.id)!
+    first.connection.leave()
+    await clock.advance(60_000)
+    assert.equal(sessions.size(), 0)
+    await connect('b')
+    await db.store.update({ collection: target.collection, id: target.id, data: { layout: headingLayout('HOOKED') } })
+    sessions.markSaved(target.collection, target.id, read.seq, { sessionId: read.sessionId })
+    sessions.adoptSaved(target.collection, target.id, { input: read.layout, output: headingLayout('HOOKED'), seq: read.seq, sessionId: read.sessionId })
+    await settle()
+    assert.deepEqual(sessions.peek(target.collection, target.id)!.layout, headingLayout('HOOKED'))
+    assert.equal(sessions.unsaved(), 1, "another session's seq never counts as saved here")
+    assert.deepEqual(await sessions.flush(target.collection, target.id), { ok: true })
+    assert.deepEqual(db.doc.layout, headingLayout('HOOKED'))
+    assert.equal(sessions.unsaved(), 0)
+  })
+})
+
+/** A document whose stored layout outside saves change, by id (through the write gate) or by `where` (not gated). */
+function outsideSetup(codec: LayoutCodec) {
+  const clock = fakeTimers()
+  const gate = createWriteGate()
+  const sessions = createSessionManager({ timers: clock.timers, gate, logger: { error: () => {} } })
+  const codecTarget = { ...target, codec }
+  let doc: Record<string, unknown> = { id: 'p1', layout: codec.encode(headingLayout('ORIGINAL')) }
+  let writes = 0
+  let next: { started: () => void; held: Promise<void>; fail: boolean } | null = null
+  const store: LiveDocStore = {
+    async findByID() {
+      // The read sees the document as it is when the read starts.
+      const snapshot = structuredClone(doc)
+      const step = next
+      next = null
+      if (step) {
+        step.started()
+        await step.held
+        if (step.fail) throw new Error('Outside read failed')
+      }
+      return snapshot
+    },
+    async update(args) {
+      writes += 1
+      doc = { ...doc, ...structuredClone(args.data as Record<string, unknown>) }
+      return structuredClone(doc)
+    },
+  }
+  /** Holds the next read of the document; `fail`: it fails when released. */
+  const holdNextRead = (fail = false) => {
+    const held = hold()
+    const read = { started: false, release: held.release }
+    next = { started: () => { read.started = true }, held: held.promise, fail }
+    return read
+  }
+  const key = writeKey(target.collection, target.id)
+  const store_ = (value: Layout) => {
+    doc = { ...doc, layout: codec.encode(value) }
+    sessions.externalSaved(target.collection, target.id, { layoutChanged: true })
+  }
+  /** A save by id: through the write gate. `then` runs while it still holds the gate. */
+  const savedById = (value: Layout, then?: () => void) => gate.run(key, {}, async () => {
+    store_(value)
+    then?.()
+  })
+  /** A bulk update (`where`): the write gate covers updates by id only. */
+  const savedByWhere = (value: Layout) => store_(value)
+  const connect = () => sessions.connect({ target: codecTarget, store, clientId: 'a', user: ana, send: () => {} })
+  const edit = (text: string) =>
+    sessions.commit({ target: codecTarget, store, user: ana, actor: actorFromUser(ana), blocks, ops: [{ type: 'update', id: 'h1', props: { text } }] })
+  return {
+    clock, sessions, store, holdNextRead, savedById, savedByWhere, connect, edit,
+    peek: () => sessions.peek(target.collection, target.id)!,
+    flush: () => sessions.flush(target.collection, target.id),
+    get doc() { return doc },
+    get writes() { return writes },
+  }
+}
+
+/** The heading h1 with `text`, and one more heading per outside save. */
+const withRows = (text: string, ...extra: string[]): Layout => ({ version: 1, blocks: [heading('h1', text), ...extra.map((id) => heading(id, id.toUpperCase()))] })
+
+describe('outside saves during a read of the stored layout', () => {
+  for (const codec of [JSON_CODEC, payloadBlocksCodec({ blocks, rootTypes: ['heading'] })]) {
+    it(`${codec.kind}: keeps a bulk update that lands during the read of an earlier outside save`, async () => {
+      const h = outsideSetup(codec)
+      await h.connect()
+      let read!: ReturnType<typeof h.holdNextRead>
+      await h.savedById(withRows('S1'), () => {
+        read = h.holdNextRead()
+      })
+      await settle()
+      assert.equal(read.started, true)
+      h.savedByWhere(withRows('S1', 'bulk'))
+      read.release()
+      await settle()
+      assert.equal((await h.edit('EDIT')).ok, true)
+      assert.deepEqual(await h.flush(), { ok: true })
+      assert.deepEqual(h.peek().layout, withRows('EDIT', 'bulk'))
+      assert.deepEqual(h.doc.layout, codec.encode(withRows('EDIT', 'bulk')), 'the committed bulk row survives')
+      assert.equal(h.writes, 1)
+      assert.equal(h.sessions.unsaved(), 0)
+    })
+
+    for (const count of [2, 3]) {
+      it(`${codec.kind}: takes the newest of ${count} outside saves that each land during the read of the one before`, async () => {
+        const h = outsideSetup(codec)
+        await h.connect()
+        assert.equal((await h.edit('EDIT')).ok, true)
+        const rows: string[] = []
+        let read!: ReturnType<typeof h.holdNextRead>
+        await h.savedById(withRows('S1'), () => {
+          read = h.holdNextRead()
+        })
+        for (let i = 2; i <= count; i++) {
+          await settle()
+          assert.equal(read.started, true, `the read after outside save ${i - 1} runs`)
+          rows.push(`u${i}`)
+          h.savedByWhere(withRows('S1', ...rows))
+          const older = read
+          // The next read (for the newer save) is held too, except for the last.
+          if (i < count) read = h.holdNextRead()
+          older.release()
+        }
+        await settle()
+        assert.deepEqual(h.peek().layout, withRows('EDIT', ...rows), 'the session shows the newest stored layout')
+        assert.deepEqual(await h.flush(), { ok: true })
+        assert.deepEqual(h.doc.layout, codec.encode(withRows('EDIT', ...rows)))
+        assert.equal(h.writes, 1)
+        assert.equal(h.sessions.unsaved(), 0)
+      })
+    }
+
+    it(`${codec.kind}: retries a failed outside read and never saves on a read that a newer outside save overtook`, async () => {
+      const h = outsideSetup(codec)
+      await h.connect()
+      assert.equal((await h.edit('EDIT')).ok, true)
+      let failing!: ReturnType<typeof h.holdNextRead>
+      await h.savedById(withRows('S1'), () => {
+        failing = h.holdNextRead(true)
+      })
+      await settle()
+      assert.equal(failing.started, true)
+      failing.release()
+      await settle()
+      assert.equal(h.sessions.unsaved(), 1, 'the failed read keeps the outside save pending')
+      // The session save reads first; a bulk update lands during that read.
+      const read = h.holdNextRead()
+      await h.clock.advance(1000)
+      assert.equal(read.started, true, 'the save reads the outside save first')
+      h.savedByWhere(withRows('S1', 'bulk'))
+      read.release()
+      await settle()
+      assert.deepEqual(h.doc.layout, codec.encode(withRows('EDIT', 'bulk')), 'the save is based on the newest stored layout')
+      assert.deepEqual(await h.flush(), { ok: true })
+      assert.deepEqual(h.peek().layout, withRows('EDIT', 'bulk'))
+      assert.deepEqual(h.doc.layout, codec.encode(withRows('EDIT', 'bulk')))
+      assert.equal(h.writes, 1)
+      assert.equal(h.sessions.unsaved(), 0)
+    })
+
+    it(`${codec.kind}: a save whose every read is overtaken writes nothing, and its retry saves on the newest layout`, async () => {
+      const h = outsideSetup(codec)
+      await h.connect()
+      assert.equal((await h.edit('EDIT')).ok, true)
+      let failing!: ReturnType<typeof h.holdNextRead>
+      await h.savedById(withRows('S1'), () => {
+        failing = h.holdNextRead(true)
+      })
+      await settle()
+      failing.release()
+      await settle()
+      let read = h.holdNextRead()
+      await h.clock.advance(1000)
+      const rows: string[] = []
+      for (let i = 1; i <= 3; i++) {
+        assert.equal(read.started, true, `read ${i} of the save runs`)
+        rows.push(`u${i}`)
+        h.savedByWhere(withRows('S1', ...rows))
+        const older = read
+        if (i < 3) read = h.holdNextRead()
+        older.release()
+        await settle()
+      }
+      assert.equal(h.writes, 0, 'no write on a read that a newer outside save overtook')
+      assert.deepEqual(h.doc.layout, codec.encode(withRows('S1', ...rows)))
+      assert.deepEqual(h.peek().layout, withRows('EDIT', ...rows), 'the queued outside sync takes the newest layout')
+      assert.equal(h.sessions.unsaved(), 1)
+      await h.clock.advance(2000)
+      assert.deepEqual(h.doc.layout, codec.encode(withRows('EDIT', ...rows)))
+      assert.equal(h.writes, 1)
+      assert.equal(h.sessions.unsaved(), 0)
     })
   }
 })

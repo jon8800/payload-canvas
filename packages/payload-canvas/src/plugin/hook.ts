@@ -89,6 +89,8 @@ export const KEEP_LAYOUT_CONTEXT = 'builderKeepLayout'
  * request's `context`: one document's seq must never mark another document's session as saved.
  */
 export const GUARD_SEQ_CONTEXT = 'builderSessionSeq'
+/** `context` key where the guard records the id of the session it read, per document (`docEntry`). */
+export const GUARD_SESSION_CONTEXT = 'builderSessionId'
 /**
  * `context` key where the save hook puts the layout before and after the prop hooks
  * (`{ input, output }`), when the hooks changed a value, per document (`docEntry`). The live
@@ -324,13 +326,20 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
     if (sessions && operation === 'update' && docId !== undefined && !own && !isRestore(context)) {
       const open = sessions.peek(slug, docId)
       if (open) {
+        // A Restore or Revert runs: its layout may still be rolled back. Refused at once, never
+        // waiting while this save holds the write gate (the action's save needs it).
+        if (open.resetting) throw new APIError('Not saved: this document is being restored or reverted. Try again in a moment.', 409, undefined, true)
         data[field] = structuredClone(open.layout)
         guarded = true
         setDocEntry(context, GUARD_SEQ_CONTEXT, slug, docId, open.seq)
+        setDocEntry(context, GUARD_SESSION_CONTEXT, slug, docId, open.sessionId)
       }
     }
     // An earlier guarded save of this document in the same request does not make this one guarded.
-    if (!guarded && docId !== undefined) setDocEntry(context, GUARD_SEQ_CONTEXT, slug, docId, undefined)
+    if (!guarded && docId !== undefined) {
+      setDocEntry(context, GUARD_SEQ_CONTEXT, slug, docId, undefined)
+      setDocEntry(context, GUARD_SESSION_CONTEXT, slug, docId, undefined)
+    }
 
     // Stale-save check for the other fields (title, slug, SEO, …): a form loaded before someone
     // else changed a field must not undo that change. See live/fieldsGuard.ts.
@@ -489,13 +498,15 @@ export function layoutAfterChange(options: {
     if (seq !== undefined) {
       // Editors show the page frame again when this save changed a region's field.
       const fields = operation === 'update' ? changedFieldsOf(context, options.collection, doc.id) : []
-      const info = { updatedAt: doc.updatedAt, status: doc._status, fields }
+      const guarded = docEntry(context, GUARD_SESSION_CONTEXT, options.collection, doc.id)
+      const source = typeof guarded === 'string' ? { sessionId: guarded } : {}
+      const info = { updatedAt: doc.updatedAt, status: doc._status, fields, ...source }
       // The save ran the prop hooks on the session's layout. Every editor gets the changed values.
       const changes = hookChangesOf(context, options.collection, doc.id)
       const docId = doc.id as string | number
       afterCommit(() => {
         options.sessions.markSaved(options.collection, docId, seq, info)
-        if (changes) options.sessions.adoptSaved(options.collection, docId, { ...changes, seq })
+        if (changes) options.sessions.adoptSaved(options.collection, docId, { ...changes, seq, ...source })
       })
     } else if (operation === 'update' && context?.[KEEP_LAYOUT_CONTEXT] && !context?.[SESSION_SAVE_CONTEXT]) {
       // A plugin save that left the layout alone (another template's "Default" flag): editors hear
