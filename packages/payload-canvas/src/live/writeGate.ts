@@ -4,7 +4,9 @@
 // whole version back. Two saves of one document that overlap therefore lose a change: the live
 // session saves only the layout, the settings drawer's autosave saves the other fields, and the
 // one that read first writes the other's fields back with their old values. The write gate makes
-// every update of a builder document wait until the update before it has ended.
+// every update of a builder document wait until the update before it has ended. A bulk update
+// (`where`) is refused with a 409: Payload reads every document it updates before it writes any,
+// so no wait per document could keep it from writing over a save that commits in between.
 //
 // When a save ends comes from the database's own answer, never from a guess:
 // - With a transaction: when the adapter's `commitTransaction` or `rollbackTransaction` for that
@@ -145,6 +147,22 @@ async function versionParent(req: object, collection: string, versionId: unknown
 /** The answer when a save cannot get the document's gate. */
 function busy(key: string, why: string): APIError {
   return new APIError(`Not saved: another save of this document is still running (${why}). Try again in a moment.`, 409, { key }, true)
+}
+
+/**
+ * True when Payload runs an update as an update by id. Its Local API runs the bulk update unless
+ * `options.id` is truthy (an id of `0` or `''` runs the bulk update); REST and GraphQL send an id
+ * only to the update by id. An update with `where` is refused too, whatever its id.
+ */
+const isUpdateByID = (args: { id?: unknown; where?: unknown }) =>
+  args.where === undefined && (typeof args.id === 'string' || typeof args.id === 'number') && Boolean(args.id)
+
+/**
+ * The answer to a bulk update (`where`) of a builder document. It reads every document before it
+ * writes any, so no gate can keep it from writing over a save that commits in between.
+ */
+function bulkRefused(collection: string): APIError {
+  return new APIError(`Not saved: bulk updates of "${collection}" are not supported, because they can overwrite other saves of a document. Update each document by ID.`, 409, { collection }, true)
 }
 
 export function createWriteGate(options: WriteGateOptions = {}): WriteGate {
@@ -374,11 +392,13 @@ export function createWriteGate(options: WriteGateOptions = {}): WriteGate {
     hooks(collection) {
       return {
         beforeOperation: async ({ args, operation, req }) => {
+          if (operation !== 'update' && operation !== 'restoreVersion') return args
+          // A bulk update is refused before it reads or writes anything (also with overrideAccess).
+          if (operation === 'update' && !isUpdateByID(args as { id?: unknown; where?: unknown })) throw bulkRefused(collection)
           let id = (args as { id?: unknown }).id
           // Restoring a version writes its document: its gate, by the version's parent.
           if (operation === 'restoreVersion') id = await versionParent(req, collection, id)
-          // Updates by id only: a bulk update (`where`) has no single document to wait for.
-          if ((operation !== 'update' && operation !== 'restoreVersion') || (typeof id !== 'string' && typeof id !== 'number')) return args
+          if (typeof id !== 'string' && typeof id !== 'number') return args
           learnFrom(req)
           const key = writeKey(collection, id)
           const transaction = transactionOf(req)

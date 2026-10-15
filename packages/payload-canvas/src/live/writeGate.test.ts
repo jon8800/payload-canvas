@@ -440,12 +440,25 @@ describe('write gate', () => {
     assert.deepEqual(seen, ['ok'])
   })
 
-  it('leaves bulk updates and other operations alone', async () => {
+  it('refuses bulk updates before they read or write, and leaves other operations alone', async () => {
     const gate = createWriteGate()
     const hooks = gate.hooks('pages')
     const req = {}
-    const bulk = { where: { id: { in: [1, 2] } }, req }
-    assert.equal(await hooks.beforeOperation({ args: bulk, operation: 'update', req } as never), bulk)
+    const refused = (args: Record<string, unknown>) =>
+      assert.rejects(
+        async () => {
+          await hooks.beforeOperation({ args: { ...args, req }, operation: 'update', req } as never)
+        },
+        (error: { status?: number; message?: string }) => error.status === 409 && /Update each document by ID\./.test(error.message ?? ''),
+      )
+    // REST sends `where` without an id; the Local API runs the bulk update unless `id` is truthy.
+    await refused({ where: { id: { in: [1, 2] } } })
+    await refused({ id: undefined, where: { id: { equals: 1 } } })
+    await refused({ id: 0, where: { id: { equals: 1 } } })
+    await refused({ id: '', where: { id: { equals: 1 } } })
+    await refused({ id: 1, where: { id: { equals: 1 } } })
+    await refused({ id: { equals: 1 } })
+    await refused({})
     const create = { data: {}, req }
     assert.equal(await hooks.beforeOperation({ args: create, operation: 'create', req } as never), create)
     assert.equal(gate.holds(req), false)

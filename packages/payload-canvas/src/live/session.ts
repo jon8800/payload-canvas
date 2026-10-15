@@ -9,6 +9,8 @@
 // In-process only: with more than one app server, route each document to one server (sticky
 // routing), because the session state lives in memory.
 
+import { AsyncLocalStorage } from 'node:async_hooks'
+
 import { sameJson } from '../core/fieldSemantics'
 import { indexLayout, normalizeLayout } from '../core/tree'
 import type { BlockDefinition, Layout, LocaleSettings, Operation } from '../core/types'
@@ -145,14 +147,17 @@ export type CommitResult =
 /**
  * A read-only view of an open session. `doc` is the document as the session last read it, without
  * the layout field (a read after a save may still run: access checks use `currentDoc`).
+ * `resetting`: a Restore or Revert of the document runs, and the caller is not its own save. Its
+ * layout may still be rolled back, so no other save may store it.
  */
-export type SessionSnapshot = { sessionId: string; seq: number; layout: Layout; doc: Record<string, unknown> }
+export type SessionSnapshot = { sessionId: string; seq: number; layout: Layout; doc: Record<string, unknown>; resetting?: true }
 
 /**
  * What one save did to the layout through the props' hooks: the layout it got (`input`, the
- * session's layout at `seq`) and the layout it stored (`output`).
+ * session's layout at `seq`) and the layout it stored (`output`). `sessionId`: the session the save
+ * read. Changes from a save of another session are applied, but never count as saved.
  */
-export type SavedHookChanges = { input: Layout; output: Layout; seq: number }
+export type SavedHookChanges = { input: Layout; output: Layout; seq: number; sessionId?: string }
 
 /** The actor of the commits that bring hook changes from a save to the editors. */
 export const FIELD_HOOKS_ACTOR: LiveActor = { type: 'user', id: 'system:field-hooks', label: 'Field hooks' }
@@ -179,9 +184,11 @@ export interface SessionManager {
   /**
    * Records that a save outside the session stored the layout at `seq` (the save-hook guard),
    * and tells the editors with a `saved` event. Call it after the save committed: it reads the
-   * document's other fields again (`currentDoc`).
+   * document's other fields again (`currentDoc`). `info.sessionId`: the session the guard read.
+   * When the session has another id now (a reset, or the session closed and opened again), the
+   * save counts as a completed write, and none of the session's commits count as saved.
    */
-  markSaved(collection: string, id: string | number, seq: number, info?: SavedInfo): void
+  markSaved(collection: string, id: string | number, seq: number, info?: SavedInfo & { sessionId?: string }): void
   /**
    * A save outside the session (the save-hook guard) stored the session's layout at `seq` after
    * the props' hooks changed it. The changed values go to every editor as a commit; a value someone
@@ -361,6 +368,11 @@ type Session = {
   /** A save outside the session changed the stored layout: read it again before the next save. */
   externalPending: boolean
   /**
+   * Counts the outside saves that changed the stored layout. A read that started before the newest
+   * of them may miss it, so it leaves that save pending.
+   */
+  externalGen: number
+  /**
    * The operations of the commits not saved yet (seq above `persistedSeq`), as they apply to the
    * current layout. A save from outside replays them on the stored layout, as often as needed;
    * the commit log is for reconnects and is cleared then.
@@ -386,6 +398,8 @@ type Session = {
   docFailed: boolean
   /** Raised each time a read finds any value of `doc` changed (`updatedAt` included). */
   docVersion: number
+  /** The newest queued adoption of a save's hook changes (`queueAdopt`), until it runs. */
+  adopting: Promise<void> | null
 }
 
 /**
@@ -410,6 +424,8 @@ type ResetUndo = {
 
 /** How often `withCurrentDoc` runs a check while saves keep changing the document. */
 const CURRENT_DOC_TRIES = 3
+/** How often a session save reads the stored layout while outside saves keep changing it. */
+const EXTERNAL_SYNC_TRIES = 3
 
 const realTimers: SessionTimers = {
   now: () => Date.now(),
@@ -519,6 +535,11 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
   const mutex = createKeyedMutex()
   const resetMutex = createKeyedMutex()
   const activeActions = new Map<string, Promise<void>>()
+  /**
+   * The reset action (its `activeActions` entry) that runs the current save (`resetFor`'s `save`),
+   * also in work that save started: it counts as that action's own only while that action runs.
+   */
+  const actionSave = new AsyncLocalStorage<Promise<void>>()
   let tokens = 0
 
   // ---- loading ----------------------------------------------------------
@@ -573,6 +594,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
             saveError: null,
             evictTimer: null,
             externalPending: false,
+            externalGen: 0,
             unsaved: [],
             stored: doc[target.field],
             ownRowIds: codecOfTarget(target).rowIds?.(doc[target.field]) ?? new Set(),
@@ -581,6 +603,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
             docGen: 0,
             docFailed: false,
             docVersion: 0,
+            adopting: null,
           }
           sessions.set(key, session)
           return session
@@ -708,9 +731,13 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     /** The save itself. Reads the layout only now: with the gate, after every save before it committed. */
     const save = async (req?: object) => {
       if (activeActions.has(session.key)) return PAUSED
-      // A save outside the session changed the stored value meanwhile: take it first.
-      if (session.externalPending) await syncExternal(session)
-      if (activeActions.has(session.key)) return PAUSED
+      // A save outside the session changed the stored value meanwhile: take it first. A newer outside
+      // save during the read leaves it pending: read again, never write on the older base.
+      for (let tries = 0; session.externalPending; tries++) {
+        if (tries === EXTERNAL_SYNC_TRIES) throw Object.assign(new Error('The stored layout kept changing during the save.'), { status: 409 })
+        await syncExternal(session)
+        if (activeActions.has(session.key)) return PAUSED
+      }
       // A save outside the session stored this layout while this one waited (Publish): nothing to write.
       if (!dirty(session)) return SKIPPED
       seq = session.seq
@@ -891,21 +918,23 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
    * commits on top (each operation that still applies). Every editor gets the new state; the
    * session id stays, so editors rebase their unsent changes instead of dropping them.
    * `savedSeq`: the session's own save that stored this document (its commits up to that seq are
-   * in it). Throws when the stored value cannot be read as a layout. The document's other fields
-   * come from the read every committed save starts (`refreshDoc`), not from here.
+   * in it). `outside`: a read for saves outside the session, with the session id and `externalGen`
+   * from when it started. Throws when the stored value cannot be read as a layout. The document's
+   * other fields come from the read every committed save starts (`refreshDoc`), not from here.
    */
-  const rebaseOn = async (session: Session, doc: Record<string, unknown>, savedSeq?: number, expectedSessionId?: string) => {
+  const rebaseOn = async (session: Session, doc: Record<string, unknown>, savedSeq?: number, outside?: { sessionId: string; gen: number }) => {
     const { target } = session
     const base = codecOfTarget(target).decode(doc[target.field])
     await mutex.run(session.key, async () => {
       if (sessions.get(session.key) !== session) return
-      // Outside reads wait for the action's outcome; an older session's read must be repeated.
-      if (expectedSessionId !== undefined && (activeActions.has(session.key) || session.sessionId !== expectedSessionId)) {
+      // Outside reads wait for the action's outcome. A read from before a reset, or from before a
+      // newer outside save, is repeated: it never takes that save's place.
+      if (outside && (activeActions.has(session.key) || session.sessionId !== outside.sessionId || session.externalGen !== outside.gen)) {
         session.externalPending = true
         markDirty(session)
         return
       }
-      if (expectedSessionId !== undefined) session.externalPending = false
+      if (outside) session.externalPending = false
       session.stored = doc[target.field]
       rememberRows(session)
       if (savedSeq !== undefined) session.persistedSeq = Math.max(session.persistedSeq, savedSeq)
@@ -947,9 +976,9 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
    */
   const syncExternal = async (session: Session) => {
     if (activeActions.has(session.key)) return
-    const sessionId = session.sessionId
+    const outside = { sessionId: session.sessionId, gen: session.externalGen }
     try {
-      await rebaseOn(session, await readStored(session), undefined, sessionId)
+      await rebaseOn(session, await readStored(session), undefined, outside)
     } catch (error) {
       session.externalPending = true
       throw error
@@ -969,7 +998,9 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     if (ops.length === 0) return
     const resolved = resolveOperations(session.layout, ops)
     if (!resolved.ok) return
-    const clean = session.seq === changes.seq && session.persistedSeq >= changes.seq
+    // Another session's seq says nothing about this one: its changes are saved again.
+    const sameSession = changes.sessionId === undefined || changes.sessionId === session.sessionId
+    const clean = sameSession && session.seq === changes.seq && session.persistedSeq >= changes.seq
     session.layout = resolved.layout
     session.seq += 1
     session.knownBlocking = null
@@ -986,11 +1017,21 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     }
   }
 
-  /** Queues `adopt` behind the commits in flight. Never awaited by a save (Revert waits for saves under the mutex). */
+  /**
+   * Queues `adopt` behind the commits in flight. Never awaited by a save. A reset waits for it
+   * (`session.adopting`): the changes belong to the state the reset replaces.
+   */
   const queueAdopt = (session: Session, changes: SavedHookChanges, info?: SavedInfo) => {
-    void mutex.run(session.key, async () => adopt(session, changes, info)).catch((error: unknown) => {
-      logger.error(`[websiteBuilder] Could not apply the field hook changes of ${session.key}.`, error)
-    })
+    const queued: Promise<void> = mutex
+      .run(session.key, async () => {
+        // Under the mutex: the next task finds no adoption queued before it.
+        if (session.adopting === queued) session.adopting = null
+        adopt(session, changes, info)
+      })
+      .catch((error: unknown) => {
+        logger.error(`[websiteBuilder] Could not apply the field hook changes of ${session.key}.`, error)
+      })
+    session.adopting = queued
   }
 
   const markDirty = (session: Session) => {
@@ -1009,14 +1050,17 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
    * `session` event with `reset: true` and a new session id: commits made on the old state can no
    * longer be replayed or rebased. A save in flight must not land after the caller's save of the
    * new layout: it is awaited outside the mutex (a save may need the mutex itself, it takes a save
-   * from outside first). `change` also gets the session's state from before anything here changed
-   * it (`prior.dirty`: it had unsaved commits). False when no session is open.
+   * from outside first). So are the queued hook changes of saves that committed before: the state
+   * the reset replaces (and puts back when the action fails) holds them. `change` also gets the
+   * session's state from before anything here changed it (`prior.dirty`: it had unsaved commits).
+   * False when no session is open.
    */
   const replaceState = async (key: string, change: (session: Session, prior: { dirty: boolean }) => void): Promise<boolean> => {
     for (;;) {
       // A load holds the mutex while it waits for this action. It will read the final document.
-      if (!sessions.has(key)) return false
-      const running = sessions.get(key)?.persisting
+      const open = sessions.get(key)
+      if (!open) return false
+      const running = open.persisting ?? open.adopting
       if (running) {
         await running
         continue
@@ -1024,8 +1068,9 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
       const done = await mutex.run(key, async () => {
         const session = sessions.get(key)
         if (!session) return false
-        // A save started while this waited for the mutex: wait for it outside, then try again.
-        if (session.persisting) return null
+        // A save started, or hook changes were queued, while this waited for the mutex: wait for
+        // them outside, then try again.
+        if (session.persisting || session.adopting) return null
         // Before the seq below moves on (that alone would make the session look unsaved).
         const prior = { dirty: dirty(session) }
         if (session.persistTimer !== null) timers.clear(session.persistTimer)
@@ -1077,12 +1122,13 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     if (needsSave) markDirty(session)
   }
 
-  const resetAction = <T>(key: string, change: () => Promise<T>): Promise<T> => resetMutex.run(key, async () => {
+  const resetAction = <T>(key: string, change: (action: Promise<void>) => Promise<T>): Promise<T> => resetMutex.run(key, async () => {
     let resume!: () => void
-    activeActions.set(key, new Promise<void>((resolve) => { resume = resolve }))
+    const action = new Promise<void>((resolve) => { resume = resolve })
+    activeActions.set(key, action)
     loading.get(key)?.invalidate()
     try {
-      return await change()
+      return await change(action)
     } finally {
       activeActions.delete(key)
       resume()
@@ -1321,11 +1367,15 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     },
 
     peek(collection, id) {
-      const session = sessions.get(channelKey(collection, id))
-      return session ? { sessionId: session.sessionId, seq: session.seq, layout: session.layout, doc: session.doc } : null
+      const key = channelKey(collection, id)
+      const session = sessions.get(key)
+      if (!session) return null
+      const action = activeActions.get(key)
+      const resetting = action !== undefined && actionSave.getStore() !== action
+      return { sessionId: session.sessionId, seq: session.seq, layout: session.layout, doc: session.doc, ...(resetting ? { resetting: true as const } : {}) }
     },
 
-    markSaved(collection, id, seq, info) {
+    markSaved(collection, id, seq, info = {}) {
       const session = sessions.get(channelKey(collection, id))
       if (!session) return
       session.completedWrites += 1
@@ -1335,7 +1385,10 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
       // newest version. Then the session must save again, so it stays dirty. Editors still hear
       // of the save (its time, its status and the other fields it changed), with the seq already
       // saved. A session save that only waits for the gate checks again when it gets it.
-      if (session.persisting && session.writing) {
+      // A save that read an earlier session (before a reset, or before the session closed and opened
+      // again) holds none of this session's commits: its seq says nothing about them.
+      const earlier = info.sessionId !== undefined && info.sessionId !== session.sessionId
+      if (earlier || (session.persisting && session.writing)) {
         deliver(session, savedEvent(session.persistedSeq, info))
         return
       }
@@ -1363,6 +1416,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
       refreshDoc(session)
       deliver(session, savedEvent(session.persistedSeq, info))
       if (!info.layoutChanged) return
+      session.externalGen += 1
       session.externalPending = true
       if (activeActions.has(session.key)) return
       // Now, so open editors see the change at once (the next save takes it too, see `persist`).
@@ -1398,7 +1452,11 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
 
     async resetFor(collection, id, layout, stored, save) {
       const key = channelKey(collection, id)
-      return resetAction(key, async () => {
+      return resetAction(key, async (action) => {
+        // A save that holds the write gate now started before this action: its commit and its hook
+        // changes belong to the state the reset replaces, and puts back when `save` fails. The gate
+        // is only passed, never held across `save`. Guarded saves that come after are refused.
+        if (gate) await gate.run(writeKey(collection, id), {}, async () => {})
         let before: ResetUndo | null = null
         await replaceState(key, (session, prior) => {
           before = {
@@ -1412,7 +1470,8 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
           resetTo(session, layout, stored)
         })
         try {
-          return await save()
+          // Its own updates may store the reset layout; other guarded saves are refused.
+          return await actionSave.run(action, save)
         } catch (error) {
           // Set inside the reset (a closure): no open session leaves it null.
           const undo = before as ResetUndo | null
