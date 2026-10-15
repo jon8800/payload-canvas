@@ -72,3 +72,11 @@ export function useValueSelector<S, T>(store: ValueStore<S>, selector: (value: S
 export function sameItems<T>(a: readonly T[], b: readonly T[]): boolean {
   return a === b || (a.length === b.length && a.every((item, i) => Object.is(item, b[i])))
 }
+
+const noSubscription = () => () => {}
+const nothing = () => null
+
+/** The value of a store that may not exist (an optional feature): null without one. */
+export function useOptionalValue<T>(store: ValueStore<T> | null): T | null {
+  return useSyncExternalStore(store?.subscribe ?? noSubscription, store?.get ?? nothing, store?.get ?? nothing)
+}

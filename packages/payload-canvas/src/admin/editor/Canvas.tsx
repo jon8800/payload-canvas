@@ -8,7 +8,18 @@ import { ancestors } from './actions'
 import { dragModeChoice, prefersReducedMotion, useDragModeSetting } from './dnd/mode'
 import { dropAt } from './dnd/smooth'
 import { BlockIcon, Icon } from './icons'
-import { applyInlineChange, applyInlineJoin, applyInlineSplit, boundHint, inlineEditing, noteInlineStart, refuseLockedInline, stopInlineEditing } from './inline'
+import {
+  applyInlineChange,
+  applyInlineJoin,
+  applyInlineSplit,
+  boundHint,
+  endRegionInline,
+  inlineEditing,
+  noteInlineStart,
+  refuseLockedInline,
+  stopInlineEditing,
+} from './inline'
+import { regionAt, selectOwner } from './regions/select'
 import { blockName } from './names'
 import { MenuButton } from './menu/Menu'
 import { playMotion } from './motion/play'
@@ -132,6 +143,7 @@ export function Canvas() {
           }
           if (message.kind === 'leave') {
             store.hover(null)
+            runtime.regions?.hovered.set(null)
             window.clearTimeout(spotTimer)
             spotTimer = window.setTimeout(() => runtime.insertSpot.set(null), SPOT_LINGER_MS)
             return
@@ -140,6 +152,9 @@ export function Canvas() {
           if (!m) return
           const { layout } = store.getState()
           const hit = deepestBlockAt(layout, m, message)
+          // Over no block: maybe over a fixed region of the page frame.
+          const region = !hit && runtime.regions ? regionAt(m, message) : null
+          if (runtime.regions && runtime.regions.hovered.get() !== region) runtime.regions.hovered.set(region)
           if (message.kind === 'move') {
             store.hover(hit)
             const band = Math.max(EDGE_BAND, SPOT_BAND_PX / (runtime.frame.get().zoom || 1))
@@ -148,7 +163,13 @@ export function Canvas() {
             const selected = selectedId ? { id: selectedId, tolerance: SELECTED_EDGE_PX / (runtime.frame.get().zoom || 1) } : undefined
             setSpot(inline.get() ? null : insertSpotAt(layout, runtime.config.blocks, m, message, { band, selected }))
           }
-          if (message.kind === 'click') store.select(hit)
+          if (message.kind === 'click') {
+            if (region && runtime.regions) runtime.regions.selected.set(region)
+            else {
+              runtime.regions?.selected.set(null)
+              store.select(hit)
+            }
+          }
           return
         }
         case 'key':
@@ -163,10 +184,18 @@ export function Canvas() {
           runtime.canvasError.set(message.message)
           return
         case 'inlineStart':
-          store.select(message.id)
+          selectOwner(runtime, message)
           if (refuseLockedInline(runtime, message)) return
           noteInlineStart(runtime, message)
-          inline.set({ session: message.session, id: message.id, path: message.path, kind: message.kind, format: null, linkRequest: 0 })
+          inline.set({
+            session: message.session,
+            id: message.id,
+            path: message.path,
+            kind: message.kind,
+            format: null,
+            linkRequest: 0,
+            ...(message.region ? { region: message.region } : {}),
+          })
           store.hover(null)
           return
         case 'inlineChange':
@@ -174,6 +203,7 @@ export function Canvas() {
           return
         case 'inlineEnd':
           if (inline.get()?.session === message.session) inline.set(null)
+          if (message.region) endRegionInline(runtime, message)
           return
         case 'inlineSplit':
           applyInlineSplit(runtime, message)
@@ -204,7 +234,7 @@ export function Canvas() {
           return
         }
         case 'imageEdit':
-          store.select(message.target.id)
+          selectOwner(runtime, message.target)
           updateImageEditor(runtime, { hover: message.target, open: { target: message.target, spot: 0, at: Date.now() } })
           return
         case 'imageDrop': {
@@ -215,8 +245,8 @@ export function Canvas() {
             runtime.warn(spot.kind === 'video' ? 'Drop a video file to replace this video.' : 'Drop an image file to replace this image.')
             return
           }
-          store.select(message.target.id)
-          void uploadImage(runtime, message.target.id, spot.path, message.file)
+          selectOwner(runtime, message.target)
+          void uploadImage(runtime, message.target, spot.path, message.file)
         }
       }
     }

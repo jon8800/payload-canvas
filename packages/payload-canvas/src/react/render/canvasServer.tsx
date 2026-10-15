@@ -5,8 +5,10 @@ import { siteCssConfigOf } from '../../plugin'
 import { knownLocale, localeSettingsOf, normalizeLayout, type Block, type BlockDefinition, type TemplateContext } from '../../core'
 import { headers } from 'next/headers'
 import { getPayload, type Payload, type SanitizedConfig } from 'payload'
+import type { ReactNode } from 'react'
 
 import { defaultComponents } from '../components'
+import { renderCanvasFrame, type CanvasFrameArgs } from './canvasFrame'
 import type {
   CanvasDocumentRef,
   CanvasScope,
@@ -37,6 +39,8 @@ export type PageDataArgs = {
   locale: string | null
 }
 
+export type { CanvasFrameArgs } from './canvasFrame'
+
 export type CanvasServerOptions = {
   /** Your Payload config (`import config from '@payload-config'`). */
   config: SanitizedConfig | Promise<SanitizedConfig>
@@ -54,6 +58,16 @@ export type CanvasServerOptions = {
    * when the canvas opens, and for each server render.
    */
   pageData?: (args: PageDataArgs) => PageData | Promise<PageData>
+  /**
+   * The page around the layout, for collections with `regions`: the same component the site
+   * renders around its layout, so the canvas shows and edits the whole page. Render `layout`
+   * where the layout goes and mark each region with `region(name, node)`. Return `null` to show
+   * the layout alone. Runs on the server for the open document, and again after a region's field
+   * changes. Without it, the canvas shows the layout alone and says that the frame is missing.
+   */
+  frame?: (args: CanvasFrameArgs) => ReactNode | Promise<ReactNode>
+  /** `depth` of the document the frame gets. Default 1 (uploads and relationships loaded). */
+  frameDepth?: number
 }
 
 /** At most this many blocks per request. */
@@ -162,6 +176,7 @@ export function createCanvasServer(options: CanvasServerOptions) {
       }
     }
     if (request.kind === 'pageData') return { kind: 'pageData', data: pageData }
+    if (request.kind === 'frame') return renderCanvasFrame(options, { payload, user, scope, locale, context, pageData })
     if (request.kind !== 'blocks' || !Array.isArray(request.blocks)) return { kind: 'error', error: 'Unknown request.' }
 
     const items = request.blocks

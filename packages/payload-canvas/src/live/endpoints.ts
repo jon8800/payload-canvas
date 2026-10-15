@@ -10,15 +10,17 @@
 // Next's route handler. `no-transform` stops compression, `X-Accel-Buffering: no` stops nginx
 // from buffering.
 
-import { addDataAndFileToRequest, type Endpoint, type PayloadRequest } from 'payload'
+import { addDataAndFileToRequest, parseDocumentID, type CollectionSlug, type Endpoint, type Payload, type PayloadRequest } from 'payload'
 
 import { EMPTY_FIELD_REGISTRY, type FieldRegistry } from '../core/fieldSemantics'
-import { normalizeLayout } from '../core/tree'
-import type { BlockDefinition, LocaleSettings } from '../core/types'
+import type { PayloadBlocksStorage } from '../core/payloadBlocks'
+import { DRAFT_NOT_READABLE_MESSAGE, liveReadProblem, withLiveReadCheck } from './draftAccess'
+import { blocksAccessProblem, codecOf, statesThrough, UNREADABLE_BLOCKS_MESSAGE, withBlocksReadCheck } from './storage'
+import type { BlockDefinition, Layout, LocaleSettings, Operation } from '../core/types'
 import { actorFromUser, type LiveDocStore } from './apply'
 import { blockFromBody, propAccessCheck, validateBlockProps } from './fieldChecks'
 import type { LiveRuntime } from './runtime'
-import { collaboratorName, type CommitResult, type SessionTarget } from './session'
+import { collaboratorName, type CommitResult, type SessionSend, type SessionTarget } from './session'
 import type {
   LiveActor,
   LiveCommitResponse,
@@ -46,8 +48,8 @@ export const SSE_HEADERS: Record<string, string> = {
 }
 
 export type LiveEndpointOptions = {
-  /** Builder collections, their layout field names and their locales. */
-  collections: Record<string, { field: string; localization?: LocaleSettings | null }>
+  /** Builder collections, their layout field names, their locales and how they store the layout. */
+  collections: Record<string, { field: string; localization?: LocaleSettings | null; payloadBlocks?: PayloadBlocksStorage }>
   blocks: BlockDefinition[]
   runtime: LiveRuntime
   /** Heartbeat interval in ms. Default 10 s. A client that stops reading is dropped after one to two intervals. */
@@ -65,26 +67,30 @@ function statusOf(error: unknown): number {
   return typeof status === 'number' ? status : 500
 }
 
-/** The session target of a builder document, or null when the collection is not a builder collection. */
+/**
+ * The session target of a builder document, or null when the collection is not a builder
+ * collection. The route gives the id as text; Payload's `parseDocumentID` turns it into a number
+ * for collections with number ids (the Postgres default), so Local API calls, the lock rows and
+ * the publish check get the id type the database uses. Collections with text ids keep the text.
+ * Without `payload.db` (0.1.x callers passed only `{ collections }`), the id stays as given.
+ */
 export function sessionTargetOf(
-  payload: { collections: unknown },
+  payload: { collections: unknown; db?: unknown },
   collections: LiveEndpointOptions['collections'],
   collection: string,
   id: string,
 ): SessionTarget | null {
   const options = collections[collection]
   if (!options || !id) return null
-  const configs = payload.collections as Record<
-    string,
-    { config: { versions?: { drafts?: boolean | { autosave?: unknown } } } } | undefined
-  >
-  const drafts = configs[collection]?.config.versions?.drafts
+  const config = (payload.collections as Payload['collections'])[collection as CollectionSlug]?.config
+  const drafts = config?.versions?.drafts
   return {
     collection,
-    id,
+    id: payload.db ? (parseDocumentID({ collectionSlug: collection as CollectionSlug, id, payload: payload as Payload }) ?? id) : id,
     field: options.field,
     drafts: Boolean(drafts),
     autosave: typeof drafts === 'object' && Boolean(drafts.autosave),
+    codec: codecOf(options),
   }
 }
 
@@ -129,6 +135,72 @@ function resumePoint(req: PayloadRequest, url: URL): { seq: number; sessionId?: 
 }
 
 export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
+  /**
+   * The event stream. Each event (of every kind, for every storage) is checked, one after the
+   * other, when its turn comes and before it goes out:
+   * - the user may read the document as the session holds it (a draft): Payload's read access and
+   *   query, run again for each event (draftAccess.ts), so a change of access or of the stored
+   *   document (a save in the drawer, a region, REST) applies to the events still waiting too;
+   * - a Payload blocks field: every value the event shows, in place (each block with its real
+   *   parents and siblings, as Payload's read access sees it). A `session` event its layout; a
+   *   `commit` each state after each of its operations, applied to the state the previous event
+   *   left (the stream's own copy, taken when each event was sent). So a value one operation
+   *   writes and a later one removes counts, and so does a value a sibling value hides.
+   * Both run on the document's other fields as stored when the check ends (`withCurrentDoc`: a
+   * save that commits during the check runs it again). The first refusal ends the stream with an
+   * `error` event, before that event or any later one goes out; a check that fails closes it.
+   * Reconnects of a Payload blocks field never replay old commits (session.ts).
+   */
+  const readCheckedSend = (req: PayloadRequest, target: SessionTarget, send: SessionSend, close: () => void): SessionSend => {
+    const blocksField = target.codec?.kind === 'payload-blocks'
+    let queue: Promise<void> = Promise.resolve()
+    let ended = false
+    /** The layout as the events sent so far left it (taken when each event was sent). */
+    let shown: Layout | null = null
+    const end = (problem: string) => {
+      ended = true
+      send({ type: 'error', error: problem } as unknown as MultiplayerEvent)
+      close()
+    }
+    return (event, id) => {
+      // The states this event shows, from the events before it: taken now, in send order.
+      let layouts: Layout[] | null = []
+      if (blocksField && event.type === 'session') {
+        shown = (event as { layout: Layout }).layout
+        layouts = [shown]
+      } else if (blocksField && event.type === 'commit') {
+        layouts = shown ? statesThrough(shown, (event as { ops: Operation[] }).ops) : null
+        if (layouts && layouts.length > 0) shown = layouts[layouts.length - 1]
+      }
+      queue = queue
+        .then(async () => {
+          if (ended) return
+          // Operations that do not apply to the stream's copy: the stream cannot tell what they show.
+          const states = layouts
+          let problem: string | null = UNREADABLE_BLOCKS_MESSAGE
+          if (states) {
+            const checked = await options.runtime.sessions.withCurrentDoc(target.collection, target.id, async (doc) => {
+              const unreadable = await liveReadProblem(req, target)
+              if (unreadable || states.length === 0) return unreadable
+              return blocksAccessProblem(req, target, { write: false, stored: false, layouts: states, doc })
+            })
+            // No open session: nothing to check against, so nothing goes out.
+            problem = checked ? checked.value : DRAFT_NOT_READABLE_MESSAGE
+          }
+          if (ended) return
+          if (problem) {
+            end(problem)
+            return
+          }
+          send(event, id)
+        })
+        .catch(() => {
+          ended = true
+          close()
+        })
+    }
+  }
+
   const { collections, blocks, runtime } = options
   const registry = options.fieldRegistry ?? EMPTY_FIELD_REGISTRY
   const heartbeatMs = options.heartbeatMs ?? HEARTBEAT_MS
@@ -151,6 +223,13 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
     if (!(await runtime.canUpdate(req, target.collection, target.id))) {
       return { ok: false, status: 403, error: 'You are not allowed to edit this document', seq: runtime.sessions.peek(target.collection, target.id)?.seq ?? 0 }
     }
+    // The session holds the document as a draft: only users who may read it so change it (the result goes back to them).
+    const stale = await liveReadProblem(req, target).catch(() => DRAFT_NOT_READABLE_MESSAGE)
+    if (stale) return { ok: false, status: 403, error: stale, seq: 0 }
+    // A Payload blocks field: only users who may read all of it and update it use the session.
+    const live = () => runtime.sessions.peek(target.collection, target.id)
+    const denied = await blocksAccessProblem(req, target, { write: true, layouts: [live()?.layout] })
+    if (denied) return { ok: false, status: 403, error: denied, seq: 0 }
     const localization = collections[target.collection]?.localization ?? null
     return runtime.sessions.commit({
       target,
@@ -159,8 +238,18 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
       actor: requestActor(req.user),
       blocks,
       localization,
-      // Field access of block props: a change to a prop the user may not update is refused.
-      access: propAccessCheck(req, { blocks, registry, collection: target.collection, id: target.id, field: target.field, localization }),
+      // Inside the commit, on the document as stored then: the user may still read the draft;
+      // field access of block props (a change to a prop the user may not update is refused);
+      // a Payload blocks field: and no value the user may not read, in any state of the batch.
+      access: withLiveReadCheck(
+        req,
+        target,
+        withBlocksReadCheck(
+          req,
+          target,
+          propAccessCheck(req, { blocks, registry, collection: target.collection, id: target.id, field: target.field, localization }),
+        ),
+      ),
       ...input,
     })
   }
@@ -186,6 +275,12 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
       } catch (error) {
         return json({ ok: false, error: 'Document not found or not readable' }, statusOf(error) === 403 ? 403 : 404)
       }
+      // A Payload blocks field: only users who may read all of it (the session holds every value).
+      // The session holds the document as a draft: a user who may read only other versions gets nothing.
+      const stale = await liveReadProblem(req, target).catch(() => DRAFT_NOT_READABLE_MESSAGE)
+      if (stale) return json({ ok: false, error: stale }, 403)
+      const unreadable = await blocksAccessProblem(req, target, { write: false, layouts: [runtime.sessions.peek(target.collection, target.id)?.layout] })
+      if (unreadable) return json({ ok: false, error: unreadable }, 403)
       const url = new URL(req.url ?? '', 'http://localhost')
       const requested = url.searchParams.get('clientId') ?? ''
       const clientId = CLIENT_ID.test(requested) ? requested : globalThis.crypto.randomUUID()
@@ -199,7 +294,7 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
             clientId,
             user: req.user,
             after: resumePoint(req, url),
-            send,
+            send: readCheckedSend(req, target, send, close),
             close,
           }),
       })
@@ -282,6 +377,11 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
       if (!(await runtime.canUpdate(req, target.collection, target.id))) {
         return json({ ok: false, error: 'You are not allowed to edit this document' } satisfies LiveFlushResponse, 403)
       }
+      // The session holds the document as a draft: only users who may read it so save it.
+      const stale = await liveReadProblem(req, target).catch(() => DRAFT_NOT_READABLE_MESSAGE)
+      if (stale) return json({ ok: false, error: stale } satisfies LiveFlushResponse, 403)
+      const denied = await blocksAccessProblem(req, target, { write: true, layouts: [runtime.sessions.peek(target.collection, target.id)?.layout] })
+      if (denied) return json({ ok: false, error: denied } satisfies LiveFlushResponse, 403)
       const result = await runtime.sessions.flush(target.collection, target.id)
       return json(result, result.ok ? 200 : 503)
     },
@@ -339,7 +439,11 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
       } catch (error) {
         return json({ ok: false, error: 'Document not found or not readable' } satisfies LiveValidateResponse, statusOf(error) === 403 ? 403 : 404)
       }
-      const layout = runtime.sessions.peek(target.collection, target.id)?.layout ?? normalizeLayout(doc[target.field])
+      const stale = await liveReadProblem(req, target).catch(() => DRAFT_NOT_READABLE_MESSAGE)
+      if (stale) return json({ ok: false, error: stale } satisfies LiveValidateResponse, 403)
+      const hidden = await blocksAccessProblem(req, target, { write: false, layouts: [runtime.sessions.peek(target.collection, target.id)?.layout] })
+      if (hidden) return json({ ok: false, error: hidden } satisfies LiveValidateResponse, 403)
+      const layout = runtime.sessions.peek(target.collection, target.id)?.layout ?? (target.codec ?? codecOf(undefined)).decode(doc[target.field])
       try {
         const problems = await validateBlockProps(req, {
           blocks,

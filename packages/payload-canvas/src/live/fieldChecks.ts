@@ -34,7 +34,7 @@ export function propAccessCheck(
     blocks: readonly BlockDefinition[]
     registry: FieldRegistry
     collection: string
-    id: string
+    id: string | number
     field: string
     /** The document's locales: a translation is a change of its prop too. */
     localization?: LocaleSettings | null
@@ -71,7 +71,7 @@ export async function validateBlockProps(
     blocks: readonly BlockDefinition[]
     registry: FieldRegistry
     collection: string
-    id: string
+    id: string | number
     field: string
     block: Block
     /** The document (as read by the user), and the layout people see now. */
@@ -143,7 +143,7 @@ export async function propAccessFor(
     blocks: readonly BlockDefinition[]
     registry: FieldRegistry
     collection: string
-    id: string
+    id: string | number
     field: string
     /** The stored layout people edit (the live session's, else the saved draft's). */
     layout: Layout

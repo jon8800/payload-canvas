@@ -27,15 +27,18 @@ import {
   type CanvasToAdmin,
   type PointerKind,
 } from '../../protocol'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 
 import { defaultResolveLink, RenderLayout, type BlockComponents, type PageData, type ResolveLink } from '../index'
 import type { CanvasScope, CanvasServer } from '../render/canvasServerTypes'
+import { LayoutOutlet, LayoutOutletContext, LayoutOutletPresence } from '../render/LayoutOutlet'
+import { LAYOUT_ROOT_ATTRIBUTE, REGION_ATTRIBUTE } from '../render/regions'
 import { createCanvasDrag } from './drag'
 import { forgetDoc } from './fetchDocs'
 import { editableAt, firstEditable, type EditableTarget } from './inline/dom'
-import { createCanvasMapper } from './inline/mapper'
+import { FrameBoundary, FrameProblem, NO_OUTLET, NO_SERVER, regionData, requestFrame, type FrameView } from './frame'
+import { createCanvasMapper, ownerOf } from './inline/mapper'
 import { bindingFor, inlineKind, valueAtPath, withPropValue } from './inline/model'
 import { startPlainSession, type InlineSession, type SessionOptions } from './inline/session'
 import { measure, sameMeasurement } from './measure'
@@ -84,6 +87,10 @@ const EDITOR_CSS = `
 [data-builder-repeat] { pointer-events: none; }
 [data-builder-repeat]:not([data-builder-repeat] [data-builder-repeat]) { opacity: 0.6; }
 [data-builder-empty-page] { min-height: 240px; }
+/* The layout inside the page frame: the same box the canvas root gives a layout without a frame. */
+[data-builder-layout] { display: flow-root; }
+/* Fixed regions of the page frame: text and images edit in place, but they never drag. */
+[data-builder-region] { user-select: none; }
 /* Inline text editing. The admin overlay draws the editing outline. */
 [data-builder-editing] { user-select: text; -webkit-user-select: text; cursor: text; outline: none; }
 [data-builder-editing='lines'] { white-space: pre-wrap; }
@@ -146,7 +153,11 @@ type Compiler = { status: 'loading' } | { status: 'ready'; compiler: CanvasCompi
  */
 type Freeze = { id: string; key: string; value: unknown; release: Layout | null }
 
-type ActiveSession = { session: string; id: string; path: string; inline: InlineSession }
+/** `region`: the session edits a region's field; `id` is empty and `path` is a document path. */
+type ActiveSession = { session: string; id: string; path: string; inline: InlineSession; region?: string; start?: unknown }
+
+/** Equal values of a text field: empty text, null and a missing value are one value. */
+const sameText = (a: unknown, b: unknown) => JSON.stringify(a === '' || a === undefined ? null : a) === JSON.stringify(b === '' || b === undefined ? null : b)
 
 /** The latest render's data, for event handlers and inline editing. `shown`: the layout on screen. */
 type Latest = { layout: Layout | null; resolved: Layout | null; shown: Layout | null; definitions: BlockDefinition[] | undefined }
@@ -238,7 +249,9 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
       shown: () => latest.current.shown,
       stored: (id) => (latest.current.layout ? findBlock(latest.current.layout, id) : null),
       definition: (type) => definitionIn(latest.current, type),
-      skip: (id) => activeRef.current?.id === id,
+      skip: (id) => !activeRef.current?.region && activeRef.current?.id === id,
+      region: (name) => regionsRef.current.get(name) ?? null,
+      skipRegion: (name) => activeRef.current?.region === name,
     }),
   )
   useEffect(() => {
@@ -252,6 +265,20 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
   // `undefined` while it loads. The canvas waits for it, so blocks never render without it.
   const [pageData, setPageData] = useState<PageData | null | undefined>(server ? undefined : null)
   const [serverVersion, setServerVersion] = useState(0)
+  // The page frame (collections with `regions`). `frameVersion` asks for it again.
+  const [frame, setFrame] = useState<FrameView>({ status: 'off' })
+  const [frameVersion, setFrameVersion] = useState(0)
+  const [outletCount, setOutletCount] = useState(0)
+  const registerOutlet = useCallback(() => {
+    setOutletCount((count) => count + 1)
+    return () => setOutletCount((count) => count - 1)
+  }, [])
+  // A frame that arrived while a region was edited inline: it shows when editing ends.
+  const pendingFrame = useRef<FrameView | null>(null)
+  // Region text kept on screen after editing, until the frame with the new value replaces it.
+  const keptRegions = useRef<Array<() => void>>([])
+  const keptRegionValues = useRef(new Map<string, unknown>())
+  const regionsRef = useRef(regionData(undefined, null))
 
   // Coalesce every trigger (render, resize, scroll) into one measurement per frame. An unchanged
   // measurement is not sent: the admin would redraw the overlay for nothing.
@@ -283,6 +310,26 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     activeRef.current = null
     const { session, id, path, inline } = active
     const connected = inline.element.isConnected
+    if (active.region) {
+      // The new value comes back in a new frame (the admin saves the field). Until then the edited
+      // text stays on screen, so the old text never flashes.
+      const region = active.region
+      const { changed, value, restore } = inline.finish({ keep: sync && connected })
+      const edited = !sameText(value, active.start)
+      if (edited) keptRegionValues.current.set(JSON.stringify([region, path]), value)
+      if (changed) send({ type: 'inlineChange', session, id: '', path, value, region })
+      send({ type: 'inlineEnd', session, id: '', region })
+      // Nothing changed: no save follows, so React's DOM comes back now.
+      if (restore && !edited) restore()
+      else if (restore) keptRegions.current.push(restore)
+      // A frame requested before the edit ended still holds the old text. Keep the edited DOM
+      // until the save requests a new frame, including when an older request is still in flight.
+      const next = edited ? null : pendingFrame.current
+      if (edited) frameRun.current++
+      pendingFrame.current = null
+      if (next) showFrameRef.current(next)
+      return
+    }
     const { changed, value } = inline.finish()
     if (changed) send({ type: 'inlineChange', session, id, path, value })
     send({ type: 'inlineEnd', session, id })
@@ -300,6 +347,58 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     flushSync(() => setFreeze(settled || !final ? null : { id, key: final.key, value: final.value, release: current }))
   }, [])
 
+  /** Shows a new frame. Region text kept from editing goes back to React's DOM first, in the same task. */
+  const showFrameRef = useRef((next: FrameView) => {
+    // Re-entering a field captures its previous retained DOM. Restore those snapshots in reverse.
+    for (const undo of keptRegions.current.splice(0).toReversed()) undo()
+    keptRegionValues.current.clear()
+    flushSync(() => setFrame(next))
+  })
+
+  /**
+   * Starts inline editing of a region's text field. The value comes from the frame's values; the
+   * admin saves it to the document when editing ends. No list keys and no bindings in regions.
+   */
+  const startRegionInline = useCallback(async (target: EditableTarget, point: { x: number; y: number } | null, offset?: number) => {
+    const region = target.region
+    const data = region ? regionsRef.current.get(region) : undefined
+    if (!region || !data) return
+    const { path, element } = target
+    const key = JSON.stringify([region, path])
+    const retained = keptRegionValues.current.has(key)
+    const value = retained ? keptRegionValues.current.get(key) : valueAtPath(data.block.props, path)
+    const kind = inlineKind(data.definition, path, value)
+    if (!kind) return
+    startingRef.current = true
+    try {
+      const session = createId()
+      const options: SessionOptions = {
+        point,
+        offset,
+        onChange: (next) => send({ type: 'inlineChange', session, id: '', path, value: next, region }),
+        onExit: () => stopInline(),
+        onFormat: (format) => send({ type: 'inlineFormat', session, format }),
+        onLinkRequest: () => send({ type: 'inlineLink', session }),
+      }
+      let inline: InlineSession | null = null
+      if (kind === 'rich') {
+        const { startRichSession } = await import('./inline/rich')
+        if (element.isConnected) inline = startRichSession(element, value, options)
+        if (!inline && element.isConnected) send({ type: 'inlineRefused', id: '', path, reason: 'unsupported', region })
+      } else {
+        inline = startPlainSession(element, kind, options)
+      }
+      if (!inline) return
+      activeRef.current = { session, id: '', path, inline, region, start: value }
+      // A retained value is the exact prior edit. Other rich text uses the admin's unpopulated value.
+      send({ type: 'inlineStart', session, id: '', path, kind, region, ...(kind === 'rich' && !retained ? {} : { base: value ?? null }) })
+    } finally {
+      startingRef.current = false
+    }
+    // `stopInline` is stable (no dependencies).
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   /**
    * Starts inline editing of one text prop. `offset` (characters) or `point` (a double-click)
    * places the caret, else it goes to the end.
@@ -307,6 +406,10 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
   const startInline = useCallback(
     async (target: EditableTarget, point: { x: number; y: number } | null, offset?: number) => {
       if (activeRef.current || startingRef.current || !target.path) return
+      if (target.region) {
+        await startRegionInline(target, point, offset)
+        return
+      }
       const { blockId: id, path, element } = target
       const stored = latest.current.layout ? findBlock(latest.current.layout, id) : null
       const shown = shownBlockIn(latest.current, id)
@@ -463,6 +566,17 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
           setLocale(message.locale)
           return
         case 'inlineStart': {
+          if (message.region) {
+            for (const el of document.querySelectorAll<HTMLElement>(`[${REGION_ATTRIBUTE}="${CSS.escape(message.region)}"]`)) {
+              if (el.getClientRects().length === 0) continue
+              mapper.ensure(el)
+              const target = firstEditable(el)
+              if (!target) continue
+              void startInline(target, null, message.offset)
+              break
+            }
+            return
+          }
           // The screen must show the admin's newest layout first (a joined list item has new text).
           const current = shownSeq.current === layoutSeq.current
           const el = current ? document.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(message.id)}"]`) : null
@@ -482,6 +596,11 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
         case 'docChanged':
           forgetDoc(message.collection, message.id)
           setDocsVersion((version) => version + 1)
+          // A media document of a region (its alt text) or the page itself changed.
+          setFrameVersion((version) => version + 1)
+          return
+        case 'frameRefresh':
+          setFrameVersion((version) => version + 1)
           return
         case 'dragStart':
           drag.start(message.drag)
@@ -526,8 +645,8 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     // Double-click on text: edit it in place. On an image: the editor opens the media popover.
     const onDoubleClick = (e: MouseEvent) => {
       if (isEditing(e.target) || !(e.target instanceof Element)) return
-      const blockEl = e.target.closest<HTMLElement>('[data-block-id]')
-      if (blockEl) mapper.ensure(blockEl)
+      const ownerEl = ownerOf(e.target)?.element
+      if (ownerEl) mapper.ensure(ownerEl)
       const target = editableAt(e.target)
       if (target) {
         e.preventDefault()
@@ -730,6 +849,38 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
       cancelled = true
     }
   }, [serverBlocks, init, context, locale])
+  // The page frame: asked for when the document has regions, again for another scope (locale) and
+  // after a region's field changed (`frameRefresh`). Without regions nothing is asked for.
+  const wantsFrame = Boolean(init?.regions?.length)
+  const frameScope = useMemo(() => (init ? canvasScope(init, context, locale) : null), [init, context, locale])
+  const frameRun = useRef(0)
+  useEffect(() => {
+    if (!wantsFrame || !frameScope) {
+      setFrame({ status: 'off' })
+      return
+    }
+    if (!server) {
+      setFrame({ status: 'error', error: NO_SERVER })
+      send({ type: 'error', message: NO_SERVER })
+      return
+    }
+    const run = ++frameRun.current
+    setFrame((current) => (current.status === 'ready' || current.status === 'error' ? current : { status: 'loading' }))
+    void requestFrame(server, frameScope).then((next) => {
+      if (run !== frameRun.current) return
+      if (next.status === 'error') send({ type: 'error', message: next.error })
+      // A region edited inline keeps its DOM until editing ends.
+      if (activeRef.current?.region) pendingFrame.current = next
+      else showFrameRef.current(next)
+    })
+  }, [wantsFrame, frameScope, server, frameVersion])
+  const frameValues = frame.status === 'ready' ? frame.values : null
+  const regions = useMemo(() => regionData(init?.regions, frameValues), [init?.regions, frameValues])
+  useLayoutEffect(() => {
+    regionsRef.current = regions
+    mapper.schedule()
+  }, [regions, mapper])
+
   // The stored layout server blocks are sent from. A prop being edited inline keeps its value from
   // the start of editing (as on screen), so the block around it asks again only once editing ends.
   const editing = freeze && freeze.release === null ? freeze : null
@@ -795,7 +946,9 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     return () => window.clearTimeout(timer)
   }, [freeze])
 
-  const visible = shown && compiler.status !== 'loading' && pageData !== undefined
+  // With regions the first frame is awaited too (also in the render before its request starts), so nothing moves when it arrives.
+  const frameLoading = Boolean(init?.regions?.length) && (frame.status === 'loading' || frame.status === 'off')
+  const visible = shown && compiler.status !== 'loading' && pageData !== undefined && !frameLoading
 
   // Observes the current block and slot elements and measures.
   const observeBlocks = useCallback(() => {
@@ -810,7 +963,15 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
 
   // After the rendered blocks change, and after a server block shows new content.
   // oxlint-disable-next-line react-hooks/exhaustive-deps
-  useLayoutEffect(observeBlocks, [visible, shown, css, observeBlocks])
+  useLayoutEffect(observeBlocks, [visible, shown, css, observeBlocks, frame])
+
+  // A frame that never renders `layout`: the canvas shows the layout under it, and says so.
+  const outletMissing = Boolean(visible && frame.status === 'ready' && frame.node && outletCount === 0)
+  useEffect(() => {
+    if (outletMissing && !rootRef.current?.querySelector(`[${LAYOUT_ROOT_ATTRIBUTE}]:not([data-builder-outlet-fallback])`)) {
+      send({ type: 'error', message: NO_OUTLET })
+    }
+  }, [outletMissing])
   useEffect(() => {
     if (!serverBlocks) return
     serverBlocks.onRendered = observeBlocks
@@ -840,13 +1001,60 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     [visible, shown, definitions, canvasComponents, css, resolveLink, context, pageData],
   )
 
+  const layoutContent = (
+    <>
+      {/* The editor draws the empty-page start screen over this space. */}
+      {visible && shown.blocks.length === 0 && <div data-builder-empty-page="" />}
+      <ServerBlocksContext.Provider value={serverContext}>{rendered}</ServerBlocksContext.Provider>
+    </>
+  )
+  let page: ReactNode = layoutContent
+  if (frame.status !== 'off' && visible) {
+    // The layout's own box, as the canvas root gave it before: the frame's outlet renders it.
+    const outlet = <div {...{ [LAYOUT_ROOT_ATTRIBUTE]: '' }}>{layoutContent}</div>
+    if (frame.status === 'error') {
+      page = (
+        <>
+          <FrameProblem text={frame.error} />
+          {outlet}
+        </>
+      )
+    } else if (frame.status === 'ready' && frame.node) {
+      page = (
+        <LayoutOutletContext.Provider value={outlet}>
+          <LayoutOutletPresence.Provider value={registerOutlet}>
+            <FrameBoundary
+              resetKey={frame.node}
+              renderError={(error) => (
+                <>
+                  <FrameProblem text={error} />
+                  <LayoutOutlet />
+                </>
+              )}
+            >
+              {frame.node}
+            </FrameBoundary>
+          </LayoutOutletPresence.Provider>
+          {outletMissing && (
+            <>
+              <FrameProblem text={NO_OUTLET} />
+              <div {...{ [LAYOUT_ROOT_ATTRIBUTE]: '' }} data-builder-outlet-fallback="">
+                {layoutContent}
+              </div>
+            </>
+          )}
+        </LayoutOutletContext.Provider>
+      )
+    } else {
+      page = outlet
+    }
+  }
+
   return (
     <>
       <style data-builder-editor-css="">{EDITOR_CSS}</style>
       <div ref={rootRef} data-builder-root="">
-        {/* The editor draws the empty-page start screen over this space. */}
-        {visible && shown.blocks.length === 0 && <div data-builder-empty-page="" />}
-        <ServerBlocksContext.Provider value={serverContext}>{rendered}</ServerBlocksContext.Provider>
+        {page}
       </div>
     </>
   )

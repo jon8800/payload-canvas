@@ -6,6 +6,9 @@
 //   pnpm payload run src/legacy-fixture/migrate.ts      # dry run; add `write` to convert
 //   open /admin/builder/legacy-pages/<id> and /legacy-demo/<slug> (add ?old=1 for the old renderer)
 //   pnpm payload run src/legacy-fixture/cleanup.ts      # deletes the fixture documents
+// `shared-blocks-pages` (./sharedCollection.ts) shows the default way: the builder edits the
+// collection's own blocks field. Create a page in the admin, open its Builder tab, and view it
+// at /legacy-demo/shared/<slug>. Nothing to seed or migrate.
 // Delete the documents before you turn the flag off: the dev schema push then drops the empty tables.
 // Client-safe.
 import { fromPayloadBlocks } from 'payload-canvas/blocks'

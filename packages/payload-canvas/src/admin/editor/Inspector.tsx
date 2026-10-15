@@ -18,11 +18,13 @@ import { AssistantPanel } from './assistant/AssistantPanel'
 import { useAccessRefresh } from './fields/access'
 import { BlockContentFields } from './renderField'
 import { useRuntime, type InspectorTab } from './runtime'
+import { storesBuilderData } from './actions'
 import { shortcutList } from './shortcuts'
 import { useEditor } from './store'
 import { StylesPanel } from './styles/StylesPanel'
 import { usePayloadControlNames } from './ui/payloadA11y'
-import { useValue, useValueSelector } from './valueStore'
+import { useOptionalValue, useValue, useValueSelector } from './valueStore'
+import { RegionPane } from './regions/RegionPane'
 
 type TabsProps<T extends string> = {
   value: T
@@ -135,6 +137,8 @@ function BlockPane() {
   const [tab, setTab] = useState<BlockTab>('content')
   const [shownType, setShownType] = useState<string | null>(null)
   const focusRequest = useValue(runtime.focusRequest)
+  // A selected page region shows its own pane.
+  const region = useOptionalValue(runtime.regions?.selected ?? null)
 
   // Styles and Motion stay open while the user edits blocks of one type. Another type opens its content,
   // so its fields never seem to vanish.
@@ -160,7 +164,7 @@ function BlockPane() {
     return () => cancelAnimationFrame(frame)
   }, [block, focusRequest, runtime])
 
-  if (!block) return <EmptyState />
+  if (!block) return region && runtime.regions ? <RegionPane key={region} regions={runtime.regions} name={region} /> : <EmptyState />
 
   return (
     // `key` remounts the inputs per block, so input state (loaded documents) never leaks between blocks.
@@ -172,15 +176,20 @@ function BlockPane() {
       <Tabs
         value={tab}
         onChange={setTab}
-        options={[
-          { id: 'content', label: 'Content' },
-          { id: 'styles', label: 'Styles' },
-          { id: 'motion', label: 'Motion' },
-        ]}
+        options={
+          storesBuilderData(runtime)
+            ? [
+                { id: 'content', label: 'Content' },
+                { id: 'styles', label: 'Styles' },
+                { id: 'motion', label: 'Motion' },
+              ]
+            : // A Payload blocks field holds the blocks' own fields only.
+              [{ id: 'content', label: 'Content' }]
+        }
       />
       {tab === 'content' && <BlockContentFields block={block} />}
-      {tab === 'styles' && <StyleFields block={block} />}
-      {tab === 'motion' && <MotionPanel blockId={block.id} blockType={block.type} motion={block.motion} />}
+      {tab === 'styles' && storesBuilderData(runtime) && <StyleFields block={block} />}
+      {tab === 'motion' && storesBuilderData(runtime) && <MotionPanel blockId={block.id} blockType={block.type} motion={block.motion} />}
     </div>
   )
 }

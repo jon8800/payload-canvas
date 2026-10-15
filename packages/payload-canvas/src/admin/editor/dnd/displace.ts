@@ -112,7 +112,10 @@ export function canvasPreview(layout: Layout, measurement: CanvasMeasurement, so
       items.push({ id: child.id, rect })
     }
     const axis = ownerId === null ? measurement.rootAxis : (slotRect(ownerId, slot)?.axis ?? 'y')
-    const bounds = ownerId === null ? { x: 0, y: 0, width: measurement.viewport.width, height: measurement.documentHeight } : (slotRect(ownerId, slot)?.rect ?? rects.get(ownerId) ?? null)
+    const bounds =
+      ownerId === null
+        ? (measurement.root ?? { x: 0, y: 0, width: measurement.viewport.width, height: measurement.documentHeight })
+        : (slotRect(ownerId, slot)?.rect ?? rects.get(ownerId) ?? null)
     return { axis, wraps: wraps(items, axis), items, bounds }
   }
 

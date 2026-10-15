@@ -53,6 +53,8 @@ export type ReferenceSource = {
   layout: string
   /** The field holds a list of blocks (saved sections), not a whole layout. */
   blocksOnly?: boolean
+  /** The field is the collection's own Payload blocks field: its stored value as a layout (or undefined). */
+  decode?: (value: unknown) => Layout | undefined
   drafts: boolean
   /** Field shown as the document's name in messages. */
   title: string
@@ -87,7 +89,7 @@ const hasDrafts = (collection: CollectionConfig) =>
 export function resolveReferences(args: {
   options: ReferencesOptions | false | undefined
   collections: CollectionConfig[]
-  sources: Record<string, Pick<ReferenceSource, 'layout' | 'blocksOnly'>>
+  sources: Record<string, Pick<ReferenceSource, 'layout' | 'blocksOnly' | 'decode'>>
   blocks: BlockDefinition[]
 }): ReferencesServerConfig | null {
   const { options, collections, blocks } = args
@@ -182,9 +184,10 @@ async function keepExisting(args: { payload: Payload; req?: PayloadRequest; want
 }
 
 /** The layout stored in a source document's data, or `undefined` when the data has none. */
-function layoutOf(source: Pick<ReferenceSource, 'layout' | 'blocksOnly'>, data: Record<string, unknown>): Layout | undefined {
+function layoutOf(source: Pick<ReferenceSource, 'layout' | 'blocksOnly' | 'decode'>, data: Record<string, unknown>): Layout | undefined {
   const value = data[source.layout]
   if (value === undefined) return undefined
+  if (source.decode) return source.decode(value)
   return source.blocksOnly ? normalizeLayout({ version: 1, blocks: value }) : normalizeLayout(value)
 }
 

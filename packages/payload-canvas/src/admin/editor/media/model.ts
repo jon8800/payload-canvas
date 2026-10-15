@@ -55,18 +55,27 @@ export function mediaRef(spot: UploadSpotField, value: unknown): { collection: s
 }
 
 /**
+ * The change that empties the upload at `path`: null at the path for a single upload, the list
+ * without the item for one value of a hasMany upload. Null when the item is gone.
+ */
+export function removeChange(props: Record<string, unknown> | undefined, path: string, spot: UploadSpotField): { path: string; value: unknown } | null {
+  if (!spot.item) return { path, value: null }
+  const cut = path.lastIndexOf('.')
+  const listPath = path.slice(0, cut)
+  const index = Number(path.slice(cut + 1))
+  let list: unknown = props
+  for (const segment of listPath.split('.')) list = Array.isArray(list) ? list[Number(segment)] : isRecord(list) ? list[segment] : undefined
+  if (!Array.isArray(list) || index >= list.length) return null
+  return { path: listPath, value: list.filter((_, i) => i !== index) }
+}
+
+/**
  * The operation that empties the upload at `path`: null for a single upload, the list without the
  * item for one value of a hasMany upload.
  */
 export function removeOp(block: Block, path: string, spot: UploadSpotField): Extract<Operation, { type: 'update' }> | null {
-  if (!spot.item) return inlineUpdate(block, path, null)
-  const cut = path.lastIndexOf('.')
-  const listPath = path.slice(0, cut)
-  const index = Number(path.slice(cut + 1))
-  let list: unknown = block.props
-  for (const segment of listPath.split('.')) list = Array.isArray(list) ? list[Number(segment)] : isRecord(list) ? list[segment] : undefined
-  if (!Array.isArray(list) || index >= list.length) return null
-  return inlineUpdate(block, listPath, list.filter((_, i) => i !== index))
+  const change = removeChange(block.props, path, spot)
+  return change ? inlineUpdate(block, change.path, change.value) : null
 }
 
 /**

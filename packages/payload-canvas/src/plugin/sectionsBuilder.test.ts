@@ -10,7 +10,7 @@ const block: Block = { id: 'b1', type: 'stack', slots: { children: [{ id: 'b2', 
 const other: Block = { id: 'b9', type: 'heading', props: { text: 'Other' } }
 const layoutOf = (list: Block[]) => ({ version: 1, blocks: list })
 const run = (data: Record<string, unknown>, originalDoc?: Record<string, unknown>, context: Record<string, unknown> = {}) =>
-  syncSectionBlocks({ data, originalDoc, context } as never) as Record<string, unknown>
+  syncSectionBlocks({ collection: { slug: 'builder-sections' }, data, originalDoc, context } as never) as Record<string, unknown>
 
 describe('saved sections in the builder', () => {
   it('stores a changed layout as the blocks', () => {
@@ -24,7 +24,10 @@ describe('saved sections in the builder', () => {
 
   it('gives the live session the last word: its own saves and guarded saves', () => {
     assert.deepEqual(run({ [SECTION_LAYOUT_FIELD]: layoutOf([block]), blocks: [other] }, { blocks: [block] }, { builderSession: true }).blocks, [block])
-    assert.deepEqual(run({ [SECTION_LAYOUT_FIELD]: layoutOf([block]), blocks: [other] }, { blocks: [block] }, { builderSessionSeq: 3 }).blocks, [block])
+    const guarded = { builderSessionSeq: { 'builder-sections:7': 3 } }
+    assert.deepEqual(run({ [SECTION_LAYOUT_FIELD]: layoutOf([block]), blocks: [other] }, { id: 7, blocks: [block] }, guarded).blocks, [block])
+    // The guard's seq of another document (a nested save with the same request) does not count.
+    assert.deepEqual(run({ [SECTION_LAYOUT_FIELD]: layoutOf([block]), blocks: [other] }, { id: 8, blocks: [block] }, guarded).blocks, [other])
   })
 
   it('reads the virtual layout from the stored blocks', () => {

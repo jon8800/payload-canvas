@@ -16,11 +16,29 @@ const BUTTON_NAMES: [selector: string, name: string][] = [
   ['.array-actions .popup-button', 'Row actions'],
 ]
 
+/** The part of the DOM `nameComboboxes` reads and writes (tests pass small fakes). */
+export type ComboboxScope = { querySelectorAll(selector: string): Iterable<ComboboxInput> }
+export type ComboboxInput = {
+  closest(selector: string): { querySelector(selector: string): { textContent: string | null } | null } | null
+  setAttribute(name: string, value: string): void
+}
+
 /** The field's visible label: the `label` of the closest field wrapper. */
-function fieldLabel(el: Element): string | null {
+function fieldLabel(el: Pick<ComboboxInput, 'closest'>): string | null {
   const field = el.closest('.field-type')
   const label = field?.querySelector('.field-label, label')?.textContent?.replace(/\*$/, '').trim()
   return label || null
+}
+
+/**
+ * Names Payload's react-select inputs (selects, relationships) that have no name, by their field's
+ * label. Payload's label points at an id the react-select input does not have.
+ */
+export function nameComboboxes(root: ComboboxScope) {
+  for (const input of root.querySelectorAll('input.rs__input:not([aria-label]):not([aria-labelledby])')) {
+    const label = fieldLabel(input)
+    if (label) input.setAttribute('aria-label', label)
+  }
 }
 
 function nameControls(root: HTMLElement) {
@@ -37,10 +55,7 @@ function nameControls(root: HTMLElement) {
     wrapper.removeAttribute('tabindex')
   }
   // react-select inputs: named by their field label.
-  for (const input of root.querySelectorAll<HTMLInputElement>('input.rs__input:not([aria-label]):not([aria-labelledby])')) {
-    const label = fieldLabel(input)
-    if (label) input.setAttribute('aria-label', label)
-  }
+  nameComboboxes(root as unknown as ComboboxScope)
   // react-select marks its chevron and clear buttons aria-hidden but leaves them focusable.
   for (const el of root.querySelectorAll<HTMLElement>('[aria-hidden="true"]:is(button, [tabindex="0"])')) {
     el.setAttribute('tabindex', '-1')

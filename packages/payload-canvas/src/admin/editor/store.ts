@@ -8,15 +8,39 @@
 // reverts someone else's edit. Undo applies the inverse as NEW local operations, so it syncs like
 // any edit. Parts of it that no longer apply (someone else changed or deleted the block) are skipped.
 
-import { applyOperation, BASE_VARIANT, createLocaleView, findBlock, knownLocale, localizeOperations, stampLocale, type Variant } from '../../core'
+import { applyOperation, applyOperations, BASE_VARIANT, createLocaleView, findBlock, knownLocale, localizeOperations, stampLocale, type Variant } from '../../core'
 import type { Block, BlockDefinition, Layout, LocaleSettings, Operation } from '../../core/types'
 import { ACCESS_DENIED_PREFIX } from '../../core/fieldAccess'
+import type { LiveFieldChange } from '../../live/types'
 import { createSyncEngine, type SyncOptions, type SyncUpdate } from './live/sync'
 import { useSelector, type Equality } from './valueStore'
+
+/** Own stored values of a region field. `Shown` values include locale fallback, for conflict checks. */
+export type FieldEdit = { path: string; before: unknown; after: unknown; beforeShown?: unknown; afterShown?: unknown }
+
+/**
+ * Saves field changes for undo and redo, in `locale` (the locale the step was made in, null
+ * without localization). False: refused. `retry`: temporary failure; keep the step.
+ */
+export type FieldWriteResult = boolean | 'retry'
+export type FieldWriter = (changes: LiveFieldChange[], locale: string | null) => Promise<FieldWriteResult>
 
 type HistoryEntry = {
   /** Applied in order, these undo (or redo) one user action. */
   ops: Operation[]
+  /**
+   * A step of document field changes (a region's text or image), saved to the document instead of
+   * applied to the layout. Undo writes `before` back, redo `after`; each expects the other value
+   * there, so a field someone else changed since is never overwritten.
+   */
+  fields?: FieldEdit[]
+  /** The original save must finish before undo can use its hook-adjusted values. */
+  fieldsReady?: Promise<boolean>
+  /**
+   * The locale a field step was made in. Undo and redo write that locale, whatever the editor
+   * shows now, as layout operations keep their own `locale`.
+   */
+  fieldLocale?: string | null
   /** Selection to restore when this entry is applied. */
   selectedId: string | null
   /**
@@ -91,6 +115,11 @@ export type EditorStoreOptions = {
    * the locale to start in (default: the default locale).
    */
   localization?: { settings: LocaleSettings; blocks: readonly BlockDefinition[]; locale?: string | null }
+  /**
+   * What the layout field cannot store (a Payload blocks field): the reason, or null. An own edit
+   * whose result it refuses is not applied, so nothing shows that the server would refuse.
+   */
+  storageProblem?: (layout: Layout) => string | null
 }
 
 const HISTORY_LIMIT = 200
@@ -171,6 +200,56 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
   const sharedEdits = new Set<() => void>()
   let tagCounter = 0
   const nextTag = () => `t${++tagCounter}`
+  let fieldWriter: FieldWriter | null = null
+  let historyBusy = false
+  let historyGeneration = 0
+  let editGeneration = 0
+  const historyQueue: Array<() => void> = []
+
+  /**
+   * Field saves run in order. A temporary failure restores the step for a later retry.
+   */
+  const fieldStep = (entry: HistoryEntry, direction: 'undo' | 'redo') => {
+    historyBusy = true
+    const source = direction === 'undo' ? 'undoStack' : 'redoStack'
+    const destination = direction === 'undo' ? 'redoStack' : 'undoStack'
+    const earlier = new Set(state[source])
+    const generation = historyGeneration
+    const edits = editGeneration
+    set({ [source]: state[source].filter((e) => e !== entry), [destination]: [...state[destination], entry], lastError: null })
+    const drop = () => set({ undoStack: state.undoStack.filter((e) => e !== entry), redoStack: state.redoStack.filter((e) => e !== entry) })
+    void (async () => {
+      let result: FieldWriteResult = 'retry'
+      try {
+        if (entry.fieldsReady && !(await entry.fieldsReady)) result = false
+        else if (!fieldWriter) warn(UNDO_NONE)
+        else {
+          const changes = (entry.fields ?? []).map((e) => direction === 'undo'
+            ? { path: e.path, value: e.before, base: 'afterShown' in e ? e.afterShown : e.after }
+            : { path: e.path, value: e.after, base: 'beforeShown' in e ? e.beforeShown : e.before })
+          result = await fieldWriter(changes, entry.fieldLocale ?? null)
+        }
+      } catch {
+        warn('Not saved. Try undo or redo again when the connection returns.')
+      }
+      if (result === false) drop()
+      if (result === 'retry') {
+        drop()
+        // New edits clear redo, but an undo that failed still belongs before those edits.
+        if (generation === historyGeneration && (direction === 'undo' || edits === editGeneration)) {
+          const newerIndex = state[source].findIndex((e) => !earlier.has(e))
+          const index = newerIndex < 0 ? state[source].length : newerIndex
+          set({ [source]: [...state[source].slice(0, index), entry, ...state[source].slice(index)].slice(-HISTORY_LIMIT) })
+        }
+        historyQueue.length = 0
+      }
+      historyBusy = false
+      while (historyQueue.length > 0) {
+        if (historyBusy) break
+        historyQueue.shift()?.()
+      }
+    })()
+  }
 
   const warn = (text: string) => {
     for (const listener of warnings) listener(text)
@@ -193,6 +272,8 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
     const selectedBefore = state.selectedId
     if (update.reset) {
       // The layout was replaced as a whole: the history no longer applies to it.
+      historyGeneration++
+      historyQueue.length = 0
       set({ layout: update.layout, undoStack: [], redoStack: [] })
       return
     }
@@ -231,7 +312,7 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
     }
   }
 
-  return {
+  const store = {
     /** The sync engine. The live hook connects it to the server. */
     sync,
     getState: () => state,
@@ -271,6 +352,14 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
           return false
         }
         list = localized.ops
+      }
+      if (options.storageProblem) {
+        const next = applyOperations(state.layout, list)
+        const problem = next.ok ? options.storageProblem(next.layout) : null
+        if (problem) {
+          set({ lastError: problem })
+          return false
+        }
       }
       const tag = nextTag()
       const result = sync.local(list, tag)
@@ -321,6 +410,7 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
                   at: now,
                 },
               ].slice(-HISTORY_LIMIT)
+      editGeneration++
       set({
         layout: result.layout,
         undoStack,
@@ -332,8 +422,16 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
     },
 
     undo() {
+      if (historyBusy) {
+        historyQueue.push(store.undo)
+        return
+      }
       const entry = state.undoStack.at(-1)
       if (!entry) return
+      if (entry.fields) {
+        fieldStep(entry, 'undo')
+        return
+      }
       const done = replay(entry)
       if (!done) {
         set({ undoStack: state.undoStack.slice(0, -1) })
@@ -349,8 +447,16 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
     },
 
     redo() {
+      if (historyBusy) {
+        historyQueue.push(store.redo)
+        return
+      }
       const entry = state.redoStack.at(-1)
       if (!entry) return
+      if (entry.fields) {
+        fieldStep(entry, 'redo')
+        return
+      }
       const done = replay(entry)
       if (!done) {
         set({ redoStack: state.redoStack.slice(0, -1) })
@@ -363,6 +469,25 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
         selectedId: entry.selectedId,
         lastError: null,
       })
+    },
+
+    /**
+     * Records the action immediately. `saved` replaces its values after hooks, or removes a failed save.
+     */
+    recordFields(edits: FieldEdit[], locale: string | null = null, saved?: Promise<FieldEdit[] | null>) {
+      if (edits.length === 0) return
+      editGeneration++
+      const entry: HistoryEntry = { ops: [], fields: edits, fieldLocale: locale, selectedId: state.selectedId, tags: [], at: Date.now() }
+      if (saved) entry.fieldsReady = saved.then((fields) => {
+        if (fields) entry.fields = fields
+        else set({ undoStack: state.undoStack.filter((e) => e !== entry), redoStack: state.redoStack.filter((e) => e !== entry) })
+        return fields !== null
+      })
+      set({ undoStack: [...state.undoStack, entry].slice(-HISTORY_LIMIT), redoStack: [] })
+    },
+    /** Saves the field changes of undo and redo. Without one, field steps cannot be undone. */
+    setFieldWriter(writer: FieldWriter | null) {
+      fieldWriter = writer
     },
 
     /**
@@ -400,6 +525,7 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
     /** The locales, or null without localization. */
     localization: localization?.settings ?? null,
   }
+  return store
 }
 
 /**

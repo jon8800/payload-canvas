@@ -17,7 +17,7 @@ import {
   storedClipboard,
   toggleHidden,
 } from './actions'
-import { startInlineEditing } from './inline'
+import { startInlineEditing, startRegionEditing } from './inline'
 import { leftTabForDigit, selectLeftTab, type LeftTab } from './layout/leftTabs'
 import { BLOCK_KEYS, isMac, keyCaps } from './menu/keys'
 import { openSelectionMenu, requestRename } from './menu/requests'
@@ -216,9 +216,13 @@ export function bindShortcuts(runtime: Runtime, doc: Document, { forwarded }: { 
       case 'assistant':
         runtime.toggleAssistant()
         return
-      case 'editText':
+      case 'editText': {
         if (selectedId) startInlineEditing(runtime, selectedId)
+        // A selected page region: edit its first text field on the canvas.
+        const region = runtime.regions?.selected.get()
+        if (!selectedId && region) startRegionEditing(runtime, region)
         return
+      }
       case 'copyStyles':
         if (selectedId) copyStyles(runtime, selectedId)
         return
@@ -270,12 +274,14 @@ export function bindShortcuts(runtime: Runtime, doc: Document, { forwarded }: { 
     // Escape closes an open menu or popover first; the selection stays.
     if (action === 'escape' && document.querySelector(OPEN_MENU)) return
     const { selectedId } = runtime.store.getState()
+    // Enter also edits a selected page region's text; other block keys do nothing on a region.
+    const editable = Boolean(selectedId) || (action === 'editText' && Boolean(runtime.regions?.selected.get()))
     if ((action === 'copy' || action === 'cut') && (hasTextSelection(doc) || !selectedId)) return
     // Without a selection these keys keep their normal meaning (Alt+arrows, Shift+Enter, Shift+F10).
-    if (!selectedId && NEEDS_SELECTION.has(action)) return
+    if (!editable && NEEDS_SELECTION.has(action)) return
     // Enter edits text only when nothing else has the focus (a focused button keeps its own Enter).
     // In the canvas, links and buttons inside blocks are not controls, so any target counts.
-    if (action === 'editText' && (!selectedId || (!forwarded && !onPage(e.target, doc)))) return
+    if (action === 'editText' && (!editable || (!forwarded && !onPage(e.target, doc)))) return
     // Copy and paste keep the browser default, so the native clipboard events still fire.
     if (action !== 'copy' && action !== 'paste') e.preventDefault()
     run(action)

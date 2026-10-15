@@ -69,7 +69,8 @@ function normalize(value: unknown): unknown {
   return String(value)
 }
 
-function sameValue(a: unknown, b: unknown): boolean {
+/** True when two stored or form values are the same value (see `normalize`). */
+export function sameValue(a: unknown, b: unknown): boolean {
   return JSON.stringify(normalize(a)) === JSON.stringify(normalize(b))
 }
 
@@ -144,6 +145,93 @@ export function defaultFieldClock(): FieldClock {
 }
 
 // ---------------------------------------------------------------------------
+// A field that two editors write: the values a form may have loaded
+// ---------------------------------------------------------------------------
+
+/**
+ * The values one field had, by the document's `updatedAt`. A form sends back every field it
+ * loaded, also the ones nobody touched in it. With the value the form loaded, a save can tell
+ * "left as loaded" (keep the newer stored value) from "changed in this form".
+ */
+export type FieldHistory = {
+  remember(collection: string, id: string | number, field: string, at: unknown, value: unknown): void
+  /** The value the field had when the document's `updatedAt` was `at`. Undefined: not known. */
+  at(collection: string, id: string | number, field: string, at: string): { value: unknown } | undefined
+}
+
+const historyKey = (collection: string, id: unknown, field: string) => `${docKey(collection, id)}:${field}`
+
+/** An in-memory field history: the last `perDoc` values of the last `maxDocs` documents. */
+export function createFieldHistory(maxDocs = 1000, perDoc = 20): FieldHistory {
+  const docs = new Map<string, Map<number, unknown>>()
+  return {
+    remember(collection, id, field, at, value) {
+      const time = typeof at === 'string' ? Date.parse(at) : Number.NaN
+      if (!Number.isFinite(time)) return
+      const key = historyKey(collection, id, field)
+      const entry = docs.get(key) ?? new Map<number, unknown>()
+      docs.delete(key)
+      entry.set(time, structuredClone(value))
+      while (entry.size > perDoc) entry.delete(entry.keys().next().value as number)
+      docs.set(key, entry)
+      if (docs.size > maxDocs) docs.delete(docs.keys().next().value as string)
+    },
+    at(collection, id, field, at) {
+      const entry = docs.get(historyKey(collection, id, field))
+      const time = Date.parse(at)
+      if (!entry || !entry.has(time)) return undefined
+      return { value: entry.get(time) }
+    },
+  }
+}
+
+const HISTORY_KEY = Symbol.for('payload-canvas/field-history')
+
+/** The process-wide field history. Kept on `globalThis`, so a dev hot reload keeps it. */
+export function defaultFieldHistory(): FieldHistory {
+  const store = globalThis as unknown as Record<symbol, FieldHistory | undefined>
+  store[HISTORY_KEY] ??= createFieldHistory()
+  return store[HISTORY_KEY]
+}
+
+/**
+ * Runs in beforeChange of an update from a form (not the plugin's own save), for a field the
+ * builder and Payload's editor both write (a Payload blocks field). A form loaded before the
+ * field's last change, the builder's settings drawer for example, sends the field back as it
+ * loaded it:
+ * - left as loaded: the save keeps the newer stored value (`data[field]` becomes it);
+ * - changed in the form, and the field changed since: a conflict, also when the same person made
+ *   both changes (the save would undo their own newer edit on the canvas);
+ * - changed in the form, and the field did not change since: the form's value is saved.
+ * Returns the conflicts. Remembers the stored value for later forms.
+ */
+export function keepNewerField(args: {
+  history: FieldHistory
+  clock: FieldClock
+  collection: string
+  id: string | number
+  field: string
+  data: Doc
+  originalDoc: Doc | undefined
+}): FieldConflict[] {
+  const { history, clock, collection, id, field, data, originalDoc } = args
+  if (!originalDoc) return []
+  const current = originalDoc[field]
+  history.remember(collection, id, field, originalDoc.updatedAt, current)
+  const base = data.updatedAt
+  if (!(field in data) || typeof base !== 'string' || base === originalDoc.updatedAt) return []
+  if (sameValue(data[field], current)) return []
+  const loaded = history.at(collection, id, field, base)
+  if (loaded && sameValue(data[field], loaded.value)) {
+    data[field] = current
+    return []
+  }
+  if (loaded && sameValue(loaded.value, current)) return []
+  // Changed in the form: a conflict when anyone (this person too) changed the field since.
+  return clock.conflicts(collection, id, [field], { base, by: 'payload-canvas:anyone' })
+}
+
+// ---------------------------------------------------------------------------
 // Stale-save check (beforeChange) and record (afterChange)
 // ---------------------------------------------------------------------------
 
@@ -203,6 +291,12 @@ export function checkStaleSave(args: StaleCheckArgs): FieldConflict[] {
     pending[docKey(collection, id)] = changed
   }
   return []
+}
+
+/** The top-level fields `checkStaleSave` saw change in this save (the layout and the plugin's own fields left out). */
+export function changedFieldsOf(context: Context | undefined, collection: string, id: unknown): string[] {
+  const pending = context?.[CHANGED_FIELDS_CONTEXT] as Record<string, string[]> | undefined
+  return pending?.[docKey(collection, id)] ?? []
 }
 
 /** Runs in afterChange: records the fields `checkStaleSave` saw change, with the new `updatedAt`. */
@@ -303,29 +397,56 @@ export async function restoreLocks(args: { payload: LockPayload; req: unknown; c
 // ---------------------------------------------------------------------------
 
 /** Who has the builder's settings drawer open, per document. In memory, like the sessions. */
+/**
+ * Who has the settings drawer of a document open. An entry lasts `ttlMs` after it was added or
+ * renewed (the drawer takes the lock when it opens and again while it stays open; the user's own
+ * saves renew it too), so a drawer whose close never reached the server stops counting after a
+ * while instead of until the server restarts.
+ */
 export type SettingsLocks = {
-  add(collection: string, id: string | number, user: string | number): void
+  /** Adds or renews the user's entry for `ttlMs` (default: the store's time, Payload's lock duration). */
+  add(collection: string, id: string | number, user: string | number, ttlMs?: number): void
   remove(collection: string, id: string | number, user: string | number): void
   has(collection: string, id: string | number, user: string | number): boolean
+  /** Renews the user's entry when it is there. */
+  renew(collection: string, id: string | number, user: string | number, ttlMs?: number): void
 }
 
-export function createSettingsLocks(): SettingsLocks {
-  const holders = new Map<string, Set<string>>()
+/** How long a settings drawer entry lasts without renewal: Payload's default lock duration. */
+export const SETTINGS_HOLD_MS = 300_000
+
+export function createSettingsLocks(options: { ttlMs?: number; now?: () => number } = {}): SettingsLocks {
+  const ttl = options.ttlMs ?? SETTINGS_HOLD_MS
+  const now = options.now ?? Date.now
+  /** Per document: user -> the time the entry ends. */
+  const holders = new Map<string, Map<string, number>>()
+  const live = (key: string) => {
+    const users = holders.get(key)
+    if (!users) return undefined
+    const at = now()
+    for (const [user, until] of users) if (until <= at) users.delete(user)
+    if (users.size === 0) holders.delete(key)
+    return users.size === 0 ? undefined : users
+  }
   return {
-    add(collection, id, user) {
+    add(collection, id, user, ttlMs = ttl) {
       const key = docKey(collection, id)
-      const set = holders.get(key) ?? new Set<string>()
-      set.add(String(user))
-      holders.set(key, set)
+      const users = live(key) ?? new Map<string, number>()
+      users.set(String(user), now() + ttlMs)
+      holders.set(key, users)
     },
     remove(collection, id, user) {
       const key = docKey(collection, id)
-      const set = holders.get(key)
-      set?.delete(String(user))
-      if (set?.size === 0) holders.delete(key)
+      const users = holders.get(key)
+      users?.delete(String(user))
+      if (users?.size === 0) holders.delete(key)
     },
     has(collection, id, user) {
-      return holders.get(docKey(collection, id))?.has(String(user)) ?? false
+      return live(docKey(collection, id))?.has(String(user)) ?? false
+    },
+    renew(collection, id, user, ttlMs = ttl) {
+      const users = live(docKey(collection, id))
+      if (users?.has(String(user))) users.set(String(user), now() + ttlMs)
     },
   }
 }
@@ -386,7 +507,8 @@ export async function takeSettingsLock(args: {
   const active = rows.filter((row) => lockIsActive(row, duration, now))
   // Listed also when someone else holds the lock: after "Take over" in Payload's dialog the lock
   // is the user's, and their saves must keep it. Only the user's own rows are ever kept.
-  holders.add(collection, id, user.id)
+  // As long as Payload's own lock: the drawer takes it again while it stays open.
+  holders.add(collection, id, user.id, duration)
   if (active.some((row) => lockOwner(row) !== String(user.id))) return 'other'
   if (active.length > 0) return 'taken'
   if (rows.length > 0) await payload.db.deleteMany({ collection: LOCKED_DOCUMENTS_SLUG, where: lockWhere(collection, id), req })
