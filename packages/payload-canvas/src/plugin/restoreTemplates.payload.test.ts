@@ -12,13 +12,17 @@ import type { LiveDocStore } from '../live/apply'
 import { builderConfigOf, restoreDocumentVersion, runPublishAction } from '../live/document'
 import { LIVE_PATH, sessionTargetOf } from '../live/endpoints'
 import { liveRuntimeOf } from '../live/runtime'
+import type { LiveSessionEvent, MultiplayerEvent } from '../live/types'
 import { memoryAdapter } from './memoryAdapter.test-data'
 import { websiteBuilder } from './index'
 
 /** While set, a hook refuses every restore of a version. */
 let failRestores = false
+/** While set, a hook refuses every Revert (the plugin's save of the stored published layout). */
+let failReverts = false
 const refuseRestores = ({ context, data }: { context: Record<string, unknown>; data: unknown }) => {
   if (failRestores && context.isRestoringVersion) throw new Error('The restore was refused by a hook.')
+  if (failReverts && context.builderStoredLayout && !context.isRestoringVersion) throw new Error('The revert was refused by a hook.')
   return data
 }
 
@@ -89,9 +93,16 @@ const blocks = () => [...(builderConfigOf(payload)!.collections.articles.payload
 /** An open session of `collection`/`id` as the admin, with helpers. */
 async function openSession(collection: string, id: number | string) {
   const target = sessionTargetOf(payload, builderConfigOf(payload)!.collections, collection, String(id))!
-  await runtime().sessions.connect({ target, store: store(), clientId: `c-${collection}-${id}`, user: admin, send: () => {} })
+  const events: MultiplayerEvent[] = []
+  await runtime().sessions.connect({ target, store: store(), clientId: `c-${collection}-${id}`, user: admin, send: (event) => events.push(event) })
   return {
     target,
+    /** Saved or not, as the newest `session` event (a reset sends one) told the editors. */
+    saved: () => {
+      const last = events.filter((e): e is LiveSessionEvent => e.type === 'session').at(-1)
+      assert.ok(last, 'a session event')
+      return last.savedSeq === last.seq
+    },
     commit: (ops: unknown[]) => runtime().sessions.commit({ target, store: store(), user: admin, actor, ops, blocks: blocks() }),
     flush: () => runtime().sessions.flush(collection, id),
     layout: () => runtime().sessions.peek(collection, id)?.layout as Layout,
@@ -213,3 +224,104 @@ describe('the "Default template" hook saves another template with the same reque
     assert.equal(textOf((bDraft as { layout?: Layout }).layout), 'B edited', "B's edit is stored")
   })
 })
+
+/** The two storages: the builder's JSON layout (posts) and a Payload blocks field (articles). */
+const kinds = {
+  posts: {
+    data: (text: string) => ({ title: 'P', layout: jsonLayout(text) }),
+    storedText: (doc: Record<string, unknown>) => textOf(doc.layout as Layout | undefined),
+  },
+  articles: {
+    data: (text: string) => ({ title: 'A', layout: [{ blockType: 'heading', text, level: 'h2' }] }),
+    storedText: (doc: Record<string, unknown>) => (doc.layout as { text?: string }[] | undefined)?.[0]?.text,
+  },
+} as const
+
+type Kind = keyof typeof kinds
+
+const versionCount = async (collection: Kind, id: number | string) =>
+  (await payload.countVersions({ collection: collection as never, where: { parent: { equals: id } }, overrideAccess: true })).totalDocs
+
+const storedDraft = async (collection: Kind, id: number | string) =>
+  (await payload.findByID({ collection: collection as never, id, draft: true, overrideAccess: true, depth: 0 })) as unknown as Record<string, unknown>
+
+/** A published document of `collection` with the heading text `text`. */
+async function publishedDoc(collection: Kind, text: string) {
+  const created = await payload.create({ collection: collection as never, overrideAccess: true, data: { ...kinds[collection].data(text), _status: 'published' } as never })
+  return created.id as number
+}
+
+const editHeading = (session: Awaited<ReturnType<typeof openSession>>, text: string) =>
+  session.commit([{ type: 'update', id: session.layout().blocks[0].id, props: { text } }])
+
+for (const collection of ['posts', 'articles'] as const) {
+  describe(`a refused Restore or Revert keeps the session as it was (${collection})`, () => {
+    it('leaves a saved published page saved when a Restore is refused: nothing new is written', { timeout: 10_000 }, async () => {
+      const id = await publishedDoc(collection, 'v1')
+      await payload.update({ collection: collection as never, id, draft: false, overrideAccess: true, data: { ...kinds[collection].data('v2'), _status: 'published' } as never })
+      const v1 = await versionWhere(collection, id, (v) => kinds[collection].storedText(v) === 'v1')
+      const session = await openSession(collection, id)
+      const versions = await versionCount(collection, id)
+      failRestores = true
+      try {
+        const result = await restoreDocumentVersion(await asAdmin(), { target: session.target, versionId: v1, runtime: runtime() })
+        assert.equal(result.ok, false)
+      } finally {
+        failRestores = false
+      }
+      assert.equal(textOf(session.layout()), 'v2', 'the layout it had')
+      assert.equal(session.saved(), true, 'still saved')
+      assert.deepEqual(await session.flush(), { ok: true })
+      assert.equal(await versionCount(collection, id), versions, 'no new version')
+      const stored = await storedDraft(collection, id)
+      assert.equal(stored._status, 'published', 'no draft on top of the published page')
+      assert.equal(kinds[collection].storedText(stored), 'v2')
+    })
+
+    it('keeps the layout and the unsaved edit when a Revert is refused; a later Revert works', { timeout: 10_000 }, async () => {
+      const id = await publishedDoc(collection, 'v1')
+      const session = await openSession(collection, id)
+      assert.equal((await editHeading(session, 'PENDING')).ok, true)
+      failReverts = true
+      try {
+        const result = await runPublishAction(await asAdmin(), { target: session.target, action: 'revert', runtime: runtime() })
+        assert.equal(result.ok, false)
+      } finally {
+        failReverts = false
+      }
+      assert.equal(textOf(session.layout()), 'PENDING', 'the live layout it had')
+      assert.equal(session.saved(), false, 'still unsaved')
+      assert.deepEqual(await session.flush(), { ok: true })
+      assert.equal(kinds[collection].storedText(await storedDraft(collection, id)), 'PENDING', 'the next save stores it')
+      // A Revert that works brings the published layout back, in the session and stored.
+      const reverted = await runPublishAction(await asAdmin(), { target: session.target, action: 'revert', runtime: runtime() })
+      assert.equal(reverted.ok, true, JSON.stringify(reverted))
+      assert.equal(textOf(session.layout()), 'v1')
+      const stored = await storedDraft(collection, id)
+      assert.equal(kinds[collection].storedText(stored), 'v1')
+      assert.equal(stored._status, 'published')
+    })
+
+    it('leaves a saved session saved when a Revert is refused: nothing new is written', { timeout: 10_000 }, async () => {
+      const id = await publishedDoc(collection, 'v1')
+      const session = await openSession(collection, id)
+      assert.equal((await editHeading(session, 'v2')).ok, true)
+      assert.deepEqual(await session.flush(), { ok: true })
+      const versions = await versionCount(collection, id)
+      failReverts = true
+      try {
+        const result = await runPublishAction(await asAdmin(), { target: session.target, action: 'revert', runtime: runtime() })
+        assert.equal(result.ok, false)
+      } finally {
+        failReverts = false
+      }
+      assert.equal(textOf(session.layout()), 'v2', 'the layout it had')
+      assert.equal(session.saved(), true, 'still saved')
+      assert.deepEqual(await session.flush(), { ok: true })
+      assert.equal(await versionCount(collection, id), versions, 'no new version')
+      const stored = await storedDraft(collection, id)
+      assert.equal(kinds[collection].storedText(stored), 'v2')
+      assert.equal(stored._status, 'draft')
+    })
+  })
+}

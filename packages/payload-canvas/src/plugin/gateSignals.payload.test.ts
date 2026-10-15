@@ -20,6 +20,15 @@ async function instance(slug: string, options: { disableOnInit?: boolean } = {})
     slug,
     versions: { drafts: true },
     access: { read: () => true, create: () => true, update: () => true, delete: () => true },
+    // A save of the title "Refused" fails in a hook.
+    hooks: {
+      beforeChange: [
+        ({ data }) => {
+          if ((data as { title?: unknown } | undefined)?.title === 'Refused') throw new Error('Refused by a hook.')
+          return data
+        },
+      ],
+    },
     fields: [{ name: 'title', type: 'text' }],
   }
   const config = await buildConfig({
@@ -58,6 +67,21 @@ describe('the write gate without the plugin onInit', () => {
     }
     assert.equal((await payload.findByID({ collection: slug as never, id: doc.id, draft: true, overrideAccess: true })).title, 'migration-2')
     await timed(() => update(payload, slug, doc.id, 'after'))
+  })
+
+  it('ends a first save that fails without a transaction (disableOnInit): the next save of the page goes through', { timeout: 10_000 }, async () => {
+    const slug = 'pages-failfirst'
+    const payload = await instance(slug, { disableOnInit: true })
+    const doc = await payload.create({ collection: slug as never, draft: true, overrideAccess: true, data: { title: 'Seed' } as never })
+    // The very first update of this Payload instance, without a transaction, fails in a hook.
+    await assert.rejects(
+      payload.update({ collection: slug as never, id: doc.id, draft: true, overrideAccess: true, disableTransaction: true, data: { title: 'Refused' } as never }),
+      /Refused by a hook/,
+    )
+    // No afterError, no garbage collection, no manual end: the Local API call itself ended the hold.
+    assert.equal(defaultWriteGate().size(), 0, 'no save holds or waits for a gate')
+    await timed(() => update(payload, slug, doc.id, 'after'))
+    assert.equal((await payload.findByID({ collection: slug as never, id: doc.id, draft: true, overrideAccess: true })).title, 'after')
   })
 
   it('ends saves without a request of their own (each runs its own transaction)', { timeout: 10_000 }, async () => {

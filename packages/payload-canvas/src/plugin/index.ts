@@ -49,7 +49,7 @@ import {
 import { captureFieldSemantics, type FieldRegistry } from '../core/fieldSemantics'
 import { FIELD_REGISTRY_KEY } from '../live/fieldChecks'
 import { regionEndpoints } from '../live/regions'
-import { defaultWriteGate, installLocalApiBoundary, installTransactionSignals, type WriteGate } from '../live/writeGate'
+import { defaultWriteGate, installLocalApiBoundary, installTransactionSignals, withGateSignals, type WriteGate } from '../live/writeGate'
 import {
   keepLockBeforeOperation,
   layoutAfterChange,
@@ -487,6 +487,9 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
 
     return {
       ...config,
+      // The write gate hears of every commit, rollback and failed Local API save from the first one
+      // on, also without onInit (`payload migrate`) and in migrations on connect (live/writeGate.ts).
+      ...(config.db ? { db: withGateSignals(config.db, writeGate) } : {}),
       admin: {
         ...config.admin,
         components: {
@@ -631,8 +634,9 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           : []),
       ],
       onInit: async (payload) => {
-        // First, before the app's own onInit saves anything: the write gate learns from the adapter
-        // itself when a transaction committed or rolled back…
+        // The adapter's init already did this (withGateSignals); again here for a `db` that came
+        // in some other way. Before the app's own onInit saves anything: the write gate learns
+        // from the adapter itself when a transaction committed or rolled back…
         installTransactionSignals(payload.db as never, writeGate)
         // …and when a Local API update ended, also a failed one without a transaction.
         installLocalApiBoundary(payload as never, writeGate)

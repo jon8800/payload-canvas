@@ -28,11 +28,11 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 ### Fixed
 
 - Native Payload version restores update an open builder after the transaction commits. Revert and restore require access to the full source layout.
-- Failed builder restores keep the previous unsaved edits available to save. Nested template saves keep each document's save sequence and hook changes separate.
+- Failed builder restores and Revert keep the previous saved or unsaved state. A refused action on a saved page creates no draft. Nested template saves keep each document's save sequence and hook changes separate.
 - Live streams check every intermediate edit with its original block ancestors and sibling values. Protected values cannot escape in a batch that later removes them. Published-only readers cannot receive live drafts.
 - Live draft access is checked before each streamed event in both storage modes, including unsaved edits. Access checks use the document's current fields after every committed save, including saves that leave the layout unchanged. Failed refreshes refuse access.
 - Publish and unpublish stop when saving pending edits fails. A queued save no longer creates an identical draft after publication. Startup updates inside `onInit` release the write gate correctly.
-- Saves before `onInit`, including data migrations, install the write gate's database signals on their first update. Repeated updates with separate requests in one transaction share that transaction's gate.
+- The write gate installs database signals and tracks failed Local API calls during adapter initialization, before `onInit` or data migrations. Repeated updates with separate requests in one transaction share that transaction's gate.
 - Region undo records pending edits before saving, orders undo and redo requests, preserves retryable history, and restores a missing translation without copying its fallback. Reconnecting reloads region fields.
 - Re-entering region text before its saved frame arrives uses the latest edit. Queued image changes use the preceding save as their base. Undo and redo buttons work while a field save runs, and retryable undo survives a newer edit.
 - Escape in drawer popups preserves the focus trap, including portalled row menus. Open drawers renew their protection; abandoned holders expire after Payload's lock duration.

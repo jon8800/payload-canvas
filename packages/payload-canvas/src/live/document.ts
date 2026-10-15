@@ -384,9 +384,12 @@ export async function runPublishAction(
         if (denied) return { ok: false, status: 403, error: denied }
         published[target.field] = full[target.field]
       }
-      await runtime.sessions.reset(target.collection, target.id, (target.codec ?? codecOf(undefined)).decode(published[target.field]), published[target.field])
       const { id: _id, ...data } = published
-      doc = await payload.update({ ...save, data: { ...data, _status: 'published' }, draft: false })
+      // The session shows the published layout while it is saved again. When that save fails, the
+      // document did not change: the session gets back its layout and its saved or unsaved state.
+      doc = await runtime.sessions.resetFor(target.collection, target.id, (target.codec ?? codecOf(undefined)).decode(published[target.field]), published[target.field], () =>
+        payload.update({ ...save, data: { ...data, _status: 'published' }, draft: false }),
+      )
     } else {
       // The session's unsaved edits are saved first. When that save fails, nothing is published:
       // the stored draft is not what the editors see.

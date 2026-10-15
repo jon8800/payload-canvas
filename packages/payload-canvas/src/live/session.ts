@@ -220,11 +220,12 @@ export interface SessionManager {
    */
   reset(collection: string, id: string | number, layout: Layout, stored?: unknown): Promise<boolean>
   /**
-   * `reset`, then `save` (the caller's save of that layout, for example a version restore). When
-   * `save` throws, the session gets back what the reset replaced: its layout, its stored value and
-   * its unsaved commits, still unsaved (the next save stores them, they never count as saved), and
-   * every editor gets that layout again (`reset: true`). Commits made on the new layout meanwhile
-   * go. The error is thrown on. Without an open session it only runs `save`.
+   * `reset`, then `save` (the caller's save of that layout: Revert, a version restore). When `save`
+   * throws, the session gets back what the reset replaced: its layout, its stored value and its
+   * unsaved commits, saved or unsaved as they were (unsaved commits never count as saved, and a
+   * session without any stays saved: nothing new is written), and every editor gets that layout
+   * again (`reset: true`). Commits made on the new layout meanwhile go. The error is thrown on.
+   * Without an open session it only runs `save`.
    */
   resetFor<T>(collection: string, id: string | number, layout: Layout, stored: unknown, save: () => Promise<T>): Promise<T>
   /**
@@ -975,9 +976,10 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
    * `session` event with `reset: true` and a new session id: commits made on the old state can no
    * longer be replayed or rebased. A save in flight must not land after the caller's save of the
    * new layout: it is awaited outside the mutex (a save may need the mutex itself, it takes a save
-   * from outside first). False when no session is open.
+   * from outside first). `change` also gets the session's state from before anything here changed
+   * it (`prior.dirty`: it had unsaved commits). False when no session is open.
    */
-  const replaceState = async (key: string, change: (session: Session) => void): Promise<boolean> => {
+  const replaceState = async (key: string, change: (session: Session, prior: { dirty: boolean }) => void): Promise<boolean> => {
     for (;;) {
       const running = sessions.get(key)?.persisting
       if (running) {
@@ -989,6 +991,8 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
         if (!session) return false
         // A save started while this waited for the mutex: wait for it outside, then try again.
         if (session.persisting) return null
+        // Before the seq below moves on (that alone would make the session look unsaved).
+        const prior = { dirty: dirty(session) }
         if (session.persistTimer !== null) timers.clear(session.persistTimer)
         session.persistTimer = null
         session.firstDirtyAt = null
@@ -997,7 +1001,7 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
         session.seq += 1
         session.log = []
         session.knownBlocking = null
-        change(session)
+        change(session, prior)
         for (const member of session.members.values()) {
           if (!member.send) continue
           try {
@@ -1338,13 +1342,13 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     async resetFor(collection, id, layout, stored, save) {
       const key = channelKey(collection, id)
       let before: ResetUndo | null = null
-      await replaceState(key, (session) => {
+      await replaceState(key, (session, prior) => {
         before = {
           layout: session.layout,
           stored: session.stored,
           unsaved: session.unsaved,
           persistedSeq: session.persistedSeq,
-          dirty: dirty(session),
+          dirty: prior.dirty,
           externalPending: session.externalPending,
         }
         resetTo(session, layout, stored)
