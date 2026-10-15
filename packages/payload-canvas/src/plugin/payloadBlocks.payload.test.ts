@@ -51,6 +51,9 @@ const heading: Block = {
     { name: 'note', type: 'text', admin: { hidden: true } },
     // Only admins and reviewers may read it.
     { name: 'secret', type: 'text', access: { read: ({ req }) => ['admin', 'reviewer'].includes(String((req.user as { role?: string } | null)?.role)) } },
+    // Hidden from everyone while its sibling flag says so.
+    { name: 'private', type: 'checkbox' },
+    { name: 'confidential', type: 'text', access: { read: ({ siblingData }) => !(siblingData as { private?: boolean } | undefined)?.private } },
     // Payload's hook stores it in capitals.
     {
       name: 'tone',
@@ -89,16 +92,22 @@ const section: Block = {
 }
 
 const signedIn = ({ req }: { req: { user?: unknown } }) => Boolean(req.user)
+/** Viewers may read published pages only (Payload's draft read then falls back to the published version). */
+const readPages = ({ req }: { req: { user?: unknown } }) =>
+  (req.user as { role?: string } | null)?.role === 'viewer' ? { _status: { equals: 'published' } } : Boolean(req.user)
+/** While set, the live session's own saves fail (a hook refuses them). */
+let failSessionSaves = false
 const users: CollectionConfig = { slug: 'users', auth: true, fields: [{ name: 'role', type: 'text' }] }
 const media: CollectionConfig = { slug: 'media', access: { read: () => true }, fields: [{ name: 'name', type: 'text' }] }
 const pages: CollectionConfig = {
   slug: 'pages',
   versions: { drafts: true },
-  access: { read: signedIn, create: signedIn, update: signedIn, delete: signedIn },
+  access: { read: readPages as never, readVersions: signedIn, create: signedIn, update: signedIn, delete: signedIn },
   hooks: {
     // Tests hold a save here (inside the write gate) with `context.hold`.
     beforeChange: [
       async ({ context, data }) => {
+        if (failSessionSaves && context.builderSession) throw new Error('The session save was refused by a hook.')
         const hold = context.hold as { entered: () => void; wait: Promise<void> } | undefined
         if (hold) {
           hold.entered()
@@ -136,6 +145,27 @@ const pages: CollectionConfig = {
 const admin = { id: 1, collection: 'users', email: 'admin@example.test', role: 'admin' }
 const editor = { id: 2, collection: 'users', email: 'editor@example.test', role: 'editor' }
 const reviewer = { id: 3, collection: 'users', email: 'reviewer@example.test', role: 'reviewer' }
+const viewer = { id: 4, collection: 'users', email: 'viewer@example.test', role: 'viewer' }
+
+/** A collection with the builder's own JSON layout, for the JSON-mode regressions. */
+const posts: CollectionConfig = {
+  slug: 'posts',
+  versions: { drafts: true },
+  access: { read: readPages as never, readVersions: signedIn, create: signedIn, update: signedIn, delete: signedIn },
+  hooks: {
+    beforeChange: [
+      async ({ context, data }) => {
+        const hold = context.hold as { entered: () => void; wait: Promise<void> } | undefined
+        if (hold) {
+          hold.entered()
+          await hold.wait
+        }
+        return data
+      },
+    ],
+  },
+  fields: [{ name: 'title', type: 'text' }],
+}
 
 const mem = memoryAdapter()
 let payload: Payload
@@ -218,10 +248,10 @@ before(async () => {
     typescript: { autoGenerate: false },
     db: mem.adapter,
     localization: { locales: ['en', 'fr'], defaultLocale: 'en', fallback: true },
-    collections: [users, media, pages],
+    collections: [users, media, pages, posts],
     plugins: [
       websiteBuilder({
-        collections: { pages: { regions: [{ name: 'hero', fields: ['heroTitle'] }] } },
+        collections: { pages: { regions: [{ name: 'hero', fields: ['heroTitle'] }] }, posts: {} },
         blocks: fromPayloadBlocks([section, heading, gallery], { onWarning: false }),
         css: { entry: 'globals.css' },
         theme: false,
@@ -965,5 +995,218 @@ describe("Payload blocks field: the settings drawer's save before it closes", ()
     const doc = await read(id)
     assert.equal(doc.heroTitle, 'Welcome', 'nothing saved')
     assert.equal(((rows(doc)[0].content as Row[])[0] as Row).text, 'Canvas edit')
+  })
+})
+
+describe('independent review: restore, revert and access', () => {
+  it("Payload's own Restore brings the version's blocks to the field and to the open canvas, after its commit", { timeout: 10_000 }, async () => {
+    const id = await createPage()
+    const v1 = rows(await read(id))
+    const changed = structuredClone(v1)
+    changed[1].text = 'Bottom v2'
+    await payload.update({ collection: 'pages', id, draft: true, user: admin, overrideAccess: false, data: { layout: changed } as never })
+    const versions = (await payload.findVersions({ collection: 'pages', where: { parent: { equals: id } }, overrideAccess: true, limit: 50, sort: 'createdAt' })).docs
+    const older = versions.find((v) => ((v.version as Record<string, unknown>).layout as Row[] | undefined)?.[1]?.text === 'Bottom')!
+    const session = openSession(id, admin)
+    await session.connect()
+    assert.equal(session.layout().blocks[1].props?.text, 'Bottom v2')
+    // Payload's Restore (the version's own updatedAt in the data: not a stale form).
+    await payload.restoreVersion({ collection: 'pages', id: older.id, overrideAccess: true, draft: true } as never)
+    await settle()
+    assert.equal(rows(await read(id))[1].text, 'Bottom', 'the version is stored')
+    assert.equal(session.layout().blocks[1].props?.text, 'Bottom', 'the canvas shows it')
+    // The next canvas save builds on the restored blocks.
+    assert.equal((await session.commit([{ type: 'update', id: headingOf(session.layout()).id, props: { text: 'After restore' } }])).ok, true)
+    assert.deepEqual(await session.flush(), { ok: true })
+    const stored = rows(await read(id))
+    assert.equal(stored[1].text, 'Bottom')
+    assert.equal(((stored[0].content as Row[])[0] as Row).text, 'After restore')
+  })
+
+  it('refuses Revert to a user who may not read every value, and an allowed Revert keeps hidden values', { timeout: 10_000 }, async () => {
+    const id = await createPage()
+    await runPublishAction(await requestAs(admin), { target: openSession(id, admin).target, action: 'publish', runtime: liveRuntimeOf(payload) })
+    const session = openSession(id, admin)
+    await session.connect()
+    const hello = headingOf(session.layout())
+    assert.equal((await session.commit([{ type: 'update', id: hello.id, props: { text: 'Draft only' } }])).ok, true)
+    assert.deepEqual(await session.flush(), { ok: true })
+    // The editor may not read `secret`: a Revert would save the blocks without it.
+    const refused = await runPublishAction(await requestAs(editor), { target: session.target, action: 'revert', runtime: liveRuntimeOf(payload) })
+    assert.equal(refused.ok, false)
+    assert.equal((refused as { status: number }).status, 403)
+    assert.equal((await storedHeading(id)).text, 'Draft only', 'nothing reverted')
+    // An admin reverts; the next canvas save keeps the secret (no null for a value it never showed).
+    const reverted = await runPublishAction(await requestAs(admin), { target: session.target, action: 'revert', runtime: liveRuntimeOf(payload) })
+    assert.equal(reverted.ok, true, JSON.stringify(reverted))
+    assert.equal((await session.commit([{ type: 'update', id: hello.id, props: { level: 'h3' } }])).ok, true)
+    assert.deepEqual(await session.flush(), { ok: true })
+    const stored = await storedHeading(id)
+    assert.equal(stored.text, 'Hello')
+    assert.equal(stored.secret, 's3cret')
+  })
+
+  it('never gives the live draft to a user who may read only the published version', { timeout: 10_000 }, async () => {
+    // The builder's own JSON layout (blocks fields add their own read check on top).
+    const post = await payload.create({ collection: 'posts', draft: false, overrideAccess: true, data: { title: 'P', _status: 'published', layout: { version: 1, blocks: [] } } as never })
+    const id = post.id as number
+    const server = payload.config.custom?.[BUILDER_CONFIG_KEY] as BuilderServerConfig
+    const target = sessionTargetOf(payload, server.collections as never, 'posts', String(id))!
+    const runtime = liveRuntimeOf(payload)
+    const store = payload as unknown as LiveDocStore
+    await runtime.sessions.connect({ target, store, clientId: `draft-${id}`, user: admin, send: () => {} })
+    const block = { id: 'h1', type: 'heading', props: { text: 'Unpublished draft' } }
+    const actor = { type: 'user' as const, id: 'users:1', label: 'Admin' }
+    assert.equal((await runtime.sessions.commit({ target, store, user: admin, actor, ops: [{ type: 'insert', block, to: { parentId: null, index: 0 } }], blocks: [...storageOf().blocks] })).ok, true)
+    assert.deepEqual(await runtime.sessions.flush('posts', id), { ok: true })
+    const asViewer = async () => {
+      const req = await requestAs(viewer, id)
+      req.routeParams = { collection: 'posts', id: String(id) }
+      ;(req as { url?: string }).url = `http://localhost/api${LIVE_PATH}/posts/${id}/events?clientId=viewer-${id}`
+      return req
+    }
+    // Payload's draft read gives the viewer the published version: the builder refuses.
+    const events = await eventsEndpoint().handler(await asViewer())
+    assert.equal(events.status, 403)
+    const operations = (payload.config.endpoints ?? []).find((e) => e.path === `${LIVE_PATH}/:collection/:id/operations` && e.method === 'post')!
+    const opReq = await asViewer()
+    opReq.data = { ops: [{ type: 'update', id: 'h1', props: { level: 'h3' } }] }
+    const response = await operations.handler(opReq)
+    assert.equal(response.status, 403)
+    assert.ok(!(await response.text()).includes('Unpublished draft'))
+    const tools = builderMcpTools({ blocks: [...storageOf().blocks], collections: { posts: { field: 'layout' } } })
+    const mcp = await tools.find((t) => t.name === 'getLayout')!.handler({ collection: 'posts', id: String(id) }, await requestAs(viewer), {})
+    assert.ok(!JSON.stringify(mcp).includes('Unpublished draft'))
+  })
+})
+
+describe('independent review: event stream and operations', () => {
+  it('an edit of a block inside a section does not end the stream', { timeout: 10_000 }, async () => {
+    const id = await createPage()
+    const session = openSession(id, admin)
+    await session.connect()
+    const stream = await eventsEndpoint().handler(await requestAs(admin, id))
+    const frames = readFrames(stream, (all) => all.some((f) => f.includes('event: commit') || f.includes('event: error')))
+    await settle()
+    // A gallery may only be inside a section.
+    const photos = session.layout().blocks[0].slots!.content[1]
+    assert.equal((await session.commit([{ type: 'update', id: photos.id, props: { settings: { columns: 2, tagline: 'Nested edit' } } }])).ok, true)
+    const sent = await frames
+    assert.ok(!sent.some((f) => f.includes('event: error')), 'no error')
+    assert.ok(sent.some((f) => f.includes('Nested edit')), 'the commit went out')
+  })
+
+  it('checks each state of a batch with its siblings: a value hidden by a flag set in the same batch never goes out', { timeout: 10_000 }, async () => {
+    const id = await createPage({ secret: false })
+    const hello = String((await storedHeading(id)).id)
+    const session = openSession(id, admin)
+    await session.connect()
+    const stream = await eventsEndpoint().handler(await requestAs(editor, id))
+    const frames = readFrames(stream, (all) => all.some((f) => f.includes('event: error')))
+    await settle()
+    const batch = [
+      { type: 'update', id: hello, props: { private: true } },
+      { type: 'update', id: hello, props: { confidential: 'SENSITIVE' } },
+      { type: 'update', id: hello, unsetProps: ['confidential'] },
+      { type: 'update', id: hello, props: { private: false } },
+    ]
+    assert.equal((await session.commit(batch)).ok, true)
+    const sent = await frames
+    assert.ok(!sent.some((f) => f.includes('SENSITIVE')))
+    assert.ok(sent.some((f) => f.includes('event: error')))
+    // The same batch through the operations endpoint, by the editor: refused before it changes anything.
+    const id2 = await createPage({ secret: false })
+    const hello2 = String((await storedHeading(id2)).id)
+    const editorBatch = batch.map((op) => ({ ...op, id: hello2 }))
+    const response = await callLive('operations', editor, id2, { ops: editorBatch })
+    assert.equal(response.status, 403)
+    assert.ok(!(await response.text()).includes('SENSITIVE'))
+    assert.equal(liveRuntimeOf(payload).sessions.peek('pages', id2)?.layout.blocks[0].slots!.content[0].props?.private, undefined, 'not applied')
+  })
+})
+
+describe('independent review: row ids across pages', () => {
+  it("gives rows pasted from another page new ids, and keeps a page's own rows through remove, save and undo", { timeout: 10_000 }, async () => {
+    const pageA = await createPage()
+    const pageB = await createPage()
+    const fromA = ((rows(await read(pageA))[0].content as Row[])[1].items as Row[]).map((r) => r.id)
+    const a = openSession(pageA, admin)
+    await a.connect()
+    const copied = structuredClone(a.layout().blocks[0].slots!.content[1])
+    const b = openSession(pageB, admin)
+    await b.connect()
+    const introB = b.layout().blocks[0]
+    assert.equal((await b.commit([{ type: 'insert', block: { ...copied, id: 'pasted-from-a' }, to: { parentId: introB.id, slot: 'content', index: 0 } }])).ok, true)
+    assert.deepEqual(await b.flush(), { ok: true })
+    const pasted = ((rows(await read(pageB))[0].content as Row[]).find((r) => r.id === 'pasted-from-a')!.items as Row[]).map((r) => r.id)
+    for (const rowId of pasted) assert.ok(!fromA.includes(rowId), 'no row id of page A on page B')
+    // Page B's own gallery: remove, save, undo (insert it back as it was), save.
+    const own = structuredClone(b.layout().blocks[0].slots!.content.find((x) => x.type === 'gallery' && x.id !== 'pasted-from-a')!)
+    const ownRows = (own.props!.items as Row[]).map((r) => r.id)
+    assert.equal((await b.commit([{ type: 'remove', id: own.id }])).ok, true)
+    assert.deepEqual(await b.flush(), { ok: true })
+    assert.equal((await b.commit([{ type: 'insert', block: own, to: { parentId: introB.id, slot: 'content', index: 1 } }])).ok, true)
+    assert.deepEqual(await b.flush(), { ok: true })
+    const back = ((rows(await read(pageB))[0].content as Row[]).find((r) => r.id === own.id)!.items as Row[]).map((r) => r.id)
+    assert.deepEqual(back, ownRows, 'its own row ids')
+  })
+})
+
+describe('independent review: saves and publishing', () => {
+  it('publishes nothing when the session draft cannot be saved', { timeout: 10_000 }, async () => {
+    const id = await createPage()
+    const session = openSession(id, admin)
+    await session.connect()
+    assert.equal((await session.commit([{ type: 'update', id: headingOf(session.layout()).id, props: { text: 'Not saved' } }])).ok, true)
+    failSessionSaves = true
+    try {
+      const result = await runPublishAction(await requestAs(admin), { target: session.target, action: 'publish', runtime: liveRuntimeOf(payload) })
+      assert.equal(result.ok, false)
+      assert.equal((await payload.findByID({ collection: 'pages', id, draft: false, overrideAccess: true }))._status, 'draft', 'not published')
+    } finally {
+      failSessionSaves = false
+    }
+  })
+
+  it('a session save that waited behind a publish of the same layout writes no second draft', { timeout: 10_000 }, async () => {
+    const post = await payload.create({ collection: 'posts', draft: true, overrideAccess: true, data: { title: 'P', layout: { version: 1, blocks: [] } } as never })
+    const id = post.id as number
+    const server = payload.config.custom?.[BUILDER_CONFIG_KEY] as BuilderServerConfig
+    const target = sessionTargetOf(payload, server.collections as never, 'posts', String(id))!
+    const runtime = liveRuntimeOf(payload)
+    await runtime.sessions.connect({ target, store: payload as unknown as LiveDocStore, clientId: `post-${id}`, user: admin, send: () => {} })
+    const block = { id: 'h1', type: 'heading', props: { text: 'Hello' } }
+    assert.equal((await runtime.sessions.commit({ target, store: payload as unknown as LiveDocStore, user: admin, actor: { type: 'user', id: 'users:1', label: 'Admin' }, ops: [{ type: 'insert', block, to: { parentId: null, index: 0 } }], blocks: [...storageOf().blocks] })).ok, true)
+    let entered!: () => void
+    let release!: () => void
+    const inside = new Promise<void>((resolve) => (entered = resolve))
+    const wait = new Promise<void>((resolve) => (release = resolve))
+    // Publish holds the gate; the session's save waits for it.
+    const publish = payload.update({ collection: 'posts', id, draft: false, user: admin, overrideAccess: false, data: { _status: 'published' } as never, context: { hold: { entered, wait } } })
+    await inside
+    const flushed = runtime.sessions.flush('posts', id)
+    release()
+    await publish
+    assert.deepEqual(await flushed, { ok: true })
+    await settle()
+    const all = (await payload.findVersions({ collection: 'posts', where: { parent: { equals: id } }, overrideAccess: true, limit: 50, sort: '-updatedAt' })).docs
+    assert.equal((all[0].version as Record<string, unknown>)._status, 'published', 'the newest version is the publish, no draft after it')
+  })
+})
+
+describe('independent review: region values in their own locale', () => {
+  it("tells each region field's own value from the fallback", { timeout: 10_000 }, async () => {
+    const id = await createPage()
+    await payload.update({ collection: 'pages', id, draft: true, locale: 'fr', overrideAccess: true, data: { heroTitle: null } as never })
+    const regions = (payload.config.endpoints ?? []).find((e) => e.path === `${LIVE_PATH}/:collection/:id/regions` && e.method === 'get')!
+    const req = await requestAs(admin, id)
+    ;(req as { url?: string }).url = `http://localhost/api${LIVE_PATH}/pages/${id}/regions?locale=fr`
+    const body = (await (await regions.handler(req)).json()) as { values: Record<string, unknown>; storedValues: Record<string, unknown> }
+    assert.equal(body.values.heroTitle, 'Welcome', 'the page shows the fallback')
+    assert.equal(body.storedValues.heroTitle, null, 'the locale has no own value')
+    const en = await requestAs(admin, id)
+    ;(en as { url?: string }).url = `http://localhost/api${LIVE_PATH}/pages/${id}/regions?locale=en`
+    const own = (await (await regions.handler(en)).json()) as { values: Record<string, unknown>; storedValues: Record<string, unknown> }
+    assert.equal(own.storedValues.heroTitle, 'Welcome')
   })
 })

@@ -14,8 +14,8 @@ import { addDataAndFileToRequest, parseDocumentID, type CollectionSlug, type End
 
 import { EMPTY_FIELD_REGISTRY, type FieldRegistry } from '../core/fieldSemantics'
 import type { PayloadBlocksStorage } from '../core/payloadBlocks'
-import { blocksAccessProblem, codecOf } from './storage'
-import { findBlock } from '../core/tree'
+import { draftReadProblem } from './draftAccess'
+import { blocksAccessProblem, codecOf, statesThrough, UNREADABLE_BLOCKS_MESSAGE, withBlocksReadCheck } from './storage'
 import type { BlockDefinition, Layout, LocaleSettings, Operation } from '../core/types'
 import { actorFromUser, type LiveDocStore } from './apply'
 import { blockFromBody, propAccessCheck, validateBlockProps } from './fieldChecks'
@@ -133,63 +133,55 @@ function resumePoint(req: PayloadRequest, url: URL): { seq: number; sessionId?: 
   return { seq, ...(sessionId ? { sessionId } : {}) }
 }
 
-/**
- * The layouts that hold every value an event carries. A `session` event: its layout. A `commit`:
- * the layout right after it, plus each operation's own values (a block it inserts, the props it
- * writes on the block they belong to), so values a later operation of the batch removed count too.
- * An update whose block is gone is checked as a block of unknown type (refused).
- */
-function eventLayouts(event: MultiplayerEvent, after: Layout | undefined): Layout[] {
-  if (event.type === 'session') return [(event as { layout: Layout }).layout]
-  if (event.type !== 'commit') return []
-  const layouts: Layout[] = after ? [after] : []
-  for (const op of (event as { ops: Operation[] }).ops) {
-    if (op.type === 'insert') layouts.push({ version: 1, blocks: [op.block] })
-    if (op.type === 'update' && (op.props || op.locale)) {
-      const block = after ? findBlock(after, op.id) : null
-      layouts.push({
-        version: 1,
-        blocks: [block ? { ...block, props: { ...block.props, ...op.props }, slots: {} } : { id: op.id, type: 'payload-canvas:unknown-block', props: op.props }],
-      })
-    }
-  }
-  return layouts
-}
-
 export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
   /**
    * The event stream of a Payload blocks field. Each event is checked, one after the other, against
-   * the values it carries as of the moment it was sent: a `session` event against its own layout,
-   * a `commit` against the session's layout right after that commit (the manager sends commits
-   * synchronously, so the layout read here is that state), taken at once and never read later.
-   * A value the user may not read ends the stream with an `error` event, before that event or any
-   * later one goes out. Reconnects never replay old commits for such fields (session.ts). The
-   * builder's JSON layout: `send` as it is.
+   * every state it shows the user, in place (each block with its real parents and siblings, as
+   * Payload's read access sees it): a `session` event its layout; a `commit` each state after each
+   * of its operations, applied to the state the previous event left (the stream's own copy). So a
+   * value one operation writes and a later one removes counts, and so does a value that a sibling
+   * value would hide. The first value the user may not read ends the stream with an `error` event,
+   * before that event or any later one goes out. Reconnects never replay old commits for such
+   * fields (session.ts). The builder's JSON layout: `send` as it is.
    */
   const readCheckedSend = (req: PayloadRequest, target: SessionTarget, send: SessionSend, close: () => void): SessionSend => {
     if (target.codec?.kind !== 'payload-blocks') return send
     let queue: Promise<void> = Promise.resolve()
     let ended = false
+    /** The layout as the events sent so far left it (taken when each event was sent). */
+    let shown: Layout | null = null
+    const end = (problem: string) => {
+      ended = true
+      send({ type: 'error', error: problem } as unknown as MultiplayerEvent)
+      close()
+    }
     return (event, id) => {
-      // The state as of this event, taken now.
-      const open = options.runtime.sessions.peek(target.collection, target.id)
-      const layouts = eventLayouts(event, open?.layout)
-      const doc = open?.doc
-      queue = queue.then(async () => {
-        if (ended) return
-        const problem = await blocksAccessProblem(req, target, { write: false, stored: false, layouts, doc })
-        if (ended) return
-        if (!problem) {
+      // The states this event shows, from the events before it: taken now, in send order.
+      let layouts: Layout[] | null = []
+      if (event.type === 'session') {
+        shown = (event as { layout: Layout }).layout
+        layouts = [shown]
+      } else if (event.type === 'commit') {
+        layouts = shown ? statesThrough(shown, (event as { ops: Operation[] }).ops) : null
+        if (layouts && layouts.length > 0) shown = layouts[layouts.length - 1]
+      }
+      const doc = options.runtime.sessions.peek(target.collection, target.id)?.doc
+      queue = queue
+        .then(async () => {
+          if (ended) return
+          // Operations that do not apply to the stream's copy: the stream cannot tell what they show.
+          const problem = layouts === null ? UNREADABLE_BLOCKS_MESSAGE : await blocksAccessProblem(req, target, { write: false, stored: false, layouts, doc })
+          if (ended) return
+          if (problem) {
+            end(problem)
+            return
+          }
           send(event, id)
-          return
-        }
-        ended = true
-        send({ type: 'error', error: problem } as unknown as MultiplayerEvent)
-        close()
-      }).catch(() => {
-        ended = true
-        close()
-      })
+        })
+        .catch(() => {
+          ended = true
+          close()
+        })
     }
   }
 
@@ -215,6 +207,9 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
     if (!(await runtime.canUpdate(req, target.collection, target.id))) {
       return { ok: false, status: 403, error: 'You are not allowed to edit this document', seq: runtime.sessions.peek(target.collection, target.id)?.seq ?? 0 }
     }
+    // The session holds the newest draft: only users who may read it change it (the result goes back to them).
+    const stale = await draftReadProblem(req, target).catch(() => 'Document not found or not readable')
+    if (stale) return { ok: false, status: 403, error: stale, seq: 0 }
     // A Payload blocks field: only users who may read all of it and update it use the session.
     const live = () => runtime.sessions.peek(target.collection, target.id)
     const denied = await blocksAccessProblem(req, target, { write: true, layouts: [live()?.layout] })
@@ -228,7 +223,12 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
       blocks,
       localization,
       // Field access of block props: a change to a prop the user may not update is refused.
-      access: propAccessCheck(req, { blocks, registry, collection: target.collection, id: target.id, field: target.field, localization }),
+      // A Payload blocks field: and no value the user may not read, in any state of the batch.
+      access: withBlocksReadCheck(
+        req,
+        target,
+        propAccessCheck(req, { blocks, registry, collection: target.collection, id: target.id, field: target.field, localization }),
+      ),
       ...input,
     })
   }
@@ -255,6 +255,9 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
         return json({ ok: false, error: 'Document not found or not readable' }, statusOf(error) === 403 ? 403 : 404)
       }
       // A Payload blocks field: only users who may read all of it (the session holds every value).
+      // The session holds the newest draft: a user who may read only an older version gets nothing.
+      const stale = await draftReadProblem(req, target)
+      if (stale) return json({ ok: false, error: stale }, 403)
       const unreadable = await blocksAccessProblem(req, target, { write: false, layouts: [runtime.sessions.peek(target.collection, target.id)?.layout] })
       if (unreadable) return json({ ok: false, error: unreadable }, 403)
       const url = new URL(req.url ?? '', 'http://localhost')
@@ -374,10 +377,6 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
         const response: LiveOperationsResponse = { ok: false, error: result.error, ...(result.errors ? { errors: result.errors } : {}) }
         return json(response, result.status)
       }
-      // The response holds the whole layout: check again, so a value stored meanwhile that this
-      // user may not read never goes out.
-      const hidden = await blocksAccessProblem(req, target, { write: false, stored: false, layouts: [result.layout] })
-      if (hidden) return json({ ok: false, error: hidden } satisfies LiveOperationsResponse, 403)
       const response: LiveOperationsResponse = {
         ok: true,
         layout: result.layout,
@@ -416,6 +415,8 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
       } catch (error) {
         return json({ ok: false, error: 'Document not found or not readable' } satisfies LiveValidateResponse, statusOf(error) === 403 ? 403 : 404)
       }
+      const stale = await draftReadProblem(req, target)
+      if (stale) return json({ ok: false, error: stale } satisfies LiveValidateResponse, 403)
       const hidden = await blocksAccessProblem(req, target, { write: false, layouts: [runtime.sessions.peek(target.collection, target.id)?.layout] })
       if (hidden) return json({ ok: false, error: hidden } satisfies LiveValidateResponse, 403)
       const layout = runtime.sessions.peek(target.collection, target.id)?.layout ?? (target.codec ?? codecOf(undefined)).decode(doc[target.field])

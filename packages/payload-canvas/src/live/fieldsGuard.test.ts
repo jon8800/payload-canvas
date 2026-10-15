@@ -376,3 +376,25 @@ describe('the settings drawer lock', () => {
     assert.equal(locks.rows().length, 0)
   })
 })
+
+describe('settings drawer holders', () => {
+  it('end after their time unless the drawer renews them, so a lost close does not block the user for good', () => {
+    let now = 0
+    const holders = createSettingsLocks({ ttlMs: 1000, now: () => now })
+    holders.add('pages', 1, 7)
+    assert.equal(holders.has('pages', 1, 7), true)
+    now = 900
+    holders.renew('pages', 1, 7)
+    now = 1500
+    assert.equal(holders.has('pages', 1, 7), true, 'renewed')
+    now = 2000
+    assert.equal(holders.has('pages', 1, 7), false, 'expired: the close never came')
+    holders.renew('pages', 1, 7)
+    assert.equal(holders.has('pages', 1, 7), false, 'renew does not bring an expired entry back')
+    holders.add('pages', 1, 7, 5000)
+    now = 6000
+    assert.equal(holders.has('pages', 1, 7), true, 'the lock duration of the collection')
+    holders.remove('pages', 1, 7)
+    assert.equal(holders.has('pages', 1, 7), false)
+  })
+})

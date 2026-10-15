@@ -8,8 +8,9 @@
 
 import { APIError, docAccessOperation, type PayloadRequest } from 'payload'
 
-import { decodePayloadBlocks, encodePayloadBlocks, payloadBlocksProblems, withUniqueRowIds, type PayloadBlocksStorage } from '../core/payloadBlocks'
+import { decodePayloadBlocks, encodePayloadBlocks, payloadBlocksProblems, payloadRowIds, withUniqueRowIds, type PayloadBlocksStorage } from '../core/payloadBlocks'
 import { normalizeLayout } from '../core/tree'
+import { applyOperation } from '../core/operations'
 import type { Layout, Operation } from '../core/types'
 
 export type LayoutCodec = {
@@ -25,9 +26,12 @@ export type LayoutCodec = {
   problems(layout: Layout): string[]
   /**
    * The resolved operations of a commit as the field stores them (a Payload blocks field gives
-   * copied rows new ids). Returns `ops` itself when nothing changes.
+   * copied rows new ids; `owned`: the row ids the document's stored value has held). Returns `ops`
+   * itself when nothing changes.
    */
-  prepare?(layout: Layout, ops: Operation[]): Operation[]
+  prepare?(layout: Layout, ops: Operation[], owned?: ReadonlySet<string>): Operation[]
+  /** The row ids of a stored value (a Payload blocks field). */
+  rowIds?(value: unknown): Set<string>
 }
 
 export const JSON_CODEC: LayoutCodec = {
@@ -48,7 +52,8 @@ export function payloadBlocksCodec(storage: PayloadBlocksStorage): LayoutCodec {
     },
     encode: (layout, previous) => encodePayloadBlocks(layout, storage, previous),
     problems: (layout) => payloadBlocksProblems(layout, storage),
-    prepare: (layout, ops) => withUniqueRowIds(layout, ops, storage),
+    prepare: (layout, ops, owned) => withUniqueRowIds(layout, ops, storage, owned),
+    rowIds: (value) => payloadRowIds(value, storage),
   }
 }
 
@@ -244,4 +249,39 @@ export async function blocksAccessProblem(
     }
   }
   return null
+}
+
+/**
+ * Every state a batch of operations passes through, after each operation, starting from `before`.
+ * A value one operation writes and a later one removes is in one of them, in its real place
+ * (its block, its parent, its siblings). Null when an operation does not apply.
+ */
+export function statesThrough(before: Layout, ops: readonly Operation[]): Layout[] | null {
+  const states: Layout[] = []
+  let layout = before
+  for (const op of ops) {
+    const result = applyOperation(layout, op)
+    if (!result.ok) return null
+    layout = result.layout
+    states.push(layout)
+  }
+  return states
+}
+
+type CommitAccess = (args: { before: Layout; after: Layout; ops: readonly Operation[]; doc: Record<string, unknown> }) => Promise<string | null>
+
+/**
+ * A Payload blocks field: the commit's access check also refuses a batch that would show the user
+ * a value they may not read, in any state the batch passes through. It runs before the commit
+ * changes anything, so a refused batch is not applied. The JSON layout: `access` as it is.
+ */
+export function withBlocksReadCheck(req: PayloadRequest, target: BlocksTarget, access?: CommitAccess): CommitAccess | undefined {
+  if (target.codec?.kind !== 'payload-blocks') return access
+  return async (args) => {
+    const denied = access ? await access(args) : null
+    if (denied) return denied
+    const states = statesThrough(args.before, args.ops)
+    if (!states) return UNREADABLE_BLOCKS_MESSAGE
+    return blocksAccessProblem(req, target, { write: false, stored: false, layouts: states, doc: args.doc })
+  }
 }

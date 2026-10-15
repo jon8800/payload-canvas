@@ -631,13 +631,14 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           : []),
       ],
       onInit: async (payload) => {
-        await config.onInit?.(payload)
-        // Save unsaved live edits when the server stops.
-        installShutdownFlush(live.sessions)
-        // The write gate learns from the adapter itself when a transaction committed or rolled back.
+        // First, before the app's own onInit saves anything: the write gate learns from the adapter
+        // itself when a transaction committed or rolled back…
         installTransactionSignals(payload.db as never, writeGate)
         // …and when a Local API update ended, also a failed one without a transaction.
         installLocalApiBoundary(payload as never, writeGate)
+        await config.onInit?.(payload)
+        // Save unsaved live edits when the server stops.
+        installShutdownFlush(live.sessions)
         for (const [slug, field] of Object.entries(fieldNames)) {
           // A Payload blocks field stays where the collection put it.
           if (blocksStorageOf[slug]) continue

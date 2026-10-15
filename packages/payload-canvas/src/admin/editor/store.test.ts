@@ -166,10 +166,12 @@ test('field steps (page regions) undo and redo through the writer, in order with
   assert.deepEqual(written, [[{ path: 'title', value: 'Old', base: 'New' }]])
   assert.equal(textOf(store.getState().layout, 0), 'A!', 'the layout is not touched by a field step')
   store.undo()
+  await new Promise((resolve) => setImmediate(resolve))
   assert.equal(textOf(store.getState().layout, 0), 'a')
 
   store.redo()
   store.redo()
+  await new Promise((resolve) => setImmediate(resolve))
   assert.deepEqual(written.at(-1), [{ path: 'title', value: 'New', base: 'Old' }])
   assert.equal(store.getState().redoStack.length, 0)
   assert.equal(store.getState().undoStack.length, 2)

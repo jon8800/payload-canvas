@@ -338,14 +338,22 @@ function rowIdsOf(blocks: readonly Block[], storage: PayloadBlocksStorage, into:
   return into
 }
 
+/** The row ids of a stored blocks value (array rows and nested Payload blocks, at every depth). */
+export function payloadRowIds(value: unknown, storage: PayloadBlocksStorage): Set<string> {
+  const decoded = decodePayloadBlocks(value, storage)
+  return decoded.ok ? rowIdsOf(decoded.layout.blocks, storage, new Set()) : new Set()
+}
+
 /**
- * Payload stores the rows of array fields and nested blocks fields by their id, and its own
- * editor gives a copied row a new id. A block inserted by the builder (a duplicate, a paste, a
- * section) carries the rows of what it was copied from. This gives each inserted row whose id is
- * already in the layout (or earlier in the same operations) a new id. Rows with unique ids keep
- * them, so undoing a removal puts the same rows back. Returns `ops` itself when nothing changed.
+ * Payload stores the rows of array fields and nested blocks fields by their id, in one table per
+ * field for every document, and its own editor gives every pasted or copied row a new id. A block
+ * inserted by the builder (a duplicate, a paste from another page, a section) carries the rows of
+ * what it was copied from. This gives each inserted row a new id unless the id is this
+ * document's own: in `owned` (rows its stored value has held: undoing a removal puts the same rows
+ * back) and not in the layout or earlier in the same operations. Without `owned`, only ids already
+ * in the layout get new ones. Returns `ops` itself when nothing changed.
  */
-export function withUniqueRowIds(layout: Layout, ops: readonly Operation[], storage: PayloadBlocksStorage): Operation[] {
+export function withUniqueRowIds(layout: Layout, ops: readonly Operation[], storage: PayloadBlocksStorage, owned?: ReadonlySet<string>): Operation[] {
   if (!ops.some((op) => op.type === 'insert')) return ops as Operation[]
   const used = rowIdsOf(layout.blocks, storage, new Set())
   let changed = false
@@ -356,11 +364,11 @@ export function withUniqueRowIds(layout: Layout, ops: readonly Operation[], stor
       const copy = structuredClone(props)
       eachRow(def.fields as RowField[], copy, storage, (row) => {
         const id = typeof row.id === 'string' || typeof row.id === 'number' ? String(row.id) : null
-        if (id !== null && !used.has(id)) {
+        if (id === null) return
+        if (!used.has(id) && (!owned || owned.has(id))) {
           used.add(id)
           return
         }
-        if (id === null) return
         let next = createId()
         while (used.has(next)) next = createId()
         row.id = next

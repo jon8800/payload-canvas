@@ -337,9 +337,16 @@ export type SettingsLockResponse = { ok: true; lock: 'taken' | 'other' | 'off' |
  */
 export type RegionAccess = Record<string, { read: boolean; update: boolean }>
 
-/** The regions' values (the document's shape, ids instead of documents) in one locale, and the user's access. */
+/**
+ * The regions' values (the document's shape, ids instead of documents) in one locale, and the
+ * user's access.
+ * - `values`: what the page shows, with Payload's locale fallback. Conflict checks compare with it.
+ * - `storedValues`: the locale's own values (no fallback). Every field path in `values` is in it
+ *   too; `null` there means "no own value in this locale" (a fallback shows). Fields the user may
+ *   not read are in neither. Without localization it equals `values`.
+ */
 export type LiveRegionsResponse =
-  | { ok: true; values: Record<string, unknown>; access: RegionAccess; updatedAt: string | null }
+  | { ok: true; values: Record<string, unknown>; storedValues: Record<string, unknown>; access: RegionAccess; updatedAt: string | null }
   | { ok: false; error: string }
 
 /**
@@ -358,8 +365,9 @@ export type LiveFieldsRequest = {
 /** A change the server refused because the field changed since the editor read it. */
 export type LiveFieldConflict = { path: string; value: unknown }
 
+/** `values` and `storedValues` as in `LiveRegionsResponse`, after the save. */
 export type LiveFieldsResponse =
-  | { ok: true; values: Record<string, unknown>; updatedAt: string | null }
+  | { ok: true; values: Record<string, unknown>; storedValues: Record<string, unknown>; updatedAt: string | null }
   | { ok: false; error: string; conflicts?: LiveFieldConflict[]; errors?: LiveError[] }
 
 /** `GET {live}/:collection/:id/access`: the user's prop access, as in `BuilderDocMeta.fieldAccess`. */

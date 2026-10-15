@@ -47,7 +47,14 @@ function setup(options: { settingsOpen?: boolean } = {}) {
     refreshFrame: () => {
       refreshed++
     },
-    record: (edits) => recorded.push(edits),
+    record: (edits, _locale, saved) => {
+      recorded.push(edits)
+      void saved.then((stored) => {
+        const index = recorded.indexOf(edits)
+        if (stored) recorded[index] = stored
+        else recorded.splice(index, 1)
+      })
+    },
     warn: (text) => warnings.push(text),
   })
   return { controller, recorded, warnings, refreshes: () => refreshed }
@@ -176,7 +183,7 @@ async function editorWith(titles: Record<string, string>, options: { trim?: bool
     locale: () => locale,
     settingsOpen: () => false,
     refreshFrame: () => {},
-    record: (edits, at) => store.recordFields(edits, at),
+    record: (edits, at, saved) => store.recordFields(edits, at, saved),
     warn: (text) => warnings.push(text),
   })
   store.setFieldWriter((changes, at) => controller.writeEdits(changes, at))
@@ -185,6 +192,141 @@ async function editorWith(titles: Record<string, string>, options: { trim?: bool
 }
 
 describe('region history', () => {
+  it('records before the save completes, so immediate undo waits for hooks and never undoes the previous layout action', async () => {
+    const titles = { en: 'Old' }
+    const { store, controller, warnings } = await editorWith(titles, { trim: true })
+    store.apply({ type: 'insert', block: { id: 'b1', type: 'text' }, to: { parentId: null, index: 0 } })
+    const original = globalThis.fetch
+    let release!: () => void
+    const held = new Promise<void>((resolve) => { release = resolve })
+    let first = true
+    globalThis.fetch = (async (url, init) => {
+      if (init?.method === 'POST' && first) { first = false; await held }
+      return original(url, init)
+    }) as typeof fetch
+    const saving = controller.write([{ path: 'title', value: '  New  ' }])
+    assert.equal(store.getState().undoStack.length, 2)
+    store.undo()
+    assert.equal(store.getState().layout.blocks.length, 1)
+    release()
+    await saving
+    await settle()
+    assert.equal(titles.en, 'Old')
+    assert.equal(store.getState().redoStack.length, 1)
+    assert.deepEqual(warnings, [])
+  })
+
+  it('runs two fast undos in order even when the first network request is slow', async () => {
+    const titles = { en: 'Old' }
+    const { store, controller, posts, warnings } = await editorWith(titles)
+    await controller.write([{ path: 'title', value: 'One' }])
+    await controller.write([{ path: 'title', value: 'Two' }])
+    const original = globalThis.fetch
+    let release!: () => void
+    const held = new Promise<void>((resolve) => { release = resolve })
+    let requests = 0
+    globalThis.fetch = (async (url, init) => {
+      if (init?.method === 'POST' && ++requests === 1) await held
+      return original(url, init)
+    }) as typeof fetch
+    store.undo()
+    store.undo()
+    await settle()
+    assert.equal(requests, 1, 'the second undo cannot overtake the first')
+    release()
+    await settle()
+    assert.equal(titles.en, 'Old')
+    assert.deepEqual(posts.slice(-2).map((p) => p.changes[0].value), ['One', 'Old'])
+    assert.deepEqual(warnings, [])
+    assert.equal(store.getState().redoStack.length, 2)
+  })
+
+  for (const failure of ['offline', 'locked'] as const) {
+    it(`keeps undo after a temporary ${failure} failure, and retries it later`, async () => {
+      const titles = { en: 'Old' }
+      const { store, controller } = await editorWith(titles)
+      await controller.write([{ path: 'title', value: 'New' }])
+      const original = globalThis.fetch
+      let first = true
+      globalThis.fetch = (async (url, init) => {
+        if (init?.method === 'POST' && first) {
+          first = false
+          if (failure === 'offline') throw new Error('Offline')
+          return new Response(JSON.stringify({ ok: false, error: 'Another editor holds the lock.' }), { status: 423 })
+        }
+        return original(url, init)
+      }) as typeof fetch
+      store.undo()
+      await settle()
+      assert.equal(titles.en, 'New')
+      assert.equal(store.getState().undoStack.length, 1)
+      assert.equal(store.getState().redoStack.length, 0)
+      store.undo()
+      await settle()
+      assert.equal(titles.en, 'Old')
+      assert.equal(store.getState().redoStack.length, 1)
+    })
+  }
+
+  it('keeps a failed redo for retry and orders a fast undo followed by redo', async () => {
+    const titles = { en: 'Old' }
+    const { store, controller } = await editorWith(titles)
+    await controller.write([{ path: 'title', value: 'New' }])
+    store.undo()
+    store.redo()
+    await settle()
+    assert.equal(titles.en, 'New')
+    assert.equal(store.getState().undoStack.length, 1)
+    store.undo()
+    await settle()
+    const original = globalThis.fetch
+    let first = true
+    globalThis.fetch = (async (url, init) => {
+      if (init?.method === 'POST' && first) { first = false; throw new Error('Offline') }
+      return original(url, init)
+    }) as typeof fetch
+    store.redo()
+    await settle()
+    assert.equal(titles.en, 'Old')
+    assert.equal(store.getState().redoStack.length, 1)
+    assert.equal(store.getState().undoStack.length, 0)
+    store.redo()
+    await settle()
+    assert.equal(titles.en, 'New')
+    assert.equal(store.getState().undoStack.length, 1)
+  })
+
+  it('undo restores a missing translation instead of copying its fallback into that locale', async () => {
+    const { store, controller, setLocale } = await editorWith({ en: 'Hello' })
+    let english = 'Hello'
+    let french: string | null = null
+    const writes: unknown[] = []
+    globalThis.fetch = (async (_url, init) => {
+      if (init?.body) {
+        const body = JSON.parse(String(init.body)) as { changes: Array<{ value: string | null; base: unknown }> }
+        writes.push(body.changes[0])
+        assert.equal(body.changes[0].base, french ?? english)
+        french = body.changes[0].value
+      }
+      return new Response(JSON.stringify({ ok: true, values: { title: french ?? english }, storedValues: { title: french }, access, updatedAt: 't' }))
+    }) as typeof fetch
+    setLocale('fr')
+    await controller.load()
+    await controller.write([{ path: 'title', value: 'Bonjour' }])
+    store.undo()
+    await settle()
+    assert.deepEqual(writes.at(-1), { path: 'title', value: null, base: 'Bonjour' })
+    assert.equal(french, null)
+    store.redo()
+    await settle()
+    assert.equal(french, 'Bonjour')
+    store.undo()
+    await settle()
+    english = 'Changed in English'
+    await controller.load()
+    assert.equal(controller.state.get().values?.title, 'Changed in English')
+  })
+
   it('undoes a step in the locale it was made in, even when another locale holds the same value', async () => {
     // English becomes "New", which French already says. Undo after switching to French must touch English only.
     const titles = { en: 'Old', fr: 'New' }

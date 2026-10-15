@@ -896,6 +896,7 @@ export async function builderCanvas(request: CanvasServerRequest) {
 - Each change carries the value the editor saw, also through a long inline edit. When someone else changed the field since, the save is refused (409) and the canvas shows their value. The answer never holds values the user may not read, also inside groups and array rows, and a save keeps those fields as they are.
 - Undo and redo of a region change write the language the change was made in, and expect the value the server stored after the fields' hooks.
 - Someone else's document lock (the Edit view or the settings drawer) refuses the save with 423. While your own settings drawer is open, canvas edits of region fields wait: the drawer's form holds its own copy of the fields.
+- An open settings drawer renews its protection. If a close or renewal request is lost, protection expires after the configured document-lock duration (300 seconds by default).
 - Saves of one document never overlap. Payload's update reads the newest version and writes the whole version back, so two overlapping saves (a layout save and a settings autosave) could lose one of the changes. The plugin lets one update of a builder document run at a time, from Payload's read to the commit of its transaction. This applies to every builder collection, with or without regions. A save that cannot get its turn (a wait that would never end) fails with a clear 409 instead. Editors hear of a save only after the database committed it: a rollback or a failed commit announces nothing.
 
 **When the frame cannot show,** the canvas says so above the layout, and the layout stays editable: no `server` on `BuilderCanvas`, no `frame` option, a frame that throws, or a frame that never renders `layout`.
@@ -1081,9 +1082,10 @@ Each component gets the props it always got: `{ id, blockType, blockName, ...fie
 - **One field.** When the builder opens a page, it reads the stored blocks (`depth: 0`) into the editor. Each save writes them back to the same field through Payload's Local API, as the editor's user (`overrideAccess: false`). Payload's field hooks, validation, access, versions and locales run once per save, as for a save in Payload's editor. Opening the builder saves nothing.
 - **Nothing lost.** A round trip keeps every stored value: fields the inspector does not show, unknown keys, `null` and empty values, block ids and order, `blockName` (the block's name in the builder), array rows with their ids, groups, nested blocks fields inside groups and arrays, and upload and relationship ids. No HTML is read back and no defaults are added. Data the builder cannot keep exactly (a block type without a builder block, two blocks with one id) is not changed: the builder refuses to open the page (422) and says why. Payload's editor still opens it.
 - **Saves from elsewhere win.** A save from Payload's editor, the REST API or the Local API is the stored truth. An open builder shows it at once and replays its own unsaved edits on top, after every such save until the builder saves.
+- **Copied rows.** Rows pasted from another page or inserted from a saved section get new ids. The page keeps its own row ids through remove, save, undo and save.
 - **Hooks.** After each save the builder reads the stored blocks again. What Payload's hooks stored becomes the builder's state at once: changed values and also added, removed or moved blocks. Edits made while the save ran stay on top. So a later edit or undo keeps what the hooks did.
 - **Old forms.** A form that loaded the page before its blocks last changed (the builder's settings drawer, a second tab) sends the blocks back as it loaded them. When the form did not change them, the save keeps the newer blocks. When it did, the save is refused (409, "Not saved. … changed Layout after you opened this form"), also when the same person made both changes.
-- **Publish, revert and restore** work on the same field. Payload validates the field when it publishes.
+- **Publish, revert and restore** work on the same field. Publish stops if pending edits cannot be saved. Revert and restore require read access to every source value and update access to the blocks field. Payload's own version restore also updates an open builder after the transaction commits.
 
 ### Limits of a Payload blocks field
 
@@ -1844,9 +1846,10 @@ Several people can have the same page open in the builder. Each change shows for
 How it works:
 
 - The server keeps one live session per open document, in memory. The session holds the layout and a sequence number `seq`.
+- Live editing requires access to the newest draft. Read access limited to published documents does not grant access to the live draft.
 - An editor applies its own change at once, then sends it to `commit`. The server applies changes in the order they arrive, raises `seq` by 1, and sends each change to every open editor. A change that no longer applies (for example, someone deleted its block) is rejected, and that editor drops it.
 - The server saves the session as a draft about 1 second after the last change (at the latest every 5 seconds). The save runs as the person who made the last change, with their access rules, and the normal save hook compiles the CSS.
-- While a session is open, the session owns the layout. Any other save of the document gets the session's layout: a stale autosave from another tab, a REST update, or **Publish**. Publish therefore publishes what everyone sees in the editor.
+- For native JSON layouts, an open session protects its unsaved layout from other document saves. Publish first saves pending edits and stops if that save fails. Payload's own version restore replaces the session from the restored version after commit. Existing Payload blocks fields follow the authoritative stored field, as described above.
 - Every editor gets a `saved` event after each save and a `published` event after Publish, Unpublish or Revert, so the top bar shows the same status for everyone.
 - The session closes 60 seconds after the last editor leaves and its draft is saved.
 

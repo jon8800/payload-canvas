@@ -10,12 +10,14 @@
 import { regionAccessAt, regionDefinition, regionFieldOf, regionsTouched, valueAtDocPath } from '../../../core/regions'
 import type { BlockDefinition, RegionConfig, RegionField } from '../../../core/types'
 import type { LiveFieldChange, LiveFieldsResponse, LivePublishedEvent, LiveRegionsResponse, LiveSavedEvent, RegionAccess } from '../../../live/types'
-import type { FieldEdit } from '../store'
+import type { FieldEdit, FieldWriteResult } from '../store'
 import { createValueStore, type ValueStore } from '../valueStore'
 
 export type RegionsState = {
   /** The regions' values in the editor's locale (ids, not documents). Null until loaded. */
   values: Record<string, unknown> | null
+  /** Own locale values, without fallback, for exact undo. */
+  storedValues: Record<string, unknown> | null
   /** What the user may read and change. Null until loaded. */
   access: RegionAccess | null
   status: 'loading' | 'ready' | 'error'
@@ -45,7 +47,7 @@ export type RegionsController = {
    */
   write(changes: RegionWrite[], options?: { history?: boolean; locale?: string | null }): Promise<boolean>
   /** Saves changes for undo or redo in the step's `locale`: `base` is the value the step expects to find. */
-  writeEdits(changes: LiveFieldChange[], locale: string | null): Promise<boolean>
+  writeEdits(changes: LiveFieldChange[], locale: string | null): Promise<FieldWriteResult>
   region(name: string | null): RegionConfig | null
   /** The region and its field that hold a document path. */
   fieldOf(path: string): { region: RegionConfig; field: RegionField } | null
@@ -69,7 +71,7 @@ export type RegionsContext = {
   /** Asks the canvas for the page frame again. */
   refreshFrame: () => void
   /** Records one undo step of field changes, made in `locale`. */
-  record: (edits: FieldEdit[], locale: string | null) => void
+  record: (edits: FieldEdit[], locale: string | null, saved: Promise<FieldEdit[] | null>) => void
   warn: (text: string) => void
 }
 
@@ -78,13 +80,14 @@ const sameValue = (a: unknown, b: unknown) => JSON.stringify(a === '' || a === u
 
 export function createRegionsController(context: RegionsContext): RegionsController {
   const { regions, endpoint } = context
-  const state = createValueStore<RegionsState>({ values: null, access: null, status: 'loading', error: null })
+  const state = createValueStore<RegionsState>({ values: null, storedValues: null, access: null, status: 'loading', error: null })
   const selected = createValueStore<string | null>(null)
   const hovered = createValueStore<string | null>(null)
   const definitions = new Map(regions.map((r) => [r.name, regionDefinition(r)]))
   let loadRun = 0
   /** `updatedAt` of this editor's own last save: its `saved` event needs no reload. */
   let ownSave: string | null = null
+  let writes: Promise<unknown> = Promise.resolve()
 
   const load = async () => {
     const run = ++loadRun
@@ -100,17 +103,17 @@ export function createRegionsController(context: RegionsContext): RegionsControl
         state.set({ ...state.get(), status: 'error', error: body && !body.ok ? body.error : `Could not load the page fields (${response.status}).` })
         return
       }
-      state.set({ values: body.values, access: body.access, status: 'ready', error: null })
+      state.set({ values: body.values, storedValues: body.storedValues ?? body.values, access: body.access, status: 'ready', error: null })
     } catch {
       if (run === loadRun) state.set({ ...state.get(), status: 'error', error: 'Could not load the page fields. Check your connection.' })
     }
   }
 
   /**
-   * Saves changes in `locale`. The answer holds the stored values of that locale; they replace
-   * the shown ones only while the editor still shows that locale.
+   * Saves changes in `locale`. Effective display values and own stored values replace the
+   * current ones only while the editor still shows that locale.
    */
-  const post = async (changes: LiveFieldChange[], locale: string | null): Promise<{ ok: boolean; values: Record<string, unknown> | null }> => {
+  const send = async (changes: LiveFieldChange[], locale: string | null): Promise<{ ok: boolean; retryable?: boolean; values: Record<string, unknown> | null; storedValues?: Record<string, unknown> }> => {
     try {
       const response = await fetch(`${endpoint}/fields`, {
         method: 'POST',
@@ -124,18 +127,26 @@ export function createRegionsController(context: RegionsContext): RegionsControl
         // Someone else's value (a conflict), or the old value again: the page shows what is stored.
         void load()
         context.refreshFrame()
-        return { ok: false, values: null }
+        return { ok: false, retryable: response.status !== 403 && response.status !== 409, values: null }
       }
       ownSave = body.updatedAt
-      if (locale === context.locale()) state.set({ ...state.get(), values: body.values, status: 'ready', error: null })
+      if (locale === context.locale()) {
+        loadRun++
+        state.set({ ...state.get(), values: body.values, storedValues: body.storedValues ?? body.values, status: 'ready', error: null })
+      }
       else void load()
       context.refreshFrame()
-      return { ok: true, values: body.values }
+      return { ok: true, values: body.values, storedValues: body.storedValues ?? body.values }
     } catch {
       context.warn('Not saved. Check your connection.')
       context.refreshFrame()
-      return { ok: false, values: null }
+      return { ok: false, retryable: true, values: null }
     }
+  }
+  const post = (changes: LiveFieldChange[], locale: string | null) => {
+    const result = writes.then(() => send(changes, locale))
+    writes = result.catch(() => undefined)
+    return result
   }
 
   const lockedMessage = (path: string): string | null => {
@@ -176,15 +187,22 @@ export function createRegionsController(context: RegionsContext): RegionsControl
         context.refreshFrame()
         return true
       }
-      const result = await post(real, locale)
-      if (result.ok && options.history !== false) {
-        // The stored value, after the fields' hooks (a trim, a slug): undo expects to find it.
-        const stored = (path: string, sent: unknown) => {
-          const value = result.values ? valueAtDocPath(result.values, path) : undefined
-          return value === undefined ? sent : value
-        }
-        context.record(real.map((e) => ({ path: e.path, before: e.base, after: stored(e.path, e.value) })), locale)
+      const ownValues = state.get().storedValues ?? values
+      const editsForHistory: FieldEdit[] = real.map((e) => {
+        const before = valueAtDocPath(ownValues, e.path) ?? null
+        return { path: e.path, before, after: e.value, ...(!sameValue(before, e.base) ? { beforeShown: e.base } : {}) }
+      })
+      let finish: ((edits: FieldEdit[] | null) => void) | undefined
+      if (options.history !== false) {
+        const saved = new Promise<FieldEdit[] | null>((resolve) => { finish = resolve })
+        context.record(editsForHistory, locale, saved)
       }
+      const result = await post(real, locale)
+      finish?.(result.ok ? editsForHistory.map((edit) => {
+        const shown = valueAtDocPath(result.values, edit.path)
+        const own = valueAtDocPath(result.storedValues, edit.path) ?? null
+        return { ...edit, after: own, ...(!sameValue(own, shown) ? { afterShown: shown } : {}) }
+      }) : null)
       return result.ok
     },
 
@@ -192,9 +210,11 @@ export function createRegionsController(context: RegionsContext): RegionsControl
       const blocked = changes.map((c) => lockedMessage(c.path)).find((text) => text !== null)
       if (blocked) {
         context.warn(blocked)
-        return false
+        const access = state.get().access
+        return access && !context.settingsOpen() && changes.some((c) => !regionAccessAt(access, c.path).update) ? false : 'retry'
       }
-      return (await post(changes, locale)).ok
+      const result = await post(changes, locale)
+      return result.ok || (result.retryable ? 'retry' : false)
     },
 
     region: (name) => regions.find((r) => r.name === name) ?? null,

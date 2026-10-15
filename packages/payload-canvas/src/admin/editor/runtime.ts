@@ -326,7 +326,7 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
       locale: () => store.getState().locale,
       settingsOpen: () => runtime.doc.settingsOpen.get(),
       refreshFrame: () => runtime.postToCanvas({ type: 'frameRefresh' }),
-      record: (edits, locale) => store.recordFields(edits, locale),
+      record: (edits, locale, saved) => store.recordFields(edits, locale, saved),
       warn: (text) => runtime.warn(text),
     })
     runtime.regions = regions
