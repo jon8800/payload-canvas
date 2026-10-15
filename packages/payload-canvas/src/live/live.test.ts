@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
+import { captureFieldSemantics } from '../core/fieldSemantics'
 import { applyOperations } from '../core/operations'
 import { findBlock } from '../core/tree'
 import type { BlockDefinition, Layout } from '../core/types'
@@ -1229,6 +1230,205 @@ describe('hook changes of a guarded save and a reset', () => {
     assert.deepEqual(await sessions.flush(target.collection, target.id), { ok: true })
     assert.deepEqual(db.doc.layout, headingLayout('HOOKED'))
     assert.equal(sessions.unsaved(), 0)
+  })
+})
+
+/** Two headings: `h1` (the text a prop hook changes) and `h2` (the text editors change). */
+const layoutWith = (h1: string, h2 = 'B'): Layout => ({ version: 1, blocks: [heading('h1', h1), heading('h2', h2)] })
+
+/**
+ * A JSON layout document whose updates run as Payload runs them: through the write gate and the real
+ * save hooks. A prop hook changes the text "ORIGINAL" (of `h1`) only in saves whose context asks
+ * for it (a hook that depends on the save, so a later save does not repeat it).
+ */
+function hookedSetup() {
+  const clock = fakeTimers()
+  const gate = createWriteGate()
+  const sessions = createSessionManager({ timers: clock.timers, gate, logger: { error: () => {} } })
+  const key = writeKey(target.collection, target.id)
+  const hookBlocks = [
+    {
+      type: 'heading',
+      label: 'Heading',
+      fields: [
+        {
+          name: 'text',
+          type: 'text',
+          hooks: { beforeChange: [({ value, context }: { value: unknown; context?: Record<string, unknown> }) => (context?.changeText && value === 'ORIGINAL' ? 'HOOKED' : value)] },
+        },
+      ],
+    },
+  ] as BlockDefinition[]
+  let doc: Record<string, unknown> = { id: 'p1', layout: layoutWith('ORIGINAL') }
+  /** The layout of every write, in order. */
+  const writes: Layout[] = []
+  const req = { payload: { logger: { info() {}, warn() {}, error() {} } }, t: (s: string) => s }
+  const before = layoutBeforeChange({
+    collection: 'pages', field: 'layout', cssField: 'layoutCss', blocks: hookBlocks, css: { entry: 'does-not-exist.css' }, sessions,
+    fieldRegistry: captureFieldSemantics(hookBlocks),
+  }) as unknown as (args: unknown) => Promise<Record<string, unknown>>
+  const after = layoutAfterChange({ collection: 'pages', sessions, writeGate: gate }) as unknown as (args: unknown) => Promise<unknown>
+  let writing: Promise<void> | null = null
+  const store: LiveDocStore = {
+    async findByID() {
+      return structuredClone(doc)
+    },
+    // The session's own save joins the gate it holds (the same `req`).
+    update(args) {
+      const { req: gateReq = {}, context: saveContext, data: input } = args as { req?: object; context?: Record<string, unknown>; data: Record<string, unknown> }
+      return gate.run(key, gateReq, async () => {
+        const context = { ...saveContext }
+        const data = await before({ collection: { versions: { drafts: true } }, context, data: structuredClone(input), operation: 'update', originalDoc: structuredClone(doc), req })
+        const wait = writing
+        writing = null
+        await wait
+        doc = { ...doc, ...data }
+        writes.push(structuredClone(doc.layout as Layout))
+        await after({ context, doc })
+        return structuredClone(doc)
+      })
+    },
+  }
+  /** A save from outside the session (the settings drawer, Publish, REST). `hold`: it waits after the guard ran. */
+  const save = (data: Record<string, unknown>, options: { changeText?: boolean; publish?: boolean; hold?: Promise<void> } = {}) => {
+    if (options.hold) writing = options.hold
+    return store.update({ collection: target.collection, id: target.id, data, draft: !options.publish, context: options.changeText ? { changeText: true } : {} })
+  }
+  const connect = () => sessions.connect({ target, store, clientId: 'a', user: ana, send: () => {} })
+  const edit = (id: string, text: string, access?: CommitArgs['access']) =>
+    sessions.commit({ target, store, user: ana, actor: actorFromUser(ana), blocks: hookBlocks, ops: [{ type: 'update', id, props: { text } }], ...(access ? { access } : {}) })
+  /** An edit whose access check holds the session lock until `release`, and is refused. */
+  const lockingEdit = (check: () => Promise<void>) => edit('h2', 'REFUSED', async () => {
+    await check()
+    return 'refused'
+  })
+  return {
+    clock, gate, sessions, key, writes, save, connect, edit, lockingEdit,
+    peek: () => sessions.peek(target.collection, target.id)!,
+    flush: () => sessions.flush(target.collection, target.id),
+    get doc() { return doc },
+  }
+}
+
+describe('hook changes of a guarded save and the saves after it', () => {
+  it('Publish waits for the hook changes of the save before it, then publishes them', async () => {
+    const h = hookedSetup()
+    await h.connect()
+    const access = hold()
+    const editing = h.lockingEdit(() => access.promise)
+    await settle()
+    await h.save({ title: 'First save' }, { changeText: true })
+    assert.deepEqual(h.doc.layout, layoutWith('HOOKED'), 'the first save stored the hook result')
+    // Publish: it saves the session first, then publishes what the session holds.
+    let flushed = false
+    const publishing = h.flush().then(async (result) => {
+      flushed = true
+      await h.save({ _status: 'published' }, { publish: true })
+      return result
+    })
+    await settle()
+    assert.equal(flushed, false, 'Publish waits for the hook changes')
+    assert.equal(h.peek().adopting, true)
+    access.release()
+    assert.equal((await editing).ok, false)
+    assert.deepEqual(await publishing, { ok: true })
+    assert.deepEqual(h.doc.layout, layoutWith('HOOKED'), 'Publish keeps the hook result')
+    assert.deepEqual(h.peek().layout, layoutWith('HOOKED'))
+    assert.equal(h.peek().adopting, undefined)
+    assert.equal(h.sessions.unsaved(), 0)
+    assert.deepEqual(await h.flush(), { ok: true })
+    assert.deepEqual(h.writes, [layoutWith('HOOKED'), layoutWith('HOOKED')])
+  })
+
+  it('refuses two following saves while the hook changes wait, and stores them after', async () => {
+    const h = hookedSetup()
+    await h.connect()
+    const access = hold()
+    const editing = h.lockingEdit(() => access.promise)
+    await settle()
+    await h.save({ title: 'First save' }, { changeText: true })
+    const drawer = await outcome(h.save({ title: 'Second save' }))
+    const publish = await outcome(h.save({ _status: 'published' }, { publish: true }))
+    assert.equal(drawer.error?.status, 409)
+    assert.equal(publish.error?.status, 409)
+    assert.deepEqual(h.doc.layout, layoutWith('HOOKED'), 'no later save wrote over the hook result')
+    access.release()
+    assert.equal((await editing).ok, false)
+    await settle()
+    // Both saves work again once the session holds the hook changes.
+    await h.save({ title: 'Second save' })
+    await h.save({ _status: 'published' }, { publish: true })
+    assert.deepEqual(h.doc.layout, layoutWith('HOOKED'))
+    assert.equal(h.doc.title, 'Second save')
+    assert.deepEqual(h.peek().layout, layoutWith('HOOKED'))
+    assert.equal(h.sessions.unsaved(), 0)
+    assert.deepEqual(await h.flush(), { ok: true })
+  })
+
+  for (const how of ['flush', 'autosave'] as const) {
+    it(`never saves the session without the queued hook changes (${how})`, async () => {
+      const h = hookedSetup()
+      await h.connect()
+      // The first save read the session before the edit below, and commits after it.
+      const writing = hold()
+      const first = h.save({ title: 'First save' }, { changeText: true, hold: writing.promise })
+      await settle()
+      assert.equal((await h.edit('h2', 'EDITED')).ok, true)
+      const access = hold()
+      const editing = h.lockingEdit(() => access.promise)
+      await settle()
+      writing.release()
+      await first
+      assert.deepEqual(h.doc.layout, layoutWith('HOOKED', 'B'))
+      assert.equal(h.sessions.unsaved(), 1, 'the edit is not saved yet')
+      let flushing: Promise<unknown> | null = null
+      if (how === 'flush') flushing = h.flush()
+      else await h.clock.advance(10_000)
+      await settle()
+      assert.deepEqual(h.writes, [layoutWith('HOOKED', 'B')], 'no session save while the hook changes wait')
+      access.release()
+      assert.equal((await editing).ok, false)
+      if (flushing) assert.deepEqual(await flushing, { ok: true })
+      else await h.clock.advance(10_000)
+      const expected = layoutWith('HOOKED', 'EDITED')
+      assert.deepEqual(h.writes, [layoutWith('HOOKED', 'B'), expected])
+      assert.deepEqual(h.doc.layout, expected)
+      assert.deepEqual(h.peek().layout, expected)
+      assert.equal(h.sessions.unsaved(), 0)
+    })
+  }
+
+  it('does not deadlock when the access check of the edit that holds the session lock needs the write gate', async () => {
+    const h = hookedSetup()
+    await h.connect()
+    const writing = hold()
+    const first = h.save({ title: 'First save' }, { changeText: true, hold: writing.promise })
+    await settle()
+    assert.equal((await h.edit('h2', 'EDITED')).ok, true)
+    const access = hold()
+    // The access check needs the write gate (for example a save of its own) after it waited.
+    const editing = h.lockingEdit(async () => {
+      await access.promise
+      await h.gate.run(h.key, {}, async () => {})
+    })
+    await settle()
+    writing.release()
+    await first
+    assert.equal(h.sessions.unsaved(), 1)
+    const flushing = h.flush()
+    // The queued autosave and a following save meet the waiting hook changes under the write gate.
+    await h.clock.advance(10_000)
+    const drawer = await outcome(h.save({ title: 'Second save' }))
+    assert.equal(drawer.error?.status, 409)
+    assert.deepEqual(h.writes, [layoutWith('HOOKED', 'B')])
+    access.release()
+    assert.equal((await editing).ok, false)
+    assert.deepEqual(await flushing, { ok: true })
+    const expected = layoutWith('HOOKED', 'EDITED')
+    assert.deepEqual(h.writes, [layoutWith('HOOKED', 'B'), expected])
+    assert.deepEqual(h.doc.layout, expected)
+    assert.deepEqual(h.peek().layout, expected)
+    assert.equal(h.sessions.unsaved(), 0)
   })
 })
 

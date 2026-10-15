@@ -148,9 +148,11 @@ export type CommitResult =
  * A read-only view of an open session. `doc` is the document as the session last read it, without
  * the layout field (a read after a save may still run: access checks use `currentDoc`).
  * `resetting`: a Restore or Revert of the document runs, and the caller is not its own save. Its
- * layout may still be rolled back, so no other save may store it.
+ * layout may still be rolled back, so no other save may store it. `adopting`: a committed save's
+ * hook changes wait for the session lock. The stored document holds them and `layout` does not
+ * yet, so no save may store `layout` until they are in it.
  */
-export type SessionSnapshot = { sessionId: string; seq: number; layout: Layout; doc: Record<string, unknown>; resetting?: true }
+export type SessionSnapshot = { sessionId: string; seq: number; layout: Layout; doc: Record<string, unknown>; resetting?: true; adopting?: true }
 
 /**
  * What one save did to the layout through the props' hooks: the layout it got (`input`, the
@@ -237,7 +239,8 @@ export interface SessionManager {
   resetFor<T>(collection: string, id: string | number, layout: Layout, stored: unknown, save: () => Promise<T>): Promise<T>
   /**
    * Saves now if the session has unsaved commits (also during a retry wait). Resolves when the
-   * save ends: `ok: false` with the reason when it failed (the session keeps retrying).
+   * save ends: `ok: false` with the reason when it failed (the session keeps retrying). First waits
+   * for an active Restore or Revert and for the queued hook changes of committed saves.
    */
   flush(collection: string, id: string | number): Promise<LiveFlushResponse>
   /** Saves every session with unsaved commits. */
@@ -446,7 +449,10 @@ function rememberRows(session: { target: SessionTarget; stored: unknown; ownRowI
 
 /** The answer of a session save that found nothing left to write. */
 const SKIPPED = Symbol('skipped')
-/** A reset action owns the layout until its save or rollback finishes. */
+/**
+ * The session save waits: a reset action owns the layout until its save or rollback finishes, or
+ * a committed save's hook changes are not in the layout yet (`session.adopting`).
+ */
 const PAUSED = Symbol('paused')
 
 /** How a session's field stores its layout. */
@@ -738,6 +744,9 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
         await syncExternal(session)
         if (activeActions.has(session.key)) return PAUSED
       }
+      // The stored document holds hook changes the layout does not have yet: never write over them.
+      // Not waited for here: the session lock they need may wait for this write gate.
+      if (session.adopting) return PAUSED
       // A save outside the session stored this layout while this one waited (Publish): nothing to write.
       if (!dirty(session)) return SKIPPED
       seq = session.seq
@@ -820,7 +829,11 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     const done = run.then(() => {
       session.persisting = null
       if (dirty(session) && !activeActions.has(session.key)) {
-        if (session.failures === 0) {
+        const adopting = session.adopting
+        if (session.failures === 0 && adopting) {
+          // Saves again once the hook changes are in the layout.
+          void adopting.then(() => markDirty(session))
+        } else if (session.failures === 0) {
           // Commits arrived during the save.
           session.firstDirtyAt ??= timers.now()
           schedulePersist(session)
@@ -1372,7 +1385,14 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
       if (!session) return null
       const action = activeActions.get(key)
       const resetting = action !== undefined && actionSave.getStore() !== action
-      return { sessionId: session.sessionId, seq: session.seq, layout: session.layout, doc: session.doc, ...(resetting ? { resetting: true as const } : {}) }
+      return {
+        sessionId: session.sessionId,
+        seq: session.seq,
+        layout: session.layout,
+        doc: session.doc,
+        ...(resetting ? { resetting: true as const } : {}),
+        ...(session.adopting ? { adopting: true as const } : {}),
+      }
     },
 
     markSaved(collection, id, seq, info = {}) {
@@ -1487,8 +1507,14 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
         while (activeActions.has(key)) await activeActions.get(key)
         const session = sessions.get(key)
         if (!session) return { ok: true }
+        // Hook changes of a committed save first (outside every lock): the layout must hold them
+        // before it is saved or published.
+        if (session.adopting) {
+          await session.adopting
+          continue
+        }
         if (session.persisting) await session.persisting
-        if (activeActions.has(key)) continue
+        if (activeActions.has(key) || session.adopting) continue
         const save = async () => {
           if (session.persistTimer !== null) timers.clear(session.persistTimer)
           session.persistTimer = null
@@ -1496,10 +1522,10 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
           await persist(session)
         }
         await save()
-        if (activeActions.has(key)) continue
+        if (activeActions.has(key) || session.adopting) continue
         // A save that started before the last commits leaves them dirty: save once more.
         if (dirty(session) && session.failures === 0) await save()
-        if (activeActions.has(key)) continue
+        if (activeActions.has(key) || session.adopting) continue
         if (!dirty(session)) return { ok: true }
         return { ok: false, error: session.saveError?.message ?? 'The draft could not be saved.' }
       }
