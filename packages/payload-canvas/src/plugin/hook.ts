@@ -329,6 +329,9 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
         // A Restore or Revert runs: its layout may still be rolled back. Refused at once, never
         // waiting while this save holds the write gate (the action's save needs it).
         if (open.resetting) throw new APIError('Not saved: this document is being restored or reverted. Try again in a moment.', 409, undefined, true)
+        // The hook changes of a committed save are not in the session's layout yet: copying it now
+        // would store the layout without them. Refused at once for the same reason.
+        if (open.adopting) throw new APIError('Not saved: the live editor is still taking in the last save. Try again in a moment.', 409, undefined, true)
         data[field] = structuredClone(open.layout)
         guarded = true
         setDocEntry(context, GUARD_SEQ_CONTEXT, slug, docId, open.seq)
