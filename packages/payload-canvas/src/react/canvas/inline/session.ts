@@ -1,5 +1,5 @@
 import type { InlineKind, RichCommand, RichFormatState } from '../../../protocol'
-import { createThrottle, placeCaret, restoreDom, snapshotDom } from './dom'
+import { createThrottle, placeCaret, restoreAttributes, restoreDom, snapshotDom } from './dom'
 import { readText, singleLine } from './model'
 
 /** Typing reaches the admin (and collaborators) at most this often. */
@@ -37,8 +37,11 @@ export type InlineSession = {
   /**
    * Ends editing and puts the DOM back as React rendered it. `changed` is true when the value
    * changed after the last `onChange` call; `value` is the final value.
+   * `keep`: the edited text stays on screen (only the editing marks go) and `restore` puts React's
+   * DOM back later, right before React shows the new value. Plain text only; rich text always
+   * restores at once.
    */
-  finish: () => { changed: boolean; value: unknown }
+  finish: (options?: { keep?: boolean }) => { changed: boolean; value: unknown; restore?: () => void }
   /** Rich text toolbar commands. */
   command?: (command: RichCommand) => void
 }
@@ -189,7 +192,7 @@ export function startPlainSession(el: HTMLElement, kind: Exclude<InlineKind, 'ri
 
   return {
     element: el,
-    finish() {
+    finish(finishing) {
       throttle.cancel()
       composing = false
       const value = read()
@@ -204,6 +207,10 @@ export function startPlainSession(el: HTMLElement, kind: Exclude<InlineKind, 'ri
       if (doc.activeElement === el) el.blur()
       doc.getSelection()?.removeAllRanges()
       for (const d of decorations) d.removeAttribute('contenteditable')
+      if (finishing?.keep) {
+        restoreAttributes(el, snapshot)
+        return { changed, value, restore: () => restoreDom(el, snapshot) }
+      }
       restoreDom(el, snapshot)
       return { changed, value }
     },

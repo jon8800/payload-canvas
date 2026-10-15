@@ -221,7 +221,50 @@ export type BuilderClientConfig = {
   validateTypes?: string[]
   /** The locales of the layout's localized props. Null without Payload localization (or when the collection turns it off). */
   localization?: LocaleSettings | null
+  /**
+   * Fixed parts of the page outside the layout (the collection's `regions` option). The canvas
+   * shows the page through the app's frame (`createCanvasServer({ frame })`) only when this has
+   * regions. Left out: the canvas shows the layout alone, as before.
+   */
+  regions?: RegionConfig[]
+  /**
+   * `payload-blocks`: the layout field is the collection's own Payload `blocks` field, the one
+   * source of truth, and `blocks` lists only its block types. The builder then keeps nothing a
+   * blocks field cannot hold: no Tailwind classes, animations, bindings, hidden blocks or
+   * translations (translations are edited in Payload's editor). Left out: the builder's JSON layout.
+   */
+  storage?: 'payload-blocks'
+  /** With `storage: 'payload-blocks'`: the block types the field allows at its top level. */
+  payloadRootTypes?: string[]
 }
+
+/** One document field a region shows. */
+export type RegionField = {
+  /** Dot path from the document root: "title", or "header.title" inside a named group or tab. */
+  path: string
+  /** The Payload field config (JSON-safe in the client config: functions are left out). */
+  field: Record<string, unknown> & { name: string; type: string }
+  /** The field's label, for the editor. */
+  label: string
+  /** Labels of the tabs that hold the field, outermost first. The settings drawer opens them. */
+  tabs: string[]
+}
+
+/**
+ * A fixed part of a page that shows ordinary document fields, outside the layout: a header with
+ * the page title, an intro made of fields. The fields stay the source of truth. Editors can select
+ * the region and edit its text and images on the canvas, and edit every field in the settings
+ * drawer. A region is never dragged, duplicated or deleted.
+ */
+export type RegionConfig = {
+  /** Name of the region, unique in the collection. The app's frame marks the region with it. */
+  name: string
+  label: string
+  fields: RegionField[]
+}
+
+/** A region on the canvas: its name and its box, in iframe viewport coordinates. */
+export type RegionRect = { name: string; rect: Rect }
 
 /**
  * What the builder needs from Payload's `localization` config (`localeSettingsOf`). Plain data, so
@@ -375,6 +418,13 @@ export type CanvasMeasurement = {
   slots: SlotRect[]
   /** Axis of the root list. */
   rootAxis: Axis
+  /**
+   * The box of the root list: the layout outlet inside the app's page frame. Left out without a
+   * frame (the layout fills the canvas). Fixed regions above or below it never count as layout.
+   */
+  root?: Rect
+  /** Fixed regions of the page frame. Left out without a frame. */
+  regions?: RegionRect[]
   viewport: { width: number; height: number }
   scroll: { x: number; y: number }
   documentHeight: number

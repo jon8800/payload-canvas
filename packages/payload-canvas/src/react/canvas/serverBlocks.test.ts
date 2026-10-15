@@ -20,6 +20,7 @@ function fakeServer(answer?: (request: CanvasServerRequest) => CanvasServerRespo
     requests.push(request)
     if (answer) return answer(request)
     if (request.kind === 'pageData') return { kind: 'pageData', data: { n: 1 } }
+    if (request.kind === 'frame') return { kind: 'frame', node: null, values: {} }
     return { kind: 'blocks', results: Object.fromEntries(request.blocks.map(({ key, block }) => [key, { node: block.id }])) }
   }
   return { server, requests }

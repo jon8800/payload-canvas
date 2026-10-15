@@ -30,7 +30,7 @@ export function TemplateControl() {
         type="button"
         className="builder-template__control builder-template__control--warn"
         data-tooltip="Pick the collection in the page settings"
-        onClick={runtime.doc.openSettings}
+        onClick={() => runtime.doc.openSettings()}
       >
         <Icon name="warning" size={14} />
         <span className="builder-template__mode">Template</span>

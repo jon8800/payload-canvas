@@ -10,15 +10,17 @@
 // Next's route handler. `no-transform` stops compression, `X-Accel-Buffering: no` stops nginx
 // from buffering.
 
-import { addDataAndFileToRequest, type Endpoint, type PayloadRequest } from 'payload'
+import { addDataAndFileToRequest, parseDocumentID, type CollectionSlug, type Endpoint, type Payload, type PayloadRequest } from 'payload'
 
 import { EMPTY_FIELD_REGISTRY, type FieldRegistry } from '../core/fieldSemantics'
-import { normalizeLayout } from '../core/tree'
-import type { BlockDefinition, LocaleSettings } from '../core/types'
+import type { PayloadBlocksStorage } from '../core/payloadBlocks'
+import { blocksAccessProblem, codecOf } from './storage'
+import { findBlock } from '../core/tree'
+import type { BlockDefinition, Layout, LocaleSettings, Operation } from '../core/types'
 import { actorFromUser, type LiveDocStore } from './apply'
 import { blockFromBody, propAccessCheck, validateBlockProps } from './fieldChecks'
 import type { LiveRuntime } from './runtime'
-import { collaboratorName, type CommitResult, type SessionTarget } from './session'
+import { collaboratorName, type CommitResult, type SessionSend, type SessionTarget } from './session'
 import type {
   LiveActor,
   LiveCommitResponse,
@@ -46,8 +48,8 @@ export const SSE_HEADERS: Record<string, string> = {
 }
 
 export type LiveEndpointOptions = {
-  /** Builder collections, their layout field names and their locales. */
-  collections: Record<string, { field: string; localization?: LocaleSettings | null }>
+  /** Builder collections, their layout field names, their locales and how they store the layout. */
+  collections: Record<string, { field: string; localization?: LocaleSettings | null; payloadBlocks?: PayloadBlocksStorage }>
   blocks: BlockDefinition[]
   runtime: LiveRuntime
   /** Heartbeat interval in ms. Default 10 s. A client that stops reading is dropped after one to two intervals. */
@@ -65,26 +67,29 @@ function statusOf(error: unknown): number {
   return typeof status === 'number' ? status : 500
 }
 
-/** The session target of a builder document, or null when the collection is not a builder collection. */
+/**
+ * The session target of a builder document, or null when the collection is not a builder
+ * collection. The route gives the id as text; Payload's `parseDocumentID` turns it into a number
+ * for collections with number ids (the Postgres default), so Local API calls, the lock rows and
+ * the publish check get the id type the database uses. Collections with text ids keep the text.
+ */
 export function sessionTargetOf(
-  payload: { collections: unknown },
+  payload: Pick<Payload, 'collections' | 'db'>,
   collections: LiveEndpointOptions['collections'],
   collection: string,
   id: string,
 ): SessionTarget | null {
   const options = collections[collection]
   if (!options || !id) return null
-  const configs = payload.collections as Record<
-    string,
-    { config: { versions?: { drafts?: boolean | { autosave?: unknown } } } } | undefined
-  >
-  const drafts = configs[collection]?.config.versions?.drafts
+  const config = payload.collections[collection as CollectionSlug]?.config
+  const drafts = config?.versions?.drafts
   return {
     collection,
-    id,
+    id: parseDocumentID({ collectionSlug: collection as CollectionSlug, id, payload: payload as Payload }) ?? id,
     field: options.field,
     drafts: Boolean(drafts),
     autosave: typeof drafts === 'object' && Boolean(drafts.autosave),
+    codec: codecOf(options),
   }
 }
 
@@ -128,7 +133,66 @@ function resumePoint(req: PayloadRequest, url: URL): { seq: number; sessionId?: 
   return { seq, ...(sessionId ? { sessionId } : {}) }
 }
 
+/**
+ * The layouts that hold every value an event carries. A `session` event: its layout. A `commit`:
+ * the layout right after it, plus each operation's own values (a block it inserts, the props it
+ * writes on the block they belong to), so values a later operation of the batch removed count too.
+ * An update whose block is gone is checked as a block of unknown type (refused).
+ */
+function eventLayouts(event: MultiplayerEvent, after: Layout | undefined): Layout[] {
+  if (event.type === 'session') return [(event as { layout: Layout }).layout]
+  if (event.type !== 'commit') return []
+  const layouts: Layout[] = after ? [after] : []
+  for (const op of (event as { ops: Operation[] }).ops) {
+    if (op.type === 'insert') layouts.push({ version: 1, blocks: [op.block] })
+    if (op.type === 'update' && (op.props || op.locale)) {
+      const block = after ? findBlock(after, op.id) : null
+      layouts.push({
+        version: 1,
+        blocks: [block ? { ...block, props: { ...block.props, ...op.props }, slots: {} } : { id: op.id, type: 'payload-canvas:unknown-block', props: op.props }],
+      })
+    }
+  }
+  return layouts
+}
+
 export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
+  /**
+   * The event stream of a Payload blocks field. Each event is checked, one after the other, against
+   * the values it carries as of the moment it was sent: a `session` event against its own layout,
+   * a `commit` against the session's layout right after that commit (the manager sends commits
+   * synchronously, so the layout read here is that state), taken at once and never read later.
+   * A value the user may not read ends the stream with an `error` event, before that event or any
+   * later one goes out. Reconnects never replay old commits for such fields (session.ts). The
+   * builder's JSON layout: `send` as it is.
+   */
+  const readCheckedSend = (req: PayloadRequest, target: SessionTarget, send: SessionSend, close: () => void): SessionSend => {
+    if (target.codec?.kind !== 'payload-blocks') return send
+    let queue: Promise<void> = Promise.resolve()
+    let ended = false
+    return (event, id) => {
+      // The state as of this event, taken now.
+      const open = options.runtime.sessions.peek(target.collection, target.id)
+      const layouts = eventLayouts(event, open?.layout)
+      const doc = open?.doc
+      queue = queue.then(async () => {
+        if (ended) return
+        const problem = await blocksAccessProblem(req, target, { write: false, stored: false, layouts, doc })
+        if (ended) return
+        if (!problem) {
+          send(event, id)
+          return
+        }
+        ended = true
+        send({ type: 'error', error: problem } as unknown as MultiplayerEvent)
+        close()
+      }).catch(() => {
+        ended = true
+        close()
+      })
+    }
+  }
+
   const { collections, blocks, runtime } = options
   const registry = options.fieldRegistry ?? EMPTY_FIELD_REGISTRY
   const heartbeatMs = options.heartbeatMs ?? HEARTBEAT_MS
@@ -151,6 +215,10 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
     if (!(await runtime.canUpdate(req, target.collection, target.id))) {
       return { ok: false, status: 403, error: 'You are not allowed to edit this document', seq: runtime.sessions.peek(target.collection, target.id)?.seq ?? 0 }
     }
+    // A Payload blocks field: only users who may read all of it and update it use the session.
+    const live = () => runtime.sessions.peek(target.collection, target.id)
+    const denied = await blocksAccessProblem(req, target, { write: true, layouts: [live()?.layout] })
+    if (denied) return { ok: false, status: 403, error: denied, seq: 0 }
     const localization = collections[target.collection]?.localization ?? null
     return runtime.sessions.commit({
       target,
@@ -186,6 +254,9 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
       } catch (error) {
         return json({ ok: false, error: 'Document not found or not readable' }, statusOf(error) === 403 ? 403 : 404)
       }
+      // A Payload blocks field: only users who may read all of it (the session holds every value).
+      const unreadable = await blocksAccessProblem(req, target, { write: false, layouts: [runtime.sessions.peek(target.collection, target.id)?.layout] })
+      if (unreadable) return json({ ok: false, error: unreadable }, 403)
       const url = new URL(req.url ?? '', 'http://localhost')
       const requested = url.searchParams.get('clientId') ?? ''
       const clientId = CLIENT_ID.test(requested) ? requested : globalThis.crypto.randomUUID()
@@ -199,7 +270,7 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
             clientId,
             user: req.user,
             after: resumePoint(req, url),
-            send,
+            send: readCheckedSend(req, target, send, close),
             close,
           }),
       })
@@ -282,6 +353,8 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
       if (!(await runtime.canUpdate(req, target.collection, target.id))) {
         return json({ ok: false, error: 'You are not allowed to edit this document' } satisfies LiveFlushResponse, 403)
       }
+      const denied = await blocksAccessProblem(req, target, { write: true, layouts: [runtime.sessions.peek(target.collection, target.id)?.layout] })
+      if (denied) return json({ ok: false, error: denied } satisfies LiveFlushResponse, 403)
       const result = await runtime.sessions.flush(target.collection, target.id)
       return json(result, result.ok ? 200 : 503)
     },
@@ -301,6 +374,10 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
         const response: LiveOperationsResponse = { ok: false, error: result.error, ...(result.errors ? { errors: result.errors } : {}) }
         return json(response, result.status)
       }
+      // The response holds the whole layout: check again, so a value stored meanwhile that this
+      // user may not read never goes out.
+      const hidden = await blocksAccessProblem(req, target, { write: false, stored: false, layouts: [result.layout] })
+      if (hidden) return json({ ok: false, error: hidden } satisfies LiveOperationsResponse, 403)
       const response: LiveOperationsResponse = {
         ok: true,
         layout: result.layout,
@@ -339,7 +416,9 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
       } catch (error) {
         return json({ ok: false, error: 'Document not found or not readable' } satisfies LiveValidateResponse, statusOf(error) === 403 ? 403 : 404)
       }
-      const layout = runtime.sessions.peek(target.collection, target.id)?.layout ?? normalizeLayout(doc[target.field])
+      const hidden = await blocksAccessProblem(req, target, { write: false, layouts: [runtime.sessions.peek(target.collection, target.id)?.layout] })
+      if (hidden) return json({ ok: false, error: hidden } satisfies LiveValidateResponse, 403)
+      const layout = runtime.sessions.peek(target.collection, target.id)?.layout ?? (target.codec ?? codecOf(undefined)).decode(doc[target.field])
       try {
         const problems = await validateBlockProps(req, {
           blocks,

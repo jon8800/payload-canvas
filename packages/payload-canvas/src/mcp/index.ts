@@ -32,6 +32,7 @@ import { validateLayout } from '../core/validate'
 import { actorFromUser, splitLayoutErrors, userLabel, type LiveDocStore } from '../live/apply'
 import { fieldRegistryOf, propAccessCheck } from '../live/fieldChecks'
 import { builderConfigOf } from '../live/document'
+import { blocksAccessProblem, codecOf } from '../live/storage'
 import { liveRuntimeOf } from '../live/runtime'
 import type { CommitResult } from '../live/session'
 import type { LiveActor } from '../live/types'
@@ -300,14 +301,20 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     if (!(await runtime.canUpdate(req, collection, id))) {
       return { ok: false, status: 403, error: 'Not allowed to edit this document (or it does not exist).', seq: 0 }
     }
-    return runtime.sessions.commit({
-      target: {
-        collection,
-        id,
-        field: fieldOf(collection),
-        drafts: Boolean(drafts),
-        autosave: typeof drafts === 'object' && Boolean(drafts.autosave),
-      },
+    const target = {
+      collection,
+      id,
+      field: fieldOf(collection),
+      drafts: Boolean(drafts),
+      autosave: typeof drafts === 'object' && Boolean(drafts.autosave),
+      // The collection's own Payload blocks field keeps its codec (live/storage.ts).
+      codec: codecOf(builderConfigOf(req.payload)?.collections[collection]),
+    }
+    // A Payload blocks field: only users who may read all of it and update it use the session.
+    const denied = await blocksAccessProblem(req, target, { write: true, layouts: [runtime.sessions.peek(collection, id)?.layout] })
+    if (denied) return { ok: false, status: 403, error: denied, seq: 0 }
+    const result = await runtime.sessions.commit({
+      target,
       store: req.payload as unknown as LiveDocStore,
       user: req.user,
       actor: await aiActor(req),
@@ -324,6 +331,13 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
         localization: localizationOf(req, collection),
       }),
     })
+    // The tools answer with the layout: check it as it is now, so a value stored meanwhile that
+    // this user may not read never goes out.
+    if (result.ok) {
+      const hidden = await blocksAccessProblem(req, target, { write: false, stored: false, layouts: [result.layout] })
+      if (hidden) return { ok: false, status: 403, error: hidden, seq: result.seq }
+    }
+    return result
   }
 
   /** The app's sections, then the saved sections the request's user can read (when turned on). */
@@ -337,8 +351,16 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
    * locale): the draft read gives one locale's view, so a localized layout comes from the database.
    */
   const currentLayout = async (req: PayloadRequest, collection: string, doc: Record<string, unknown>) => {
+    const codec = codecOf(builderConfigOf(req.payload)?.collections[collection])
     const open = liveRuntimeOf(req.payload).sessions.peek(collection, String(doc.id))
+    // A Payload blocks field: the session holds every value, also ones this user may not read.
+    if (codec.kind === 'payload-blocks') {
+      const target = { collection, id: doc.id as string | number, field: fieldOf(collection), drafts: hasDrafts(req, collection), codec }
+      const unreadable = await blocksAccessProblem(req, target, { write: false, layouts: [open?.layout] })
+      if (unreadable) throw new Error(unreadable)
+    }
     if (open) return { layout: open.layout, seq: open.seq }
+    if (codec.kind === 'payload-blocks') return { layout: codec.decode(doc[fieldOf(collection)]) }
     const config = collectionConfig(req, collection)
     const stored = localizationOf(req, collection) && config && doc.id !== undefined ? await storedLayout(req, config, doc.id as string | number, fieldOf(collection)) : null
     return { layout: stored ?? normalizeLayout(doc[fieldOf(collection)]) }
@@ -474,7 +496,12 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
         return fail(errorMessage(error))
       }
       const titleField = collectionConfig(req, collection)?.admin?.useAsTitle
-      const current = await currentLayout(req, collection, doc)
+      let current: Awaited<ReturnType<typeof currentLayout>>
+      try {
+        current = await currentLayout(req, collection, doc)
+      } catch (error) {
+        return fail(errorMessage(error))
+      }
       const { settings } = at
       let localized: Record<string, unknown> = {}
       if (settings) {
@@ -584,6 +611,11 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       }
       const localization = localizationOf(req, String(args.collection))
       const { blocking, warnings } = splitLayoutErrors(withoutBoundRequired(validateLayout(layout, blocks, { localization }), layout))
+      // A Payload blocks field refuses what it cannot store (classes, animations, other block types).
+      const codec = codecOf(builderConfigOf(req.payload)?.collections[String(args.collection)])
+      if (blocking.length === 0) {
+        for (const message of codec.problems(normalizeLayout(layout))) blocking.push({ path: '', message, code: 'invalid' })
+      }
       // The props' own `validate` functions (publish only, so they are warnings), on a layout that
       // has the right shape.
       if (blocking.length === 0) {

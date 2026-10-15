@@ -38,6 +38,8 @@ export {
   type PayloadBuilderProps,
 } from './render/payload'
 export { renderOnServer, withPageData } from './render/marks'
+export { LAYOUT_ROOT_ATTRIBUTE, REGION_ATTRIBUTE, siteRegion, type RegionMark } from './render/regions'
+export { LayoutOutlet } from './render/LayoutOutlet'
 export type {
   CanvasDocumentRef,
   CanvasScope,

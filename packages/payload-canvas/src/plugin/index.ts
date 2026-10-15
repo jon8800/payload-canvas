@@ -18,12 +18,15 @@ import { defaultBlocks } from '../blocks'
 import { richTextFieldName } from '../core/blocks'
 import { DEFAULT_TEMPLATES_SLUG, DOCUMENT_TEMPLATE_FIELD, TEMPLATE_TARGET_FIELD } from '../core/bindings'
 import { localeSettingsOf } from '../core/locale'
+import { resolveRegions, type RegionOption } from '../core/regions'
+import { decodePayloadBlocks, payloadBlocksProblems, payloadBlocksStorage, type PayloadBlocksStorage } from '../core/payloadBlocks'
 import {
   EMPTY_LAYOUT,
   type BlockDefinition,
   type BuilderClientConfig,
   type EditorOptions,
   type LocaleSettings,
+  type RegionConfig,
   type SectionDefinition,
   type TemplatesClientConfig,
 } from '../core/types'
@@ -45,9 +48,13 @@ import {
 } from '../live'
 import { captureFieldSemantics, type FieldRegistry } from '../core/fieldSemantics'
 import { FIELD_REGISTRY_KEY } from '../live/fieldChecks'
+import { regionEndpoints } from '../live/regions'
+import { defaultWriteGate, installLocalApiBoundary, installTransactionSignals, type WriteGate } from '../live/writeGate'
 import {
   keepLockBeforeOperation,
   layoutAfterChange,
+  payloadBlocksAfterChange,
+  payloadBlocksBeforeChange,
   layoutAfterRead,
   layoutBeforeChange,
   recordOverrideAccess,
@@ -96,7 +103,16 @@ export function siteCssConfigOf(payload: { config: { custom?: Record<string, unk
 }
 
 export type BuilderCollectionOptions = {
-  /** Name of the layout JSON field. Default "layout". */
+  /**
+   * Name of the builder's field. Default "layout". The field's own type says how the layout is
+   * stored:
+   * - a Payload `blocks` field of the collection: the builder edits that field itself, the one
+   *   source of truth. Payload's editor, hooks, validation, access and versions keep working on it;
+   *   the builder offers only its block types (from `fromPayloadBlocks`) and keeps nothing the field
+   *   cannot hold (no Tailwind classes, animations, bindings, hidden blocks; translations in
+   *   Payload's editor).
+   * - a `json` field, or no field with that name: the builder's own JSON layout, with every feature.
+   */
   field?: string
   /**
    * Frontend path of a document. Used for preview. Collections with a `url` can be shown by the
@@ -116,6 +132,16 @@ export type BuilderCollectionOptions = {
    * draft too. Remove the names when you remove the fields.
    */
   legacyFields?: string[]
+  /**
+   * Fixed parts of the page that show ordinary document fields outside the layout, for example a
+   * header made of `title`, `subtitle` and `coverImage`. The fields stay where they are; the
+   * builder shows the whole page through the app's page frame (`createCanvasServer({ frame })`)
+   * and lets editors edit these fields on the canvas and in the settings drawer. A region is
+   * never dragged, duplicated or deleted. Paths go through groups and named tabs ("header.title");
+   * fields in rows, collapsibles and unnamed tabs are named directly. Left out: the builder shows
+   * the layout alone. See the README's "Whole-page editing" section.
+   */
+  regions?: RegionOption[]
   /**
    * How the layout is translated when Payload's `localization` is on. `'props'` (the default):
    * one layout structure for every locale; props whose field says `localized: true` hold a value
@@ -230,9 +256,14 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
     const canvasPath = options.canvasPath ?? '/builder-canvas'
     const sourceCollections = config.collections ?? []
     const live = defaultLiveRuntime()
+    const writeGate = defaultWriteGate()
     // Payload's locales. Each builder collection uses them unless it sets `localization: false`.
     const locales = localeSettingsOf(config.localization)
+    // Collections whose builder field is their own Payload blocks field (filled below).
+    const blocksStorageOf: Record<string, PayloadBlocksStorage> = {}
     const localizationOf = (slug: string): LocaleSettings | null => {
+      // A Payload blocks field: the builder edits the default locale; Payload's editor the others.
+      if (blocksStorageOf[slug]) return null
       const option = builderOptions[slug]?.localization
       if (option !== undefined && option !== false && option !== 'props') {
         throw new Error(`[websiteBuilder] \`localization\` of "${slug}" must be 'props' or false. A separate layout per locale is not supported yet.`)
@@ -326,6 +357,24 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       }
     }
 
+    // A builder field that is the collection's own Payload blocks field stays the source of truth.
+    for (const [slug, o] of Object.entries(options.collections)) {
+      const source = sourceCollections.find((c) => c.slug === slug)
+      const field = o.field ?? 'layout'
+      const found = source ? takeField(source.fields, field).found : undefined
+      if (found?.type !== 'blocks') continue
+      if (o.templates) {
+        throw new Error(
+          `[websiteBuilder] "${slug}.${field}" is a Payload blocks field, and templates hold builder JSON layouts. Leave out \`templates\` for "${slug}", or use a json field.`,
+        )
+      }
+      const slugs = [
+        ...(found.blocks ?? []).map((b) => (typeof b === 'string' ? b : b.slug)),
+        ...((found as { blockReferences?: Array<string | { slug: string }> }).blockReferences ?? []).map((b) => (typeof b === 'string' ? b : b.slug)),
+      ]
+      blocksStorageOf[slug] = payloadBlocksStorage([...new Set(slugs)], blocks, `"${slug}.${field}"`)
+    }
+
     // Saved sections: a collection of sections people saved from the editor.
     const savedSections: SavedSectionsServerConfig | null =
       options.savedSections === false ? null : { slug: options.savedSections?.slug ?? DEFAULT_SAVED_SECTIONS_SLUG }
@@ -348,10 +397,32 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       collections,
       blocks,
       sources: {
-        ...Object.fromEntries(Object.entries(builderOptions).map(([slug, o]) => [slug, { layout: o.field ?? 'layout' }])),
+        ...Object.fromEntries(
+          Object.entries(builderOptions).map(([slug, o]) => {
+            const storage = blocksStorageOf[slug]
+            if (!storage) return [slug, { layout: o.field ?? 'layout' }]
+            // The references index follows the blocks field itself (no copy of the content).
+            const decode = (value: unknown) => {
+              const result = decodePayloadBlocks(value, storage)
+              return result.ok ? result.layout : undefined
+            }
+            return [slug, { layout: o.field ?? 'layout', decode }]
+          }),
+        ),
         ...(savedSections ? { [savedSections.slug]: { layout: 'blocks', blocksOnly: true } } : {}),
       },
     })
+    // Page regions: document fields outside the layout that the builder shows and edits.
+    const regionsOf: Record<string, RegionConfig[]> = {}
+    for (const [slug, o] of Object.entries(options.collections)) {
+      if (!o.regions) continue
+      if (!Array.isArray(o.regions)) throw new Error(`[websiteBuilder] \`regions\` of "${slug}" must be a list.`)
+      if (o.regions.length === 0) continue
+      const source = sourceCollections.find((c) => c.slug === slug)
+      const field = o.field ?? 'layout'
+      const own = [field, cssFieldName(field), richTextFieldName(field), DOCUMENT_TEMPLATE_FIELD, ...(references ? [references.field] : [])]
+      regionsOf[slug] = resolveRegions(slug, source?.fields ?? [], o.regions, { fields: new Set(own), legacy: new Set(o.legacyFields ?? []) })
+    }
     const clientBlocks = toJsonSafe(blocks)
     const css: CssOptions = {
       entry: path.resolve(process.cwd(), options.css.entry),
@@ -365,6 +436,8 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           ...(o.url ? { url: o.url } : {}),
           ...(o.legacyFields?.length ? { legacyFields: o.legacyFields } : {}),
           localization: localizationOf(slug),
+          ...(regionsOf[slug] ? { regions: regionsOf[slug] } : {}),
+          ...(blocksStorageOf[slug] ? { payloadBlocks: blocksStorageOf[slug] } : {}),
         },
       ]),
     )
@@ -430,14 +503,21 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
         if (!collectionOptions) return references ? addReferences(collection, references) : collection
         const field = collectionOptions.field ?? 'layout'
         fieldNames[collection.slug] = field
+        const storage = blocksStorageOf[collection.slug]
         const clientConfig: BuilderClientConfig = {
           collection: collection.slug,
           field,
-          blocks: clientBlocks,
+          // A Payload blocks field offers its own block types only.
+          // Its blocks have no style controls there: a Payload block stores no classes or animations,
+          // also when the definition turns styles on for the builder's JSON layouts.
+          blocks: storage ? toJsonSafe(storage.blocks.map(withoutStyles)) : clientBlocks,
           canvasPath,
           cssEndpoint: `${apiRoute}${CANVAS_CSS_PATH}`,
           tokensEndpoint: `${apiRoute}${STYLE_TOKENS_PATH}`,
-          sections: options.sections ?? [],
+          // Only sections the field can store as they are.
+          sections: storage
+            ? (options.sections ?? []).filter((section) => payloadBlocksProblems({ version: 1, blocks: section.blocks }, storage).length === 0)
+            : (options.sections ?? []),
           liveEndpoint: `${apiRoute}${LIVE_PATH}`,
           templates: clientTemplates,
           ai: options.ai ? aiClientConfig(options.ai, `${apiRoute}${AI_PATH}`) : null,
@@ -446,6 +526,8 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           editor: { dragMode: options.editor?.dragMode ?? 'indicator' },
           validateTypes: [...fieldRegistry.types('validate')],
           localization: localizationOf(collection.slug),
+          ...(regionsOf[collection.slug] ? { regions: toJsonSafe(regionsOf[collection.slug]) } : {}),
+          ...(storage ? { storage: 'payload-blocks' as const, payloadRootTypes: [...storage.rootTypes] } : {}),
         }
         const isSections = collection.slug === savedSections?.slug
         const built = addBuilder(collection, {
@@ -461,6 +543,8 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           ownFields: [...(references ? [references.field] : []), ...(isSections ? ['blocks'] : [])],
           fieldRegistry,
           localization: localizationOf(collection.slug),
+          writeGate,
+          payloadBlocks: storage,
         })
         // After the layout hook, so the references follow the layout the session guard put in.
         return references ? addReferences(built, references) : built
@@ -479,9 +563,16 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
         ...(imageService ? { [AI_IMAGES_KEY]: imageService } : {}),
       },
       globals: themeOptions ? [...(config.globals ?? []), themeGlobal(themeOptions)] : config.globals,
+      // A failed GraphQL or REST request ends its builder saves without a transaction (live/writeGate.ts).
+      hooks: {
+        ...config.hooks,
+        afterError: [...(config.hooks?.afterError ?? []), ({ req }) => writeGate.failRequest(req)],
+      },
       endpoints: [
         ...(config.endpoints ?? []),
         ...liveEndpoints({ collections: liveCollections, blocks, runtime: live, heartbeatMs: options.live?.heartbeatMs, fieldRegistry }),
+        // Region fields: only when a collection has regions.
+        ...(Object.keys(regionsOf).length > 0 ? regionEndpoints({ collections: liveCollections, runtime: live, gate: writeGate }) : []),
         ...documentEndpoints({
           collections: liveCollections,
           templates: serverConfig.templates,
@@ -543,7 +634,13 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
         await config.onInit?.(payload)
         // Save unsaved live edits when the server stops.
         installShutdownFlush(live.sessions)
+        // The write gate learns from the adapter itself when a transaction committed or rolled back.
+        installTransactionSignals(payload.db as never, writeGate)
+        // …and when a Local API update ended, also a failed one without a transaction.
+        installLocalApiBoundary(payload as never, writeGate)
         for (const [slug, field] of Object.entries(fieldNames)) {
+          // A Payload blocks field stays where the collection put it.
+          if (blocksStorageOf[slug]) continue
           const collection = payload.config.collections.find((c) => c.slug === slug)
           const topLevel = collection?.fields.some((f) => 'name' in f && f.name === field)
           if (topLevel) continue
@@ -578,11 +675,17 @@ type AddBuilderArgs = {
   fieldRegistry: FieldRegistry
   /** The locales of localized props, or null. */
   localization: LocaleSettings | null
+  /** One save at a time per document. */
+  writeGate: WriteGate
+  /** The builder field is the collection's own Payload blocks field: its block types. */
+  payloadBlocks?: PayloadBlocksStorage
 }
 
 function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): CollectionConfig {
+  if (args.payloadBlocks) return addPayloadBlocksBuilder(collection, args, args.payloadBlocks)
   const { field, clientConfig, blocks, css, sessions, bindings, afterLayout = [], ownFields, fieldRegistry, localization } = args
   const cssField = cssFieldName(field)
+  const gate = args.writeGate.hooks(collection.slug)
 
   // An existing field with this name (also inside rows, collapsibles or unnamed tabs) is reused
   // and moved to the top level.
@@ -590,6 +693,7 @@ function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): Collect
   if (found && found.type !== 'json') {
     throw new Error(wrongFieldTypeMessage(collection.slug, field, found.type))
   }
+  // (A `blocks` field never gets here: addPayloadBlocksBuilder edits it in place.)
   if (fields.some((f) => 'name' in f && f.name === cssField)) {
     throw new Error(
       `[websiteBuilder] Collection "${collection.slug}" already has a field named "${cssField}". The plugin needs this name for the generated CSS.`,
@@ -650,7 +754,11 @@ function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): Collect
     // settings drawer. The builder view never takes it; the plugin's own saves keep it.
     hooks: {
       ...collection.hooks,
-      beforeOperation: [...(collection.hooks?.beforeOperation ?? []), keepLockBeforeOperation({ collection: collection.slug })],
+      // One save at a time per document (live/writeGate.ts): the session's layout saves, the
+      // settings drawer's autosave and the region fields endpoint never overwrite each other.
+      beforeOperation: [...(collection.hooks?.beforeOperation ?? []), gate.beforeOperation, keepLockBeforeOperation({ collection: collection.slug })],
+      afterOperation: [...(collection.hooks?.afterOperation ?? []), gate.afterOperation],
+      afterError: [...(collection.hooks?.afterError ?? []), gate.afterError],
       beforeChange: [
         ...(collection.hooks?.beforeChange ?? []),
         layoutBeforeChange({ collection: collection.slug, field, cssField, blocks, css, sessions, bindings, ownFields, fieldRegistry, localization }),
@@ -658,7 +766,7 @@ function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): Collect
       ],
       afterChange: [
         ...(collection.hooks?.afterChange ?? []),
-        layoutAfterChange({ collection: collection.slug, sessions, props: { field, blocks, registry: fieldRegistry, localization } }),
+        layoutAfterChange({ collection: collection.slug, sessions, writeGate: args.writeGate, props: { field, blocks, registry: fieldRegistry, localization } }),
       ],
     },
     admin: {
@@ -681,16 +789,91 @@ function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): Collect
   }
 }
 
+/**
+ * The builder on a collection whose builder field is its own Payload `blocks` field: the field
+ * stays exactly as the collection declares it (place, editor, hooks, validation, access, versions),
+ * and no other field holds the content. The builder adds the Builder tab and view, the write gate,
+ * the stale-save check and the handover of saves from elsewhere to the live session.
+ */
+function addPayloadBlocksBuilder(collection: CollectionConfig, args: AddBuilderArgs, storage: PayloadBlocksStorage): CollectionConfig {
+  const { field, clientConfig, sessions, ownFields = [] } = args
+  const gate = args.writeGate.hooks(collection.slug)
+  // The inspector edits rich text props with Payload's editor through a virtual field (no column).
+  const richText = richTextSupportField(storage.blocks as BlockDefinition[], field)
+  if (richText && collection.fields.some((f) => 'name' in f && f.name === richText.name)) {
+    throw new Error(
+      `[websiteBuilder] Collection "${collection.slug}" already has a field named "${richText.name}". The plugin needs this name for rich text block props.`,
+    )
+  }
+  const views = collection.admin?.components?.views
+  if (views?.edit?.root) {
+    throw new Error(
+      `[websiteBuilder] Collection "${collection.slug}" replaces the whole document view (admin.components.views.edit.root). The Builder tab cannot be added.`,
+    )
+  }
+  const edit = {
+    ...views?.edit,
+    builder: { Component: BUILDER_REDIRECT_COMPONENT, path: '/builder', tab: { Component: BUILDER_TAB_COMPONENT } },
+  } as EditViews
+  // The builder view reads its config from here: a hidden virtual field, so the blocks field stays untouched.
+  const configField: JSONField = {
+    name: builderConfigFieldName(field),
+    type: 'json',
+    virtual: true,
+    admin: { hidden: true, disableListColumn: true, disableListFilter: true, custom: { builder: clientConfig } },
+  }
+  const skip = [builderConfigFieldName(field), ...(richText ? [richText.name] : []), ...ownFields]
+  return {
+    ...collection,
+    fields: [...collection.fields, configField, ...(richText ? [richText] : [])],
+    hooks: {
+      ...collection.hooks,
+      beforeOperation: [...(collection.hooks?.beforeOperation ?? []), gate.beforeOperation, keepLockBeforeOperation({ collection: collection.slug })],
+      afterOperation: [...(collection.hooks?.afterOperation ?? []), gate.afterOperation],
+      afterError: [...(collection.hooks?.afterError ?? []), gate.afterError],
+      beforeChange: [...(collection.hooks?.beforeChange ?? []), payloadBlocksBeforeChange({ collection: collection.slug, field, skip })],
+      afterChange: [
+        ...(collection.hooks?.afterChange ?? []),
+        payloadBlocksAfterChange({ collection: collection.slug, field, sessions, writeGate: args.writeGate }),
+      ],
+    },
+    admin: {
+      ...collection.admin,
+      ...(collection.versions && typeof collection.versions === 'object' && collection.versions.drafts && !collection.admin?.defaultColumns
+        ? { defaultColumns: [collection.admin?.useAsTitle ?? 'id', '_status', 'updatedAt'] }
+        : {}),
+      components: {
+        ...collection.admin?.components,
+        edit: {
+          ...collection.admin?.components?.edit,
+          PublishButton: collection.admin?.components?.edit?.PublishButton ?? PUBLISH_BUTTON_COMPONENT,
+        },
+        views: { ...views, edit },
+      },
+    },
+  }
+}
+
+/** A block definition without style controls (classes, animations, default classes). */
+function withoutStyles(def: BlockDefinition): BlockDefinition {
+  const { defaultClassName: _defaultClassName, ...rest } = def
+  return { ...rest, styles: false }
+}
+
+/** Name of the hidden virtual field that carries the builder's config for a Payload blocks field. */
+export function builderConfigFieldName(field: string): string {
+  return `${field}Builder`
+}
+
 /** The error for a layout field name that a field of another type already uses. */
 function wrongFieldTypeMessage(collection: string, field: string, type: string): string {
   const suggestion = field === 'builderLayout' ? 'builder' : 'builderLayout'
   const intro = `[websiteBuilder] Collection "${collection}" already has a "${type}" field named "${field}". The builder stores its layout in a "json" field.`
   if (type === 'blocks') {
+    // The builder edits a top-level blocks field itself. Here the field is somewhere it cannot reach.
     return (
-      `${intro} Keep your blocks field and give the builder a field of its own: ` +
-      `websiteBuilder({ collections: { ${collection}: { field: '${suggestion}' } } }). ` +
-      'Your block configs work as builder blocks with fromPayloadBlocks(), and migrateBlocksField() copies the content over. ' +
-      'See "Using existing Payload blocks" in the payload-canvas README.'
+      `[websiteBuilder] Collection "${collection}" has a "blocks" field named "${field}" that is not at the top level (or in rows, collapsibles or unnamed tabs). ` +
+      'Move it there, and the builder edits that field itself. See "Using existing Payload blocks" in the payload-canvas README.'
     )
   }
   return `${intro} Pick another name: websiteBuilder({ collections: { ${collection}: { field: '${suggestion}' } } }).`

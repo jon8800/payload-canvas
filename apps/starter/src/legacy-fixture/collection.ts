@@ -1,6 +1,8 @@
-// Dev fixture: a pages collection as a site that predates the builder has it. The old content
-// lives in the `layout` blocks field (inside an unnamed tab); the builder gets its own field,
-// `builderLayout` (see payload.config.ts). Server only.
+// Dev fixture for the opt-in copy: a pages collection as a site that predates the builder has it.
+// The old content lives in the `layout` blocks field (inside an unnamed tab); the builder gets its
+// own JSON field, `builderLayout`, and migrate.ts copies the content one way (see payload.config.ts).
+// Sites that only want to edit their blocks in the builder need no copy: see ./sharedCollection.ts.
+// Server only.
 import type { CollectionConfig } from 'payload'
 
 import { authenticated } from '../access/authenticated'

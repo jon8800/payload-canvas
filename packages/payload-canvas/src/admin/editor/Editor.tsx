@@ -85,6 +85,8 @@ export function Editor({ config, meta, icon, locale }: EditorProps) {
   useEffect(() => () => runtime.assistant?.stop(), [runtime])
   // The hidden thumbnail iframe goes with the editor.
   useEffect(() => () => runtime.thumbnails.dispose(), [runtime])
+  // The page's fixed regions: their values and the user's access, once the editor runs in the browser.
+  useEffect(() => void runtime.regions?.load(), [runtime])
   const stopAutoScroll = useRef<(() => void) | null>(null)
   const dndId = useId()
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))

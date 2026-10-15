@@ -19,6 +19,7 @@ import type {
 } from '../../../live/types'
 import { createValueStore, type ValueStore } from '../valueStore'
 import type { PublishFailure } from './problems'
+import type { SettingsFocus } from './settingsFocus'
 
 export type DocumentBusy = PublishAction | 'rename' | null
 
@@ -31,8 +32,13 @@ export type DocumentController = {
   busy: ValueStore<DocumentBusy>
   /** Set to the current time to open the settings drawer. */
   settingsRequest: ValueStore<number>
-  /** Opens the document's settings drawer (title, slug, SEO, a template's collection, …). */
-  openSettings: () => void
+  /**
+   * Opens the document's settings drawer (title, slug, SEO, a template's collection, …). With
+   * `focus`, the drawer opens the tabs that hold that field and focuses it.
+   */
+  openSettings: (focus?: SettingsFocus) => void
+  /** The field the drawer opens at, set by `openSettings`. */
+  settingsFocus: ValueStore<SettingsFocus | null>
   /** True while the settings drawer is open: its saves (autosave too) reload the header. */
   settingsOpen: ValueStore<boolean>
   /**
@@ -120,6 +126,8 @@ type DocumentContext = {
   onPublishFailed?: (failure: PublishFailure) => string | null
   /** A publish worked: old problems are gone. */
   onPublished?: () => void
+  /** A save changed these top-level document fields (not the layout): their old problems are gone. */
+  onFieldsSaved?: (fields: readonly string[]) => void
 }
 
 export function createDocumentController(context: DocumentContext, initial: BuilderDocMeta): DocumentController {
@@ -128,6 +136,7 @@ export function createDocumentController(context: DocumentContext, initial: Buil
   const busy = createValueStore<DocumentBusy>(null)
   const settingsRequest = createValueStore(0)
   const settingsOpen = createValueStore(false)
+  const settingsFocus = createValueStore<SettingsFocus | null>(null)
   const screenRequest = createValueStore<{ screen: DocumentScreen; at: number } | null>(null)
   const path = `${encodeURIComponent(initial.collection)}/${encodeURIComponent(initial.id)}`
   const endpoint = `${config.liveEndpoint}/${path}`
@@ -182,7 +191,11 @@ export function createDocumentController(context: DocumentContext, initial: Buil
     meta,
     busy,
     settingsRequest,
-    openSettings: () => settingsRequest.set(Date.now()),
+    openSettings: (focus) => {
+      settingsFocus.set(focus ?? null)
+      settingsRequest.set(Date.now())
+    },
+    settingsFocus,
     settingsOpen,
     async settingsLock(take) {
       try {
@@ -201,6 +214,7 @@ export function createDocumentController(context: DocumentContext, initial: Buil
       busy.set('rename')
       try {
         if (!(await patch({ [name]: value }, 'saved'))) return false
+        context.onFieldsSaved?.([name])
         refreshSoon()
         return true
       } catch {
@@ -303,6 +317,7 @@ export function createDocumentController(context: DocumentContext, initial: Buil
           updatedAt: event.updatedAt ?? current.updatedAt,
           publishedAt: status === 'published' ? (event.updatedAt ?? current.publishedAt) : current.publishedAt,
         })
+        if (event.fields?.length) context.onFieldsSaved?.(event.fields)
         // A save from the settings drawer may change the title, the slug (preview URL), …
         if (settingsOpen.get()) refreshSoon()
         return

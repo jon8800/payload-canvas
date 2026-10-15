@@ -1777,6 +1777,59 @@
     background: var(--theme-error-500);
   }
 
+  // A button with a word next to its icon ("Edit fields" on a page region).
+  .builder-editor__action--text {
+    display: inline-flex;
+    gap: 4px;
+    width: auto;
+    padding: 0 6px;
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-medium);
+    white-space: nowrap;
+  }
+
+  // Page regions: fixed parts of the page frame, drawn dashed so they read as "not a block".
+  .builder-editor__hover--region {
+    box-shadow: none;
+    outline: var(--be-px) dashed var(--be-accent);
+    outline-offset: calc(var(--be-px) * -1);
+  }
+
+  .builder-editor__selection--region:not(.builder-editor__selection--editing) {
+    box-shadow: none;
+    outline: calc(var(--be-px) * 2) dashed var(--be-accent);
+    outline-offset: calc(var(--be-px) * -2);
+  }
+
+  .builder-editor__tag-note {
+    margin-left: 2px;
+    opacity: 0.75;
+    font-weight: var(--be-weight-medium);
+  }
+
+  .builder-region__rows {
+    display: grid;
+    gap: 1px;
+    padding: 4px 6px;
+    border-bottom: 1px solid var(--theme-elevation-100);
+  }
+
+  .builder-region__row {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    font: inherit;
+    text-align: left;
+  }
+
+  .builder-region__fields {
+    display: grid;
+    gap: 2px;
+    margin: 0 0 12px;
+    padding: 0;
+    list-style: none;
+  }
+
   .builder-editor__handle {
     cursor: grab;
     touch-action: none;

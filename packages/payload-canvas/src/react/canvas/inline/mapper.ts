@@ -16,6 +16,7 @@ import type { Block, BlockDefinition, Layout } from '../../../core'
 import type { CanvasImageKind, CanvasImageTarget } from '../../../protocol'
 
 import { EDITABLE_IMAGE_ATTRIBUTE, EDITABLE_TEXT_ATTRIBUTE } from '../../render/editable'
+import { LAYOUT_ROOT_ATTRIBUTE, REGION_ATTRIBUTE } from '../../render/regions'
 import { blockCandidates, compactText, cssUrls, normalizeText, srcsetUrls, urlKey, type TextCandidate } from './candidates'
 
 /** The attribute the mapping puts on an element that shows a text prop. Its value is the prop path. */
@@ -23,6 +24,27 @@ export const AUTO_TEXT_ATTRIBUTE = 'data-builder-text-auto'
 
 /** Explicit or automatic text marks. */
 export const TEXT_MARK_SELECTOR = `[${EDITABLE_TEXT_ATTRIBUTE}], [${AUTO_TEXT_ATTRIBUTE}]`
+
+/** Elements that own props: blocks and the page frame's regions. */
+export const OWNER_SELECTOR = `[data-block-id], [${REGION_ATTRIBUTE}]`
+
+/** Where an element's own content stops: a nested block, a region, or the layout outlet of the page frame. */
+const BOUNDARY = `[data-block-id], [${REGION_ATTRIBUTE}], [${LAYOUT_ROOT_ATTRIBUTE}]`
+
+/** A block or a region, and its key in the mapping (`b:<id>` or `r:<name>`, so the two never collide). */
+export type MapOwner =
+  | { kind: 'block'; id: string; key: string; element: HTMLElement }
+  | { kind: 'region'; name: string; key: string; element: HTMLElement }
+
+/** The block or region element `el` belongs to: its own or the nearest one above it. */
+export function ownerOf(el: Element | null | undefined): MapOwner | null {
+  const element = el?.closest<HTMLElement>(OWNER_SELECTOR)
+  if (!element) return null
+  const id = element.dataset.blockId
+  if (id) return { kind: 'block', id, key: `b:${id}`, element }
+  const name = element.getAttribute(REGION_ATTRIBUTE)
+  return name ? { kind: 'region', name, key: `r:${name}`, element } : null
+}
 
 /** Stands for a nested block in an element's text: an element around a child block never matches. */
 const NESTED = '\u0000'
@@ -86,6 +108,13 @@ export type MapperOptions = {
   definition: (type: string) => BlockDefinition | undefined
   /** True for the block being edited inline: its DOM is the user's, not React's. */
   skip: (id: string) => boolean
+  /**
+   * The page frame's regions: their values as the frame got them (documents loaded) as a block,
+   * and their fields as a definition. A new block object maps the region again.
+   */
+  region?: (name: string) => { block: Block; definition: BlockDefinition } | null
+  /** True for the region being edited inline. */
+  skipRegion?: (name: string) => boolean
 }
 
 function indexBlocks(layout: Layout | null): Map<string, Block> {
@@ -100,11 +129,11 @@ function indexBlocks(layout: Layout | null): Map<string, Block> {
   return index
 }
 
-/** The block's own elements (the block element first), without nested blocks and their content. */
+/** The owner's own elements (the owner element first), without nested blocks, regions and the layout outlet. */
 function ownElements(blockEl: HTMLElement): HTMLElement[] {
   const out: HTMLElement[] = [blockEl]
   const walker = blockEl.ownerDocument.createTreeWalker(blockEl, NodeFilter.SHOW_ELEMENT, {
-    acceptNode: (node) => ((node as Element).hasAttribute('data-block-id') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+    acceptNode: (node) => ((node as Element).matches(BOUNDARY) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
   })
   for (let node = walker.nextNode(); node; node = walker.nextNode()) out.push(node as HTMLElement)
   return out
@@ -133,7 +162,7 @@ function elementTexts(blockEl: HTMLElement): Map<Element, string> {
         const element = child as Element
         if (element.tagName === 'BR') out += '\n'
         else if (SKIP_TAGS.has(element.tagName) || element.hasAttribute('data-builder-placeholder')) continue
-        else if (element.hasAttribute('data-block-id')) out += NESTED
+        else if (element.matches(BOUNDARY)) out += NESTED
         else out += walk(element)
       }
     }
@@ -244,18 +273,30 @@ export function createCanvasMapper(options: MapperOptions): CanvasMapper {
     return index.get(id) ?? null
   }
 
-  const fresh = (el: HTMLElement, id: string) => {
-    const entry = entries.get(id)
-    return Boolean(entry && entry.element === el && entry.block === blockOf(id) && !dirty.has(id))
+  /** The data an owner shows: a block of the layout on screen, or a region's values. */
+  const dataOf = (owner: MapOwner): { block: Block | null; definition: BlockDefinition | undefined } => {
+    if (owner.kind === 'region') {
+      const region = options.region?.(owner.name) ?? null
+      return { block: region?.block ?? null, definition: region?.definition }
+    }
+    const block = blockOf(owner.id)
+    return { block, definition: block ? options.definition(block.type) : undefined }
   }
 
-  function mapBlock(blockEl: HTMLElement, block: Block | null): Entry {
+  const skipped = (owner: MapOwner) => (owner.kind === 'region' ? Boolean(options.skipRegion?.(owner.name)) : options.skip(owner.id))
+
+  const fresh = (owner: MapOwner) => {
+    const entry = entries.get(owner.key)
+    return Boolean(entry && entry.element === owner.element && entry.block === dataOf(owner).block && !dirty.has(owner.key))
+  }
+
+  function mapBlock(blockEl: HTMLElement, block: Block | null, definition: BlockDefinition | undefined): Entry {
     const entry: Entry = { element: blockEl, block, images: [], at: performance.now() }
     const own = ownElements(blockEl)
     for (const el of own) if (el.hasAttribute(AUTO_TEXT_ATTRIBUTE)) el.removeAttribute(AUTO_TEXT_ATTRIBUTE)
     if (!block) return entry
-    const definition = options.definition(block.type)
-    const stored = options.stored(block.id)
+    // Regions have no bindings: their values are the document's own fields.
+    const stored = block.id ? options.stored(block.id) : null
     const source = stored?.bindings ? { ...block, bindings: stored.bindings } : block
     const { texts, images } = blockCandidates(source, definition, blockEl.ownerDocument.baseURI)
 
@@ -312,10 +353,11 @@ export function createCanvasMapper(options: MapperOptions): CanvasMapper {
     return entry
   }
 
-  function remap(el: HTMLElement, id: string) {
+  function remap(owner: MapOwner) {
     const started = performance.now()
-    entries.set(id, mapBlock(el, blockOf(id)))
-    dirty.delete(id)
+    const { block, definition } = dataOf(owner)
+    entries.set(owner.key, mapBlock(owner.element, block, definition))
+    dirty.delete(owner.key)
     const ms = performance.now() - started
     stats.blocks++
     stats.ms += ms
@@ -331,8 +373,8 @@ export function createCanvasMapper(options: MapperOptions): CanvasMapper {
       for (const record of records) {
         const node = record.target
         const el = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement
-        const id = el?.closest<HTMLElement>('[data-block-id]')?.dataset.blockId
-        if (id) dirty.add(id)
+        const owner = ownerOf(el)
+        if (owner) dirty.add(owner.key)
       }
       schedule()
     })
@@ -350,15 +392,15 @@ export function createCanvasMapper(options: MapperOptions): CanvasMapper {
     let ms = 0
     let sliced = false
     let later = false
-    for (const el of root.querySelectorAll<HTMLElement>('[data-block-id]')) {
-      const id = el.dataset.blockId
+    for (const el of root.querySelectorAll<HTMLElement>(OWNER_SELECTOR)) {
+      const owner = ownerOf(el)
       // Repeated collection list items share their block's id: the first element is the block.
-      if (!id || seen.has(id)) continue
-      seen.add(id)
-      if (fresh(el, id) || options.skip(id)) continue
+      if (!owner || owner.element !== el || seen.has(owner.key)) continue
+      seen.add(owner.key)
+      if (fresh(owner) || skipped(owner)) continue
       // Only its DOM changed, and it was mapped a moment ago: map it a little later.
-      const entry = entries.get(id)
-      if (entry && entry.element === el && entry.block === blockOf(id) && started - entry.at < DOM_REMAP_MS) {
+      const entry = entries.get(owner.key)
+      if (entry && entry.element === el && entry.block === dataOf(owner).block && started - entry.at < DOM_REMAP_MS) {
         later = true
         continue
       }
@@ -367,7 +409,7 @@ export function createCanvasMapper(options: MapperOptions): CanvasMapper {
         sliced = true
         break
       }
-      ms += remap(el, id)
+      ms += remap(owner)
       mapped++
     }
     // Blocks no longer on the page. After a cut pass, the next one finishes the rest.
@@ -391,9 +433,9 @@ export function createCanvasMapper(options: MapperOptions): CanvasMapper {
   }
 
   function ensure(blockEl: HTMLElement) {
-    const id = blockEl.dataset.blockId
-    if (!id || options.skip(id) || fresh(blockEl, id)) return
-    remap(blockEl, id)
+    const owner = ownerOf(blockEl)
+    if (!owner || owner.element !== blockEl || skipped(owner) || fresh(owner)) return
+    remap(owner)
   }
 
   return {
@@ -403,14 +445,14 @@ export function createCanvasMapper(options: MapperOptions): CanvasMapper {
     imageTarget(x, y) {
       const root = options.root()
       const top = root?.ownerDocument.elementFromPoint(x, y)
-      const blockEl = top?.closest<HTMLElement>('[data-block-id]')
-      const id = blockEl?.dataset.blockId
-      if (!top || !blockEl || !id || !root?.contains(blockEl) || blockEl.closest('[data-builder-repeat]')) return null
+      const owner = ownerOf(top)
+      const blockEl = owner?.element
+      if (!top || !owner || !blockEl || !root?.contains(blockEl) || blockEl.closest('[data-builder-repeat]')) return null
       // Text on top of an image (a hero heading over its photo): the text wins.
       const text = top.closest(TEXT_MARK_SELECTOR)
-      if (text && text.closest('[data-block-id]') === blockEl) return null
+      if (text && ownerOf(text)?.element === blockEl) return null
       ensure(blockEl)
-      const entry = entries.get(id)
+      const entry = entries.get(owner.key)
       if (!entry || entry.element !== blockEl) return null
       const hits: Array<ImageEntry & { rect: DOMRect }> = []
       for (const image of entry.images) {
@@ -435,7 +477,7 @@ export function createCanvasMapper(options: MapperOptions): CanvasMapper {
         const { left, top: y0, width, height } = hit.rect
         return [{ path: hit.path, kind: hit.kind, rect: { x: left, y: y0, width, height } }]
       })
-      return { id, spots }
+      return owner.kind === 'region' ? { id: '', region: owner.name, spots } : { id: owner.id, spots }
     },
     invalidate() {
       for (const id of entries.keys()) dirty.add(id)

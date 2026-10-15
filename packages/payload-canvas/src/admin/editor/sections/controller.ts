@@ -57,14 +57,23 @@ async function docOf(res: Response): Promise<SectionDefinition | string> {
   return (body.doc && toSavedSection(body.doc)) || 'The server returned no section.'
 }
 
-/** `api` is Payload's REST route ("/api"); `collection` the saved sections slug, or null when turned off. */
-export function createSectionsController(api: string, collection: string | null): SectionsController {
+/**
+ * `api` is Payload's REST route ("/api"); `collection` the saved sections slug, or null when turned
+ * off. `accepts`: the sections this editor can insert (a Payload blocks field takes only sections
+ * it can store). Left out: every section.
+ */
+export function createSectionsController(
+  api: string,
+  collection: string | null,
+  accepts: (section: SectionDefinition) => boolean = () => true,
+): SectionsController {
   const saved = createValueStore<SectionDefinition[] | null>(null)
   const dialog = createValueStore<SectionDialog | null>(null)
   const base = collection ? `${api}/${encodeURIComponent(collection)}` : null
   let loading: Promise<void> | null = null
 
   const replace = (section: SectionDefinition) => {
+    if (!accepts(section)) return
     const list = saved.get() ?? []
     saved.set(list.some((s) => s.id === section.id) ? list.map((s) => (s.id === section.id ? section : s)) : [section, ...list])
   }
@@ -81,7 +90,7 @@ export function createSectionsController(api: string, collection: string | null)
         .then(async (res) => {
           if (!res.ok) throw new Error(await errorText(res))
           const body = (await res.json()) as { docs?: Record<string, unknown>[] }
-          saved.set((body.docs ?? []).flatMap((doc) => toSavedSection(doc) ?? []))
+          saved.set((body.docs ?? []).flatMap((doc) => toSavedSection(doc) ?? []).filter(accepts))
         })
         .catch(() => {
           // No access or offline: the library shows the built-in sections only. A later call retries.

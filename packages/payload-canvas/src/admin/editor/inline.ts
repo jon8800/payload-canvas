@@ -5,8 +5,10 @@
 // the store, so it syncs to collaborators like any edit. All updates of one editing session merge
 // into one undo step. In a list, Enter and Backspace move the editing to another item: typing,
 // the new and joined items and the typing in them stay one undo step until editing ends.
+// A page region's text is a document field: its newest value is kept while editing and saved to
+// the document once when editing ends (one save, one undo step).
 
-import { createId, findBlock, joinListItem, splitListItem, TEXT_LIST_ITEM_BLOCK, type ListItemEdit } from '../../core'
+import { createId, findBlock, joinListItem, splitListItem, TEXT_LIST_ITEM_BLOCK, valueAtDocPath, type ListItemEdit } from '../../core'
 import type { Block, Operation } from '../../core/types'
 import { setPropPath, type InlineKind, type RichCommand, type RichFormatState } from '../../protocol'
 import { lockedMessage, propAccessNow } from './fields/accessRules'
@@ -23,6 +25,24 @@ export type InlineEditing = {
   format: RichFormatState | null
   /** Set to the current time to open the link form (Ctrl+K in the canvas). */
   linkRequest: number
+  /** The session edits a field of this page region; `id` is empty and `path` is a document path. */
+  region?: string
+}
+
+/**
+ * Each region editing session: the value it started from (`base`) and its locale, kept from the
+ * start, and its newest value, saved when it ends. The base never follows a reload meanwhile: a
+ * change someone saved while this session typed is a conflict, never overwritten.
+ */
+type RegionDraft = { path: string; base: unknown; locale: string | null; value?: unknown; changed: boolean }
+const regionDrafts = new WeakMap<Runtime, Map<string, RegionDraft>>()
+const draftsOf = (runtime: Runtime) => {
+  let drafts = regionDrafts.get(runtime)
+  if (!drafts) {
+    drafts = new Map()
+    regionDrafts.set(runtime, drafts)
+  }
+  return drafts
 }
 
 const stores = new WeakMap<Runtime, ValueStore<InlineEditing | null>>()
@@ -38,7 +58,14 @@ const listRuns = new WeakMap<Runtime, ListRun>()
  * The canvas started an editing session. A session on the item a list key moved to continues that
  * key's run; a new session on a list item starts a run; any other session ends it.
  */
-export function noteInlineStart(runtime: Runtime, message: { session: string; id: string; path: string }) {
+export function noteInlineStart(runtime: Runtime, message: { session: string; id: string; path: string; region?: string; base?: unknown }) {
+  if (message.region) {
+    listRuns.delete(runtime)
+    // The canvas sends the text it started from; else the value the editor has now.
+    const base = 'base' in message ? message.base : valueAtDocPath(runtime.regions?.state.get().values, message.path)
+    draftsOf(runtime).set(message.session, { path: message.path, base, locale: runtime.store.getState().locale, changed: false })
+    return
+  }
   const run = listRuns.get(runtime)
   if (run && run.next === message.id) {
     listRuns.set(runtime, { ...run, session: message.session, next: null })
@@ -80,7 +107,12 @@ export function inlineUpdate(block: Block, path: string, value: unknown): Extrac
 }
 
 /** Applies one value from the canvas. Every change of a session joins the same undo step. */
-export function applyInlineChange(runtime: Runtime, change: { session: string; id: string; path: string; value: unknown }) {
+export function applyInlineChange(runtime: Runtime, change: { session: string; id: string; path: string; value: unknown; region?: string }) {
+  if (change.region) {
+    const draft = draftsOf(runtime).get(change.session)
+    if (draft && draft.path === change.path) draftsOf(runtime).set(change.session, { ...draft, value: change.value, changed: true })
+    return
+  }
   // The block as the canvas shows it (the editor's locale): the store writes that locale.
   const block = findBlock(runtime.store.getState().view, change.id)
   // A prop the user may not change (field access): the canvas session was stopped; drop late values.
@@ -96,9 +128,16 @@ export function applyInlineChange(runtime: Runtime, change: { session: string; i
  * read or change (field `access`) is refused: the canvas stops at once and the editor says why.
  * Returns true when it refused.
  */
-export function refuseLockedInline(runtime: Runtime, message: { id: string; path: string }): boolean {
-  const block = findBlock(runtime.store.getState().view, message.id)
-  const text = block ? lockedMessage(runtime, block, message.path) : null
+export function refuseLockedInline(runtime: Runtime, message: { id: string; path: string; region?: string }): boolean {
+  const block = message.region ? null : findBlock(runtime.store.getState().view, message.id)
+  // `null` from `lockedMessage` means allowed: only a missing regions controller is a refusal.
+  const text = message.region
+    ? runtime.regions
+      ? runtime.regions.lockedMessage(message.path)
+      : 'This page has no regions.'
+    : block
+      ? lockedMessage(runtime, block, message.path)
+      : null
   if (!text) return false
   runtime.postToCanvas({ type: 'inlineStop' })
   runtime.warn(text)
@@ -109,6 +148,21 @@ export function refuseLockedInline(runtime: Runtime, message: { id: string; path
 export function startInlineEditing(runtime: Runtime, id: string, offset?: number) {
   runtime.iframeRef.current?.focus()
   runtime.postToCanvas({ type: 'inlineStart', id, ...(offset === undefined ? {} : { offset }) })
+}
+
+/** Starts inline editing of a region's first text field (Enter on a selected region). */
+export function startRegionEditing(runtime: Runtime, region: string) {
+  runtime.iframeRef.current?.focus()
+  runtime.postToCanvas({ type: 'inlineStart', id: '', region })
+}
+
+/** A region editing session ended: its newest value goes to the document. Nothing typed: nothing saved. */
+export function endRegionInline(runtime: Runtime, message: { session: string }) {
+  const drafts = draftsOf(runtime)
+  const draft = drafts.get(message.session)
+  drafts.delete(message.session)
+  if (!draft?.changed || !runtime.regions) return
+  void runtime.regions.write([{ path: draft.path, value: draft.value, base: draft.base }], { locale: draft.locale })
 }
 
 /**

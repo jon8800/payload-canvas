@@ -2,7 +2,7 @@
 // Both sides check `event.origin` and `event.source` before they trust a message.
 // Pure TypeScript: no React, no Payload runtime imports.
 
-import type { Block, BlockDefinition, CanvasMeasurement, Layout, Point, Rect, TemplateContext } from '../core/types'
+import type { Block, BlockDefinition, CanvasMeasurement, Layout, Point, Rect, RegionConfig, TemplateContext } from '../core/types'
 
 export * from './motion'
 
@@ -20,6 +20,12 @@ export type CanvasInit = {
    * (server-rendered blocks, page data). Missing for section thumbnails.
    */
   document?: { collection: string; id: string | number } | null
+  /**
+   * The document's fixed regions (the collection's `regions` option). With regions, the canvas
+   * asks the app's canvas server action for the page frame and shows the whole page. Left out:
+   * the layout alone.
+   */
+  regions?: RegionConfig[]
 }
 
 export type PointerKind = 'move' | 'leave' | 'click'
@@ -95,7 +101,13 @@ export type CanvasImageSpot = {
  * The upload props under the pointer, in one block. `spots[0]` is the one on top; the others lie
  * under it (a video's poster under the video, a background under a photo).
  */
-export type CanvasImageTarget = { id: string; spots: CanvasImageSpot[] }
+export type CanvasImageTarget = {
+  /** The block. Empty for a region. */
+  id: string
+  /** The region, when the image shows a region's field. `spots` then hold document paths. */
+  region?: string
+  spots: CanvasImageSpot[]
+}
 
 export type CanvasToAdmin =
   /** Repeated until the iframe has both `init` and a layout, so a reload never races. */
@@ -118,11 +130,23 @@ export type CanvasToAdmin =
    * Inline editing started on a prop of a block. `path` is the prop path, e.g. "text" or
    * "items.2.text". `session` names this editing session in the messages below.
    */
-  | { type: 'inlineStart'; session: string; id: string; path: string; kind: InlineKind }
-  /** The new value of the edited prop (a string, or Lexical JSON for rich text). Sent about every 150 ms while typing. */
-  | { type: 'inlineChange'; session: string; id: string; path: string; value: unknown }
+  | {
+      type: 'inlineStart'
+      session: string
+      id: string
+      path: string
+      kind: InlineKind
+      region?: string
+      /** A region's plain text as the canvas shows it at the start: the base of the save when editing ends. */
+      base?: unknown
+    }
+  /**
+   * The new value of the edited prop (a string, or Lexical JSON for rich text). Sent about every
+   * 150 ms while typing. With `region`, `id` is empty and `path` is a document path of the region.
+   */
+  | { type: 'inlineChange'; session: string; id: string; path: string; value: unknown; region?: string }
   /** Editing ended. Any last change was sent before this message. */
-  | { type: 'inlineEnd'; session: string; id: string }
+  | { type: 'inlineEnd'; session: string; id: string; region?: string }
   /**
    * Enter in a list item. Editing of it has ended (with the text before the caret); `after` is the
    * text after the caret. The admin adds the next item with it and edits that item.
@@ -142,7 +166,7 @@ export type CanvasToAdmin =
    * document data (`field` is the bound field path). `unsupported`: the content has a shape the
    * canvas editor cannot read.
    */
-  | { type: 'inlineRefused'; id: string; path: string; reason: 'bound' | 'unsupported'; field?: string }
+  | { type: 'inlineRefused'; id: string; path: string; reason: 'bound' | 'unsupported'; field?: string; region?: string }
   /** Thumbnail mode: the picture of a requested section as a data URL, or null with the error. */
   | { type: 'thumbnail'; key: string; url: string | null; width?: number; height?: number; error?: string }
   /**
@@ -178,7 +202,7 @@ export type AdminToCanvas =
    * Starts inline editing of the block's first editable text, with the caret at the end, or
    * `offset` characters into the text. A block not on the canvas yet starts once it renders.
    */
-  | { type: 'inlineStart'; id: string; offset?: number }
+  | { type: 'inlineStart'; id: string; offset?: number; region?: string }
   /** Ends inline editing (a click outside the canvas, another block selected). */
   | { type: 'inlineStop' }
   /**
@@ -186,6 +210,11 @@ export type AdminToCanvas =
    * canvas loads it again.
    */
   | { type: 'docChanged'; collection: string; id: string | number }
+  /**
+   * The open document's other fields changed (a region edit, the settings drawer, someone else's
+   * save): the canvas asks for the page frame again. Ignored without regions.
+   */
+  | { type: 'frameRefresh' }
   /** Rich text: a toolbar command for the current session. */
   | { type: 'inlineCommand'; command: RichCommand }
   /** Thumbnail mode: picture one section. Requests queue up in the iframe. */

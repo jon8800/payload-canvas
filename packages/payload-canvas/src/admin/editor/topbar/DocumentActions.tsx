@@ -24,6 +24,8 @@ import { formatSaveTime } from './saveTime'
 import { RouterIntercept } from './screens/DrawerRouter'
 import { DrawerWidth } from './screens/DrawerWidth'
 import { SettingsDrawerReload, SettingsDrawerSlug } from './settingsDrawer'
+import { useDrawerLabels } from './drawerLabels'
+import { focusDrawerField } from './settingsFocus'
 
 type SaveStateName = 'connecting' | 'offline' | 'reconnecting' | 'failed' | 'saving' | 'saved'
 
@@ -127,6 +129,8 @@ export function PageSettings() {
   // Numeric ids go to Payload as numbers (the app's ID type can be `number`).
   const docId = (/^\d+$/.test(id) ? Number(id) : id) as DefaultDocumentIDType
   const [DocumentDrawer, , { drawerSlug, openDrawer, closeDrawer, isDrawerOpen }] = useDocumentDrawer({ collectionSlug: collection, id: docId })
+  // Payload's labels in a drawer point at ids its inputs do not have: point them at the inputs.
+  useDrawerLabels(drawerSlug, isDrawerOpen)
   // A new key mounts the drawer's form again: Payload loads the document again.
   const [formKey, setFormKey] = useState(0)
 
@@ -134,7 +138,13 @@ export function PageSettings() {
   // locked" dialog when the form loads (see live/fieldsGuard.ts).
   const open = useEffectEvent(async () => {
     await runtime.doc.settingsLock(true)
+    const focus = runtime.doc.settingsFocus.get()
+    if (focus && isDrawerOpen) {
+      focusDrawerField(drawerSlug, focus)
+      return
+    }
     openDrawer()
+    if (focus) focusDrawerField(drawerSlug, focus)
   })
   const reload = useCallback(async () => {
     await runtime.doc.settingsLock(true)
@@ -154,6 +164,8 @@ export function PageSettings() {
     if (isDrawerOpen) return
     void runtime.doc.settingsLock(false)
     void runtime.doc.refresh()
+    // The drawer's saves may have changed a region's fields: the canvas shows them again.
+    runtime.regions?.reload()
   }, [isDrawerOpen, runtime])
   // Leaving the builder (or closing the tab) with the drawer open gives the lock back too.
   useEffect(() => {
@@ -191,7 +203,7 @@ export function PageSettings() {
         className="builder-bar__button"
         aria-label={`${singular} settings`}
         data-tooltip={`Title and other ${singular.toLowerCase()} settings`}
-        onClick={runtime.doc.openSettings}
+        onClick={() => runtime.doc.openSettings()}
       >
         <Icon name="settings" size={14} />
         <span className="builder-bar__label">{singular} settings</span>
@@ -201,7 +213,14 @@ export function PageSettings() {
       <SettingsDrawerSlug value={drawerSlug}>
         <SettingsDrawerReload value={reload}>
           <RouterIntercept intercept={intercept}>
-            <DocumentDrawer key={formKey} disableActions onSave={() => void runtime.doc.refresh()} />
+            <DocumentDrawer
+              key={formKey}
+              disableActions
+              onSave={() => {
+                void runtime.doc.refresh()
+                runtime.regions?.reload()
+              }}
+            />
           </RouterIntercept>
         </SettingsDrawerReload>
       </SettingsDrawerSlug>
@@ -342,6 +361,14 @@ function PublishProblems() {
       runtime.store.select(problem.blockId)
       return
     }
+    // A field of a page region: select the region on the canvas and open the drawer at the field.
+    const found = problem.path ? runtime.regions?.fieldOf(problem.path) : null
+    if (found && runtime.regions) {
+      runtime.inspectorTab.set('block')
+      runtime.regions.selected.set(found.region.name)
+      runtime.doc.openSettings({ path: found.field.path, tabs: found.field.tabs })
+      return
+    }
     runtime.doc.openSettings()
   }
 
@@ -365,7 +392,8 @@ function PublishProblems() {
         <ul className="builder-bar__problems-list">
           {problems.map((problem, index) => {
             const block = problem.blockId ? findBlock(layout, problem.blockId) : null
-            const where = block ? blockSummary(block, runtime.blockLabel(block.type)) : `${singular} settings`
+            const region = !block && problem.path ? runtime.regions?.fieldOf(problem.path)?.region : null
+            const where = block ? blockSummary(block, runtime.blockLabel(block.type)) : region ? region.label : `${singular} settings`
             return (
               // oxlint-disable-next-line react/no-array-index-key -- problems have no id; the list is replaced as a whole
               <li key={index}>
