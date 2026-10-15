@@ -19,7 +19,8 @@ export const LIVE_RUNTIME_KEY = 'websiteBuilderLive'
 // carries the editor's locale. A dev hot reload from an older runtime must not reuse its object.
 // v8: awareness carries the field the editor types in.
 // v9: the session's save holds the write gate, and a Payload blocks field has its codec.
-const GLOBAL_KEY = Symbol.for('payload-canvas/live-runtime-v9')
+// v10: sessions read the document's other fields again after every committed save (`currentDoc`).
+const GLOBAL_KEY = Symbol.for('payload-canvas/live-runtime-v10')
 
 const ACCESS_TTL_MS = 30_000
 

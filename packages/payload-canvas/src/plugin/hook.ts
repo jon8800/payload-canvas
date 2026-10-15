@@ -461,6 +461,12 @@ export function layoutAfterChange(options: {
         options.sessions.markSaved(options.collection, docId, seq, info)
         if (changes) options.sessions.adoptSaved(options.collection, docId, { ...changes, seq })
       })
+    } else if (operation === 'update' && context?.[KEEP_LAYOUT_CONTEXT] && !context?.[SESSION_SAVE_CONTEXT]) {
+      // A plugin save that left the layout alone (another template's "Default" flag): editors hear
+      // of it, and an open session reads the other fields again (field access reads them).
+      const docId = doc.id as string | number
+      const info = { updatedAt: doc.updatedAt, status: doc._status, fields: changedFieldsOf(context, options.collection, docId) }
+      afterCommit(() => options.sessions.externalSaved(options.collection, docId, info))
     }
     // The props' afterChange hooks. As in Payload, what they return changes only the returned document.
     let result = doc

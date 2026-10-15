@@ -143,8 +143,8 @@ export type CommitResult =
   | { ok: false; status: number; error: string; seq: number; errors?: LayoutError[] }
 
 /**
- * A read-only view of an open session. `doc` is the document as the session loaded it, without
- * the layout field (other fields may have changed since).
+ * A read-only view of an open session. `doc` is the document as the session last read it, without
+ * the layout field (a read after a save may still run: access checks use `currentDoc`).
  */
 export type SessionSnapshot = { sessionId: string; seq: number; layout: Layout; doc: Record<string, unknown> }
 
@@ -178,7 +178,8 @@ export interface SessionManager {
   peek(collection: string, id: string | number): SessionSnapshot | null
   /**
    * Records that a save outside the session stored the layout at `seq` (the save-hook guard),
-   * and tells the editors with a `saved` event.
+   * and tells the editors with a `saved` event. Call it after the save committed: it reads the
+   * document's other fields again (`currentDoc`).
    */
   markSaved(collection: string, id: string | number, seq: number, info?: SavedInfo): void
   /**
@@ -193,9 +194,24 @@ export interface SessionManager {
    * A save outside the session committed (the Edit view, REST, the Local API). Editors hear of it.
    * With `layoutChanged` (a field that stores its own layout, a Payload blocks field), that save is
    * the truth: the session reads the stored value again and replays its own unsaved commits on top,
-   * before its next save. No-op without an open session.
+   * before its next save. Every call reads the document's other fields again (`currentDoc`), so
+   * call it after the save committed. No-op without an open session.
    */
   externalSaved(collection: string, id: string | number, info: SavedInfo & { layoutChanged?: boolean }): void
+  /**
+   * The document's other fields (not the builder field) as stored now. Every committed save of the
+   * document (the session's own, and any from outside, also one that left the layout alone) reads
+   * them again; this waits for those reads. Throws when the last read failed and a new one fails
+   * too: a check must never run on fields it cannot trust. Null without an open session. Never
+   * takes the write gate or the session's lock (a plain read), so it cannot wait on a save.
+   */
+  currentDoc(collection: string, id: string | number): Promise<Record<string, unknown> | null>
+  /**
+   * Runs `check` with `currentDoc`, and again while a save committed during the check changed the
+   * fields (so the answer always belongs to the fields as stored when it returns), at most
+   * 3 times. Throws when the fields cannot be read or keep changing. Null without an open session.
+   */
+  withCurrentDoc<T>(collection: string, id: string | number, check: (doc: Record<string, unknown>) => Promise<T>): Promise<{ value: T } | null>
   /**
    * Replaces the layout of an open session as a whole (Revert to published). Unsaved commits are
    * dropped: the caller saves the new layout. `stored`: the field value the caller stores (a Payload
@@ -313,7 +329,7 @@ type Session = {
   target: SessionTarget
   store: LiveDocStore
   layout: Layout
-  /** The document as loaded, without the layout field. */
+  /** The document as last read (load, every committed save), without the layout field. */
   doc: Record<string, unknown>
   seq: number
   log: LiveCommitEvent[]
@@ -351,7 +367,16 @@ type Session = {
    * is not: a save from outside that stores the session's layout meanwhile counts as saved.
    */
   writing: boolean
+  /** The newest read of the stored document after a committed save, while it runs. */
+  docRefresh: Promise<void> | null
+  /** Counts the reads of the document: an older read never replaces a newer one. */
+  docGen: number
+  /** The newest read failed: `doc` may be older than the stored document, so checks may not use it. */
+  docFailed: boolean
 }
+
+/** How often `withCurrentDoc` runs a check while saves keep changing the document. */
+const CURRENT_DOC_TRIES = 3
 
 const realTimers: SessionTimers = {
   now: () => Date.now(),
@@ -506,6 +531,9 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
           stored: doc[target.field],
           ownRowIds: codecOfTarget(target).rowIds?.(doc[target.field]) ?? new Set(),
           writing: false,
+          docRefresh: null,
+          docGen: 0,
+          docFailed: false,
         }
         sessions.set(key, session)
         return session
@@ -664,8 +692,8 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
       if (codec.kind === 'payload-blocks') {
         // Still holding the gate, so no other save lands in between. What Payload's hooks stored
         // (other values, added, removed or moved blocks) becomes the session's base, with the
-        // commits made during the save on top.
-        const doc = await readStored(session)
+        // commits made during the save on top. The read also gives the other fields.
+        const doc = await refreshDoc(session)
         const before = session.stored
         session.stored = doc[target.field]
         rememberRows(session)
@@ -673,6 +701,9 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
           await rebaseOn(session, doc, seq)
           rebased = true
         }
+      } else {
+        // The collection's hooks may change other fields in this save too: read them again.
+        refreshDoc(session)
       }
       return saved
     }
@@ -735,17 +766,74 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
       context: { [ALL_LOCALES_KEY]: true },
     })
 
+  /** The document's other fields from a stored document, unless a newer read already set them. */
+  const setDoc = (session: Session, doc: Record<string, unknown>, gen: number) => {
+    if (gen !== session.docGen) return
+    const { [session.target.field]: _layout, ...rest } = doc
+    session.doc = rest
+    session.docFailed = false
+  }
+
+  /**
+   * Reads the stored document again after a committed save (a region, the settings drawer, REST,
+   * the session's own save): its other fields may change who may read what. No gate, no lock: a
+   * plain read, so it can run while a save holds the gate or a commit holds the lock. A failed read
+   * marks the fields as untrusted (`docFailed`) until a newer read works.
+   */
+  const refreshDoc = (session: Session): Promise<Record<string, unknown>> => {
+    const gen = ++session.docGen
+    const stored = readStored(session)
+    const read: Promise<void> = stored
+      .then(
+        (doc) => setDoc(session, doc, gen),
+        (error: unknown) => {
+          if (gen !== session.docGen) return
+          session.docFailed = true
+          logger.error(`[websiteBuilder] Could not read ${session.key} again after a save.`, error)
+        },
+      )
+      .finally(() => {
+        if (session.docRefresh === read) session.docRefresh = null
+      })
+    session.docRefresh = read
+    return stored
+  }
+
+  /**
+   * The session's doc once the reads after committed saves are done. After a failed read it reads
+   * once more; when that fails too, it throws.
+   */
+  const freshDoc = async (session: Session) => {
+    for (let retried = false; ; retried = true) {
+      while (session.docRefresh) await session.docRefresh
+      if (!session.docFailed) return session.doc
+      if (retried) throw new Error(`The document ${session.key} could not be read after a save.`)
+      refreshDoc(session)
+    }
+  }
+
+  /** `check` on the doc as stored when it returns: again when a save changed the doc meanwhile. */
+  const withCurrent = async <T>(session: Session, check: (doc: Record<string, unknown>) => Promise<T>): Promise<T> => {
+    for (let i = 0; i < CURRENT_DOC_TRIES; i++) {
+      const doc = await freshDoc(session)
+      const value = await check(doc)
+      // Every read sets a new object, so the same object means no save committed since.
+      if (session.doc === doc && !session.docRefresh && !session.docFailed) return value
+    }
+    throw new Error(`The document ${session.key} kept changing during an access check.`)
+  }
+
   /**
    * Makes a stored document the session's base: its layout as stored, then the session's unsaved
    * commits on top (each operation that still applies). Every editor gets the new state; the
    * session id stays, so editors rebase their unsent changes instead of dropping them.
    * `savedSeq`: the session's own save that stored this document (its commits up to that seq are
-   * in it). Throws when the stored value cannot be read as a layout.
+   * in it). Throws when the stored value cannot be read as a layout. The document's other fields
+   * come from the read every committed save starts (`refreshDoc`), not from here.
    */
   const rebaseOn = async (session: Session, doc: Record<string, unknown>, savedSeq?: number) => {
     const { target } = session
     const base = codecOfTarget(target).decode(doc[target.field])
-    const { [target.field]: _layout, ...rest } = doc
     await mutex.run(session.key, async () => {
       if (sessions.get(session.key) !== session) return
       session.stored = doc[target.field]
@@ -766,7 +854,6 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
       }
       session.unsaved = pending
       session.layout = layout
-      session.doc = rest
       session.seq += 1
       session.knownBlocking = null
       // The commit log no longer leads to this state: a reconnect gets a fresh session.
@@ -977,8 +1064,20 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
           }
         }
         if (args.access) {
-          // No other commit runs meanwhile (mutex), and hook changes queue behind this one.
-          const denied = await args.access({ before: session.layout, after: resolved.layout, ops: resolved.ops, doc: session.doc })
+          // No other commit runs meanwhile (mutex), and hook changes queue behind this one. The
+          // document's other fields as stored now: a save that commits during the check runs it again.
+          const access = args.access
+          const { layout: before } = session
+          const after = resolved.layout
+          const changes = resolved.ops
+          let denied: string | null
+          try {
+            denied = await withCurrent(session, (doc) => access({ before, after, ops: changes, doc }))
+          } catch (error) {
+            logger.error(`[websiteBuilder] Could not check access for a commit to ${session.key}.`, error)
+            maybeEvict(session)
+            return reject(503, 'The document could not be checked. Try again.')
+          }
           if (denied) {
             maybeEvict(session)
             return reject(403, denied)
@@ -1061,6 +1160,8 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     markSaved(collection, id, seq, info) {
       const session = sessions.get(channelKey(collection, id))
       if (!session) return
+      // A committed save from outside: its other fields are read again.
+      refreshDoc(session)
       // A session save that is writing may finish after this save and store an older layout as the
       // newest version. Then the session must save again, so it stays dirty. Editors still hear
       // of the save (its time, its status and the other fields it changed), with the seq already
@@ -1087,6 +1188,9 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     externalSaved(collection, id, info) {
       const session = sessions.get(channelKey(collection, id))
       if (!session) return
+      // Every committed save from outside, also one that left the layout alone (a region, the
+      // settings drawer, REST): its other fields may change who may read what.
+      refreshDoc(session)
       deliver(session, savedEvent(session.persistedSeq, info))
       if (!info.layoutChanged) return
       session.externalPending = true
@@ -1096,6 +1200,16 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
         session.externalPending = true
         logger.error(`[websiteBuilder] Could not take the saved layout of ${session.key} into the live session.`, error)
       })
+    },
+
+    async currentDoc(collection, id) {
+      const session = sessions.get(channelKey(collection, id))
+      return session ? freshDoc(session) : null
+    },
+
+    async withCurrentDoc(collection, id, check) {
+      const session = sessions.get(channelKey(collection, id))
+      return session ? { value: await withCurrent(session, check) } : null
     },
 
     broadcast(collection, id, event) {

@@ -1847,6 +1847,8 @@ How it works:
 
 - The server keeps one live session per open document, in memory. The session holds the layout and a sequence number `seq`.
 - Live editing requires access to the newest draft. Read access limited to published documents does not grant access to the live draft.
+- This also applies before the first draft save. The server checks collection read access on every streamed event and live edit. Query rules on the layout field cannot be checked against unsaved edits, so they refuse live editing. Other query rules use Payload's current stored document. A user role change applies after reconnecting.
+- After each committed save, the session reads the document's other fields again. Block access checks use those current fields, including for events still waiting to be sent. If the read fails, the check refuses access.
 - An editor applies its own change at once, then sends it to `commit`. The server applies changes in the order they arrive, raises `seq` by 1, and sends each change to every open editor. A change that no longer applies (for example, someone deleted its block) is rejected, and that editor drops it.
 - The server saves the session as a draft about 1 second after the last change (at the latest every 5 seconds). The save runs as the person who made the last change, with their access rules, and the normal save hook compiles the CSS.
 - For native JSON layouts, an open session protects its unsaved layout from other document saves. Publish first saves pending edits and stops if that save fails. Payload's own version restore replaces the session from the restored version after commit. Existing Payload blocks fields follow the authoritative stored field, as described above.
