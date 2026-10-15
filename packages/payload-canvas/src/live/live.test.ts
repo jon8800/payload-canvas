@@ -8,7 +8,7 @@ import { layoutAfterChange, layoutBeforeChange } from '../plugin/hook'
 import { actorFromUser, resolveOperations, type LiveDocStore } from './apply'
 import { requestActor, sessionStream, sseFrame } from './endpoints'
 import { createKeyedMutex } from './mutex'
-import { JSON_CODEC, payloadBlocksCodec } from './storage'
+import { JSON_CODEC, payloadBlocksCodec, type LayoutCodec } from './storage'
 import { createWriteGate, writeKey } from './writeGate'
 import {
   COLLABORATOR_COLORS,
@@ -54,7 +54,7 @@ const target: SessionTarget = { collection: 'pages', id: 'p1', field: 'layout', 
 const dbDown = () => new Error('DB down')
 
 /** A fake Payload Local API with one document. Reads and writes can be slowed down or fail. */
-function fakeStore(layout: Layout = base, timing: { read?: number; write?: number } = {}) {
+function fakeStore(layout: unknown = base, timing: { read?: number; write?: number } = {}) {
   let doc: Record<string, unknown> = { id: 'p1', layout: structuredClone(layout) }
   const writes: Record<string, unknown>[] = []
   let failures = 0
@@ -155,6 +155,38 @@ function setup(options: SessionManagerOptions = {}, layout: Layout = base) {
 const heading = (id: string, text = 'New') => ({ id, type: 'heading', props: { text } })
 const headingRows = (text: string) => [{ id: 'h1', blockType: 'heading', text }]
 
+function hold() {
+  let release!: () => void
+  const promise = new Promise<void>((resolve) => { release = resolve })
+  return { promise, release }
+}
+
+function headingLayout(text: string): Layout {
+  return { version: 1, blocks: [heading('h1', text)] }
+}
+
+function resetSetup(codec: LayoutCodec) {
+  const clock = fakeTimers()
+  const gate = createWriteGate()
+  const sessions = createSessionManager({ timers: clock.timers, gate })
+  const codecTarget = { ...target, codec }
+  const original = headingLayout('ORIGINAL')
+  const db = fakeStore(codec.encode(original))
+  const key = writeKey(target.collection, target.id)
+  const connect = (store = db.store) => sessions.connect({ target: codecTarget, store, clientId: 'a', user: ana, send: () => {} })
+  const edit = (text: string) => sessions.commit({
+    target: codecTarget, store: db.store, user: ana, actor: actorFromUser(ana), blocks,
+    ops: [{ type: 'update', id: 'h1', props: { text } }],
+  })
+  const save = (value: Layout) => gate.run(key, {}, async () => {
+    const saved = await db.store.update({ collection: target.collection, id: target.id, data: { layout: codec.encode(value) } })
+    sessions.externalSaved(target.collection, target.id, {})
+    return saved
+  })
+  const reset = (value: Layout, action: () => Promise<unknown>) => sessions.resetFor(target.collection, target.id, value, codec.encode(value), action)
+  return { clock, gate, sessions, layout: headingLayout, original, db, key, connect, edit, save, reset }
+}
+
 describe('reset failure after a queued save', () => {
   for (const editDuringReset of [false, true]) {
     it(`keeps storage consistent when an edit during the reset is ${editDuringReset}`, async () => {
@@ -180,11 +212,11 @@ describe('reset failure after a queued save', () => {
       assert.deepEqual(await sessions.flush(target.collection, target.id), { ok: true })
       assert.deepEqual(db.doc.layout, base, 'saved content matches the restored screen')
       assert.equal(sessions.unsaved(), 0)
-      assert.equal(db.writes.length, editDuringReset ? 2 : 0, 'only a completed intervening write needs correction')
+      assert.equal(db.writes.length, 0, 'transient reset edits never reach storage')
     })
   }
 
-  it('corrects a committed Payload blocks save whose next read fails', async () => {
+  it('does not start a queued Payload blocks save or its read when the reset fails', async () => {
     const codec = payloadBlocksCodec({ blocks, rootTypes: ['heading'] })
     const blockTarget = { ...target, codec }
     const original = headingRows('Hi')
@@ -193,11 +225,11 @@ describe('reset failure after a queued save', () => {
     const sessions = createSessionManager({ timers: clock.timers, gate, logger: { error: () => {} } })
     let doc = { id: 'p1', layout: original } as Record<string, unknown>
     let writes = 0
-    let failRead = false
+    let readsAfterWrite = 0
     const store: LiveDocStore = {
       async findByID() {
-        if (failRead) {
-          failRead = false
+        if (writes > 0) {
+          readsAfterWrite += 1
           throw new Error('Read after save failed')
         }
         return structuredClone(doc)
@@ -205,7 +237,6 @@ describe('reset failure after a queued save', () => {
       async update(args) {
         writes += 1
         doc = { ...doc, ...structuredClone(args.data as Record<string, unknown>) }
-        failRead = writes === 1
         return structuredClone(doc)
       },
     }
@@ -225,12 +256,13 @@ describe('reset failure after a queued save', () => {
     assert.equal(writes, 0, 'the session save waits for the action')
     fail(new Error('refused'))
     await assert.rejects(resetting, /refused/)
-    assert.deepEqual(doc.layout, headingRows('RESET+EDIT'), 'the write committed before its read failed')
+    assert.deepEqual(doc.layout, original, 'the paused save never writes the transient edit')
     assert.deepEqual(sessions.peek(target.collection, target.id)!.layout, codec.decode(original))
-    assert.equal(sessions.unsaved(), 1, 'the restored layout still needs saving')
+    assert.equal(sessions.unsaved(), 0)
     assert.deepEqual(await sessions.flush(target.collection, target.id), { ok: true })
     assert.deepEqual(doc.layout, original)
-    assert.equal(writes, 2, 'the second write corrects storage')
+    assert.equal(writes, 0)
+    assert.equal(readsAfterWrite, 0)
     assert.equal(sessions.unsaved(), 0)
   })
 
@@ -346,6 +378,138 @@ describe('reset failure after a queued save', () => {
 
 describe('reset with an outside read in flight', () => {
   for (const codec of [JSON_CODEC, payloadBlocksCodec({ blocks, rootTypes: ['heading'] })]) {
+    it(`keeps the outside ${codec.kind} save when a reset fails with an autosave queued`, async () => {
+      const clock = fakeTimers()
+      const gate = createWriteGate()
+      const sessions = createSessionManager({ timers: clock.timers, gate })
+      const codecTarget = { ...target, codec }
+      const initial: Layout = { version: 1, blocks: [heading('h1', 'ORIGINAL')] }
+      const external: Layout = { version: 1, blocks: [heading('h1', 'EXTERNAL'), heading('outside', 'EXTERNAL ONLY')] }
+      const reset: Layout = { version: 1, blocks: [heading('h1', 'RESET')] }
+      let doc: Record<string, unknown> = { id: 'p1', layout: codec.encode(initial) }
+      let writes = 0
+      let holdNextRead = false
+      let releaseRead!: () => void
+      let readStarted!: () => void
+      const readHeld = new Promise<void>((resolve) => { releaseRead = resolve })
+      const reading = new Promise<void>((resolve) => { readStarted = resolve })
+      const store: LiveDocStore = {
+        async findByID() {
+          const snapshot = structuredClone(doc)
+          if (holdNextRead) {
+            holdNextRead = false
+            readStarted()
+            await readHeld
+          }
+          return snapshot
+        },
+        async update(args) {
+          writes += 1
+          doc = { ...doc, ...structuredClone(args.data as Record<string, unknown>) }
+          return structuredClone(doc)
+        },
+      }
+      await sessions.connect({ target: codecTarget, store, clientId: 'a', user: ana, send: () => {} })
+      const key = writeKey(target.collection, target.id)
+      await gate.run(key, {}, async () => {
+        await store.update({ collection: target.collection, id: target.id, data: { layout: codec.encode(external) } })
+        sessions.externalSaved(target.collection, target.id, { layoutChanged: true })
+        holdNextRead = true
+      })
+      await reading
+      const resetting = sessions.resetFor(target.collection, target.id, reset, codec.encode(reset), () =>
+        gate.run(key, {}, async () => { throw new Error('action refused') }),
+      )
+      const rejected = assert.rejects(resetting, /action refused/)
+      await settle()
+      assert.equal((await sessions.commit({
+        target: codecTarget, store, user: ana, actor: actorFromUser(ana), blocks,
+        ops: [{ type: 'update', id: 'h1', props: { text: 'RESET+EDIT' } }],
+      })).ok, true)
+      await clock.advance(1000)
+      assert.equal(writes, 1, 'the action has not finished')
+      releaseRead()
+      await rejected
+      assert.deepEqual(await sessions.flush(target.collection, target.id), { ok: true })
+      assert.deepEqual(sessions.peek(target.collection, target.id)!.layout, external, 'the transient reset edit is discarded')
+      assert.deepEqual(doc.layout, codec.encode(external), 'every value and block from the outside save stays')
+      assert.equal(writes, 1, 'the failed reset never writes its transient edits')
+      assert.equal(sessions.unsaved(), 0)
+    })
+
+    for (const automatic of [false, true]) {
+      it(`resumes an older ${codec.kind} read after reset times out (${automatic ? 'automatic' : 'flush'})`, async () => {
+        const clock = fakeTimers()
+        const gate = createWriteGate({ waitMs: 15 })
+        const sessions = createSessionManager({ timers: clock.timers, gate })
+        const codecTarget = { ...target, codec }
+        const initial: Layout = { version: 1, blocks: [heading('h1', 'ORIGINAL')] }
+        const external: Layout = { version: 1, blocks: [heading('h1', 'EXTERNAL')] }
+        const reset: Layout = { version: 1, blocks: [heading('h1', 'RESET')] }
+        let doc: Record<string, unknown> = { id: 'p1', layout: codec.encode(initial) }
+        let writes = 0
+        let holdNextRead = false
+        let releaseRead!: () => void
+        let readStarted!: () => void
+        const readHeld = new Promise<void>((resolve) => { releaseRead = resolve })
+        const reading = new Promise<void>((resolve) => { readStarted = resolve })
+        const store: LiveDocStore = {
+          async findByID() {
+            const snapshot = structuredClone(doc)
+            if (holdNextRead) {
+              holdNextRead = false
+              readStarted()
+              await readHeld
+            }
+            return snapshot
+          },
+          async update(args) {
+            writes += 1
+            doc = { ...doc, ...structuredClone(args.data as Record<string, unknown>) }
+            return structuredClone(doc)
+          },
+        }
+        await sessions.connect({ target: codecTarget, store, clientId: 'a', user: ana, send: () => {} })
+        const key = writeKey(target.collection, target.id)
+        await gate.run(key, {}, async () => {
+          await store.update({ collection: target.collection, id: target.id, data: { layout: codec.encode(external) } })
+          sessions.externalSaved(target.collection, target.id, { layoutChanged: true })
+          holdNextRead = true
+        })
+        await reading
+        // The gate's timeout is unref'd; keep the process alive until it refuses the reset.
+        const keepAlive = setInterval(() => {}, 1000)
+        let flushing: ReturnType<typeof sessions.flush> | undefined
+        try {
+          await assert.rejects(sessions.resetFor(target.collection, target.id, reset, codec.encode(reset), () =>
+            gate.run(key, {}, async () => assert.fail('the reset must time out before it can write')),
+          ), /another save/)
+          assert.equal(sessions.unsaved(), 1, 'the outside read is still pending')
+          if (!automatic) {
+            let finished = false
+            flushing = sessions.flush(target.collection, target.id).then((result) => {
+              finished = true
+              return result
+            })
+            await settle()
+            assert.equal(finished, false, 'flush must wait for the outside read')
+          }
+        } finally {
+          clearInterval(keepAlive)
+          releaseRead()
+        }
+        await settle()
+        if (automatic) {
+          assert.equal(sessions.unsaved(), 1, 'the discarded read still needs a refresh')
+          await clock.advance(1000)
+        } else assert.deepEqual(await flushing, { ok: true })
+        assert.deepEqual(sessions.peek(target.collection, target.id)!.layout, external)
+        assert.deepEqual(doc.layout, codec.encode(external))
+        assert.equal(writes, 1, 'the refresh does not write another draft')
+        assert.equal(sessions.unsaved(), 0)
+      })
+    }
+
     it(`keeps a successful reset after an older ${codec.kind} read returns`, async () => {
       const initial: Layout = { version: 1, blocks: [heading('h1', 'ORIGINAL')] }
       const reset: Layout = { version: 1, blocks: [heading('h1', 'RESET')] }
@@ -399,6 +563,7 @@ describe('reset with an outside read in flight', () => {
       await resetting
       assert.deepEqual(sessions.peek(target.collection, target.id)!.layout, reset, 'the older read cannot replace the reset')
       assert.deepEqual(doc.layout, codec.encode(reset))
+      assert.deepEqual(await sessions.flush(target.collection, target.id), { ok: true })
       assert.equal(sessions.unsaved(), 0)
       assert.equal(writes, 2)
       assert.equal((await sessions.commit({
@@ -411,6 +576,312 @@ describe('reset with an outside read in flight', () => {
       assert.deepEqual(doc.layout, codec.encode(edited), 'the next edit cannot revive the outside blocks')
       assert.equal(writes, 3)
       assert.equal(sessions.unsaved(), 0)
+    })
+  }
+})
+
+describe('outside read retries', () => {
+  for (const codec of [JSON_CODEC, payloadBlocksCodec({ blocks, rootTypes: ['heading'] })]) {
+    it(`retains a failed ${codec.kind} refresh and retries with backoff`, async () => {
+      const clock = fakeTimers()
+      const gate = createWriteGate()
+      const sessions = createSessionManager({ timers: clock.timers, gate, logger: { error: () => {} } })
+      const codecTarget = { ...target, codec }
+      const initial: Layout = { version: 1, blocks: [heading('h1', 'ORIGINAL')] }
+      const external: Layout = { version: 1, blocks: [heading('h1', 'EXTERNAL')] }
+      let doc: Record<string, unknown> = { id: 'p1', layout: codec.encode(initial) }
+      let writes = 0
+      let reads = 0
+      let failures = 0
+      const store: LiveDocStore = {
+        async findByID() {
+          reads += 1
+          if (failures > 0) {
+            failures -= 1
+            throw new Error('Outside read failed')
+          }
+          return structuredClone(doc)
+        },
+        async update(args) {
+          writes += 1
+          doc = { ...doc, ...structuredClone(args.data as Record<string, unknown>) }
+          return structuredClone(doc)
+        },
+      }
+      await sessions.connect({ target: codecTarget, store, clientId: 'a', user: ana, send: () => {} })
+      await gate.run(writeKey(target.collection, target.id), {}, async () => {
+        await store.update({ collection: target.collection, id: target.id, data: { layout: codec.encode(external) } })
+        sessions.externalSaved(target.collection, target.id, { layoutChanged: true })
+        failures = 3
+      })
+      await settle()
+      assert.equal(sessions.unsaved(), 1)
+      const beforeAutomatic = reads
+      await clock.advance(1000)
+      assert.equal(reads, beforeAutomatic + 1, 'the first failed read retries automatically')
+      assert.equal((await sessions.flush(target.collection, target.id)).ok, false, 'a failed refresh is not saved')
+      assert.equal(sessions.unsaved(), 1, 'a retry that fails must keep the pending refresh')
+      const beforeRetry = reads
+      await clock.advance(4999)
+      assert.equal(reads, beforeRetry, 'failed reads use the save backoff')
+      await clock.advance(1)
+      assert.equal(reads, beforeRetry + 1)
+      assert.deepEqual(sessions.peek(target.collection, target.id)!.layout, external)
+      assert.deepEqual(doc.layout, codec.encode(external))
+      assert.equal(writes, 1, 'retries only read the outside save')
+      assert.equal(sessions.unsaved(), 0)
+    })
+  }
+})
+
+describe('reset action boundaries', () => {
+  for (const codec of [JSON_CODEC, payloadBlocksCodec({ blocks, rootTypes: ['heading'] })]) {
+    for (const priorEdit of [false, true]) {
+      it(`${codec.kind}: a failed reset restores ${priorEdit ? 'pending edits' : 'a clean document'}`, async () => {
+        const h = resetSetup(codec)
+        await h.connect()
+        if (priorEdit) assert.equal((await h.edit('BEFORE')).ok, true)
+        const action = hold()
+        const resetting = h.reset(h.layout('RESET'), async () => {
+          await action.promise
+          throw new Error('refused')
+        })
+        const rejected = assert.rejects(resetting, /refused/)
+        await settle()
+        assert.equal((await h.edit('RESET+EDIT')).ok, true)
+        await h.clock.advance(5000)
+        assert.equal(h.db.writes.length, 0)
+        action.release()
+        await rejected
+        const expected = priorEdit ? h.layout('BEFORE') : h.original
+        assert.deepEqual(h.sessions.peek(target.collection, target.id)!.layout, expected)
+        assert.deepEqual(await h.sessions.flush(target.collection, target.id), { ok: true })
+        assert.deepEqual(h.db.doc.layout, codec.encode(expected))
+        assert.equal(h.db.writes.length, priorEdit ? 1 : 0)
+      })
+    }
+
+    for (const firstSucceeds of [false, true]) {
+      for (const secondSucceeds of [false, true]) {
+        it(`${codec.kind}: serializes resets with outcomes ${firstSucceeds}/${secondSucceeds}`, async () => {
+          const h = resetSetup(codec)
+          await h.connect()
+          const action = hold()
+          const first = h.reset(h.layout('FIRST'), async () => {
+            await action.promise
+            if (!firstSucceeds) throw new Error('first refused')
+            return h.save(h.layout('FIRST'))
+          }).then(() => true, () => false)
+          await settle()
+          let secondStarted = false
+          const second = h.reset(h.layout('SECOND'), async () => {
+            secondStarted = true
+            if (!secondSucceeds) throw new Error('second refused')
+            return h.save(h.layout('SECOND'))
+          }).then(() => true, () => false)
+          await settle()
+          const startedEarly = secondStarted
+          const during = h.sessions.peek(target.collection, target.id)!.layout
+          action.release()
+          assert.deepEqual(await Promise.all([first, second]), [firstSucceeds, secondSucceeds])
+          assert.equal(startedEarly, false)
+          assert.deepEqual(during, h.layout('FIRST'))
+          assert.deepEqual(await h.sessions.flush(target.collection, target.id), { ok: true })
+          const expected = secondSucceeds ? h.layout('SECOND') : firstSucceeds ? h.layout('FIRST') : h.original
+          assert.deepEqual(h.sessions.peek(target.collection, target.id)!.layout, expected)
+          assert.deepEqual(h.db.doc.layout, codec.encode(expected))
+          assert.equal(h.db.writes.length, Number(firstSucceeds) + Number(secondSucceeds))
+        })
+      }
+    }
+
+    it(`${codec.kind}: public reset waits for a reset action`, async () => {
+      const h = resetSetup(codec)
+      await h.connect()
+      const action = hold()
+      const resetting = h.reset(h.layout('FIRST'), async () => {
+        await action.promise
+        throw new Error('refused')
+      })
+      const rejected = assert.rejects(resetting, /refused/)
+      await settle()
+      const second = h.sessions.reset(target.collection, target.id, h.layout('SECOND'), codec.encode(h.layout('SECOND')))
+      await settle()
+      const during = h.sessions.peek(target.collection, target.id)!.layout
+      action.release()
+      await rejected
+      assert.equal(await second, true)
+      assert.deepEqual(during, h.layout('FIRST'))
+      assert.deepEqual(h.sessions.peek(target.collection, target.id)!.layout, h.layout('SECOND'))
+    })
+
+    for (const succeeds of [false, true]) {
+      it(`${codec.kind}: flush and flushAll wait for an action that ${succeeds ? 'succeeds' : 'fails'}`, async () => {
+        const h = resetSetup(codec)
+        await h.connect()
+        const action = hold()
+        const resetting = h.reset(h.layout('RESET'), async () => {
+          await action.promise
+          if (!succeeds) throw new Error('refused')
+          return h.save(h.layout('RESET'))
+        }).then(() => true, () => false)
+        await settle()
+        assert.equal((await h.edit('RESET+EDIT')).ok, true)
+        let flushed = false
+        let flushedAll = false
+        const flushing = h.sessions.flush(target.collection, target.id).then((result) => { flushed = true; return result })
+        const flushingAll = h.sessions.flushAll().then(() => { flushedAll = true })
+        await settle()
+        const finishedEarly = flushed || flushedAll
+        action.release()
+        assert.equal(await resetting, succeeds)
+        assert.deepEqual(await flushing, { ok: true })
+        await flushingAll
+        assert.equal(finishedEarly, false)
+        const expected = succeeds ? h.layout('RESET+EDIT') : h.original
+        assert.deepEqual(h.sessions.peek(target.collection, target.id)!.layout, expected)
+        assert.deepEqual(h.db.doc.layout, codec.encode(expected))
+        assert.equal(h.db.writes.length, succeeds ? 2 : 0)
+      })
+    }
+
+    it(`${codec.kind}: a save pauses when a reset starts during its outside read`, async () => {
+      const h = resetSetup(codec)
+      await h.connect()
+      const outside = hold()
+      const read = hold()
+      const reading = hold()
+      let holdNextRead = false
+      const findByID = h.db.store.findByID
+      h.db.store.findByID = async (args) => {
+        const shouldHold = holdNextRead
+        holdNextRead = false
+        const snapshot = await findByID(args)
+        if (shouldHold) {
+          reading.release()
+          await read.promise
+        }
+        return snapshot
+      }
+      const external: Layout = { version: 1, blocks: [heading('h1', 'EXTERNAL'), heading('outside', 'EXTERNAL ONLY')] }
+      const outsideSave = h.gate.run(h.key, {}, async () => {
+        await outside.promise
+        await h.db.store.update({ collection: target.collection, id: target.id, data: { layout: codec.encode(external) } })
+        h.sessions.externalSaved(target.collection, target.id, { layoutChanged: true })
+        holdNextRead = true
+      })
+      assert.equal((await h.edit('BEFORE')).ok, true)
+      await h.clock.advance(1000)
+      outside.release()
+      await outsideSave
+      await reading.promise
+      const resetting = h.reset(h.layout('RESET'), async () => { throw new Error('refused') })
+      const rejected = assert.rejects(resetting, /refused/)
+      await settle()
+      read.release()
+      await rejected
+      assert.equal(h.db.writes.length, 1, 'the save must pause after its read too')
+      assert.deepEqual(h.db.doc.layout, codec.encode(external))
+      assert.deepEqual(await h.sessions.flush(target.collection, target.id), { ok: true })
+      const expected: Layout = { version: 1, blocks: [heading('h1', 'BEFORE'), heading('outside', 'EXTERNAL ONLY')] }
+      assert.deepEqual(h.sessions.peek(target.collection, target.id)!.layout, expected)
+      assert.deepEqual(h.db.doc.layout, codec.encode(expected))
+      assert.equal(h.db.writes.length, 2, 'only the restored pending edit needs a save')
+    })
+
+    it(`${codec.kind}: a queued save pauses after it gets the write gate`, async () => {
+      const h = resetSetup(codec)
+      await h.connect()
+      const outside = hold()
+      const outsideSave = h.gate.run(h.key, {}, () => outside.promise)
+      assert.equal((await h.edit('BEFORE')).ok, true)
+      await h.clock.advance(1000)
+      const action = hold()
+      const resetting = h.reset(h.layout('RESET'), async () => {
+        await action.promise
+        throw new Error('refused')
+      })
+      const rejected = assert.rejects(resetting, /refused/)
+      await settle()
+      outside.release()
+      await outsideSave
+      await settle()
+      assert.deepEqual(h.sessions.peek(target.collection, target.id)!.layout, h.layout('RESET'))
+      assert.equal(h.db.writes.length, 0, 'the already queued save also pauses')
+      action.release()
+      await rejected
+      assert.deepEqual(await h.sessions.flush(target.collection, target.id), { ok: true })
+      assert.deepEqual(h.db.doc.layout, codec.encode(h.layout('BEFORE')))
+      assert.equal(h.db.writes.length, 1)
+    })
+
+    it(`${codec.kind}: a long action keeps its session after the last editor leaves`, async () => {
+      const h = resetSetup(codec)
+      const connection = await h.connect()
+      connection.leave()
+      const action = hold()
+      const resetting = h.reset(h.layout('RESET'), async () => {
+        await action.promise
+        throw new Error('refused')
+      })
+      const rejected = assert.rejects(resetting, /refused/)
+      await settle()
+      await h.clock.advance(120_000)
+      const retained = h.sessions.size()
+      action.release()
+      await rejected
+      assert.equal(retained, 1)
+      assert.deepEqual(h.sessions.peek(target.collection, target.id)!.layout, h.original)
+      assert.equal(h.db.writes.length, 0)
+      await h.clock.advance(60_000)
+      assert.equal(h.sessions.size(), 0, 'normal eviction resumes')
+    })
+
+    it(`${codec.kind}: a late connection and flush wait when the action started without a session`, async () => {
+      const h = resetSetup(codec)
+      const action = hold()
+      const resetting = h.reset(h.layout('RESET'), async () => {
+        await action.promise
+        return h.save(h.layout('RESET'))
+      })
+      await settle()
+      let connected = false
+      let flushed = false
+      const connecting = h.connect().then(() => { connected = true })
+      const flushing = h.sessions.flushAll().then(() => { flushed = true })
+      await settle()
+      const finishedEarly = connected || flushed
+      action.release()
+      await resetting
+      await Promise.all([connecting, flushing])
+      assert.equal(finishedEarly, false)
+      assert.deepEqual(h.sessions.peek(target.collection, target.id)!.layout, h.layout('RESET'))
+      assert.deepEqual(h.db.doc.layout, codec.encode(h.layout('RESET')))
+      assert.equal(h.db.writes.length, 1)
+    })
+
+    it(`${codec.kind}: an initial read spanning an entire action reloads the final document`, async () => {
+      const h = resetSetup(codec)
+      const read = hold()
+      let reads = 0
+      const store: LiveDocStore = {
+        ...h.db.store,
+        async findByID(args) {
+          const snapshot = await h.db.store.findByID(args)
+          reads += 1
+          if (reads === 1) await read.promise
+          return snapshot
+        },
+      }
+      const connecting = h.connect(store)
+      await settle()
+      const resetting = h.reset(h.layout('RESET'), () => h.save(h.layout('RESET')))
+      await resetting
+      read.release()
+      await connecting
+      assert.equal(reads, 2)
+      assert.deepEqual(h.sessions.peek(target.collection, target.id)!.layout, h.layout('RESET'))
+      assert.deepEqual(h.db.doc.layout, codec.encode(h.layout('RESET')))
     })
   }
 })

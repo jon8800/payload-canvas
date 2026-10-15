@@ -29,6 +29,7 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 - Native Payload version restores update an open builder after the transaction commits. Revert and restore require access to the full source layout.
 - Failed builder restores and Revert keep the previous saved or unsaved state. A refused action on a saved page creates no draft. Nested template saves keep each document's save sequence and hook changes separate.
+- Restore and Revert pause background saves and layout sync through their save or rollback. Concurrent actions run in order, Publish waits, and committed outside edits survive failed actions. Pending outside sync retries after read failures.
 - Live streams check every intermediate edit with its original block ancestors and sibling values. Protected values cannot escape in a batch that later removes them. Published-only readers cannot receive live drafts.
 - Live draft access is checked before each streamed event in both storage modes, including unsaved edits. Access checks use the document's current fields after every committed save, including saves that leave the layout unchanged. Failed refreshes refuse access.
 - Publish and unpublish stop when saving pending edits fails. A queued save no longer creates an identical draft after publication. Startup updates inside `onInit` release the write gate correctly.

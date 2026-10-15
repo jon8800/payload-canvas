@@ -1852,6 +1852,7 @@ How it works:
 - An editor applies its own change at once, then sends it to `commit`. The server applies changes in the order they arrive, raises `seq` by 1, and sends each change to every open editor. A change that no longer applies (for example, someone deleted its block) is rejected, and that editor drops it.
 - The server saves the session as a draft about 1 second after the last change (at the latest every 5 seconds). The save runs as the person who made the last change, with their access rules, and the normal save hook compiles the CSS.
 - For native JSON layouts, an open session protects its unsaved layout from other document saves. Publish first saves pending edits and stops if that save fails. Payload's own version restore replaces the session from the restored version after commit. Existing Payload blocks fields follow the authoritative stored field, as described above.
+- Builder Restore and Revert pause background layout saves and outside layout sync until their save finishes. Concurrent actions run in order. Publish waits for an active action. A failed action keeps earlier unsaved edits, and outside saves remain authoritative.
 - Every editor gets a `saved` event after each save and a `published` event after Publish, Unpublish or Revert, so the top bar shows the same status for everyone.
 - The session closes 60 seconds after the last editor leaves and its draft is saved.
 
