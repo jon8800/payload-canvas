@@ -32,7 +32,7 @@ import { flushSync } from 'react-dom'
 
 import { defaultResolveLink, RenderLayout, type BlockComponents, type PageData, type ResolveLink } from '../index'
 import type { CanvasScope, CanvasServer } from '../render/canvasServerTypes'
-import { LayoutOutletContext } from '../render/LayoutOutlet'
+import { LayoutOutlet, LayoutOutletContext, LayoutOutletPresence } from '../render/LayoutOutlet'
 import { LAYOUT_ROOT_ATTRIBUTE, REGION_ATTRIBUTE } from '../render/regions'
 import { createCanvasDrag } from './drag'
 import { forgetDoc } from './fetchDocs'
@@ -271,7 +271,11 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
   // The page frame (collections with `regions`). `frameVersion` asks for it again.
   const [frame, setFrame] = useState<FrameView>({ status: 'off' })
   const [frameVersion, setFrameVersion] = useState(0)
-  const [outletMissing, setOutletMissing] = useState(false)
+  const [outletCount, setOutletCount] = useState(0)
+  const registerOutlet = useCallback(() => {
+    setOutletCount((count) => count + 1)
+    return () => setOutletCount((count) => count - 1)
+  }, [])
   // A frame that arrived while a region was edited inline: it shows when editing ends.
   const pendingFrame = useRef<FrameView | null>(null)
   // Region text kept on screen after editing, until the frame with the new value replaces it.
@@ -325,7 +329,11 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
           for (const undo of keptRegions.current.splice(0)) undo()
         }, REGION_KEEP_MS)
       }
-      const next = pendingFrame.current
+      // A frame requested before the edit ended still holds the old text. Keep the edited DOM
+      // until the save requests a new frame, including when an older request is still in flight.
+      const edited = !sameText(value, active.start)
+      const next = edited ? null : pendingFrame.current
+      if (edited) frameRun.current++
       pendingFrame.current = null
       if (next) showFrameRef.current(next)
       return
@@ -564,10 +572,14 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
           return
         case 'inlineStart': {
           if (message.region) {
-            const el = document.querySelector<HTMLElement>(`[${REGION_ATTRIBUTE}="${CSS.escape(message.region)}"]`)
-            if (el) mapper.ensure(el)
-            const target = el ? firstEditable(el) : null
-            if (target) void startInline(target, null, message.offset)
+            for (const el of document.querySelectorAll<HTMLElement>(`[${REGION_ATTRIBUTE}="${CSS.escape(message.region)}"]`)) {
+              if (el.getClientRects().length === 0) continue
+              mapper.ensure(el)
+              const target = firstEditable(el)
+              if (!target) continue
+              void startInline(target, null, message.offset)
+              break
+            }
             return
           }
           // The screen must show the admin's newest layout first (a joined list item has new text).
@@ -858,7 +870,7 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
       return
     }
     const run = ++frameRun.current
-    setFrame((current) => (current.status === 'ready' ? current : { status: 'loading' }))
+    setFrame((current) => (current.status === 'ready' || current.status === 'error' ? current : { status: 'loading' }))
     void requestFrame(server, frameScope).then((next) => {
       if (run !== frameRun.current) return
       if (next.status === 'error') send({ type: 'error', message: next.error })
@@ -959,12 +971,11 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
   useLayoutEffect(observeBlocks, [visible, shown, css, observeBlocks, frame])
 
   // A frame that never renders `layout`: the canvas shows the layout under it, and says so.
-  useLayoutEffect(() => {
-    const own = rootRef.current?.querySelector(`[${LAYOUT_ROOT_ATTRIBUTE}]:not([data-builder-outlet-fallback])`)
-    setOutletMissing(Boolean(visible && frame.status === 'ready' && frame.node && !own))
-  }, [visible, frame])
+  const outletMissing = Boolean(visible && frame.status === 'ready' && frame.node && outletCount === 0)
   useEffect(() => {
-    if (outletMissing) send({ type: 'error', message: NO_OUTLET })
+    if (outletMissing && !rootRef.current?.querySelector(`[${LAYOUT_ROOT_ATTRIBUTE}]:not([data-builder-outlet-fallback])`)) {
+      send({ type: 'error', message: NO_OUTLET })
+    }
   }, [outletMissing])
   useEffect(() => {
     if (!serverBlocks) return
@@ -1016,17 +1027,19 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     } else if (frame.status === 'ready' && frame.node) {
       page = (
         <LayoutOutletContext.Provider value={outlet}>
-          <FrameBoundary
-            resetKey={frame.node}
-            renderError={(error) => (
-              <>
-                <FrameProblem text={error} />
-                {outlet}
-              </>
-            )}
-          >
-            {frame.node}
-          </FrameBoundary>
+          <LayoutOutletPresence.Provider value={registerOutlet}>
+            <FrameBoundary
+              resetKey={frame.node}
+              renderError={(error) => (
+                <>
+                  <FrameProblem text={error} />
+                  <LayoutOutlet />
+                </>
+              )}
+            >
+              {frame.node}
+            </FrameBoundary>
+          </LayoutOutletPresence.Provider>
           {outletMissing && (
             <>
               <FrameProblem text={NO_OUTLET} />

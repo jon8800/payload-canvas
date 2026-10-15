@@ -31,7 +31,7 @@ import type { PublishButtonClientProps } from 'payload'
 import { createContext, use, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
-import { autosaveAction, closeMustSave, closesDrawerAtOnce, escapeRoute, forwardEscape } from './closeSave'
+import { autosaveAction, closeMustSave, closesDrawerAtOnce, escapeRoute, keepEscapeInPopup, trackDrawerPopups } from './closeSave'
 
 import { staleFieldAuthor, topFieldLabel } from '../../../live/staleMessages'
 import './settingsDrawer.scss'
@@ -82,20 +82,19 @@ function SaveBeforeClose() {
   })
   useEffect(() => {
     if (!drawerSlug) return
-    // The Escapes this listener sent on to a popup (see forwardEscape).
-    const forwarded = new WeakSet<object>()
+    const drawer = document.getElementById(`close-drawer__${drawerSlug}`)?.closest('.drawer')
+    if (!drawer) return
+    const trackPopups = trackDrawerPopups(drawer)
     const hold = (event: Event) => {
-      if (forwarded.has(event)) return
       const state = latest.current
-      const drawer = document.getElementById(`close-drawer__${drawerSlug}`)?.closest('.drawer')
-      if (!drawer) return
       const modals = document.querySelectorAll('.payload__modal-item')
       const topmost = modals.length === 0 || modals[modals.length - 1] === drawer
       const target = event.target instanceof Element ? event.target : null
       const key = (event as KeyboardEvent).key
+      const popupOpen = trackPopups({ type: event.type, key, target })
       // Escape in an open menu, listbox or popup closes that popup only, never the drawer.
-      if (escapeRoute({ type: event.type, key, target }, topmost, drawer) === 'popup') {
-        forwardEscape(event as KeyboardEvent, (init) => new KeyboardEvent('keydown', init), forwarded)
+      if (escapeRoute({ type: event.type, key, target }, topmost, drawer, popupOpen) === 'popup') {
+        keepEscapeInPopup(event as KeyboardEvent)
         return
       }
       if (!autosave || state.id === undefined || state.id === null || !state.collectionSlug) return
@@ -125,9 +124,11 @@ function SaveBeforeClose() {
     }
     window.addEventListener('click', hold, true)
     window.addEventListener('keydown', hold, true)
+    window.addEventListener('mouseover', hold, true)
     return () => {
       window.removeEventListener('click', hold, true)
       window.removeEventListener('keydown', hold, true)
+      window.removeEventListener('mouseover', hold, true)
     }
   }, [autosave, drawerSlug])
   return null

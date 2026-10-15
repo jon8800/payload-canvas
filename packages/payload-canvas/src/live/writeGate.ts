@@ -112,7 +112,7 @@ export const writeKey = (collection: string, id: string | number) => `${collecti
 
 /** A transaction id, or null for none (Payload leaves a Promise there when the adapter began none). */
 const transactionOf = (req: object) => {
-  const value = (req as { transactionID?: unknown }).transactionID
+  const value = (req as { transactionID?: unknown } | undefined)?.transactionID
   return value === undefined || value === null || value instanceof Promise ? null : value
 }
 
@@ -126,6 +126,16 @@ function releaser(tails: Map<string, Promise<void>>, key: string, tail: Promise<
     open()
     if (tails.get(key) === tail) tails.delete(key)
   }
+}
+
+/** The document of a version (`restoreVersion` gets the version's id), or undefined. */
+async function versionParent(req: object, collection: string, versionId: unknown): Promise<unknown> {
+  if (typeof versionId !== 'string' && typeof versionId !== 'number') return undefined
+  const db = (req as { payload?: { db?: { findVersions?: (args: Record<string, unknown>) => Promise<{ docs: { parent?: unknown }[] }> } } }).payload?.db
+  if (!db?.findVersions) return undefined
+  const { docs } = await db.findVersions({ collection, where: { id: { equals: versionId } }, limit: 1, pagination: false, req })
+  const parent = docs[0]?.parent
+  return parent !== null && typeof parent === 'object' ? (parent as { id?: unknown }).id : parent
 }
 
 /** The answer when a save cannot get the document's gate. */
@@ -279,8 +289,18 @@ export function createWriteGate(options: WriteGateOptions = {}): WriteGate {
 
     afterCommit(req, key, fn) {
       const op = running.get(req)?.get(key)?.at(-1)
-      if (op && !op.ended) op.callbacks.push(fn)
-      else fn()
+      if (op && !op.ended) {
+        op.callbacks.push(fn)
+        return
+      }
+      // An operation the gate does not run (none of its updates): still never before the commit
+      // of the request's transaction.
+      const transaction = transactionOf(req)
+      if (transaction !== null) {
+        transactionRecord(transaction).callbacks.push(fn)
+        return
+      }
+      fn()
     },
 
     transactionEnded(transaction, committed) {
@@ -316,9 +336,11 @@ export function createWriteGate(options: WriteGateOptions = {}): WriteGate {
     hooks(collection) {
       return {
         beforeOperation: async ({ args, operation, req }) => {
-          const id = (args as { id?: unknown }).id
+          let id = (args as { id?: unknown }).id
+          // Restoring a version writes its document: its gate, by the version's parent.
+          if (operation === 'restoreVersion') id = await versionParent(req, collection, id)
           // Updates by id only: a bulk update (`where`) has no single document to wait for.
-          if (operation !== 'update' || (typeof id !== 'string' && typeof id !== 'number')) return args
+          if ((operation !== 'update' && operation !== 'restoreVersion') || (typeof id !== 'string' && typeof id !== 'number')) return args
           const key = writeKey(collection, id)
           const transaction = transactionOf(req)
           const hold = joinable(req, key, transaction) ?? (await take(key, req, transaction, 'op'))

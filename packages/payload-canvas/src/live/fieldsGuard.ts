@@ -397,29 +397,56 @@ export async function restoreLocks(args: { payload: LockPayload; req: unknown; c
 // ---------------------------------------------------------------------------
 
 /** Who has the builder's settings drawer open, per document. In memory, like the sessions. */
+/**
+ * Who has the settings drawer of a document open. An entry lasts `ttlMs` after it was added or
+ * renewed (the drawer takes the lock when it opens and again while it stays open; the user's own
+ * saves renew it too), so a drawer whose close never reached the server stops counting after a
+ * while instead of until the server restarts.
+ */
 export type SettingsLocks = {
-  add(collection: string, id: string | number, user: string | number): void
+  /** Adds or renews the user's entry for `ttlMs` (default: the store's time, Payload's lock duration). */
+  add(collection: string, id: string | number, user: string | number, ttlMs?: number): void
   remove(collection: string, id: string | number, user: string | number): void
   has(collection: string, id: string | number, user: string | number): boolean
+  /** Renews the user's entry when it is there. */
+  renew(collection: string, id: string | number, user: string | number, ttlMs?: number): void
 }
 
-export function createSettingsLocks(): SettingsLocks {
-  const holders = new Map<string, Set<string>>()
+/** How long a settings drawer entry lasts without renewal: Payload's default lock duration. */
+export const SETTINGS_HOLD_MS = 300_000
+
+export function createSettingsLocks(options: { ttlMs?: number; now?: () => number } = {}): SettingsLocks {
+  const ttl = options.ttlMs ?? SETTINGS_HOLD_MS
+  const now = options.now ?? Date.now
+  /** Per document: user -> the time the entry ends. */
+  const holders = new Map<string, Map<string, number>>()
+  const live = (key: string) => {
+    const users = holders.get(key)
+    if (!users) return undefined
+    const at = now()
+    for (const [user, until] of users) if (until <= at) users.delete(user)
+    if (users.size === 0) holders.delete(key)
+    return users.size === 0 ? undefined : users
+  }
   return {
-    add(collection, id, user) {
+    add(collection, id, user, ttlMs = ttl) {
       const key = docKey(collection, id)
-      const set = holders.get(key) ?? new Set<string>()
-      set.add(String(user))
-      holders.set(key, set)
+      const users = live(key) ?? new Map<string, number>()
+      users.set(String(user), now() + ttlMs)
+      holders.set(key, users)
     },
     remove(collection, id, user) {
       const key = docKey(collection, id)
-      const set = holders.get(key)
-      set?.delete(String(user))
-      if (set?.size === 0) holders.delete(key)
+      const users = holders.get(key)
+      users?.delete(String(user))
+      if (users?.size === 0) holders.delete(key)
     },
     has(collection, id, user) {
-      return holders.get(docKey(collection, id))?.has(String(user)) ?? false
+      return live(docKey(collection, id))?.has(String(user)) ?? false
+    },
+    renew(collection, id, user, ttlMs = ttl) {
+      const users = live(docKey(collection, id))
+      if (users?.has(String(user))) users.set(String(user), now() + ttlMs)
     },
   }
 }
@@ -480,7 +507,8 @@ export async function takeSettingsLock(args: {
   const active = rows.filter((row) => lockIsActive(row, duration, now))
   // Listed also when someone else holds the lock: after "Take over" in Payload's dialog the lock
   // is the user's, and their saves must keep it. Only the user's own rows are ever kept.
-  holders.add(collection, id, user.id)
+  // As long as Payload's own lock: the drawer takes it again while it stays open.
+  holders.add(collection, id, user.id, duration)
   if (active.some((row) => lockOwner(row) !== String(user.id))) return 'other'
   if (active.length > 0) return 'taken'
   if (rows.length > 0) await payload.db.deleteMany({ collection: LOCKED_DOCUMENTS_SLUG, where: lockWhere(collection, id), req })

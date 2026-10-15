@@ -146,28 +146,54 @@ export function regionAccessFrom(permissions: unknown, regions: readonly RegionC
 // Reading and writing
 // ---------------------------------------------------------------------------
 
-/** The regions' values as the user may read them, in `locale` with Payload's fallback (ids, not documents). */
+/**
+ * The regions' values as the user may read them, in `locale` (ids, not documents): `values` with
+ * Payload's locale fallback, `storedValues` the locale's own values (see `LiveRegionsResponse`).
+ */
 export async function loadRegionValues(
   req: PayloadRequest,
   target: SessionTarget,
   regions: readonly RegionConfig[],
   locale: string | undefined,
-): Promise<{ values: Doc; updatedAt: string | null }> {
-  const doc = await api(req).findByID({
-    collection: target.collection,
-    id: target.id,
-    depth: 0,
-    draft: target.drafts,
-    overrideAccess: false,
-    user: req.user,
-    select: regionSelect(regions),
-    ...(locale ? { locale } : {}),
-  })
-  return { values: regionValues(doc, regions), updatedAt: typeof doc.updatedAt === 'string' ? doc.updatedAt : null }
+): Promise<{ values: Doc; storedValues: Doc; updatedAt: string | null }> {
+  const read = (fallback: boolean) =>
+    api(req).findByID({
+      collection: target.collection,
+      id: target.id,
+      depth: 0,
+      draft: target.drafts,
+      overrideAccess: false,
+      user: req.user,
+      select: regionSelect(regions),
+      ...(locale ? { locale } : {}),
+      ...(fallback ? {} : { fallbackLocale: 'none' }),
+    })
+  const doc = await read(true)
+  const values = regionValues(doc, regions)
+  const updatedAt = typeof doc.updatedAt === 'string' ? doc.updatedAt : null
+  if (!(req.payload.config as { localization?: unknown }).localization) return { values, storedValues: values, updatedAt }
+  return { values, storedValues: ownValues(values, regionValues(await read(false), regions), regions), updatedAt }
+}
+
+/**
+ * The locale's own values for every region field path that `values` has: the own value, or `null`
+ * for none. Only paths the user may read (they are in `values`), so nothing else shows.
+ */
+function ownValues(values: Doc, own: Doc, regions: readonly RegionConfig[]): Doc {
+  let out: Doc = {}
+  for (const region of regions) {
+    for (const field of region.fields) {
+      if (valueAtDocPath(values, field.path) === undefined) continue
+      const value = valueAtDocPath(own, field.path)
+      const next = setDocPath(out, field.path, value === undefined ? null : value)
+      if (next.ok) out = next.value
+    }
+  }
+  return out
 }
 
 export type RegionWriteResult =
-  | { ok: true; values: Doc; updatedAt: string | null; changed: boolean }
+  | { ok: true; values: Doc; storedValues: Doc; updatedAt: string | null; changed: boolean }
   | { ok: false; status: number; error: string; conflicts?: LiveFieldConflict[]; errors?: LiveError[] }
 
 /** Checks the request body: a list of changes at paths inside the regions. */
@@ -320,8 +346,8 @@ export async function writeRegionFields(req: PayloadRequest, options: RegionWrit
         touched.add(change.path.split('.')[0])
       }
       if (touched.size === 0) {
-        const { values, updatedAt } = await loadRegionValues(req, target, regions, locale)
-        return { ok: true, values, updatedAt, changed: false }
+        const { values, storedValues, updatedAt } = await loadRegionValues(req, target, regions, locale)
+        return { ok: true, values, storedValues, updatedAt, changed: false }
       }
       // Only the top-level fields that change. Payload merges them onto the newest version.
       const data = Object.fromEntries([...touched].map((name) => [name, next[name]]))
@@ -341,8 +367,8 @@ export async function writeRegionFields(req: PayloadRequest, options: RegionWrit
         overrideLock: false,
         context: { [KEEP_LOCK_CONTEXT]: true, [REGION_SAVE_CONTEXT]: true },
       })
-      const { values, updatedAt } = await loadRegionValues(req, target, regions, locale)
-      return { ok: true, values, updatedAt, changed: true }
+      const { values, storedValues, updatedAt } = await loadRegionValues(req, target, regions, locale)
+      return { ok: true, values, storedValues, updatedAt, changed: true }
     } catch (error) {
       const status = statusOf(error)
       if (status === 423) {
@@ -386,11 +412,11 @@ export function regionEndpoints({ collections, runtime, gate, settingsLocks, acc
       if (regions.length === 0) return json({ ok: false, error: 'This collection has no regions.' } satisfies LiveRegionsResponse, 404)
       const url = new URL(req.url ?? 'http://localhost')
       try {
-        const [{ values, updatedAt }, rights] = await Promise.all([
+        const [{ values, storedValues, updatedAt }, rights] = await Promise.all([
           loadRegionValues(req, target, regions, localeOf(req, url.searchParams.get('locale'))),
           access(req, target, regions),
         ])
-        return json({ ok: true, values, access: rights, updatedAt } satisfies LiveRegionsResponse)
+        return json({ ok: true, values, storedValues, access: rights, updatedAt } satisfies LiveRegionsResponse)
       } catch (error) {
         return json({ ok: false, error: 'Document not found or not readable' } satisfies LiveRegionsResponse, statusOf(error) === 403 ? 403 : 404)
       }
@@ -419,7 +445,7 @@ export function regionEndpoints({ collections, runtime, gate, settingsLocks, acc
         const { status, ok: _ok, ...body } = result
         return json({ ok: false, ...body } satisfies LiveFieldsResponse, status)
       }
-      return json({ ok: true, values: result.values, updatedAt: result.updatedAt } satisfies LiveFieldsResponse)
+      return json({ ok: true, values: result.values, storedValues: result.storedValues, updatedAt: result.updatedAt } satisfies LiveFieldsResponse)
     },
   }
 

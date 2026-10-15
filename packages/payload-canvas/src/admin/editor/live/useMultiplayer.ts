@@ -368,6 +368,7 @@ export function useMultiplayer(
         others.set(collaborator.clientId, collaborator)
       }
       engine.session(data.seq, normalizeLayout(data.layout), data.sessionId ?? null, data.reset === true)
+      runtime.regions?.reload()
       const savedSeq = data.savedSeq ?? data.seq
       // A save error still current follows this event.
       publish({ self: data.self ?? null, status: 'open', lastError: null, savedSeq, unsaved: data.seq > savedSeq, saveError: null })
@@ -403,6 +404,8 @@ export function useMultiplayer(
         if (!resuming) return
         resuming = false
         engine.resumed()
+        // Saved events are not replayed, so region fields may have changed while disconnected.
+        runtime.regions?.reload()
         publish({ status: 'open' })
         publishOffline()
         lastSent = null

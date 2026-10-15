@@ -452,3 +452,19 @@ describe('write gate', () => {
     assert.equal(gate.size(), 0)
   })
 })
+
+describe('afterCommit outside a gated update', () => {
+  it("waits for the request's own transaction (a restore of a version, which the gate does not run)", () => {
+    const gate = createWriteGate()
+    const runs: string[] = []
+    gate.afterCommit({ transactionID: 'tx-restore' }, writeKey('pages', 1), () => runs.push('committed'))
+    assert.equal(runs.join(','), '', 'not before the commit')
+    gate.transactionEnded('tx-restore', true)
+    assert.equal(runs.join(','), 'committed')
+    gate.afterCommit({ transactionID: 'tx-rolled-back' }, writeKey('pages', 1), () => runs.push('rolled back'))
+    gate.transactionEnded('tx-rolled-back', false)
+    assert.equal(runs.join(','), 'committed', 'never after a rollback')
+    gate.afterCommit({}, writeKey('pages', 1), () => runs.push('no transaction'))
+    assert.equal(runs.join(','), 'committed,no transaction', 'without a transaction: at once')
+  })
+})

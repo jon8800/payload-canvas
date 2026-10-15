@@ -15,14 +15,15 @@ import type { LiveFieldChange } from '../../live/types'
 import { createSyncEngine, type SyncOptions, type SyncUpdate } from './live/sync'
 import { useSelector, type Equality } from './valueStore'
 
-/** One change of a document field outside the layout (a page region's field). */
-export type FieldEdit = { path: string; before: unknown; after: unknown }
+/** Own stored values of a region field. `Shown` values include locale fallback, for conflict checks. */
+export type FieldEdit = { path: string; before: unknown; after: unknown; beforeShown?: unknown; afterShown?: unknown }
 
 /**
  * Saves field changes for undo and redo, in `locale` (the locale the step was made in, null
- * without localization). Resolves false when the server refused them.
+ * without localization). False: refused. `retry`: temporary failure; keep the step.
  */
-export type FieldWriter = (changes: LiveFieldChange[], locale: string | null) => Promise<boolean>
+export type FieldWriteResult = boolean | 'retry'
+export type FieldWriter = (changes: LiveFieldChange[], locale: string | null) => Promise<FieldWriteResult>
 
 type HistoryEntry = {
   /** Applied in order, these undo (or redo) one user action. */
@@ -33,6 +34,8 @@ type HistoryEntry = {
    * there, so a field someone else changed since is never overwritten.
    */
   fields?: FieldEdit[]
+  /** The original save must finish before undo can use its hook-adjusted values. */
+  fieldsReady?: Promise<boolean>
   /**
    * The locale a field step was made in. Undo and redo write that locale, whatever the editor
    * shows now, as layout operations keep their own `locale`.
@@ -198,29 +201,46 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
   let tagCounter = 0
   const nextTag = () => `t${++tagCounter}`
   let fieldWriter: FieldWriter | null = null
+  let historyBusy = false
+  const historyQueue: Array<() => void> = []
 
   /**
-   * Undoes or redoes a step of field changes. The step moves to the other stack at once (the next
-   * Ctrl+Z goes on with the step before); the save follows. When the server refuses it, the step
-   * goes: the field changed since, and the writer already said so.
+   * Field saves run in order. A temporary failure restores the step for a later retry.
    */
   const fieldStep = (entry: HistoryEntry, direction: 'undo' | 'redo') => {
-    const edits = entry.fields ?? []
-    const changes: LiveFieldChange[] = edits.map((e) =>
-      direction === 'undo' ? { path: e.path, value: e.before, base: e.after } : { path: e.path, value: e.after, base: e.before },
-    )
-    const moved: HistoryEntry = { ...entry, at: Date.now() }
-    if (direction === 'undo') set({ undoStack: state.undoStack.slice(0, -1), redoStack: [...state.redoStack, moved], lastError: null })
-    else set({ redoStack: state.redoStack.slice(0, -1), undoStack: [...state.undoStack, moved], lastError: null })
-    const drop = () => set({ undoStack: state.undoStack.filter((e) => e !== moved), redoStack: state.redoStack.filter((e) => e !== moved) })
-    if (!fieldWriter) {
-      warn(UNDO_NONE)
-      drop()
-      return
-    }
-    void fieldWriter(changes, entry.fieldLocale ?? null).then((ok) => {
-      if (!ok) drop()
-    })
+    historyBusy = true
+    const source = direction === 'undo' ? 'undoStack' : 'redoStack'
+    const destination = direction === 'undo' ? 'redoStack' : 'undoStack'
+    const index = state[source].indexOf(entry)
+    set({ [source]: state[source].filter((e) => e !== entry), [destination]: [...state[destination], entry], lastError: null })
+    const drop = () => set({ undoStack: state.undoStack.filter((e) => e !== entry), redoStack: state.redoStack.filter((e) => e !== entry) })
+    void (async () => {
+      let result: FieldWriteResult = 'retry'
+      try {
+        if (entry.fieldsReady && !(await entry.fieldsReady)) result = false
+        else if (!fieldWriter) warn(UNDO_NONE)
+        else {
+          const changes = (entry.fields ?? []).map((e) => direction === 'undo'
+            ? { path: e.path, value: e.before, base: 'afterShown' in e ? e.afterShown : e.after }
+            : { path: e.path, value: e.after, base: 'beforeShown' in e ? e.beforeShown : e.before })
+          result = await fieldWriter(changes, entry.fieldLocale ?? null)
+        }
+      } catch {
+        warn('Not saved. Try undo or redo again when the connection returns.')
+      }
+      if (result === false) drop()
+      if (result === 'retry') {
+        const present = state[destination].includes(entry)
+        drop()
+        if (present) set({ [source]: [...state[source].slice(0, index), entry, ...state[source].slice(index)] })
+        historyQueue.length = 0
+      }
+      historyBusy = false
+      while (historyQueue.length > 0) {
+        if (historyBusy) break
+        historyQueue.shift()?.()
+      }
+    })()
   }
 
   const warn = (text: string) => {
@@ -391,6 +411,10 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
     },
 
     undo() {
+      if (historyBusy) {
+        historyQueue.push(() => this.undo())
+        return
+      }
       const entry = state.undoStack.at(-1)
       if (!entry) return
       if (entry.fields) {
@@ -412,6 +436,10 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
     },
 
     redo() {
+      if (historyBusy) {
+        historyQueue.push(() => this.redo())
+        return
+      }
       const entry = state.redoStack.at(-1)
       if (!entry) return
       if (entry.fields) {
@@ -433,12 +461,16 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
     },
 
     /**
-     * Records one undo step of document field changes that are already saved (a region's text
-     * or image). Undo and redo save them back through the writer set with `setFieldWriter`.
+     * Records the action immediately. `saved` replaces its values after hooks, or removes a failed save.
      */
-    recordFields(edits: FieldEdit[], locale: string | null = null) {
+    recordFields(edits: FieldEdit[], locale: string | null = null, saved?: Promise<FieldEdit[] | null>) {
       if (edits.length === 0) return
       const entry: HistoryEntry = { ops: [], fields: edits, fieldLocale: locale, selectedId: state.selectedId, tags: [], at: Date.now() }
+      if (saved) entry.fieldsReady = saved.then((fields) => {
+        if (fields) entry.fields = fields
+        else set({ undoStack: state.undoStack.filter((e) => e !== entry), redoStack: state.redoStack.filter((e) => e !== entry) })
+        return fields !== null
+      })
       set({ undoStack: [...state.undoStack, entry].slice(-HISTORY_LIMIT), redoStack: [] })
     },
     /** Saves the field changes of undo and redo. Without one, field steps cannot be undone. */

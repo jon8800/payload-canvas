@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { autosaveAction, closeMustSave, closesDrawerAtOnce, escapeRoute, forwardEscape, type CloseTarget, type EscapeInit } from './closeSave'
+import { autosaveAction, closeMustSave, closesDrawerAtOnce, escapeRoute, type CloseTarget } from './closeSave'
 
 /** An element that matches the selectors in `matches`. */
 const element = (...matches: string[]): CloseTarget => ({ closest: (selector) => (matches.includes(selector) ? {} : null) })
@@ -60,93 +60,11 @@ describe('Escape inside the drawer', () => {
       assert.ok(selector.includes(part), part)
     }
   })
-})
 
-/** The propagation methods of a fake keyboard event: `stopped` after stopImmediatePropagation. */
-function keyMethods() {
-  return {
-    stopped: false,
-    stopImmediatePropagation(this: { stopped: boolean }) {
-      this.stopped = true
-    },
-    preventDefault() {},
-  }
-}
-
-/**
- * The admin's real order for a keydown: the builder's capture listener on window, then, on
- * `document`, React's handler (react-select reads `key`) and Payload's modal provider (closes the
- * topmost modal when `keyCode` is 27). `forward: false` is the old behaviour (step aside).
- */
-function adminKeydown(options: { forward: boolean }) {
-  const state = { menuOpen: true, drawerOpen: true }
-  const drawer = {}
-  const forwarded = new WeakSet<object>()
-  type Key = { key: string; keyCode: number; stopped: boolean; stopImmediatePropagation(): void; preventDefault(): void; target: unknown }
-  const input = {
-    closest: (selector: string) => (state.menuOpen && selector.includes('[aria-expanded="true"]') ? input : drawer),
-    dispatchEvent: (event: object) => {
-      run(event as Key)
-      return true
-    },
-  }
-  const builderCapture = (event: Key) => {
-    if (forwarded.has(event)) return
-    if (escapeRoute({ type: 'keydown', key: event.key, target: input }, true, drawer) !== 'popup') return
-    if (options.forward) forwardEscape(event, (init: EscapeInit) => ({ ...init, keyCode: 0, ...keyMethods(), target: input }), forwarded)
-  }
-  const reactSelect = (event: Key) => {
-    if (event.key === 'Escape' && state.menuOpen) state.menuOpen = false
-  }
-  const modalProvider = (event: Key) => {
-    if (event.keyCode === 27) state.drawerOpen = false
-  }
-  function run(event: Key) {
-    for (const listener of [builderCapture, reactSelect, modalProvider]) {
-      listener(event)
-      if (event.stopped) return
-    }
-  }
-  const press = () => run({ key: 'Escape', keyCode: 27, target: input, ...keyMethods() } as Key)
-  return { state, press }
-}
-
-describe('Escape in an open select in the drawer, in the admin event order', () => {
-  it('closes the menu only, and the drawer keeps its form', () => {
-    const admin = adminKeydown({ forward: true })
-    admin.press()
-    assert.deepEqual(admin.state, { menuOpen: false, drawerOpen: true })
-    // The next Escape (no popup open any more) is a bare Escape: the drawer path handles it.
-    assert.equal(escapeRoute({ type: 'keydown', key: 'Escape', target: { closest: () => null } }, true, {}), 'close')
-  })
-
-  it('stepping aside is not enough: the modal provider closed the drawer with the menu', () => {
-    const admin = adminKeydown({ forward: false })
-    admin.press()
-    assert.deepEqual(admin.state, { menuOpen: false, drawerOpen: false })
-  })
-
-  it("forwards an Escape without keyCode, keeping the modifier keys, and stops the original", () => {
-    const calls: string[] = []
-    let sent: Record<string, unknown> | null = null
-    const forwarded = new WeakSet<object>()
-    forwardEscape(
-      {
-        target: { dispatchEvent: (event: object) => ((sent = event as Record<string, unknown>), true) },
-        shiftKey: true,
-        stopImmediatePropagation: () => calls.push('stop'),
-        preventDefault: () => calls.push('prevent'),
-      },
-      (init) => ({ ...init }),
-      forwarded,
-    )
-    assert.deepEqual(calls, ['stop', 'prevent'])
-    assert.ok(sent)
-    const copy = sent as Record<string, unknown>
-    assert.equal(copy.key, 'Escape')
-    assert.equal(copy.bubbles, true)
-    assert.equal(copy.shiftKey, true)
-    assert.equal('keyCode' in copy, false, 'the modal provider reads keyCode: the copy has none')
-    assert.equal(forwarded.has(copy), true)
+  it('routes an owned portal to its popup only while this drawer is topmost', () => {
+    const event = { type: 'keydown', key: 'Escape', target: focused(drawer) }
+    assert.equal(escapeRoute(event, true, drawer, true), 'popup')
+    assert.equal(escapeRoute(event, false, drawer, true), 'none')
+    assert.equal(escapeRoute({ ...event, key: 'Tab' }, true, drawer, true), 'none')
   })
 })

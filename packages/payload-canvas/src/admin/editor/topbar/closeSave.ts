@@ -36,8 +36,10 @@ export function escapeRoute(
   topmost: boolean,
   /** The drawer's element: it is a dialog itself, so it never counts as a popup in it. */
   drawer?: unknown,
+  popupOpen = false,
 ): 'popup' | 'close' | 'none' {
   if (event.type !== 'keydown' || event.key !== 'Escape' || !topmost) return 'none'
+  if (popupOpen) return 'popup'
   const popup = event.target?.closest(OWN_ESCAPE) ?? null
   return popup === null || popup === drawer ? 'close' : 'popup'
 }
@@ -58,40 +60,40 @@ export function closesDrawerAtOnce(
   return event.target.closest(`[id="close-drawer__${slug}"].drawer__close`) !== null
 }
 
-/** The keys of a keyboard event that the copy for a popup keeps. */
-export type EscapeInit = { key: string; code: string; bubbles: boolean; cancelable: boolean; composed: boolean; shiftKey: boolean; ctrlKey: boolean; altKey: boolean; metaKey: boolean }
-
 /**
- * Sends an Escape meant for a popup inside the drawer to that popup only. Payload's modal provider
- * closes the topmost modal on every Escape that reaches `document` with `keyCode` 27, and in the
- * admin React handles its events on `document` too, so a popup's own handler (react-select, Payload's
- * Popup, a dialog) cannot stop it: the whole drawer closed with the menu. So the original event
- * stops here (capture phase), and a new Escape goes to the same element. A constructed keyboard
- * event has `keyCode` 0: the popup's handlers read `key` and close it; the modal provider ignores
- * it. `forwarded` remembers the copies, so this listener lets them through.
+ * Payload's focus trap reads Escape during capture; its modal provider reads keyCode during
+ * bubbling. Keep both from closing the drawer, but let the popup read Escape at the target and
+ * during bubbling. Replaying an Escape would run the focus trap again and release its focus.
  */
-export function forwardEscape(
-  event: { target: unknown; stopImmediatePropagation(): void; preventDefault(): void; shiftKey?: boolean; ctrlKey?: boolean; altKey?: boolean; metaKey?: boolean },
-  make: (init: EscapeInit) => object,
-  forwarded: WeakSet<object>,
-): void {
-  const target = event.target as { dispatchEvent?: (event: object) => boolean } | null
-  event.stopImmediatePropagation()
-  event.preventDefault()
-  if (typeof target?.dispatchEvent !== 'function') return
-  const copy = make({
-    key: 'Escape',
-    code: 'Escape',
-    bubbles: true,
-    cancelable: true,
-    composed: true,
-    shiftKey: Boolean(event.shiftKey),
-    ctrlKey: Boolean(event.ctrlKey),
-    altKey: Boolean(event.altKey),
-    metaKey: Boolean(event.metaKey),
+export function keepEscapeInPopup(event: KeyboardEvent): void {
+  Object.defineProperties(event, {
+    key: { configurable: true, get: () => event.eventPhase === event.CAPTURING_PHASE ? 'Unidentified' : 'Escape' },
+    keyCode: { configurable: true, value: 0 },
   })
-  forwarded.add(copy)
-  target.dispatchEvent(copy)
+}
+
+/** Payload portals have no owner ID, so remember which trigger opened them. */
+export function trackDrawerPopups(drawer: Element) {
+  const document = drawer.ownerDocument
+  let previous = new Set(document.querySelectorAll('.popup__content'))
+  let openedHere = false
+  const owned = new Set<Element>()
+  return (event: { type: string; key?: string; target: Element | null }): boolean => {
+    const current = new Set(document.querySelectorAll('.popup__content'))
+    for (const popup of current) {
+      if (openedHere && !previous.has(popup)) owned.add(popup)
+    }
+    for (const popup of owned) {
+      if (!current.has(popup)) owned.delete(popup)
+    }
+    previous = current
+    openedHere = false
+    if (event.type === 'click' || event.type === 'mouseover' || (event.type === 'keydown' && (event.key === 'Enter' || event.key === ' '))) {
+      const trigger = event.target?.closest('.popup__trigger-wrap')
+      openedHere = Boolean(trigger && (drawer.contains(trigger) || [...owned].some((popup) => popup.contains(trigger))))
+    }
+    return owned.size > 0
+  }
 }
 
 /** True when closing must wait for a save: an unsaved edit in a form that autosaves. */

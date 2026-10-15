@@ -125,7 +125,11 @@ export function PageSettings() {
   const singular = useCollectionLabel(collection, 'singular')
   const {
     config: { routes },
+    getEntityConfig,
   } = useConfig()
+  const lockDocuments = getEntityConfig({ collectionSlug: collection })?.lockDocuments
+  const lockDuration = typeof lockDocuments === 'object' ? lockDocuments.duration : undefined
+  const renewLockMs = Math.min(60_000, (lockDuration && Number.isFinite(lockDuration) && lockDuration > 0 ? lockDuration : 300) * 500)
   // Numeric ids go to Payload as numbers (the app's ID type can be `number`).
   const docId = (/^\d+$/.test(id) ? Number(id) : id) as DefaultDocumentIDType
   const [DocumentDrawer, , { drawerSlug, openDrawer, closeDrawer, isDrawerOpen }] = useDocumentDrawer({ collectionSlug: collection, id: docId })
@@ -171,9 +175,14 @@ export function PageSettings() {
   useEffect(() => {
     if (!isDrawerOpen) return
     const release = () => void runtime.doc.settingsLock(false)
+    // A crashed tab expires on the server; an open drawer renews before that expiry.
+    const timer = window.setInterval(() => void runtime.doc.settingsLock(true), renewLockMs)
     window.addEventListener('pagehide', release)
-    return () => window.removeEventListener('pagehide', release)
-  }, [isDrawerOpen, runtime])
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('pagehide', release)
+    }
+  }, [isDrawerOpen, runtime, renewLockMs])
   useEffect(
     () => () => {
       if (!runtime.doc.settingsOpen.get()) return
