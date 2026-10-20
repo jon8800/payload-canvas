@@ -7,25 +7,25 @@
   .builder-editor__fields {
     .field-description,
     .upload-relationship-details__meta {
-      color: var(--theme-elevation-600);
+      color: var(--color-text-secondary);
     }
   }
 
   .builder-field-group {
     display: flex;
     flex-direction: column;
-    gap: calc(var(--base) * 0.5);
+    gap: calc(var(--spacer-3) * 0.5);
     min-width: 0;
     margin: 0;
-    padding: calc(var(--base) * 0.5) 0 0 calc(var(--base) * 0.6);
+    padding: calc(var(--spacer-3) * 0.5) 0 0 calc(var(--spacer-3) * 0.6);
     border: 0;
-    border-left: 2px solid var(--theme-elevation-100);
+    border-left: 2px solid var(--color-bg-hover);
   }
 
   .builder-field-group__label {
-    margin: 0 0 calc(var(--base) * 0.25);
+    margin: 0 0 calc(var(--spacer-3) * 0.25);
     padding: 0;
-    color: var(--theme-elevation-600);
+    color: var(--color-text-secondary);
     font-size: var(--be-text-s);
     font-weight: var(--be-weight-strong);
     letter-spacing: 0.04em;
@@ -34,27 +34,27 @@
 
   .builder-field-group__description {
     margin: 0;
-    color: var(--theme-elevation-600);
+    color: var(--color-text-secondary);
     font-size: var(--be-text-m);
   }
 
   .builder-field-group__fields {
     display: flex;
     flex-direction: column;
-    gap: calc(var(--base) * 0.75);
+    gap: calc(var(--spacer-3) * 0.75);
   }
 
   // Point field: longitude and latitude side by side.
   .builder-field-point {
     display: flex;
     flex-direction: column;
-    gap: calc(var(--base) * 0.25);
+    gap: calc(var(--spacer-3) * 0.25);
   }
 
   .builder-field-point__inputs {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: calc(var(--base) * 0.5);
+    gap: calc(var(--spacer-3) * 0.5);
   }
 
   // Array field: Payload's look (Collapsible rows, drag handle, "..." row menu), sized for the
@@ -63,7 +63,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: calc(var(--base) * 0.4);
+    gap: calc(var(--spacer-3) * 0.4);
 
     > * {
       align-self: stretch;
@@ -94,14 +94,14 @@
       padding: 0;
       border: 0;
       background: none;
-      color: var(--theme-elevation-800);
+      color: var(--color-text);
       font: inherit;
       font-size: var(--be-text-m);
       cursor: pointer;
 
       &:hover,
       &:focus-visible {
-        color: var(--theme-elevation-600);
+        color: var(--color-text-secondary);
         text-decoration: underline;
       }
     }
@@ -122,24 +122,24 @@
   }
 
   .builder-field-array .builder-field-array__collapsible {
-    border-radius: var(--style-radius-s, 4px);
-    background: var(--theme-elevation-0);
+    border-radius: var(--radius-medium, 4px);
+    background: var(--color-bg);
 
     > .collapsible__toggle-wrap {
       gap: 2px;
       padding: 2px 4px;
-      border-top-left-radius: var(--style-radius-s, 4px);
-      border-top-right-radius: var(--style-radius-s, 4px);
+      border-top-left-radius: var(--radius-medium, 4px);
+      border-top-right-radius: var(--radius-medium, 4px);
       line-height: 24px;
 
       > .collapsible__toggle {
-        border-radius: var(--style-radius-s, 4px);
+        border-radius: var(--radius-medium, 4px);
       }
     }
 
     &.collapsible--collapsed > .collapsible__toggle-wrap {
-      border-bottom-left-radius: var(--style-radius-s, 4px);
-      border-bottom-right-radius: var(--style-radius-s, 4px);
+      border-bottom-left-radius: var(--radius-medium, 4px);
+      border-bottom-right-radius: var(--radius-medium, 4px);
     }
 
     // The toggle button covers the whole header. The handle sits above it, so a drag starts there.
@@ -152,8 +152,8 @@
       width: 20px;
       height: 20px;
       padding: 2px;
-      border-radius: var(--style-radius-s, 4px);
-      color: var(--theme-elevation-800);
+      border-radius: var(--radius-medium, 4px);
+      color: var(--color-text);
 
       &:hover {
         opacity: 1;
@@ -161,7 +161,7 @@
 
       &:focus-visible {
         opacity: 1;
-        outline: 2px solid var(--theme-elevation-400);
+        outline: 2px solid var(--color-text-tertiary);
       }
     }
 
@@ -181,15 +181,15 @@
 
     .collapsible__content {
       padding: 0;
-      border-bottom-left-radius: var(--style-radius-s, 4px);
-      border-bottom-right-radius: var(--style-radius-s, 4px);
+      border-bottom-left-radius: var(--radius-medium, 4px);
+      border-bottom-right-radius: var(--radius-medium, 4px);
     }
   }
 
   .builder-field-array__title {
     display: block;
     overflow: hidden;
-    color: var(--theme-text);
+    color: var(--color-text);
     font-size: var(--be-text-m);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -206,12 +206,12 @@
     border: 0;
     border-radius: 50%;
     background: none;
-    color: var(--theme-elevation-800);
+    color: var(--color-text);
     cursor: pointer;
 
     &:hover,
     &[aria-expanded='true'] {
-      background: var(--theme-elevation-0);
+      background: var(--color-bg);
     }
 
     // Near the inspector's right edge: the tooltip opens to the left.
@@ -225,14 +225,14 @@
   .builder-field-array__fields {
     display: flex;
     flex-direction: column;
-    gap: calc(var(--base) * 0.75);
+    gap: calc(var(--spacer-3) * 0.75);
     padding: 10px;
   }
 
   // The message under an input (`InputError`).
   .builder-field-error {
     margin: 4px 0 0;
-    color: var(--theme-error-500);
+    color: var(--color-bg-danger);
     font-size: var(--be-text-m);
   }
 
@@ -286,9 +286,9 @@
     justify-content: center;
     width: 20px;
     height: 20px;
-    border-radius: var(--style-radius-s);
-    color: var(--theme-elevation-600);
-    background: var(--theme-elevation-50);
+    border-radius: var(--radius-medium);
+    color: var(--color-text-secondary);
+    background: var(--color-bg-secondary);
     cursor: help;
   }
 

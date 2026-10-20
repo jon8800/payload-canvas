@@ -1,6 +1,10 @@
 # Payload Canvas
 
-**A visual drag-and-drop website builder for [Payload CMS](https://payloadcms.com) 3.**
+**A visual drag-and-drop website builder for [Payload CMS](https://payloadcms.com) 4 beta.**
+
+This branch prepares `payload-canvas@0.3.0-next.0` for Payload `4.0.0-beta.3`. It publishes only the plugin to npm's `next` tag.
+
+The bundled starter and `create-payload-canvas` still target Payload 3. They are outside this branch's workspace and prerelease workflow. Existing screenshots show the v3 release.
 
 <p align="center">
   <a href="docs/media/drag-and-drop.mp4"><img src="docs/media/drag-and-drop.gif" width="960" alt="Dragging a section on the canvas while the other sections slide out of the way, reordering it in the Layers tree, and dropping a ready-made section onto the page"></a>
@@ -34,7 +38,7 @@
 </table>
 </details>
 
-Install Payload Canvas as a plugin in any Payload app, or start from the starter app in this repository.
+Install `payload-canvas@next` in an existing Payload `4.0.0-beta.3` app. See [the prerelease notes](docs/payload-v4-next.md).
 
 - Editors build pages on a live canvas: drag blocks, nest them, style them, publish.
 - Developers keep full control: blocks are Payload field configs, components are plain React, styles are Tailwind classes.
@@ -45,9 +49,9 @@ Install Payload Canvas as a plugin in any Payload app, or start from the starter
 | Package | What it is |
 |---|---|
 | [`payload-canvas`](packages/payload-canvas/README.md) | The Payload plugin and the React renderer in one package: the full-screen builder, block definitions, the CSS compiler, live editing, the AI assistant, MCP tools, and `RenderLayout` with the default block components and the canvas runtime (`payload-canvas/react`). |
-| [`create-payload-canvas`](packages/create-payload-canvas/README.md) | A CLI that creates a new project from the starter app. |
+| [`create-payload-canvas`](packages/create-payload-canvas/README.md) | The existing v3 CLI. Excluded from this prerelease. |
 
-Requirements: Payload 3.90+, Next.js 16.3+, React 19.2+, Tailwind CSS 4.3+, Node.js 20.9+.
+Requirements: Payload `4.0.0-beta.3`, Next.js 16.4+, React 19.2+, Tailwind CSS 4.3+, Node.js 24.15+.
 
 ## Features
 

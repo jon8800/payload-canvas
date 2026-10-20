@@ -189,6 +189,20 @@ describe('loadTemplate', () => {
   const fallback = tpl(2, { isDefault: true })
   const payload = fakePayload([own, fallback, tpl(3, { isDefault: true, targetCollection: 'pages' })])
 
+  it('checks draft reads as the signed-in user and trusts only published templates', async () => {
+    const calls: Call[] = []
+    const user = { id: 'editor' }
+    const checkingPayload = fakePayload([own, fallback], calls)
+    await loadTemplate(checkingPayload, { collection: 'posts', doc: { template: 1 }, draft: true, user })
+    await loadTemplate(checkingPayload, { collection: 'posts', doc: {}, draft: true, user })
+    assert.equal(calls.length, 2)
+    assert.ok(calls.every((call) => call.overrideAccess === false && call.user === user))
+    calls.length = 0
+    await loadTemplate(checkingPayload, { collection: 'posts', doc: { template: 1 } })
+    assert.equal(calls[0]?.overrideAccess, true)
+    assert.equal(calls[0]?.draft, false)
+  })
+
   it('uses the document\'s own template first', async () => {
     const found = await loadTemplate(payload, { collection: 'posts', doc: { id: 1, template: 1 } })
     assert.equal(found?.template.id, 1)

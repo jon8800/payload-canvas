@@ -2,7 +2,7 @@
 // the request's user. Shared by the assistant tool, the editor's Generate action (endpoint) and the
 // MCP tool, so they share one hourly limit per user, kept in Payload's KV store. Server only.
 
-import type { KVAdapter, PayloadRequest } from 'payload'
+import type { Access, KVAdapter, PayloadRequest } from 'payload'
 
 import { isPlainObject } from '../../core/tree'
 import type { AiImageAdapter, AiImageAspectRatio, AiImageLimits, AiOptions } from '../types'
@@ -216,7 +216,7 @@ const failure = (code: GenerateImageErrorCode, status: number, message: string):
 type UploadConfig = {
   upload?: unknown
   fields: Array<{ name?: string; type?: string }>
-  access?: { create?: (args: { req: PayloadRequest; data?: unknown }) => unknown }
+  access?: { create?: Access }
 }
 
 const str = (value: unknown) => (typeof value === 'string' && value ? value : null)
@@ -291,7 +291,7 @@ export async function generateImageToMedia(req: PayloadRequest, service: ImageSe
   }
   try {
     const access = config.access?.create
-    const allowed = access ? await access({ req, data }) : Boolean(req.user)
+    const allowed = access ? await access({ req, data, slug }) : Boolean(req.user)
     if (!allowed) return failure('forbidden', 403, `You may not upload to "${slug}", so you cannot generate images there.`)
   } catch {
     return failure('forbidden', 403, `You may not upload to "${slug}", so you cannot generate images there.`)

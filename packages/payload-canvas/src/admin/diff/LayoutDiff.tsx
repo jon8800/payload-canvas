@@ -123,12 +123,12 @@ function ChangeRow({ change, settings }: { change: LayoutChange; settings: Local
 }
 
 export function LayoutDiff(props: FieldDiffServerProps<JSONField, JSONFieldClient>) {
-  const { comparisonValue, versionValue, field, clientField, i18n, locale, nestingLevel, selectedLocales } = props
+  const { valueFrom, valueTo, field, clientField, i18n, locale, nestingLevel, selectedLocales } = props
   const builder = field.admin?.custom?.builder as BuilderClientConfig | undefined
   const settings = builder?.localization ?? null
   // Translations follow the locales picked in the compare view; all of them when none are picked.
   const locales = settings && selectedLocales?.length ? selectedLocales : undefined
-  const changes = diffLayouts(comparisonValue, versionValue, { blocks: builder?.blocks ?? [], ...(locales ? { locales } : {}) })
+  const changes = diffLayouts(valueFrom, valueTo, { blocks: builder?.blocks ?? [], ...(locales ? { locales } : {}) })
   const label = fieldLabel(clientField?.label ?? field.label, i18n?.language ?? 'en', field.name)
 
   return (
@@ -146,7 +146,7 @@ export function LayoutDiff(props: FieldDiffServerProps<JSONField, JSONFieldClien
             ))}
           </ul>
         ) : null}
-        <LayoutJsonDiff from={comparisonValue} to={versionValue} />
+        <LayoutJsonDiff from={valueFrom} to={valueTo} />
       </div>
     </div>
   )

@@ -1,5 +1,28 @@
 # Releasing
 
+## Payload 4 prereleases
+
+On `release/payload-v4-next`, use `.github/workflows/publish-next.yml`. It publishes only `payload-canvas` with npm's `next` dist-tag.
+
+The bundled v3 starter and `create-payload-canvas` are excluded from this branch's workspace. Do not publish them as v4 packages.
+
+1. Update only `packages/payload-canvas/package.json` to a version such as `0.3.0-next.0`.
+2. Keep `publishConfig.tag` set to `next` and the Payload peer versions pinned to the tested beta.
+3. Run `pnpm install --frozen-lockfile`, then the plugin's test, typecheck and lint scripts.
+4. Run `pnpm pack:next`. Its prepack script builds the package and checks every public export.
+5. Run `node scripts/publish.mjs --dry-run --expect-version 0.3.0-next.0 dist-packages/payload-canvas-0.3.0-next.0.tgz`.
+6. After review, push the branch and the matching tag `v0.3.0-next.0`.
+
+Branch pushes and manual runs validate without publishing. Only a matching `v*-next.*` tag reaches the publish step.
+
+The workflow uses the existing repository secret `NPM_TOKEN` with `scripts/publish.mjs`. Local npm login is not required. The tarball path names exactly one plugin archive. Old tarballs in the folder cannot be published by this workflow.
+
+The two-package workflow rejects prerelease manifests on this branch. The stable `main` branch and existing npm `latest` versions remain unchanged.
+
+See [the prerelease notes](payload-v4-next.md) for the checked candidate and local commands.
+
+## Stable releases
+
 Pushing a version tag publishes `payload-canvas` and `create-payload-canvas` to npm. The workflow is `.github/workflows/publish.yml`. It tests, packs each package with `pnpm pack`, checks the versions against the tag, and publishes the tarballs with `scripts/publish.mjs`.
 
 `scripts/publish.mjs` sends a raw authenticated PUT to the npm registry. It does not use `npm publish`, because `npm publish` returns 403 on this account: security-key-only 2FA collides with the CLI's one-time-password flow. The registry accepts the same request from a granular token that has "bypass 2FA".

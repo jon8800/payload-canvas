@@ -11,10 +11,9 @@ import type { Layout } from '../../core'
 import { compilePageCss } from '../server'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-const starter = path.resolve(here, '../../../../../apps/starter')
-const entry = path.join(starter, 'src/app/(frontend)/globals.css')
-// The starter's entry uses the typography plugin, so the compile needs it in the plugins map.
-const plugins = { '@tailwindcss/typography': createRequire(path.join(starter, 'package.json'))('@tailwindcss/typography') as unknown }
+const fixture = path.resolve(here, '../../../test/fixtures')
+const entry = path.join(fixture, 'tailwind.css')
+const plugins = { '@tailwindcss/typography': createRequire(import.meta.url)('@tailwindcss/typography') as unknown }
 const blocks = defaultBlocks()
 
 const fake = (custom: Record<string, unknown>) => ({ config: { custom }, logger: { error() {} } }) as unknown as Payload

@@ -18,10 +18,10 @@
     padding: 4px 8px;
     overflow: visible;
     border: 0;
-    border-radius: var(--style-radius-s, 4px);
-    background: var(--theme-elevation-900);
-    color: var(--theme-elevation-0);
-    font-family: var(--font-body);
+    border-radius: var(--radius-medium, 4px);
+    background: var(--color-text);
+    color: var(--color-bg);
+    font-family: var(--text-body-family);
     font-size: var(--be-text-s);
     font-weight: var(--be-weight-medium);
     line-height: 16px;

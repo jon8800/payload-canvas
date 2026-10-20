@@ -1,10 +1,30 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import type { Where } from 'payload'
+import type { PayloadRequest, Where } from 'payload'
 
-import { decideForDraft } from './draftAccess'
+import { decideForDraft, DRAFT_NOT_READABLE_MESSAGE, liveReadProblem } from './draftAccess'
 
 const decide = (where: Where, drafts = true) => decideForDraft(where, 'layout', drafts)
+
+it('passes the collection slug and request to Payload 4 read access without bypassing a denial', async () => {
+  let allowed = false
+  let observed: { slug: string; req: PayloadRequest } | undefined
+  const req = {
+    user: { id: 'editor' },
+    payload: {
+      collections: {
+        pages: { config: { access: { read: (args: { slug: string; req: PayloadRequest }) => { observed = args; return allowed } } } },
+      },
+      find: () => { throw new Error('A boolean access result needs no database lookup') },
+    },
+  } as unknown as PayloadRequest
+  const target = { collection: 'pages', id: 'page', field: 'layout', drafts: true }
+  assert.equal(await liveReadProblem(req, target), DRAFT_NOT_READABLE_MESSAGE)
+  assert.equal(observed?.slug, 'pages')
+  assert.equal(observed?.req, req)
+  allowed = true
+  assert.equal(await liveReadProblem(req, target), null)
+})
 
 describe('decideForDraft: `_status` conditions decided for a draft', () => {
   it('decides each status operator for "draft"', () => {

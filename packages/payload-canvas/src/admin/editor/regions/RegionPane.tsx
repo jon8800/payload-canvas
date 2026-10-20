@@ -79,7 +79,7 @@ export function RegionPane({ regions, name }: { regions: RegionsController; name
         ) : (
           <p className="builder-editor__hint">It has no fields to edit.</p>
         )}
-        <Button buttonStyle="secondary" size="small" margin={false} onClick={() => editRegionFields(runtime, regions, region.name)}>
+        <Button buttonStyle="secondary" size="medium" margin={false} onClick={() => editRegionFields(runtime, regions, region.name)}>
           Edit fields in the settings
         </Button>
       </div>

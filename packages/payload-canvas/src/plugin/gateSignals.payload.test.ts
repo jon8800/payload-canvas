@@ -5,7 +5,7 @@
 
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { buildConfig, commitTransaction, createLocalReq, getPayload, initTransaction, type CollectionConfig, type Payload } from 'payload'
+import { buildConfig, commitTransaction, createPayloadRequest, getPayload, initTransaction, type CollectionConfig, type Payload } from 'payload'
 
 import { defaultWriteGate } from '../live/writeGate'
 import { memoryAdapter } from './memoryAdapter.test-data'
@@ -58,7 +58,7 @@ describe('the write gate without the plugin onInit', () => {
     const payload = await instance(slug, { disableOnInit: true })
     const doc = await payload.create({ collection: slug as never, draft: true, overrideAccess: true, data: { title: 'Seed' } as never })
     for (const name of ['migration-1', 'migration-2']) {
-      const req = await createLocalReq({}, payload)
+      const req = await createPayloadRequest({ payload })
       await initTransaction(req)
       await timed(async () => {
         await update(payload, slug, doc.id, name, req)
@@ -96,7 +96,7 @@ describe('the write gate without the plugin onInit', () => {
     const slug = 'pages-prod'
     const payload = await instance(slug, { disableOnInit: true })
     const doc = await payload.create({ collection: slug as never, draft: true, overrideAccess: true, data: { title: 'Seed' } as never })
-    const req = await createLocalReq({}, payload)
+    const req = await createPayloadRequest({ payload })
     await initTransaction(req)
     await timed(async () => {
       await update(payload, slug, doc.id, 'migrated', req)

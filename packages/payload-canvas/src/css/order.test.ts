@@ -14,9 +14,9 @@ import { BUILDER_CSS_CLASS, compileClasses, getCanvasCssInput, withBuilderCssCla
 import { compileFromInput, countUtilityLayers, extractUtilities, splitTopLevel } from './shared'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-const starter = path.resolve(here, '../../../../apps/starter')
-const entry = path.join(starter, 'src/app/(frontend)/globals.css')
-const typography: unknown = createRequire(path.join(starter, 'package.json'))('@tailwindcss/typography')
+const fixture = path.resolve(here, '../../test/fixtures')
+const entry = path.join(fixture, 'tailwind.css')
+const typography: unknown = createRequire(import.meta.url)('@tailwindcss/typography')
 const plugins = { '@tailwindcss/typography': typography }
 const options = { entry, plugins }
 

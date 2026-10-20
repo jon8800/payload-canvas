@@ -132,8 +132,9 @@ describe('rich text round trip', () => {
   })
 
   test('JSON Lexical cannot read is refused', () => {
-    const editor = createRichEditor({ root: { type: 'root', children: [{ type: 'text' }] } }, () => undefined)
+    const editor = load(PAYLOAD_STATE)
     assert.equal(loadValue(editor, { root: { type: 'nope', children: 5 } }), false)
+    assert.deepEqual(json(editor), PAYLOAD_STATE, 'a failed parse never replaces existing content')
   })
 })
 

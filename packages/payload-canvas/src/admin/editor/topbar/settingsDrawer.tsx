@@ -70,7 +70,7 @@ function SaveBeforeClose() {
   const {
     config: { routes },
   } = useConfig()
-  const { code: locale } = useLocale()
+  const locale = useLocale()?.code
   const drafts = (docConfig as { versions?: { drafts?: { autosave?: unknown; validate?: unknown } | boolean } } | undefined)?.versions?.drafts
   const autosave = typeof drafts === 'object' && Boolean(drafts.autosave)
   const validate = typeof drafts === 'object' && Boolean(drafts.validate)
@@ -178,7 +178,7 @@ function StaleSaveBanner() {
         if you need it.
       </p>
       {reload && (
-        <Button buttonStyle="secondary" size="small" margin={false} className="builder-stale-save__reload" onClick={reload}>
+        <Button buttonStyle="secondary" size="medium" margin={false} className="builder-stale-save__reload" onClick={reload}>
           Reload with their changes
         </Button>
       )}

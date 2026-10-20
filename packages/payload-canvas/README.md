@@ -15,11 +15,11 @@
   </tr>
 </table>
 
-A visual page builder for Payload CMS 3. It adds a full-screen builder to the collections you choose. Editors drag blocks onto a live canvas, nest them without limit, and style them with Tailwind classes. AI agents can build and edit the same pages over MCP, and an open editor shows each AI change as it happens.
+A visual page builder for Payload CMS 4 beta. It adds a full-screen builder to the collections you choose. Editors drag blocks onto a live canvas, nest them without limit, and style them with Tailwind classes. AI agents can build and edit the same pages over MCP, and an open editor shows each AI change as it happens.
 
 The npm package is `payload-canvas`.
 
-- Works in any Payload 3.90+ app on Next.js 16 and React 19.
+- This prerelease targets Payload `4.0.0-beta.3`, Next.js `16.4+` and React 19.
 - The layout is one JSON field per document. Nothing changes in your other fields.
 - The site renders the layout with `payload-canvas/react` (React Server Components), or with your own renderer.
 - Save, drafts, autosave, versions and access control stay Payload's own.
@@ -27,11 +27,9 @@ The npm package is `payload-canvas`.
 
 One package holds everything: the Payload plugin and admin editor (`payload-canvas`), and the React renderer and canvas runtime for your site (`payload-canvas/react`). See [Entry points](#entry-points).
 
-**Quick start.** Add the builder to an existing Payload app with the [install guide](#install) (about ten minutes). Or create a new project from the starter app:
+**Quick start.** Add `payload-canvas@next` to an existing Payload `4.0.0-beta.3` app with the [install guide](#install).
 
-```bash
-npx create-payload-canvas my-website
-```
+The bundled starter and `create-payload-canvas@latest` still target Payload 3. This prerelease publishes only the plugin.
 
 ## Contents
 
@@ -64,43 +62,37 @@ npx create-payload-canvas my-website
 
 ## Requirements
 
-- `payload`, `@payloadcms/ui`, `@payloadcms/richtext-lexical` 3.90 or later (Payload 3 only, not the Payload 4 canary)
-- `next` 16.3 or later, `react` and `react-dom` 19.2 or later
+- `payload`, `@payloadcms/ui`, `@payloadcms/richtext-lexical` exactly `4.0.0-beta.3`
+- `next` 16.4 or later, `react` and `react-dom` 19.2 or later
 - `tailwindcss` 4.3 or later (the plugin compiles your Tailwind entry CSS)
-- Node.js 20.9 or later
+- Node.js 24.15 or later; TypeScript 6.0.3 or later for source development
 - Any Payload database adapter. Postgres and SQLite store the layout as `jsonb`/JSON.
 
-You do not need `transpilePackages` or a `sass` install. The package ships compiled JavaScript. The admin styles are `.scss` files, and Next compiles them with the `sass` that `@payloadcms/next` already installs, the same way it compiles Payload's own admin styles.
+The package ships compiled JavaScript. Its admin styles remain SCSS and use Payload 4 semantic tokens. Payload 4's own admin uses CSS. Install `sass` if your app does not already provide it.
 
 Peer dependencies:
 
 | Package | Range | Needed for |
 |---|---|---|
-| `payload`, `@payloadcms/ui`, `@payloadcms/richtext-lexical` | `^3.90.0` | everything |
-| `next` | `^16.3.0` | everything |
+| `payload`, `@payloadcms/ui`, `@payloadcms/richtext-lexical` | `4.0.0-beta.3` | everything |
+| `next` | `^16.4.0` | everything |
 | `react`, `react-dom` | `^19.2.0` | everything |
 | `tailwindcss` | `^4.3.0` | the CSS compile on save and in the canvas |
 | `@anthropic-ai/sdk` | `>=0.131.0`, optional | only the `/ai/anthropic` adapter |
-| `payload-mcp-toolkit` | `>=0.9.0`, optional | only `builderMcpTools()` (`/mcp`) |
+| `payload-mcp-toolkit` | `0.10.0-next.0`, optional | only `builderMcpTools()` (`/mcp`) |
 | `zod` | `^3.25 \|\| ^4`, optional | only `builderMcpTools()` (`/mcp`) |
 
 ## Install
 
-These steps start from a blank Payload app with Postgres:
-
-```bash
-npx create-payload-app@latest -n my-site -t blank --db postgres --use-pnpm
-```
-
-They were tested step by step on such an app with Payload 3.90.2, Next.js 16.3.3, React 19.2.6, Tailwind 4.3.3, TypeScript 5.7 and pnpm 10, in `next dev` and in `next build` + `next start`. An existing Payload app works the same way: skip what you already have.
+These steps start from an existing Payload `4.0.0-beta.3` app. Keep every `@payloadcms/*` package on that exact beta version.
 
 ### 1. Add the package
 
 ```bash
-pnpm add payload-canvas tailwindcss @tailwindcss/postcss postcss
+pnpm add payload-canvas@next tailwindcss @tailwindcss/postcss postcss sass
 ```
 
-With npm: `npm install payload-canvas tailwindcss @tailwindcss/postcss postcss`.
+With npm: `npm install payload-canvas@next tailwindcss @tailwindcss/postcss postcss sass`.
 
 ### 2. Add a collection with pages
 

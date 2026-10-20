@@ -2,7 +2,7 @@
 
 import { Combobox } from '@base-ui/react/combobox'
 import { useField } from '@payloadcms/ui'
-import type { TextFieldClientComponent } from 'payload'
+import type { TextFieldClientProps } from 'payload'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { googleFontsHref } from '../css'
@@ -27,7 +27,7 @@ function loadPreview(family: string) {
 }
 
 /** A Google Font family: a searchable list that previews each font in its own typeface. */
-export const ThemeFontField: TextFieldClientComponent = function ThemeFontField({ path, field, readOnly }) {
+export function ThemeFontField({ path, field, readOnly }: TextFieldClientProps) {
   const { value, setValue, disabled } = useField<string>({ path })
   const locked = Boolean(readOnly || disabled)
   const [query, setQuery] = useState('')

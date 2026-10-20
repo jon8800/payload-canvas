@@ -93,6 +93,18 @@ const page = (props: Record<string, unknown>, extra: Partial<Layout['blocks'][nu
   blocks: [{ id: 's', type: 'stack', slots: { children: [{ id: 'p', type: 'product', props, ...extra }] } }],
 })
 
+it('passes the validate operation through block hooks and validators', async () => {
+  const { blocks, slugHook, skuValidate } = productBlocks()
+  const registry = captureFieldSemantics(blocks)
+  const layout = page({ slug: ' New Slug ', sku: 'BAD' })
+  const context = ctx({ operation: 'validate' })
+  await runPropHooks('beforeChange', layout, { blocks, registry, ctx: context })
+  const errors = await runPropValidators(layout, { blocks, registry, ctx: context })
+  assert.equal(slugHook.calls[0]?.operation, 'validate')
+  assert.equal(skuValidate.calls[0]?.operation, 'validate')
+  assert.ok(errors.some((error) => error.message === 'Use a SKU like ABC-123'))
+})
+
 describe('captureFieldSemantics', () => {
   it('reads validate, hooks and access at every depth, and the block types that have them', () => {
     const { blocks } = productBlocks()
@@ -352,6 +364,7 @@ describe('field access', () => {
     assert.deepEqual(findBlock(layout, 'p')?.props, { sku: 'ABC-123' })
     const call = noteRead.calls[0]
     assert.equal(call.id, 'p1')
+    assert.deepEqual(call.collection, { slug: 'pages' })
     assert.equal((call.blockData as Args).blockType, 'productBlock')
     const admin = page({ note: 'secret' })
     assert.equal(await filterUnreadableProps(admin, { blocks, registry, ctx: ctx(), doc: {} }), false)

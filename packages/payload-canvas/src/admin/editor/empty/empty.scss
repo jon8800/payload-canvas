@@ -24,7 +24,7 @@
     border: 1px solid var(--be-border);
     border-radius: var(--be-radius-m);
     background: var(--be-panel);
-    color: var(--theme-text);
+    color: var(--color-text);
     box-shadow: var(--be-shadow);
     text-align: center;
     pointer-events: auto;
@@ -44,7 +44,7 @@
   .builder-empty-start__title {
     margin: 0;
     // Payload's h4 size (16px): the start card's title is a page-level heading, not panel text.
-    font-size: calc(var(--base) * 0.8);
+    font-size: calc(var(--spacer-3) * 0.8);
     font-weight: var(--be-weight-strong);
     line-height: 1.35;
     text-wrap: balance;
@@ -53,7 +53,7 @@
   .builder-empty-start__text {
     max-width: 48ch;
     margin: 0;
-    color: var(--theme-elevation-650);
+    color: var(--color-text-secondary);
     font-size: var(--be-text-m);
     line-height: 1.5;
     text-wrap: balance;

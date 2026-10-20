@@ -4,7 +4,7 @@
 
 import assert from 'node:assert/strict'
 import { before, describe, it } from 'node:test'
-import { buildConfig, createLocalReq, getPayload, handleEndpoints, type Block, type CollectionConfig, type Payload, type PayloadRequest } from 'payload'
+import { buildConfig, createPayloadRequest, getPayload, handleEndpoints, type Block, type CollectionConfig, type Payload, type PayloadRequest } from 'payload'
 
 import { fromPayloadBlocks } from '../blocks/payload'
 import type { Layout } from '../core/types'
@@ -118,7 +118,7 @@ async function openSession(collection: string, id: number | string) {
 }
 
 const textOf = (layout: Layout | undefined) => layout?.blocks[0]?.props?.text
-const asAdmin = async () => (await createLocalReq({ user: admin as never }, payload)) as PayloadRequest
+const asAdmin = async () => (await createPayloadRequest({ user: admin as never, payload })) as PayloadRequest
 
 /** The newest version of `collection`/`id` whose stored values match `pick`. */
 async function versionWhere(collection: string, id: number | string, pick: (version: Record<string, unknown>) => boolean) {
@@ -386,12 +386,12 @@ describe('bulk updates of a builder collection', () => {
       const versions = await versionCount(collection, id)
       const stored = await storedDraft(collection, id)
       const where = { id: { equals: id } }
-      // The Local API, with overrideAccess (its default): Payload's own `disableBulkEdit` check does not run.
-      const local = await failure(() => payload.update({ collection: collection as never, where, data: { title: 'Bulk' } as never }))
+      // Explicit trusted access: Payload's own `disableBulkEdit` check does not run.
+      const local = await failure(() => payload.update({ collection: collection as never, where, overrideAccess: true, data: { title: 'Bulk' } as never }))
       assert.equal(local?.status, 409)
       assert.match(local?.message ?? '', /Update each document by ID\./)
       // An id of 0 runs the bulk update in the Local API.
-      const zero = await failure(() => payload.update({ collection, id: 0, where, data: { title: 'Bulk' } } as never))
+      const zero = await failure(() => payload.update({ collection, id: 0, where, overrideAccess: true, data: { title: 'Bulk' } } as never))
       assert.equal(zero?.status, 409)
       // A user's bulk update: Payload refuses it first (`disableBulkEdit`).
       const asUser = await failure(() => payload.update({ collection: collection as never, where, data: { title: 'Bulk' } as never, overrideAccess: false, user: admin as never }))
@@ -414,7 +414,7 @@ describe('bulk updates of a builder collection', () => {
       assert.equal(after.title, stored.title)
       assert.equal(after.updatedAt, stored.updatedAt)
       // An update by ID works as before.
-      await payload.update({ collection: collection as never, id, draft: true, data: { title: 'By ID' } as never })
+      await payload.update({ collection: collection as never, id, draft: true, overrideAccess: true, data: { title: 'By ID' } as never })
       assert.equal((await storedDraft(collection, id)).title, 'By ID')
     })
   }

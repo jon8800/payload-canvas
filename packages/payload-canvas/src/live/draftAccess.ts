@@ -112,7 +112,7 @@ export async function liveReadProblem(req: PayloadRequest, target: Target): Prom
   const config = (req.payload.collections as Record<string, { config: { access?: { read?: ReadAccess } } } | undefined>)[target.collection]?.config
   if (!config) return DRAFT_NOT_READABLE_MESSAGE
   // Without `access.read` (never after Payload's sanitizing), executeAccess allows signed-in users.
-  const result: unknown = await executeAccess({ id: target.id, collectionConfig: config as never, disableErrors: true, req }, config.access?.read as ReadAccess)
+  const result: unknown = await executeAccess({ id: target.id, slug: target.collection, disableErrors: true, req }, config.access?.read as ReadAccess)
   if (!result) return DRAFT_NOT_READABLE_MESSAGE
   // As in Payload: anything but a Where that is not false allows.
   if (typeof result !== 'object') return null

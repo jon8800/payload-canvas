@@ -1,7 +1,7 @@
 {
   "name": "payload-canvas",
-  "version": "0.2.0",
-  "description": "Payload Canvas: a visual drag-and-drop website builder for Payload CMS 3. Nested layout blocks, Tailwind styling, sections, templates, live AI editing over MCP, and the React renderer for your site.",
+  "version": "0.3.0-next.0",
+  "description": "Payload Canvas: a visual drag-and-drop website builder for Payload CMS 4 beta. Nested layout blocks, Tailwind styling, sections, templates, live AI editing over MCP, and the React renderer for your site.",
   "keywords": [
     "payload",
     "payloadcms",
@@ -173,7 +173,8 @@
         "types": "./dist/react/server.d.ts",
         "default": "./dist/react/server.js"
       }
-    }
+    },
+    "tag": "next"
   },
   "files": [
     "dist",
@@ -186,28 +187,28 @@
     "prepublishOnly": "node ../../scripts/check-publish.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint",
-    "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "test": "node --import tsx --test --test-concurrency=4 \"src/**/*.test.ts\"",
     "generate:fonts": "node scripts/generate-google-fonts.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
     "@dnd-kit/core": "6.3.1",
-    "@lexical/history": "0.50.0",
-    "@lexical/list": "0.50.0",
-    "@lexical/rich-text": "0.50.0",
-    "@lexical/selection": "0.50.0",
-    "@lexical/utils": "0.50.0",
-    "lexical": "0.50.0",
+    "@lexical/history": "0.52.0",
+    "@lexical/list": "0.52.0",
+    "@lexical/rich-text": "0.52.0",
+    "@lexical/selection": "0.52.0",
+    "@lexical/utils": "0.52.0",
+    "lexical": "0.52.0",
     "motion": "^14.0.0",
     "react-colorful": "^5.8.1"
   },
   "peerDependencies": {
     "@anthropic-ai/sdk": ">=0.131.0",
-    "@payloadcms/richtext-lexical": "^3.90.0",
-    "@payloadcms/ui": "^3.90.0",
-    "next": "^16.3.0",
-    "payload": "^3.90.0",
-    "payload-mcp-toolkit": ">=0.9.0",
+    "@payloadcms/richtext-lexical": "4.0.0-beta.3",
+    "@payloadcms/ui": "4.0.0-beta.3",
+    "next": "^16.4.0",
+    "payload": "4.0.0-beta.3",
+    "payload-mcp-toolkit": "0.10.0-next.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "tailwindcss": "^4.3.0",
@@ -226,23 +227,27 @@
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
-    "@payloadcms/richtext-lexical": "^3.90.2",
-    "@payloadcms/ui": "^3.90.2",
+    "@payloadcms/richtext-lexical": "4.0.0-beta.3",
+    "@payloadcms/ui": "4.0.0-beta.3",
+    "@tailwindcss/typography": "0.5.20",
     "@types/node": "^24",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "google-font-metadata": "^6.0.8",
-    "next": "16.3.8",
+    "graphql": "16.14.2",
+    "monaco-editor": "0.57.0",
+    "next": "16.4.2",
     "oxlint": "^1.86.0",
-    "payload": "^3.90.2",
-    "react": "19.3.0",
-    "react-dom": "19.3.0",
+    "payload": "4.0.0-beta.3",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.15",
-    "typescript": "7.0.2",
+    "typescript": "6.0.3",
+    "yjs": "13.6.33",
     "zod": "^3.25.76"
   },
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=24.15.0"
   }
 }

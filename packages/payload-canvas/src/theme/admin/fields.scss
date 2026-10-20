@@ -1,50 +1,50 @@
 // Theme fields in Payload's admin. Payload CSS variables only, no Tailwind.
 @layer payload-default {
   .theme-field {
-    margin-bottom: var(--spacing-field, calc(var(--base) * 1.5));
+    margin-bottom: var(--spacing-field, calc(var(--spacer-3) * 1.5));
   }
 
   // Shared look of the text inputs, close to Payload's own inputs.
   %theme-input {
-    height: calc(var(--base) * 2);
-    padding: 0 calc(var(--base) * 0.5);
-    border: 1px solid var(--theme-elevation-150);
-    border-radius: var(--style-radius-s, var(--border-radius-m));
-    background: var(--theme-input-bg);
-    color: var(--theme-text);
+    height: calc(var(--spacer-3) * 2);
+    padding: 0 calc(var(--spacer-3) * 0.5);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-medium, var(--radius-medium));
+    background: var(--color-bg);
+    color: var(--color-text);
     font: inherit;
-    font-size: var(--font-body-size-m, 13px);
+    font-size: var(--text-body-medium-font-size, 13px);
     box-sizing: border-box;
     outline: none;
 
     &:hover {
-      border-color: var(--theme-elevation-250);
+      border-color: var(--color-border);
     }
 
     &:focus {
-      border-color: var(--theme-elevation-400);
+      border-color: var(--color-text-tertiary);
     }
 
     &:disabled {
-      background: var(--theme-elevation-50);
-      color: var(--theme-elevation-500);
+      background: var(--color-bg-secondary);
+      color: var(--color-text-secondary);
     }
   }
 
   %theme-quiet-button {
     flex-shrink: 0;
-    padding: calc(var(--base) * 0.25) calc(var(--base) * 0.5);
+    padding: calc(var(--spacer-3) * 0.25) calc(var(--spacer-3) * 0.5);
     border: none;
-    border-radius: var(--style-radius-s, var(--border-radius-m));
+    border-radius: var(--radius-medium, var(--radius-medium));
     background: none;
-    color: var(--theme-elevation-600);
+    color: var(--color-text-secondary);
     font: inherit;
-    font-size: var(--font-body-size-s, 12px);
+    font-size: var(--text-body-small-font-size, 12px);
     cursor: pointer;
 
     &:hover {
-      background: var(--theme-elevation-100);
-      color: var(--theme-text);
+      background: var(--color-bg-hover);
+      color: var(--color-text);
     }
   }
 
@@ -54,9 +54,9 @@
   }
 
   %theme-popup {
-    border: 1px solid var(--theme-elevation-150);
-    border-radius: var(--style-radius-m, var(--border-radius-m));
-    background: var(--theme-elevation-0);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-large, var(--radius-medium));
+    background: var(--color-bg);
     box-shadow: 0 6px 20px rgb(0 0 0 / 14%);
   }
 
@@ -66,24 +66,24 @@
     &__controls {
       display: flex;
       align-items: center;
-      gap: calc(var(--base) * 0.5);
+      gap: calc(var(--spacer-3) * 0.5);
     }
 
     &__swatch {
       flex-shrink: 0;
-      width: calc(var(--base) * 2);
-      height: calc(var(--base) * 2);
+      width: calc(var(--spacer-3) * 2);
+      height: calc(var(--spacer-3) * 2);
       padding: 0;
-      border: 1px solid var(--theme-elevation-200);
-      border-radius: var(--style-radius-s, var(--border-radius-m));
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-medium, var(--radius-medium));
       cursor: pointer;
 
       &:hover {
-        box-shadow: 0 0 0 2px var(--theme-elevation-150);
+        box-shadow: 0 0 0 2px var(--color-border);
       }
 
       &:focus-visible {
-        outline: 2px solid var(--theme-elevation-500);
+        outline: 2px solid var(--color-text-secondary);
         outline-offset: 2px;
       }
 
@@ -92,24 +92,24 @@
         background: linear-gradient(
           to top right,
           transparent calc(50% - 1px),
-          var(--theme-error-500) calc(50% - 1px),
-          var(--theme-error-500) calc(50% + 1px),
+          var(--color-bg-danger) calc(50% - 1px),
+          var(--color-bg-danger) calc(50% + 1px),
           transparent calc(50% + 1px)
         ),
-        var(--theme-input-bg);
+        var(--color-bg);
       }
     }
 
     &__hex {
       @extend %theme-input;
-      width: calc(var(--base) * 6);
-      font-family: var(--font-mono, monospace);
+      width: calc(var(--spacer-3) * 6);
+      font-family: var(--text-mono-family, monospace);
     }
 
     &__popup {
       @extend %theme-popup;
       width: 224px;
-      padding: calc(var(--base) * 0.5);
+      padding: calc(var(--spacer-3) * 0.5);
 
       .react-colorful {
         width: 100%;
@@ -135,20 +135,20 @@
       display: grid;
       grid-template-columns: repeat(6, 1fr);
       gap: 4px;
-      margin: calc(var(--base) * 0.5) 0;
+      margin: calc(var(--spacer-3) * 0.5) 0;
     }
 
     &__preset {
       width: 100%;
       aspect-ratio: 1;
       padding: 0;
-      border: 1px solid var(--theme-elevation-150);
+      border: 1px solid var(--color-border);
       border-radius: 4px;
       cursor: pointer;
 
       &:hover,
       &:focus-visible {
-        border-color: var(--theme-elevation-500);
+        border-color: var(--color-text-secondary);
         outline: none;
       }
     }
@@ -165,7 +165,7 @@
     &__row {
       display: flex;
       align-items: center;
-      gap: calc(var(--base) * 0.5);
+      gap: calc(var(--spacer-3) * 0.5);
     }
 
     &__input {
@@ -194,12 +194,12 @@
     &__option {
       display: block;
       padding: 6px 10px;
-      color: var(--theme-text);
+      color: var(--color-text);
       font-size: 15px;
       cursor: pointer;
 
       &[data-highlighted] {
-        background: var(--theme-elevation-100);
+        background: var(--color-bg-hover);
       }
 
       &[data-selected] {
@@ -209,13 +209,13 @@
 
     &__empty:not(:empty) {
       padding: 8px 10px;
-      color: var(--theme-elevation-500);
-      font-size: var(--font-body-size-s, 12px);
+      color: var(--color-text-secondary);
+      font-size: var(--text-body-small-font-size, 12px);
     }
 
     &__preview {
-      margin-top: calc(var(--base) * 0.5);
-      color: var(--theme-text);
+      margin-top: calc(var(--spacer-3) * 0.5);
+      color: var(--color-text);
       font-size: 16px;
     }
   }
@@ -226,7 +226,7 @@
     &__controls {
       display: flex;
       align-items: center;
-      gap: calc(var(--base) * 0.5);
+      gap: calc(var(--spacer-3) * 0.5);
       max-width: 480px;
     }
 
@@ -234,13 +234,13 @@
 
     &__number {
       @extend %theme-input;
-      width: calc(var(--base) * 3.5);
+      width: calc(var(--spacer-3) * 3.5);
       text-align: right;
     }
 
     &__unit {
-      color: var(--theme-elevation-500);
-      font-size: var(--font-body-size-s, 12px);
+      color: var(--color-text-secondary);
+      font-size: var(--text-body-small-font-size, 12px);
     }
 
     &__reset {

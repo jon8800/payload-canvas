@@ -20,7 +20,7 @@ function fakeReq(options: { user?: Record<string, unknown> | null; canCreate?: b
   const user = options.user === undefined ? { id: 'u1', collection: 'users', email: 'a@b.c' } : options.user
   const payload = {
     collections: {
-      media: { config: { slug: 'media', upload: { mimeTypes: ['image/*'] }, fields: options.fields ?? [{ name: 'alt', type: 'text' }], access: { create: ({ req }: { req: PayloadRequest }) => Boolean(req.user) && options.canCreate !== false } } },
+      media: { config: { slug: 'media', upload: { mimeTypes: ['image/*'] }, fields: options.fields ?? [{ name: 'alt', type: 'text' }], access: { create: ({ req, slug }: { req: PayloadRequest; slug: string }) => Boolean(req.user) && slug === 'media' && options.canCreate !== false } } },
       docs: { config: { slug: 'docs', upload: { mimeTypes: ['application/pdf'] }, fields: [] } },
       pages: { config: { slug: 'pages', fields: [] } },
     },

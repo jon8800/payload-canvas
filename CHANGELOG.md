@@ -4,6 +4,23 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ## [Unreleased]
 
+## [0.3.0-next.0] - 2026-10-20
+
+This prerelease contains only `payload-canvas`. `create-payload-canvas` and the bundled starter remain on Payload 3.
+
+### Changed
+
+- Target Payload `4.0.0-beta.3`, Next.js 16.4+, Node.js 24.15+ and Lexical 0.52.
+- Use Payload 4 semantic tokens in the admin styles. The plugin's styles remain SCSS.
+- Update public admin props, access arguments, version comparison props and the `validate` hook operation for Payload 4.
+- Keep draft template and related-document reads under the supplied user's access.
+- Publish plugin prereleases through a separate workflow with the `next` dist-tag.
+
+### Fixed
+
+- Reject incomplete Lexical parses before they replace existing rich text.
+- Resolve string block references when checking field access for Payload 4 blocks.
+
 ## [0.2.0] - 2026-10-16
 
 ### Added

@@ -196,6 +196,8 @@ export async function loadLayoutData(
       pagination: false,
       // Join fields (for example media's "Used in") are not needed to render; skip their subqueries.
       joins: false,
+      overrideAccess: false,
+      user: options?.user as never,
       ...locale,
     })
     return new Map(

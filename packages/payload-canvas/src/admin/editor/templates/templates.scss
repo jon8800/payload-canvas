@@ -17,7 +17,7 @@
   .builder-bind__stack {
     display: flex;
     flex-direction: column;
-    gap: calc(var(--base) * 0.5);
+    gap: calc(var(--spacer-3) * 0.5);
   }
 
   // The bind button sits on the label row of the input it binds. (`[data-tooltip]` sets relative.)
@@ -45,9 +45,9 @@
     height: 22px;
     padding: 0;
     border: 1px solid transparent;
-    border-radius: var(--style-radius-s, 4px);
+    border-radius: var(--radius-medium, 4px);
     background: transparent;
-    color: var(--theme-elevation-400);
+    color: var(--color-text-tertiary);
     cursor: pointer;
     transition:
       color 120ms ease,
@@ -56,14 +56,14 @@
 
     &:hover,
     &[aria-expanded='true'] {
-      border-color: color-mix(in srgb, var(--theme-success-500) 40%, transparent);
-      background: color-mix(in srgb, var(--theme-success-500) 12%, transparent);
-      color: var(--theme-success-600);
+      border-color: color-mix(in srgb, var(--color-bg-success) 40%, transparent);
+      background: color-mix(in srgb, var(--color-bg-success) 12%, transparent);
+      color: var(--color-text-success);
     }
   }
 
   .builder-bind:hover > .builder-bind__button {
-    color: var(--theme-elevation-700);
+    color: var(--color-text);
   }
 
   .builder-bind--bound {
@@ -76,19 +76,19 @@
     align-items: center;
     min-width: 0;
     min-height: 34px;
-    border: 1px solid color-mix(in srgb, var(--theme-success-500) 45%, transparent);
-    border-radius: var(--style-radius-s, 4px);
-    background: color-mix(in srgb, var(--theme-success-500) 10%, var(--theme-input-bg, var(--theme-elevation-0)));
-    color: var(--theme-text);
+    border: 1px solid color-mix(in srgb, var(--color-bg-success) 45%, transparent);
+    border-radius: var(--radius-medium, 4px);
+    background: color-mix(in srgb, var(--color-bg-success) 10%, var(--color-bg, var(--color-bg)));
+    color: var(--color-text);
   }
 
   .builder-bind__chip--missing,
   .builder-bind__select--missing {
-    border-color: color-mix(in srgb, var(--theme-warning-500, var(--theme-error-500)) 55%, transparent);
-    background: color-mix(in srgb, var(--theme-warning-500, var(--theme-error-500)) 10%, transparent);
+    border-color: color-mix(in srgb, var(--color-bg-warning, var(--color-bg-danger)) 55%, transparent);
+    background: color-mix(in srgb, var(--color-bg-warning, var(--color-bg-danger)) 10%, transparent);
 
     svg:first-child {
-      color: var(--theme-warning-600, var(--theme-error-500));
+      color: var(--color-text-warning, var(--color-bg-danger));
     }
   }
 
@@ -110,7 +110,7 @@
 
     > svg:first-child {
       flex: none;
-      color: var(--theme-success-600);
+      color: var(--color-text-success);
     }
 
     &:disabled {
@@ -121,12 +121,12 @@
   .builder-bind__select {
     flex: none;
     width: 100%;
-    border-color: var(--theme-elevation-150);
-    background: var(--theme-input-bg, var(--theme-elevation-0));
+    border-color: var(--color-border);
+    background: var(--color-bg, var(--color-bg));
 
     &:hover,
     &[aria-expanded='true'] {
-      border-color: var(--theme-elevation-250);
+      border-color: var(--color-border);
     }
   }
 
@@ -149,8 +149,8 @@
     margin-left: auto;
     overflow: hidden;
     padding: 1px 0;
-    color: var(--theme-elevation-600);
-    font-family: var(--font-mono, monospace);
+    color: var(--color-text-secondary);
+    font-family: var(--text-mono-family, monospace);
     font-size: var(--be-text-s);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -158,13 +158,13 @@
 
   .builder-bind__placeholder {
     flex: 1;
-    color: var(--theme-elevation-600);
+    color: var(--color-text-secondary);
   }
 
   .builder-bind__select-caret {
     flex: none;
     margin-left: 4px;
-    color: var(--theme-elevation-600);
+    color: var(--color-text-secondary);
   }
 
   .builder-bind__chip-x {
@@ -176,26 +176,26 @@
     margin-right: 4px;
     padding: 0;
     border: 0;
-    border-radius: var(--style-radius-s, 4px);
+    border-radius: var(--radius-medium, 4px);
     background: none;
-    color: var(--theme-elevation-600);
+    color: var(--color-text-secondary);
     cursor: pointer;
 
     &:hover {
-      background: var(--theme-elevation-100);
-      color: var(--theme-error-500);
+      background: var(--color-bg-hover);
+      color: var(--color-bg-danger);
     }
   }
 
   .builder-bind__note {
     margin: 0;
-    color: var(--theme-elevation-600);
+    color: var(--color-text-secondary);
     font-size: var(--be-text-m);
     line-height: 1.45;
   }
 
   .builder-bind__note--warn {
-    color: var(--theme-warning-600, var(--theme-error-500));
+    color: var(--color-text-warning, var(--color-bg-danger));
   }
 
   .builder-bind__preview {
@@ -205,13 +205,13 @@
     min-width: 0;
     padding: 6px 8px;
     // The binding chip above already says the value is bound; the preview is a plain quiet box.
-    background: var(--theme-elevation-50);
-    border-radius: var(--style-radius-s, 4px);
+    background: var(--color-bg-secondary);
+    border-radius: var(--radius-medium, 4px);
   }
 
   .builder-bind__preview-from {
     overflow: hidden;
-    color: var(--theme-elevation-600);
+    color: var(--color-text-secondary);
     font-size: var(--be-text-s);
     font-weight: var(--be-weight-strong);
     letter-spacing: 0.04em;
@@ -223,7 +223,7 @@
   .builder-bind__preview-text {
     display: -webkit-box;
     overflow: hidden;
-    color: var(--theme-text);
+    color: var(--color-text);
     font-size: var(--be-text-m);
     line-height: 1.45;
     -webkit-box-orient: vertical;
@@ -235,13 +235,13 @@
     display: block;
     width: 100%;
     max-height: 120px;
-    border-radius: var(--style-radius-s, 4px);
+    border-radius: var(--radius-medium, 4px);
     object-fit: cover;
-    background: var(--theme-elevation-100);
+    background: var(--color-bg-hover);
   }
 
   .builder-bind__preview-empty {
-    color: var(--theme-elevation-600);
+    color: var(--color-text-secondary);
     font-size: var(--be-text-m);
     font-style: italic;
   }
@@ -254,19 +254,19 @@
     padding: 2px 0;
     border: 0;
     background: none;
-    color: var(--theme-elevation-600);
+    color: var(--color-text-secondary);
     font: inherit;
     font-size: var(--be-text-m);
     cursor: pointer;
 
     &:hover {
-      color: var(--theme-text);
+      color: var(--color-text);
     }
   }
 
   .builder-bind__fallback {
     padding: 8px 0 0 10px;
-    border-left: 2px solid var(--theme-elevation-100);
+    border-left: 2px solid var(--color-bg-hover);
   }
 
   // ---------------------------------------------------------------------------
@@ -278,16 +278,16 @@
     align-items: flex-start;
     gap: 8px;
     padding: 8px 10px;
-    border-radius: var(--style-radius-m, 6px);
-    background: var(--theme-elevation-50);
-    color: var(--theme-elevation-700);
+    border-radius: var(--radius-large, 6px);
+    background: var(--color-bg-secondary);
+    color: var(--color-text);
     font-size: var(--be-text-m);
     line-height: 1.45;
 
     > svg {
       flex: none;
       margin-top: 1px;
-      color: var(--theme-success-600);
+      color: var(--color-text-success);
     }
 
     p {
@@ -296,11 +296,11 @@
   }
 
   .builder-bind__banner--warn {
-    background: color-mix(in srgb, var(--theme-warning-500, var(--theme-error-500)) 12%, transparent);
-    color: var(--theme-text);
+    background: color-mix(in srgb, var(--color-bg-warning, var(--color-bg-danger)) 12%, transparent);
+    color: var(--color-text);
 
     > svg {
-      color: var(--theme-warning-600, var(--theme-error-500));
+      color: var(--color-text-warning, var(--color-bg-danger));
     }
   }
 
@@ -314,7 +314,7 @@
     padding: 0;
     border: 0;
     background: none;
-    color: var(--theme-text);
+    color: var(--color-text);
     font: inherit;
     font-weight: var(--be-weight-strong);
     text-decoration: underline;
@@ -331,7 +331,7 @@
     width: 340px;
     max-height: min(460px, calc(100vh - 16px));
     overflow: hidden;
-    border-color: var(--theme-elevation-150);
+    border-color: var(--color-border);
   }
 
   .builder-bind__picker {
@@ -350,14 +350,14 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    color: var(--theme-elevation-600);
+    color: var(--color-text-secondary);
     font-size: var(--be-text-s);
     font-weight: var(--be-weight-strong);
     letter-spacing: 0.04em;
     text-transform: uppercase;
 
     svg {
-      color: var(--theme-success-600);
+      color: var(--color-text-success);
     }
   }
 
@@ -369,14 +369,14 @@
     height: 30px;
     margin: 0 10px 6px;
     padding: 0 8px;
-    border: 1px solid var(--theme-elevation-150);
-    border-radius: var(--style-radius-m, 6px);
-    background: var(--theme-input-bg, var(--theme-elevation-0));
-    color: var(--theme-elevation-400);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-large, 6px);
+    background: var(--color-bg, var(--color-bg));
+    color: var(--color-text-tertiary);
 
     &:focus-within {
-      border-color: var(--theme-success-500);
-      color: var(--theme-text);
+      border-color: var(--color-bg-success);
+      color: var(--color-text);
     }
 
     input {
@@ -386,7 +386,7 @@
       border: 0;
       outline: 0;
       background: transparent;
-      color: var(--theme-text);
+      color: var(--color-text);
       font: inherit;
       font-size: var(--be-text-m);
     }
@@ -395,7 +395,7 @@
   .builder-bind__picker-empty {
     margin: 0;
     padding: 16px 14px 18px;
-    color: var(--theme-elevation-600);
+    color: var(--color-text-secondary);
     font-size: var(--be-text-m);
     text-align: center;
   }
@@ -403,8 +403,8 @@
   .builder-bind__picker-foot {
     margin: 0;
     padding: 8px 12px;
-    border-top: 1px solid var(--theme-elevation-100);
-    color: var(--theme-elevation-600);
+    border-top: 1px solid var(--color-bg-hover);
+    color: var(--color-text-secondary);
     font-size: var(--be-text-s);
   }
 
@@ -424,12 +424,12 @@
     gap: 8px;
     min-height: 34px;
     padding: 4px 8px;
-    border-radius: var(--style-radius-s, 4px);
-    color: var(--theme-text);
+    border-radius: var(--radius-medium, 4px);
+    color: var(--color-text);
     cursor: pointer;
 
     &[data-active] {
-      background: var(--theme-elevation-100);
+      background: var(--color-bg-hover);
     }
 
     &[data-current] .builder-bind__row-label {
@@ -440,7 +440,7 @@
   .builder-bind__row--group {
     min-height: 26px;
     margin-top: 2px;
-    color: var(--theme-elevation-600);
+    color: var(--color-text-secondary);
     font-size: var(--be-text-s);
     font-weight: var(--be-weight-strong);
     cursor: default;
@@ -453,7 +453,7 @@
   .builder-bind__row-hop {
     padding: 0 5px;
     border-radius: 8px;
-    background: var(--theme-elevation-100);
+    background: var(--color-bg-hover);
     font-size: var(--be-text-s);
     font-weight: var(--be-weight-medium);
   }
@@ -464,9 +464,9 @@
     place-items: center;
     width: 22px;
     height: 22px;
-    border-radius: var(--style-radius-s, 4px);
-    background: var(--theme-elevation-100);
-    color: var(--theme-elevation-700);
+    border-radius: var(--radius-medium, 4px);
+    background: var(--color-bg-hover);
+    color: var(--color-text);
   }
 
   .builder-bind__row-text {
@@ -486,8 +486,8 @@
 
   .builder-bind__row-path {
     overflow: hidden;
-    color: var(--theme-elevation-600);
-    font-family: var(--font-mono, monospace);
+    color: var(--color-text-secondary);
+    font-family: var(--text-mono-family, monospace);
     font-size: var(--be-text-s);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -497,7 +497,7 @@
     flex: none;
     max-width: 40%;
     overflow: hidden;
-    color: var(--theme-elevation-600);
+    color: var(--color-text-secondary);
     font-size: var(--be-text-s);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -505,7 +505,7 @@
 
   .builder-bind__row-check {
     flex: none;
-    color: var(--theme-success-600);
+    color: var(--color-text-success);
   }
 
   // ---------------------------------------------------------------------------
@@ -521,10 +521,10 @@
     height: 28px;
     margin-left: 8px;
     padding: 0 10px 0 8px;
-    border: 1px solid var(--theme-elevation-150);
+    border: 1px solid var(--color-border);
     border-radius: 14px;
-    background: var(--theme-elevation-50);
-    color: var(--theme-elevation-800);
+    background: var(--color-bg-secondary);
+    color: var(--color-text);
     font-size: var(--be-text-m);
     white-space: nowrap;
     cursor: pointer;
@@ -534,27 +534,27 @@
 
     > svg:first-child {
       flex: none;
-      color: var(--theme-success-600);
+      color: var(--color-text-success);
     }
 
     > svg:last-child {
       flex: none;
-      color: var(--theme-elevation-600);
+      color: var(--color-text-secondary);
     }
 
     &:hover,
     &[aria-expanded='true'] {
-      border-color: var(--theme-elevation-250);
-      background: var(--theme-elevation-100);
+      border-color: var(--color-border);
+      background: var(--color-bg-hover);
     }
   }
 
   .builder-template__control--warn {
-    border-color: color-mix(in srgb, var(--theme-warning-500, var(--theme-error-500)) 55%, transparent);
-    background: color-mix(in srgb, var(--theme-warning-500, var(--theme-error-500)) 12%, transparent);
+    border-color: color-mix(in srgb, var(--color-bg-warning, var(--color-bg-danger)) 55%, transparent);
+    background: color-mix(in srgb, var(--color-bg-warning, var(--color-bg-danger)) 12%, transparent);
 
     > svg:first-child {
-      color: var(--theme-warning-600, var(--theme-error-500));
+      color: var(--color-text-warning, var(--color-bg-danger));
     }
   }
 
@@ -565,17 +565,17 @@
 
   .builder-template__sep {
     flex: none;
-    color: var(--theme-elevation-400);
+    color: var(--color-text-tertiary);
   }
 
   .builder-template__text {
     min-width: 0;
     overflow: hidden;
-    color: var(--theme-elevation-600);
+    color: var(--color-text-secondary);
     text-overflow: ellipsis;
 
     strong {
-      color: var(--theme-text);
+      color: var(--color-text);
       font-weight: var(--be-weight-medium);
     }
   }
@@ -584,8 +584,8 @@
     flex: none;
     padding: 0 6px;
     border-radius: 8px;
-    background: var(--theme-elevation-100);
-    color: var(--theme-elevation-600);
+    background: var(--color-bg-hover);
+    color: var(--color-text-secondary);
     font-size: var(--be-text-s);
     line-height: 16px;
   }
@@ -602,13 +602,13 @@
     height: 18px;
     margin-left: auto;
     border-radius: 4px;
-    background: color-mix(in srgb, var(--theme-success-500) 14%, transparent);
-    color: var(--theme-success-600);
+    background: color-mix(in srgb, var(--color-bg-success) 14%, transparent);
+    color: var(--color-text-success);
   }
 
   .builder-editor__row-bound--broken {
-    background: color-mix(in srgb, var(--theme-warning-500) 18%, transparent);
-    color: var(--theme-warning-700, var(--theme-warning-500));
+    background: color-mix(in srgb, var(--color-bg-warning) 18%, transparent);
+    color: var(--color-text-warning, var(--color-bg-warning));
   }
 
   .builder-editor__row:hover .builder-editor__row-bound {
