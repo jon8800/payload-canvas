@@ -1,6 +1,9 @@
 packages:
-  - "apps/*"
-  - "packages/*"
+  # The v3 starter and scaffolder are not part of the Payload 4 prerelease.
+  - "packages/payload-canvas"
+
+useNodeVersion: 24.15.0
+autoInstallPeers: false
 
 onlyBuiltDependencies:
   - esbuild

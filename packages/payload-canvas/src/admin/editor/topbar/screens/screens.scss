@@ -13,16 +13,16 @@
     position: sticky;
     z-index: 3;
     top: 0;
-    border-bottom: 1px solid var(--theme-elevation-100);
-    background: var(--theme-bg);
+    border-bottom: 1px solid var(--color-bg-hover);
+    background: var(--color-bg);
   }
 
   .builder-screen-drawer__bar {
     display: flex;
     align-items: center;
-    gap: calc(var(--base) * 0.5);
-    min-height: calc(var(--base) * 2.5);
-    padding: calc(var(--base) * 1.5) 0 var(--base);
+    gap: calc(var(--spacer-3) * 0.5);
+    min-height: calc(var(--spacer-3) * 2.5);
+    padding: calc(var(--spacer-3) * 1.5) 0 var(--spacer-3);
   }
 
   .builder-screen-drawer__title {
@@ -42,18 +42,18 @@
     height: 32px;
     padding: 0;
     border: 0;
-    border-radius: var(--style-radius-s, 4px);
+    border-radius: var(--radius-medium, 4px);
     background: transparent;
-    color: var(--theme-elevation-800);
+    color: var(--color-text);
     cursor: pointer;
 
     &:hover {
-      background: var(--theme-elevation-100);
-      color: var(--theme-text);
+      background: var(--color-bg-hover);
+      color: var(--color-text);
     }
 
     &:focus-visible {
-      outline: 2px solid var(--theme-success-500);
+      outline: 2px solid var(--color-bg-success);
       outline-offset: 0;
     }
   }
@@ -66,16 +66,16 @@
     height: 32px;
     padding: 0 12px;
     border: 0;
-    border-radius: var(--style-radius-s, 4px);
-    background: var(--theme-elevation-800);
-    color: var(--theme-elevation-0);
+    border-radius: var(--radius-medium, 4px);
+    background: var(--color-text);
+    color: var(--color-bg);
     font: inherit;
     font-size: var(--be-text-m);
     font-weight: var(--be-weight-medium);
     cursor: pointer;
 
     &:hover:not(:disabled) {
-      background: var(--theme-elevation-1000);
+      background: var(--color-text);
     }
 
     &:disabled {
@@ -84,7 +84,7 @@
     }
 
     &:focus-visible {
-      outline: 2px solid var(--theme-success-500);
+      outline: 2px solid var(--color-bg-success);
       outline-offset: 2px;
     }
   }
@@ -107,20 +107,20 @@
   .builder-screen-drawer__loading {
     display: flex;
     flex-direction: column;
-    gap: var(--base);
-    padding-top: var(--base);
+    gap: var(--spacer-3);
+    padding-top: var(--spacer-3);
   }
 
   .builder-screen-drawer__error {
-    margin: var(--base) 0;
-    color: var(--theme-elevation-800);
+    margin: var(--spacer-3) 0;
+    color: var(--color-text);
   }
 
   .builder-screen-drawer__link {
     padding: 0;
     border: 0;
     background: none;
-    color: var(--theme-text);
+    color: var(--color-text);
     font: inherit;
     text-decoration: underline;
     cursor: pointer;

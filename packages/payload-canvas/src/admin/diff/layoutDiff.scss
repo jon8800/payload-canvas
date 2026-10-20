@@ -9,14 +9,14 @@
     &__content {
       display: flex;
       flex-direction: column;
-      gap: calc(var(--base) * 0.5);
-      background: var(--theme-elevation-50);
-      padding: calc(var(--base) * 0.5);
+      gap: calc(var(--spacer-3) * 0.5);
+      background: var(--color-bg-secondary);
+      padding: calc(var(--spacer-3) * 0.5);
     }
 
     &__summary {
       margin: 0;
-      color: var(--theme-elevation-800);
+      color: var(--color-text);
       font-weight: 500;
     }
 
@@ -30,47 +30,47 @@
     &__list {
       display: flex;
       flex-direction: column;
-      gap: calc(var(--base) * 0.25);
+      gap: calc(var(--spacer-3) * 0.25);
     }
 
     &__change {
-      padding: calc(var(--base) * 0.4) calc(var(--base) * 0.5);
-      border: 1px solid var(--theme-elevation-100);
-      border-radius: var(--style-radius-s);
-      background: var(--theme-elevation-0);
+      padding: calc(var(--spacer-3) * 0.4) calc(var(--spacer-3) * 0.5);
+      border: 1px solid var(--color-bg-hover);
+      border-radius: var(--radius-medium);
+      background: var(--color-bg);
     }
 
     &__head {
       display: flex;
       flex-wrap: wrap;
       align-items: baseline;
-      gap: calc(var(--base) * 0.3);
+      gap: calc(var(--spacer-3) * 0.3);
       min-width: 0;
     }
 
     &__pill {
       flex: none;
-      padding: 0 calc(var(--base) * 0.25);
-      border: 1px solid var(--theme-elevation-150);
-      border-radius: var(--style-radius-s);
-      background: var(--theme-elevation-100);
-      color: var(--theme-elevation-800);
-      font-size: calc(var(--base) * 0.55);
+      padding: 0 calc(var(--spacer-3) * 0.25);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-medium);
+      background: var(--color-bg-hover);
+      color: var(--color-text);
+      font-size: calc(var(--spacer-3) * 0.55);
       font-weight: 600;
       line-height: 1.6;
       text-transform: uppercase;
       letter-spacing: 0.04em;
 
       &--added {
-        border-color: var(--diff-create-pill-border, var(--theme-success-400));
-        background: var(--diff-create-pill-bg, var(--theme-success-200));
-        color: var(--diff-create-pill-color, var(--theme-success-600));
+        border-color: var(--diff-create-pill-border, var(--color-border-success-strong));
+        background: var(--diff-create-pill-bg, var(--color-border-success));
+        color: var(--diff-create-pill-color, var(--color-text-success));
       }
 
       &--removed {
-        border-color: var(--diff-delete-pill-border, var(--theme-error-400));
-        background: var(--diff-delete-pill-bg, var(--theme-error-200));
-        color: var(--diff-delete-pill-color, var(--theme-error-600));
+        border-color: var(--diff-delete-pill-border, var(--color-border-danger-strong));
+        background: var(--diff-delete-pill-bg, var(--color-border-danger));
+        color: var(--diff-delete-pill-color, var(--color-text-danger));
       }
     }
 
@@ -80,31 +80,31 @@
     }
 
     &__where {
-      color: var(--theme-elevation-600);
+      color: var(--color-text-secondary);
     }
 
     &__details {
       display: flex;
       flex-direction: column;
-      gap: calc(var(--base) * 0.2);
-      margin-top: calc(var(--base) * 0.3);
-      padding-inline-start: calc(var(--base) * 0.5);
-      border-inline-start: 2px solid var(--theme-elevation-100);
+      gap: calc(var(--spacer-3) * 0.2);
+      margin-top: calc(var(--spacer-3) * 0.3);
+      padding-inline-start: calc(var(--spacer-3) * 0.5);
+      border-inline-start: 2px solid var(--color-bg-hover);
     }
 
     &__detail {
       display: flex;
       flex-wrap: wrap;
       align-items: baseline;
-      gap: calc(var(--base) * 0.25);
+      gap: calc(var(--spacer-3) * 0.25);
       min-width: 0;
     }
 
     &__detail-label {
       display: inline-flex;
       align-items: baseline;
-      gap: calc(var(--base) * 0.2);
-      color: var(--theme-elevation-600);
+      gap: calc(var(--spacer-3) * 0.2);
+      color: var(--color-text-secondary);
 
       &::after {
         content: ':';
@@ -117,59 +117,59 @@
 
     &__value,
     &__class {
-      padding: 0 calc(var(--base) * 0.15);
-      border-radius: var(--style-radius-s);
+      padding: 0 calc(var(--spacer-3) * 0.15);
+      border-radius: var(--radius-medium);
       text-decoration: none;
       overflow-wrap: anywhere;
     }
 
     &__value--del {
-      background: var(--diff-delete-parent-bg, var(--theme-error-100));
-      color: var(--diff-delete-parent-color, var(--theme-error-800));
+      background: var(--diff-delete-parent-bg, var(--color-bg-danger-tertiary));
+      color: var(--diff-delete-parent-color, var(--color-text-danger));
       text-decoration: line-through;
-      text-decoration-color: var(--diff-delete-pill-border, var(--theme-error-400));
+      text-decoration-color: var(--diff-delete-pill-border, var(--color-border-danger-strong));
     }
 
     &__value--ins {
-      background: var(--diff-create-parent-bg, var(--theme-success-100));
-      color: var(--diff-create-parent-color, var(--theme-success-800));
+      background: var(--diff-create-parent-bg, var(--color-bg-success-tertiary));
+      color: var(--diff-create-parent-color, var(--color-text-success));
     }
 
     &__class {
-      font-family: var(--font-mono, ui-monospace, monospace);
-      font-size: calc(var(--base) * 0.55);
+      font-family: var(--text-mono-family, ui-monospace, monospace);
+      font-size: calc(var(--spacer-3) * 0.55);
     }
 
     &__empty {
-      color: var(--theme-elevation-400);
+      color: var(--color-text-tertiary);
       font-style: italic;
     }
 
     &__arrow {
-      color: var(--theme-elevation-400);
+      color: var(--color-text-tertiary);
     }
 
     &__json {
-      border-top: 1px solid var(--theme-elevation-100);
-      padding-top: calc(var(--base) * 0.4);
+      border-top: 1px solid var(--color-bg-hover);
+      padding-top: calc(var(--spacer-3) * 0.4);
     }
 
     &__json-summary {
       cursor: pointer;
-      color: var(--theme-elevation-600);
+      color: var(--color-text-secondary);
       width: fit-content;
 
       &:hover {
-        color: var(--theme-elevation-900);
+        color: var(--color-text);
       }
     }
 
     &__json-content {
       display: grid;
       // Same columns as Payload's field diffs: old on the left, new on the right.
-      grid-template-columns: calc(50% - var(--base) * 0.5) calc(50% - var(--base) * 0.5);
-      gap: var(--base);
-      margin-top: calc(var(--base) * 0.5);
+      grid-template-columns: calc(50% - var(--spacer-3) * 0.5) calc(50% - var(--spacer-3) * 0.5);
+      gap: var(--spacer-3);
+      margin-top: calc(var(--spacer-3) * 0.5);
       overflow-x: auto;
 
       pre {

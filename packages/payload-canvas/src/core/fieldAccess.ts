@@ -68,7 +68,7 @@ async function allowed(
   if (!fn) return true
   try {
     return Boolean(
-      await fn({ id: ctx.id, blockData: v.blockData, data: docs.data, doc: docs.doc, req: ctx.req, siblingData: v.siblingData }),
+      await fn({ collection: ctx.collection, id: ctx.id, blockData: v.blockData, data: docs.data, doc: docs.doc, req: ctx.req, siblingData: v.siblingData }),
     )
   } catch {
     return false

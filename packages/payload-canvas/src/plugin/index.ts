@@ -294,9 +294,9 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       )
     }
     /** The theme's font families for the Styles panel. Empty without a theme or when the read fails. */
-    const themeFamilies = async (payload: Payload): Promise<FontFamilies> => {
+    const themeFamilies = async (req: PayloadRequest): Promise<FontFamilies> => {
       if (!theme) return {}
-      const doc = await payload.findGlobal({ slug: theme.slug as never, depth: 0 }).catch(() => null)
+      const doc = await req.payload.findGlobal({ slug: theme.slug as never, depth: 0, req, overrideAccess: false }).catch(() => null)
       return themeFontFamilies(doc as ThemeData | null)
     }
 
@@ -612,7 +612,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
             if (!req.user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
             const tokens = await getStyleTokens(css)
             const custom = await Promise.resolve(options.css.fontFamilies?.(req.payload)).catch(() => undefined)
-            const families = { ...(await themeFamilies(req.payload)), ...custom }
+            const families = { ...(await themeFamilies(req)), ...custom }
             const fonts = applyFontFamilies(tokens.fonts, families)
             // Not cached by the browser: the fonts follow the theme global.
             return Response.json({ ...tokens, fonts }, { headers: { 'Cache-Control': 'private, no-cache' } })
@@ -827,7 +827,7 @@ function addPayloadBlocksBuilder(collection: CollectionConfig, args: AddBuilderA
     name: builderConfigFieldName(field),
     type: 'json',
     virtual: true,
-    admin: { hidden: true, disableListColumn: true, disableListFilter: true, custom: { builder: clientConfig } },
+    admin: { hidden: true, custom: { builder: clientConfig } },
   }
   const skip = [builderConfigFieldName(field), ...(richText ? [richText.name] : []), ...ownFields]
   return {

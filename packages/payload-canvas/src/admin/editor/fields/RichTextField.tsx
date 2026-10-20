@@ -2,7 +2,7 @@
 
 import { DocumentInfoProvider, useAuth } from '@payloadcms/ui'
 import { RenderLexical } from '@payloadcms/richtext-lexical/client'
-import type { CollectionSlug, TypedUser } from 'payload'
+import type { CollectionSlug, User } from 'payload'
 import { useState, type KeyboardEvent } from 'react'
 
 import { richTextFieldName } from '../../../core/blocks'
@@ -55,7 +55,7 @@ export function RichTextField({ label, path, value, onChange }: Props) {
     <DocumentInfoProvider
       id={id}
       collectionSlug={collection as CollectionSlug}
-      currentEditor={user as TypedUser}
+      currentEditor={user as User}
       hasPublishedDoc={publishedAt !== null}
       isLocked={false}
       lastUpdateTime={0}

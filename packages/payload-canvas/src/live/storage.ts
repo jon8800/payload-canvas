@@ -78,7 +78,7 @@ type LooseField = {
   access?: { read?: (args: Record<string, unknown>) => unknown }
   fields?: LooseField[]
   tabs?: (Omit<LooseField, 'type'> & { fields: LooseField[] })[]
-  blocks?: { slug: string; fields: LooseField[] }[]
+  blocks?: (string | { slug: string; fields: LooseField[] })[]
   blockReferences?: (string | { slug: string; fields: LooseField[] })[]
 }
 
@@ -122,7 +122,7 @@ export async function canReadBlocksValue(
     if (value === undefined) return true
     if (field.hidden) return false
     if (field.access?.read) {
-      const ok = await field.access.read({ req, id: args.id, data: doc, doc, siblingData: sibling, blockData })
+      const ok = await field.access.read({ collection: config, req, id: args.id, data: doc, doc, siblingData: sibling, blockData })
       if (!ok) return false
     }
     return true
@@ -157,8 +157,7 @@ export async function canReadBlocksValue(
     }
     if (f.type === 'blocks') {
       const blocks = new Map<string, { slug: string; fields: LooseField[] }>()
-      for (const b of f.blocks ?? []) blocks.set(b.slug, b)
-      for (const ref of f.blockReferences ?? []) {
+      for (const ref of [...(f.blocks ?? []), ...(f.blockReferences ?? [])]) {
         const block = typeof ref === 'string' ? references.get(ref) : ref
         if (block) blocks.set(block.slug, block)
       }

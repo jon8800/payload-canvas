@@ -155,7 +155,8 @@ test('loadLayoutData calls payload.find once per collection', async () => {
       { id: 'b', type: 'image', props: { image: 'm2' } },
     ],
   }
-  const out = await loadLayoutData(small, blocks, payload as never, { draft: true })
+  const user = { id: 'editor' }
+  const out = await loadLayoutData(small, blocks, payload as never, { draft: true, user })
   assert.equal(calls.length, 1)
   assert.deepEqual(calls[0], {
     collection: 'media',
@@ -165,6 +166,8 @@ test('loadLayoutData calls payload.find once per collection', async () => {
     limit: 2,
     pagination: false,
     joins: false,
+    overrideAccess: false,
+    user,
   })
   assert.deepEqual(out.blocks[1]!.props, { image: { id: 'm2', collection: 'media' } })
 })

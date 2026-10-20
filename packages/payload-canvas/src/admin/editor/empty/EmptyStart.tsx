@@ -147,11 +147,11 @@ function TemplateNotice({ template, titleId, onIgnore }: { template: AppliedTemp
       </p>
       <div className="builder-empty-start__actions">
         {templates && (
-          <Button el="link" url={builderViewPath(routes.admin, templates.collection, template.id)} buttonStyle="primary" size="small" margin={false}>
+          <Button el="link" url={builderViewPath(routes.admin, templates.collection, template.id)} buttonStyle="primary" size="medium" margin={false}>
             Open the template
           </Button>
         )}
-        <Button buttonStyle="secondary" size="small" margin={false} onClick={onIgnore}>
+        <Button buttonStyle="secondary" size="medium" margin={false} onClick={onIgnore}>
           Add blocks here anyway
         </Button>
       </div>
@@ -190,15 +190,15 @@ function StartOptions({ titleId }: { titleId: string }) {
       )}
       <div className="builder-empty-start__actions">
         {picks.length > 0 && (
-          <Button buttonStyle="secondary" size="small" margin={false} onClick={() => selectLeftTab(runtime, 'sections', { focus: true })}>
+          <Button buttonStyle="secondary" size="medium" margin={false} onClick={() => selectLeftTab(runtime, 'sections', { focus: true })}>
             Browse sections
           </Button>
         )}
-        <Button buttonStyle="secondary" size="small" margin={false} onClick={() => selectLeftTab(runtime, 'blocks', { focus: true })}>
+        <Button buttonStyle="secondary" size="medium" margin={false} onClick={() => selectLeftTab(runtime, 'blocks', { focus: true })}>
           Add a block
         </Button>
         {runtime.assistant && (
-          <Button buttonStyle="secondary" size="small" margin={false} icon={<Icon name="sparkle" size={14} />} iconPosition="left" onClick={() => runtime.toggleAssistant(true)}>
+          <Button buttonStyle="secondary" size="medium" margin={false} icon={<Icon name="sparkle" size={14} />} iconPosition="left" onClick={() => runtime.toggleAssistant(true)}>
             Ask the assistant
           </Button>
         )}

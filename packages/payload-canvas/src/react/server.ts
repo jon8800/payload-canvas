@@ -44,6 +44,8 @@ export type LoadTemplateArgs = RenderLocale & {
   templatesSlug?: string
   /** Draft mode: use the latest template drafts. Otherwise only published templates. */
   draft?: boolean
+  /** The signed-in user when reading template drafts. */
+  user?: unknown
 }
 
 /** The generated CSS stored next to a layout field (`{ hash, css }`). */
@@ -76,7 +78,7 @@ const DEFAULT_CANDIDATES = 5
  * template cannot show fields the visitor may not read (for example an author's email):
  *
  *   const post = await payload.find({ collection: 'posts', where, depth: 1, draft, overrideAccess: false, user })
- *   const found = await loadTemplate(payload, { collection: 'posts', doc: post, draft })
+ *   const found = await loadTemplate(payload, { collection: 'posts', doc: post, draft, user })
  *   const context = { collection: 'posts', doc: post }
  *   const layout = await loadLayoutData(found.layout, blocks, payload, { draft, context, resolveLink, user })
  *   <RenderLayout layout={layout} context={context} blocks={blocks} resolveLink={resolveLink} />
@@ -93,7 +95,7 @@ export async function loadTemplate(payload: Payload, args: LoadTemplateArgs): Pr
   const ownId = isRecord(own) ? own.id : own
   if (typeof ownId === 'string' || typeof ownId === 'number') {
     try {
-      const template = (await payload.findByID({ collection: slug as never, id: ownId, depth: 0, draft, ...locale })) as Doc
+      const template = (await payload.findByID({ collection: slug as never, id: ownId, depth: 0, draft, overrideAccess: !draft, user: args.user as never, ...locale })) as Doc
       const found = usable(template, collection, draft)
       if (found) return found
     } catch {
@@ -114,6 +116,9 @@ export async function loadTemplate(payload: Payload, args: LoadTemplateArgs): Pr
     depth: 0,
     limit: DEFAULT_CANDIDATES,
     draft,
+    // Published templates are server-rendered layout data; drafts use the visitor's access.
+    overrideAccess: !draft,
+    user: args.user as never,
     ...locale,
   })
   for (const candidate of result.docs as Doc[]) {

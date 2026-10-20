@@ -226,7 +226,7 @@ export function ScreenDrawer() {
   useCleanApiUrl(body, !localization && shownRoute?.path[0] === 'api')
 
   return (
-    <Drawer slug={slug} className="builder-screen-drawer" gutter={false} Header={null}>
+    <Drawer slug={slug} className="builder-screen-drawer" Header={null}>
       <Gutter className="builder-screen-drawer__header">
         <div className="builder-screen-drawer__bar">
           {history.length > 1 && (

@@ -1,7 +1,7 @@
 // Native Payload reads are the control: live sessions must respect named tabs and unnamed groups.
 import assert from 'node:assert/strict'
 import { after, before, describe, it } from 'node:test'
-import { buildConfig, createLocalReq, getPayload, type Block, type FieldAccess, type Payload } from 'payload'
+import { buildConfig, createPayloadRequest, getPayload, type Block, type FieldAccess, type Payload } from 'payload'
 
 import { fromPayloadBlocks } from '../blocks/payload'
 import type { LiveDocStore } from '../live/apply'
@@ -14,9 +14,9 @@ import { websiteBuilder } from './index'
 const admin = { id: 1, collection: 'users', email: 'admin@example.test', role: 'admin' }
 const editor = { id: 2, collection: 'users', email: 'editor@example.test', role: 'editor' }
 const mayReadTab: FieldAccess = ({ req, data, doc, siblingData, blockData }) =>
-  req.user?.role === 'admin' || Boolean(!doc?.private && data?.id === doc?.id && siblingData?.marker === 'group' && blockData?.marker === 'block')
+  (req.user as { role?: string } | null)?.role === 'admin' || Boolean(!doc?.private && data?.id === doc?.id && siblingData?.marker === 'group' && blockData?.marker === 'block')
 const mayReadGroup: FieldAccess = ({ req, data, doc, siblingData, blockData }) =>
-  req.user?.role === 'admin' || Boolean(!doc?.private && data?.id === doc?.id && siblingData?.marker === 'block' && blockData?.marker === 'block')
+  (req.user as { role?: string } | null)?.role === 'admin' || Boolean(!doc?.private && data?.id === doc?.id && siblingData?.marker === 'block' && blockData?.marker === 'block')
 
 const tabbed: Block = {
   slug: 'tabbed',
@@ -45,13 +45,14 @@ before(async () => {
     telemetry: false,
     typescript: { autoGenerate: false },
     db: mem.adapter,
+    blocks: [tabbed, grouped],
     collections: [
       { slug: 'users', auth: true, fields: [{ name: 'role', type: 'text' }] },
       {
         slug: 'pages',
         versions: { drafts: true },
         access: { read: () => true, create: () => true, update: () => true },
-        fields: [{ name: 'private', type: 'checkbox' }, { name: 'layout', type: 'blocks', blocks: [tabbed, grouped] }],
+        fields: [{ name: 'private', type: 'checkbox' }, { name: 'layout', type: 'blocks', blocks: ['tabbed', 'grouped'] }],
       },
     ],
     plugins: [websiteBuilder({ collections: { pages: {} }, blocks, css: { entry: 'globals.css' }, theme: false })],
@@ -66,7 +67,7 @@ after(async () => {
 const read = (id: number, user = admin) => payload.findByID({ collection: 'pages', id, draft: true, depth: 0, overrideAccess: false, user })
 
 async function openStream(id: number) {
-  const req = await createLocalReq({ user: editor }, payload)
+  const req = await createPayloadRequest({ user: editor, payload })
   req.routeParams = { collection: 'pages', id: String(id) }
   ;(req as { url?: string }).url = `http://localhost/api${LIVE_PATH}/pages/${id}/events?clientId=groups-${id}`
   const endpoint = payload.config.endpoints.find((entry) => entry.path === `${LIVE_PATH}/:collection/:id/events` && entry.method === 'get')
@@ -111,7 +112,7 @@ describe('Payload block field containers', () => {
       const id = created.id as number
       const doc = await read(id)
       assert.ok(JSON.stringify(await read(id, editor)).includes(secret), 'native access allows these exact siblings and ancestors')
-      const req = await createLocalReq({ user: editor }, payload)
+      const req = await createPayloadRequest({ user: editor, payload })
       assert.equal(await canReadBlocksValue(req, { collection: 'pages', field: 'layout', id, value: doc.layout, doc }), true)
       const response = await openStream(id)
       const sent = await firstEvent(response)

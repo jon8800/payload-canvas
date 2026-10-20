@@ -5,6 +5,7 @@ on:
   push:
     tags:
       - 'v*'
+      - '!v*-next.*'
   workflow_dispatch:
 
 permissions:
@@ -23,6 +24,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+
+      - name: Reject plugin prereleases in the two-package workflow
+        run: node -e "const p=require('./packages/payload-canvas/package.json'); if(p.version.includes('-')) throw new Error('Use the Payload 4 prerelease workflow. The v3 scaffolder must not be published with this prerelease.')"
 
       - uses: pnpm/action-setup@v6
 

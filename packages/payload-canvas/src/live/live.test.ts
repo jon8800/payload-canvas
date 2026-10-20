@@ -1294,7 +1294,10 @@ function hookedSetup() {
     if (options.hold) writing = options.hold
     return store.update({ collection: target.collection, id: target.id, data, draft: !options.publish, context: options.changeText ? { changeText: true } : {} })
   }
-  const connect = () => sessions.connect({ target, store, clientId: 'a', user: ana, send: () => {} })
+  let saved: (() => void) | null = null
+  const connect = () => sessions.connect({ target, store, clientId: 'a', user: ana, send: (event) => {
+    if (event.type === 'saved') saved?.()
+  } })
   const edit = (id: string, text: string, access?: CommitArgs['access']) =>
     sessions.commit({ target, store, user: ana, actor: actorFromUser(ana), blocks: hookBlocks, ops: [{ type: 'update', id, props: { text } }], ...(access ? { access } : {}) })
   /** An edit whose access check holds the session lock until `release`, and is refused. */
@@ -1305,6 +1308,7 @@ function hookedSetup() {
   return {
     clock, gate, sessions, key, writes, save, connect, edit, lockingEdit,
     peek: () => sessions.peek(target.collection, target.id)!,
+    nextSave: () => new Promise<void>((resolve) => { saved = resolve }),
     flush: () => sessions.flush(target.collection, target.id),
     get doc() { return doc },
   }
@@ -1366,7 +1370,7 @@ describe('hook changes of a guarded save and the saves after it', () => {
   })
 
   for (const how of ['flush', 'autosave'] as const) {
-    it(`never saves the session without the queued hook changes (${how})`, async () => {
+    it(`never saves the session without the queued hook changes (${how})`, { timeout: 10_000 }, async () => {
       const h = hookedSetup()
       await h.connect()
       // The first save read the session before the edit below, and commits after it.
@@ -1389,7 +1393,12 @@ describe('hook changes of a guarded save and the saves after it', () => {
       access.release()
       assert.equal((await editing).ok, false)
       if (flushing) assert.deepEqual(await flushing, { ok: true })
-      else await h.clock.advance(10_000)
+      else {
+        await settle()
+        const saved = h.nextSave()
+        await h.clock.advance(10_000)
+        await saved
+      }
       const expected = layoutWith('HOOKED', 'EDITED')
       assert.deepEqual(h.writes, [layoutWith('HOOKED', 'B'), expected])
       assert.deepEqual(h.doc.layout, expected)

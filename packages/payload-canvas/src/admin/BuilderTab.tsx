@@ -16,7 +16,7 @@ export function BuilderTab() {
   if (id === undefined || id === null || !collectionSlug) return null
   return (
     <Button
-      buttonStyle="tab"
+      buttonStyle="ghost"
       className="doc-tab"
       el="link"
       margin={false}

@@ -1,0 +1,51 @@
+name: Payload 4 prerelease
+
+on:
+  push:
+    branches: [release/payload-v4-next]
+    tags: ['v*-next.*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-next
+  cancel-in-progress: false
+
+jobs:
+  plugin:
+    if: github.repository == 'jon8800/payload-canvas'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.15.0
+          cache: pnpm
+
+      - name: Check prerelease manifest and tag
+        id: release
+        run: node scripts/check-next-release.mjs
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter ./packages/payload-canvas test
+      - run: pnpm --filter ./packages/payload-canvas typecheck
+      - run: pnpm --filter ./packages/payload-canvas lint
+
+      # prepack builds the plugin and verifies every published export.
+      - run: pnpm pack:next
+
+      - name: Check the plugin tarball
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: node scripts/publish.mjs --dry-run --expect-version "$VERSION" "dist-packages/payload-canvas-$VERSION.tgz"
+
+      # Branch pushes and manual runs validate only. A matching next tag publishes one package.
+      - name: Publish plugin to next
+        if: github.ref_type == 'tag'
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: node scripts/publish.mjs --expect-version "$VERSION" "dist-packages/payload-canvas-$VERSION.tgz"

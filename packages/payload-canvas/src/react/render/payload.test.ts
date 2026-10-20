@@ -13,14 +13,14 @@ const configs: PayloadBlockConfig[] = [
     slug: 'section',
     fields: [
       { name: 'tone', type: 'select', defaultValue: 'light', options: ['light', 'dark'] },
-      { name: 'content', type: 'blocks', blockReferences: ['heading'], blocks: [] },
+      { name: 'content', type: 'blocks', blocks: ['heading'] },
     ],
   },
   {
     slug: 'columns',
     fields: [
-      { name: 'left', type: 'blocks', blockReferences: ['heading'], blocks: [] },
-      { name: 'right', type: 'blocks', blockReferences: ['heading'], blocks: [] },
+      { name: 'left', type: 'blocks', blocks: ['heading'] },
+      { name: 'right', type: 'blocks', blocks: ['heading'] },
     ],
   },
   { slug: 'heading', fields: [{ name: 'text', type: 'text' }, { name: 'level', type: 'select', defaultValue: 'h2', options: ['h2', 'h3'] }] },

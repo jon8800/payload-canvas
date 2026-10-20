@@ -127,10 +127,9 @@ export function ArrayField({ fields, label, singular, description, maxRows, path
         disabled={full}
         icon="plus"
         iconPosition="left"
-        iconStyle="with-border"
         margin={false}
         onClick={() => actions.addBelow(rows.length - 1)}
-        size="small"
+        size="medium"
       >
         {singular ? `Add ${singular}` : 'Add item'}
       </Button>

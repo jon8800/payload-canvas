@@ -211,13 +211,15 @@ export const keepOneDefault: CollectionAfterChangeHook = async ({ collection, co
     draft: false,
     depth: 0,
     pagination: false,
+    // This hook maintains the collection-wide default after the user's publish passed access.
+    overrideAccess: true,
     req,
   })
   for (const other of others.docs as unknown as Record<string, unknown>[]) {
     // A template that was never published is not live. Its draft takes over when it is published.
     if (!isPublished(other)) continue
     const id = other.id as string | number
-    const latest = (await req.payload.findByID({ collection: slug, id, draft: true, depth: 0, req })) as unknown as Record<string, unknown>
+    const latest = (await req.payload.findByID({ collection: slug, id, draft: true, depth: 0, overrideAccess: true, req })) as unknown as Record<string, unknown>
     const { id: _id, ...published } = other
     // Localized templates: the reads above hold one locale's view; save the stored layouts.
     published[TEMPLATE_LAYOUT_FIELD] = await storedTemplateLayout(req.payload, slug, id, false)
@@ -230,6 +232,7 @@ export const keepOneDefault: CollectionAfterChangeHook = async ({ collection, co
       data: { ...published, [TEMPLATE_DEFAULT_FIELD]: false, _status: 'published' } as never,
       draft: false,
       depth: 0,
+      overrideAccess: true,
       req,
       context: { [DEFAULT_CONTEXT]: true, [KEEP_LAYOUT]: true, [STORED_LAYOUT]: true },
     })
@@ -243,6 +246,7 @@ export const keepOneDefault: CollectionAfterChangeHook = async ({ collection, co
         data: { ...draft, [TEMPLATE_DEFAULT_FIELD]: false } as never,
         draft: true,
         depth: 0,
+        overrideAccess: true,
         req,
         context: { [DEFAULT_CONTEXT]: true, [STORED_LAYOUT]: true },
       })
