@@ -1,6 +1,8 @@
 # Payload 4 prerelease
 
-Candidate: `payload-canvas@0.3.0-next.0` for Payload `4.0.0-beta.3`.
+Candidate: `payload-canvas@0.3.0-next.1` for Payload `4.0.0-beta.3`.
+
+This metadata update requires `payload-mcp-toolkit@0.10.0-next.1` for optional MCP integration. Runtime source matches the checked `0.3.0-next.0` candidate. The earlier pushed tag remains unchanged.
 
 This branch publishes only the plugin to npm's `next` tag. The bundled v3 starter and scaffolder remain unchanged and unsupported here.
 
@@ -27,7 +29,7 @@ pnpm --filter ./packages/payload-canvas typecheck
 pnpm --filter ./packages/payload-canvas lint
 pnpm pack:next
 pnpm exec node scripts/check-next-release.mjs
-node scripts/publish.mjs --dry-run --expect-version 0.3.0-next.0 dist-packages/payload-canvas-0.3.0-next.0.tgz
+node scripts/publish.mjs --dry-run --expect-version 0.3.0-next.1 dist-packages/payload-canvas-0.3.0-next.1.tgz
 ```
 
 The package build emits 316 JavaScript modules, their declarations and 21 stylesheets. All 26 public exports point to shipped files in `dist`.
@@ -42,11 +44,11 @@ The parent release task checks all six packed plugins together in a separate Nex
 
 ## Candidate archive
 
-File: `dist-packages/payload-canvas-0.3.0-next.0.tgz`.
+File: `dist-packages/payload-canvas-0.3.0-next.1.tgz`.
 
-Size: 932,428 bytes.
+Size: 932,430 bytes.
 
-SHA-256: `F729C555D88429A3BA1392B68F7EEF5200F67D834E0B566AD278FC7E68D36B02`.
+SHA-256: `58C723D0D55498BB95D240BA5D7BA89C0CCE0DF4A35B42367C727AE6A8705C64`.
 
 The publish dry run selects `next` and reports that this version does not exist on npm. It sends no registry write.
 
@@ -56,8 +58,8 @@ The existing repository secret `NPM_TOKEN` supplies authentication to `scripts/p
 
 `.github/workflows/publish-next.yml` checks the manifest and tag, installs from the lockfile, runs package checks and packs only the plugin.
 
-Branch pushes and manual runs validate only. Tag `v0.3.0-next.0` publishes the one named plugin archive to `next`.
+Branch pushes and manual runs validate only. Tag `v0.3.0-next.1` publishes the one named plugin archive to `next`.
 
 The legacy two-package workflow excludes next tags. It rejects a prerelease manifest on manual runs. It cannot publish the v3 scaffolder through this prerelease path.
 
-No local commit, push, tag or publish was performed while preparing this candidate.
+The recovery changes remain local for review. No commit, push, new tag or publication was performed while preparing this candidate.

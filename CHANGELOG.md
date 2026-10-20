@@ -4,6 +4,13 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ## [Unreleased]
 
+## [0.3.0-next.1] - 2026-10-20
+
+### Changed
+
+- Require optional MCP integration `payload-mcp-toolkit@0.10.0-next.1` after its prerelease workflow correction.
+- Keep the previous `v0.3.0-next.0` tag unchanged. Plugin runtime code matches the checked `0.3.0-next.0` candidate.
+
 ## [0.3.0-next.0] - 2026-10-20
 
 This prerelease contains only `payload-canvas`. `create-payload-canvas` and the bundled starter remain on Payload 3.
