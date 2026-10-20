@@ -6,12 +6,12 @@ On `release/payload-v4-next`, use `.github/workflows/publish-next.yml`. It publi
 
 The bundled v3 starter and `create-payload-canvas` are excluded from this branch's workspace. Do not publish them as v4 packages.
 
-1. Update only `packages/payload-canvas/package.json` to a version such as `0.3.0-next.0`.
+1. Update only `packages/payload-canvas/package.json` to a version such as `0.3.0-next.1`.
 2. Keep `publishConfig.tag` set to `next` and the Payload peer versions pinned to the tested beta.
 3. Run `pnpm install --frozen-lockfile`, then the plugin's test, typecheck and lint scripts.
 4. Run `pnpm pack:next`. Its prepack script builds the package and checks every public export.
-5. Run `node scripts/publish.mjs --dry-run --expect-version 0.3.0-next.0 dist-packages/payload-canvas-0.3.0-next.0.tgz`.
-6. After review, push the branch and the matching tag `v0.3.0-next.0`.
+5. Run `node scripts/publish.mjs --dry-run --expect-version 0.3.0-next.1 dist-packages/payload-canvas-0.3.0-next.1.tgz`.
+6. After review, push the branch and the matching tag `v0.3.0-next.1`.
 
 Branch pushes and manual runs validate without publishing. Only a matching `v*-next.*` tag reaches the publish step.
 

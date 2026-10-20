@@ -2,7 +2,7 @@
 
 **A visual drag-and-drop website builder for [Payload CMS](https://payloadcms.com) 4 beta.**
 
-This branch prepares `payload-canvas@0.3.0-next.0` for Payload `4.0.0-beta.3`. It publishes only the plugin to npm's `next` tag.
+This branch prepares `payload-canvas@0.3.0-next.1` for Payload `4.0.0-beta.3`. It publishes only the plugin to npm's `next` tag.
 
 The bundled starter and `create-payload-canvas` still target Payload 3. They are outside this branch's workspace and prerelease workflow. Existing screenshots show the v3 release.
 

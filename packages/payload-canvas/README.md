@@ -79,7 +79,7 @@ Peer dependencies:
 | `react`, `react-dom` | `^19.2.0` | everything |
 | `tailwindcss` | `^4.3.0` | the CSS compile on save and in the canvas |
 | `@anthropic-ai/sdk` | `>=0.131.0`, optional | only the `/ai/anthropic` adapter |
-| `payload-mcp-toolkit` | `0.10.0-next.0`, optional | only `builderMcpTools()` (`/mcp`) |
+| `payload-mcp-toolkit` | `0.10.0-next.1`, optional | only `builderMcpTools()` (`/mcp`) |
 | `zod` | `^3.25 \|\| ^4`, optional | only `builderMcpTools()` (`/mcp`) |
 
 ## Install

@@ -1,6 +1,6 @@
 {
   "name": "payload-canvas",
-  "version": "0.3.0-next.0",
+  "version": "0.3.0-next.1",
   "description": "Payload Canvas: a visual drag-and-drop website builder for Payload CMS 4 beta. Nested layout blocks, Tailwind styling, sections, templates, live AI editing over MCP, and the React renderer for your site.",
   "keywords": [
     "payload",
@@ -208,7 +208,7 @@
     "@payloadcms/ui": "4.0.0-beta.3",
     "next": "^16.4.0",
     "payload": "4.0.0-beta.3",
-    "payload-mcp-toolkit": "0.10.0-next.0",
+    "payload-mcp-toolkit": "0.10.0-next.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "tailwindcss": "^4.3.0",
