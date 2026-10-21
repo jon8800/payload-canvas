@@ -1109,7 +1109,7 @@ const jsonLd = faqJsonLd(items)
 
 - Props: `content` (the rich text, usually bound), `minHeadings` (default 3; with fewer headings the block renders nothing) and `label` (the nav's name, default "On this page").
 - The ids come from `headingId(text)` in `payload-canvas/blocks`: lower case, accents dropped, other characters as hyphens, letters of every script kept ("Über uns?" becomes `uber-uns`). Give the headings of the rich text on the page the same ids. `lexicalHeadings(value, 'h2')` returns `{ id, text }` for each top-level heading.
-- Two headings with the same text get the same id. Give them different text.
+- Headings with the same text get their own ids: the second `rates-2`, the third `rates-3`, the same ids the rich text renders with `headingIds: true`.
 - On the canvas, with too few headings, it shows three sample links, so it can be selected and styled.
 
 #### Filter link

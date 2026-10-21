@@ -51,6 +51,7 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 - Media backdrop and image: Payload's default 50/50 focal point no longer sets `object-position`, so the block's position classes crop the photo. Any other focal point still wins. New `builtinComponents({ mediaUrl })` (and `mediaBackdropComponent(mediaUrl)`) maps the media backdrop's upload URLs, for example absolute URLs to paths; they were used exactly as stored.
 - `prepareBlocks(blocks, listCollections)` in `payload-canvas/blocks`: the block preparation of `websiteBuilder` and `builderMcpTools` (`listCollectionsOf`, then `withInlineBlocks`) as a function. A site's own list lacked it, so a seed's `validateLayout` refused an icon in a link and checked a list's `ids` as text. `listCollectionsOf` is exported too.
 - Pager: the page-1 link was `?`, so it rendered as `/guides?`. New `loadLayoutData` option `path` (`/guides`): the page links start with it, and page 1 is the path with the other query values, or the bare path. `pageLinks` takes it as its last argument. Without `path` the links stay relative as before.
+- README, "Table of contents": headings with the same text get `-2`, `-3` ids, as the code does. It said they share one id.
 
 ## [0.3.0] - 2026-10-21
 
