@@ -13,6 +13,7 @@ import {
   type Layout,
   type TemplateContext,
 } from '../../core'
+import { FILTER_LINK_BLOCK } from '../../blocks/builtins/filterLink'
 import { isRecord } from './fields'
 
 export type Doc = Record<string, unknown>
@@ -40,6 +41,8 @@ export type ListQuery = {
   random?: true
   /** `paginate: "pages"`: the page to show, from 1 (the URL's `?page=`). */
   page?: number
+  /** The list's own page parameter (`pageParam`), when it is not `page`. */
+  pageParam?: string
 }
 
 /** The runtime prop that carries a paginated list's page links (`ListPages`). Never stored. */
@@ -48,8 +51,37 @@ export { PAGE_PARAM }
 /** `sort` value that shuffles the list. */
 export const RANDOM_SORT = '$random'
 
-/** A paginated list's page links, for the collection list component. */
-export type ListPages = { current: number; links: Array<{ page: number; href: string; current: boolean }> }
+/**
+ * A paginated list's page links, for the collection list component. Long lists show the first,
+ * the last and the pages next to the current one; `gapBefore` marks a link after left-out pages.
+ */
+export type ListPages = { current: number; links: Array<{ page: number; href: string; current: boolean; gapBefore?: true }> }
+
+/** The runtime prop of filter links that holds the page parameters of the layout's lists (`withPageParams`). */
+export const LIST_PAGE_PARAMS_PROP = '$pageParams'
+
+/** A page parameter name: letters, digits, `_` and `-`. */
+const PARAM_NAME = /^[\w-]+$/
+
+/** A list's page parameter: its `pageParam` prop when that is a valid name, else `page`. */
+export function pageParamOf(props: Record<string, unknown> | undefined): string {
+  const raw = typeof props?.pageParam === 'string' ? props.pageParam.trim() : ''
+  return PARAM_NAME.test(raw) ? raw : PAGE_PARAM
+}
+
+/**
+ * The pages a pager shows, in order: the first, the last, the current one and one on each side.
+ * A gap of a single page shows that page instead. Seven pages or fewer: all of them.
+ */
+export function pageWindow(current: number, totalPages: number): number[] {
+  const shown = new Set([1, totalPages, current - 1, current, current + 1])
+  const pages: number[] = []
+  for (let page = 1; page <= totalPages; page++) {
+    // A gap of one page shows that page: "…" would take the same room.
+    if (totalPages <= 7 || shown.has(page) || (shown.has(page - 1) && shown.has(page + 1))) pages.push(page)
+  }
+  return pages
+}
 
 /**
  * The request's URL query, for collection lists' `queryFilters`: `URLSearchParams`, or the
@@ -149,30 +181,32 @@ function pickedIds(value: unknown, collection: string): Id[] {
   return [...out]
 }
 
-/** The page of the URL query (`?page=3`), from 1. */
-export function pageOf(query?: ListQueryParams | null): number {
-  const raw = query ? paramValues(query, PAGE_PARAM)[0] : undefined
+/** The page of the URL query (`?page=3`, or the list's own `param`), from 1. */
+export function pageOf(query?: ListQueryParams | null, param = PAGE_PARAM): number {
+  const raw = query ? paramValues(query, param)[0] : undefined
   const page = raw ? Number(raw) : 1
   return Number.isInteger(page) && page >= 1 ? page : 1
 }
 
 /**
- * The page links of a paginated list: `?page=N` with the rest of the URL query kept (filters), and
- * no `page` for page 1. Empty with one page or fewer.
+ * The page links of a paginated list: `?page=N` (or the list's own `param`) with the rest of the
+ * URL query kept (filters and other lists' pages), and no page param for page 1. Long lists get
+ * gaps (`pageWindow`). Empty with one page or fewer.
  */
-export function pageLinks(query: ListQueryParams | null | undefined, current: number, totalPages: number): ListPages {
+export function pageLinks(query: ListQueryParams | null | undefined, current: number, totalPages: number, param = PAGE_PARAM): ListPages {
   const links: ListPages['links'] = []
   if (totalPages <= 1) return { current, links }
   const base = new URLSearchParams()
   if (query instanceof URLSearchParams) for (const [key, value] of query) base.append(key, value)
   else if (query) for (const [key, value] of Object.entries(query)) for (const one of ([] as string[]).concat(value ?? [])) base.append(key, one)
-  base.delete(PAGE_PARAM)
-  // ponytail: one link per page; add a window with gaps if lists reach dozens of pages.
-  for (let page = 1; page <= totalPages; page++) {
+  base.delete(param)
+  let previous = 0
+  for (const page of pageWindow(current, totalPages)) {
     const params = new URLSearchParams(base)
-    if (page > 1) params.set(PAGE_PARAM, String(page))
+    if (page > 1) params.set(param, String(page))
     const text = params.toString()
-    links.push({ page, href: text ? `?${text}` : '?', current: page === current })
+    links.push({ page, href: text ? `?${text}` : '?', current: page === current, ...(page > previous + 1 ? { gapBefore: true as const } : {}) })
+    previous = page
   }
   return { current, links }
 }
@@ -248,7 +282,11 @@ export function listQueries(layout: Layout, context?: TemplateContext | null, qu
     const ids = pickedIds(props.ids, collection).slice(0, MAX_LIMIT)
     if (ids.length > 0) list.ids = ids
     else if (sort === RANDOM_SORT) list.random = true
-    else if (props.paginate === 'pages') list.page = pageOf(query)
+    else if (props.paginate === 'pages') {
+      const param = pageParamOf(props)
+      list.page = pageOf(query, param)
+      if (param !== PAGE_PARAM) list.pageParam = param
+    }
     const id = context?.doc.id
     const exclude = props.excludeCurrent !== false && context?.collection === collection
     if (exclude && (typeof id === 'string' || typeof id === 'number')) list.exclude = id
@@ -284,6 +322,23 @@ export function attachListItems(layout: Layout, items: ReadonlyMap<string, Doc[]
         ...next,
         slots: Object.fromEntries(Object.entries(next.slots).map(([name, children]) => [name, visit(children)])),
       }
+    })
+  return { ...layout, blocks: visit(layout.blocks) }
+}
+
+/**
+ * Gives every filter link the page parameters of the layout's paginated lists that do not use
+ * `page` (`$pageParams`), so a new filter starts those lists at page 1 too. `page` is always
+ * dropped. Returns the same layout when no list has its own parameter.
+ */
+export function withPageParams(layout: Layout, queries: readonly ListQuery[]): Layout {
+  const params = [...new Set(queries.flatMap((query) => (query.pageParam ? [query.pageParam] : [])))]
+  if (params.length === 0) return layout
+  const visit = (blocks: Block[]): Block[] =>
+    blocks.map((block) => {
+      const next: Block = block.type === FILTER_LINK_BLOCK ? { ...block, props: { ...block.props, [LIST_PAGE_PARAMS_PROP]: params } } : block
+      if (!next.slots) return next
+      return { ...next, slots: Object.fromEntries(Object.entries(next.slots).map(([name, children]) => [name, visit(children)])) }
     })
   return { ...layout, blocks: visit(layout.blocks) }
 }

@@ -16,7 +16,13 @@ function valuesOf(query: FilterQuery, param: string): string[] {
 
 const keysOf = (query: FilterQuery) => [...new Set(query instanceof URLSearchParams ? query.keys() : Object.keys(query))]
 
-export type FilterLinkTarget = { param: string; value: string; multiple?: boolean }
+export type FilterLinkTarget = {
+  param: string
+  value: string
+  multiple?: boolean
+  /** Page parameters of lists with their own `pageParam`, dropped like `page`. */
+  pageParams?: readonly string[]
+}
 
 /**
  * Where a filter link goes and whether it is the current filter. An empty `param` clears every
@@ -24,9 +30,10 @@ export type FilterLinkTarget = { param: string; value: string; multiple?: boolea
  * param's comma list; otherwise the value replaces the param's values. Other params stay.
  * `path` is the page path; with an empty path the href is relative (`?a=b`, or `?` for none).
  */
-export function filterHref(path: string, query: FilterQuery, { param, value, multiple }: FilterLinkTarget): { href: string; active: boolean } {
-  // A new filter starts again at page 1, so the page number is dropped.
-  const params = keysOf(query).filter((key) => key !== PAGE_PARAM && valuesOf(query, key).length > 0)
+export function filterHref(path: string, query: FilterQuery, { param, value, multiple, pageParams = [] }: FilterLinkTarget): { href: string; active: boolean } {
+  // A new filter starts again at page 1, so the page numbers are dropped.
+  const pages = new Set([PAGE_PARAM, ...pageParams])
+  const params = keysOf(query).filter((key) => !pages.has(key) && valuesOf(query, key).length > 0)
   const link = (search: string) => (search ? `${path}?${search}` : path || '?')
   if (!param) return { href: link(''), active: params.length === 0 }
   const current = valuesOf(query, param)
@@ -73,7 +80,8 @@ export function filterLinkBlock(): BlockDefinition {
         'A link to the current page with one URL query value set, toggled or cleared, for the "queryFilters" of a collection ' +
         'list (a filterLink with param "available" and value "today" goes to ?available=today). Other query values stay. An ' +
         'empty param clears every filter (the "All" link); an empty value clears its param. "multiple" toggles the value in a ' +
-        'comma list. The current filter gets aria-current="true": style it with aria-[current=true]: classes. Its "children" ' +
+        'comma list. It drops the page numbers of paginated lists ("page", and the "pageParam" of each list in the same ' +
+        'layout). The current filter gets aria-current="true": style it with aria-[current=true]: classes. Its "children" ' +
         'slot holds the label (a text, an icon). Filtered URLs should be noindex, follow.',
       example: {
         type: FILTER_LINK_BLOCK,

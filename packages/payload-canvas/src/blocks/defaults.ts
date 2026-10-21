@@ -799,14 +799,40 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
           { label: 'None: only the first items', value: 'none' },
           { label: 'Pages with ?page=N links', value: 'pages' },
         ],
-        admin: { description: 'Pages: "Number of items" per page, with links to every page under the list. "Skip items" does not apply.' },
+        admin: {
+          description:
+            'Pages: "Number of items" per page, with page links under the list. Long lists show the first, the last and the ' +
+            'pages around the current one, with "…" between. "Skip items" does not apply.',
+        },
+      },
+      {
+        name: 'pageParam',
+        type: 'text',
+        label: 'Page parameter',
+        admin: {
+          description:
+            'The URL parameter of the page number. Empty: "page". Give each paginated list on one page its own, for example ' +
+            '"reviewsPage". Letters, digits, _ and -.',
+          ...when('paginate', 'pages'),
+        },
+      },
+      {
+        name: 'pagerLabel',
+        type: 'text',
+        label: 'Page links: label for screen readers',
+        defaultValue: 'Pages',
+        localized: true,
+        admin: when('paginate', 'pages'),
       },
       {
         name: 'pagerClassName',
         type: 'text',
         label: 'Page links: classes',
         defaultValue: 'flex flex-wrap gap-2',
-        admin: { description: 'Classes of the element that holds the page links.', custom: { builderClasses: true } },
+        admin: {
+          description: 'Classes of the element that holds the page links. A gap ("…") is a span with data-page-gap.',
+          custom: { builderClasses: true },
+        },
       },
       {
         name: 'pageLinkClassName',
@@ -848,7 +874,9 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         'documents. "depth" ("1" or "2") is how deep related documents load. "ids" picks documents by id and keeps the ' +
         'pick order (limit, sort, offset and pages then do not apply). "sort": "$random" shuffles the newest 100 ' +
         'matches once per page build. "paginate": "pages" shows "limit" items per page with crawlable ?page=N links ' +
-        'under the list ("pagerClassName" and "pageLinkClassName" style them; the current link has aria-current="page"). ' +
+        'under the list ("pagerClassName" and "pageLinkClassName" style them; the current link has aria-current="page"; long ' +
+        'lists show "…" gaps as <span data-page-gap>). Two paginated lists on one page need their own "pageParam" ' +
+        '(default "page"), for example "reviewsPage". "pagerLabel" names the page links for screen readers (default "Pages"). ' +
         'The "empty" slot shows instead of the ' +
         'items when no document matches (e.g. a text "Nobody is available today"); it renders in its own div, styled ' +
         'with "slotClassName": { "empty": "col-span-full ..." }.',
