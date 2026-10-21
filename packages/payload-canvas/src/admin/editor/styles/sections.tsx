@@ -19,7 +19,7 @@ import { propertiesIn, propertyDef } from './model'
 // ---------------------------------------------------------------------------
 
 const TEXT_TYPES = new Set(['heading', 'text', 'richText', 'quote', 'button', 'list', 'listItem', 'link', 'field'])
-const CONTAINER_TYPES = new Set(['stack', 'grid', 'collectionList', 'fieldList'])
+const CONTAINER_TYPES = new Set(['stack', 'grid', 'collectionList', 'repeat'])
 
 function mainGroup(blockType: string): StyleGroup | null {
   if (TEXT_TYPES.has(blockType)) return 'typography'

@@ -1,6 +1,6 @@
 import type { CollectionSlug } from 'payload'
 import { defineBlock } from '../core/blocks'
-import { COLLECTION_LIST_BLOCK, FIELD_BLOCK, FIELD_LIST_BLOCK, INDEX_PATH, ITEM_PATH, LIST_ITEM_SLOT } from '../core/bindings'
+import { COLLECTION_LIST_BLOCK, FIELD_BLOCK, INDEX_PATH, ITEM_PATH, LIST_EMPTY_SLOT, LIST_ITEM_SLOT, PAGE_PATH, PARENT_PATH, REPEAT_BLOCK } from '../core/bindings'
 import { TEXT_LIST_BLOCK, TEXT_LIST_ITEM_BLOCK, TEXT_LIST_SLOT } from '../core/textList'
 import type { BlockDefinition } from '../core/types'
 import { BUILDER_CSS_CLASS } from '../css/marker'
@@ -92,7 +92,7 @@ const FIELD_CLASSES = Object.values(FIELD_CLASS_MAP)
 
 /**
  * The built-in blocks: stack, grid, heading, text, richText, image, button, link, menu, list (with
- * its listItem blocks), quote, divider, spacer, video, and the dynamic blocks field, collectionList and fieldList.
+ * its listItem blocks), quote, divider, spacer, video, and the dynamic blocks field, collectionList and repeat.
  */
 export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[] {
   const mediaCollection = (options?.mediaCollection ?? 'media') as CollectionSlug
@@ -678,10 +678,10 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     },
   })
 
-  const fieldList = defineBlock({
-    type: FIELD_LIST_BLOCK,
-    label: 'Field list',
-    icon: 'fieldList',
+  const repeat = defineBlock({
+    type: REPEAT_BLOCK,
+    label: 'Repeat',
+    icon: 'repeat',
     category: 'Dynamic',
     fields: [
       {
@@ -717,16 +717,17 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     ai: {
       description:
         'Repeats its "item" slot once per row of a list field of the CURRENT document (templates; inside a collection ' +
-        'list item, of each listed document; inside another field list, of the row). "path" is the field: an array ' +
+        'list item, of each listed document; inside another repeat, of the row). "path" is the field: an array ' +
         '(e.g. FAQs, rates), a hasMany upload (e.g. a gallery), a hasMany relationship, or hasMany text/select. ' +
-        'Blocks in "item" bind to the ROW: the field names of an array row (e.g. "question"), the related document ' +
-        `fields (e.g. "name"; "$url" when "collection" names its collection), "${ITEM_PATH}" (the row value itself: ` +
-        `an upload for an image, a text for a text block) and "${INDEX_PATH}" (the row number from 1). "limit" and ` +
-        '"offset" pick rows (offset 1 skips the first). On a page without a current document it shows nothing. ' +
-        'Example 2 (photos): { "type": "fieldList", "props": { "path": "galleryImages", "offset": 1 }, "slots": { "item": ' +
-        `[{ "type": "image", "bindings": { "image": "${ITEM_PATH}" } }] } }.`,
+        'Blocks in "item" bind to the ROW: the field names of an array row (e.g. "question", "price"), the related ' +
+        `document's fields (e.g. "name"; "$url" when "collection" names its collection), "${ITEM_PATH}" (the row value ` +
+        `itself: an upload for an image, a text for a text block), "${INDEX_PATH}" (the row number from 1), ` +
+        `"${PARENT_PATH}.<field>" (the enclosing document, e.g. "${PARENT_PATH}.name") and "${PAGE_PATH}.<field>" (the page's ` +
+        'document). "limit" and "offset" pick rows (offset 1 skips the first). On a page without a current document ' +
+        'it shows nothing. Example 2 (photos): { "type": "repeat", "props": { "path": "galleryImages", "offset": 1 }, ' +
+        `"slots": { "item": [{ "type": "image", "bindings": { "image": "${ITEM_PATH}" } }] } }.`,
       example: {
-        type: FIELD_LIST_BLOCK,
+        type: REPEAT_BLOCK,
         props: { path: 'faqs' },
         className: 'flex flex-col gap-4',
         slots: {
@@ -748,5 +749,5 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     },
   })
 
-  return [stack, grid, heading, text, richText, image, button, link, menu, list, listItem, quote, divider, spacer, video, field, collectionList, fieldList]
+  return [stack, grid, heading, text, richText, image, button, link, menu, list, listItem, quote, divider, spacer, video, field, collectionList, repeat]
 }

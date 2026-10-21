@@ -5,7 +5,7 @@ import { isLinkField } from '../../../blocks/link'
 import {
   COLLECTION_LIST_BLOCK,
   FIELD_BLOCK,
-  FIELD_LIST_BLOCK,
+  REPEAT_BLOCK,
   getByPath,
   isIsoDate,
   isUploadDoc,
@@ -14,9 +14,9 @@ import {
   toPlainText,
   URL_PATH,
 } from '../../../core/bindings'
-import type { BindingField, Block, Layout } from '../../../core/types'
+import type { BindingField, Block, Layout, TemplateContext } from '../../../core/types'
 
-export { FIELD_BLOCK, FIELD_LIST_BLOCK, URL_PATH }
+export { FIELD_BLOCK, REPEAT_BLOCK, URL_PATH }
 /** Block type of the collection list block. Blocks in its `item` slot bind to each item. */
 export const LIST_BLOCK = COLLECTION_LIST_BLOCK
 export const LIST_SLOT = LIST_ITEM_SLOT
@@ -232,6 +232,19 @@ export function bindingTrail(fields: BindingField[], path: string): string[] {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
+
+/**
+ * A context as one document for previews (`valueAt`, the field picker's samples): the document's
+ * fields plus `$item`, `$index`, `$parent` and `$page` as keys.
+ */
+export function previewDoc(context: TemplateContext): Record<string, unknown> {
+  const doc: Record<string, unknown> = { ...context.doc }
+  if (context.item !== undefined) doc.$item = context.item
+  if (context.index !== undefined) doc.$index = context.index
+  if (context.parent) doc.$parent = context.parent
+  if (context.page) doc.$page = context.page
+  return doc
+}
 
 /**
  * The value at a dot path in a document loaded with depth 1, read the same way the renderer reads
