@@ -35,7 +35,7 @@ const model: TemplateContext = {
 
 const faq: Block = {
   id: 'faq',
-  type: 'fieldList',
+  type: 'repeat',
   props: { path: 'faqs' },
   slots: {
     item: [
@@ -55,7 +55,7 @@ const faq: Block = {
 }
 const layoutOf = (...list: Block[]): Layout => ({ version: 1, blocks: list })
 
-describe('field list rendering', () => {
+describe('repeat rendering', () => {
   it('repeats the item for every row, bound to the row ($index from 1)', () => {
     const html = render({ layout: layoutOf(faq), context: model })
     for (const text of ['First question', 'First answer', 'Second question', 'Second answer']) assert.ok(html.includes(text), text)
@@ -65,7 +65,7 @@ describe('field list rendering', () => {
   it('binds an image to $item in a list of uploads, after `offset`', () => {
     const photos: Block = {
       id: 'photos',
-      type: 'fieldList',
+      type: 'repeat',
       props: { path: 'galleryImages', offset: 1 },
       slots: { item: [{ id: 'img', type: 'image', bindings: { image: '$item' } }] },
     }
@@ -74,10 +74,10 @@ describe('field list rendering', () => {
     assert.ok(html.includes('/media/8.png') && html.includes('/media/9.png'))
   })
   it('binds text to $item in a hasMany text list, and $url with the `collection` prop', () => {
-    const tags: Block = { id: 't', type: 'fieldList', props: { path: 'tags' }, slots: { item: [{ id: 'tx', type: 'text', bindings: { text: '$item' } }] } }
+    const tags: Block = { id: 't', type: 'repeat', props: { path: 'tags' }, slots: { item: [{ id: 'tx', type: 'text', bindings: { text: '$item' } }] } }
     const services: Block = {
       id: 's',
-      type: 'fieldList',
+      type: 'repeat',
       props: { path: 'services', collection: 'services' },
       slots: { item: [{ id: 'lk', type: 'button', props: { label: 'Service' }, bindings: { label: 'title', link: '$url' } }] },
     }
@@ -95,8 +95,8 @@ describe('field list rendering', () => {
     const html = render({ layout: attachListItems(layoutOf(list), new Map([['l', docs]])) })
     for (const text of ['Q of two', 'Q of three', 'Another of three']) assert.ok(html.includes(text), text)
   })
-  it('renders inside another field list, against the row', () => {
-    const outer: Block = { id: 'o', type: 'fieldList', props: { path: 'groups' }, slots: { item: [{ ...faq, id: 'inner' }] } }
+  it('renders inside another repeat, against the row', () => {
+    const outer: Block = { id: 'o', type: 'repeat', props: { path: 'groups' }, slots: { item: [{ ...faq, id: 'inner' }] } }
     const doc = { id: 1, groups: [{ faqs: [{ question: 'Nested one' }] }, { faqs: [{ question: 'Nested two' }] }] }
     const html = render({ layout: layoutOf(outer), context: { collection: 'models', doc } })
     assert.ok(html.includes('Nested one') && html.includes('Nested two'))
@@ -111,7 +111,7 @@ describe('field list rendering', () => {
   it('on the canvas the first row is editable and the others are repeats', () => {
     const canvas = render({ layout: layoutOf(faq), context: model, mode: 'canvas' })
     assert.equal(canvas.match(/data-block-id="q"/g)?.length, 1)
-    assert.match(canvas, /data-block-id="faq" data-block-type="fieldList" data-slot-owner="faq" data-slot="item"/)
+    assert.match(canvas, /data-block-id="faq" data-block-type="repeat" data-slot-owner="faq" data-slot="item"/)
     // The second row: stack, heading and two texts.
     assert.equal(canvas.match(/data-builder-repeat=""/g)?.length, 4)
     assert.ok(canvas.includes('Second question'))
@@ -119,9 +119,42 @@ describe('field list rendering', () => {
 })
 
 describe('canvas client resolution', () => {
-  it('gives a field list its rows from the sample document', async () => {
-    const resolved = await resolveCanvasLayout(layoutOf(faq), model, '/api-field-list-test', blocks, resolveLink)
+  it('gives a repeat its rows from the sample document', async () => {
+    const resolved = await resolveCanvasLayout(layoutOf(faq), model, '/api-repeat-test', blocks, resolveLink)
     assert.deepEqual(resolved.blocks[0].props?.[LIST_ITEMS_PROP], model.doc.faqs)
     assert.deepEqual(resolved.blocks[0].slots?.item, faq.slots?.item)
+  })
+})
+
+describe('item bindings: $parent, $page and $index', () => {
+  it('a repeat in a collection list item reads $parent (the listed document) and $page', () => {
+    const repeat: Block = {
+      id: 'r',
+      type: 'repeat',
+      props: { path: 'faqs' },
+      slots: { item: [{ id: 't', type: 'text', bindings: { text: '{{question}} · {{$parent.title}} · {{$page.slug}} · {{$index}}' } }] },
+    }
+    const list: Block = { id: 'l', type: 'collectionList', props: { collection: 'models' }, slots: { item: [repeat] } }
+    const docs = [{ id: 2, title: 'Bea', faqs: [{ question: 'Q1' }, { question: 'Q2' }] }]
+    const html = render({ layout: attachListItems(layoutOf(list), new Map([['l', docs]])), context: model })
+    assert.ok(html.includes('Q1 · Bea · ada · 1'))
+    assert.ok(html.includes('Q2 · Bea · ada · 2'))
+  })
+})
+
+const badge = (condition: string): Block => ({ id: 'b', type: 'text', props: { text: 'Available today' }, bindings: { $visible: condition } })
+
+describe('$visible', () => {
+  it('renders the block only when the condition holds, also inside list items', () => {
+    assert.ok(render({ layout: layoutOf(badge('slug')), context: model }).includes('Available today'))
+    assert.ok(!render({ layout: layoutOf(badge('!slug')), context: model }).includes('Available today'))
+    const list: Block = { id: 'l', type: 'collectionList', props: { collection: 'models' }, slots: { item: [badge('availableToday')] } }
+    const docs = [{ id: 2, availableToday: true }, { id: 3, availableToday: false }]
+    const html = render({ layout: attachListItems(layoutOf(list), new Map([['l', docs]])) })
+    assert.equal(html.match(/Available today/g)?.length, 1)
+  })
+  it('marks a hidden block on the canvas instead of removing it', () => {
+    const canvas = render({ layout: layoutOf(badge('!slug')), context: model, mode: 'canvas' })
+    assert.match(canvas, /data-builder-hidden="true"/)
   })
 })

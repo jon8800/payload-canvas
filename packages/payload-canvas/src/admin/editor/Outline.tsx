@@ -26,8 +26,8 @@ import { blockPreview, blockSummary, childrenOf, customLabel, typeName } from '.
 import { OUTLINE_INDENT, useRuntime, type DragData, type Runtime } from './runtime'
 import { RegionRows } from './regions/RegionRows'
 import { useEditor } from './store'
-import { scopeSources } from '../../core/bindings'
-import { findBindingField, URL_PATH } from './templates/binding'
+import { bindingPaths, scopeSources } from '../../core/bindings'
+import { findBindingField } from './templates/binding'
 import { useValue, useValueSelector } from './valueStore'
 
 type Row = {
@@ -111,11 +111,12 @@ const NO_ISSUES: string[] = []
  * document): the template's, each list item's, or each field list row's.
  */
 function hasBrokenBinding(runtime: Runtime, layout: Layout, block: Block, templateTarget: string | null): boolean {
-  const paths = Object.values(block.bindings ?? {})
-  if (paths.length === 0) return false
+  const bindings = Object.entries(block.bindings ?? {})
+  if (bindings.length === 0) return false
   const fields = scopeSources(layout, block.id, runtime.config.templates?.sources ?? {}, templateTarget)
   if (!fields) return true
-  return paths.some((path) => path !== URL_PATH && !findBindingField(fields, path))
+  // Every plain path a binding reads (templates and fallback chains have several).
+  return bindings.some(([key, binding]) => bindingPaths(key, binding).some((path) => !findBindingField(fields, path)))
 }
 
 /**

@@ -1488,7 +1488,35 @@ Which template a document uses: its own `template`, else the newest default temp
 
 - A **binding** connects a block prop to a document field: `bindings: { "text": "title", "image": "author.avatar" }`. Paths are dot paths from the document root. At render time the prop takes the document's value. A missing value falls back to the prop's own value. In the editor, the binding picker lists only compatible fields of the target collection, including one relationship hop.
 - The **Field** block (`field`) shows one field of the document by path, rendered by its type: rich text, an upload as an image, a date, a relationship's title, or text. Use it for the post body.
-- The **Collection list** block (`collectionList`) lists the latest documents of a collection (`collection`, `limit`, `sort`, `excludeCurrent`, and the filters `filterField`, `filterBy` and `where` below). Its `item` slot is the design of one item and repeats for every document. Blocks in it bind to the item's fields, for example a heading with `bindings: { "text": "title" }` and a link with `bindings: { "link": "$url" }` (the item's URL from the collection's `url` option). The site shows published documents only. It works on normal pages too, not only in templates.
+- The **Collection list** block (`collectionList`) lists the latest documents of a collection (`collection`, `limit`, `sort`, `excludeCurrent`, `offset`, `depth`, and the filters `filterField`, `filterBy`, `where` and `queryFilters` below). Its `item` slot is the design of one item and repeats for every document. Its `empty` slot shows instead when no document matches, for example a text "Nobody is available today". Blocks in the item bind to the item's fields, for example a heading with `bindings: { "text": "title" }` and a link with `bindings: { "link": "$url" }` (the item's URL from the collection's `url` option). The site shows published documents only. It works on normal pages too, not only in templates.
+  - `offset` skips documents after the sort (at most 100).
+  - `depth` is `"1"` (default) or `"2"`: how deep the related documents of each item load. Use `"2"` to reach, for example, `categories.image`.
+- The **Repeat** block (`repeat`) repeats its `item` slot per row of an array or hasMany field. See "Repeat the rows of a field" below.
+
+#### Binding syntax
+
+| Binding | Example | What it gives |
+| --- | --- | --- |
+| A path | `"title"`, `"author.name"` | The field's value. |
+| `$url` | `{ "link": "$url" }` | The document's page URL (the collection's `url` option). |
+| A fallback chain | `"heading\|name"` | The first path that has a value. |
+| Formatters | `"publishedAt\|date:en-AU:Australia/Brisbane"`, `"price\|currency:AUD"`, `"price\|number"`, `"bio\|firstSentence"` | Text. `date[:locale[:timeZone]]` (default `en`, UTC), `currency[:code[:locale]]` (`$1,200`; whole amounts have no cents), `number[:locale]` (`1,200`), `firstSentence`. Put them after the paths: `"heading\|name\|firstSentence"`. |
+| A template string | `{ "text": "Enquire about {{name}}" }`, `"From {{price\|currency:AUD}}"` | Text with each `{{expression}}` filled in. A missing expression becomes empty. When every expression is missing, the prop keeps its own value. |
+| `$visible` | `{ "$visible": "availableToday" }` | Not a prop: the block shows only when the condition holds. See below. |
+| `$item`, `$index` | `{ "image": "$item" }`, `"{{$index}}."` | Inside a repeat: the row value itself. Inside a list or repeat item: the item number, from 1. |
+| `$parent.<path>` | `"$parent.name"` | Inside a list or repeat item: the enclosing document (the page's document, the listed document, or the outer row). |
+| `$page.<path>` | `"$page.title"` | Anywhere: the page's own document, also inside list and repeat items. |
+
+`$visible` conditions:
+
+| Condition | Shows the block when |
+| --- | --- |
+| `"field"` | the field has a value. `false`, `""`, `null` and `[]` count as empty. |
+| `"!field"` | the field is empty. |
+| `"field=value"` | the field equals the value. For a list (hasMany), any item or document id matches. |
+| `"field!=value"` | the field does not equal the value. |
+
+A block hidden by `$visible` renders nothing on the site. On the canvas it shows dimmed, like a hidden block. Expressions and `$visible` are not checked against the collection's fields when you publish. The inspector shows an expression as text with a preview of its value. Add or change one in the layout JSON or through the MCP tools.
 
 #### Filter a collection list
 
@@ -1566,7 +1594,7 @@ return <RenderLayout layout={layout} css={found.css} context={context} blocks={b
 ```
 
 - `loadTemplate(payload, { collection, doc, templatesSlug?, draft? })` returns `{ template, layout, css }` or `null`. Without `draft` it uses published templates only.
-- `loadLayoutData(layout, blocks, payload, { draft, context, resolveLink })` resolves bindings and Field blocks against `context`, loads collection lists, and loads upload and relationship props. Pass the same `context` to `RenderLayout`.
+- `loadLayoutData(layout, blocks, payload, { draft, context, resolveLink, user, query })` resolves bindings and Field blocks against `context`, gives repeats their rows, loads collection lists, and loads upload and relationship props. `query` is the request's URL query for `queryFilters`. Pass the same `context` to `RenderLayout`.
 - `getByPath(doc, path)` and `resolveBindings(layout, context, blocks)` from `payload-canvas/core` do the same work for a custom renderer.
 
 ## References and Used in

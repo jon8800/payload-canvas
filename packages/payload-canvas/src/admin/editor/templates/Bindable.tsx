@@ -8,8 +8,19 @@ import { createContext, use, useCallback, useState, type ChangeEvent, type React
 import type { Field, OptionObject } from 'payload'
 
 import { isLinkField } from '../../../blocks/link'
-import { COLLECTION_LIST_BLOCK, fieldListRowContext, fieldListRows, getBlockDefinition, itemSources, propField, repeatAncestors } from '../../../core'
-import type { BindingField, Block, BlockDefinition } from '../../../core/types'
+import {
+  bindingValue,
+  COLLECTION_LIST_BLOCK,
+  getBlockDefinition,
+  isBindingExpression,
+  itemSources,
+  listItemContext,
+  propField,
+  repeatAncestors,
+  repeatRowContext,
+  repeatRows,
+} from '../../../core'
+import type { BindingField, Block, BlockDefinition, TemplateContext } from '../../../core/types'
 import { Icon } from '../icons'
 import { useRuntime } from '../runtime'
 import { useEditor } from '../store'
@@ -19,7 +30,7 @@ import {
   bindingTrail,
   docTitle,
   FIELD_BLOCK,
-  FIELD_LIST_BLOCK,
+  REPEAT_BLOCK,
   findBindingField,
   hasBindableField,
   isCompatible,
@@ -27,6 +38,7 @@ import {
   isFieldListSource,
   isObviousPath,
   LIST_BLOCK,
+  previewDoc,
   previewValue,
   propKind,
   propPathOf,
@@ -39,17 +51,19 @@ import { FieldPicker, fieldIcon } from './FieldPicker'
 import { useCollectionLabel, useListSample, useTitleField } from './useTemplate'
 import './templates.scss'
 
-/** Where the selected block's bindings read from: the template's document, each list item, or each field list row. */
+/** Where the selected block's bindings read from: the template's document, each list item, or each repeat row. */
 export type BindingScope = {
   kind: 'template' | 'list' | 'row'
   /** Null when the template has no target yet, or the list has no collection. */
   collection: string | null
   fields: BindingField[]
-  /** The document previews read from: the template's sample, the list's first item, or the first row. */
+  /** The document previews read from: the template's sample, the list's first item, or the first row (`previewDoc`). */
   sample: Record<string, unknown> | null
+  /** The same sample as a binding context, for expression previews. */
+  context: TemplateContext | null
   sampleTitle: string
   loading: boolean
-  /** Field lists only: the field whose rows repeat, e.g. "faqs". */
+  /** Repeats only: the field whose rows repeat, e.g. "faqs". */
   rowPath?: string
 }
 
@@ -66,30 +80,34 @@ const sameBlocks = (a: Block[], b: Block[]) => a.length === b.length && a.every(
 
 /**
  * The binding scope of a block, or null when nothing can be bound (a normal page, outside lists).
- * Inside field lists the scope narrows to the row: the row's fields, `$item` and `$index`, and the
- * first row of the sample.
+ * Inside repeats the scope narrows to the row: the row's fields, `$item`, `$index`, `$parent` and
+ * `$page`, and the first row of the sample.
  */
 export function useBindingScope(block: Block): BindingScope | null {
   const runtime = useRuntime()
+  const template = useValue(runtime.template)
   const repeats = useEditor(runtime.store, (s) => repeatAncestors(s.layout, block.id), sameBlocks)
   const nearest = repeats.findLastIndex((b) => b.type === COLLECTION_LIST_BLOCK)
   const scope = useOuterScope(block, nearest >= 0 ? repeats[nearest]! : null)
   const rows = repeats.slice(nearest + 1)
   if (!scope || rows.length === 0) return scope
   const sources = runtime.config.templates?.sources ?? {}
+  const page = template.isTemplate && template.target ? sources[template.target] : undefined
   let fields: BindingField[] | undefined = scope.fields
-  let sample = scope.sample
+  let context = scope.context
   for (const row of rows) {
-    fields = itemSources(row, fields, sources)
-    const first = sample ? fieldListRows(sample, row.props)[0] : undefined
-    sample = first === undefined ? null : fieldListRowContext(first, 0).doc
+    fields = itemSources(row, fields, sources, page)
+    const first = context ? repeatRows(context, row.props)[0] : undefined
+    const collection = typeof row.props?.collection === 'string' ? row.props.collection : ''
+    context = first === undefined || !context ? null : repeatRowContext(first, 0, context, collection)
   }
   return {
     ...scope,
     kind: 'row',
     fields: fields ?? [],
-    sample,
-    sampleTitle: sample ? docTitle(sample.$item) : '',
+    sample: context ? previewDoc(context) : null,
+    context,
+    sampleTitle: context ? docTitle(context.item) : '',
     rowPath: typeof rows.at(-1)?.props?.path === 'string' ? (rows.at(-1)!.props!.path as string) : '',
   }
 }
@@ -108,12 +126,17 @@ function useOuterScope(block: Block, list: Block | null): BindingScope | null {
   const locale = useEditor(runtime.store, (s) => s.locale)
   const listSample = useListSample(runtime.api, list ? listCollection : null, listSort, exclude, locale)
 
+  const page = template.isTemplate && template.target ? sources[template.target] : undefined
+  const pageContext: TemplateContext | null =
+    template.isTemplate && template.sample?.doc ? { collection: template.target ?? '', doc: template.sample.doc } : null
   if (list) {
+    const context = listSample.doc ? listItemContext(listSample.doc, 0, pageContext, listCollection ?? '') : null
     return {
       kind: 'list',
       collection: listCollection,
-      fields: listCollection ? withUrl('list', sources[listCollection] ?? []) : [],
-      sample: listSample.doc,
+      fields: listCollection ? withUrl('list', itemSources(list, undefined, sources, page) ?? []) : [],
+      sample: context ? previewDoc(context) : null,
+      context,
       sampleTitle: listSample.doc ? docTitle(listSample.doc, listTitle) : '',
       loading: listSample.loading,
     }
@@ -124,6 +147,7 @@ function useOuterScope(block: Block, list: Block | null): BindingScope | null {
     collection: template.target,
     fields: template.target ? withUrl('template', sources[template.target] ?? []) : [],
     sample: template.sample?.doc ?? null,
+    context: pageContext,
     sampleTitle: template.sample?.title ?? '',
     loading: template.status === 'loading',
   }
@@ -164,10 +188,10 @@ export function FieldSlot(props: SlotProps) {
   const { block, def, scope } = ctx
 
   if (block.type === FIELD_BLOCK && propPath === 'path') return <FieldPathInput {...props} scope={scope} />
-  if (block.type === FIELD_LIST_BLOCK && propPath === 'path') return <FieldPathInput {...props} scope={scope} rows />
+  if (block.type === REPEAT_BLOCK && propPath === 'path') return <FieldPathInput {...props} scope={scope} rows />
   if (block.type === LIST_BLOCK && propPath === 'collection') return <ListCollectionInput {...props} />
   if (block.type === LIST_BLOCK && propPath === 'sort') return <ListSortInput {...props} block={block} />
-  if (block.type === FIELD_BLOCK || block.type === LIST_BLOCK || block.type === FIELD_LIST_BLOCK) return props.children
+  if (block.type === FIELD_BLOCK || block.type === LIST_BLOCK || block.type === REPEAT_BLOCK) return props.children
 
   const kind = propKind(props.field as { type: string; hasMany?: boolean })
   if (!kind) return props.children
@@ -278,8 +302,9 @@ function BoundField({
   const collectionLabel = useCollectionLabel(scope?.collection ?? null)
   const [showFallback, setShowFallback] = useState(false)
   const fields = scope?.collection ? scope.fields : [urlField(scope?.kind ?? 'list')]
-  const source = findBindingField(fields, bound)
-  const trail = source ? bindingTrail(fields, bound) : bound.split('.')
+  const expression = isBindingExpression(bound)
+  const source = expression ? { path: bound, label: bound, type: 'text' } : findBindingField(fields, bound)
+  const trail = source && !expression ? bindingTrail(fields, bound) : [bound]
   const required = 'required' in field ? Boolean(field.required) : false
 
   return (
@@ -307,7 +332,9 @@ function BoundField({
           <Icon name="close" size={12} />
         </button>
       </div>
-      {source ? (
+      {expression ? (
+        <ExpressionPreview scope={scope} binding={bound} />
+      ) : source ? (
         <SamplePreview scope={scope} source={source} />
       ) : (
         <p className="builder-bind__note builder-bind__note--warn">
@@ -338,6 +365,18 @@ function BoundField({
           onPick={bind}
         />
       )}
+    </div>
+  )
+}
+
+/** The sample's value for a binding expression (a template string, a fallback chain, formatters). */
+function ExpressionPreview({ scope, binding }: { scope: BindingScope | null; binding: string }) {
+  if (!scope?.context) return <p className="builder-bind__note">A binding expression. No sample to preview.</p>
+  const text = previewValue(bindingValue(scope.context, binding), 'text')
+  return (
+    <div className="builder-bind__preview">
+      <span className="builder-bind__preview-from">Expression</span>
+      {text.kind === 'text' ? <span className="builder-bind__preview-text">{text.text}</span> : <span className="builder-bind__preview-empty">Empty here. The fallback shows instead.</span>}
     </div>
   )
 }
@@ -519,7 +558,7 @@ function ScopeBanner({ block, scope }: { block: Block; scope: BindingScope | nul
   const runtime = useRuntime()
   const collectionLabel = useCollectionLabel(scope?.collection ?? null)
   const singular = useCollectionLabel(scope?.collection ?? null, 'singular')
-  if (!scope || block.type === FIELD_BLOCK || block.type === LIST_BLOCK || block.type === FIELD_LIST_BLOCK) return null
+  if (!scope || block.type === FIELD_BLOCK || block.type === LIST_BLOCK || block.type === REPEAT_BLOCK) return null
   const def = getBlockDefinition(runtime.config.blocks, block.type)
   if (!def || !hasBindableField(def.fields as Parameters<typeof hasBindableField>[0])) return null
 

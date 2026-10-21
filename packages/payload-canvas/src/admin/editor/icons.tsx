@@ -103,7 +103,7 @@ const PATHS = {
     </>
   ),
   // Rows of one field: braces (a field) around repeated lines.
-  fieldList: (
+  repeat: (
     <>
       <path d="M5 2.5h-.5A1.5 1.5 0 0 0 3 4v8a1.5 1.5 0 0 0 1.5 1.5H5" />
       <path d="M11 2.5h.5A1.5 1.5 0 0 1 13 4v8a1.5 1.5 0 0 1-1.5 1.5H11" />

@@ -171,6 +171,16 @@ export type TemplateContext = {
   // not assignable to Record<string, unknown>.
   // oxlint-disable-next-line typescript/no-explicit-any
   doc: Record<string, any>
+  /** Inside a repeat item: the row value itself (`$item`). */
+  item?: unknown
+  /** Inside a collection list or repeat item: the item's number, from 1 (`$index`). */
+  index?: number
+  /** Inside a collection list or repeat item: the enclosing document (`$parent.`). */
+  // oxlint-disable-next-line typescript/no-explicit-any
+  parent?: Record<string, any>
+  /** Inside a collection list or repeat item: the page's own document (`$page.`). Else `doc` is the page. */
+  // oxlint-disable-next-line typescript/no-explicit-any
+  page?: Record<string, any>
 }
 
 // ---------------------------------------------------------------------------

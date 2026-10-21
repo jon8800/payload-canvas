@@ -1,7 +1,7 @@
 // Texts and helpers shared by the MCP tools (src/mcp) and the editor's AI assistant (src/ai).
 // No zod and no Payload runtime here, so the assistant does not need the MCP dependencies.
 
-import { COLLECTION_LIST_BLOCK, FIELD_BLOCK, FIELD_LIST_BLOCK, INDEX_PATH, ITEM_PATH, URL_PATH } from '../core/bindings'
+import { COLLECTION_LIST_BLOCK, FIELD_BLOCK, INDEX_PATH, ITEM_PATH, PAGE_PATH, PARENT_PATH, REPEAT_BLOCK, URL_PATH, VISIBLE_BINDING } from '../core/bindings'
 import { dataFields, optionValues } from '../core/fields'
 import { createId } from '../core/ids'
 import { MOTION_EASING_INFO, MOTION_KINDS, MOTION_PRESET_INFO, MOTION_SPECS } from '../core/motion'
@@ -62,7 +62,12 @@ export const BINDINGS_GUIDE = [
   'Values are converted to the prop type: rich text and dates become plain text in text props. When the document has no value, the literal prop stays, so bound props may stay empty.',
   `The "${FIELD_BLOCK}" block shows any field by its type (rich text, image, date, text): props { "path": "content" }.`,
   `In a "${COLLECTION_LIST_BLOCK}" block, blocks in the "item" slot bind to each LISTED document, not to the page.`,
-  `In a "${FIELD_LIST_BLOCK}" block (props { "path": "faqs" }), blocks in the "item" slot bind to each ROW of that list field: the row's fields ("question"), "${ITEM_PATH}" (the row value, e.g. an upload for an image) and "${INDEX_PATH}" (the row number from 1).`,
+  `In a "${REPEAT_BLOCK}" block (props { "path": "faqs" }), blocks in the "item" slot bind to each ROW of that list field: the row's fields ("question"), "${ITEM_PATH}" (the row value, e.g. an upload for an image) and "${INDEX_PATH}" (the row number from 1).`,
+  `Inside any list or repeat item: "${PARENT_PATH}.<field>" reads the enclosing document (e.g. "${PARENT_PATH}.name"), "${PAGE_PATH}.<field>" the page's own document, "${INDEX_PATH}" the item number.`,
+  'Fallbacks: "heading|name" uses the first path with a value.',
+  'Formatters after the paths: "publishedAt|date:en-AU:Australia/Brisbane", "price|currency:AUD" ($1,200), "price|number", "bio|firstSentence".',
+  'Template strings: a binding with {{…}} is text with expressions, e.g. { "text": "Enquire about {{name}}" } or "From {{price|currency:AUD}}". A missing expression becomes empty; when all are missing the literal prop stays.',
+  `Conditional blocks: "${VISIBLE_BINDING}" in bindings shows the block only when the condition holds: "availableToday" (filled; false counts as empty), "!availableToday" (empty), "district=north" (equals; for lists, any item or document id), "district!=north". A hidden block renders nothing on the site.`,
 ].join('\n')
 
 /** Copies a block tree with new ids that are not in `used`. */

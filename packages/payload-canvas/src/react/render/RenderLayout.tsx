@@ -2,12 +2,14 @@ import { Fragment, memo, type ReactNode } from 'react'
 import {
   blocksHaveMotion,
   COLLECTION_LIST_BLOCK,
-  fieldListRowContext,
   isRepeatSlot,
+  LIST_EMPTY_SLOT,
+  listItemContext,
   motionAttributes,
   staggersChildren,
   LIST_ITEM_SLOT,
   LIST_ITEMS_PROP,
+  repeatRowContext,
   resolveBlockBindings,
   type Block,
   type BlockDefinition,
@@ -96,27 +98,30 @@ function renderSlot(block: Block, slot: string, ctx: Context): ReactNode {
   )
 }
 
-/** The contexts a repeat block's `item` slot renders with: one per listed document or field list row. */
-function repeatContexts(block: Block): TemplateContext[] {
+/** The contexts a list block's `item` slot renders with: one per listed document or repeat row. */
+function repeatContexts(block: Block, around: TemplateContext | null): TemplateContext[] {
   const collection = typeof block.props?.collection === 'string' ? block.props.collection : ''
-  if (block.type === COLLECTION_LIST_BLOCK) return listItemsOf(block.props).map((doc) => ({ collection, doc }))
+  if (block.type === COLLECTION_LIST_BLOCK) return listItemsOf(block.props).map((doc, i) => listItemContext(doc, i, around, collection))
   const rows = block.props?.[LIST_ITEMS_PROP]
-  return Array.isArray(rows) ? rows.map((row, i) => fieldListRowContext(row, i, collection)) : []
+  return Array.isArray(rows) ? rows.map((row, i) => repeatRowContext(row, i, around, collection)) : []
 }
 
+/** True when a collection list shows its `empty` slot: it has no documents. */
+const showsEmpty = (block: Block) => block.type === COLLECTION_LIST_BLOCK && listItemsOf(block.props).length === 0
+
 /**
- * The `item` slot of a collection list (once per loaded document) or a field list (once per row).
+ * The `item` slot of a collection list (once per loaded document) or a repeat (once per row).
  * Each repetition binds to its own document or row. On the canvas only the first one is
  * editable; the others are repeats. With nothing to repeat, the editor still shows the item
  * design once, and the site shows nothing.
  */
 function renderListItems(block: Block, ctx: Context): ReactNode {
-  const contexts = repeatContexts(block)
+  const contexts = repeatContexts(block, ctx.context)
   const children = block.slots?.[LIST_ITEM_SLOT] ?? []
   if (contexts.length === 0) {
     if (ctx.mode !== 'canvas') return null
     const collection = block.type === COLLECTION_LIST_BLOCK && typeof block.props?.collection === 'string' ? block.props.collection : ''
-    return renderSlot(block, LIST_ITEM_SLOT, { ...ctx, context: { collection, doc: {} } })
+    return renderSlot(block, LIST_ITEM_SLOT, { ...ctx, context: listItemContext({}, 0, ctx.context, collection) })
   }
   if (children.length === 0) return renderSlot(block, LIST_ITEM_SLOT, ctx)
   return contexts.map((context, i) => (
@@ -159,6 +164,8 @@ function renderBlock(stored: Block, ctx: Context, preview = false, item = false)
   const block = ctx.context
     ? resolveBlockBindings(stored, ctx.context, ctx.definitions.get(stored.type), ctx.binding)
     : stored
+  // A `$visible` binding that does not hold hides the block (the canvas shows it dimmed).
+  if (block.hidden && !editor) return null
 
   const attributes: Record<string, string> = preview
     ? {}
@@ -189,7 +196,9 @@ function renderBlock(stored: Block, ctx: Context, preview = false, item = false)
   const isList = isRepeatSlot(block.type, LIST_ITEM_SLOT)
   for (const slot of slotNamesOf(block, ctx)) {
     if (preview) slots[slot] = <SlotOutlet name={slot} />
-    else slots[slot] = isRepeatSlot(block.type, slot) ? renderListItems(block, ctx) : renderSlot(block, slot, ctx)
+    else if (isRepeatSlot(block.type, slot)) slots[slot] = renderListItems(block, ctx)
+    else if (block.type === COLLECTION_LIST_BLOCK && slot === LIST_EMPTY_SLOT) slots[slot] = showsEmpty(block) ? renderSlot(block, slot, ctx) : null
+    else slots[slot] = renderSlot(block, slot, ctx)
     slotAttributes[slot] = editor ? { 'data-slot-owner': block.id, 'data-slot': slot } : {}
   }
   if (isList && !(LIST_ITEM_SLOT in slots)) {

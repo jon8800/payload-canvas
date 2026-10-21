@@ -13,7 +13,7 @@ import { z, type ZodTypeAny } from 'zod'
 
 import {
   COLLECTION_LIST_BLOCK,
-  FIELD_LIST_BLOCK,
+  REPEAT_BLOCK,
   DEFAULT_TEMPLATES_SLUG,
   FIELD_BLOCK,
   TEMPLATE_DEFAULT_FIELD,
@@ -386,7 +386,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     description: [
       'Lists every block type you can use in page layouts: label, description, props, slots (which child types they accept) and an example. Call this before you build or edit a layout.',
       'To build whole page parts (hero, features, pricing, call to action, footer), PREFER ready-made sections: listSections, then insertSection. They are designed and tested. Use single blocks for small additions and edits.',
-      `Dynamic blocks: "${FIELD_BLOCK}" shows one field of the current document (templates), "${COLLECTION_LIST_BLOCK}" lists documents of a collection and repeats its "item" slot per document, "${FIELD_LIST_BLOCK}" repeats its "item" slot per row of an array or hasMany field of the current document. Blocks inside a template or a list item can bind props to document fields with "bindings" (see getBindingSources).`,
+      `Dynamic blocks: "${FIELD_BLOCK}" shows one field of the current document (templates), "${COLLECTION_LIST_BLOCK}" lists documents of a collection and repeats its "item" slot per document, "${REPEAT_BLOCK}" repeats its "item" slot per row of an array or hasMany field of the current document. Blocks inside a template or a list item can bind props to document fields with "bindings" (see getBindingSources).`,
       LAYOUT_GUIDE,
     ].join('\n\n'),
     parameters: { collection: collectionArg },
