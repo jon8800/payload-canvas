@@ -48,6 +48,7 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 ### Fixed
 
 - Site classes: a comment before a rule's `/* @canvas Group: Label */` comment no longer merges with it, so the rule keeps its label. Only the comment right above the rule counts. In the escort-starter's CSS, 10 of 32 labels were lost.
+- Media backdrop and image: Payload's default 50/50 focal point no longer sets `object-position`, so the block's position classes crop the photo. Any other focal point still wins. New `builtinComponents({ mediaUrl })` (and `mediaBackdropComponent(mediaUrl)`) maps the media backdrop's upload URLs, for example absolute URLs to paths; they were used exactly as stored.
 
 ## [0.3.0] - 2026-10-21
 
