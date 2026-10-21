@@ -8,7 +8,7 @@ function addClasses(target: Set<string>, value: string): void {
 }
 
 /**
- * Every distinct class the layout needs, sorted: each block's `className` (hidden blocks too),
+ * Every distinct class the layout needs, sorted: each block's `className` and `slotClassName` (hidden blocks too),
  * plus `BlockDefinition.classes` of every block type in the layout when `blocks` is given.
  */
 export function collectClasses(layout: Layout, blocks?: readonly BlockDefinition[]): string[] {
@@ -17,6 +17,7 @@ export function collectClasses(layout: Layout, blocks?: readonly BlockDefinition
   walkBlocks(layout, (block) => {
     types.add(block.type)
     if (typeof block.className === 'string') addClasses(classes, block.className)
+    for (const value of Object.values(block.slotClassName ?? {})) if (typeof value === 'string') addClasses(classes, value)
   })
   for (const definition of blocks ?? []) {
     if (!types.has(definition.type) || !Array.isArray(definition.classes)) continue

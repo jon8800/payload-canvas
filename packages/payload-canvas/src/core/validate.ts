@@ -62,7 +62,7 @@ export function isBlockingError(error: Pick<LayoutError, 'code'>, publishing: bo
   return publishing || !PUBLISH_ONLY_CODES.has(error.code)
 }
 
-const BLOCK_KEYS = new Set(['id', 'type', 'props', 'className', 'slots', 'bindings', 'hidden', 'label', 'locales', 'motion', 'attrs'])
+const BLOCK_KEYS = new Set(['id', 'type', 'props', 'className', 'slots', 'bindings', 'hidden', 'label', 'locales', 'motion', 'attrs', 'slotClassName'])
 
 /** Checks structure, unique ids, known block types, slot rules and prop types. */
 export function validateLayout(layout: unknown, blocks: BlockDefinition[], options: ValidateOptions = {}): LayoutError[] {
@@ -150,6 +150,15 @@ function checkBlock(
   if (value.className !== undefined) {
     if (typeof value.className !== 'string') report(`${path}.className`, 'className must be a string')
     else if (def?.styles === false) report(`${path}.className`, `Block type "${type}" does not take a className`)
+  }
+  if (value.slotClassName !== undefined) {
+    if (!isPlainObject(value.slotClassName)) report(`${path}.slotClassName`, 'slotClassName must be an object of slot name -> classes')
+    else {
+      for (const [slot, classes] of Object.entries(value.slotClassName)) {
+        if (typeof classes !== 'string') report(`${path}.slotClassName.${slot}`, 'Slot classes must be a string')
+        else if (def && !def.slots?.[slot]?.styles) report(`${path}.slotClassName.${slot}`, `The "${slot}" slot of ${def.label} takes no classes`)
+      }
+    }
   }
   if (value.hidden !== undefined && typeof value.hidden !== 'boolean') {
     report(`${path}.hidden`, 'hidden must be a boolean')

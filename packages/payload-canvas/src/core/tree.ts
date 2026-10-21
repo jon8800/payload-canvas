@@ -85,11 +85,12 @@ export function subtreeIds(block: Block, out: string[] = []): string[] {
 // - `locales` holds no empty locale objects, and is left out when empty
 // - `motion` holds only valid kinds and values (motion.ts), and is left out when empty
 // - `attrs` holds only valid, non-empty values (attrs.ts), and is left out when empty
+// - `slotClassName` holds only non-blank class strings, and is left out when empty
 // - every id is a non-empty string, unique in the layout
 // - old list blocks (`props.items` rows) hold `listItem` blocks in their `items` slot (textList.ts)
 // The operations module relies on this form for exact undo.
 
-const BLOCK_KEYS = new Set(['id', 'type', 'blockType', 'blockName', 'props', 'className', 'slots', 'children', 'bindings', 'hidden', 'label', 'locales', 'motion', 'attrs'])
+const BLOCK_KEYS = new Set(['id', 'type', 'blockType', 'blockName', 'props', 'className', 'slots', 'children', 'bindings', 'hidden', 'label', 'locales', 'motion', 'attrs', 'slotClassName'])
 
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
@@ -181,6 +182,10 @@ function normalizeBlock(value: unknown, seen: Set<string>): Block | null {
   // A bad value is dropped key by key: a stored layout never fails to load.
   const attrs = normalizeAttrs(value.attrs)
   if (attrs) block.attrs = attrs
+  if (isPlainObject(value.slotClassName)) {
+    const kept = Object.fromEntries(Object.entries(value.slotClassName).filter(([, v]) => typeof v === 'string' && v.trim() !== ''))
+    if (Object.keys(kept).length > 0) block.slotClassName = kept as Record<string, string>
+  }
   // Old shapes of built-in blocks (see textList.ts).
   migrateTextList(block, (raw) => uniqueId(raw, seen))
   return block

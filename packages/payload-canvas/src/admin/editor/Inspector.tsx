@@ -23,6 +23,7 @@ import { storesBuilderData } from './actions'
 import { shortcutList } from './shortcuts'
 import { useEditor } from './store'
 import { StylesPanel } from './styles/StylesPanel'
+import { Select } from './ui/Select'
 import { usePayloadControlNames } from './ui/payloadA11y'
 import { useOptionalValue, useValue, useValueSelector } from './valueStore'
 import { RegionPane } from './regions/RegionPane'
@@ -288,10 +289,31 @@ function BlockHeader({ block }: { block: Block }) {
 function StyleFields({ block }: { block: Block }) {
   const runtime = useRuntime()
   const def = getBlockDefinition(runtime.config.blocks, block.type)
+  // Slots with an element of their own (`styles: true`) are style targets next to the block.
+  const styledSlots = Object.entries(def?.slots ?? {}).filter(([, slot]) => slot.styles)
+  const [target, setTarget] = useState<string | null>(null)
+  const slot = target && styledSlots.some(([name]) => name === target) ? target : null
+  const blockStyles = def?.styles !== false
 
   return (
     <div className="builder-editor__fields">
-      {def?.styles === false ? (
+      {styledSlots.length > 0 && (
+        <Select
+          aria-label="Style target"
+          emptyLabel={blockStyles ? 'This block' : undefined}
+          placeholder="Pick a slot"
+          value={slot}
+          onValueChange={setTarget}
+          options={styledSlots.map(([name, s]) => ({
+            value: name,
+            label: `Slot: ${s.label?.trim() || name}`,
+            ...(block.slotClassName?.[name] ? { suffix: <span className="builder-styles__dot" aria-label="has classes" /> } : {}),
+          }))}
+        />
+      )}
+      {slot ? (
+        <StylesPanel key={slot} block={block} slot={slot} />
+      ) : !blockStyles ? (
         <p className="builder-editor__hint">This block has no style controls.</p>
       ) : (
         <StylesPanel block={block} />

@@ -134,6 +134,15 @@ function blockSchema(def: BlockDefinition, all: BlockDefinition[]): Schema {
       additionalProperties: false,
     }
   }
+  const styled = Object.entries(def.slots ?? {}).filter(([, slot]) => slot.styles)
+  if (styled.length > 0) {
+    properties.slotClassName = {
+      type: 'object',
+      description: `Tailwind classes of a slot's own element, by slot name. Only these slots take classes: ${styled.map(([name]) => name).join(', ')}.`,
+      properties: Object.fromEntries(styled.map(([name]) => [name, { type: 'string' }])),
+      additionalProperties: false,
+    }
+  }
   properties.bindings = {
     type: 'object',
     description: 'Prop path -> document field path. Bound props take the document\'s value at render time.',

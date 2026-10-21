@@ -213,6 +213,9 @@ function renderBlock(stored: Block, ctx: Context, preview = false, item = false)
     else if (block.type === COLLECTION_LIST_BLOCK && slot === LIST_EMPTY_SLOT) slots[slot] = showsEmpty(block) ? renderSlot(block, slot, ctx) : null
     else slots[slot] = renderSlot(block, slot, ctx)
     slotAttributes[slot] = editor ? { 'data-slot-owner': block.id, 'data-slot': slot } : {}
+    // A slot with its own element takes its own classes (`styles: true` on the slot).
+    const slotClass = ctx.definitions.get(block.type)?.slots?.[slot]?.styles ? withBuilderCssClass(stored.slotClassName?.[slot]) : undefined
+    if (slotClass) slotAttributes[slot].className = slotClass
   }
   if (isList && !(LIST_ITEM_SLOT in slots)) {
     slots[LIST_ITEM_SLOT] = renderListItems(block, ctx)

@@ -43,7 +43,7 @@ export function motionGuide(): string {
  */
 export function layoutGuide(blocksFrom: string): string {
   return `
-LAYOUT MODEL. A layout is JSON: { "version": 1, "blocks": Block[] }. A Block is { id, type, props?, className?, slots?, bindings?, hidden?, motion?, attrs? }.
+LAYOUT MODEL. A layout is JSON: { "version": 1, "blocks": Block[] }. A Block is { id, type, props?, className?, slots?, bindings?, hidden?, motion?, attrs?, slotClassName? }.
 - id: a string, unique in the whole layout. Operations target blocks by id, never by array index. New blocks need new ids: use "b_" plus 6 lowercase letters or digits (e.g. "b_k3x9qa").
 - type: a block type from ${blocksFrom}.
 - props: the block's own values. Get the exact shape with getBlockSchema. Upload and relationship props hold document IDs.
@@ -51,6 +51,7 @@ LAYOUT MODEL. A layout is JSON: { "version": 1, "blocks": Block[] }. A Block is 
 - slots: child blocks by slot name, e.g. { "children": [ ...blocks ] }. Only block types with slots take children. ${blocksFrom} shows which types each slot accepts. A type with "onlyInside" goes only directly inside those types (e.g. "listItem" only in a "list"). A slot with "maxBlocks" holds at most that many direct children: inserting into a full slot fails, so replace (update or remove) the block there instead. A slot with "minBlocks" needs that many before the page can be published.
 - bindings: (templates and collection list items only) prop path -> document field path, e.g. { "text": "title" }, { "image": "featuredImage" }, { "link": "$url" }. At render time the prop takes the document's value; when the document has no value the literal prop stays. Get field paths from getBindingSources.
 - motion: animations of the block (see MOTION below). Leave it out when the block has none.
+- slotClassName: Tailwind classes of a slot's own element, by slot name, e.g. { "empty": "col-span-full text-center" }. Only slots marked with "classes" in ${blocksFrom} take them. In "update" it merges per slot; null removes a slot's classes.
 - attrs: HTML attributes of the block element: { id?, ariaLabel?, ariaHidden? }. "id" is an anchor for "#id" links (e.g. "contact"), unique in the layout, letters, digits, - and _, starting with a letter; never the block id. "ariaLabel" names the element for screen readers (e.g. a nav or an icon-only link). "ariaHidden": true hides decorative blocks from screen readers. Copies of a section or a block leave out an id the page already uses.
 - Canonical form: leave out empty props, slots, bindings and motion objects and empty slot lists. Set hidden only when true.
 POSITION = { parentId, slot?, index }. parentId null means the page root, whose only slot is "children". slot defaults to "children". index is the block's FINAL index in the target list (0 = first; the list length = append). For a move inside the same list, count positions after the block is taken out.
@@ -184,6 +185,7 @@ export function describeBlock(def: BlockDefinition) {
             accepts: slot.allow && !slot.allow.includes('*') ? slot.allow : 'any block',
             ...(typeof slot.min === 'number' ? { minBlocks: slot.min } : {}),
             ...(typeof slot.max === 'number' ? { maxBlocks: slot.max } : {}),
+            ...(slot.styles ? { classes: 'takes its own classes in "slotClassName"' } : {}),
           },
         ]),
       )
