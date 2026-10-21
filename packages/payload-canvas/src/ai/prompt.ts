@@ -80,6 +80,7 @@ const ANIMATIONS_GUIDE = [
   '- Grids and lists of cards: "enter" with stagger 60-120 on the grid or list block. The card blocks then play in turn, so give the cards no motion of their own.',
   '- Cards that link, and buttons: hover { preset: "lift" } and press { preset: "shrink" }.',
   '- scroll "parallax" only on decorative images. "loop" (float, pulse) rarely, on one small decorative block.',
+  '- Stacked cards: give each card the classes "sticky top-24 origin-top" and scroll { preset: "recede" }, except the last card.',
   '- In "update", `motion` merges per kind: a kind you send replaces that kind, null removes a kind, kinds you leave out stay. motion: null removes all animations. To remove an animation the user dislikes, send null for its kind.',
 ].join('\n')
 

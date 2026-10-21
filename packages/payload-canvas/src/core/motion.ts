@@ -28,7 +28,7 @@ export const ENTER_PRESETS = [
 ] as const
 export const HOVER_PRESETS = ['lift', 'grow', 'tilt'] as const
 export const PRESS_PRESETS = ['shrink'] as const
-export const SCROLL_PRESETS = ['parallax', 'fade', 'zoom'] as const
+export const SCROLL_PRESETS = ['parallax', 'fade', 'zoom', 'recede'] as const
 export const LOOP_PRESETS = ['float', 'pulse'] as const
 export const MOTION_EASINGS = ['ease-out', 'ease-in-out', 'linear', 'spring', 'bouncy'] as const
 export const ENTER_TRIGGERS = ['view', 'load'] as const
@@ -91,7 +91,7 @@ export type ScrollMotion = {
   preset: ScrollPreset
   /** "parallax": pixels the block moves against the scroll over its pass. Negative moves with it. Default 60. */
   distance?: number
-  /** "zoom": the scale it starts from at the bottom of the window. Default 0.9. */
+  /** "zoom": the scale it starts from at the bottom of the window. "recede": the scale it shrinks to. Default 0.9. */
   scale?: number
 }
 
@@ -173,6 +173,8 @@ export const DEFAULT_STAGGER = 80
 export const HOVER_DEFAULTS = { distance: 4, scale: 1.03, angle: 6 }
 export const PRESS_DEFAULTS = { scale: 0.97 }
 export const SCROLL_DEFAULTS = { distance: 60, scale: 0.9 }
+/** "recede": the brightness a block dims to while the next block covers it. */
+export const RECEDE_BRIGHTNESS = 0.7
 export const LOOP_DEFAULTS = { float: { duration: 3000, distance: 8 }, pulse: { duration: 1500, scale: 1.04 } }
 
 export type MotionPresetInfo = { value: string; label: string; description: string }
@@ -203,6 +205,7 @@ export const MOTION_PRESET_INFO: Record<MotionKind, MotionPresetInfo[]> = {
     { value: 'parallax', label: 'Parallax', description: 'Moves slower or faster than the page while you scroll.' },
     { value: 'fade', label: 'Fade', description: 'Fades in as it rises into the window.' },
     { value: 'zoom', label: 'Zoom', description: 'Grows to full size as it rises into the window.' },
+    { value: 'recede', label: 'Recede', description: 'Shrinks and dims while the next block scrolls over it. For stacked sticky cards.' },
   ],
   loop: [
     { value: 'float', label: 'Float', description: 'Floats gently up and down.' },
@@ -436,22 +439,41 @@ export function interactTransform(
 
 const round = (n: number) => Math.round(n * 100) / 100
 
+/** The properties a scroll effect animates. They add to the block's own transform and to the other effects. */
+export type ScrollProperty = 'translate' | 'opacity' | 'scale' | 'filter'
+
 /**
- * A scroll-linked effect: keyframes of one CSS property over the block's pass through the window.
- * `offset` pairs are [block progress, window progress] (Motion's `scroll` offsets): [0, 1] is the
- * block's top at the window's bottom, [1, 0] its bottom at the window's top. Null with reduced motion for effects that move.
+ * A scroll-linked effect: keyframes of CSS properties over a pass through the window.
+ * `offset` pairs are [element progress, window progress] (Motion's `scroll` offsets): [0, 1] is the
+ * element's top at the window's bottom, [1, 0] its bottom at the window's top. `target` names the
+ * element whose pass drives it: the block itself, or the block's next sibling (the card that slides
+ * over a receding card). Every offset here maps to a native ViewTimeline range, so the browser
+ * runs the effect off the main thread where it can.
  */
-export function scrollPlan(
-  scroll: ScrollMotion,
-  reduced = false,
-): { property: 'translate' | 'opacity' | 'scale'; keyframes: Array<string | number>; offset: [[number, number], [number, number]] } | null {
-  // Fade and zoom finish when the block's middle reaches the window's bottom edge. Both offsets
-  // map to a native ViewTimeline range, so the browser runs them off the main thread.
-  if (scroll.preset === 'fade') return { property: 'opacity', keyframes: [0, 1], offset: [[0, 1], [0.5, 1]] }
+export type ScrollPlan = {
+  keyframes: Partial<Record<ScrollProperty, Array<string | number>>>
+  offset: [[number, number], [number, number]]
+  target: 'self' | 'next'
+}
+
+/** The plan of a scroll effect. Null with reduced motion for effects that move or scale. */
+export function scrollPlan(scroll: ScrollMotion, reduced = false): ScrollPlan | null {
+  // Fade and zoom finish when the block's middle reaches the window's bottom edge.
+  if (scroll.preset === 'fade') return { keyframes: { opacity: [0, 1] }, offset: [[0, 1], [0.5, 1]], target: 'self' }
   if (reduced) return null
-  if (scroll.preset === 'zoom') return { property: 'scale', keyframes: [scroll.scale ?? SCROLL_DEFAULTS.scale, 1], offset: [[0, 1], [0.5, 1]] }
+  if (scroll.preset === 'zoom') return { keyframes: { scale: [scroll.scale ?? SCROLL_DEFAULTS.scale, 1] }, offset: [[0, 1], [0.5, 1]], target: 'self' }
+  if (scroll.preset === 'recede') {
+    // Follows the next block from the window's bottom to its top. The next block's own pass is
+    // never affected by `position: sticky` on this block, and it ends when the next card reaches
+    // the top, where a stacked card sticks and covers this one. The last block has no next one.
+    return {
+      keyframes: { scale: [1, scroll.scale ?? SCROLL_DEFAULTS.scale], filter: ['brightness(1)', `brightness(${RECEDE_BRIGHTNESS})`] },
+      offset: [[0, 1], [0, 0]],
+      target: 'next',
+    }
+  }
   const d = scroll.distance ?? SCROLL_DEFAULTS.distance
-  return { property: 'translate', keyframes: [`0px ${d}px`, `0px ${-d}px`], offset: [[0, 1], [1, 0]] }
+  return { keyframes: { translate: [`0px ${d}px`, `0px ${-d}px`] }, offset: [[0, 1], [1, 0]], target: 'self' }
 }
 
 /** A loop: one CSS property, there and back forever. Null with reduced motion. */
@@ -588,7 +610,7 @@ export function motionJsonSchema(): Record<string, unknown> {
       }),
       scroll: kindSchema('scroll', 'Follows the scroll position while the block passes through the window.', {
         distance: numberSchema('scroll', 'distance', 'parallax: pixels it moves against the scroll. Negative moves with it. Default 60.'),
-        scale: numberSchema('scroll', 'scale', 'zoom: the scale it starts from. Default 0.9.'),
+        scale: numberSchema('scroll', 'scale', 'zoom: the scale it starts from. recede: the scale it shrinks to. Default 0.9.'),
       }),
       loop: kindSchema('loop', 'Plays again and again while in view. Use rarely, on small decorative blocks.', {
         duration: numberSchema('loop', 'duration', 'Milliseconds one way. Default 3000 (float) or 1500 (pulse).'),

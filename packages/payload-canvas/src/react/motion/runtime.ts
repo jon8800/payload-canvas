@@ -11,8 +11,8 @@
 // - Loops: an endless animation that pauses while the block is out of view (`inView`).
 //
 // Properties: entrances, hover and press animate `opacity`, `transform`, `filter` and `clip-path`;
-// scroll and loop effects use the separate `translate`, `scale` and `opacity` properties, so they
-// add to the others instead of replacing them. Nothing changes layout, so nothing shifts.
+// scroll and loop effects use the separate `translate`, `scale` and `opacity` properties (and
+// `filter` for the recede dim), so they add to the others instead of replacing them. Nothing changes layout, so nothing shifts.
 
 import { hover, inView, press, scroll, spring, stagger } from 'motion'
 import { animate } from 'motion/mini'
@@ -460,10 +460,12 @@ class MotionController {
     const plan = entry.motion.scroll ? scrollPlan(entry.motion.scroll, this.reduced) : null
     if (!plan) return
     const { el } = entry
-    const anim = animate(el, { [plan.property]: plan.keyframes } as Record<string, string[]>, { ease: 'linear', duration: 1 })
-    const options = { target: el, offset: plan.offset, container: this.doc.scrollingElement ?? undefined }
+    const target = plan.target === 'next' ? el.nextElementSibling : el
+    if (!(target instanceof HTMLElement)) return
+    const anim = animate(el, plan.keyframes as Record<string, string[]>, { ease: 'linear', duration: 1 })
+    const options = { target, offset: plan.offset, container: this.doc.scrollingElement ?? undefined }
     let stop: () => void
-    if (insideScrollBox(el)) {
+    if (insideScrollBox(target)) {
       // A native ViewTimeline follows the nearest scroll box, and `overflow: hidden` (the usual
       // parallax frame) makes one that never scrolls. Follow the page scroll in JavaScript instead.
       anim.pause()
@@ -476,7 +478,7 @@ class MotionController {
     entry.stops.push(() => {
       stop()
       anim.cancel()
-      el.style.removeProperty(plan.property)
+      for (const property of Object.keys(plan.keyframes)) el.style.removeProperty(property)
     })
   }
 
