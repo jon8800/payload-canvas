@@ -663,8 +663,29 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         type: 'text',
         label: 'Sort',
         defaultValue: '-createdAt',
-        admin: { description: 'The field to sort by, for example "publishedAt". Put a "-" in front for newest or largest first: "-publishedAt".' },
+        admin: {
+          description:
+            'The field to sort by, for example "publishedAt". Put a "-" in front for newest or largest first: "-publishedAt". ' +
+            '"$random" shuffles the newest 100 matches once per page build.',
+        },
       },
+      listCollections && listCollections.length > 0
+        ? {
+            name: 'ids',
+            type: 'relationship',
+            label: 'Picked documents',
+            // The slugs come from the app, so they cannot match Payload's generated slug type.
+            relationTo: (listCollections.length === 1 ? listCollections[0] : listCollections) as never,
+            hasMany: true,
+            admin: { description: 'Only these documents, in this order. Limit, sort, skip and pages then do not apply.' },
+          }
+        : {
+            name: 'ids',
+            type: 'text',
+            label: 'Picked document ids',
+            hasMany: true,
+            admin: { description: 'Only these documents, in this order. Limit, sort, skip and pages then do not apply.' },
+          },
       {
         name: 'excludeCurrent',
         type: 'checkbox',
@@ -716,6 +737,30 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
       },
       { name: 'offset', type: 'number', label: 'Skip items', min: 0, admin: { description: 'Documents to leave out at the start.' } },
       {
+        name: 'paginate',
+        type: 'select',
+        label: 'Pages',
+        defaultValue: 'none',
+        options: [
+          { label: 'None: only the first items', value: 'none' },
+          { label: 'Pages with ?page=N links', value: 'pages' },
+        ],
+        admin: { description: 'Pages: "Number of items" per page, with links to every page under the list. "Skip items" does not apply.' },
+      },
+      {
+        name: 'pagerClassName',
+        type: 'text',
+        label: 'Page links: classes',
+        defaultValue: 'flex flex-wrap gap-2',
+        admin: { description: 'Classes of the element that holds the page links.', custom: { builderClasses: true } },
+      },
+      {
+        name: 'pageLinkClassName',
+        type: 'text',
+        label: 'Page link: classes',
+        admin: { description: 'Classes of each page link. The current page has aria-current="page", e.g. "aria-[current=page]:font-bold".', custom: { builderClasses: true } },
+      },
+      {
         name: 'depth',
         type: 'select',
         label: 'Related data depth',
@@ -746,7 +791,11 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         '"$now-30d" or "$now+7d" (units d and h). "queryFilters" filters by the page URL: { "<param>": { "<value>": where } }, ' +
         'e.g. { "available": { "today": { "availableToday": { "equals": true } } } } for ?available=today; values of one ' +
         'param (repeated or comma-separated) are OR-ed, params are AND-ed; the canvas ignores them. "offset" skips ' +
-        'documents. "depth" ("1" or "2") is how deep related documents load. The "empty" slot shows instead of the ' +
+        'documents. "depth" ("1" or "2") is how deep related documents load. "ids" picks documents by id and keeps the ' +
+        'pick order (limit, sort, offset and pages then do not apply). "sort": "$random" shuffles the newest 100 ' +
+        'matches once per page build. "paginate": "pages" shows "limit" items per page with crawlable ?page=N links ' +
+        'under the list ("pagerClassName" and "pageLinkClassName" style them; the current link has aria-current="page"). ' +
+        'The "empty" slot shows instead of the ' +
         'items when no document matches (e.g. a text "Nobody is available today"); it renders in its own div, styled ' +
         'with "slotClassName": { "empty": "col-span-full ..." }.',
       example: {

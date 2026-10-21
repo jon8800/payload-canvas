@@ -1,7 +1,11 @@
 import { resolveBindings, type BlockDefinition, type Layout, type TemplateContext } from '../../core'
 
 import { attachListItems, listQueries, resolveLayoutData, urlResolver, type ResolveLink } from '../index'
-import { createRestFetchDocs, fetchListItems } from './fetchDocs'
+import { pageLinks } from '../render/lists'
+import { createRestFetchDocs, fetchListPage } from './fetchDocs'
+
+/** One shuffle per canvas: `$random` lists keep their order while someone edits. */
+const CANVAS_SEED = Math.floor(Math.random() * 4_294_967_296)
 
 /**
  * The layout as the canvas renders it: bound to the template's document (when there is one),
@@ -18,7 +22,9 @@ export async function resolveCanvasLayout(
 ): Promise<Layout> {
   const bound = context ? resolveBindings(layout, context, definitions, { url: urlResolver(resolveLink) }) : layout
   const queries = listQueries(bound, context)
-  const lists = await Promise.all(queries.map((query) => fetchListItems(api, query, locale)))
-  const withItems = attachListItems(bound, new Map(queries.map((query, i) => [query.blockId, lists[i]])))
+  const lists = await Promise.all(queries.map((query) => fetchListPage(api, query, locale, CANVAS_SEED)))
+  // A paginated list shows page 1 with its page links.
+  const pages = new Map(queries.flatMap((query, i) => (query.page ? [[query.blockId, pageLinks(null, query.page, lists[i]!.totalPages)] as const] : [])))
+  const withItems = attachListItems(bound, new Map(queries.map((query, i) => [query.blockId, lists[i]!.docs])), pages)
   return resolveLayoutData(withItems, definitions, createRestFetchDocs(api, locale))
 }
