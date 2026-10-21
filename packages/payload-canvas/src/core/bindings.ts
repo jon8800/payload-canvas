@@ -44,6 +44,20 @@ export const LIST_ITEM_SLOT = 'item'
 export const LIST_ITEMS_PROP = '$items'
 /** Runtime-only prop of the Field block: the resolved value. It is never stored. */
 export const FIELD_VALUE_PROP = 'value'
+/**
+ * The field list block: renders its `item` slot once per row of an array or hasMany field of the
+ * current document (`props.path`). The rows are its runtime-only `$items` prop.
+ */
+export const FIELD_LIST_BLOCK = 'fieldList'
+/** Virtual binding path inside a field list item: the row value itself (a document, an upload, a text). */
+export const ITEM_PATH = '$item'
+/** Virtual binding path inside a field list item: the row number, from 1. */
+export const INDEX_PATH = '$index'
+
+/** True for the slot that repeats per item: the `item` slot of a collection list or a field list. */
+export function isRepeatSlot(type: string, slot: string): boolean {
+  return slot === LIST_ITEM_SLOT && (type === COLLECTION_LIST_BLOCK || type === FIELD_LIST_BLOCK)
+}
 
 // ---------------------------------------------------------------------------
 // Reading values
@@ -82,6 +96,35 @@ export function getByPath(doc: unknown, path: string): unknown {
     if (current === undefined) return undefined
   }
   return current
+}
+
+const wholeNumber = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : undefined
+
+/**
+ * The rows of a field list: the value at `props.path` in `doc` (an array field's rows, a hasMany
+ * field's documents, IDs or values; one value counts as one row), after `offset` and `limit`.
+ */
+export function fieldListRows(doc: unknown, props: BlockProps | undefined): unknown[] {
+  const path = typeof props?.path === 'string' ? props.path.trim() : ''
+  if (!path) return []
+  const value = getByPath(doc, path)
+  const rows = (Array.isArray(value) ? value : [value]).filter((row) => row !== undefined && row !== null)
+  const offset = wholeNumber(props?.offset) ?? 0
+  const limit = wholeNumber(props?.limit)
+  return rows.slice(offset, limit === undefined ? undefined : offset + limit)
+}
+
+/**
+ * The context one field list row binds to: the row's own fields (an array row, or the related
+ * document of a relationship or upload) plus `$item` (the row value) and `$index` (from 1).
+ * `collection` is the related collection for `$url`; a `{ relationTo, value }` row names its own.
+ */
+export function fieldListRowContext(row: unknown, index: number, collection = ''): TemplateContext {
+  const pair = isRelationPair(row)
+  const value = pair ? row.value : row
+  const doc = { ...(isPlainObject(value) ? value : {}), [ITEM_PATH]: value, [INDEX_PATH]: index + 1 }
+  return { collection: pair ? row.relationTo : collection, doc }
 }
 
 /** True for values that count as "no value": the literal prop stays. */
@@ -323,6 +366,11 @@ export function resolveBlockBindings(
     }
   }
 
+  if (block.type === FIELD_LIST_BLOCK) {
+    props = { ...props, [LIST_ITEMS_PROP]: fieldListRows(context.doc, props) }
+    changed = true
+  }
+
   if (!changed) return block
   const next: Block = { ...block, props }
   if (Object.keys(left).length > 0) next.bindings = left
@@ -331,9 +379,10 @@ export function resolveBlockBindings(
 }
 
 /**
- * Resolves every block's bindings against the context document. The `item` slot of a collection
- * list is left alone: its blocks bind to each listed document at render time. Applied bindings are
- * removed, so resolving twice is safe. Never mutates.
+ * Resolves every block's bindings against the context document. Field lists get their rows
+ * (`$items`). The `item` slot of a collection list or a field list is left alone: its blocks bind
+ * to each listed document or row at render time. Applied bindings are removed, so resolving twice
+ * is safe. Never mutates.
  */
 export function resolveBindings(
   layout: Layout,
@@ -349,7 +398,7 @@ export function resolveBindings(
       const slots = Object.fromEntries(
         Object.entries(next.slots).map(([name, children]) => [
           name,
-          next.type === COLLECTION_LIST_BLOCK && name === LIST_ITEM_SLOT ? children : visit(children),
+          isRepeatSlot(next.type, name) ? children : visit(children),
         ]),
       )
       return { ...next, slots }
@@ -428,11 +477,86 @@ export function bindingProblem(fields: readonly unknown[], propPath: string, sou
   return null
 }
 
+/** `fields` with the `prefix.` taken off every path (children included). */
+function relativeTo(fields: readonly BindingField[], prefix: string): BindingField[] {
+  return fields.map((field) => {
+    const out: BindingField = { ...field, path: field.path.startsWith(`${prefix}.`) ? field.path.slice(prefix.length + 1) : field.path }
+    if (field.children) out.children = relativeTo(field.children, prefix)
+    return out
+  })
+}
+
+/**
+ * The bindable fields inside a repeat block's `item` slot. A collection list: its collection's
+ * sources. A field list: `$item`, `$index`, and the row's fields: the related collection's sources
+ * (a relationship or upload to one collection; `$url` only when the list's `collection` names it),
+ * else the field's children (an array row). `fields` are the sources around the block. Undefined
+ * when unknown.
+ */
+export function itemSources(
+  block: Block,
+  fields: readonly BindingField[] | undefined,
+  sources: Record<string, readonly BindingField[]>,
+): BindingField[] | undefined {
+  if (block.type === COLLECTION_LIST_BLOCK) {
+    const collection = block.props?.collection
+    return typeof collection === 'string' && collection ? sources[collection]?.slice() : undefined
+  }
+  const path = typeof block.props?.path === 'string' ? block.props.path.trim() : ''
+  const field = path && fields ? findBindingField(fields, path) : undefined
+  if (!field) return undefined
+  const relationTo = typeof field.relationTo === 'string' ? field.relationTo : undefined
+  const related = relationTo
+    ? sources[relationTo]?.filter((f) => f.path !== URL_PATH || block.props?.collection === relationTo)
+    : undefined
+  const { hasMany: _hasMany, children: _children, ...row } = field
+  return [
+    { ...row, path: ITEM_PATH, label: 'This row' },
+    { path: INDEX_PATH, label: 'Row number', type: 'number' },
+    ...(related ?? relativeTo(field.children ?? [], field.path)),
+  ]
+}
+
+/** The collection lists and field lists whose `item` slot holds the block, outermost first. */
+export function repeatAncestors(layout: Layout, id: string): Block[] {
+  const path: Array<{ block: Block; slot: string }> = []
+  const visit = (blocks: Block[]): boolean => {
+    for (const block of blocks) {
+      if (block.id === id) return true
+      for (const [slot, children] of Object.entries(block.slots ?? {})) {
+        path.push({ block, slot })
+        if (visit(children)) return true
+        path.pop()
+      }
+    }
+    return false
+  }
+  if (!visit(layout.blocks)) return []
+  return path.filter(({ block, slot }) => isRepeatSlot(block.type, slot)).map(({ block }) => block)
+}
+
+/**
+ * The bindable fields a block reads: the template collection's sources, narrowed by every
+ * collection list and field list around it. Undefined when unknown (no collection, or a field
+ * list path missing from the sources).
+ */
+export function scopeSources(
+  layout: Layout,
+  id: string,
+  sources: Record<string, readonly BindingField[]>,
+  collection: string | null,
+): BindingField[] | undefined {
+  let fields: BindingField[] | undefined = collection ? sources[collection]?.slice() : undefined
+  for (const repeat of repeatAncestors(layout, id)) fields = itemSources(repeat, fields, sources)
+  return fields
+}
+
 /**
  * Checks every binding against the bindable fields of the document it reads: the template's
- * target collection, or inside a collection list's `item` slot, the listed collection. Problems
- * have the code `binding` (they block publishing only). Paths missing from `sources` are left
- * alone: the renderer keeps the literal value.
+ * target collection, inside a collection list's `item` slot the listed collection, and inside a
+ * field list's `item` slot the row (`itemSources`). Problems have the code `binding` (they block
+ * publishing only). Paths missing from `sources` are left alone: the renderer keeps the literal
+ * value. `$item` and `$index` are always allowed.
  */
 export function validateBindings(
   layout: Layout,
@@ -442,13 +566,13 @@ export function validateBindings(
 ): LayoutError[] {
   const definitions = new Map(blocks.map((d) => [d.type, d]))
   const errors: LayoutError[] = []
-  const visit = (list: Block[], path: string, scope: string | null) => {
+  const visit = (list: Block[], path: string, fields: readonly BindingField[] | undefined) => {
     list.forEach((block, i) => {
       const at = `${path}[${i}]`
       const definition = definitions.get(block.type)
-      const fields = scope ? sources[scope] : undefined
       if (definition && fields) {
         for (const [propPath, fieldPath] of Object.entries(block.bindings ?? {})) {
+          if (fieldPath === ITEM_PATH || fieldPath === INDEX_PATH) continue
           const source = fieldPath === URL_PATH ? { path: URL_PATH, label: 'Page URL', type: 'text' } : findBindingField(fields, fieldPath)
           if (!source) continue
           const problem = bindingProblem(definition.fields as unknown[], propPath, source)
@@ -458,12 +582,10 @@ export function validateBindings(
         }
       }
       for (const [name, children] of Object.entries(block.slots ?? {})) {
-        const listed = block.type === COLLECTION_LIST_BLOCK && name === LIST_ITEM_SLOT
-        const next = listed ? (typeof block.props?.collection === 'string' ? block.props.collection : null) : scope
-        visit(children, `${at}.slots.${name}`, next)
+        visit(children, `${at}.slots.${name}`, isRepeatSlot(block.type, name) ? itemSources(block, fields, sources) : fields)
       }
     })
   }
-  visit(layout.blocks, 'blocks', collection)
+  visit(layout.blocks, 'blocks', collection ? sources[collection] : undefined)
   return errors
 }
