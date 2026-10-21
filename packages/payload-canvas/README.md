@@ -1844,6 +1844,19 @@ Lists load with the visitor's access (`overrideAccess: false`). The site (`loadL
 - After `loadLayoutData`, a paginated list carries its links as the runtime `$pages` prop (`LIST_PAGES_PROP`, type `ListPages`). A custom collection list component can render them its own way.
 - Not built: a "Load more" button. Use the page links.
 
+**ItemList JSON-LD.** `loadedLists(layout)` reads the collection lists of a layout after `loadLayoutData`, with the documents each one shows, in order: `{ blockId, collection, docs }[]`. It sends no query. Hidden lists are left out. Build your structured data from it:
+
+```ts
+import { loadedLists, loadLayoutData } from 'payload-canvas/react/server'
+
+const layout = await loadLayoutData(page.layout, blocks, payload, { query: searchParams })
+const itemLists = loadedLists(layout).map((list) => ({
+  '@context': 'https://schema.org',
+  '@type': 'ItemList',
+  itemListElement: list.docs.map((doc, i) => ({ '@type': 'ListItem', position: i + 1, url: urlOf(list.collection, doc) })),
+}))
+```
+
 #### Repeat the rows of a field
 
 The **Repeat** block (`repeat`) repeats its `item` slot once per row of a list field of the current document. Use it for an array field (FAQs `faqs: [{ question, answer }]`, rates `rates: [{ duration, price }]`), a hasMany upload (a gallery), a hasMany relationship (the services of a model) or a hasMany text or select field (tags).

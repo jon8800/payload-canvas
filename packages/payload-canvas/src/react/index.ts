@@ -56,6 +56,7 @@ export {
   LIST_PAGES_PROP,
   listItemsOf,
   listQueries,
+  loadedLists,
   PAGE_PARAM,
   pageLinks,
   pageOf,
@@ -66,6 +67,7 @@ export {
   withPageParams,
   type ListPages,
   type ListQuery,
+  type LoadedList,
   type ListQueryParams,
 } from './render/lists'
 export { fieldFor } from './components/Field'
