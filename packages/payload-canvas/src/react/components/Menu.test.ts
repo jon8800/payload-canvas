@@ -75,3 +75,10 @@ describe('Menu', () => {
     assert.equal(renderToStaticMarkup(createElement(Menu, props({ items: [] }))), '')
   })
 })
+
+describe('Menu toggle label', () => {
+  test('is "Menu" by default and takes the toggleLabel prop', () => {
+    assert.match(renderToStaticMarkup(createElement(Menu, props({}))), /<summary[^>]*><span>Menu<\/span>/)
+    assert.match(renderToStaticMarkup(createElement(Menu, props({ toggleLabel: 'Menü' }))), /<summary[^>]*><span>Menü<\/span>/)
+  })
+})

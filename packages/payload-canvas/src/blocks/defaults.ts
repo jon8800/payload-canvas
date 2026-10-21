@@ -464,6 +464,14 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         admin: { description: 'Read by screen readers, for example "Main" or "Footer".' },
       },
       {
+        name: 'toggleLabel',
+        type: 'text',
+        label: 'Menu button text',
+        defaultValue: 'Menu',
+        localized: true,
+        admin: { description: 'The text of the button that opens the links on small screens.' },
+      },
+      {
         name: 'collapse',
         type: 'select',
         label: 'Small screens',
@@ -496,7 +504,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         'On small screens the links fold into a "Menu" button that opens a panel ("collapse": "md" or "lg"; ' +
         '"never" keeps the links visible, for footers). The className lays out the links. ' +
         'Put it in a header stack that has the "relative" class, so the panel opens below the header. ' +
-        'Optional "ctaLabel" and "cta" (a link) add a button as the last row of the small-screen panel.',
+        'Optional "ctaLabel" and "cta" (a link) add a button as the last row of the small-screen panel. "toggleLabel" is the text of the menu button (default "Menu"; translate it per locale).',
       example: {
         type: 'menu',
         props: {

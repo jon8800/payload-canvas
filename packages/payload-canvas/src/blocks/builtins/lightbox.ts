@@ -1,6 +1,6 @@
 import { defineBlock } from '../../core/blocks'
 import type { BlockDefinition } from '../../core/types'
-import { classesOf, classMap } from './shared'
+import { classesOf, classMap, labelsField, labelsHelp } from './shared'
 
 export const LIGHTBOX_BLOCK = 'lightbox'
 
@@ -22,6 +22,16 @@ export const LIGHTBOX_CLASS_MAP = classMap({
   icon: 'size-5',
 })
 
+/** The lightbox's control labels and their English defaults. */
+export const LIGHTBOX_LABELS = {
+  closeLabel: 'Close',
+  previousLabel: 'Previous photo',
+  nextLabel: 'Next photo',
+  countLabel: '{n} of {count}',
+}
+
+const LABEL_NAMES = { closeLabel: 'Close button', previousLabel: 'Previous button', nextLabel: 'Next button', countLabel: 'Photo number' }
+
 const LIGHTBOX_CLASS =
   'grid grid-cols-2 gap-3 md:grid-cols-3 [&_dialog]:text-white [&_dialog]:backdrop:bg-black/85 ' +
   '[&_[data-lightbox-button]]:size-11 [&_[data-lightbox-button]]:rounded-full [&_[data-lightbox-button]]:bg-black/50'
@@ -41,6 +51,7 @@ export function lightboxBlock(): BlockDefinition {
         admin: { description: 'Lightboxes with the same group on a page open as one set. Optional.' },
       },
       { name: 'captions', type: 'checkbox', label: 'Show the alt text as a caption', defaultValue: false },
+      labelsField(LIGHTBOX_LABELS, LABEL_NAMES),
     ],
     slots: { children: { label: 'Content' } },
     defaultClassName: LIGHTBOX_CLASS,
@@ -52,7 +63,9 @@ export function lightboxBlock(): BlockDefinition {
         'images with its className (a grid), or put a repeat of images in it (path "galleryImages", image bound to "$item"). ' +
         'Style the dialog from the className: [&_dialog]: for its text colour and backdrop ([&_dialog]:backdrop:bg-black/85), ' +
         '[&_[data-lightbox-button]]: for the close, previous and next buttons, [&_[data-lightbox-photo]]: for the large photo. ' +
-        'The canvas does not open it.',
+        'The canvas does not open it.' +
+        labelsHelp(LIGHTBOX_LABELS) +
+        ' In "countLabel", {n} is the photo number and {count} the number of photos.',
       example: {
         type: LIGHTBOX_BLOCK,
         props: { label: 'Gallery' },
