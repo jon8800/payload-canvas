@@ -1093,6 +1093,16 @@ const jsonLd = faqJsonLd(items)
 - Two headings with the same text get the same id. Give them different text.
 - On the canvas, with too few headings, it shows three sample links, so it can be selected and styled.
 
+#### Filter link
+
+`filterLink` is a link to the current page with one URL query value set, toggled or cleared. It pairs with a collection list's `queryFilters`: a filter link with `param: 'available'` and `value: 'today'` goes to `?available=today`, and the list filters by it. Its `children` slot holds the label (a text, an icon); links and controls are refused there.
+
+- Props: `param`, `value` and `multiple`. An empty `param` clears every query value (the "All" link). An empty `value` clears its param. `multiple` adds or removes the value in a comma list (`?hair=blonde,red`) instead of replacing it. The page's other query values stay.
+- The current filter gets `aria-current="true"`. Style it with `aria-[current=true]:` classes.
+- It is a client component that reads the browser's URL. The server renders a relative href (`?available=today`), so the link works before the script runs and search engines can follow it. The active state and the kept query values appear after hydration.
+- `filterHref(path, query, { param, value, multiple })` in `payload-canvas/blocks` is the same rule as a pure function, for a server component of your own.
+- Send `noindex, follow` for filtered URLs.
+
 ## Using existing Payload blocks
 
 A site that already has a Payload `blocks` field (for example `pages.layout` with sections and nested blocks) keeps its field, its block configs, its components and its content. Point the builder at that field. The builder then edits the field itself: there is one source of truth, no second copy of the page, and nothing to migrate.

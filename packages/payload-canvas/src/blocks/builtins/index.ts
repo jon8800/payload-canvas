@@ -5,11 +5,12 @@
 import type { BlockDefinition } from '../../core/types'
 import { carouselBlock } from './carousel'
 import { accordionBlock, disclosureBlock } from './disclosure'
+import { filterLinkBlock } from './filterLink'
 import { iconBlock } from './icon'
 import { lightboxBlock } from './lightbox'
 import { tableOfContentsBlock } from './tableOfContents'
 
-export const BUILTIN_TYPES = ['icon', 'disclosure', 'accordion', 'lightbox', 'carousel', 'tableOfContents'] as const
+export const BUILTIN_TYPES = ['icon', 'disclosure', 'accordion', 'lightbox', 'carousel', 'tableOfContents', 'filterLink'] as const
 
 export type BuiltinType = (typeof BUILTIN_TYPES)[number]
 
@@ -44,12 +45,14 @@ export function builtinBlocks(options: BuiltinBlocksOptions = {}): BlockDefiniti
     lightbox: lightboxBlock,
     carousel: carouselBlock,
     tableOfContents: tableOfContentsBlock,
+    filterLink: filterLinkBlock,
   }
   return BUILTIN_TYPES.filter((type) => include.has(type)).map((type) => make[type]())
 }
 
 export { CAROUSEL_BLOCK, CAROUSEL_CLASS_MAP, carouselBlock } from './carousel'
 export { ACCORDION_BLOCK, accordionBlock, DISCLOSURE_BLOCK, DISCLOSURE_CLASS_MAP, disclosureBlock } from './disclosure'
+export { FILTER_LINK_BLOCK, filterHref, filterLinkBlock, type FilterLinkTarget, type FilterQuery } from './filterLink'
 export { faqItems, faqJsonLd, type FaqItem } from './faq'
 export { headingId, lexicalHeadings, lexicalText, type RichTextHeading } from './headingId'
 export { ICON_BLOCK, iconBlock } from './icon'
