@@ -1,10 +1,9 @@
 import { defineBlock } from '../../core/blocks'
 import type { BlockDefinition } from '../../core/types'
+import { iconLabel } from '../defaults'
 
 export const ICON_BLOCK = 'icon'
 
-/** "arrowUpRight" -> "arrow up right". */
-const labelOf = (name: string) => name.replace(/([A-Z])/g, ' $1').toLowerCase()
 
 /**
  * One icon from the site's own icon set. `names` are the keys of the site's icon map, as plain
@@ -26,7 +25,7 @@ export function iconBlock(names: readonly string[]): BlockDefinition {
         label: 'Icon',
         required: true,
         defaultValue: names[0],
-        options: names.map((value) => ({ label: labelOf(value), value })),
+        options: names.map((value) => ({ label: iconLabel(value), value })),
       },
       {
         name: 'label',

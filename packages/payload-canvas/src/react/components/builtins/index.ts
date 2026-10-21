@@ -2,6 +2,7 @@
 // Client-safe: the site and the canvas use the same map.
 
 import type { BlockComponents } from '../../render/types'
+import { buttonComponent } from '../Button'
 import { Accordion } from './Accordion'
 import { Carousel } from './Carousel'
 import { Disclosure } from './Disclosure'
@@ -12,7 +13,10 @@ import { MediaBackdrop } from './MediaBackdrop'
 import { TableOfContents } from './TableOfContents'
 
 export type BuiltinComponentsOptions = {
-  /** The site's icons by name, for the `icon` block. The same names as `builtinBlocks({ icons })`. */
+  /**
+   * The site's icons by name, for the `icon` block and the button's `icon` prop. The same names as
+   * `builtinBlocks({ icons })` and `defaultBlocks({ icons })`.
+   */
   icons?: IconMap
 }
 
@@ -24,10 +28,14 @@ export type BuiltinComponentsOptions = {
  */
 export function builtinComponents(options: BuiltinComponentsOptions = {}): BlockComponents {
   const components: BlockComponents = { disclosure: Disclosure, accordion: Accordion, lightbox: Lightbox, carousel: Carousel, tableOfContents: TableOfContents, filterLink: FilterLink, mediaBackdrop: MediaBackdrop }
-  if (options.icons) components.icon = iconComponent(options.icons)
+  if (options.icons) {
+    components.icon = iconComponent(options.icons)
+    components.button = buttonComponent(options.icons)
+  }
   return components
 }
 
+export { buttonComponent } from '../Button'
 export { Accordion } from './Accordion'
 export { Carousel } from './Carousel'
 export { Disclosure } from './Disclosure'
