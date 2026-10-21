@@ -26,7 +26,7 @@ import {
 } from '../core/bindings'
 import { createId } from '../core/ids'
 import { blockJsonSchema } from '../core/schema'
-import { getBlockDefinition, sectionsWithDefaultClassNames, sectionsWithVariants, withInlineBlocks } from '../core/blocks'
+import { getBlockDefinition, sectionsWithDefaultClassNames, sectionsWithVariants } from '../core/blocks'
 import { localeSettingsOf, localizedKeys, resolveLayoutLocale, stampLocale, untranslatedKeys } from '../core/locale'
 import { normalizeLayout, subtreeIds, walkBlocks } from '../core/tree'
 import type { BlockDefinition, Layout, LocaleSettings, Operation, SectionDefinition } from '../core/types'
@@ -43,7 +43,7 @@ import type { LiveActor } from '../live/types'
 import { storedLayout } from '../plugin/hook'
 import { builderViewPath, documentPath, draftPreviewPath } from '../plugin/links'
 import { siteCssConfigOf } from '../plugin'
-import { listCollectionsOf } from '../plugin/listCollections'
+import { prepareBlocks } from '../plugin/listCollections'
 import { getStyleTokens } from '../css'
 import { findSection, loadSavedSections, savedSectionsConfigOf } from '../plugin/sections'
 import { templatesConfigOf } from '../plugin/templates'
@@ -277,7 +277,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
   const templatesSlug = templateTargets.length > 0 ? (options.templates?.slug ?? DEFAULT_TEMPLATES_SLUG) : null
   const listable = Object.entries(options.collections).filter(([, c]) => c.url).map(([slug]) => slug)
   // The same block list the plugin validates against (collection list: only collections with a url).
-  const blocks = withInlineBlocks(listCollectionsOf(options.blocks, listable))
+  const blocks = prepareBlocks(options.blocks, listable)
   // A section block without a className gets its type's default classes, as in the plugin.
   // Each variant is a section of its own (`<id>/<variant id>`).
   const sections = sectionsWithDefaultClassNames(sectionsWithVariants(options.sections ?? []), blocks)

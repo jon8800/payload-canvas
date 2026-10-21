@@ -1,5 +1,6 @@
 import type { Field } from 'payload'
 import { COLLECTION_LIST_BLOCK, REPEAT_BLOCK } from '../core/bindings'
+import { withInlineBlocks } from '../core/blocks'
 import type { BlockDefinition } from '../core/types'
 
 /**
@@ -33,4 +34,15 @@ export function listCollectionsOf(blocks: BlockDefinition[], slugs: string[]): B
     })
     return { ...block, fields }
   })
+}
+
+/**
+ * The block list as `websiteBuilder` and `builderMcpTools` use it: `listCollectionsOf` (the
+ * collection list's `collection` and `ids` point to `listCollections`, the collections with a
+ * `url`), then `withInlineBlocks` (inline blocks may go straight into a link). Run it on the
+ * site's own list too, so a seed's `validateLayout` agrees with the editor. Running it twice
+ * changes nothing.
+ */
+export function prepareBlocks(blocks: BlockDefinition[], listCollections: string[] = []): BlockDefinition[] {
+  return withInlineBlocks(listCollectionsOf(blocks, listCollections))
 }
