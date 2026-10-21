@@ -1073,6 +1073,17 @@ const jsonLd = faqJsonLd(items)
 - Style the dialog from the block's `className`: `[&_dialog]:` for its text colour and backdrop (`[&_dialog]:backdrop:bg-black/85`), `[&_[data-lightbox-button]]:` for the close, previous and next buttons (`data-lightbox-button` is `close`, `previous` or `next`) and `[&_[data-lightbox-photo]]:` for the large photo. The component sets only position and size.
 - The canvas never opens it, so a click selects an image there.
 
+#### Carousel
+
+`carousel` shows the blocks of its `slides` slot as slides. Each direct child is one slide: give it its width with its own `className` (`w-[85%] md:w-1/3`). A single `collectionList` or `repeat` child makes each of its items a slide.
+
+- Props: `mode` (`scroll`: a swipeable scroll-snap track; `fade`: the slides stack and fade), `arrows` (default on), `dots`, `loop`, `autoplay` (milliseconds, 0 is off) and `label` (the region's name, default "Carousel").
+- The optional `previous` and `next` slots hold the content of the arrow buttons, for example an `icon` block. Empty, they show a chevron.
+- Accessibility: the carousel is a `<section>` region with `aria-roledescription="carousel"` and its label. Each slide is a group labelled "2 of 6". The scroll track takes the keyboard focus, and the arrow keys move one slide. In fade mode the hidden slides are `inert`. The track announces slide changes (`aria-live="polite"`) unless autoplay is running.
+- Autoplay shows a Pause button (WCAG 2.2.2), stops while the pointer is over the carousel and while it has focus, and never runs when the visitor asks for less motion. With reduced motion the arrows also jump instead of scroll smoothly.
+- Style it from the block's `className`: `[&_[data-carousel-track]]:` for the track (the gap between slides), `[&_[data-carousel-arrow]]:` for the arrows (`previous` or `next`; `:disabled` at either end without `loop`), `[&_[data-carousel-dot]]:` for the dots (the current dot has `aria-current="true"`), `[&_[data-carousel-controls]]:` for the row of controls and `[&_[data-carousel-pause]]:` for the pause button.
+- The arrows and dots appear after the script has counted the slides. On the canvas the slides always scroll and never autoplay, so each one can be selected.
+
 ## Using existing Payload blocks
 
 A site that already has a Payload `blocks` field (for example `pages.layout` with sections and nested blocks) keeps its field, its block configs, its components and its content. Point the builder at that field. The builder then edits the field itself: there is one source of truth, no second copy of the page, and nothing to migrate.
