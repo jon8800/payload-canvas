@@ -1632,6 +1632,22 @@ Lists load with the visitor's access (`overrideAccess: false`). The site (`loadL
 - The canvas has no URL query, so it shows the list without these filters.
 - Filtered URLs show the same page with fewer items. Set `robots: { index: false, follow: true }` (`noindex, follow`) in the route's metadata when the URL has a filter param, so search engines index only the unfiltered page.
 
+#### Picked documents, random order and pages
+
+| Prop | What it does |
+| --- | --- |
+| `ids` | Picked documents, in the order you pick them. A relationship (hasMany) to the collections with a `url` when the plugin knows them, else a list of ids. The list shows only these, up to 100. `limit`, `sort`, `offset` and `paginate` do not apply; the other filters still do. A pick from another collection than `collection` is left out. |
+| `sort: "$random"` | Shuffles the newest 100 matching documents, then applies `offset` and `limit`. `loadLayoutData` picks a new seed per call, so a cached page shuffles once per cache build. Pass `randomSeed` to fix the order. The canvas keeps one order while you edit. Two random lists on a page get different orders. |
+| `paginate: "pages"` | Shows `limit` documents per page and links to every page under the items: `?page=2`, `?page=3` (`PAGE_PARAM`). The links keep the rest of the URL query (filters), and page 1 has no `page` param. Pass the query to `loadLayoutData` (`query`), as for `queryFilters`. `offset` does not apply. |
+| `pagerClassName` | Classes of the `<nav aria-label="Pages">` around the links. Default `flex flex-wrap gap-2`. |
+| `pageLinkClassName` | Classes of each page link. The current page has `aria-current="page"`, so `aria-[current=page]:font-bold` styles it. |
+
+- The page links are plain `<a href>` links, so search engines can crawl every page. Give `?page=N` pages their own canonical URL (with the page), not the first page.
+- One paginated list per page: every list reads the same `page` param.
+- On the canvas a paginated list shows page 1 with its links.
+- After `loadLayoutData`, a paginated list carries its links as the runtime `$pages` prop (`LIST_PAGES_PROP`, type `ListPages`). A custom collection list component can render them its own way.
+- Not built: a "Load more" button. Use the page links.
+
 #### Repeat the rows of a field
 
 The **Repeat** block (`repeat`) repeats its `item` slot once per row of a list field of the current document. Use it for an array field (FAQs `faqs: [{ question, answer }]`, rates `rates: [{ duration, price }]`), a hasMany upload (a gallery), a hasMany relationship (the services of a model) or a hasMany text or select field (tags).

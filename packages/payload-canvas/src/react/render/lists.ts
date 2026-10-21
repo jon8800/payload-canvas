@@ -33,7 +33,23 @@ export type ListQuery = {
   offset?: number
   /** Depth of related documents, when more than 1. */
   depth?: 2
+  /** Picked documents (`ids`): only these, in this order. `limit`, `offset`, `sort` and pages do not apply. */
+  ids?: Id[]
+  /** `sort: "$random"`: a shuffle of the newest 100 matches, then `offset` and `limit`. */
+  random?: true
+  /** `paginate: "pages"`: the page to show, from 1 (the URL's `?page=`). */
+  page?: number
 }
+
+/** The runtime prop that carries a paginated list's page links (`ListPages`). Never stored. */
+export const LIST_PAGES_PROP = '$pages'
+/** The URL query parameter of a paginated list's page. */
+export const PAGE_PARAM = 'page'
+/** `sort` value that shuffles the list. */
+export const RANDOM_SORT = '$random'
+
+/** A paginated list's page links, for the collection list component. */
+export type ListPages = { current: number; links: Array<{ page: number; href: string; current: boolean }> }
 
 /**
  * The request's URL query, for collection lists' `queryFilters`: `URLSearchParams`, or the
@@ -122,6 +138,92 @@ function filterOf(props: Record<string, unknown>, context: TemplateContext | nul
   return by === 'shared' ? { [field]: { in: values } } : { id: { in: values } }
 }
 
+/** The ids picked in `ids`: plain ids, populated documents or `{ relationTo, value }` pairs of this collection. */
+function pickedIds(value: unknown, collection: string): Id[] {
+  if (!Array.isArray(value)) return []
+  const out = new Set<Id>()
+  for (const item of value) {
+    if (isRecord(item) && 'relationTo' in item && 'value' in item && item.relationTo !== collection) continue
+    for (const id of valuesOf(item)) out.add(id)
+  }
+  return [...out]
+}
+
+/** The page of the URL query (`?page=3`), from 1. */
+export function pageOf(query?: ListQueryParams | null): number {
+  const raw = query ? paramValues(query, PAGE_PARAM)[0] : undefined
+  const page = raw ? Number(raw) : 1
+  return Number.isInteger(page) && page >= 1 ? page : 1
+}
+
+/**
+ * The page links of a paginated list: `?page=N` with the rest of the URL query kept (filters), and
+ * no `page` for page 1. Empty with one page or fewer.
+ */
+export function pageLinks(query: ListQueryParams | null | undefined, current: number, totalPages: number): ListPages {
+  const links: ListPages['links'] = []
+  if (totalPages <= 1) return { current, links }
+  const base = new URLSearchParams()
+  if (query instanceof URLSearchParams) for (const [key, value] of query) base.append(key, value)
+  else if (query) for (const [key, value] of Object.entries(query)) for (const one of ([] as string[]).concat(value ?? [])) base.append(key, one)
+  base.delete(PAGE_PARAM)
+  // ponytail: one link per page; add a window with gaps if lists reach dozens of pages.
+  for (let page = 1; page <= totalPages; page++) {
+    const params = new URLSearchParams(base)
+    if (page > 1) params.set(PAGE_PARAM, String(page))
+    const text = params.toString()
+    links.push({ page, href: text ? `?${text}` : '?', current: page === current })
+  }
+  return { current, links }
+}
+
+/** What to ask Payload for: the number of documents, the sort and the page. */
+export function listRequest(query: ListQuery): { limit: number; sort: string; page?: number } {
+  if (query.ids) return { limit: Math.max(query.ids.length, 1), sort: DEFAULT_SORT }
+  if (query.random) return { limit: MAX_LIMIT, sort: DEFAULT_SORT }
+  if (query.page) return { limit: query.limit, sort: query.sort, page: query.page }
+  return { limit: query.limit + (query.offset ?? 0), sort: query.sort }
+}
+
+/** A small seeded random number generator (mulberry32): the same seed gives the same order. */
+function seededRandom(seed: number): () => number {
+  let a = seed >>> 0
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0
+    let t = a
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296
+  }
+}
+
+function hashText(text: string): number {
+  let h = 2_166_136_261
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16_777_619)
+  return h >>> 0
+}
+
+/**
+ * The loaded documents in the list's order: picked ids in pick order, a seeded shuffle for
+ * `$random` (the seed and the block id pick the order), else after `offset`, at most `limit`.
+ */
+export function arrangeListDocs(docs: Doc[], query: ListQuery, seed = 0): Doc[] {
+  if (query.ids) {
+    const byId = new Map(docs.map((doc) => [String(doc.id), doc]))
+    return query.ids.map((id) => byId.get(String(id))).filter((doc): doc is Doc => doc !== undefined)
+  }
+  if (query.page) return docs.slice(0, query.limit)
+  const offset = query.offset ?? 0
+  if (!query.random) return docs.slice(offset, offset + query.limit)
+  const random = seededRandom(seed ^ hashText(query.blockId))
+  const shuffled = docs.slice()
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1))
+    ;[shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!]
+  }
+  return shuffled.slice(offset, offset + query.limit)
+}
+
 const DEFAULT_LIMIT = 3
 const MAX_LIMIT = 100
 // ponytail: offsets load the skipped documents too; use Payload pages if lists need deep offsets.
@@ -143,6 +245,10 @@ export function listQueries(layout: Layout, context?: TemplateContext | null, qu
     const rawLimit = typeof props.limit === 'number' && Number.isFinite(props.limit) ? Math.round(props.limit) : DEFAULT_LIMIT
     const sort = typeof props.sort === 'string' && props.sort.trim() ? props.sort.trim() : DEFAULT_SORT
     const list: ListQuery = { blockId: block.id, collection, limit: Math.min(Math.max(rawLimit, 1), MAX_LIMIT), sort }
+    const ids = pickedIds(props.ids, collection).slice(0, MAX_LIMIT)
+    if (ids.length > 0) list.ids = ids
+    else if (sort === RANDOM_SORT) list.random = true
+    else if (props.paginate === 'pages') list.page = pageOf(query)
     const id = context?.doc.id
     const exclude = props.excludeCurrent !== false && context?.collection === collection
     if (exclude && (typeof id === 'string' || typeof id === 'number')) list.exclude = id
@@ -160,13 +266,19 @@ export function listQueries(layout: Layout, context?: TemplateContext | null, qu
   return queries
 }
 
-/** Puts the loaded documents on each list block as the runtime-only `$items` prop. Never mutates. */
-export function attachListItems(layout: Layout, items: ReadonlyMap<string, Doc[]>): Layout {
+/**
+ * Puts the loaded documents on each list block as the runtime-only `$items` prop, and a paginated
+ * list's page links as `$pages` (`pages`). Never mutates.
+ */
+export function attachListItems(layout: Layout, items: ReadonlyMap<string, Doc[]>, pages?: ReadonlyMap<string, ListPages>): Layout {
   if (items.size === 0) return layout
   const visit = (blocks: Block[]): Block[] =>
     blocks.map((block) => {
       const docs = items.get(block.id)
-      const next: Block = docs ? { ...block, props: { ...block.props, [LIST_ITEMS_PROP]: docs } } : block
+      const links = pages?.get(block.id)
+      const next: Block = docs
+        ? { ...block, props: { ...block.props, [LIST_ITEMS_PROP]: docs, ...(links?.links.length ? { [LIST_PAGES_PROP]: links } : {}) } }
+        : block
       if (!next.slots) return next
       return {
         ...next,

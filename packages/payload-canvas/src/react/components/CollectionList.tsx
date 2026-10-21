@@ -1,5 +1,6 @@
 import { createElement } from 'react'
 import { LIST_EMPTY_SLOT, LIST_ITEM_SLOT, REPEAT_BLOCK } from '../../core'
+import { LIST_PAGES_PROP, type ListPages } from '../render/lists'
 import type { BlockComponentProps } from '../render/types'
 
 const CONTENTS = { display: 'contents' } as const
@@ -19,11 +20,26 @@ export function CollectionList({ block, props, className, attributes, slots, slo
     if (mode !== 'canvas') return items
     return createElement('div', { ...attributes, ...slotAttributes[LIST_ITEM_SLOT], style: CONTENTS }, items)
   }
+  const pages = props[LIST_PAGES_PROP] as ListPages | undefined
   return (
     <div {...attributes} {...slotAttributes[LIST_ITEM_SLOT]} className={className}>
       {items}
       {/* The empty slot takes its own classes (`slotClassName.empty`) through its slot attributes. */}
       {empty && <div {...slotAttributes[LIST_EMPTY_SLOT]}>{empty}</div>}
+      {pages && pages.links.length > 1 && (
+        <nav aria-label="Pages" className={typeof props.pagerClassName === 'string' ? props.pagerClassName : undefined}>
+          {pages.links.map((link) => (
+            <a
+              key={link.page}
+              href={link.href}
+              aria-current={link.current ? 'page' : undefined}
+              className={typeof props.pageLinkClassName === 'string' ? props.pageLinkClassName : undefined}
+            >
+              {link.page}
+            </a>
+          ))}
+        </nav>
+      )}
     </div>
   )
 }
