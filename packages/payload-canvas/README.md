@@ -1291,6 +1291,26 @@ export default function CanvasPage() {
 - **Theme variables in the canvas.** The canvas gets the Theme global from `<ThemeStyle live />` in its layout. If you set other variables at runtime, render the same tag in the canvas layout too.
 - **Standalone output** needs `outputFileTracingIncludes`. See [step 8](#8-add-the-standalone-tracing-lines).
 
+### HTML attributes
+
+Each block can carry three HTML attributes in `block.attrs`. Edit them in the inspector's **Advanced** tab.
+
+| Key | HTML | What it does |
+| --- | --- | --- |
+| `id` | `id` | An anchor for `#id` links, for example `contact`. Letters, digits, `-` and `_`, starting with a letter. Unique in the layout. |
+| `ariaLabel` | `aria-label` | The name screen readers read, for example for a link that shows only an icon. |
+| `ariaHidden` | `aria-hidden="true"` | Screen readers skip the block: decorative shapes, dots and repeated links. |
+
+```json
+{ "id": "b_k3x9qa", "type": "stack", "attrs": { "id": "contact", "ariaLabel": "Contact us" } }
+```
+
+- `RenderLayout` puts them in `attributes`, which every block component spreads on its root element.
+- An update merges per key: `{ "type": "update", "id": "b_k3x9qa", "attrs": { "ariaHidden": true, "ariaLabel": null } }`. `null` removes a key, and `attrs: null` removes all.
+- Inserting a block with an id the layout already uses fails, and so does an update to such an id. A duplicate, a paste and a second copy of a section leave out the id. `validateLayout` reports a repeated id as a `constraint` problem, which blocks publishing.
+- Inside a collection list item or a repeat row, only the first item keeps the `id`. The other items leave it out, so the id stays unique on the page.
+- A Payload `blocks` field cannot store them, so the Advanced tab is hidden there.
+
 ## Animations
 
 Editors and the AI can add motion to any block without code: an entrance when the block scrolls into view, hover and press effects, a scroll effect such as parallax, and a loop. The site plays them with the [`motion`](https://motion.dev) package (its DOM API). Animations are data, not classes.

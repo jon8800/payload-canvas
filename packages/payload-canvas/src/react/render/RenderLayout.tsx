@@ -2,6 +2,7 @@ import { Fragment, memo, type ReactNode } from 'react'
 import {
   blocksHaveMotion,
   COLLECTION_LIST_BLOCK,
+  htmlAttributes,
   isRepeatSlot,
   LIST_EMPTY_SLOT,
   listItemContext,
@@ -43,6 +44,11 @@ type Context = {
    * `data-builder-repeat` instead of editor attributes, so selection maps to the first item.
    */
   repeat: boolean
+  /**
+   * A collection list item or repeat row after the first, on the site and the canvas. Its blocks
+   * leave out their HTML `id`, so an id stays unique on the page.
+   */
+  copy: boolean
   /** Given to components that read the page data (see `withPageData`). */
   pageData: PageData | null
 }
@@ -132,6 +138,7 @@ function renderListItems(block: Block, ctx: Context): ReactNode {
           ...ctx,
           context,
           repeat: ctx.repeat || (ctx.mode === 'canvas' && i > 0),
+          copy: ctx.copy || i > 0,
         },
         staggersChildren(block.motion),
       )}
@@ -175,6 +182,12 @@ function renderBlock(stored: Block, ctx: Context, preview = false, item = false)
       ? { 'data-builder-repeat': '' }
       : {}
   if (editor && !preview && block.hidden) attributes['data-builder-hidden'] = 'true'
+  // The block's own HTML attributes (id, aria-label, aria-hidden). Copies of a list row leave out the id.
+  if (stored.attrs) {
+    const own = htmlAttributes(stored.attrs)
+    if (ctx.copy) delete own.id
+    Object.assign(attributes, own)
+  }
   // Animations: settings for the motion runtime (the canvas plays them only on request).
   if (!preview && (stored.motion || item)) Object.assign(attributes, motionAttributes(stored.motion, item))
 
@@ -238,6 +251,7 @@ function createContext(
     binding: { url: urlResolver(resolveLink) },
     context,
     repeat: false,
+    copy: false,
     pageData,
   }
 }

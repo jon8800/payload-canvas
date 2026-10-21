@@ -5,6 +5,7 @@
 // `hidden` only when true. Operations keep this form. When a slot list becomes empty, its key is
 // deleted. This is what makes every inverse restore the exact previous layout.
 
+import { checkAttrs, htmlIdClash, htmlIdsOf, patchAttrs, withoutTakenHtmlIds } from './attrs'
 import { placementError, slotFullError } from './blocks'
 import { createId } from './ids'
 import { checkMotion, motionInverse, patchMotion } from './motion'
@@ -74,6 +75,8 @@ function insert(layout: Layout, rawBlock: unknown, rawTo: unknown, blocks?: read
   if (to.index > length) return fail(`Index ${to.index} is out of range (0-${length})`)
   const refused = blocks ? placementError(blocks, layout, to.parentId, to.slot, checked, index) : null
   if (refused) return fail(refused)
+  const clash = htmlIdClash(layout, checked)
+  if (clash) return fail(clash)
 
   const next = mapList(layout, to.parentId, to.slot, (list) => insertAt(list, to.index, checked))
   return ok(next, [{ type: 'remove', id: checked.id }])
@@ -120,7 +123,8 @@ function duplicate(layout: Layout, id: unknown, newId: unknown, blocks?: readonl
 
   const used = new Set(index.keys())
   used.add(newId)
-  const copy = cloneWithNewIds(entry.block, newId, used)
+  // The copy leaves out the HTML ids: each id is unique in the layout.
+  const copy = withoutTakenHtmlIds(cloneWithNewIds(entry.block, newId, used), htmlIdsOf(layout.blocks))
   const next = mapList(layout, entry.parentId, entry.slot, (list) => insertAt(list, entry.index + 1, copy))
   return ok(next, [{ type: 'remove', id: newId }])
 }
@@ -216,6 +220,17 @@ function update(layout: Layout, op: Extract<Operation, { type: 'update' }>): App
     inverse.motion = motionInverse(before.motion, op.motion as Record<string, unknown> | null)
     if (motion) next.motion = motion
     else delete next.motion
+  }
+
+  if (op.attrs !== undefined) {
+    const patched = patchAttrs(before.attrs, op.attrs)
+    if (typeof patched === 'string') return fail(patched)
+    inverse.attrs = patched.inverse
+    if (patched.attrs) next.attrs = patched.attrs
+    else delete next.attrs
+    const id = patched.attrs?.id
+    const owner = id && id !== before.attrs?.id ? htmlIdsOf(layout.blocks).get(id) : undefined
+    if (owner) return fail(`The HTML id "${id}" is already used by block "${owner}". Every id is unique in a layout.`)
   }
 
   const result = mapList(layout, entry.parentId, entry.slot, (list) => replaceAt(list, entry.index, next))
@@ -320,6 +335,7 @@ function cloneWithNewIds(block: Block, id: string, used: Set<string>): Block {
   if (block.props) clone.props = structuredClone(block.props)
   if (block.locales) clone.locales = structuredClone(block.locales)
   if (block.bindings) clone.bindings = { ...block.bindings }
+  if (block.attrs) clone.attrs = { ...block.attrs }
   if (block.slots) {
     clone.slots = Object.fromEntries(
       Object.entries(block.slots).map(([name, children]) => [
@@ -344,7 +360,7 @@ function freshId(used: Set<string>): string {
  */
 function checkBlock(value: unknown, used: Set<string>, path = 'block'): Block | string {
   if (!isPlainObject(value)) return `${path} must be an object`
-  const { id, type, props, className, slots, bindings, hidden, label, locales, motion } = value
+  const { id, type, props, className, slots, bindings, hidden, label, locales, motion, attrs } = value
   if (typeof id !== 'string' || id === '') return `${path}.id must be a non-empty string`
   if (used.has(id)) return `Block id "${id}" already exists`
   used.add(id)
@@ -404,5 +420,8 @@ function checkBlock(value: unknown, used: Set<string>, path = 'block'): Block | 
     if (typeof checked === 'string') return `${path}.${checked}`
     if (checked) block.motion = checked
   }
+  const checkedAttrs = checkAttrs(attrs)
+  if (typeof checkedAttrs === 'string') return `${path}.${checkedAttrs}`
+  if (checkedAttrs) block.attrs = checkedAttrs
   return block
 }

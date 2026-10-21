@@ -271,8 +271,16 @@ function blockDetails(ctx: Context, from: Block, to: Block): LayoutChangeDetail[
     out.push({ kind: 'value', label, from: before ? `{${before}}` : '', to: after ? `{${after}}` : '' })
   }
   if (!sameValue(from.motion, to.motion)) out.push({ kind: 'note', label: 'Animation', text: motionNote(from.motion, to.motion) })
+  for (const key of Object.keys(ATTR_NAMES) as Array<keyof typeof ATTR_NAMES>) {
+    const before = from.attrs?.[key]
+    const after = to.attrs?.[key]
+    if (before !== after) out.push({ kind: 'value', label: ATTR_NAMES[key], from: attrText(before), to: attrText(after) })
+  }
   return out
 }
+
+const ATTR_NAMES = { id: 'HTML id', ariaLabel: 'ARIA label', ariaHidden: 'Hidden from screen readers' } as const
+const attrText = (value: string | boolean | undefined) => (value === true ? 'Yes' : value === undefined ? '' : String(value))
 
 /** Ids of `list` that keep their relative order (longest common subsequence with `other`). */
 function stableIds(list: string[], other: string[]): Set<string> {
