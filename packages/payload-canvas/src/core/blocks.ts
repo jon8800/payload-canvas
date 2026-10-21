@@ -90,6 +90,29 @@ export function defineSection(input: SectionInput): SectionDefinition {
   return { ...input, blocks: fill(input.blocks) }
 }
 
+/**
+ * The blocks with each block's `defaultClassName` filled where the block has no `className` key, at
+ * any depth. A `className` of `''` stays empty. Blocks of unknown types stay as they are. The
+ * plugin and `builderMcpTools` run it on the app's `sections`, so a section tree may leave out a
+ * block's default classes. Seeds that build layouts by hand can run it too.
+ */
+export function withDefaultClassNames(list: readonly Block[], definitions: readonly BlockDefinition[]): Block[] {
+  return list.map((block) => {
+    const next: Block = { ...block }
+    const fallback = block.className === undefined ? getBlockDefinition(definitions, block.type)?.defaultClassName : undefined
+    if (fallback) next.className = fallback
+    if (block.slots) {
+      next.slots = Object.fromEntries(Object.entries(block.slots).map(([name, children]) => [name, withDefaultClassNames(children, definitions)]))
+    }
+    return next
+  })
+}
+
+/** `withDefaultClassNames` on the blocks of every section. */
+export function sectionsWithDefaultClassNames(sections: readonly SectionDefinition[], definitions: readonly BlockDefinition[]): SectionDefinition[] {
+  return sections.map((section) => ({ ...section, blocks: withDefaultClassNames(section.blocks, definitions) }))
+}
+
 export function getBlockDefinition(blocks: readonly BlockDefinition[], type: string): BlockDefinition | undefined {
   return blocks.find((b) => b.type === type)
 }

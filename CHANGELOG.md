@@ -4,6 +4,10 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ## [Unreleased]
 
+### Added
+
+- Sections: a block without a `className` key gets its type's `defaultClassName`. `websiteBuilder` and `builderMcpTools` fill it in the app's `sections`; `withDefaultClassNames(blocks, definitions)` does the same for seeds. `className: ''` keeps a block without classes. Saved sections stay as saved.
+
 ## [0.3.0] - 2026-10-21
 
 ### Added

@@ -24,7 +24,7 @@ import {
 } from '../core/bindings'
 import { createId } from '../core/ids'
 import { blockJsonSchema } from '../core/schema'
-import { getBlockDefinition } from '../core/blocks'
+import { getBlockDefinition, sectionsWithDefaultClassNames } from '../core/blocks'
 import { localeSettingsOf, localizedKeys, resolveLayoutLocale, stampLocale, untranslatedKeys } from '../core/locale'
 import { normalizeLayout, subtreeIds, walkBlocks } from '../core/tree'
 import type { BlockDefinition, Layout, LocaleSettings, Operation, SectionDefinition } from '../core/types'
@@ -240,12 +240,13 @@ async function loadDraft(req: PayloadRequest, collection: string, id: string): P
 // ---------------------------------------------------------------------------
 
 export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool[] {
-  const { sections = [] } = options
   const templateTargets = Object.entries(options.collections).filter(([, c]) => c.templates).map(([slug]) => slug)
   const templatesSlug = templateTargets.length > 0 ? (options.templates?.slug ?? DEFAULT_TEMPLATES_SLUG) : null
   const listable = Object.entries(options.collections).filter(([, c]) => c.url).map(([slug]) => slug)
   // The same block list the plugin validates against (collection list: only collections with a url).
   const blocks = listCollectionsOf(options.blocks, listable)
+  // A section block without a className gets its type's default classes, as in the plugin.
+  const sections = sectionsWithDefaultClassNames(options.sections ?? [], blocks)
   const collections: Record<string, BuilderMcpCollection> = templatesSlug
     ? { ...options.collections, [templatesSlug]: { field: TEMPLATE_LAYOUT_FIELD } }
     : options.collections
