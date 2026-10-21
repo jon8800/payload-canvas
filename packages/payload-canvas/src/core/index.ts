@@ -2,6 +2,7 @@
 // Owner: core agent. Signatures here are the contract other parts build against.
 
 export * from './types'
+export { checkAttrs, htmlAttributes, htmlIdClash, htmlIdProblem, htmlIdsOf, patchAttrs, withoutTakenHtmlIds } from './attrs'
 export { createId } from './ids'
 export { findBlock, findLocation, walkBlocks, isSelfOrDescendant, normalizeLayout, type BlockLocation } from './tree'
 export { applyOperation, applyOperations, type ApplyOptions } from './operations'

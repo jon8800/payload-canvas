@@ -209,10 +209,13 @@ const MOTION_TEXT =
   MOTION_KINDS.map((kind) => `${kind} ${MOTION_SPECS[kind].presets.join('|')}`).join('; ') +
   '. Example: { "enter": { "preset": "fade-up", "stagger": 80 } }.'
 
+const ATTRS_TEXT =
+  'HTML attributes { id?, ariaLabel?, ariaHidden? }: id is an anchor for "#id" links, unique in the layout (letters, digits, - and _, starting with a letter); ariaLabel is the name screen readers read; ariaHidden true hides a decorative block from screen readers.'
+
 const BLOCK_SCHEMA = {
   type: 'object',
   description:
-    'A block: { id?, type, props?, className?, slots?, bindings?, hidden?, label?, motion? }. Children in slots have the same shape. `label` names the block for editors (e.g. "Hero"); give each top-level section one. Ids you leave out are generated; the tool result lists them.',
+    'A block: { id?, type, props?, className?, slots?, bindings?, hidden?, label?, motion?, attrs? }. Children in slots have the same shape. `label` names the block for editors (e.g. "Hero"); give each top-level section one. Ids you leave out are generated; the tool result lists them.',
   properties: {
     id: { type: 'string' },
     type: { type: 'string' },
@@ -223,6 +226,7 @@ const BLOCK_SCHEMA = {
     hidden: { type: 'boolean' },
     label: { type: 'string', description: 'Name for editors (outline). Never rendered.' },
     motion: { type: 'object', description: MOTION_TEXT },
+    attrs: { type: 'object', description: ATTRS_TEXT },
   },
   required: ['type'],
 } as const
@@ -259,6 +263,7 @@ const FLAT_OPERATIONS_SCHEMA: Record<string, unknown> = {
             type: ['object', 'null'],
             description: `insert (inside block) and update: ${MOTION_TEXT} update merges per kind: a kind replaces that kind, null removes it, kinds left out stay. null removes all.`,
           },
+          attrs: { type: ['object', 'null'], description: `update: ${ATTRS_TEXT} A key replaces that key, null removes it; attrs: null removes all.` },
           newId: { type: 'string' },
         },
         required: ['type'],
@@ -346,7 +351,7 @@ export function toolDefinitions(env: ToolEnv): AiToolDefinition[] {
         '- move { id, to }: move a block (with children).',
         '- remove { id }: delete a block and its children.',
         '- duplicate { id, newId? }: copy a block right after itself.',
-        '- update { id, props?, unsetProps?, className?, hidden?, bindings?, label?, motion? }: props and bindings are merged (shallow); className REPLACES all classes, so send the full list; null removes it; a null binding removes that binding; label renames the block for editors (null removes it); motion merges per kind (a kind you send replaces that kind, null removes a kind, null alone removes all animations).',
+        '- update { id, props?, unsetProps?, className?, hidden?, bindings?, label?, motion?, attrs? }: props and bindings are merged (shallow); className REPLACES all classes, so send the full list; null removes it; a null binding removes that binding; label renames the block for editors (null removes it); motion merges per kind (a kind you send replaces that kind, null removes a kind, null alone removes all animations); attrs (HTML id, ariaLabel, ariaHidden) merges per key, null removes a key.',
         'Position: { parentId (null = page root), slot? (default "children"), index (final index in the target list) }.',
         'On success the result lists the changed ids and any warnings (e.g. a required prop is empty). On error nothing changes and the error names the failing operation; fix it and call again.',
         'Example (ids come from the layout; block types and props from the block catalog): change a heading, then add a text block after it in the same section:',
@@ -379,6 +384,7 @@ export function toolDefinitions(env: ToolEnv): AiToolDefinition[] {
                       type: ['object', 'null'],
                       description: `${MOTION_TEXT} Merges per kind: a kind replaces that kind, null removes it, kinds left out stay. null removes all.`,
                     },
+                    attrs: { type: ['object', 'null'], description: `${ATTRS_TEXT} A key replaces that key, null removes it. null removes all.` },
                   },
                   required: ['type', 'id'],
                 },

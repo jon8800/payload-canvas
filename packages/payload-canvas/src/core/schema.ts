@@ -141,6 +141,18 @@ function blockSchema(def: BlockDefinition, all: BlockDefinition[]): Schema {
   }
   properties.hidden = { type: 'boolean', description: 'Hidden blocks stay in the data but do not render.' }
   properties.motion = { $ref: `#/$defs/${encodeURIComponent(MOTION_DEF)}` }
+  properties.attrs = {
+    type: 'object',
+    description:
+      'HTML attributes of the block element. id: an anchor for "#id" links, unique in the layout (letters, digits, "-" and "_", starting with a letter). ' +
+      'ariaLabel: the name screen readers read (aria-label). ariaHidden: true hides a decorative block from screen readers (aria-hidden).',
+    properties: {
+      id: { type: 'string', pattern: '^[A-Za-z][\\w-]*$' },
+      ariaLabel: { type: 'string' },
+      ariaHidden: { type: 'boolean' },
+    },
+    additionalProperties: false,
+  }
   properties.label = {
     type: 'string',
     description: 'Optional name for editors, shown in the outline (e.g. "Hero", "Pricing"). Never rendered on the site.',

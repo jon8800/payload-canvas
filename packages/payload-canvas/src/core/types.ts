@@ -44,7 +44,25 @@ export type Block = {
    * Stored only when it holds a kind.
    */
   motion?: BlockMotion
+  /**
+   * HTML attributes of the block's root element (`core/attrs.ts`). Payload reserves `id` inside
+   * blocks, so they live here. Stored only when one is set.
+   */
+  attrs?: BlockAttrs
 }
+
+/** A block's own HTML attributes. Empty values are left out. */
+export type BlockAttrs = {
+  /** The element's `id`, for `#anchor` links. Unique in the layout. Letters, digits, "-" and "_", starting with a letter. */
+  id?: string
+  /** `aria-label`: the element's name for screen readers. */
+  ariaLabel?: string
+  /** `aria-hidden="true"`: screen readers skip the element (decorative shapes, repeated links). */
+  ariaHidden?: boolean
+}
+
+/** An update of `attrs`: a key replaces that key, `null` removes it, keys left out stay. */
+export type BlockAttrsPatch = { [K in keyof BlockAttrs]?: BlockAttrs[K] | null }
 
 export type Layout = {
   version: 1
@@ -402,6 +420,8 @@ export type Operation =
        * kinds left out stay. `motion: null` removes all motion.
        */
       motion?: MotionPatch | null
+      /** HTML attributes. Each key given replaces that key, `null` removes it. `attrs: null` removes all. */
+      attrs?: BlockAttrsPatch | null
     }
 
 /** `inverse` undoes this operation when applied in order to the resulting layout. */

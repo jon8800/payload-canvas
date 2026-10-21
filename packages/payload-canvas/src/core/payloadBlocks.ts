@@ -119,6 +119,7 @@ export function payloadBlocksProblems(layout: Layout, storage: PayloadBlocksStor
       if (allowed && !allowed.includes(block.type)) problems.push(`${name} blocks are not allowed here.`)
       if (block.className) problems.push(`${name}: this field cannot store Tailwind classes.`)
       if (block.motion) problems.push(`${name}: this field cannot store animations.`)
+      if (block.attrs) problems.push(`${name}: this field cannot store HTML attributes (id, aria-label, aria-hidden).`)
       if (block.bindings) problems.push(`${name}: this field cannot store bindings.`)
       if (block.hidden) problems.push(`${name}: this field cannot store hidden blocks.`)
       if (block.locales) problems.push(`${name}: translations are edited in Payload's editor for this field.`)
