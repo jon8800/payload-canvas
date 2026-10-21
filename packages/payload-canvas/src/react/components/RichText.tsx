@@ -3,7 +3,8 @@
 // renders in server components and inside the client canvas.
 
 import { LinkJSXConverter, RichText as LexicalRichText } from '@payloadcms/richtext-lexical/react'
-import type { ComponentType, ReactNode } from 'react'
+import { createElement, type ComponentType, type ReactNode } from 'react'
+import { richTextHeadings } from '../../core/headings'
 import { editableText } from '../render/editable'
 import { defaultResolveLink } from '../render/link'
 import type { BlockComponentProps, ResolveLink } from '../render/types'
@@ -48,14 +49,37 @@ function converters(resolveLink: ResolveLink) {
 
 const convertersByResolver = new WeakMap<ResolveLink, ReturnType<typeof converters>>()
 
-/** Lexical rich text as React elements, with internal links resolved by `resolveLink`. No wrapper. */
-export function renderRichText(content: unknown, resolveLink: ResolveLink): ReactNode {
+const HEADING_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+
+type HeadingArgs = { node: { tag?: unknown; children?: unknown }; nodesToJSX: (args: { nodes: unknown }) => ReactNode }
+
+/**
+ * Converters whose headings get the ids of `richTextHeadings` (made per value, because the ids
+ * belong to this value's headings).
+ */
+function withHeadingIds(base: ReturnType<typeof converters>, content: unknown) {
+  const ids = new WeakMap(richTextHeadings(content).map((heading) => [heading.node, heading.id]))
+  return (args: { defaultConverters: Record<string, unknown> }) => ({
+    ...base(args),
+    heading: ({ node, nodesToJSX }: HeadingArgs) => {
+      const tag = typeof node.tag === 'string' && HEADING_TAGS.has(node.tag) ? node.tag : 'h1'
+      return createElement(tag, { id: ids.get(node as Record<string, unknown>) }, nodesToJSX({ nodes: node.children }))
+    },
+  })
+}
+
+/**
+ * Lexical rich text as React elements, with internal links resolved by `resolveLink`. No wrapper.
+ * `headingIds`: each heading gets an id from its text (`richTextHeadings`), for `#id` links.
+ */
+export function renderRichText(content: unknown, resolveLink: ResolveLink, options?: { headingIds?: boolean }): ReactNode {
   let rendererConverters = convertersByResolver.get(resolveLink)
   if (!rendererConverters) {
     rendererConverters = converters(resolveLink)
     convertersByResolver.set(resolveLink, rendererConverters)
   }
-  return <LexicalRichText data={content as never} disableContainer converters={rendererConverters as never} />
+  const used = options?.headingIds ? withHeadingIds(rendererConverters, content) : rendererConverters
+  return <LexicalRichText data={content as never} disableContainer converters={used as never} />
 }
 
 /**
@@ -78,7 +102,7 @@ function createRichText(resolveLink: ResolveLink): ComponentType<BlockComponentP
     }
     return (
       <div {...attributes} {...editableText(mode, 'content')} className={className}>
-        {renderRichText(content, resolveLink)}
+        {renderRichText(content, resolveLink, { headingIds: props.headingIds === true })}
       </div>
     )
   }

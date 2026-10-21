@@ -8,6 +8,7 @@ export { findBlock, findLocation, walkBlocks, isSelfOrDescendant, normalizeLayou
 export { applyOperation, applyOperations, type ApplyOptions } from './operations'
 export { deepestBlockAt, canvasDropTarget, outlineDropTarget } from './dropTarget'
 export { classFields, collectClasses } from './classes'
+export { headingId, richTextHeadings, type RichTextHeading } from './headings'
 export { blockJsonSchema, layoutJsonSchema } from './schema'
 export { validateLayout, isBlockingError, isLayoutWarning, PUBLISH_ONLY_CODES, type LayoutError, type LayoutErrorCode, type ValidateOptions } from './validate'
 export {

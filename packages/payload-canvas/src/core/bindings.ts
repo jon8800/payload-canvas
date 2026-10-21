@@ -442,6 +442,17 @@ export const BINDING_FORMATTERS: Record<string, (value: unknown, args: string[])
   },
 }
 
+/**
+ * A value through one formatter, written as in a binding: "currency:AUD", "date:en-AU:Australia/Brisbane",
+ * "number" or "firstSentence". Undefined for an unknown formatter, a missing value or a value the
+ * formatter cannot read. The field block's `format` prop uses it.
+ */
+export function formatBindingValue(value: unknown, format: string): string | undefined {
+  const formatter = formatterOf(format.trim())
+  if (!formatter || isMissing(value)) return undefined
+  return BINDING_FORMATTERS[formatter.name]!(value, formatter.args)
+}
+
 /** One `|` part of an expression: a formatter (by name, after the first part) or a path. */
 function formatterOf(part: string): { name: string; args: string[] } | null {
   const [name = '', ...args] = part.split(':')

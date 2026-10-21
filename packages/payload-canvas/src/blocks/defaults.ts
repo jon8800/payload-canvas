@@ -251,12 +251,21 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     label: 'Rich text',
     icon: 'richText',
     category: 'Content',
-    fields: [{ name: 'content', type: 'richText', label: 'Content', required: true, localized: true }],
+    fields: [
+      { name: 'content', type: 'richText', label: 'Content', required: true, localized: true },
+      {
+        name: 'headingIds',
+        type: 'checkbox',
+        label: 'Heading ids',
+        admin: { description: 'Each heading gets an id from its text, so a table of contents can link to it ("#prices").' },
+      },
+    ],
     defaultClassName: 'prose',
     ai: {
       description:
         'Formatted text (Lexical JSON): paragraphs, headings, bold and italic, links and lists. ' +
-        'Use it for articles and longer copy. The "prose" class styles the content.',
+        'Use it for articles and longer copy. The "prose" class styles the content. "headingIds": true gives each ' +
+        'heading an id from its text, for "#id" links.',
       example: {
         type: 'richText',
         className: 'prose',
@@ -608,6 +617,22 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         localized: true,
         admin: { description: 'Shown when this field is empty.' },
       },
+      {
+        name: 'format',
+        type: 'text',
+        label: 'Format',
+        admin: {
+          description:
+            'For a number, date or text: "currency:AUD" ($1,200), "number" (1,200), "date:en-AU:Australia/Brisbane" ' +
+            '(a date in that language and time zone) or "firstSentence". Empty: the value as it is.',
+        },
+      },
+      {
+        name: 'headingIds',
+        type: 'checkbox',
+        label: 'Heading ids',
+        admin: { description: 'For rich text: each heading gets an id from its text, so a table of contents can link to it ("#prices").' },
+      },
     ],
     classes: FIELD_CLASSES,
     ai: {
@@ -615,7 +640,9 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         'Shows one field of the current document in a template, rendered by its value: rich text as formatted ' +
         'text, an upload as an image, a date as a formatted date, a relationship as its title, text as text. ' +
         '"path" is a dot path from getBindingSources (e.g. "content", "author.name"). Only works in templates ' +
-        'and inside a collection list item.',
+        'and inside a collection list item. "format" formats a number, date or text with a binding formatter: ' +
+        '"currency:AUD", "number", "date:en-AU:Australia/Brisbane" or "firstSentence". "headingIds": true gives each ' +
+        'rich-text heading an id from its text (e.g. "Our prices" -> "our-prices", repeats get "-2"), for "#id" links.',
       example: { type: FIELD_BLOCK, props: { path: 'content' }, className: 'prose max-w-none' },
     },
   })
