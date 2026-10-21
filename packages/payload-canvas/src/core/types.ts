@@ -389,6 +389,21 @@ export type StyleTokens = {
   containers: ThemeToken[]
   /** Every utility class name the design system knows (for autocomplete), without variants. */
   classList: string[]
+  /**
+   * The site's own static `@utility` classes (`type-h2`, `btn-primary`, `glass`), in CSS order, from
+   * the CSS entry and the files it imports (not from packages). The Styles panel lists them as
+   * presets. Left out by servers before this field existed.
+   */
+  siteClasses?: SiteClass[]
+}
+
+/** One `@utility` class of the site. A `/* @canvas Group: Label *\/` comment right above the rule sets `label` and `group`. */
+export type SiteClass = {
+  name: string
+  label?: string
+  group?: string
+  /** The rule's declarations, shortened, for a preview in the editor. */
+  css: string
 }
 
 // ---------------------------------------------------------------------------

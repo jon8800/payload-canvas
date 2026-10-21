@@ -13,6 +13,7 @@ import { StylesContext, writeClassName, writeStyle, type StylesContextValue } fr
 import { createReader } from './model'
 import { stopEditorKeys } from './popover'
 import { RawClasses } from './RawClasses'
+import { SiteClasses } from './SiteClasses'
 import { StyleSections } from './sections'
 import { BREAKPOINTS, breakpointAt, breakpointWidths, reloadStyleTokens, useStyleTokens, withFallback } from './tokens'
 import { VariantBar } from './VariantBar'
@@ -80,6 +81,7 @@ export function StylesPanel({ block, slot = null }: { block: Block; slot?: strin
         ) : (
           <p className="builder-styles__hint">Visual style controls are not available yet. Edit the classes below.</p>
         )}
+        <SiteClasses />
         <RawClasses />
       </div>
     </StylesContext>

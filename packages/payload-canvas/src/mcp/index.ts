@@ -40,7 +40,9 @@ import type { CommitResult } from '../live/session'
 import type { LiveActor } from '../live/types'
 import { storedLayout } from '../plugin/hook'
 import { builderViewPath, documentPath, draftPreviewPath } from '../plugin/links'
+import { siteCssConfigOf } from '../plugin'
 import { listCollectionsOf } from '../plugin/listCollections'
+import { getStyleTokens } from '../css'
 import { findSection, loadSavedSections, savedSectionsConfigOf } from '../plugin/sections'
 import { templatesConfigOf } from '../plugin/templates'
 import { generateImageToMedia, imageServiceOf } from '../ai/images/service'
@@ -254,6 +256,20 @@ async function loadDraft(req: PayloadRequest, collection: string, id: string): P
 // Tools
 // ---------------------------------------------------------------------------
 
+/** The site's own `@utility` classes for `listBlocks`, or nothing without the plugin's CSS config. */
+async function siteClassesOf(req: PayloadRequest | undefined): Promise<Record<string, unknown>> {
+  const site = req?.payload?.config ? siteCssConfigOf(req.payload) : null
+  if (!site) return {}
+  const list = await getStyleTokens(site.css)
+    .then((tokens) => tokens.siteClasses ?? [])
+    .catch(() => [])
+  if (list.length === 0) return {}
+  return {
+    siteClasses: list.map(({ name, label, group }) => ({ name, ...(label ? { label } : {}), ...(group ? { group } : {}) })),
+    siteClassesNote: "The site's own classes (its look: type styles, buttons, cards, surfaces). Prefer them in className over rebuilding the same look from utilities.",
+  }
+}
+
 export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool[] {
   const templateTargets = Object.entries(options.collections).filter(([, c]) => c.templates).map(([slug]) => slug)
   const templatesSlug = templateTargets.length > 0 ? (options.templates?.slug ?? DEFAULT_TEMPLATES_SLUG) : null
@@ -406,9 +422,10 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       LAYOUT_GUIDE,
     ].join('\n\n'),
     parameters: { collection: collectionArg },
-    handler: async () =>
+    handler: async (_args, req) =>
       text({
         blocks: blocks.map(describeBlock),
+        ...(await siteClassesOf(req)),
         sections: sections.length,
         bindings: BINDINGS_GUIDE,
         ...(templatesSlug ? { templates: { collection: templatesSlug, targets: templateTargets } } : {}),
