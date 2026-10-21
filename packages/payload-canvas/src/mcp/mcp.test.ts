@@ -296,6 +296,27 @@ describe('write tools', () => {
   })
 })
 
+describe('section variants', () => {
+  const variantTools = builderMcpTools({
+    blocks,
+    sections: [{ ...hero, variants: [{ id: 'plain', label: 'Plain', blocks: [{ id: 'only', type: 'heading', props: { text: 'Plain hero' } }] }] }],
+    collections: { pages: { field: 'layout', url: (doc) => `/${String(doc.slug)}` } },
+  })
+  const variantTool = (name: string) => variantTools.find((t) => t.name === name) as BuilderMcpTool
+  it('listSections lists a variant after its section, and insertSection inserts it by id', async () => {
+    const { req } = fakeRequest({ version: 1, blocks: [] })
+    const listed = json(await variantTool('listSections').handler({ collection: 'pages' }, req, {})).sections as Record<string, unknown>[]
+    assert.deepEqual(listed.map((s) => [s.id, s.label, s.variantOf, s.category]), [
+      ['hero', 'Hero', undefined, 'Heroes'],
+      ['hero/plain', 'Hero (Plain)', 'hero', 'Heroes'],
+    ])
+    const inserted = json(await variantTool('insertSection').handler({ collection: 'pages', id: 'p1', sectionId: 'hero/plain' }, req, {}))
+    assert.equal(inserted.section, 'hero/plain')
+    const layout = json(await variantTool('getLayout').handler({ collection: 'pages', id: 'p1' }, req, {})).layout as Layout
+    assert.equal(layout.blocks[0]?.props?.text, 'Plain hero')
+  })
+})
+
 describe('motion', () => {
   const motionHero: SectionDefinition = {
     id: 'motion-hero',

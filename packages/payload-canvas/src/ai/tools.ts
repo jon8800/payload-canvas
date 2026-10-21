@@ -708,6 +708,7 @@ export async function runTool(name: string, rawInput: unknown, workspace: Worksp
           id: s.id,
           label: s.label,
           ...(s.savedId !== undefined ? { saved: true } : {}),
+          ...(s.variantOf ? { variantOf: s.variantOf } : {}),
           ...(s.category ? { category: s.category } : {}),
           ...(input.full === true ? { blocks: s.blocks } : {}),
         })),

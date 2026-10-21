@@ -1382,6 +1382,28 @@ export const hero = defineSection({
 })
 ```
 
+### Section variants
+
+One section file can hold 2 or 3 versions of a section, for example a centred hero and a split hero. Put the other versions in `variants`. Each variant has an `id` (unique in the section), a `label`, an optional `description` and its own `blocks`. The section's own `blocks` stay the first version.
+
+```ts
+export const hero = defineSection({
+  id: 'hero',
+  label: 'Hero',
+  category: 'Heroes',
+  blocks: [{ type: 'stack', slots: { children: [{ type: 'heading', props: { text: 'Build faster', level: '1' } }] } }],
+  variants: [
+    {
+      id: 'split',
+      label: 'Split',
+      blocks: [{ type: 'grid', className: 'grid md:grid-cols-2 gap-8', slots: { children: [/* … */] } }],
+    },
+  ],
+})
+```
+
+`websiteBuilder` and `builderMcpTools` list each variant as a section of its own, right after its section: id `hero/split`, label "Hero (Split)", the section's category, and its description unless the variant has one. So the **Sections** tab shows a card for each version, and `listSections` lists the variant with `variantOf: "hero"`. `insertSection` and the assistant take the variant's id (`hero/split`). The empty-page suggestions show only the first version of each section. `defineSection` fills a variant's missing block ids as `<section id>_<variant id>_1`, `_2`, …, and throws when a variant has no `id` or `label` or two variants share an id. Variant blocks get their `defaultClassName` like section blocks. `sectionsWithVariants(sections)` (from `payload-canvas` or `payload-canvas/blocks`) is the same step for your own code, for example a seed. Saved sections have no variants.
+
 The library shows each section as a real picture: the hidden canvas page (`?mode=thumbnail`) renders one section at a time with your components and theme, at a desktop width of 1280 px, and the editor keeps the picture in IndexedDB. A picture changes when the section, the theme or the block definitions change. Cards show a wireframe until their picture is ready, or when it fails.
 
 ### Saved sections
