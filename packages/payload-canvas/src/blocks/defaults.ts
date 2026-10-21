@@ -546,16 +546,30 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     },
   })
 
+  const itemLink = linkField({ collections: linkCollections })
   const listItem = defineBlock({
     type: TEXT_LIST_ITEM_BLOCK,
     label: 'List item',
     icon: 'text',
     category: 'Content',
-    fields: [{ name: 'text', type: 'text', label: 'Text', required: true, localized: true }],
+    fields: [
+      { name: 'text', type: 'text', label: 'Text', required: true, localized: true },
+      {
+        ...itemLink,
+        admin: {
+          ...itemLink.admin,
+          description:
+            'Optional. The item text becomes a link. Leave it empty in a list inside a Link block: a link cannot hold another link.',
+        },
+      },
+    ],
     parents: [TEXT_LIST_BLOCK],
     ai: {
-      description: `One item (<li>) of a "${TEXT_LIST_BLOCK}" block. It goes only in a list's "${TEXT_LIST_SLOT}" slot.`,
-      example: { type: TEXT_LIST_ITEM_BLOCK, props: { text: 'Fast' } },
+      description:
+        `One item (<li>) of a "${TEXT_LIST_BLOCK}" block. It goes only in a list's "${TEXT_LIST_SLOT}" slot. ` +
+        'Optional "link" makes the whole item text a link (<li><a>text</a></li>); without a link it is plain text. ' +
+        'Never set a link on items of a list inside a "link" block.',
+      example: { type: TEXT_LIST_ITEM_BLOCK, props: { text: 'Pricing', link: exampleLink } },
     },
   })
 

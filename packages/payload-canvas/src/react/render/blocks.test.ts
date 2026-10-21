@@ -143,6 +143,18 @@ describe('list', () => {
     assert.match(canvas({ type: 'list' }), /^<ul [^>]*><div data-slot-empty="" data-slot-owner="b" data-slot="items"/)
   })
 
+  test('an item with a link puts its text in an <a>; an empty link keeps the plain item', () => {
+    const linked: Block = { id: 'i1', type: 'listItem', props: { text: 'Pricing', link: { type: 'url', url: '/pricing' } } }
+    const resolvedRef: Block = { id: 'i2', type: 'listItem', props: { text: 'About', link: { type: 'reference', reference: { relationTo: 'pages', value: page } } } }
+    const empty: Block = { id: 'i3', type: 'listItem', props: { text: 'Plain', link: { type: 'url', url: '' } } }
+    assert.equal(
+      site({ type: 'list', slots: { items: [linked, resolvedRef, empty] }, className: 'list-none' }),
+      '<ul class="list-none builder-css"><li><a href="/pricing">Pricing</a></li><li><a href="/about">About</a></li><li>Plain</li></ul>',
+    )
+    // On the canvas the <a> holds the inline-edit mark, so the canvas edits the text.
+    assert.match(canvas({ type: 'list', slots: { items: [linked] } }), /<li data-block-id="i1" data-block-type="listItem"><a href="\/pricing" data-builder-text="text">Pricing<\/a><\/li>/)
+  })
+
   test('the old shape (props.items rows) still renders, skipping empty rows', () => {
     assert.equal(site({ type: 'list', props: { items: legacy }, className: 'list-disc' }), '<ul class="list-disc builder-css"><li>One</li><li>Two</li></ul>')
     assert.match(canvas({ type: 'list', props: { items: legacy } }), /<li data-builder-text="items.0.text">One<\/li><li data-builder-text="items.2.text">Two<\/li>/)
