@@ -5,6 +5,7 @@ import type { BlockComponents } from '../../render/types'
 import { Accordion } from './Accordion'
 import { Disclosure } from './Disclosure'
 import { iconComponent, type IconMap } from './Icon'
+import { Lightbox } from './Lightbox'
 
 export type BuiltinComponentsOptions = {
   /** The site's icons by name, for the `icon` block. The same names as `builtinBlocks({ icons })`. */
@@ -18,7 +19,7 @@ export type BuiltinComponentsOptions = {
  * bundle, import single components (`Carousel`, `Lightbox`, …) instead.
  */
 export function builtinComponents(options: BuiltinComponentsOptions = {}): BlockComponents {
-  const components: BlockComponents = { disclosure: Disclosure, accordion: Accordion }
+  const components: BlockComponents = { disclosure: Disclosure, accordion: Accordion, lightbox: Lightbox }
   if (options.icons) components.icon = iconComponent(options.icons)
   return components
 }
@@ -26,3 +27,4 @@ export function builtinComponents(options: BuiltinComponentsOptions = {}): Block
 export { Accordion } from './Accordion'
 export { Disclosure } from './Disclosure'
 export { iconComponent, type IconComponent, type IconMap } from './Icon'
+export { Lightbox } from './Lightbox'
