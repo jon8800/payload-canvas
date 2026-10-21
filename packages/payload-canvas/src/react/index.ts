@@ -23,6 +23,7 @@ export {
 export { parseVideoUrl, type VideoEmbed } from './components/videoUrl'
 export { editableImage, editableText, EDITABLE_IMAGE_ATTRIBUTE, EDITABLE_TEXT_ATTRIBUTE } from './render/editable'
 export { defaultComponents } from './components'
+export * from './components/builtins'
 export { BuilderStyle, RenderLayout } from './render/RenderLayout'
 export { MotionRuntime } from './motion/MotionRuntime'
 export { MotionStyle, MOTION_CSS } from './motion/style'

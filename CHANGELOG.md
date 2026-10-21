@@ -4,6 +4,11 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in built-in blocks: `builtinBlocks({ include, icons })` in `payload-canvas/blocks` and `builtinComponents({ icons })` in `payload-canvas/react`. Leave a type out of `include` to replace it with your own block. See the README's "Built-in blocks".
+- The **Icon** built-in (`icon`): one icon of the site's icon set. The definition takes the names as plain strings; the component map takes the icon components (`IconMap`). Decorative unless it has a `label`.
+
 ## [0.3.0] - 2026-10-21
 
 ### Added

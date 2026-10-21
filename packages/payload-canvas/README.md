@@ -46,6 +46,7 @@ npx create-payload-canvas my-website
    - [Whole-page editing: regions outside the layout](#whole-page-editing-regions-outside-the-layout)
 8. [Custom blocks](#custom-blocks)
    - [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields)
+   - [Built-in blocks](#built-in-blocks)
 9. [Using existing Payload blocks](#using-existing-payload-blocks)
 10. [Sections](#sections)
 11. [Styling](#styling)
@@ -998,6 +999,52 @@ Limits:
 - On a collection without drafts, nothing is "published", so `validate` messages never block a save. They show in the inspector.
 - Saved sections (`builder-sections`) store blocks without running their field hooks.
 - `migrateBlocksField` writes through the database adapter, so no hooks run. The values come from the old field, where Payload already ran the hooks.
+
+### Built-in blocks
+
+Some blocks most sites need come with the plugin, but they are off until you add them: `icon`, `disclosure`, `accordion`, `lightbox`, `carousel`, `tableOfContents`, `filterLink` and `mediaBackdrop`. Add the definitions next to `defaultBlocks()`, and the components next to yours:
+
+```ts
+// src/builder.ts
+import { builtinBlocks, defaultBlocks } from 'payload-canvas/blocks'
+import { ICON_NAMES } from './icons/names'
+
+export const blocks = [
+  ...defaultBlocks({ mediaCollection: 'media' }),
+  ...builtinBlocks({ include: ['icon', 'carousel', 'lightbox'], icons: ICON_NAMES }),
+]
+```
+
+```tsx
+// src/components/blocks.ts
+import { builtinComponents, type BlockComponents } from 'payload-canvas/react'
+import { icons } from './icons'
+
+export const components: BlockComponents = { ...builtinComponents({ icons }), pricingTable: PricingTable }
+```
+
+- Without `include`, `builtinBlocks()` adds all of them (`icon` only when you give `icons`).
+- The MCP tools and the AI assistant read the same `blocks` list, so they see each built-in you include, with its description and example.
+- Every built-in takes its look from `className`. The definitions have plain `defaultClassName`s without colours. Elements inside a built-in have `data-*` attributes, so you style them from the block's `className` with variants such as `[&_[data-carousel-arrow]]:size-11`.
+- **Replace a built-in** with your own block of the same type: leave it out of `include` and add your block. Block types must be unique, so the plugin refuses both at once. In the components map, a key of yours with the same type wins over `builtinComponents()`.
+- `builtinComponents()` returns every built-in component. To keep the code of blocks you do not use out of the client bundle, import single components instead (`Carousel`, `Lightbox`, …, and `iconComponent(icons)`).
+
+#### Icon
+
+`icon` draws one icon of your own icon set. `builtinBlocks({ icons })` takes the names as plain strings, so `payload.config.ts` loads no React. `builtinComponents({ icons })` takes the components by the same names. Let TypeScript check that both lists match:
+
+```ts
+// src/icons/names.ts (no React here)
+export const ICON_NAMES = ['arrowRight', 'check', 'close'] as const
+
+// src/icons/index.ts
+import type { IconMap } from 'payload-canvas/react'
+export const icons = { arrowRight: ArrowRight, check: Check, close: Close } satisfies IconMap<(typeof ICON_NAMES)[number]>
+```
+
+- Props: `name` (one of the names) and `label`. Without a label the icon is decoration (`aria-hidden="true"`). With a label it is an image (`role="img"`, `aria-label`).
+- Each icon component gets `className`, the ARIA attributes and, on the canvas, the editor attributes. Spread its props on the `<svg>`.
+- An unknown name renders nothing on the site and a note on the canvas.
 
 ## Using existing Payload blocks
 
