@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { CAROUSEL_CLASS_MAP as C } from '../../../blocks/builtins/carousel'
-import { textOr } from '../../../blocks/builtins/shared'
+import { joinClasses, textOr } from '../../../blocks/builtins/shared'
 import type { BlockComponentProps } from '../../render/types'
 import { Chevron } from './glyphs'
 
@@ -149,7 +149,7 @@ export function Carousel({ block, props, className, attributes, slotAttributes, 
         {...slotAttributes.slides}
         ref={track}
         data-carousel-track=""
-        className={trackClass}
+        className={joinClasses(trackClass, slotAttributes.slides?.className)}
         aria-live={playing ? 'off' : 'polite'}
         tabIndex={fade || canvas ? undefined : 0}
         onKeyDown={onTrackKey}

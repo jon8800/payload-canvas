@@ -17,6 +17,8 @@ export function iconBlock(names: readonly string[]): BlockDefinition {
     label: 'Icon',
     icon: 'image',
     category: 'Content',
+    // An icon may go straight into a link (an arrow at the end of a linked row).
+    inline: true,
     fields: [
       {
         name: 'name',

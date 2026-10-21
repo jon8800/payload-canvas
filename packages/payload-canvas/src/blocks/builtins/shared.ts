@@ -37,3 +37,6 @@ export const INTERACTIVE = [
 /** Plain string props: trimmed, or the fallback when empty. */
 export const textOr = (value: unknown, fallback: string): string =>
   typeof value === 'string' && value.trim() ? value.trim() : fallback
+
+/** Class strings joined with spaces; empty and missing ones are left out. */
+export const joinClasses = (...classes: (string | undefined)[]): string => classes.filter(Boolean).join(' ')
