@@ -1084,6 +1084,15 @@ const jsonLd = faqJsonLd(items)
 - Style it from the block's `className`: `[&_[data-carousel-track]]:` for the track (the gap between slides), `[&_[data-carousel-arrow]]:` for the arrows (`previous` or `next`; `:disabled` at either end without `loop`), `[&_[data-carousel-dot]]:` for the dots (the current dot has `aria-current="true"`), `[&_[data-carousel-controls]]:` for the row of controls and `[&_[data-carousel-pause]]:` for the pause button.
 - The arrows and dots appear after the script has counted the slides. On the canvas the slides always scroll and never autoplay, so each one can be selected.
 
+#### Table of contents
+
+`tableOfContents` links to the H2 headings of a rich text field of the current document, for example the body of a post template. Bind its `content` prop to that field: `bindings: { content: 'content' }` (in the inspector, the bind button next to "Rich text"). It renders a `<nav>` of bare `<a href="#id">` links; style them with `[&>a]:` classes on the block.
+
+- Props: `content` (the rich text, usually bound), `minHeadings` (default 3; with fewer headings the block renders nothing) and `label` (the nav's name, default "On this page").
+- The ids come from `headingId(text)` in `payload-canvas/blocks`: lower case, accents dropped, other characters as hyphens, letters of every script kept ("Über uns?" becomes `uber-uns`). Give the headings of the rich text on the page the same ids. `lexicalHeadings(value, 'h2')` returns `{ id, text }` for each top-level heading.
+- Two headings with the same text get the same id. Give them different text.
+- On the canvas, with too few headings, it shows three sample links, so it can be selected and styled.
+
 ## Using existing Payload blocks
 
 A site that already has a Payload `blocks` field (for example `pages.layout` with sections and nested blocks) keeps its field, its block configs, its components and its content. Point the builder at that field. The builder then edits the field itself: there is one source of truth, no second copy of the page, and nothing to migrate.
