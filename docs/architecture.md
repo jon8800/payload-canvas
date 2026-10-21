@@ -341,7 +341,7 @@ Blocks that need data are server components on the site. The canvas renders them
 ## 11. Templates and binding
 
 - The plugin adds a Templates collection. Each template targets one collection and holds a layout.
-- A document in a collection with `templates: true` uses its own template if it has one, then the collection's default template, then a generated default (title plus main content).
+- A document in a collection with `templates: true` uses its own template if it has one, then the first template (by name) whose `conditions` (a Payload where query) match it, then the collection's default template, then a generated default (title plus main content).
 - **Field block:** shows any field of the current document by path (`content`, `featuredImage`, `author.name`), rendered by the field's type. This is how a template shows the post body.
 - **Binding:** a block stores `bindings: { "text": "title", "image": "author.avatar" }`, keyed by prop path. At render time, bound props take the document's value. Missing values fall back to the literal prop.
 - The binding picker lists only compatible fields. It builds the list by walking the target collection's schema, including one relationship hop.

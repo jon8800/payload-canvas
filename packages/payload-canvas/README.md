@@ -1695,10 +1695,32 @@ websiteBuilder({
 
 What the plugin adds:
 
-- A templates collection (`builder-templates`) with drafts and the builder. Each template has a target collection (`targetCollection`), a "default for this collection" checkbox (`isDefault`) and a sample document for the editor preview (`previewDocument`).
+- A templates collection (`builder-templates`) with drafts and the builder. Each template has a target collection (`targetCollection`), a "default for this collection" checkbox (`isDefault`), optional `conditions` and a sample document for the editor preview (`previewDocument`).
 - A `template` relationship in the sidebar of every document in a collection with `templates: true`.
 
-Which template a document uses: its own `template`, else the newest default template of its collection, else none. Templates with an empty layout are skipped.
+Which template a document uses:
+
+1. Its own `template`.
+2. Else the first template, by name, whose `conditions` match the document.
+3. Else the newest default template of its collection.
+4. Else none.
+
+Only published templates count (all templates in draft mode). Templates with an empty layout are skipped.
+
+#### Template conditions
+
+`conditions` is a Payload `where` query against the document, written as JSON in the template's edit form. Use it to give some documents their own default layout, for example touring models or VIP types:
+
+```json
+{ "tier": { "equals": "vip" } }
+{ "and": [{ "touring": { "equals": true } }, { "city": { "in": ["Sydney", "Perth"] } }] }
+```
+
+- `loadTemplate` asks Payload whether the document matches (one query per template with conditions, on the stored document: the latest draft in draft mode). Every operator and field path of a Payload query works, for example `equals`, `not_equals`, `in`, `not_in`, `exists`, `greater_than`, `less_than_equal`, `and`, `or` and relationship paths such as `category.slug`.
+- Two templates can match the same document. The first by name wins, so name them in order (`1 VIP`, `2 Touring`).
+- Empty conditions (`null` or `{}`) never match. A template with conditions can also be the default: then it is still the fallback for every document.
+- A query that Payload refuses (an unknown field) counts as no match, and the error goes to the Payload log.
+- The editor's notice on an empty document ("This page uses a template") follows the same rule.
 
 ### Bindings and dynamic blocks
 
@@ -1873,7 +1895,7 @@ const layout = await loadLayoutData(found.layout, blocks, payload, { draft, cont
 return <RenderLayout layout={layout} css={found.css} context={context} blocks={blocks} resolveLink={resolveLink} />
 ```
 
-- `loadTemplate(payload, { collection, doc, templatesSlug?, draft? })` returns `{ template, layout, css }` or `null`. Without `draft` it uses published templates only.
+- `loadTemplate(payload, { collection, doc, templatesSlug?, draft? })` returns `{ template, layout, css }` or `null`. Without `draft` it uses published templates only. The document needs its `id` for template conditions.
 - `loadLayoutData(layout, blocks, payload, { draft, context, resolveLink, user, query })` resolves bindings and Field blocks against `context`, gives repeats their rows, loads collection lists, and loads upload and relationship props. `query` is the request's URL query for `queryFilters`. Pass the same `context` to `RenderLayout`.
 - `getByPath(doc, path)` and `resolveBindings(layout, context, blocks)` from `payload-canvas/core` do the same work for a custom renderer.
 

@@ -11,6 +11,7 @@ import {
   propField,
   resolveBindings,
   richTextToPlain,
+  templateConditions,
   toPlainText,
   withoutBoundRequired,
 } from './bindings'
@@ -191,5 +192,13 @@ describe('validation', () => {
     assert.ok(validateLayout(bad, restricted).some((e) => e.code === 'invalid' && e.path.endsWith('props.collection')))
     assert.deepEqual(validateLayout(good, restricted), [])
     assert.equal(listCollectionsOf(blocks, []), blocks)
+  })
+})
+
+describe('templateConditions', () => {
+  it('returns a non-empty plain object, else null', () => {
+    assert.deepEqual(templateConditions({ conditions: { tier: { equals: 'vip' } } }), { tier: { equals: 'vip' } })
+    for (const conditions of [undefined, null, {}, [], 'tier', 3]) assert.equal(templateConditions({ conditions }), null)
+    assert.equal(templateConditions(null), null)
   })
 })

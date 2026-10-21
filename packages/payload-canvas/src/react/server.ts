@@ -8,9 +8,11 @@ import {
   DEFAULT_TEMPLATES_SLUG,
   DOCUMENT_TEMPLATE_FIELD,
   normalizeLayout,
+  TEMPLATE_CONDITIONS_FIELD,
   TEMPLATE_DEFAULT_FIELD,
   TEMPLATE_LAYOUT_FIELD,
   TEMPLATE_TARGET_FIELD,
+  templateConditions,
   type Layout,
 } from '../core'
 import { compileClasses } from '../css'
@@ -62,12 +64,47 @@ function usable(template: Doc | null | undefined, collection: string, draft: boo
   return { template, layout, css: cssOf(template) }
 }
 
+/** How many templates with conditions `loadTemplate` tries, in name order. */
+const CONDITION_CANDIDATES = 100
+
+/**
+ * Whether the stored document (the latest draft in draft mode) matches a template's conditions:
+ * one Payload query, so every operator and field path Payload knows works. A query Payload
+ * refuses (an unknown field) counts as no match and is logged.
+ */
+async function matchesConditions(
+  payload: Payload,
+  collection: string,
+  id: string | number,
+  where: Record<string, unknown>,
+  draft: boolean,
+  locale: ReturnType<typeof localeArgs>,
+): Promise<boolean> {
+  try {
+    const found = await payload.find({
+      collection: collection as never,
+      where: { and: [{ id: { equals: id } }, where as never] },
+      draft,
+      depth: 0,
+      limit: 1,
+      pagination: false,
+      select: { id: true } as never,
+      ...locale,
+    })
+    return found.docs.length > 0
+  } catch (error) {
+    payload.logger.error({ err: error, msg: '[builder] Template conditions failed. The template is skipped.' })
+    return false
+  }
+}
+
 /** How many default templates `loadTemplate` looks at (one normally; more only with old data). */
 const DEFAULT_CANDIDATES = 5
 
 /**
  * The template a document renders through: the document's own template (its `template` field),
- * else the collection's default template, else `null`. Templates with an empty layout are
+ * else the first template (by name) whose `conditions` match the document, else the collection's
+ * default template, else `null`. Templates with an empty layout are
  * skipped: an empty own template falls back to the default, and an empty default falls back to
  * the next most recently changed default (the plugin refuses to publish an empty default, so
  * this only matters for older data).
@@ -98,6 +135,28 @@ export async function loadTemplate(payload: Payload, args: LoadTemplateArgs): Pr
       if (found) return found
     } catch {
       // A deleted template falls back to the default.
+    }
+  }
+
+  const docId = doc.id
+  if (typeof docId === 'string' || typeof docId === 'number') {
+    // Only the conditions are read here; the matching template loads in full below.
+    const candidates = await payload.find({
+      collection: slug as never,
+      where: { and: [{ [TEMPLATE_TARGET_FIELD]: { equals: collection } }, ...(draft ? [] : [{ _status: { equals: 'published' } }])] },
+      sort: 'name',
+      depth: 0,
+      limit: CONDITION_CANDIDATES,
+      draft,
+      select: { [TEMPLATE_CONDITIONS_FIELD]: true } as never,
+      ...locale,
+    })
+    for (const candidate of candidates.docs as Doc[]) {
+      const where = templateConditions(candidate)
+      if (!where || !(await matchesConditions(payload, collection, docId, where, draft, locale))) continue
+      const template = (await payload.findByID({ collection: slug as never, id: candidate.id as string | number, depth: 0, draft, ...locale })) as Doc
+      const found = usable(template, collection, draft)
+      if (found) return found
     }
   }
 
