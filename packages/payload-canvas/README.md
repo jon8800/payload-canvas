@@ -955,7 +955,7 @@ export const blocks = [...defaultBlocks({ linkCollections: ['pages'] }), pricing
 - `linkField()` stores `{ type, url, reference, newTab }`. The component receives it resolved, with `href`, `target` and `rel`.
 - The default blocks are `stack`, `grid`, `heading`, `text`, `richText`, `image`, `video`, `button`, `link`, `menu`, `list` with its `listItem` blocks, `quote`, `divider`, `spacer`, `collectionList` (documents from a collection), `field` (a field of the document a template renders) and `repeat` (the rows of an array or hasMany field of that document).
 - Props worth knowing on the default blocks:
-  - `image`: `priority` (load first: `loading="eager"` and `fetchpriority="high"`, for the hero image) and `sizes` (the HTML `sizes` attribute, for example `(min-width: 768px) 50vw, 100vw`). The media's focal point (`focalX`, `focalY`) sets `object-position`, so a cropped image keeps its subject.
+  - `image`: `priority` (load first: `loading="eager"` and `fetchpriority="high"`, for the hero image) and `sizes` (the HTML `sizes` attribute, for example `(min-width: 768px) 50vw, 100vw`). The media's focal point (`focalX`, `focalY`) sets `object-position`, so a cropped image keeps its subject. Payload's default 50/50 counts as unset, so an `object-position` class (`object-top`) sets the crop of a photo whose focal point nobody moved. Limit: a focal point set to exactly 50/50 loses to such a class.
   - `heading`: `accent`, words of the text to highlight. They render as `<em>`. Style them with classes on the heading, for example `[&_em]:text-primary [&_em]:not-italic`.
   - `stack`: `as` also takes `ol`, `ul`, `li`, `dl`, `dt`, `dd`, `figure`, `figcaption`, `p` and `span`, for lists, term lists and captions.
 - The `menu` block folds its links into a "Menu" button and a panel on small screens. Set `ctaLabel` and `cta` (a link) to add a button as the last row of that panel, for example the header's call to action, which a header hides on phones. The inline links, and so the wide-screen header, do not change. `toggleLabel` is the text of the menu button (default "Menu").
@@ -1130,7 +1130,8 @@ const jsonLd = faqJsonLd(items)
 - Props: `image` (a photo), `alt` (empty: decoration, as most backgrounds are), `video` (an upload) or `videoUrl` (a link to a video file), `poster` (empty: the photo), `priority`, `sizes` (default `100vw`) and `overlay`. Uploads come from `builtinBlocks({ mediaCollection })`, default `media`.
 - A video wins over the photo. It starts from script, muted and looping, and never plays when the visitor asks for less motion: the poster stays. It does not play on the canvas.
 - `priority` (the hero only): the photo loads eagerly with `fetchpriority="high"`; for a video the poster is preloaded with high priority.
-- The media focal point (`focalX`, `focalY`) sets `object-position`. The photo gets a `srcset` from the media sizes.
+- The media focal point (`focalX`, `focalY`) sets `object-position`, unless it is Payload's default 50/50: then the block's `[&>[data-backdrop-media]]:object-top` (or other position) class sets the crop. The photo gets a `srcset` from the media sizes.
+- Media URLs render as stored. When the site serves them from another host or path (Payload stores absolute URLs when `serverURL` is set), map them: `builtinComponents({ mediaUrl: (url) => new URL(url, 'http://x').pathname })`. It applies to the photo, its sizes, the video upload and the poster, not to a typed `videoUrl`. `mediaBackdropComponent(mediaUrl)` is that component alone.
 - Style the media with `[&>[data-backdrop-media]]:` classes (blur, opacity) and the overlay with `[&>[data-backdrop-overlay]]:` classes (`[&>[data-backdrop-overlay]]:bg-black/40`).
 - No WebGL effects.
 

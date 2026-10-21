@@ -14,6 +14,19 @@ const asNumber = (value: unknown): number | undefined =>
 type Size = { url: string; width: number }
 
 /**
+ * The media focal point (Payload's `focalX`/`focalY`, percent) as `object-position`, so a cropped
+ * image keeps its subject. Payload's default 50/50 counts as unset: it is the browser's own
+ * position too, and leaving it out lets an `object-position` class (`object-top`) set the crop.
+ * Limit: an editor's focal point of exactly 50/50 loses to such a class.
+ */
+export function focalStyle(doc: Record<string, unknown> | null | undefined): { objectPosition: string } | undefined {
+  const x = asNumber(doc?.focalX)
+  const y = asNumber(doc?.focalY)
+  if (x === undefined || y === undefined || (x === 50 && y === 50)) return undefined
+  return { objectPosition: `${x}% ${y}%` }
+}
+
+/**
  * `srcset` from Payload's image sizes (`doc.sizes`) plus the original. Only sizes with the
  * original's aspect ratio count (a square crop would distort the image). Undefined when there
  * is nothing to choose from.
@@ -53,10 +66,6 @@ export function Image({ props, className, attributes, mode }: BlockComponentProp
   const srcSet = srcSetOf(doc)
   const priority = props.priority === true
   const sizes = asString(props.sizes)?.trim()
-  // The media focal point (percent, Payload's focalX/focalY) keeps the subject in view when the image is cropped.
-  const focalX = asNumber(doc.focalX)
-  const focalY = asNumber(doc.focalY)
-  const style = focalX !== undefined && focalY !== undefined ? { objectPosition: `${focalX}% ${focalY}%` } : undefined
   return (
     <img
       {...attributes}
@@ -68,7 +77,7 @@ export function Image({ props, className, attributes, mode }: BlockComponentProp
       alt={asString(props.alt) ?? asString(doc.alt) ?? ''}
       width={asNumber(doc.width)}
       height={asNumber(doc.height)}
-      style={style}
+      style={focalStyle(doc)}
       loading={priority ? 'eager' : 'lazy'}
       {...(priority ? { fetchPriority: 'high' as const } : {})}
     />

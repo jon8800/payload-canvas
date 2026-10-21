@@ -9,7 +9,7 @@ import { Disclosure } from './Disclosure'
 import { FilterLink } from './FilterLink'
 import { iconComponent, type IconMap } from './Icon'
 import { Lightbox } from './Lightbox'
-import { MediaBackdrop } from './MediaBackdrop'
+import { mediaBackdropComponent, type MediaUrl } from './MediaBackdrop'
 import { SectionRef } from './SectionRef'
 import { TableOfContents } from './TableOfContents'
 
@@ -19,6 +19,11 @@ export type BuiltinComponentsOptions = {
    * `builtinBlocks({ icons })` and `defaultBlocks({ icons })`.
    */
   icons?: IconMap
+  /**
+   * Maps a stored media URL to the one the site serves, for the media backdrop's uploads. Example:
+   * `(url) => new URL(url, 'http://x').pathname` serves absolute URLs from the current host.
+   */
+  mediaUrl?: MediaUrl
 }
 
 /**
@@ -28,7 +33,7 @@ export type BuiltinComponentsOptions = {
  * bundle, import single components (`Carousel`, `Lightbox`, …) instead.
  */
 export function builtinComponents(options: BuiltinComponentsOptions = {}): BlockComponents {
-  const components: BlockComponents = { disclosure: Disclosure, accordion: Accordion, lightbox: Lightbox, carousel: Carousel, tableOfContents: TableOfContents, filterLink: FilterLink, mediaBackdrop: MediaBackdrop, sectionRef: SectionRef }
+  const components: BlockComponents = { disclosure: Disclosure, accordion: Accordion, lightbox: Lightbox, carousel: Carousel, tableOfContents: TableOfContents, filterLink: FilterLink, mediaBackdrop: mediaBackdropComponent(options.mediaUrl), sectionRef: SectionRef }
   if (options.icons) {
     components.icon = iconComponent(options.icons)
     components.button = buttonComponent(options.icons)
@@ -43,6 +48,6 @@ export { Disclosure } from './Disclosure'
 export { FilterLink } from './FilterLink'
 export { iconComponent, type IconComponent, type IconMap } from './Icon'
 export { Lightbox } from './Lightbox'
-export { MediaBackdrop } from './MediaBackdrop'
+export { MediaBackdrop, mediaBackdropComponent, type MediaUrl } from './MediaBackdrop'
 export { SectionRef } from './SectionRef'
 export { TableOfContents } from './TableOfContents'
