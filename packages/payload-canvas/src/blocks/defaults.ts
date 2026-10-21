@@ -607,6 +607,36 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         defaultValue: true,
         admin: { description: 'On a page made from a template, the item that the page shows is not listed again.' },
       },
+      {
+        name: 'filterField',
+        type: 'text',
+        label: 'Filter by field',
+        admin: {
+          description:
+            'Only documents related to the current document through this field, for example "services" or "category". ' +
+            'Works on pages made from a template. On other pages the list is not filtered.',
+        },
+      },
+      {
+        name: 'filterBy',
+        type: 'select',
+        label: 'Relation',
+        defaultValue: 'current',
+        options: [
+          { label: 'The listed documents\' field holds the current document', value: 'current' },
+          { label: 'The listed documents share a value with the current document\'s field', value: 'shared' },
+          { label: 'The current document\'s field points to the listed documents', value: 'linked' },
+        ],
+        admin: { description: 'How "Filter by field" relates the listed documents to the current document.' },
+      },
+      {
+        name: 'where',
+        type: 'json',
+        label: 'Where',
+        admin: {
+          description: 'A Payload where query, added to the filter. Example: { "featured": { "equals": true } }.',
+        },
+      },
     ],
     slots: { [LIST_ITEM_SLOT]: { label: 'Item' } },
     defaultClassName: 'grid grid-cols-1 gap-6 md:grid-cols-3',
@@ -615,7 +645,15 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         'Lists the latest documents of a collection (e.g. "latest posts"). The "item" slot is the design of ONE ' +
         'item: it repeats for every document. Blocks in it bind to the ITEM\'s fields with "bindings", e.g. a ' +
         'heading with bindings { "text": "title" } and a link with bindings { "link": "$url" } (the item\'s URL). ' +
-        'Only published documents show on the site.',
+        'Only published documents show on the site. ' +
+        'To list documents related to the current document (templates only; ignored on normal pages), set ' +
+        '"filterField" (a field name) and "filterBy": "current" (default) lists documents whose filterField holds ' +
+        'the current document (e.g. on a service template, models whose "services" include this service); ' +
+        '"shared" lists documents whose filterField shares a value with the current document\'s filterField ' +
+        '(e.g. similar models with a "category" in common, posts with the same "category" text); "linked" lists ' +
+        'the documents the current document\'s filterField points to (e.g. on a model template, the model\'s ' +
+        '"services"). With "shared" or "linked" and an empty field, the list is empty. "where" is a static Payload ' +
+        'where query AND-ed with the rest, e.g. { "featured": { "equals": true } }.',
       example: {
         type: COLLECTION_LIST_BLOCK,
         props: { collection: 'posts', limit: 3, sort: '-createdAt' },

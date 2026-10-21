@@ -55,20 +55,34 @@ export function createRestFetchDocs(api: string, locale?: string | null): FetchD
   }
 }
 
-/** One promise per list query. Key: api + locale + collection + limit + sort. */
+/** One promise per list query. Key: api + locale + collection + limit + sort + where. */
 const listCache = new Map<string, Promise<Doc[]>>()
+
+/**
+ * Payload's REST bracket query for a `where`, e.g. `where[and][0][services][in][0]=5`, as
+ * `[name, value]` pairs. Arrays and objects nest; other values become strings.
+ */
+export function whereParams(value: unknown, prefix = 'where'): Array<[string, string]> {
+  if (value === undefined || value === null) return []
+  if (typeof value !== 'object') return [[prefix, String(value)]]
+  return Object.entries(value).flatMap(([key, inner]) => whereParams(inner, `${prefix}[${key}]`))
+}
 
 /**
  * Loads a collection list's documents over REST (`depth=1`, latest drafts, in `locale`), cached
  * for the life of the iframe. The page's own document is filtered out here, so one request serves
- * every page.
+ * every page. The query's `where` goes along as Payload's bracket query. A filter that matches
+ * nothing (`none`) loads nothing.
  */
 export function fetchListItems(api: string, query: ListQuery, locale?: string | null): Promise<Doc[]> {
+  if (query.none) return Promise.resolve([])
   const limit = query.limit + (query.exclude === undefined ? 0 : 1)
-  const key = `${api}\u0000${locale ?? ''}\u0000${query.collection}\u0000${limit}\u0000${query.sort}`
+  const where = whereParams(query.where)
+  const key = `${api}\u0000${locale ?? ''}\u0000${query.collection}\u0000${limit}\u0000${query.sort}\u0000${JSON.stringify(where)}`
   let request = listCache.get(key)
   if (!request) {
     const params = withLocale(new URLSearchParams({ limit: String(limit), sort: query.sort, depth: '1', draft: 'true' }), locale)
+    for (const [name, value] of where) params.append(name, value)
     request = fetch(`${api}/${encodeURIComponent(query.collection)}?${params}`, { credentials: 'include' })
       .then(async (res) => {
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
