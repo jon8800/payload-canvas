@@ -13,6 +13,7 @@ import {
 } from 'payload'
 import {
   DOCUMENT_TEMPLATE_FIELD,
+  TEMPLATE_CONDITIONS_FIELD,
   TEMPLATE_DEFAULT_FIELD,
   TEMPLATE_LAYOUT_FIELD,
   TEMPLATE_PREVIEW_FIELD,
@@ -251,6 +252,15 @@ export const keepOneDefault: CollectionAfterChangeHook = async ({ collection, co
   return doc
 }
 
+/** Conditions are empty or a where query (a JSON object). Payload checks the fields when the query runs. */
+export function validateConditions(value: unknown): true | string {
+  if (value === null || value === undefined || value === '') return true
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    return 'Conditions must be a where query: a JSON object such as {"tier": {"equals": "vip"}}, or empty.'
+  }
+  return true
+}
+
 /** The templates collection, before the builder field is added (the plugin adds it like any builder collection). */
 export function templatesCollection(args: {
   slug: string
@@ -266,7 +276,7 @@ export function templatesCollection(args: {
     admin: {
       useAsTitle: 'name',
       defaultColumns: ['name', TEMPLATE_TARGET_FIELD, TEMPLATE_DEFAULT_FIELD, '_status', 'updatedAt'],
-      description: 'Layouts for collection documents. Each document renders through its own template or the default one.',
+      description: 'Layouts for collection documents. Each document renders through its own template, the first template whose conditions match it, or the default one.',
     },
     versions: { maxPerDoc: 20, drafts: { autosave: { interval: 300 } } },
     hooks: {
@@ -298,6 +308,16 @@ export function templatesCollection(args: {
         },
       },
       {
+        name: TEMPLATE_CONDITIONS_FIELD,
+        type: 'json',
+        label: 'Conditions',
+        validate: validateConditions,
+        admin: {
+          description:
+            'Optional. A Payload where query against the document, for example {"tier": {"equals": "vip"}}. A document without a template of its own uses the first published template (by name) whose conditions match, before the default template.',
+        },
+      },
+      {
         name: TEMPLATE_PREVIEW_FIELD,
         type: 'relationship',
         label: 'Preview document',
@@ -317,7 +337,7 @@ export function documentTemplateField(target: string, templatesSlug: string): Re
     label: 'Template',
     relationTo: templatesSlug as CollectionSlug,
     filterOptions: { [TEMPLATE_TARGET_FIELD]: { equals: target } },
-    admin: { position: 'sidebar', description: 'Leave empty to use the default template.' },
+    admin: { position: 'sidebar', description: 'Leave empty to use the first template whose conditions match, else the default template.' },
   }
 }
 

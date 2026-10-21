@@ -594,7 +594,12 @@ describe('template tools', () => {
         config: { routes: { admin: '/admin' } },
         async find(a: Record<string, unknown>) {
           assert.equal(a.collection, 'builder-templates')
-          return { docs: [{ id: 5, name: 'Post template', targetCollection: 'posts', isDefault: true, _status: 'published', layout: { version: 1, blocks: [{ id: 'a', type: 'stack' }] } }] }
+          return {
+            docs: [
+              { id: 5, name: 'Post template', targetCollection: 'posts', isDefault: true, _status: 'published', layout: { version: 1, blocks: [{ id: 'a', type: 'stack' }] } },
+              { id: 6, name: 'VIP', targetCollection: 'posts', isDefault: false, conditions: { tier: { equals: 'vip' } } },
+            ],
+          }
         },
       },
     } as unknown as PayloadRequest
@@ -609,6 +614,7 @@ describe('template tools', () => {
       blocks: 1,
       editorPath: '/admin/builder/builder-templates/5',
     })
+    assert.deepEqual(body.templates[1].conditions, { tier: { equals: 'vip' } })
   })
 })
 

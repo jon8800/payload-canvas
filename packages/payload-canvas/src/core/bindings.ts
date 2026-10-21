@@ -25,8 +25,23 @@ export const TEMPLATE_DEFAULT_FIELD = 'isDefault'
 export const TEMPLATE_PREVIEW_FIELD = 'previewDocument'
 /** Templates collection: the layout field. */
 export const TEMPLATE_LAYOUT_FIELD = 'layout'
+/**
+ * Templates collection: an optional Payload `where` query against the document. A document
+ * without a template of its own uses the first published template (by name) whose conditions
+ * match it, before the default template.
+ */
+export const TEMPLATE_CONDITIONS_FIELD = 'conditions'
 /** Template-enabled collections: the relationship to the document's own template. */
 export const DOCUMENT_TEMPLATE_FIELD = 'template'
+
+/**
+ * A template's conditions as a `where` query, or `null` when it has none: only a plain object
+ * with at least one key counts (an empty object would match every document).
+ */
+export function templateConditions(template: Record<string, unknown> | null | undefined): Record<string, unknown> | null {
+  const value = template?.[TEMPLATE_CONDITIONS_FIELD]
+  return isPlainObject(value) && Object.keys(value).length > 0 ? value : null
+}
 
 /** Virtual binding path: the frontend URL of the context document (from the link resolver). */
 export const URL_PATH = '$url'

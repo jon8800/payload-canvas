@@ -224,10 +224,10 @@ function matches(doc: Record<string, unknown>, where: Record<string, unknown>): 
   )
 }
 
-function fakePayload(templates: Array<Record<string, unknown>>, calls: Call[] = []) {
+function fakePayload(templates: Array<Record<string, unknown>>, calls: Call[] = [], posts?: Array<Record<string, unknown>>) {
   const data: Record<string, Array<Record<string, unknown>>> = {
     'builder-templates': templates,
-    posts: [{ id: 1, title: 'First', _status: 'published' }, ...items.map((i) => ({ ...i, _status: 'published' })), { id: 4, title: 'Draft', _status: 'draft' }],
+    posts: posts ?? [{ id: 1, title: 'First', _status: 'published' }, ...items.map((i) => ({ ...i, _status: 'published' })), { id: 4, title: 'Draft', _status: 'draft' }],
     media: [image],
   }
   return {
@@ -245,6 +245,8 @@ function fakePayload(templates: Array<Record<string, unknown>>, calls: Call[] = 
     },
     async find(args: Call) {
       calls.push({ op: 'find', ...args })
+      // Payload refuses a query on an unknown field.
+      if (JSON.stringify(args.where ?? {}).includes('"nope"')) throw new Error('The following path cannot be queried: nope')
       const docs = data[args.collection as string].filter((d) => matches(d, (args.where as Record<string, unknown>) ?? {}))
       return { docs: docs.slice(0, (args.limit as number) || docs.length) }
     },
@@ -292,6 +294,50 @@ describe('loadTemplate', () => {
   it('skips an empty default and uses the next default (QA M13)', async () => {
     const both = fakePayload([tpl(5, { isDefault: true, layout: { version: 1, blocks: [] } }), tpl(6, { isDefault: true })])
     assert.equal((await loadTemplate(both, { collection: 'posts', doc: {} }))?.template.id, 6)
+  })
+  describe('conditions', () => {
+    const vip = tpl(10, { name: 'A VIP', conditions: { tier: { equals: 'vip' } } })
+    const later = tpl(11, { name: 'B VIP too', conditions: { tier: { equals: 'vip' } } })
+    const touring = tpl(12, { name: 'C Touring', conditions: { touring: { equals: true } } })
+    const posts = [
+      { id: 1, tier: 'vip', touring: false },
+      { id: 2, tier: 'basic', touring: true },
+      { id: 3, tier: 'basic', touring: false },
+    ]
+    const models = fakePayload([own, vip, later, touring, fallback], [], posts)
+    it('uses the first template whose conditions match, before the default', async () => {
+      assert.equal((await loadTemplate(models, { collection: 'posts', doc: { id: 1 } }))?.template.id, 10)
+      assert.equal((await loadTemplate(models, { collection: 'posts', doc: { id: 2 } }))?.template.id, 12)
+      assert.equal((await loadTemplate(models, { collection: 'posts', doc: { id: 3 } }))?.template.id, 2)
+    })
+    it('keeps the own template of the document first', async () => {
+      assert.equal((await loadTemplate(models, { collection: 'posts', doc: { id: 1, template: 1 } }))?.template.id, 1)
+    })
+    it('queries the document with the conditions, in name order', async () => {
+      const calls: Call[] = []
+      await loadTemplate(fakePayload([vip, fallback], calls, posts), { collection: 'posts', doc: { id: 1 } })
+      const listCall = calls.find((c) => c.collection === 'builder-templates' && c.op === 'find')!
+      assert.equal(listCall.sort, 'name')
+      const match = calls.find((c) => c.collection === 'posts')!
+      assert.deepEqual(match.where, { and: [{ id: { equals: 1 } }, { tier: { equals: 'vip' } }] })
+    })
+    it('skips empty conditions, unpublished or empty templates, a failing query and documents without an id', async () => {
+      const skipped = fakePayload(
+        [
+          tpl(20, { conditions: {} }),
+          tpl(21, { conditions: { tier: { equals: 'vip' } }, _status: 'draft' }),
+          tpl(22, { conditions: { tier: { equals: 'vip' } }, layout: { version: 1, blocks: [] } }),
+          tpl(23, { conditions: { nope: { equals: 1 } } }),
+          fallback,
+        ],
+        [],
+        posts,
+      )
+      assert.equal((await loadTemplate(skipped, { collection: 'posts', doc: { id: 1 } }))?.template.id, 2)
+      assert.equal((await loadTemplate(models, { collection: 'posts', doc: { tier: 'vip' } }))?.template.id, 2)
+      // Draft mode: the latest draft of a template counts.
+      assert.equal((await loadTemplate(skipped, { collection: 'posts', doc: { id: 1 }, draft: true }))?.template.id, 21)
+    })
   })
   it('returns null when the app has no templates collection', async () => {
     const none = { collections: {} } as unknown as Payload

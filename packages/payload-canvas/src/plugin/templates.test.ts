@@ -4,7 +4,7 @@ import type { CollectionConfig, Config, Field } from 'payload'
 
 import type { BindingField, BuilderClientConfig } from '../core/types'
 import { websiteBuilder } from './index'
-import { bindingSources, TEMPLATES_CONFIG_KEY } from './templates'
+import { bindingSources, templatesCollection, TEMPLATES_CONFIG_KEY, validateConditions } from './templates'
 
 const media: CollectionConfig = { slug: 'media', upload: true, fields: [{ name: 'alt', type: 'text' }] }
 const users: CollectionConfig = { slug: 'users', auth: true, fields: [{ name: 'name', type: 'text' }] }
@@ -126,5 +126,16 @@ describe('websiteBuilder with templates', () => {
       admin: { custom: { builder: BuilderClientConfig } }
     }
     assert.equal(f.admin.custom.builder.templates, null)
+  })
+})
+
+describe('template conditions field', () => {
+  it('is a JSON field on the templates collection', () => {
+    const field = templatesCollection({ slug: 'builder-templates', targets: ['posts'] }).fields.find((f) => 'name' in f && f.name === 'conditions')
+    assert.equal(field?.type, 'json')
+  })
+  it('accepts empty values and objects, refuses other JSON', () => {
+    for (const ok of [null, undefined, '', {}, { tier: { equals: 'vip' } }]) assert.equal(validateConditions(ok), true)
+    for (const bad of [[{ tier: { equals: 'vip' } }], 'tier', 3, true]) assert.equal(typeof validateConditions(bad), 'string')
   })
 })

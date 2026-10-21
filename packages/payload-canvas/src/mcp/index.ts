@@ -16,10 +16,12 @@ import {
   REPEAT_BLOCK,
   DEFAULT_TEMPLATES_SLUG,
   FIELD_BLOCK,
+  TEMPLATE_CONDITIONS_FIELD,
   TEMPLATE_DEFAULT_FIELD,
   TEMPLATE_LAYOUT_FIELD,
   TEMPLATE_PREVIEW_FIELD,
   TEMPLATE_TARGET_FIELD,
+  templateConditions,
   withoutBoundRequired,
 } from '../core/bindings'
 import { createId } from '../core/ids'
@@ -778,8 +780,8 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     name: 'listTemplates',
     routing: { kind: 'collection', action: 'read' },
     description: [
-      `Lists the templates: layouts that render every document of a collection (${templateTargets.join(', ')}). A document uses its own template (its "template" field), else its collection's default template.`,
-      `To edit a template, call getLayout and applyOperations with collection "${templatesSlug}" and the template id. Bind props to the document's fields with "bindings" (getBindingSources lists the fields). To create a template, use createDocument on "${templatesSlug}" with { name, ${TEMPLATE_TARGET_FIELD}, ${TEMPLATE_DEFAULT_FIELD} }.`,
+      `Lists the templates: layouts that render every document of a collection (${templateTargets.join(', ')}). A document uses its own template (its "template" field), else the first published template (by name) whose "${TEMPLATE_CONDITIONS_FIELD}" (a Payload where query against the document, e.g. { "tier": { "equals": "vip" } }) match it, else its collection's default template.`,
+      `To edit a template, call getLayout and applyOperations with collection "${templatesSlug}" and the template id. Bind props to the document's fields with "bindings" (getBindingSources lists the fields). To create a template, use createDocument on "${templatesSlug}" with { name, ${TEMPLATE_TARGET_FIELD}, ${TEMPLATE_DEFAULT_FIELD} } and optional ${TEMPLATE_CONDITIONS_FIELD}.`,
     ].join('\n'),
     parameters: {
       collection: z.enum([templatesSlug]).describe(`Always "${templatesSlug}".`),
@@ -805,6 +807,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
             name: doc.name,
             target: doc[TEMPLATE_TARGET_FIELD],
             isDefault: doc[TEMPLATE_DEFAULT_FIELD] === true,
+            ...(templateConditions(doc) ? { conditions: templateConditions(doc) } : {}),
             ...(doc[TEMPLATE_PREVIEW_FIELD] ? { previewDocument: doc[TEMPLATE_PREVIEW_FIELD] } : {}),
             ...(doc._status ? { status: doc._status } : {}),
             blocks: normalizeLayout(doc[TEMPLATE_LAYOUT_FIELD]).blocks.length,
