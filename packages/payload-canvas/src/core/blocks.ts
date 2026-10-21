@@ -1,5 +1,5 @@
 import { indexLayout, subtreeIds, type IndexedBlock } from './tree'
-import type { Block, BlockDefinition, Layout, SlotDefinition } from './types'
+import type { Block, BlockDefinition, Layout, SectionDefinition, SlotDefinition } from './types'
 
 /**
  * True when the slot accepts the block type as a direct child: `allow` undefined or containing "*"
@@ -47,6 +47,47 @@ export function starterSlots(blocks: readonly BlockDefinition[], type: string, m
 
 export function defineBlock<T extends BlockDefinition>(def: T): T {
   return def
+}
+
+/** A block in `defineSection` input: like `Block`, but `id` may be left out (here and in every slot). */
+export type SectionBlockInput = Omit<Block, 'id' | 'slots'> & { id?: string; slots?: Record<string, SectionBlockInput[]> }
+
+/** `defineSection` input: a `SectionDefinition` whose blocks may leave out `id`. */
+export type SectionInput = Omit<SectionDefinition, 'blocks'> & { blocks: SectionBlockInput[] }
+
+/**
+ * A section with every missing block id filled: `<section id>_1`, `_2`, … in walk order (each
+ * block before its slots, slots in their order), skipping ids that are given. The same input
+ * always gives the same ids. Throws when `id` or `label` is missing or two blocks share an id.
+ */
+export function defineSection(input: SectionInput): SectionDefinition {
+  if (typeof input.id !== 'string' || !input.id.trim()) throw new Error('defineSection: the section needs an "id".')
+  if (typeof input.label !== 'string' || !input.label.trim()) throw new Error(`defineSection("${input.id}"): the section needs a "label".`)
+  const given = new Set<string>()
+  const collect = (blocks: SectionBlockInput[]) => {
+    for (const block of blocks) {
+      if (block.id) {
+        if (given.has(block.id)) throw new Error(`defineSection("${input.id}"): two blocks have the id "${block.id}".`)
+        given.add(block.id)
+      }
+      for (const children of Object.values(block.slots ?? {})) collect(children)
+    }
+  }
+  collect(input.blocks)
+  let count = 0
+  const nextId = () => {
+    let id: string
+    do id = `${input.id}_${++count}`
+    while (given.has(id))
+    return id
+  }
+  const fill = (blocks: SectionBlockInput[]): Block[] =>
+    blocks.map(({ slots, ...rest }) => {
+      const block: Block = { ...rest, id: rest.id || nextId() }
+      if (slots) block.slots = Object.fromEntries(Object.entries(slots).map(([name, children]) => [name, fill(children)]))
+      return block
+    })
+  return { ...input, blocks: fill(input.blocks) }
 }
 
 export function getBlockDefinition(blocks: readonly BlockDefinition[], type: string): BlockDefinition | undefined {

@@ -1220,6 +1220,29 @@ export const sections: SectionDefinition[] = [
 
 Pass them to `websiteBuilder({ sections })` and to `builderMcpTools({ sections })`. Block ids are regenerated on every insert.
 
+`defineSection()` (from `payload-canvas` or `payload-canvas/blocks`) writes the block ids for you. Leave out `id` on any block, at any depth. It fills each missing id as `<section id>_1`, `_2`, … in tree order and skips ids you gave. The same input always gives the same ids. It throws an `Error` when the section has no `id` or `label`, or when two blocks have the same id. The input type is `SectionInput`.
+
+```ts
+import { defineSection } from 'payload-canvas/blocks'
+
+export const hero = defineSection({
+  id: 'hero',
+  label: 'Hero',
+  blocks: [
+    {
+      type: 'stack',
+      className: 'flex flex-col items-center gap-6 py-24 text-center',
+      slots: {
+        children: [
+          { type: 'heading', props: { text: 'Build faster', level: '1' } },   // id: 'hero_2'
+          { type: 'button', props: { label: 'Start', link: { type: 'url', url: '/contact' } } },
+        ],
+      },
+    },
+  ],
+})
+```
+
 The library shows each section as a real picture: the hidden canvas page (`?mode=thumbnail`) renders one section at a time with your components and theme, at a desktop width of 1280 px, and the editor keeps the picture in IndexedDB. A picture changes when the section, the theme or the block definitions change. Cards show a wireframe until their picture is ready, or when it fails.
 
 ### Saved sections
