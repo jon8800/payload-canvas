@@ -162,6 +162,11 @@ export type LoadLayoutOptions = RenderLocale & {
    */
   query?: ListQueryParams | null
   /**
+   * The page's path (`/guides`). The page links of paginated lists start with it, so the link to
+   * page 1 is the bare path. Without it they are relative (`?page=2`, and `?` for page 1).
+   */
+  path?: string
+  /**
    * The seed of `sort: "$random"` lists: the same seed gives the same order. Default: a new seed
    * per call, so a cached page shuffles once per cache build.
    */
@@ -221,7 +226,7 @@ export async function loadLayoutData(
     queries.map(async (query) => {
       const result = await findListItems(payload, query, draft, options?.user ?? null, locale)
       items.set(query.blockId, arrangeListDocs(result.docs, query, seed))
-      if (query.page) pages.set(query.blockId, pageLinks(options?.query, query.page, result.totalPages, query.pageParam))
+      if (query.page) pages.set(query.blockId, pageLinks(options?.query, query.page, result.totalPages, query.pageParam, options?.path))
     }),
   )
   const withItems = withPageParams(attachListItems(bound, items, pages), queries)
