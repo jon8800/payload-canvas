@@ -4,6 +4,13 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-21
+
+### Added
+
+- Collection list filters. `filterField` lists only documents related to the current document (the one a template renders). `filterBy` says how: `current` (default) lists documents whose field holds the current document, `shared` lists documents that share a value of the field with the current document, and `linked` lists the documents the current document's field points to. With `shared` or `linked` and no values, the list is empty. On a normal page the filter is ignored. `where` adds a static Payload `where` query. The site, server blocks and the canvas preview of a template build the same query (`listQueries`). See the README's "Filter a collection list".
+- `defineSection()` in `payload-canvas` and `payload-canvas/blocks`: write sections without block ids. It fills each missing id as `<section id>_1`, `_2`, … and throws on a missing `id` or `label` or a repeated block id. Input type: `SectionInput`.
+
 ## [0.2.0] - 2026-10-16
 
 ### Added
