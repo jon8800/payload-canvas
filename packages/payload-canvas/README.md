@@ -1059,7 +1059,7 @@ export const icons = { arrowRight: ArrowRight, check: Check, close: Close } sati
 ```tsx
 const items = [layout, templateLayout].flatMap((value) => faqItems(value, blocks))
 const jsonLd = faqJsonLd(items)
-// <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\u003c') }} />
+// <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }} />
 ```
 
 ## Using existing Payload blocks
