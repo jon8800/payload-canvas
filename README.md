@@ -52,7 +52,7 @@ Requirements: Payload 3.90+, Next.js 16.3+, React 19.2+, Tailwind CSS 4.3+, Node
 ## Features
 
 - **Full-screen builder** for any collection you list, opened from the document's **Builder** tab. Payload keeps save, drafts, autosave, versions, locking and access control.
-- **16 nestable blocks**: stack, grid, heading, text, rich text (Payload's Lexical editor), image, video, button, link, menu, list, quote, divider, spacer, collection list (documents from any collection), and field (shows a document field in templates). Add your own with `defineBlock`, or reuse your existing Payload blocks with `fromPayloadBlocks`.
+- **17 nestable blocks**: stack, grid, heading, text, rich text (Payload's Lexical editor), image, video, button, link, menu, list, quote, divider, spacer, collection list (documents from any collection), field (shows a document field in templates), and field list (repeats the rows of an array or hasMany field). Add your own with `defineBlock`, or reuse your existing Payload blocks with `fromPayloadBlocks`.
 - **Live canvas** in an iframe that renders your real components, including server components. Drag and drop on the canvas and in the layers tree, a "+" between blocks, fluid, desktop, tablet, mobile and custom widths.
 - **Inline editing**: double-click text or an image on the canvas to change it in place, in the default blocks and in your own components.
 - **Styles panel**: visual controls that read and write Tailwind v4 classes, with breakpoints and hover/focus states. Your `@theme` tokens appear in the pickers.

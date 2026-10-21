@@ -33,4 +33,6 @@ export const defaultComponents: BlockComponents = {
   video: Video,
   field: Field,
   collectionList: CollectionList,
+  // A field list wraps its rows the same way.
+  fieldList: CollectionList,
 }

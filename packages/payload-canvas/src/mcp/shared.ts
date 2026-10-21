@@ -1,7 +1,7 @@
 // Texts and helpers shared by the MCP tools (src/mcp) and the editor's AI assistant (src/ai).
 // No zod and no Payload runtime here, so the assistant does not need the MCP dependencies.
 
-import { COLLECTION_LIST_BLOCK, FIELD_BLOCK, URL_PATH } from '../core/bindings'
+import { COLLECTION_LIST_BLOCK, FIELD_BLOCK, FIELD_LIST_BLOCK, INDEX_PATH, ITEM_PATH, URL_PATH } from '../core/bindings'
 import { dataFields, optionValues } from '../core/fields'
 import { createId } from '../core/ids'
 import { MOTION_EASING_INFO, MOTION_KINDS, MOTION_PRESET_INFO, MOTION_SPECS } from '../core/motion'
@@ -62,6 +62,7 @@ export const BINDINGS_GUIDE = [
   'Values are converted to the prop type: rich text and dates become plain text in text props. When the document has no value, the literal prop stays, so bound props may stay empty.',
   `The "${FIELD_BLOCK}" block shows any field by its type (rich text, image, date, text): props { "path": "content" }.`,
   `In a "${COLLECTION_LIST_BLOCK}" block, blocks in the "item" slot bind to each LISTED document, not to the page.`,
+  `In a "${FIELD_LIST_BLOCK}" block (props { "path": "faqs" }), blocks in the "item" slot bind to each ROW of that list field: the row's fields ("question"), "${ITEM_PATH}" (the row value, e.g. an upload for an image) and "${INDEX_PATH}" (the row number from 1).`,
 ].join('\n')
 
 /** Copies a block tree with new ids that are not in `used`. */

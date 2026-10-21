@@ -944,7 +944,7 @@ export const blocks = [...defaultBlocks({ linkCollections: ['pages'] }), pricing
 - Block fields keep Payload's `validate`, `hooks` and `access`. See [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields).
 - `admin.custom.builderFormat` on a `text` field names a value check, for example `custom: { builderFormat: 'videoUrl' }` (the Video block's URL). The inspector shows the message while the user types, and a bad value blocks **Publish** but not draft saves. `videoUrl` is the only built-in format. Formats live in a registry in `payload-canvas/core` (`FORMATS`, `formatProblem`). The renderer can use the same parser (`parseVideoUrl`).
 - `linkField()` stores `{ type, url, reference, newTab }`. The component receives it resolved, with `href`, `target` and `rel`.
-- The default blocks are `stack`, `grid`, `heading`, `text`, `richText`, `image`, `video`, `button`, `link`, `menu`, `list` with its `listItem` blocks, `quote`, `divider`, `spacer`, `collectionList` (documents from a collection) and `field` (a field of the document a template renders).
+- The default blocks are `stack`, `grid`, `heading`, `text`, `richText`, `image`, `video`, `button`, `link`, `menu`, `list` with its `listItem` blocks, `quote`, `divider`, `spacer`, `collectionList` (documents from a collection), `field` (a field of the document a template renders) and `fieldList` (the rows of an array or hasMany field of that document).
 - The `menu` block folds its links into a "Menu" button and a panel on small screens. Set `ctaLabel` and `cta` (a link) to add a button as the last row of that panel, for example the header's call to action, which a header hides on phones. The inline links, and so the wide-screen header, do not change.
 - The `field` block renders rich text with the `prose` typography (and `max-w-none`) when its own `className` has no `prose` class. Add `prose prose-lg` or another `prose` class to take control.
 - A list holds its items as `listItem` blocks in its `items` slot, so each item can be selected, dragged, styled and edited on the canvas. Enter at the end of an item adds the next one; Backspace at the start of an item joins it to the one before. Older layouts stored the items as a prop (`props.items: [{ text }]`). `normalizeLayout` turns them into `listItem` blocks when a layout loads, and the List component still renders the old prop until the layout is saved again. A list whose `items` prop is bound to document data keeps the old form.
@@ -1513,6 +1513,37 @@ A collection list can show only the documents related to the current document (t
 ```
 
 Lists load with the visitor's access (`overrideAccess: false`). The site (`loadLayoutData`), the canvas and server blocks in the canvas build the same query (`listQueries`), so a template's canvas preview shows the list filtered by its sample document.
+
+#### Repeat the rows of a field
+
+The **Field list** block (`fieldList`) repeats its `item` slot once per row of a list field of the current document. Use it for an array field (FAQs `faqs: [{ question, answer }]`, rates `rates: [{ duration, price }]`), a hasMany upload (a gallery), a hasMany relationship (the services of a model) or a hasMany text or select field (tags).
+
+| Prop | Type | What it does |
+| --- | --- | --- |
+| `path` | text, required | The field, as a dot path in the current document, for example `faqs` or `galleryImages`. |
+| `limit` | number | The most rows to show. Empty shows every row. |
+| `offset` | number | Rows to skip at the start. `1` skips the first photo. |
+| `collection` | text (a select of the collections with a `url` when the plugin knows them) | For a relationship field: the related collection, so `$url` links to each document. A `{ relationTo, value }` row names its own collection. |
+
+Blocks in the `item` slot bind to the **row**:
+
+- An array row's fields by name: `question`, `answer`.
+- A related document's fields: `title`, `name`, `url` (uploads), and `$url` when `collection` is set.
+- `$item`: the row value itself. Bind an image's `image` to `$item` in a list of uploads, or a text's `text` to `$item` in a hasMany text list.
+- `$index`: the row number, from 1.
+
+```json
+{
+  "type": "fieldList",
+  "props": { "path": "galleryImages", "offset": 1 },
+  "slots": { "item": [{ "type": "image", "bindings": { "image": "$item" } }] }
+}
+```
+
+- The current document is the template's document, the listed document inside a collection list item, and the row inside another field list.
+- Without a current document (a normal page), the site shows nothing. The canvas shows the item design once.
+- On the canvas, the first row is the editable one. The other rows are repeats (`data-builder-repeat`), as in a collection list. In the inspector, the field picker for `path` offers array and hasMany fields, and blocks in the item bind to the row's fields, `$item` and `$index`.
+- Load the document with `depth: 1` (or more). Then relationship and upload rows are documents, not IDs. An ID row still gives `$item` and `$index`, but no fields.
 
 ### Render a document through its template
 

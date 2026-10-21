@@ -26,7 +26,8 @@ import { blockPreview, blockSummary, childrenOf, customLabel, typeName } from '.
 import { OUTLINE_INDENT, useRuntime, type DragData, type Runtime } from './runtime'
 import { RegionRows } from './regions/RegionRows'
 import { useEditor } from './store'
-import { findBindingField, listAncestor, URL_PATH } from './templates/binding'
+import { scopeSources } from '../../core/bindings'
+import { findBindingField, URL_PATH } from './templates/binding'
 import { useValue, useValueSelector } from './valueStore'
 
 type Row = {
@@ -105,15 +106,15 @@ function brokenBindingIds(runtime: Runtime, layout: Layout, templateTarget: stri
 
 const NO_ISSUES: string[] = []
 
-/** True when a binding of the block reads a field its collection does not have (or there is no collection). */
+/**
+ * True when a binding of the block reads a field its document does not have (or there is no
+ * document): the template's, each list item's, or each field list row's.
+ */
 function hasBrokenBinding(runtime: Runtime, layout: Layout, block: Block, templateTarget: string | null): boolean {
   const paths = Object.values(block.bindings ?? {})
   if (paths.length === 0) return false
-  const list = listAncestor(layout, block.id)
-  const listCollection = typeof list?.props?.collection === 'string' ? list.props.collection : null
-  const collection = list ? listCollection : templateTarget
-  if (!collection) return true
-  const fields = runtime.config.templates?.sources?.[collection] ?? []
+  const fields = scopeSources(layout, block.id, runtime.config.templates?.sources ?? {}, templateTarget)
+  if (!fields) return true
   return paths.some((path) => path !== URL_PATH && !findBindingField(fields, path))
 }
 

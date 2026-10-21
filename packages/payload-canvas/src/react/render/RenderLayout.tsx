@@ -2,6 +2,8 @@ import { Fragment, memo, type ReactNode } from 'react'
 import {
   blocksHaveMotion,
   COLLECTION_LIST_BLOCK,
+  fieldListRowContext,
+  isRepeatSlot,
   motionAttributes,
   staggersChildren,
   LIST_ITEM_SLOT,
@@ -32,10 +34,10 @@ type Context = {
   definitions: Map<string, BlockDefinition>
   resolveLinks: VisitField
   binding: BindingOptions
-  /** The document bindings and Field blocks read. Inside a collection list: the item. */
+  /** The document bindings and Field blocks read. Inside a collection list: the item; inside a field list: the row. */
   context: TemplateContext | null
   /**
-   * Canvas only: a repeated collection list item after the first. Its blocks get
+   * Canvas only: a repeated collection list item or field list row after the first. Its blocks get
    * `data-builder-repeat` instead of editor attributes, so selection maps to the first item.
    */
   repeat: boolean
@@ -94,26 +96,36 @@ function renderSlot(block: Block, slot: string, ctx: Context): ReactNode {
   )
 }
 
+/** The contexts a repeat block's `item` slot renders with: one per listed document or field list row. */
+function repeatContexts(block: Block): TemplateContext[] {
+  const collection = typeof block.props?.collection === 'string' ? block.props.collection : ''
+  if (block.type === COLLECTION_LIST_BLOCK) return listItemsOf(block.props).map((doc) => ({ collection, doc }))
+  const rows = block.props?.[LIST_ITEMS_PROP]
+  return Array.isArray(rows) ? rows.map((row, i) => fieldListRowContext(row, i, collection)) : []
+}
+
 /**
- * The `item` slot of a collection list, once per loaded document. Each repetition binds to its
- * own document. With no documents, the editor still shows the item design once.
+ * The `item` slot of a collection list (once per loaded document) or a field list (once per row).
+ * Each repetition binds to its own document or row. On the canvas only the first one is
+ * editable; the others are repeats. With nothing to repeat, the editor still shows the item
+ * design once, and the site shows nothing.
  */
 function renderListItems(block: Block, ctx: Context): ReactNode {
-  const items = listItemsOf(block.props)
-  const collection = typeof block.props?.collection === 'string' ? block.props.collection : ''
+  const contexts = repeatContexts(block)
   const children = block.slots?.[LIST_ITEM_SLOT] ?? []
-  if (items.length === 0) {
+  if (contexts.length === 0) {
     if (ctx.mode !== 'canvas') return null
+    const collection = block.type === COLLECTION_LIST_BLOCK && typeof block.props?.collection === 'string' ? block.props.collection : ''
     return renderSlot(block, LIST_ITEM_SLOT, { ...ctx, context: { collection, doc: {} } })
   }
   if (children.length === 0) return renderSlot(block, LIST_ITEM_SLOT, ctx)
-  return items.map((doc, i) => (
-    <Fragment key={typeof doc.id === 'string' || typeof doc.id === 'number' ? doc.id : i}>
+  return contexts.map((context, i) => (
+    <Fragment key={typeof context.doc.id === 'string' || typeof context.doc.id === 'number' ? context.doc.id : i}>
       {renderBlocks(
         children,
         {
           ...ctx,
-          context: { collection, doc },
+          context,
           repeat: ctx.repeat || (ctx.mode === 'canvas' && i > 0),
         },
         staggersChildren(block.motion),
@@ -174,10 +186,10 @@ function renderBlock(stored: Block, ctx: Context, preview = false, item = false)
 
   const slots: Record<string, ReactNode> = {}
   const slotAttributes: Record<string, Record<string, string>> = {}
-  const isList = block.type === COLLECTION_LIST_BLOCK
+  const isList = isRepeatSlot(block.type, LIST_ITEM_SLOT)
   for (const slot of slotNamesOf(block, ctx)) {
     if (preview) slots[slot] = <SlotOutlet name={slot} />
-    else slots[slot] = isList && slot === LIST_ITEM_SLOT ? renderListItems(block, ctx) : renderSlot(block, slot, ctx)
+    else slots[slot] = isRepeatSlot(block.type, slot) ? renderListItems(block, ctx) : renderSlot(block, slot, ctx)
     slotAttributes[slot] = editor ? { 'data-slot-owner': block.id, 'data-slot': slot } : {}
   }
   if (isList && !(LIST_ITEM_SLOT in slots)) {

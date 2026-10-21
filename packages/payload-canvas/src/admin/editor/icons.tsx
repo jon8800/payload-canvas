@@ -102,6 +102,16 @@ const PATHS = {
       <path d="M4.5 11.5h4" opacity={0.45} />
     </>
   ),
+  // Rows of one field: braces (a field) around repeated lines.
+  fieldList: (
+    <>
+      <path d="M5 2.5h-.5A1.5 1.5 0 0 0 3 4v8a1.5 1.5 0 0 0 1.5 1.5H5" />
+      <path d="M11 2.5h.5A1.5 1.5 0 0 1 13 4v8a1.5 1.5 0 0 1-1.5 1.5H11" />
+      <path d="M6 5.5h4" />
+      <path d="M6 8h4" opacity={0.6} />
+      <path d="M6 10.5h4" opacity={0.35} />
+    </>
+  ),
   bind: (
     <>
       <ellipse cx="8" cy="3.75" rx="5" ry="1.75" />

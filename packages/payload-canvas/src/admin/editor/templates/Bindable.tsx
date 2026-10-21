@@ -8,7 +8,7 @@ import { createContext, use, useCallback, useState, type ChangeEvent, type React
 import type { Field, OptionObject } from 'payload'
 
 import { isLinkField } from '../../../blocks/link'
-import { getBlockDefinition, propField } from '../../../core'
+import { COLLECTION_LIST_BLOCK, fieldListRowContext, fieldListRows, getBlockDefinition, itemSources, propField, repeatAncestors } from '../../../core'
 import type { BindingField, Block, BlockDefinition } from '../../../core/types'
 import { Icon } from '../icons'
 import { useRuntime } from '../runtime'
@@ -19,13 +19,14 @@ import {
   bindingTrail,
   docTitle,
   FIELD_BLOCK,
+  FIELD_LIST_BLOCK,
   findBindingField,
   hasBindableField,
   isCompatible,
   isFieldBlockSource,
+  isFieldListSource,
   isObviousPath,
   LIST_BLOCK,
-  listAncestor,
   previewValue,
   propKind,
   propPathOf,
@@ -38,16 +39,18 @@ import { FieldPicker, fieldIcon } from './FieldPicker'
 import { useCollectionLabel, useListSample, useTitleField } from './useTemplate'
 import './templates.scss'
 
-/** Where the selected block's bindings read from: the template's document, or each list item. */
+/** Where the selected block's bindings read from: the template's document, each list item, or each field list row. */
 export type BindingScope = {
-  kind: 'template' | 'list'
+  kind: 'template' | 'list' | 'row'
   /** Null when the template has no target yet, or the list has no collection. */
   collection: string | null
   fields: BindingField[]
-  /** The document previews read from: the template's sample, or the list's first item. */
+  /** The document previews read from: the template's sample, the list's first item, or the first row. */
   sample: Record<string, unknown> | null
   sampleTitle: string
   loading: boolean
+  /** Field lists only: the field whose rows repeat, e.g. "faqs". */
+  rowPath?: string
 }
 
 type ScopeContext = { block: Block; def: BlockDefinition | undefined; prefix: string; scope: BindingScope | null }
@@ -55,14 +58,45 @@ type ScopeContext = { block: Block; def: BlockDefinition | undefined; prefix: st
 const BindingScopeContext = createContext<ScopeContext | null>(null)
 
 /** The sources plus the `$url` field, unless the plugin already lists it. */
-function withUrl(kind: 'template' | 'list', fields: BindingField[]): BindingField[] {
+function withUrl(kind: 'template' | 'list' | 'row', fields: BindingField[]): BindingField[] {
   return fields.some((f) => f.path === URL_PATH) ? fields : [urlField(kind), ...fields]
 }
 
-/** The binding scope of a block, or null when nothing can be bound (a normal page, outside lists). */
+const sameBlocks = (a: Block[], b: Block[]) => a.length === b.length && a.every((block, i) => block === b[i])
+
+/**
+ * The binding scope of a block, or null when nothing can be bound (a normal page, outside lists).
+ * Inside field lists the scope narrows to the row: the row's fields, `$item` and `$index`, and the
+ * first row of the sample.
+ */
 export function useBindingScope(block: Block): BindingScope | null {
   const runtime = useRuntime()
-  const list = useEditor(runtime.store, (s) => listAncestor(s.layout, block.id))
+  const repeats = useEditor(runtime.store, (s) => repeatAncestors(s.layout, block.id), sameBlocks)
+  const nearest = repeats.findLastIndex((b) => b.type === COLLECTION_LIST_BLOCK)
+  const scope = useOuterScope(block, nearest >= 0 ? repeats[nearest]! : null)
+  const rows = repeats.slice(nearest + 1)
+  if (!scope || rows.length === 0) return scope
+  const sources = runtime.config.templates?.sources ?? {}
+  let fields: BindingField[] | undefined = scope.fields
+  let sample = scope.sample
+  for (const row of rows) {
+    fields = itemSources(row, fields, sources)
+    const first = sample ? fieldListRows(sample, row.props)[0] : undefined
+    sample = first === undefined ? null : fieldListRowContext(first, 0).doc
+  }
+  return {
+    ...scope,
+    kind: 'row',
+    fields: fields ?? [],
+    sample,
+    sampleTitle: sample ? docTitle(sample.$item) : '',
+    rowPath: typeof rows.at(-1)?.props?.path === 'string' ? (rows.at(-1)!.props!.path as string) : '',
+  }
+}
+
+/** The scope of the template or of the nearest collection list around the block. */
+function useOuterScope(block: Block, list: Block | null): BindingScope | null {
+  const runtime = useRuntime()
   const template = useValue(runtime.template)
   const sources = runtime.config.templates?.sources ?? {}
   const listCollection = typeof list?.props?.collection === 'string' && list.props.collection ? list.props.collection : null
@@ -130,9 +164,10 @@ export function FieldSlot(props: SlotProps) {
   const { block, def, scope } = ctx
 
   if (block.type === FIELD_BLOCK && propPath === 'path') return <FieldPathInput {...props} scope={scope} />
+  if (block.type === FIELD_LIST_BLOCK && propPath === 'path') return <FieldPathInput {...props} scope={scope} rows />
   if (block.type === LIST_BLOCK && propPath === 'collection') return <ListCollectionInput {...props} />
   if (block.type === LIST_BLOCK && propPath === 'sort') return <ListSortInput {...props} block={block} />
-  if (block.type === FIELD_BLOCK || block.type === LIST_BLOCK) return props.children
+  if (block.type === FIELD_BLOCK || block.type === LIST_BLOCK || block.type === FIELD_LIST_BLOCK) return props.children
 
   const kind = propKind(props.field as { type: string; hasMany?: boolean })
   if (!kind) return props.children
@@ -152,6 +187,7 @@ export function FieldSlot(props: SlotProps) {
 }
 
 function scopeTitle(scope: BindingScope, collectionLabel: string): string {
+  if (scope.kind === 'row') return `Fields of each row · ${scope.rowPath ?? ''}`
   return scope.kind === 'list' ? `Fields of each item · ${collectionLabel}` : `Fields of ${collectionLabel}`
 }
 
@@ -319,12 +355,12 @@ export function SamplePreview({ scope, source }: { scope: BindingScope | null; s
   if (!scope.sample) {
     return (
       <p className="builder-bind__note">
-        {scope.kind === 'list' ? 'The list has no items yet.' : 'No sample document to preview.'}
+        {scope.kind === 'list' ? 'The list has no items yet.' : scope.kind === 'row' ? 'The field has no rows in the sample.' : 'No sample document to preview.'}
       </p>
     )
   }
   const preview = previewValue(valueAt(scope.sample, source.path), source.type)
-  const from = scope.kind === 'list' ? 'First item' : 'Sample'
+  const from = scope.kind === 'list' ? 'First item' : scope.kind === 'row' ? 'First row' : 'Sample'
   return (
     <div className="builder-bind__preview">
       <span className="builder-bind__preview-from" title={scope.sampleTitle}>
@@ -340,10 +376,10 @@ export function SamplePreview({ scope, source }: { scope: BindingScope | null; s
   )
 }
 
-/** The Field block's `path`: picks any field of the scope's document. */
-function FieldPathInput({ value, onChange, label, children, scope }: SlotProps & { scope: BindingScope | null }) {
+/** The Field block's `path`: picks any field of the scope's document. `rows`: a field list's path (fields with rows). */
+function FieldPathInput({ value, onChange, label, children, scope, rows = false }: SlotProps & { scope: BindingScope | null; rows?: boolean }) {
   const popover = usePopover('auto')
-  const accept = isFieldBlockSource
+  const accept = rows ? isFieldListSource : isFieldBlockSource
   const collectionLabel = useCollectionLabel(scope?.collection ?? null)
   const path = typeof value === 'string' && value ? value : null
 
@@ -355,7 +391,9 @@ function FieldPathInput({ value, onChange, label, children, scope }: SlotProps &
             ? 'Choose the list’s collection first. Then pick the field each item shows.'
             : scope?.kind === 'template'
               ? 'Choose which collection this template is for. Then pick a field here.'
-              : 'A Field block shows a field of the template’s document or of each list item. Use it in a template or inside a collection list.'}
+              : rows
+                ? 'A Field list repeats the rows of a field of the template’s document or of each list item. Use it in a template or inside a collection list.'
+                : 'A Field block shows a field of the template’s document or of each list item. Use it in a template or inside a collection list.'}
         </p>
         {children}
       </div>
@@ -481,7 +519,7 @@ function ScopeBanner({ block, scope }: { block: Block; scope: BindingScope | nul
   const runtime = useRuntime()
   const collectionLabel = useCollectionLabel(scope?.collection ?? null)
   const singular = useCollectionLabel(scope?.collection ?? null, 'singular')
-  if (!scope || block.type === FIELD_BLOCK || block.type === LIST_BLOCK) return null
+  if (!scope || block.type === FIELD_BLOCK || block.type === LIST_BLOCK || block.type === FIELD_LIST_BLOCK) return null
   const def = getBlockDefinition(runtime.config.blocks, block.type)
   if (!def || !hasBindableField(def.fields as Parameters<typeof hasBindableField>[0])) return null
 
@@ -503,6 +541,17 @@ function ScopeBanner({ block, scope }: { block: Block; scope: BindingScope | nul
       <div className="builder-bind__banner builder-bind__banner--warn">
         <Icon name="collectionList" size={14} />
         <p>This block is inside a collection list. Choose the list’s collection to bind fields of each item.</p>
+      </div>
+    )
+  }
+  if (scope.kind === 'row') {
+    return (
+      <div className="builder-bind__banner">
+        <Icon name="collectionList" size={14} />
+        <p>
+          Repeats for each row of “{scope.rowPath}”. Use <Icon name="bind" size={12} className="builder-bind__inline-icon" /> next
+          to a field to show the row’s data.
+        </p>
       </div>
     )
   }

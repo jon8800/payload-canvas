@@ -1,6 +1,6 @@
 import type { CollectionSlug } from 'payload'
 import { defineBlock } from '../core/blocks'
-import { COLLECTION_LIST_BLOCK, FIELD_BLOCK, LIST_ITEM_SLOT } from '../core/bindings'
+import { COLLECTION_LIST_BLOCK, FIELD_BLOCK, FIELD_LIST_BLOCK, INDEX_PATH, ITEM_PATH, LIST_ITEM_SLOT } from '../core/bindings'
 import { TEXT_LIST_BLOCK, TEXT_LIST_ITEM_BLOCK, TEXT_LIST_SLOT } from '../core/textList'
 import type { BlockDefinition } from '../core/types'
 import { BUILDER_CSS_CLASS } from '../css/marker'
@@ -92,7 +92,7 @@ const FIELD_CLASSES = Object.values(FIELD_CLASS_MAP)
 
 /**
  * The built-in blocks: stack, grid, heading, text, richText, image, button, link, menu, list (with
- * its listItem blocks), quote, divider, spacer, video, and the dynamic blocks field and collectionList.
+ * its listItem blocks), quote, divider, spacer, video, and the dynamic blocks field, collectionList and fieldList.
  */
 export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[] {
   const mediaCollection = (options?.mediaCollection ?? 'media') as CollectionSlug
@@ -678,5 +678,75 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     },
   })
 
-  return [stack, grid, heading, text, richText, image, button, link, menu, list, listItem, quote, divider, spacer, video, field, collectionList]
+  const fieldList = defineBlock({
+    type: FIELD_LIST_BLOCK,
+    label: 'Field list',
+    icon: 'fieldList',
+    category: 'Dynamic',
+    fields: [
+      {
+        name: 'path',
+        type: 'text',
+        label: 'Field',
+        required: true,
+        admin: {
+          description:
+            'The list field of the current document to repeat, for example "faqs" (an array), "galleryImages" or "services" ' +
+            '(many uploads or relationships) or "tags" (many values). Inside a collection list: a field of each item.',
+        },
+      },
+      { name: 'limit', type: 'number', label: 'Number of rows', min: 1, admin: { description: 'Empty: every row.' } },
+      { name: 'offset', type: 'number', label: 'Skip rows', min: 0, admin: { description: 'Rows to leave out at the start, for example 1 to skip the first photo.' } },
+      listCollections && listCollections.length > 0
+        ? {
+            name: 'collection',
+            type: 'select',
+            label: 'Related collection',
+            options: listCollections,
+            admin: { description: 'For a relationship field: the collection of its documents, so "$url" links to each one.' },
+          }
+        : {
+            name: 'collection',
+            type: 'text',
+            label: 'Related collection',
+            admin: { description: 'For a relationship field: the collection of its documents, so "$url" links to each one.' },
+          },
+    ],
+    slots: { [LIST_ITEM_SLOT]: { label: 'Row' } },
+    defaultClassName: 'flex flex-col gap-4',
+    ai: {
+      description:
+        'Repeats its "item" slot once per row of a list field of the CURRENT document (templates; inside a collection ' +
+        'list item, of each listed document; inside another field list, of the row). "path" is the field: an array ' +
+        '(e.g. FAQs, rates), a hasMany upload (e.g. a gallery), a hasMany relationship, or hasMany text/select. ' +
+        'Blocks in "item" bind to the ROW: the field names of an array row (e.g. "question"), the related document ' +
+        `fields (e.g. "name"; "$url" when "collection" names its collection), "${ITEM_PATH}" (the row value itself: ` +
+        `an upload for an image, a text for a text block) and "${INDEX_PATH}" (the row number from 1). "limit" and ` +
+        '"offset" pick rows (offset 1 skips the first). On a page without a current document it shows nothing. ' +
+        'Example 2 (photos): { "type": "fieldList", "props": { "path": "galleryImages", "offset": 1 }, "slots": { "item": ' +
+        `[{ "type": "image", "bindings": { "image": "${ITEM_PATH}" } }] } }.`,
+      example: {
+        type: FIELD_LIST_BLOCK,
+        props: { path: 'faqs' },
+        className: 'flex flex-col gap-4',
+        slots: {
+          [LIST_ITEM_SLOT]: [
+            {
+              id: 'b_example_1',
+              type: 'stack',
+              className: 'flex flex-col gap-2 rounded-lg border p-4',
+              slots: {
+                children: [
+                  { id: 'b_example_2', type: 'heading', props: { level: '3' }, bindings: { text: 'question' } },
+                  { id: 'b_example_3', type: 'text', bindings: { text: 'answer' } },
+                ],
+              },
+            },
+          ],
+        },
+      },
+    },
+  })
+
+  return [stack, grid, heading, text, richText, image, button, link, menu, list, listItem, quote, divider, spacer, video, field, collectionList, fieldList]
 }

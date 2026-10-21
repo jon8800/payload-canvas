@@ -2,7 +2,7 @@ import { LIST_ITEM_SLOT } from '../../core'
 import type { BlockComponentProps } from '../render/types'
 
 /**
- * The collection list block. RenderLayout renders the `item` slot once per document; this
+ * The collection list and field list blocks. RenderLayout renders the `item` slot once per document or row; this
  * component only wraps the items. Nothing on the site when the list is empty.
  */
 export function CollectionList({ className, attributes, slots, slotAttributes, mode }: BlockComponentProps) {
