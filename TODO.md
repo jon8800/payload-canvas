@@ -42,6 +42,23 @@ Read `AGENTS.md` and `docs/architecture.md` first. The gap numbers (8.x) match p
 
 Delete `anchor` from the starter now that item 2 is done; it is not in the plugin. These stay in the starter, because they hold site rules: `contactLink`, `form`, `breadcrumbs`, `jsonLd`, `documentLayout`, `glossaryTerm`, `letterFilter` and `rating`.
 
+## Found in the starter
+
+The starter moved to 0.4.0-dev.2 (packed from `25ae771`). Fixed (see "Fixed" in `[Unreleased]`):
+
+- Site class labels: a comment before the `@canvas` comment merged with it; 10 of 32 labels were lost.
+- Media backdrop: Payload's default 50/50 focal point overrode the position classes. The image block had the same rule. New `builtinComponents({ mediaUrl })` maps upload URLs.
+- `prepareBlocks(blocks, listCollections)`: a site's own block list now gets the `websiteBuilder` preparation, so seeds validate like the editor.
+- Pager: page 1 was `?` (`/guides?`). `loadLayoutData({ path })` makes it the bare path.
+- README: repeated heading texts get `-2`, `-3` ids.
+
+Still open:
+
+- `mediaUrl` covers the media backdrop only. The default `image` block still renders stored URLs (the starter overrides `image`).
+- Without `path`, the pager's page 1 is still `?`. The canvas never passes a path.
+- Template `conditions` is always on, so every site needs a migration (`builder_templates.conditions`) when it moves to 0.4.
+- A focal point set to exactly 50/50 loses to a position class: the plugin cannot tell it from Payload's default.
+
 ## Open
 
 More work from the same night is in `[Unreleased]` too: button icons, control labels, lightbox swipe, and pager gaps with a `pageParam` per list.
