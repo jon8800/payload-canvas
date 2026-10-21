@@ -92,3 +92,39 @@ test('page data comes from the server, or is empty when it fails', async () => {
   })
   assert.deepEqual(await failing.pageData(), {})
 })
+
+test('animation settings are not part of the key, at any depth', () => {
+  const { server } = fakeServer()
+  const store = createServerBlocks(server)
+  const plain = { id: 'a', type: 'grid', props: { motion: 'kept' }, slots: { children: [{ id: 'c', type: 'text' }] } }
+  const moving = {
+    ...plain,
+    motion: { entrance: { preset: 'fade-in' } },
+    slots: { children: [{ id: 'c', type: 'text', motion: { hover: { preset: 'lift' } } }] },
+  } as unknown as Layout['blocks'][number]
+  assert.equal(store.keyOf(moving), store.keyOf(plain))
+  // A prop named "motion" still counts.
+  assert.notEqual(store.keyOf({ ...plain, props: {} }), store.keyOf(plain))
+})
+
+test('refresh asks again for the mounted blocks and forgets the rest', async () => {
+  const { server, requests } = fakeServer()
+  const store = createServerBlocks(server, { debounceMs: 1 })
+  const [a, b] = layout.blocks
+  const keyA = store.keyOf(a)
+  const keyB = store.keyOf(b)
+  store.want(keyA, a)
+  const releaseB = store.want(keyB, b)
+  await store.idle()
+  releaseB()
+  assert.equal(requests.length, 1)
+  store.refresh()
+  assert.deepEqual(store.get(keyA), { status: 'pending' })
+  assert.equal(store.get(keyB), undefined)
+  await store.idle()
+  assert.equal(requests.length, 2)
+  const second = requests[1]
+  assert.ok(second?.kind === 'blocks')
+  assert.deepEqual(second.blocks.map((item) => item.key), [keyA])
+  assert.equal(store.get(keyA)?.status, 'ready')
+})

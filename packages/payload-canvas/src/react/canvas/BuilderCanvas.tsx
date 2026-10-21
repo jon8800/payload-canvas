@@ -596,6 +596,8 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
         case 'docChanged':
           forgetDoc(message.collection, message.id)
           setDocsVersion((version) => version + 1)
+          // Server blocks may show the document too (an image's alt text).
+          serverBlocks?.refresh()
           // A media document of a region (its alt text) or the page itself changed.
           setFrameVersion((version) => version + 1)
           return
@@ -785,7 +787,7 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
       observer.current?.disconnect()
       cancelAnimationFrame(frameRequest.current)
     }
-  }, [scheduleMeasure, startInline, stopInline, drag, motion, mapper])
+  }, [scheduleMeasure, startInline, stopInline, drag, motion, mapper, serverBlocks])
 
   // The CSS endpoint comes from the admin, or from `?cssEndpoint=` when the page is opened alone.
   const cssEndpoint = init?.cssEndpoint ?? null
