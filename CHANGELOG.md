@@ -4,6 +4,13 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-21
+
+### Added
+
+- The **Field list** block (`fieldList`): repeats its `item` slot once per row of an array or hasMany field of the current document (`path`), for example FAQs, rates, a photo gallery, the services of a model or tags. `limit` and `offset` pick the rows. Blocks in the item bind to the row's fields, to `$item` (the row value, for example an upload for an image) and to `$index` (the row number from 1). `collection` names the related collection, so `$url` links to each related document. It works in templates, inside collection list items and inside other field lists. On the canvas the first row is editable and the other rows are repeats. Without a current document the site shows nothing. See the README's "Repeat the rows of a field".
+- Binding checks, the outline and the inspector's field picker read the row's fields inside a field list. `itemSources`, `scopeSources`, `repeatAncestors`, `fieldListRows` and `fieldListRowContext` in `payload-canvas/core`.
+
 ## [0.2.1] - 2026-10-21
 
 ### Added
