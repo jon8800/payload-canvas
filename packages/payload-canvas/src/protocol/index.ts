@@ -26,6 +26,8 @@ export type CanvasInit = {
    * the layout alone.
    */
   regions?: RegionConfig[]
+  /** Collection -> relationship field path -> related collection, for `<path>.$url` bindings. */
+  relations?: Record<string, Record<string, string>>
 }
 
 export type PointerKind = 'move' | 'leave' | 'click'

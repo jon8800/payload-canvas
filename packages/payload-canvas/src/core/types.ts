@@ -286,6 +286,11 @@ export type BuilderClientConfig = {
   storage?: 'payload-blocks'
   /** With `storage: 'payload-blocks'`: the block types the field allows at its top level. */
   payloadRootTypes?: string[]
+  /**
+   * Collection -> relationship field path -> related collection (`bindingRelations`), so the
+   * canvas resolves `<path>.$url` bindings as the site does.
+   */
+  relations?: Record<string, Record<string, string>>
 }
 
 /** One document field a region shows. */

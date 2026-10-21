@@ -350,6 +350,61 @@ export type BindingOptions = {
    * resolver here. Without it, `$url` bindings stay unresolved.
    */
   url?: (context: TemplateContext) => string | null | undefined
+  /**
+   * Which collection each relationship and upload field points to (`bindingRelations`), so
+   * `<path>.$url` (e.g. `categories.0.$url`) knows the related document's collection. A
+   * `{ relationTo, value }` value names its own collection without it.
+   */
+  relations?: BindingRelations
+}
+
+/** Collection slug -> field path (no row numbers, e.g. "gallery.photo") -> the related collection. */
+export type BindingRelations = Record<string, Record<string, string>>
+
+/**
+ * The related collection of every relationship and upload field with one `relationTo`, at any
+ * depth of groups, named tabs and arrays (blocks fields are left out). Plain JSON: pass it to
+ * `RenderLayout` and `loadLayoutData` as `relations`. The plugin sends it to the canvas itself.
+ */
+export function bindingRelations(collections: ReadonlyArray<{ slug: string; fields: readonly unknown[] }>): BindingRelations {
+  const out: BindingRelations = {}
+  for (const collection of collections) {
+    const into: Record<string, string> = {}
+    walkRelations(collection.fields, '', into)
+    if (Object.keys(into).length > 0) out[collection.slug] = into
+  }
+  return out
+}
+
+function walkRelations(fields: readonly unknown[], prefix: string, into: Record<string, string>): void {
+  for (const field of dataFields(fields)) {
+    const path = prefix ? `${prefix}.${field.name}` : field.name
+    if ((field.type === 'relationship' || field.type === 'upload') && typeof field.relationTo === 'string') into[path] = field.relationTo
+    else if (field.type === 'group' || field.type === 'array') walkRelations(field.fields ?? [], path, into)
+  }
+}
+
+/** `<path>.$url`: the URL of the related document at `path`. */
+const RELATED_URL_SUFFIX = `.${URL_PATH}`
+
+/**
+ * The collection of the document at `path` of the context document, by `relations`: each
+ * relationship on the way moves to its collection. Row numbers are skipped. Undefined when the
+ * path does not end on a relationship.
+ */
+function relationOf(collection: string, path: string, relations: BindingRelations | undefined): string | undefined {
+  let current = collection
+  let local = ''
+  for (const part of path.split('.')) {
+    if (/^\d+$/.test(part)) continue
+    local = local ? `${local}.${part}` : part
+    const next = relations?.[current]?.[local]
+    if (next) {
+      current = next
+      local = ''
+    }
+  }
+  return local === '' && path !== '' ? current : undefined
 }
 
 /**
@@ -358,6 +413,18 @@ export type BindingOptions = {
  */
 function pathValue(context: TemplateContext, path: string, options?: BindingOptions): unknown {
   if (path === URL_PATH) return options?.url?.(context) ?? undefined
+  if (path.endsWith(RELATED_URL_SUFFIX)) {
+    const target = path.slice(0, -RELATED_URL_SUFFIX.length)
+    const value = pathValue(context, target, options)
+    const pair = isRelationPair(value)
+    const doc = pair ? value.value : value
+    // Only a loaded document has the fields a URL needs (an id alone does not).
+    const head = target.split('.')[0]
+    const own = head === PARENT_PATH || head === PAGE_PATH || head === ITEM_PATH ? undefined : relationOf(context.collection, target, options?.relations)
+    const collection = pair ? value.relationTo : own
+    if (!collection || !isPlainObject(doc)) return undefined
+    return options?.url?.({ collection, doc }) ?? undefined
+  }
   const dot = path.indexOf('.')
   const head = dot < 0 ? path : path.slice(0, dot)
   const rest = dot < 0 ? '' : path.slice(dot + 1)
@@ -517,6 +584,7 @@ export function bindingPaths(key: string, binding: string): string[] {
       .split('|')
       .map((part) => part.trim())
       .filter((part, i) => part && (i === 0 || !formatterOf(part)))
+      .map((path) => (path.endsWith(RELATED_URL_SUFFIX) ? path.slice(0, -RELATED_URL_SUFFIX.length) : path))
       .filter((path) => path !== URL_PATH && path.split('.')[0] !== ITEM_PATH && path !== INDEX_PATH),
   )
 }
@@ -867,7 +935,8 @@ export function validateBindings(
           // Expressions (templates, fallbacks, formatters), `$visible` and the row's own value are not checked.
           if (propPath === VISIBLE_BINDING || isBindingExpression(fieldPath)) continue
           if (fieldPath.split('.')[0] === ITEM_PATH || fieldPath === INDEX_PATH) continue
-          const source = fieldPath === URL_PATH ? { path: URL_PATH, label: 'Page URL', type: 'text' } : findBindingField(fields, fieldPath)
+          const source =
+            fieldPath === URL_PATH || fieldPath.endsWith(RELATED_URL_SUFFIX) ? { path: URL_PATH, label: 'Page URL', type: 'text' } : findBindingField(fields, fieldPath)
           if (!source) continue
           const problem = bindingProblem(definition.fields as unknown[], propPath, source)
           if (problem) {

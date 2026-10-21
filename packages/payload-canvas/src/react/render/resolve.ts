@@ -1,7 +1,7 @@
 // Replaces upload/relationship IDs in block props with documents.
 
 import type { Payload, Where } from 'payload'
-import { resolveBindings, type Block, type BlockDefinition, type Layout, type TemplateContext } from '../../core'
+import { resolveBindings, type BindingRelations, type Block, type BlockDefinition, type Layout, type TemplateContext } from '../../core'
 import { isRecord, mapFieldValues, type FieldLike, type VisitField } from './fields'
 import { arrangeListDocs, attachListItems, listQueries, listRequest, pageLinks, type ListPages, type ListQuery, type ListQueryParams } from './lists'
 import type { FetchDocs, ResolveLink } from './types'
@@ -146,6 +146,8 @@ export type LoadLayoutOptions = RenderLocale & {
   context?: TemplateContext | null
   /** The site's link resolver, for the `$url` binding path. `RenderLayout` resolves it otherwise. */
   resolveLink?: ResolveLink
+  /** Which collection each relationship field points to (`bindingRelations`), for `<path>.$url` bindings. */
+  relations?: BindingRelations | null
   /**
    * The visitor (the signed-in user, or none). Collection lists load their documents with this
    * user's access (`overrideAccess: false`), so a list never shows documents or populated fields
@@ -184,7 +186,10 @@ export async function loadLayoutData(
   const locale = localeArgs(options)
   const localized = localizeLayout(layout, blocks, payload, options)
   const bound = context
-    ? resolveBindings(localized, context, blocks, options?.resolveLink ? { url: urlResolver(options.resolveLink) } : undefined)
+    ? resolveBindings(localized, context, blocks, {
+        ...(options?.resolveLink ? { url: urlResolver(options.resolveLink) } : {}),
+        ...(options?.relations ? { relations: options.relations } : {}),
+      })
     : localized
 
   const queries = listQueries(bound, context, options?.query)

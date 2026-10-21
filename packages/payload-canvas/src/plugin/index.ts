@@ -16,7 +16,7 @@ import { AI_IMAGES_KEY, createImageService } from '../ai/images/service'
 import type { AiOptions } from '../ai/types'
 import { defaultBlocks } from '../blocks'
 import { richTextFieldName, sectionsWithDefaultClassNames, withInlineBlocks } from '../core/blocks'
-import { DEFAULT_TEMPLATES_SLUG, DOCUMENT_TEMPLATE_FIELD, TEMPLATE_TARGET_FIELD } from '../core/bindings'
+import { bindingRelations, DEFAULT_TEMPLATES_SLUG, DOCUMENT_TEMPLATE_FIELD, TEMPLATE_TARGET_FIELD } from '../core/bindings'
 import { localeSettingsOf } from '../core/locale'
 import { resolveRegions, type RegionOption } from '../core/regions'
 import { decodePayloadBlocks, payloadBlocksProblems, payloadBlocksStorage, type PayloadBlocksStorage } from '../core/payloadBlocks'
@@ -427,6 +427,8 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       regionsOf[slug] = resolveRegions(slug, source?.fields ?? [], o.regions, { fields: new Set(own), legacy: new Set(o.legacyFields ?? []) })
     }
     const clientBlocks = toJsonSafe(blocks)
+    // Relationship targets of every collection, so the canvas resolves `<path>.$url` bindings.
+    const relations = bindingRelations(collections)
     const css: CssOptions = {
       entry: path.resolve(process.cwd(), options.css.entry),
       plugins: options.css.plugins,
@@ -534,6 +536,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           localization: localizationOf(collection.slug),
           ...(regionsOf[collection.slug] ? { regions: toJsonSafe(regionsOf[collection.slug]) } : {}),
           ...(storage ? { storage: 'payload-blocks' as const, payloadRootTypes: [...storage.rootTypes] } : {}),
+          ...(Object.keys(relations).length > 0 ? { relations } : {}),
         }
         const isSections = collection.slug === savedSections?.slug
         const built = addBuilder(collection, {
