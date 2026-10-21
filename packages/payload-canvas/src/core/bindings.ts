@@ -51,6 +51,8 @@ export const FIELD_VALUE_PROP = 'value'
 export const REPEAT_BLOCK = 'repeat'
 /** Collection list slot shown when the list has no documents. */
 export const LIST_EMPTY_SLOT = 'empty'
+/** The URL query parameter of a paginated list's page (`?page=3`). Filter links drop it. */
+export const PAGE_PARAM = 'page'
 /** Virtual binding path inside a repeat item: the row value itself (a document, an upload, a text). */
 export const ITEM_PATH = '$item'
 /** Virtual binding path inside a collection list or repeat item: the item number, from 1. */

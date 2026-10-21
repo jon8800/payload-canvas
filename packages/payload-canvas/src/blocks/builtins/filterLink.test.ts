@@ -6,6 +6,7 @@ import { filterHref } from './filterLink'
 describe('filterHref', () => {
   it('sets a value and keeps the other params', () => {
     assert.deepEqual(filterHref('/escorts', {}, { param: 'available', value: 'today' }), { href: '/escorts?available=today', active: false })
+    assert.deepEqual(filterHref('/escorts', { page: '3', new: 'month' }, { param: 'available', value: 'today' }), { href: '/escorts?new=month&available=today', active: false })
     const today = { available: 'today', new: 'month' }
     assert.deepEqual(filterHref('/escorts', today, { param: 'available', value: 'today' }), { href: '/escorts?new=month&available=today', active: true })
     assert.equal(filterHref('/escorts', today, { param: 'available', value: 'week' }).href, '/escorts?new=month&available=week')

@@ -7,6 +7,7 @@ import {
   COLLECTION_LIST_BLOCK,
   getByPath,
   LIST_ITEMS_PROP,
+  PAGE_PARAM,
   walkBlocks,
   type Block,
   type Layout,
@@ -43,8 +44,7 @@ export type ListQuery = {
 
 /** The runtime prop that carries a paginated list's page links (`ListPages`). Never stored. */
 export const LIST_PAGES_PROP = '$pages'
-/** The URL query parameter of a paginated list's page. */
-export const PAGE_PARAM = 'page'
+export { PAGE_PARAM }
 /** `sort` value that shuffles the list. */
 export const RANDOM_SORT = '$random'
 
