@@ -18,6 +18,9 @@ const typography: unknown = createRequire(path.join(starter, 'package.json'))('@
 const plugins = { '@tailwindcss/typography': typography }
 const options = { entry, plugins }
 
+/** Recorded CSS data with only an entry. */
+const cssData = (css: string): CanvasCssData => ({ version: 1, entry: css, stylesheets: {}, plugins: [] })
+
 const MAIN = ['bg-primary', 'p-8', 'md:p-12', 'hover:bg-secondary', 'p-[37px]', 'prose']
 
 /** Class selectors of every rule in the output, e.g. ".p-8", ".md\:p-12". */
@@ -240,18 +243,17 @@ describe('getStyleTokens', () => {
   })
 
   test('only the comment right above a rule labels it: an earlier comment never merges in', () => {
-    const data = (entry: string): CanvasCssData => ({ version: 1, entry, stylesheets: {}, plugins: [] })
     const css = ['/* A note. */', '/* @canvas Effects: Glass */', '@utility glass {\n  /* inside */\n  color: red;\n}', '/* @canvas Effects: Grain */', '/* Not a label. */', '@utility grain {}'].join('\n')
-    assert.deepEqual(parseSiteClasses(data(css)), [
+    assert.deepEqual(parseSiteClasses(cssData(css)), [
       { name: 'glass', label: 'Glass', group: 'Effects', css: 'color: red;' },
       { name: 'grain', css: '' },
     ])
     // The escort-starter's globals.css: 41 static utilities, 32 labelled. Before the fix, the 10 that
     // follow another comment (glass, rule-brand, type-hero, …) had no label.
-    const classes = parseSiteClasses(data(STARTER_GLOBALS_CSS))
+    const classes = parseSiteClasses(cssData(STARTER_GLOBALS_CSS))
     assert.equal(classes.length, 41)
-    assert.equal(classes.filter((entry) => entry.label).length, 32)
-    const byName = new Map(classes.map((entry) => [entry.name, entry]))
+    assert.equal(classes.filter((site) => site.label).length, 32)
+    const byName = new Map(classes.map((site) => [site.name, site]))
     for (const name of ['glass', 'glass-bar', 'glass-lens', 'glass-plate', 'rule-brand', 'ambient-light', 'film-grain', 'type-hero', 'surface-dark', 'text-accent-gradient']) {
       assert.ok(byName.get(name)?.label && byName.get(name)?.group, `${name} has a label and a group`)
     }
