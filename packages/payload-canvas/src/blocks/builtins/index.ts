@@ -8,9 +8,10 @@ import { accordionBlock, disclosureBlock } from './disclosure'
 import { filterLinkBlock } from './filterLink'
 import { iconBlock } from './icon'
 import { lightboxBlock } from './lightbox'
+import { mediaBackdropBlock } from './mediaBackdrop'
 import { tableOfContentsBlock } from './tableOfContents'
 
-export const BUILTIN_TYPES = ['icon', 'disclosure', 'accordion', 'lightbox', 'carousel', 'tableOfContents', 'filterLink'] as const
+export const BUILTIN_TYPES = ['icon', 'disclosure', 'accordion', 'lightbox', 'carousel', 'tableOfContents', 'filterLink', 'mediaBackdrop'] as const
 
 export type BuiltinType = (typeof BUILTIN_TYPES)[number]
 
@@ -22,6 +23,8 @@ export type BuiltinBlocksOptions = {
    * `builtinComponents({ icons })`. Plain strings, so the Payload config loads no React.
    */
   icons?: readonly string[]
+  /** Upload collection for the mediaBackdrop block. Default "media". */
+  mediaCollection?: string
 }
 
 /**
@@ -46,6 +49,7 @@ export function builtinBlocks(options: BuiltinBlocksOptions = {}): BlockDefiniti
     carousel: carouselBlock,
     tableOfContents: tableOfContentsBlock,
     filterLink: filterLinkBlock,
+    mediaBackdrop: () => mediaBackdropBlock(options.mediaCollection),
   }
   return BUILTIN_TYPES.filter((type) => include.has(type)).map((type) => make[type]())
 }
@@ -57,4 +61,5 @@ export { faqItems, faqJsonLd, type FaqItem } from './faq'
 export { headingId, lexicalHeadings, lexicalText, type RichTextHeading } from './headingId'
 export { ICON_BLOCK, iconBlock } from './icon'
 export { LIGHTBOX_BLOCK, LIGHTBOX_CLASS_MAP, lightboxBlock } from './lightbox'
+export { MEDIA_BACKDROP_BLOCK, MEDIA_BACKDROP_CLASS_MAP, mediaBackdropBlock } from './mediaBackdrop'
 export { TABLE_OF_CONTENTS_BLOCK, tableOfContentsBlock } from './tableOfContents'

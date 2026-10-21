@@ -1103,6 +1103,17 @@ const jsonLd = faqJsonLd(items)
 - `filterHref(path, query, { param, value, multiple })` in `payload-canvas/blocks` is the same rule as a pure function, for a server component of your own.
 - Send `noindex, follow` for filtered URLs.
 
+#### Media backdrop
+
+`mediaBackdrop` puts a photo or a muted looping video behind the blocks of its `children` slot: a hero, a banner, a section with a background. The media and the optional overlay are absolutely placed first children; the block's `className` lays out the content. Keep `relative isolate` in it, so the media stays behind the content and inside the block.
+
+- Props: `image` (a photo), `alt` (empty: decoration, as most backgrounds are), `video` (an upload) or `videoUrl` (a link to a video file), `poster` (empty: the photo), `priority`, `sizes` (default `100vw`) and `overlay`. Uploads come from `builtinBlocks({ mediaCollection })`, default `media`.
+- A video wins over the photo. It starts from script, muted and looping, and never plays when the visitor asks for less motion: the poster stays. It does not play on the canvas.
+- `priority` (the hero only): the photo loads eagerly with `fetchpriority="high"`; for a video the poster is preloaded with high priority.
+- The media focal point (`focalX`, `focalY`) sets `object-position`. The photo gets a `srcset` from the media sizes.
+- Style the media with `[&>[data-backdrop-media]]:` classes (blur, opacity) and the overlay with `[&>[data-backdrop-overlay]]:` classes (`[&>[data-backdrop-overlay]]:bg-black/40`).
+- No WebGL effects.
+
 ## Using existing Payload blocks
 
 A site that already has a Payload `blocks` field (for example `pages.layout` with sections and nested blocks) keeps its field, its block configs, its components and its content. Point the builder at that field. The builder then edits the field itself: there is one source of truth, no second copy of the page, and nothing to migrate.
