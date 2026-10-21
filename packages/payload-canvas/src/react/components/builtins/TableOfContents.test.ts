@@ -30,6 +30,10 @@ describe('TableOfContents', () => {
     )
   })
 
+  test('repeated heading texts link to their own ids: -2, -3 (README "Table of contents")', () => {
+    assert.match(render({ content: content('Rates', 'Rates', 'Rates') }), /<a href="#rates">Rates<\/a><a href="#rates-2">Rates<\/a><a href="#rates-3">Rates<\/a>/)
+  })
+
   test('shows nothing with too few headings, and sample links on the canvas', () => {
     assert.equal(render({ content: content('One', 'Two') }), '')
     assert.equal(render({}), '')
