@@ -2,6 +2,7 @@
 // No zod and no Payload runtime here, so the assistant does not need the MCP dependencies.
 
 import { COLLECTION_LIST_BLOCK, FIELD_BLOCK, INDEX_PATH, ITEM_PATH, PAGE_PATH, PARENT_PATH, REPEAT_BLOCK, URL_PATH, VISIBLE_BINDING } from '../core/bindings'
+import { classFields } from '../core/classes'
 import { dataFields, optionValues } from '../core/fields'
 import { htmlIdsOf, withoutTakenHtmlIds } from '../core/attrs'
 import { createId } from '../core/ids'
@@ -165,6 +166,7 @@ export function sectionInsertOps(
 
 /** A block type as plain data for AI models: props, slots, where it may go, description and example. */
 export function describeBlock(def: BlockDefinition) {
+  const classProps = new Set(classFields(def).map((f) => f.name))
   const props = dataFields(def.fields as unknown[]).map((f) => {
     const options = f.type === 'select' || f.type === 'radio' ? optionValues(f) : undefined
     return {
@@ -174,6 +176,7 @@ export function describeBlock(def: BlockDefinition) {
       ...(f.hasMany ? { hasMany: true } : {}),
       ...(options?.length ? { options } : {}),
       ...(f.relationTo ? { relationTo: f.relationTo } : {}),
+      ...(classProps.has(f.name) ? { holds: 'Tailwind classes (compiled like className)' } : {}),
     }
   })
   const slots = def.slots
