@@ -103,6 +103,23 @@ export const MENU_CLASS_MAP = withMarker({
   panelLink:
     'flex min-h-12 items-center border-b border-border py-3 text-lg ' +
     'aria-[current=page]:font-semibold aria-[current=page]:underline decoration-1 underline-offset-8',
+  /** A link with children (one level): a <details> dropdown next to, or in place of, the link. */
+  submenu: 'relative flex items-center gap-1',
+  submenuDetails: 'group/submenu',
+  submenuToggle:
+    'inline-flex cursor-pointer list-none items-center gap-1 py-2 opacity-75 transition-opacity hover:opacity-100 ' +
+    'aria-[current=true]:opacity-100 [&::-webkit-details-marker]:hidden',
+  submenuIcon: 'size-4 transition-transform group-open/submenu:rotate-180 motion-reduce:transition-none',
+  submenuList:
+    'absolute top-full left-0 z-50 flex min-w-48 flex-col border border-border bg-background p-2 text-foreground shadow-md',
+  submenuLink:
+    'flex min-h-10 items-center px-3 py-2 opacity-75 transition-opacity hover:opacity-100 ' +
+    'aria-[current=page]:opacity-100 aria-[current=page]:underline decoration-1 underline-offset-8',
+  /** The children of a link in the small-screen panel: a nested list. */
+  panelSubList: 'flex flex-col pl-4',
+  panelSubLink:
+    'flex min-h-11 items-center py-2 text-base ' +
+    'aria-[current=page]:font-semibold aria-[current=page]:underline decoration-1 underline-offset-8',
   /** The optional button after the links in the panel. */
   panelCta:
     'mt-5 flex min-h-12 items-center justify-center rounded-full bg-primary px-6 text-base font-medium ' +
@@ -453,6 +470,20 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         fields: [
           { name: 'label', type: 'text', label: 'Label', required: true, localized: true },
           linkField({ collections: linkCollections }),
+          {
+            name: 'children',
+            type: 'array',
+            label: 'Dropdown links',
+            admin: {
+              description:
+                'Optional. Links under this one (one level), shown in a dropdown. The link above is optional when it has ' +
+                'dropdown links: without it the label opens the dropdown.',
+            },
+            fields: [
+              { name: 'label', type: 'text', label: 'Label', required: true, localized: true },
+              linkField({ collections: linkCollections }),
+            ],
+          },
         ],
       },
       {
@@ -470,6 +501,17 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         defaultValue: 'Menu',
         localized: true,
         admin: { description: 'The text of the button that opens the links on small screens.' },
+      },
+      {
+        name: 'submenuLabel',
+        type: 'text',
+        label: 'Dropdown button name',
+        defaultValue: '{label} menu',
+        localized: true,
+        admin: {
+          description:
+            'Read by screen readers on the small arrow button next to a link with dropdown links. {label} is the link label.',
+        },
       },
       {
         name: 'collapse',
@@ -504,7 +546,10 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         'On small screens the links fold into a "Menu" button that opens a panel ("collapse": "md" or "lg"; ' +
         '"never" keeps the links visible, for footers). The className lays out the links. ' +
         'Put it in a header stack that has the "relative" class, so the panel opens below the header. ' +
-        'Optional "ctaLabel" and "cta" (a link) add a button as the last row of the small-screen panel. "toggleLabel" is the text of the menu button (default "Menu"; translate it per locale).',
+        'Optional "ctaLabel" and "cta" (a link) add a button as the last row of the small-screen panel. "toggleLabel" is the text of the menu button (default "Menu"; translate it per locale). ' +
+        'An item may have "children" (one level of { label, link }): a dropdown. With its own link the item shows the link and a ' +
+        'small arrow button that opens the dropdown ("submenuLabel" names that button, default "{label} menu"); without a link the ' +
+        'label itself opens it. On small screens the children show as a nested list in the panel.',
       example: {
         type: 'menu',
         props: {
@@ -512,6 +557,13 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
           collapse: 'md',
           items: [
             { label: 'About', link: { type: 'url', url: '/about' } },
+            {
+              label: 'Services',
+              children: [
+                { label: 'Dinner dates', link: { type: 'url', url: '/services/dinner' } },
+                { label: 'Travel', link: { type: 'url', url: '/services/travel' } },
+              ],
+            },
             { label: 'Contact', link: { type: 'url', url: '/contact' } },
           ],
         },
