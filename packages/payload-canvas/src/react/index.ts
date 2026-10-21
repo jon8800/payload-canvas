@@ -50,6 +50,7 @@ export type {
   CanvasServerResult,
 } from './render/canvasServerTypes'
 export { loadLayoutData, resolveLayoutData, urlResolver, type LoadLayoutOptions } from './render/resolve'
+export { attachSections } from './render/sections'
 export {
   attachListItems,
   LIST_PAGE_PARAMS_PROP,

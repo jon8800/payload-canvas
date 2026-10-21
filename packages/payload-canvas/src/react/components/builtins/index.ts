@@ -10,6 +10,7 @@ import { FilterLink } from './FilterLink'
 import { iconComponent, type IconMap } from './Icon'
 import { Lightbox } from './Lightbox'
 import { MediaBackdrop } from './MediaBackdrop'
+import { SectionRef } from './SectionRef'
 import { TableOfContents } from './TableOfContents'
 
 export type BuiltinComponentsOptions = {
@@ -27,7 +28,7 @@ export type BuiltinComponentsOptions = {
  * bundle, import single components (`Carousel`, `Lightbox`, …) instead.
  */
 export function builtinComponents(options: BuiltinComponentsOptions = {}): BlockComponents {
-  const components: BlockComponents = { disclosure: Disclosure, accordion: Accordion, lightbox: Lightbox, carousel: Carousel, tableOfContents: TableOfContents, filterLink: FilterLink, mediaBackdrop: MediaBackdrop }
+  const components: BlockComponents = { disclosure: Disclosure, accordion: Accordion, lightbox: Lightbox, carousel: Carousel, tableOfContents: TableOfContents, filterLink: FilterLink, mediaBackdrop: MediaBackdrop, sectionRef: SectionRef }
   if (options.icons) {
     components.icon = iconComponent(options.icons)
     components.button = buttonComponent(options.icons)
@@ -43,4 +44,5 @@ export { FilterLink } from './FilterLink'
 export { iconComponent, type IconComponent, type IconMap } from './Icon'
 export { Lightbox } from './Lightbox'
 export { MediaBackdrop } from './MediaBackdrop'
+export { SectionRef } from './SectionRef'
 export { TableOfContents } from './TableOfContents'

@@ -14,7 +14,8 @@ const fieldsOf = (blocks: BlockDefinition[], type: string) => (blocks.find((b) =
 
 describe('builtinBlocks', () => {
   it('adds every built-in by default, and the icon block only with icon names', () => {
-    assert.deepEqual(builtinBlocks({ icons: ICONS }).map((b) => b.type), [...BUILTIN_TYPES])
+    assert.deepEqual(builtinBlocks({ icons: ICONS }).map((b) => b.type), BUILTIN_TYPES.filter((type) => type !== 'sectionRef'))
+    assert.ok(builtinBlocks({ include: ['sectionRef'] }).some((b) => b.type === 'sectionRef'))
     assert.ok(!builtinBlocks().some((b) => b.type === 'icon'))
   })
 
@@ -40,8 +41,8 @@ describe('builtinBlocks', () => {
   })
 
   it('every AI example is a valid block next to the default blocks', () => {
-    const blocks = [...defaultBlocks(), ...builtinBlocks({ icons: ICONS })]
-    for (const def of builtinBlocks({ icons: ICONS })) {
+    const blocks = [...defaultBlocks(), ...builtinBlocks({ include: BUILTIN_TYPES, icons: ICONS })]
+    for (const def of builtinBlocks({ include: BUILTIN_TYPES, icons: ICONS })) {
       assert.ok(def.ai?.description, `${def.type} has no AI description`)
       assert.ok(def.ai?.example, `${def.type} has no AI example`)
       const layout = { version: 1, blocks: [{ id: 'b_example', type: def.type, ...def.ai?.example }] }

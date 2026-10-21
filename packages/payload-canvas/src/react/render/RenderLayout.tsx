@@ -18,7 +18,7 @@ import {
   type BindingRelations,
   type TemplateContext,
 } from '../../core'
-import { defaultBlocks, isLinkField, withBuilderCssClass } from '../../blocks'
+import { defaultBlocks, isLinkField, SECTION_REF_SLOT, withBuilderCssClass } from '../../blocks'
 import { classFields } from '../../core/classes'
 import { defaultComponents } from '../components'
 import { fieldFor } from '../components/Field'
@@ -221,6 +221,13 @@ function renderBlock(stored: Block, ctx: Context, preview = false, item = false)
   const slotAttributes: Record<string, Record<string, string>> = {}
   const isList = isRepeatSlot(block.type, LIST_ITEM_SLOT)
   for (const slot of slotNamesOf(block, ctx)) {
+    if (slot === SECTION_REF_SLOT) {
+      // A live saved section: its blocks render as repeats on the canvas (the ref is what the
+      // editor selects), and its runtime slot is never a drop target.
+      slots[slot] = renderBlocks(block.slots?.[slot] ?? [], { ...ctx, repeat: ctx.repeat || canvas })
+      slotAttributes[slot] = {}
+      continue
+    }
     if (preview) slots[slot] = <SlotOutlet name={slot} />
     else if (isRepeatSlot(block.type, slot)) slots[slot] = renderListItems(block, ctx)
     else if (block.type === COLLECTION_LIST_BLOCK && slot === LIST_EMPTY_SLOT) slots[slot] = showsEmpty(block) ? renderSlot(block, slot, ctx) : null

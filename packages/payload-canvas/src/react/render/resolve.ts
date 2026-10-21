@@ -6,6 +6,7 @@ import { isRecord, mapFieldValues, type FieldLike, type VisitField } from './fie
 import { arrangeListDocs, attachListItems, listQueries, listRequest, pageLinks, withPageParams, type ListPages, type ListQuery, type ListQueryParams } from './lists'
 import type { FetchDocs, ResolveLink } from './types'
 import { localeArgs, localizeLayout, type LocaleArgs, type RenderLocale } from './locale'
+import { attachSections } from './sections'
 
 type Id = string | number
 type Resolve = (collection: string, id: Id) => unknown
@@ -169,6 +170,7 @@ export type LoadLayoutOptions = RenderLocale & {
 
 /**
  * Server helper: prepares a layout for `RenderLayout` with Payload's Local API.
+ * 0. Puts the current blocks of each live saved section (`sectionRef`) into the layout.
  * 1. Resolves bindings and Field blocks against `options.context` (when given).
  * 2. Loads every collection list's documents (`depth: 1` or the list's `depth`; published only unless `draft`), with the
  *    access of `options.user` (anonymous without it).
@@ -184,7 +186,26 @@ export async function loadLayoutData(
   const context = options?.context ?? null
   // Localized sites: the layout and its documents in the render's locale (render/locale.ts).
   const locale = localeArgs(options)
-  const localized = localizeLayout(layout, blocks, payload, options)
+  const fetchDocs: FetchDocs = async (collection, ids) => {
+    const result = await payload.find({
+      // The collection slug is dynamic, so it cannot match the generated slug union.
+      collection: collection as never,
+      where: { id: { in: ids } },
+      depth: 0,
+      draft,
+      limit: ids.length,
+      pagination: false,
+      // Join fields (for example media's "Used in") are not needed to render; skip their subqueries.
+      joins: false,
+      ...locale,
+    })
+    return new Map(
+      (result.docs as Array<Record<string, unknown>>).map((doc) => [doc.id as Id, doc]),
+    )
+  }
+  // Live saved sections first, so their blocks get the same bindings, lists and documents.
+  const withSections = await attachSections(layout, blocks, fetchDocs)
+  const localized = localizeLayout(withSections, blocks, payload, options)
   const bound = context
     ? resolveBindings(localized, context, blocks, {
         ...(options?.resolveLink ? { url: urlResolver(options.resolveLink) } : {}),
@@ -205,23 +226,7 @@ export async function loadLayoutData(
   )
   const withItems = withPageParams(attachListItems(bound, items, pages), queries)
 
-  return resolveLayoutData(withItems, blocks, async (collection, ids) => {
-    const result = await payload.find({
-      // The collection slug is dynamic, so it cannot match the generated slug union.
-      collection: collection as never,
-      where: { id: { in: ids } },
-      depth: 0,
-      draft,
-      limit: ids.length,
-      pagination: false,
-      // Join fields (for example media's "Used in") are not needed to render; skip their subqueries.
-      joins: false,
-      ...locale,
-    })
-    return new Map(
-      (result.docs as Array<Record<string, unknown>>).map((doc) => [doc.id as Id, doc]),
-    )
-  })
+  return resolveLayoutData(withItems, blocks, fetchDocs)
 }
 
 /**
