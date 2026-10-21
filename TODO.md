@@ -29,21 +29,23 @@ Read `AGENTS.md` and `docs/architecture.md` first. The gap numbers (8.x) match p
 | 11 | `$url` of a related document | `<path>.$url` from `resolveLink`; `bindingRelations()` as `relations` |
 | 12 | The `random` prop warning | Not from the plugin. No plugin block or motion code passes `random`. |
 | 13 to 19 | Built-in blocks | `builtinBlocks({ include, icons, mediaCollection })` and `builtinComponents({ icons })`: `icon`, `carousel`, `lightbox`, `accordion` and `disclosure` (`faqItems`, `faqJsonLd`), `mediaBackdrop`, `tableOfContents`, `filterLink` (`filterHref`). Button icons: `defaultBlocks({ icons })` adds `icon`, `iconPosition` and `iconClassName` to `button` |
+| 20 | Loaded lists for ItemList JSON-LD | `loadedLists(layout)` after `loadLayoutData`: `{ blockId, collection, docs }[]`, no second query |
+| 21 | Menu dropdowns | `menu.items[].children` (one level), `<details>` dropdowns, `submenuLabel`, `MENU_CLASS_MAP.submenu*` |
+| 22 | Links in list items | `listItem` `link` (one link per item). Links inside the text are not built: see the changelog |
+| 23 | `scroll: recede` | `motion.scroll = { preset: 'recede', scale? }`, CSS view timeline with Motion's fallback |
+| 25 | Section variants | `SectionDefinition.variants`; each shows as a section `hero/split` (`sectionsWithVariants()`) |
+| 26 | Where builder | condition rows for `collectionList.where`, **Edit as JSON**; `admin.custom.builderWhere` on any JSON field. `queryFilters` stays JSON |
+| 27 | Server block cache | the canvas cache existed (per scope and block JSON, 200 entries); its key now ignores `motion`, and `refresh()` runs after document saves. Limit: data changed outside the editor shows after a reload |
+| 28 | Template conditions | `conditions` (a where query) on templates: the document's own template, then the first matching template by name, then the default |
 | 29 | `create-payload-canvas` version | installs `payload-canvas` `^0.3.0` |
 
 Delete `anchor` from the starter now that item 2 is done; it is not in the plugin. These stay in the starter, because they hold site rules: `contactLink`, `form`, `breadcrumbs`, `jsonLd`, `documentLayout`, `glossaryTerm`, `letterFilter` and `rating`.
 
-## P2: later
+## Open
+
+More work from the same night is in `[Unreleased]` too: button icons, control labels, lightbox swipe, and pager gaps with a `pageParam` per list.
 
 | # | Gap | Change |
 | --- | --- | --- |
-| 20 | 8.9 | `loadLayoutData` returns the loaded lists (`blockId`, `collection`, `docs`), so a site can emit ItemList JSON-LD without a second query. |
-| 21 | 8.12 | `menu` items with one level of children, so headers can move out of code. |
-| 22 | 8.13 | Links inside `listItem` text. |
-| 23 | 8.15 | `scroll: recede` preset for stacked cards. The starter's `cardStack` uses `scroll: zoom` instead. |
 | 24 | 8.16 | A `sectionRef` block that renders a saved section live, with a "detach" action. |
-| 25 | 8.17 | `variants` on `SectionDefinition`, so one file holds 2 or 3 versions of a section. |
-| 26 | 8.18 | A small where builder in the inspector (field, operator, value) in place of raw JSON. |
-| 27 | 8.19 | Cache server block output in the canvas per block id and props, so data blocks do not wait 250 to 1000 ms per edit. |
-| 28 | 8.20 | Template `conditions` (a where query), so touring models or VIP types can get their own default layout. |
 | 30 | — | Decide whether sites use the Theme global for brand colours and fonts. The starter turns it off (`theme: false`) and keeps them in `brand.config.ts` and its CSS. |
