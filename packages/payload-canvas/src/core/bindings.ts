@@ -510,17 +510,45 @@ export function bindingPaths(key: string, binding: string): string[] {
   )
 }
 
-type Condition = { path: string; test: 'filled' | 'empty' | 'equals' | 'differs'; value: string }
+type Comparison = '=' | '!=' | '>' | '>=' | '<' | '<='
+/** `count`: the condition tests the number of items (`path#`), not the value. */
+type Condition = { path: string; test: 'filled' | 'empty' | Comparison; value: string; count: boolean }
 
-/** `field`, `!field`, `field=value`, `field!=value`. */
+/** The first operator wins, so a value may hold "=" or ">" (`title=a=b`). Two-character operators first. */
+const COMPARISON = /^(.+?)\s*(>=|<=|!=|>|<|=)\s*(.*)$/s
+
+/** `path#`: the condition counts the items. */
+const counts = (path: string) => path.endsWith('#')
+const bare = (path: string) => (counts(path) ? path.slice(0, -1).trim() : path)
+
+/**
+ * `field`, `!field`, `field=value`, `field!=value`, and for numbers `field>3`, `field>=3`,
+ * `field<3`, `field<=3`. `field#` is the number of items of a list (0 when empty, 1 for any other
+ * filled value), e.g. `galleryImages#>=3`.
+ */
 function conditionOf(condition: string): Condition {
   const text = condition.trim()
-  const differs = text.indexOf('!=')
-  if (differs > 0) return { path: text.slice(0, differs).trim(), test: 'differs', value: text.slice(differs + 2).trim() }
-  const equals = text.indexOf('=')
-  if (equals > 0) return { path: text.slice(0, equals).trim(), test: 'equals', value: text.slice(equals + 1).trim() }
-  if (text.startsWith('!')) return { path: text.slice(1).trim(), test: 'empty', value: '' }
-  return { path: text, test: 'filled', value: '' }
+  const match = COMPARISON.exec(text)
+  if (match && match[1].trim() !== '!') {
+    const path = match[1].trim()
+    return { path: bare(path), test: match[2] as Comparison, value: match[3].trim(), count: counts(path) }
+  }
+  if (text.startsWith('!')) return { path: bare(text.slice(1).trim()), test: 'empty', value: '', count: counts(text) }
+  return { path: bare(text), test: 'filled', value: '', count: counts(text) }
+}
+
+/** The number of items: a list's length, 0 for an empty value, 1 for any other value. */
+function itemCount(value: unknown): number {
+  if (Array.isArray(value)) return value.length
+  return isMissing(value) || value === false ? 0 : 1
+}
+
+/** A number from a number or a numeric text; null otherwise. */
+function numberOf(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value !== 'string' || value.trim() === '') return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 /** True when a value matches `expected`: itself, a document's id, or any item of a list. */
@@ -533,12 +561,21 @@ function matches(value: unknown, expected: string): boolean {
 
 /** True when the `$visible` condition holds for the context. `false` counts as empty. */
 export function isVisible(context: TemplateContext, condition: string, options?: BindingOptions): boolean {
-  const { path, test, value: expected } = conditionOf(condition)
-  const value = expressionValue(context, path, options)
-  const filled = !isMissing(value) && value !== false
+  const { path, test, value: expected, count } = conditionOf(condition)
+  const raw = expressionValue(context, path, options)
+  const value = count ? itemCount(raw) : raw
+  const filled = count ? value !== 0 : !isMissing(value) && value !== false
   if (test === 'filled') return filled
   if (test === 'empty') return !filled
-  return matches(value, expected) === (test === 'equals')
+  if (test === '=' || test === '!=') return matches(value, expected) === (test === '=')
+  // Greater and less compare numbers only: a value that is not a number never passes.
+  const actual = numberOf(value)
+  const limit = numberOf(expected)
+  if (actual === null || limit === null) return false
+  if (test === '>') return actual > limit
+  if (test === '>=') return actual >= limit
+  if (test === '<') return actual < limit
+  return actual <= limit
 }
 
 /**

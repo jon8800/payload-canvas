@@ -71,7 +71,7 @@ export const BINDINGS_GUIDE = [
   'Fallbacks: "heading|name" uses the first path with a value.',
   'Formatters after the paths: "publishedAt|date:en-AU:Australia/Brisbane", "price|currency:AUD" ($1,200), "price|number", "bio|firstSentence".',
   'Template strings: a binding with {{…}} is text with expressions, e.g. { "text": "Enquire about {{name}}" } or "From {{price|currency:AUD}}". A missing expression becomes empty; when all are missing the literal prop stays.',
-  `Conditional blocks: "${VISIBLE_BINDING}" in bindings shows the block only when the condition holds: "availableToday" (filled; false counts as empty), "!availableToday" (empty), "district=north" (equals; for lists, any item or document id), "district!=north". A hidden block renders nothing on the site.`,
+  `Conditional blocks: "${VISIBLE_BINDING}" in bindings shows the block only when the condition holds: "availableToday" (filled; false counts as empty), "!availableToday" (empty), "district=north" (equals; for lists, any item or document id), "district!=north", and for numbers "price>100", "price>=100", "age<30", "age<=30". "field#" is the number of items of a list: "galleryImages#>=3" (at least 3 photos), "services#=0". A hidden block renders nothing on the site.`,
 ].join('\n')
 
 /** Copies a block tree with new ids that are not in `used`. */
