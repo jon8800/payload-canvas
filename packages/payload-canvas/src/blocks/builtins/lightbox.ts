@@ -10,7 +10,8 @@ export const LIGHTBOX_BLOCK = 'lightbox'
  */
 export const LIGHTBOX_CLASS_MAP = classMap({
   root: '[&_img:not([data-lightbox-photo])]:cursor-zoom-in',
-  dialog: 'fixed inset-0 m-0 size-full max-h-none max-w-none overflow-hidden bg-transparent p-0',
+  /** `touch-pan-y`: a sideways swipe reaches the script as pointer events (pinch zoom still works). */
+  dialog: 'fixed inset-0 m-0 size-full max-h-none max-w-none touch-pan-y touch-pinch-zoom overflow-hidden bg-transparent p-0',
   figure: 'm-0 box-border flex size-full items-center justify-center p-4 md:p-16',
   photo: 'max-h-full max-w-full object-contain',
   caption: 'absolute inset-x-0 bottom-4 px-16 text-center',
@@ -58,8 +59,8 @@ export function lightboxBlock(): BlockDefinition {
     classes: classesOf(LIGHTBOX_CLASS_MAP),
     ai: {
       description:
-        'A container whose images open full screen in a modal dialog: a click, or Enter on a focused image. Arrow keys and the ' +
-        'arrow buttons step through the images; Escape closes. Lightboxes with the same "group" open as one set. Lay out the ' +
+        'A container whose images open full screen in a modal dialog: a click, or Enter on a focused image. Arrow keys, a ' +
+        'sideways swipe on touch screens and the arrow buttons step through the images; Escape closes. Lightboxes with the same "group" open as one set. Lay out the ' +
         'images with its className (a grid), or put a repeat of images in it (path "galleryImages", image bound to "$item"). ' +
         'Style the dialog from the className: [&_dialog]: for its text colour and backdrop ([&_dialog]:backdrop:bg-black/85), ' +
         '[&_[data-lightbox-button]]: for the close, previous and next buttons, [&_[data-lightbox-photo]]: for the large photo. ' +

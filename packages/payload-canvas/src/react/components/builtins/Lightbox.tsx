@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react'
 import { LIGHTBOX_CLASS_MAP as C, LIGHTBOX_LABELS as L } from '../../../blocks/builtins/lightbox'
 import { labelOf, textOr } from '../../../blocks/builtins/shared'
 import type { BlockComponentProps } from '../../render/types'
@@ -20,10 +20,23 @@ function imageAt(target: EventTarget | null): HTMLImageElement | null {
 /** The next index in a list of `count`, wrapping around. */
 export const stepIndex = (index: number, by: number, count: number) => (count > 0 ? (index + by + count) % count : 0)
 
+/** Shortest sideways move, in CSS pixels, that counts as a swipe. */
+const SWIPE_DISTANCE = 50
+
+/**
+ * The step of a swipe that moved `dx` sideways and `dy` down: 1 (next) for a swipe to the left,
+ * -1 (previous) for a swipe to the right, 0 when it was short or mostly vertical.
+ */
+export function swipeStep(dx: number, dy: number, distance = SWIPE_DISTANCE): -1 | 0 | 1 {
+  if (Math.abs(dx) < distance || Math.abs(dx) <= Math.abs(dy)) return 0
+  return dx < 0 ? 1 : -1
+}
+
 /**
  * A container whose images open full screen. The native modal dialog traps the focus, makes the
  * page inert, closes on Escape and gives the focus back. Arrow keys step through the images.
- * Images get `tabindex="0"` and `role="button"`, so the keyboard can open them. Off on the canvas,
+ * Images get `tabindex="0"` and `role="button"`, so the keyboard can open them. On touch screens a
+ * sideways swipe steps too (pointer events; a mouse drag does not). Off on the canvas,
  * so a click selects an image there.
  */
 export function Lightbox({ props, className, attributes, slotAttributes, slots, mode }: BlockComponentProps) {
@@ -31,6 +44,9 @@ export function Lightbox({ props, className, attributes, slotAttributes, slots, 
   const dialog = useRef<HTMLDialogElement>(null)
   const [photos, setPhotos] = useState<Photo[]>([])
   const [index, setIndex] = useState(0)
+  /** Where a touch or pen swipe started; `swiped` drops the click that follows a swipe. */
+  const swipe = useRef<{ x: number; y: number; id: number } | null>(null)
+  const swiped = useRef(false)
   const canvas = mode === 'canvas'
   const group = textOr(props.group, '')
   const open = photos.length > 0
@@ -70,6 +86,19 @@ export function Lightbox({ props, className, attributes, slotAttributes, slots, 
   }
   const step = (by: number) => setIndex((current) => stepIndex(current, by, photos.length))
   const close = () => dialog.current?.close()
+  const onSwipeStart = (event: PointerEvent<HTMLDialogElement>) => {
+    swiped.current = false
+    swipe.current = event.pointerType === 'mouse' || !event.isPrimary ? null : { x: event.clientX, y: event.clientY, id: event.pointerId }
+  }
+  const onSwipeEnd = (event: PointerEvent<HTMLDialogElement>) => {
+    const start = swipe.current
+    swipe.current = null
+    if (!start || start.id !== event.pointerId) return
+    const by = swipeStep(event.clientX - start.x, event.clientY - start.y)
+    if (by === 0 || photos.length < 2) return
+    swiped.current = true
+    step(by)
+  }
   const label = (name: keyof typeof L) => labelOf(props, L, name, { n: index + 1, count: photos.length })
   const photo = photos[index]
   const caption = props.captions === true && photo?.alt ? photo.alt : ''
@@ -93,6 +122,15 @@ export function Lightbox({ props, className, attributes, slotAttributes, slots, 
           aria-label={textOr(props.label, 'Photos')}
           className={C.dialog}
           onClose={() => setPhotos([])}
+          onPointerDown={onSwipeStart}
+          onPointerUp={onSwipeEnd}
+          onPointerCancel={() => (swipe.current = null)}
+          onClickCapture={(event) => {
+            // The click after a swipe would close the dialog (a click beside the photo).
+            if (!swiped.current) return
+            swiped.current = false
+            event.stopPropagation()
+          }}
           onKeyDown={(event) => {
             if (event.key === 'ArrowRight') step(1)
             if (event.key === 'ArrowLeft') step(-1)
