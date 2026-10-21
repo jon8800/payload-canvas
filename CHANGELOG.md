@@ -8,6 +8,7 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 - Opt-in built-in blocks: `builtinBlocks({ include, icons })` in `payload-canvas/blocks` and `builtinComponents({ icons })` in `payload-canvas/react`. Leave a type out of `include` to replace it with your own block. See the README's "Built-in blocks".
 - The **Icon** built-in (`icon`): one icon of the site's icon set. The definition takes the names as plain strings; the component map takes the icon components (`IconMap`). Decorative unless it has a `label`.
+- The **Disclosure** and **Accordion** built-ins (`disclosure`, `accordion`): a native `<details>` with `summary` and `content` slots and a CSS height animation, and a list of them with an optional one-open-at-a-time mode. `faqItems(layout, blocks)` and `faqJsonLd(items)` build FAQPage JSON-LD from accordions with `faqSchema` on.
 
 ## [0.3.0] - 2026-10-21
 

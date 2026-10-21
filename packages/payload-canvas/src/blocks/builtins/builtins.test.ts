@@ -66,3 +66,13 @@ describe('icon block', () => {
     assert.equal(validateLayout(layout, blocks).length, 1)
   })
 })
+
+describe('disclosure and accordion blocks', () => {
+  it('refuses links and controls in the summary, and other blocks as accordion items', () => {
+    const blocks = [...defaultBlocks(), ...builtinBlocks()]
+    const summary = { version: 1, blocks: [{ id: 'd', type: 'disclosure', slots: { summary: [{ id: 'b', type: 'button', props: { label: 'Go' } }] } }] }
+    assert.equal(validateLayout(summary, blocks).length, 1)
+    const items = { version: 1, blocks: [{ id: 'a', type: 'accordion', slots: { items: [{ id: 't', type: 'text', props: { text: 'x' } }] } }] }
+    assert.equal(validateLayout(items, blocks).length, 1)
+  })
+})

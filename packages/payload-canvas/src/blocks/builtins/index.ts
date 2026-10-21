@@ -3,9 +3,10 @@
 // `payload-canvas/react`.
 
 import type { BlockDefinition } from '../../core/types'
+import { accordionBlock, disclosureBlock } from './disclosure'
 import { iconBlock } from './icon'
 
-export const BUILTIN_TYPES = ['icon'] as const
+export const BUILTIN_TYPES = ['icon', 'disclosure', 'accordion'] as const
 
 export type BuiltinType = (typeof BUILTIN_TYPES)[number]
 
@@ -35,8 +36,12 @@ export function builtinBlocks(options: BuiltinBlocksOptions = {}): BlockDefiniti
   }
   const make: Record<BuiltinType, () => BlockDefinition> = {
     icon: () => iconBlock(icons),
+    disclosure: disclosureBlock,
+    accordion: accordionBlock,
   }
   return BUILTIN_TYPES.filter((type) => include.has(type)).map((type) => make[type]())
 }
 
+export { ACCORDION_BLOCK, accordionBlock, DISCLOSURE_BLOCK, DISCLOSURE_CLASS_MAP, disclosureBlock } from './disclosure'
+export { faqItems, faqJsonLd, type FaqItem } from './faq'
 export { ICON_BLOCK, iconBlock } from './icon'

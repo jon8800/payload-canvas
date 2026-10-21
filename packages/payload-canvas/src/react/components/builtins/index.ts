@@ -2,6 +2,8 @@
 // Client-safe: the site and the canvas use the same map.
 
 import type { BlockComponents } from '../../render/types'
+import { Accordion } from './Accordion'
+import { Disclosure } from './Disclosure'
 import { iconComponent, type IconMap } from './Icon'
 
 export type BuiltinComponentsOptions = {
@@ -16,9 +18,11 @@ export type BuiltinComponentsOptions = {
  * bundle, import single components (`Carousel`, `Lightbox`, …) instead.
  */
 export function builtinComponents(options: BuiltinComponentsOptions = {}): BlockComponents {
-  const components: BlockComponents = {}
+  const components: BlockComponents = { disclosure: Disclosure, accordion: Accordion }
   if (options.icons) components.icon = iconComponent(options.icons)
   return components
 }
 
+export { Accordion } from './Accordion'
+export { Disclosure } from './Disclosure'
 export { iconComponent, type IconComponent, type IconMap } from './Icon'
