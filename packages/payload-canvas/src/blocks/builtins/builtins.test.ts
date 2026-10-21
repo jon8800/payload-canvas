@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { withoutBoundRequired } from '../../core/bindings'
+import { plainToRichText, resolveBindings, withoutBoundRequired } from '../../core/bindings'
 import { validateLayout } from '../../core/validate'
-import type { BlockDefinition } from '../../core/types'
+import type { BlockDefinition, Layout } from '../../core/types'
 import { defaultBlocks } from '../defaults'
 import { builtinBlocks, BUILTIN_TYPES } from '.'
 
@@ -74,5 +74,15 @@ describe('disclosure and accordion blocks', () => {
     assert.equal(validateLayout(summary, blocks).length, 1)
     const items = { version: 1, blocks: [{ id: 'a', type: 'accordion', slots: { items: [{ id: 't', type: 'text', props: { text: 'x' } }] } }] }
     assert.equal(validateLayout(items, blocks).length, 1)
+  })
+})
+
+describe('tableOfContents block', () => {
+  it('takes the rich text of the document through a binding', () => {
+    const blocks = builtinBlocks()
+    const body = plainToRichText('Body')
+    const layout: Layout = { version: 1, blocks: [{ id: 't', type: 'tableOfContents', bindings: { content: 'content' } }] }
+    const resolved = resolveBindings(layout, { collection: 'posts', doc: { content: body } }, blocks)
+    assert.deepEqual(resolved.blocks[0]?.props, { content: body })
   })
 })

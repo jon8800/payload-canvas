@@ -7,8 +7,9 @@ import { carouselBlock } from './carousel'
 import { accordionBlock, disclosureBlock } from './disclosure'
 import { iconBlock } from './icon'
 import { lightboxBlock } from './lightbox'
+import { tableOfContentsBlock } from './tableOfContents'
 
-export const BUILTIN_TYPES = ['icon', 'disclosure', 'accordion', 'lightbox', 'carousel'] as const
+export const BUILTIN_TYPES = ['icon', 'disclosure', 'accordion', 'lightbox', 'carousel', 'tableOfContents'] as const
 
 export type BuiltinType = (typeof BUILTIN_TYPES)[number]
 
@@ -42,6 +43,7 @@ export function builtinBlocks(options: BuiltinBlocksOptions = {}): BlockDefiniti
     accordion: accordionBlock,
     lightbox: lightboxBlock,
     carousel: carouselBlock,
+    tableOfContents: tableOfContentsBlock,
   }
   return BUILTIN_TYPES.filter((type) => include.has(type)).map((type) => make[type]())
 }
@@ -49,5 +51,7 @@ export function builtinBlocks(options: BuiltinBlocksOptions = {}): BlockDefiniti
 export { CAROUSEL_BLOCK, CAROUSEL_CLASS_MAP, carouselBlock } from './carousel'
 export { ACCORDION_BLOCK, accordionBlock, DISCLOSURE_BLOCK, DISCLOSURE_CLASS_MAP, disclosureBlock } from './disclosure'
 export { faqItems, faqJsonLd, type FaqItem } from './faq'
+export { headingId, lexicalHeadings, lexicalText, type RichTextHeading } from './headingId'
 export { ICON_BLOCK, iconBlock } from './icon'
 export { LIGHTBOX_BLOCK, LIGHTBOX_CLASS_MAP, lightboxBlock } from './lightbox'
+export { TABLE_OF_CONTENTS_BLOCK, tableOfContentsBlock } from './tableOfContents'
