@@ -1,6 +1,6 @@
 import { defineBlock } from '../../core/blocks'
 import type { BlockDefinition } from '../../core/types'
-import { classesOf, classMap } from './shared'
+import { classesOf, classMap, labelsField, labelsHelp } from './shared'
 
 export const CAROUSEL_BLOCK = 'carousel'
 
@@ -34,6 +34,29 @@ const CAROUSEL_CLASS =
   '[&_[data-carousel-dot]]:after:size-2 [&_[data-carousel-dot]]:after:rounded-full [&_[data-carousel-dot]]:after:bg-current ' +
   '[&_[data-carousel-dot]]:after:opacity-30 [&_[data-carousel-dot][aria-current=true]]:after:opacity-100 ' +
   '[&_[data-carousel-pause]]:text-sm [&_[data-carousel-pause]]:underline'
+
+/** The carousel's control labels and their English defaults. */
+export const CAROUSEL_LABELS = {
+  previousLabel: 'Previous slide',
+  nextLabel: 'Next slide',
+  pauseLabel: 'Pause',
+  playLabel: 'Play',
+  dotLabel: 'Slide {n}',
+  slideLabel: '{n} of {count}',
+  carouselRole: 'carousel',
+  slideRole: 'slide',
+}
+
+const LABEL_NAMES = {
+  previousLabel: 'Previous button',
+  nextLabel: 'Next button',
+  pauseLabel: 'Pause button',
+  playLabel: 'Play button',
+  dotLabel: 'Each dot',
+  slideLabel: 'Each slide',
+  carouselRole: 'Name of the kind "carousel"',
+  slideRole: 'Name of the kind "slide"',
+}
 
 /** Content of an arrow button: an icon or a short text. */
 const ARROW_CONTENT = ['icon', 'text', 'image']
@@ -71,6 +94,7 @@ export function carouselBlock(): BlockDefinition {
         },
       },
       { name: 'label', type: 'text', label: 'Label for screen readers', defaultValue: 'Carousel', localized: true },
+      labelsField(CAROUSEL_LABELS, LABEL_NAMES),
     ],
     slots: {
       slides: { label: 'Slides', styles: true },
@@ -88,7 +112,9 @@ export function carouselBlock(): BlockDefinition {
         'carousel className: [&_[data-carousel-track]]: for the track (the gap between slides), [&_[data-carousel-arrow]]: for ' +
         'the arrows, [&_[data-carousel-dot]]: for the dots (the current dot has aria-current="true"), [&_[data-carousel-controls]]: ' +
         'for the row of controls, [&_[data-carousel-pause]]: for the pause button that autoplay adds. It is a <section> region with aria-roledescription "carousel"; each slide gets an "i of n" label. The canvas ' +
-        'always scrolls and never autoplays.',
+        'always scrolls and never autoplays.' +
+        labelsHelp(CAROUSEL_LABELS) +
+        ' {n} is the slide number and {count} the number of slides. "carouselRole" and "slideRole" are the aria-roledescription values.',
       example: {
         type: CAROUSEL_BLOCK,
         props: { mode: 'scroll', arrows: true, dots: true, label: 'Reviews' },

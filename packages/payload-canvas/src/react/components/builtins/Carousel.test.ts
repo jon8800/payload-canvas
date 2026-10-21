@@ -58,4 +58,11 @@ describe('carousel positions', () => {
     assert.equal(nearestSlide(offsets, 599, 600), 3)
     assert.equal(nearestSlide([], 0, 0), 0)
   })
+
+  test('control labels come from the props, with English defaults', () => {
+    assert.match(render({ autoplay: 4000 }), /aria-roledescription="carousel"[^>]*>.*>Pause<\/button>/)
+    const html = render({ autoplay: 4000, pauseLabel: 'Anhalten', carouselRole: 'Karussell' })
+    assert.match(html, /^<section aria-roledescription="Karussell"/)
+    assert.match(html, />Anhalten<\/button>/)
+  })
 })

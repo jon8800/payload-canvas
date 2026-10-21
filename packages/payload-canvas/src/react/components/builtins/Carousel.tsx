@@ -1,8 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { CAROUSEL_CLASS_MAP as C } from '../../../blocks/builtins/carousel'
-import { joinClasses, textOr } from '../../../blocks/builtins/shared'
+import { CAROUSEL_CLASS_MAP as C, CAROUSEL_LABELS as L } from '../../../blocks/builtins/carousel'
+import { joinClasses, labelOf, textOr } from '../../../blocks/builtins/shared'
 import type { BlockComponentProps } from '../../render/types'
 import { Chevron } from './glyphs'
 
@@ -60,19 +60,23 @@ export function Carousel({ block, props, className, attributes, slotAttributes, 
     return () => observer.disconnect()
   }, [])
 
+  const label = (name: keyof typeof L, values?: Record<string, number>) => labelOf(props, L, name, values)
+  const slideRole = label('slideRole')
+  const slideLabel = textOr(props.slideLabel, L.slideLabel)
+
   // Label each slide "i of n"; in fade mode hide all but the current one.
   useEffect(() => {
     const el = track.current
     if (!el || canvas) return
     slidesOf(el).forEach((slide, i) => {
       slide.setAttribute('role', 'group')
-      slide.setAttribute('aria-roledescription', 'slide')
-      slide.setAttribute('aria-label', `${i + 1} of ${count}`)
+      slide.setAttribute('aria-roledescription', slideRole)
+      slide.setAttribute('aria-label', labelOf({ slideLabel }, L, 'slideLabel', { n: i + 1, count }))
       if (!fade) return
       slide.toggleAttribute('data-slide-off', i !== index)
       slide.inert = i !== index
     })
-  }, [canvas, count, fade, index])
+  }, [canvas, count, fade, index, slideLabel, slideRole])
 
   // Scroll mode: the current slide follows the scroll position.
   useEffect(() => {
@@ -133,7 +137,7 @@ export function Carousel({ block, props, className, attributes, slotAttributes, 
     // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <section
       {...attributes}
-      aria-roledescription="carousel"
+      aria-roledescription={label('carouselRole')}
       aria-label={textOr(props.label, 'Carousel')}
       className={className}
       onFocus={() => setPaused(true)}
@@ -166,7 +170,7 @@ export function Carousel({ block, props, className, attributes, slotAttributes, 
                   type="button"
                   data-carousel-dot=""
                   className={C.button}
-                  aria-label={`Slide ${i + 1}`}
+                  aria-label={label('dotLabel', { n: i + 1, count })}
                   aria-current={i === index ? 'true' : undefined}
                   onClick={() => goTo(i)}
                 />
@@ -176,7 +180,7 @@ export function Carousel({ block, props, className, attributes, slotAttributes, 
           <div data-carousel-arrows="" className={C.arrows}>
             {autoplay > 0 ? (
               <button type="button" data-carousel-pause="" className={C.button} onClick={() => setStopped((value) => !value)}>
-                {stopped ? 'Play' : 'Pause'}
+                {stopped ? label('playLabel') : label('pauseLabel')}
               </button>
             ) : null}
             {showArrows ? (
@@ -186,7 +190,7 @@ export function Carousel({ block, props, className, attributes, slotAttributes, 
                   type="button"
                   data-carousel-arrow="previous"
                   className={C.button}
-                  aria-label="Previous slide"
+                  aria-label={label('previousLabel')}
                   disabled={!loop && index <= 0}
                   onClick={() => goTo(index - 1)}
                 >
@@ -197,7 +201,7 @@ export function Carousel({ block, props, className, attributes, slotAttributes, 
                   type="button"
                   data-carousel-arrow="next"
                   className={C.button}
-                  aria-label="Next slide"
+                  aria-label={label('nextLabel')}
                   disabled={!loop && index >= count - 1}
                   onClick={() => goTo(index + 1)}
                 >

@@ -354,7 +354,16 @@ export function RenderBlockFields({ fields, data, path, onChange, scope = fields
     if (field.type === 'collapsible') {
       const shared = <RenderBlockFields fields={field.fields} data={record} path={path} onChange={onChange} scope={scope} />
       const title = text(field.label)
-      out.push(title ? <FieldSection key={`layout-${index}`} label={title}>{shared}</FieldSection> : <Fragment key={`layout-${index}`}>{shared}</Fragment>)
+      const folded = field.admin?.initCollapsed === true
+      out.push(
+        title ? (
+          <FieldSection key={`layout-${index}`} label={title} description={folded ? text(field.admin?.description) : undefined} collapsed={folded ? true : undefined}>
+            {shared}
+          </FieldSection>
+        ) : (
+          <Fragment key={`layout-${index}`}>{shared}</Fragment>
+        ),
+      )
       return
     }
     if (field.type === 'row' || (field.type === 'group' && !('name' in field && field.name))) {

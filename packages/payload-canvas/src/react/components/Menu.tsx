@@ -140,7 +140,7 @@ export function Menu({ props, className, attributes, mode }: BlockComponentProps
       {collapse === 'never' ? null : (
         <details ref={details} className={`group ${C.toggleWrap[collapse]}`}>
           <summary className={C.toggle}>
-            <span>Menu</span>
+            <span>{asText(props.toggleLabel) || 'Menu'}</span>
             <Icon className={C.iconOpen} open={false} />
             <Icon className={C.iconClose} open />
           </summary>

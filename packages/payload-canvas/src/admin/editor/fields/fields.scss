@@ -32,6 +32,15 @@
     text-transform: uppercase;
   }
 
+  // A collapsible with `initCollapsed`: the heading opens and closes it.
+  .builder-field-group--fold > .builder-field-group__label {
+    cursor: pointer;
+  }
+
+  .builder-field-group--fold:not([open]) {
+    padding-bottom: 0;
+  }
+
   .builder-field-group__description {
     margin: 0;
     color: var(--theme-elevation-600);

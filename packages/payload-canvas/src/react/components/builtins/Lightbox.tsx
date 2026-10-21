@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
-import { LIGHTBOX_CLASS_MAP as C } from '../../../blocks/builtins/lightbox'
-import { textOr } from '../../../blocks/builtins/shared'
+import { LIGHTBOX_CLASS_MAP as C, LIGHTBOX_LABELS as L } from '../../../blocks/builtins/lightbox'
+import { labelOf, textOr } from '../../../blocks/builtins/shared'
 import type { BlockComponentProps } from '../../render/types'
 import { Chevron, CloseIcon } from './glyphs'
 
@@ -70,6 +70,7 @@ export function Lightbox({ props, className, attributes, slotAttributes, slots, 
   }
   const step = (by: number) => setIndex((current) => stepIndex(current, by, photos.length))
   const close = () => dialog.current?.close()
+  const label = (name: keyof typeof L) => labelOf(props, L, name, { n: index + 1, count: photos.length })
   const photo = photos[index]
   const caption = props.captions === true && photo?.alt ? photo.alt : ''
 
@@ -109,18 +110,18 @@ export function Lightbox({ props, className, attributes, slotAttributes, slots, 
             />
             <figcaption className={`${C.caption} ${caption ? '' : C.hidden}`} aria-live="polite">
               {caption ? `${caption}. ` : ''}
-              {index + 1} of {photos.length}
+              {label('countLabel')}
             </figcaption>
           </figure>
-          <button type="button" data-lightbox-button="close" aria-label="Close" className={`${C.button} ${C.close}`} onClick={close}>
+          <button type="button" data-lightbox-button="close" aria-label={label('closeLabel')} className={`${C.button} ${C.close}`} onClick={close}>
             <CloseIcon className={C.icon} />
           </button>
           {photos.length > 1 ? (
             <>
-              <button type="button" data-lightbox-button="previous" aria-label="Previous photo" className={`${C.button} ${C.previous}`} onClick={() => step(-1)}>
+              <button type="button" data-lightbox-button="previous" aria-label={label('previousLabel')} className={`${C.button} ${C.previous}`} onClick={() => step(-1)}>
                 <Chevron className={C.icon} direction="left" />
               </button>
-              <button type="button" data-lightbox-button="next" aria-label="Next photo" className={`${C.button} ${C.next}`} onClick={() => step(1)}>
+              <button type="button" data-lightbox-button="next" aria-label={label('nextLabel')} className={`${C.button} ${C.next}`} onClick={() => step(1)}>
                 <Chevron className={C.icon} direction="right" />
               </button>
             </>
