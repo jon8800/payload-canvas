@@ -1389,7 +1389,11 @@ describe('hook changes of a guarded save and the saves after it', () => {
       access.release()
       assert.equal((await editing).ok, false)
       if (flushing) assert.deepEqual(await flushing, { ok: true })
-      else await h.clock.advance(10_000)
+      else {
+        await h.clock.advance(10_000)
+        // The save hook's CSS compile reads files (real I/O), so a few promise ticks may not be enough.
+        for (let i = 0; i < 200 && h.writes.length < 2; i++) await delay(5)
+      }
       const expected = layoutWith('HOOKED', 'EDITED')
       assert.deepEqual(h.writes, [layoutWith('HOOKED', 'B'), expected])
       assert.deepEqual(h.doc.layout, expected)
