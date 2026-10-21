@@ -12,6 +12,7 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 - The **Lightbox** built-in (`lightbox`): images in its slot open full screen in a native modal dialog, by click or keyboard, with arrow keys, an optional `group` across lightboxes and alt-text captions. Client component.
 - The **Carousel** built-in (`carousel`): its `slides` slot as a scroll-snap track or fading slides, with arrows (optional `previous`/`next` slots for their content), dots, loop and autoplay with a pause button. Keyboard arrows on the track, slide labels, and reduced motion respected. Client component.
 - The **Table of contents** built-in (`tableOfContents`): links to the H2 headings of a rich text prop, bound to the document's rich text field. `headingId(text)` and `lexicalHeadings(value, tag)` in `payload-canvas/blocks` give the shared heading ids.
+- The **Filter link** built-in (`filterLink`): a link that sets, toggles (`multiple`) or clears one URL query value for collection list `queryFilters`, keeps the other values and marks the current filter with `aria-current="true"`. `filterHref()` is the same rule as a pure function.
 
 ## [0.3.0] - 2026-10-21
 
