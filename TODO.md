@@ -28,7 +28,7 @@ Read `AGENTS.md` and `docs/architecture.md` first. The gap numbers (8.x) match p
 | 10 | `$visible` comparisons | `field>3`, `>=`, `<`, `<=`, `field#>=3` |
 | 11 | `$url` of a related document | `<path>.$url` from `resolveLink`; `bindingRelations()` as `relations` |
 | 12 | The `random` prop warning | Not from the plugin. No plugin block or motion code passes `random`. |
-| 13 to 19 | Built-in blocks | `builtinBlocks({ include, icons, mediaCollection })` and `builtinComponents({ icons })`: `icon`, `carousel`, `lightbox`, `accordion` and `disclosure` (`faqItems`, `faqJsonLd`), `mediaBackdrop`, `tableOfContents`, `filterLink` (`filterHref`) |
+| 13 to 19 | Built-in blocks | `builtinBlocks({ include, icons, mediaCollection })` and `builtinComponents({ icons })`: `icon`, `carousel`, `lightbox`, `accordion` and `disclosure` (`faqItems`, `faqJsonLd`), `mediaBackdrop`, `tableOfContents`, `filterLink` (`filterHref`). Button icons: `defaultBlocks({ icons })` adds `icon`, `iconPosition` and `iconClassName` to `button` |
 | 29 | `create-payload-canvas` version | installs `payload-canvas` `^0.3.0` |
 
 Delete `anchor` from the starter now that item 2 is done; it is not in the plugin. These stay in the starter, because they hold site rules: `contactLink`, `form`, `breadcrumbs`, `jsonLd`, `documentLayout`, `glossaryTerm`, `letterFilter` and `rating`.

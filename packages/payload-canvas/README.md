@@ -1056,6 +1056,12 @@ export const icons = { arrowRight: ArrowRight, check: Check, close: Close } sati
 - Each icon component gets `className`, the ARIA attributes and, on the canvas, the editor attributes. Spread its props on the `<svg>`.
 - An unknown name renders nothing on the site and a note on the canvas.
 
+**Icons on buttons.** Give `defaultBlocks()` the same names, and the `button` block gets three props: `icon` (optional, one of the names), `iconPosition` (`start` or `end`, default `end`) and `iconClassName` (the icon's classes, default `size-4 shrink-0`). `builtinComponents({ icons })` includes a `button` component that draws the icon; `buttonComponent(icons)` is that component alone. The icon is decoration (`aria-hidden="true"`): the label names the button. With an icon, the label sits in its own `<span>`. A button without an icon renders as before. Without icon names the button has no icon props, and the default `Button` component ignores them.
+
+```ts
+...defaultBlocks({ mediaCollection: 'media', icons: ICON_NAMES }),
+```
+
 #### Disclosure and accordion
 
 `disclosure` is one show/hide item: a native `<details>` with a `summary` slot (always visible) and a `content` slot. It opens with the mouse and the keyboard without script, and the closed content stays in the HTML for search engines. `accordion` is a list of disclosures in its `items` slot (also a `repeat` or `collectionList` of disclosures). Include both: `include: ['disclosure', 'accordion']`.
