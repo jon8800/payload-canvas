@@ -1,5 +1,5 @@
 import { indexLayout, subtreeIds, type IndexedBlock } from './tree'
-import type { Block, BlockDefinition, Layout, SectionDefinition, SlotDefinition } from './types'
+import type { Block, BlockDefinition, Layout, SectionDefinition, SectionVariant, SlotDefinition } from './types'
 
 /**
  * True when the slot accepts the block type as a direct child: `allow` undefined or containing "*"
@@ -52,42 +52,94 @@ export function defineBlock<T extends BlockDefinition>(def: T): T {
 /** A block in `defineSection` input: like `Block`, but `id` may be left out (here and in every slot). */
 export type SectionBlockInput = Omit<Block, 'id' | 'slots'> & { id?: string; slots?: Record<string, SectionBlockInput[]> }
 
-/** `defineSection` input: a `SectionDefinition` whose blocks may leave out `id`. */
-export type SectionInput = Omit<SectionDefinition, 'blocks'> & { blocks: SectionBlockInput[] }
+/** `defineSection` input: a `SectionDefinition` whose blocks (and its variants' blocks) may leave out `id`. */
+export type SectionInput = Omit<SectionDefinition, 'blocks' | 'variants'> & {
+  blocks: SectionBlockInput[]
+  variants?: (Omit<SectionVariant, 'blocks'> & { blocks: SectionBlockInput[] })[]
+}
 
-/**
- * A section with every missing block id filled: `<section id>_1`, `_2`, … in walk order (each
- * block before its slots, slots in their order), skipping ids that are given. The same input
- * always gives the same ids. Throws when `id` or `label` is missing or two blocks share an id.
- */
-export function defineSection(input: SectionInput): SectionDefinition {
-  if (typeof input.id !== 'string' || !input.id.trim()) throw new Error('defineSection: the section needs an "id".')
-  if (typeof input.label !== 'string' || !input.label.trim()) throw new Error(`defineSection("${input.id}"): the section needs a "label".`)
+/** The blocks with every missing id filled as `<prefix>_1`, `_2`, … (see `defineSection`). */
+function fillBlockIds(owner: string, prefix: string, blocks: SectionBlockInput[]): Block[] {
   const given = new Set<string>()
-  const collect = (blocks: SectionBlockInput[]) => {
-    for (const block of blocks) {
+  const collect = (list: SectionBlockInput[]) => {
+    for (const block of list) {
       if (block.id) {
-        if (given.has(block.id)) throw new Error(`defineSection("${input.id}"): two blocks have the id "${block.id}".`)
+        if (given.has(block.id)) throw new Error(`defineSection("${owner}"): two blocks have the id "${block.id}".`)
         given.add(block.id)
       }
       for (const children of Object.values(block.slots ?? {})) collect(children)
     }
   }
-  collect(input.blocks)
+  collect(blocks)
   let count = 0
   const nextId = () => {
     let id: string
-    do id = `${input.id}_${++count}`
+    do id = `${prefix}_${++count}`
     while (given.has(id))
     return id
   }
-  const fill = (blocks: SectionBlockInput[]): Block[] =>
-    blocks.map(({ slots, ...rest }) => {
+  const fill = (list: SectionBlockInput[]): Block[] =>
+    list.map(({ slots, ...rest }) => {
       const block: Block = { ...rest, id: rest.id || nextId() }
       if (slots) block.slots = Object.fromEntries(Object.entries(slots).map(([name, children]) => [name, fill(children)]))
       return block
     })
-  return { ...input, blocks: fill(input.blocks) }
+  return fill(blocks)
+}
+
+/**
+ * A section with every missing block id filled: `<section id>_1`, `_2`, … in walk order (each
+ * block before its slots, slots in their order), skipping ids that are given. A variant's blocks
+ * get `<section id>_<variant id>_1`, … The same input always gives the same ids. Throws when `id`
+ * or `label` is missing (also on a variant), two variants share an id, or two blocks of one tree
+ * share an id.
+ */
+export function defineSection(input: SectionInput): SectionDefinition {
+  if (typeof input.id !== 'string' || !input.id.trim()) throw new Error('defineSection: the section needs an "id".')
+  if (typeof input.label !== 'string' || !input.label.trim()) throw new Error(`defineSection("${input.id}"): the section needs a "label".`)
+  const { variants, ...rest } = input
+  const section: SectionDefinition = { ...rest, blocks: fillBlockIds(input.id, input.id, input.blocks) }
+  if (variants) {
+    checkVariants(input.id, variants)
+    section.variants = variants.map((variant) => ({ ...variant, blocks: fillBlockIds(input.id, `${input.id}_${variant.id}`, variant.blocks) }))
+  }
+  return section
+}
+
+function checkVariants(section: string, variants: readonly { id: string; label: string }[]) {
+  const seen = new Set<string>()
+  for (const variant of variants) {
+    if (typeof variant.id !== 'string' || !variant.id.trim()) throw new Error(`Section "${section}": a variant needs an "id".`)
+    if (typeof variant.label !== 'string' || !variant.label.trim()) throw new Error(`Section "${section}": variant "${variant.id}" needs a "label".`)
+    if (seen.has(variant.id)) throw new Error(`Section "${section}": two variants have the id "${variant.id}".`)
+    seen.add(variant.id)
+  }
+}
+
+/**
+ * The sections with each variant as a section of its own, right after its section: id
+ * `<section id>/<variant id>`, label `<section label> (<variant label>)`, the section's category,
+ * its description unless the variant has one, and `variantOf` set to the section id. The section
+ * itself stays the first version and loses its `variants` key. The plugin and `builderMcpTools`
+ * run it on the app's `sections`, so the library, the insert picker, MCP and the assistant all
+ * list the variants. Throws on a variant without id or label, or two variants with one id.
+ */
+export function sectionsWithVariants(sections: readonly SectionDefinition[]): SectionDefinition[] {
+  return sections.flatMap(({ variants, ...section }) => {
+    if (!variants?.length) return [section]
+    checkVariants(section.id, variants)
+    return [
+      section,
+      ...variants.map((variant) => ({
+        id: `${section.id}/${variant.id}`,
+        label: `${section.label} (${variant.label})`,
+        ...(variant.description ?? section.description ? { description: variant.description ?? section.description } : {}),
+        ...(section.category ? { category: section.category } : {}),
+        blocks: variant.blocks,
+        variantOf: section.id,
+      })),
+    ]
+  })
 }
 
 /**
@@ -108,9 +160,13 @@ export function withDefaultClassNames(list: readonly Block[], definitions: reado
   })
 }
 
-/** `withDefaultClassNames` on the blocks of every section. */
+/** `withDefaultClassNames` on the blocks of every section and its variants. */
 export function sectionsWithDefaultClassNames(sections: readonly SectionDefinition[], definitions: readonly BlockDefinition[]): SectionDefinition[] {
-  return sections.map((section) => ({ ...section, blocks: withDefaultClassNames(section.blocks, definitions) }))
+  return sections.map((section) => ({
+    ...section,
+    blocks: withDefaultClassNames(section.blocks, definitions),
+    ...(section.variants ? { variants: section.variants.map((v) => ({ ...v, blocks: withDefaultClassNames(v.blocks, definitions) })) } : {}),
+  }))
 }
 
 /**

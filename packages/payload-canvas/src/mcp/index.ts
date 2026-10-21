@@ -24,7 +24,7 @@ import {
 } from '../core/bindings'
 import { createId } from '../core/ids'
 import { blockJsonSchema } from '../core/schema'
-import { getBlockDefinition, sectionsWithDefaultClassNames, withInlineBlocks } from '../core/blocks'
+import { getBlockDefinition, sectionsWithDefaultClassNames, sectionsWithVariants, withInlineBlocks } from '../core/blocks'
 import { localeSettingsOf, localizedKeys, resolveLayoutLocale, stampLocale, untranslatedKeys } from '../core/locale'
 import { normalizeLayout, subtreeIds, walkBlocks } from '../core/tree'
 import type { BlockDefinition, Layout, LocaleSettings, Operation, SectionDefinition } from '../core/types'
@@ -277,7 +277,8 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
   // The same block list the plugin validates against (collection list: only collections with a url).
   const blocks = withInlineBlocks(listCollectionsOf(options.blocks, listable))
   // A section block without a className gets its type's default classes, as in the plugin.
-  const sections = sectionsWithDefaultClassNames(options.sections ?? [], blocks)
+  // Each variant is a section of its own (`<id>/<variant id>`).
+  const sections = sectionsWithDefaultClassNames(sectionsWithVariants(options.sections ?? []), blocks)
   const collections: Record<string, BuilderMcpCollection> = templatesSlug
     ? { ...options.collections, [templatesSlug]: { field: TEMPLATE_LAYOUT_FIELD } }
     : options.collections
@@ -453,6 +454,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     routing: { kind: 'collection', action: 'read' },
     description: [
       'Lists ready-made sections (heroes, features, testimonials, calls to action, contact, footers, …) with an outline of their blocks. Sections are the best way to build a page: insert them with insertSection, then change their text, images and classes with applyOperations "update". Set `full: true` to get the complete block JSON of each section.',
+      'A section can come in variants (other versions of the same section): they follow it in the list with an id like "hero/split" and `variantOf: "hero"`. Pick the version that fits the page.',
       'The list also has the sections people saved on this site. They have `saved: true` and an id like "saved:12".',
     ].join('\n'),
     parameters: {
@@ -469,6 +471,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
           id: s.id,
           label: s.label,
           ...(s.savedId !== undefined ? { saved: true } : {}),
+          ...(s.variantOf ? { variantOf: s.variantOf } : {}),
           ...(s.category ? { category: s.category } : {}),
           ...(s.description ? { description: s.description } : {}),
           ...(args.full ? { blocks: s.blocks } : { outline: outline(s.blocks).join('\n') }),
@@ -491,7 +494,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       sectionId: z
         .string()
         .min(1)
-        .describe('The section from listSections: its id (e.g. "hero" or "saved:12") or its exact name.'),
+        .describe('The section from listSections: its id (e.g. "hero", the variant "hero/split" or "saved:12") or its exact name.'),
       parentId: z.string().nullable().optional().describe('Parent block id. Default null (page root).'),
       slot: z.string().optional().describe('Slot of the parent. Default "children".'),
       index: z.number().int().min(0).optional().describe('Final index in the target list. Default: append.'),

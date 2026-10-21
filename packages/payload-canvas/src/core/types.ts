@@ -168,6 +168,23 @@ export type SectionDefinition = {
    * the saved sections collection. The section's own `id` is then `saved:<savedId>`.
    */
   savedId?: string | number
+  /**
+   * Other versions of the section in the same file (a split hero next to a centred one). The
+   * plugin and `builderMcpTools` list each variant as a section of its own after this one
+   * (`sectionsWithVariants`): id `<id>/<variant id>`, label `<label> (<variant label>)`.
+   */
+  variants?: SectionVariant[]
+  /** Set on a variant after `sectionsWithVariants`: the id of the section it belongs to. */
+  variantOf?: string
+}
+
+/** One version of a section (`SectionDefinition.variants`). It shares the section's category. */
+export type SectionVariant = {
+  /** Unique in the section, e.g. "split". The variant's section id is `<section id>/<id>`. */
+  id: string
+  label: string
+  description?: string
+  blocks: Block[]
 }
 
 /** The saved sections collection, for the editor. Null when `websiteBuilder({ savedSections: false })`. */

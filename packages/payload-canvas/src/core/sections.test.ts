@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import { defineSection, withDefaultClassNames } from '../blocks'
-import { sectionsWithDefaultClassNames } from './blocks'
+import { sectionsWithDefaultClassNames, sectionsWithVariants } from './blocks'
 
 describe('defineSection', () => {
   it('fills missing block ids in walk order, at any depth, without clashing with given ids', () => {
@@ -45,6 +45,48 @@ describe('defineSection', () => {
   })
 })
 
+describe('section variants', () => {
+  it('defineSection fills the ids of each variant with its own prefix', () => {
+    const section = defineSection({
+      id: 'hero',
+      label: 'Hero',
+      blocks: [{ type: 'stack' }],
+      variants: [{ id: 'split', label: 'Split', blocks: [{ type: 'grid', slots: { children: [{ type: 'text' }] } }] }],
+    })
+    assert.equal(section.blocks[0].id, 'hero_1')
+    assert.equal(section.variants?.[0]?.blocks[0]?.id, 'hero_split_1')
+    assert.equal(section.variants?.[0]?.blocks[0]?.slots?.children?.[0]?.id, 'hero_split_2')
+    assert.equal('variants' in defineSection({ id: 'x', label: 'X', blocks: [] }), false)
+  })
+  it('defineSection and sectionsWithVariants refuse a variant without id or label and repeated variant ids', () => {
+    assert.throws(() => defineSection({ id: 'x', label: 'X', blocks: [], variants: [{ id: '', label: 'A', blocks: [] }] }), /variant needs an "id"/)
+    assert.throws(() => defineSection({ id: 'x', label: 'X', blocks: [], variants: [{ id: 'a', label: '', blocks: [] }] }), /needs a "label"/)
+    const twice = [{ id: 'a', label: 'A', blocks: [] }, { id: 'a', label: 'B', blocks: [] }]
+    assert.throws(() => sectionsWithVariants([{ id: 'x', label: 'X', blocks: [], variants: twice }]), /two variants have the id "a"/)
+  })
+  it('sectionsWithVariants lists each variant as a section right after its own', () => {
+    const list = sectionsWithVariants([
+      {
+        id: 'hero',
+        label: 'Hero',
+        category: 'Heroes',
+        description: 'Big title',
+        blocks: [{ id: 'a', type: 'stack' }],
+        variants: [
+          { id: 'split', label: 'Split', blocks: [{ id: 'b', type: 'grid' }] },
+          { id: 'dark', label: 'Dark', description: 'On black', blocks: [{ id: 'c', type: 'stack' }] },
+        ],
+      },
+      { id: 'cta', label: 'CTA', blocks: [] },
+    ])
+    assert.deepEqual(list.map((s) => s.id), ['hero', 'hero/split', 'hero/dark', 'cta'])
+    assert.equal('variants' in list[0], false)
+    assert.deepEqual(list[1], { id: 'hero/split', label: 'Hero (Split)', description: 'Big title', category: 'Heroes', blocks: [{ id: 'b', type: 'grid' }], variantOf: 'hero' })
+    assert.equal(list[2].description, 'On black')
+    assert.equal(list[3].variantOf, undefined)
+  })
+})
+
 describe('withDefaultClassNames', () => {
   const defs = [
     { type: 'stack', label: 'Stack', fields: [], defaultClassName: 'flex flex-col', slots: { children: {} } },
@@ -62,5 +104,9 @@ describe('withDefaultClassNames', () => {
   it('runs on every section', () => {
     const [section] = sectionsWithDefaultClassNames([{ id: 's', label: 'S', blocks: [{ id: 'a', type: 'text' }] }], defs)
     assert.equal(section.blocks[0].className, 'break-words')
+  })
+  it('runs on the variants of a section', () => {
+    const [section] = sectionsWithDefaultClassNames([{ id: 's', label: 'S', blocks: [], variants: [{ id: 'v', label: 'V', blocks: [{ id: 'a', type: 'text' }] }] }], defs)
+    assert.equal(section.variants?.[0]?.blocks[0]?.className, 'break-words')
   })
 })

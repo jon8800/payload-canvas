@@ -15,7 +15,7 @@ import { aiClientConfig } from '../ai/config'
 import { AI_IMAGES_KEY, createImageService } from '../ai/images/service'
 import type { AiOptions } from '../ai/types'
 import { defaultBlocks } from '../blocks'
-import { richTextFieldName, sectionsWithDefaultClassNames, withInlineBlocks } from '../core/blocks'
+import { richTextFieldName, sectionsWithDefaultClassNames, sectionsWithVariants, withInlineBlocks } from '../core/blocks'
 import { bindingRelations, DEFAULT_TEMPLATES_SLUG, DOCUMENT_TEMPLATE_FIELD, TEMPLATE_TARGET_FIELD } from '../core/bindings'
 import { localeSettingsOf } from '../core/locale'
 import { resolveRegions, type RegionOption } from '../core/regions'
@@ -338,8 +338,10 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
 
     // Inline blocks (`inline: true`) may sit in a link: they join its `allow` list.
     const blocks = withInlineBlocks(listCollectionsOf(options.blocks ?? defaultBlocks(), [...withUrl]))
+    // Each section variant is listed as a section of its own (`<id>/<variant id>`).
+    const appSections = sectionsWithVariants(options.sections ?? [])
     // A section block without a className gets its type's default classes (JSON layouts only).
-    const sections = sectionsWithDefaultClassNames(options.sections ?? [], blocks)
+    const sections = sectionsWithDefaultClassNames(appSections, blocks)
     const duplicate = blocks.find((b, i) => blocks.findIndex((other) => other.type === b.type) !== i)
     if (duplicate) {
       throw new Error(
@@ -524,7 +526,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           tokensEndpoint: `${apiRoute}${STYLE_TOKENS_PATH}`,
           // Only sections the field can store as they are.
           sections: storage
-            ? (options.sections ?? []).filter((section) => payloadBlocksProblems({ version: 1, blocks: section.blocks }, storage).length === 0)
+            ? appSections.filter((section) => payloadBlocksProblems({ version: 1, blocks: section.blocks }, storage).length === 0)
             : sections,
           liveEndpoint: `${apiRoute}${LIVE_PATH}`,
           templates: clientTemplates,

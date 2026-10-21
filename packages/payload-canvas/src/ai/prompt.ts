@@ -94,12 +94,12 @@ function sectionCatalog(sections: SectionDefinition[], saved: boolean): string {
       : 'SECTION CATALOG\nThis site has no ready-made sections. Build from blocks.'
   }
   const entries = sections.map((s) => {
-    const head = `## ${s.id}: ${s.label}${s.category ? ` (${s.category})` : ''}`
+    const head = `## ${s.id}: ${s.label}${s.category ? ` (${s.category})` : ''}${s.variantOf ? ` [variant of ${s.variantOf}]` : ''}`
     const description = s.description ? `\n${s.description}` : ''
     return `${head}${description}\n${outline(s.blocks).join('\n')}`
   })
   return [
-    'SECTION CATALOG. Ready-made, designed sections. Insert one with insertSection { sectionId }. The outline shows its blocks (type and start of the text). listSections { full: true } returns the full JSON.' +
+    'SECTION CATALOG. Ready-made, designed sections. Insert one with insertSection { sectionId }. The outline shows its blocks (type and start of the text). A variant ("hero/split") is another version of the section before it: pick the one that fits. listSections { full: true } returns the full JSON.' +
       (saved ? `\n${SAVED_SECTIONS_NOTE}` : ''),
     ...entries,
   ].join('\n\n')

@@ -28,7 +28,9 @@ import './empty.scss'
 const SUGGESTED = ['Heroes', 'Features', 'Calls to action']
 const SUGGESTION_COUNT = 3
 
-function suggestions(sections: SectionDefinition[]): SectionDefinition[] {
+function suggestions(all: SectionDefinition[]): SectionDefinition[] {
+  // One version of each section: its variants stay in the library.
+  const sections = all.filter((s) => !s.variantOf)
   const picked = SUGGESTED.flatMap((category) => sections.find((s) => s.category === category) ?? [])
   const rest = sections.filter((s) => !picked.includes(s))
   return [...picked, ...rest].slice(0, SUGGESTION_COUNT)

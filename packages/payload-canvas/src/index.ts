@@ -54,7 +54,7 @@ export {
   type MigrateIssue,
 } from './migrate'
 export type { AiAdapter, AiChatRequest, AiClientConfig, AiMessage, AiOptions, AiStreamEvent } from './ai/types'
-export { defineBlock, defineSection, type SectionBlockInput, type SectionInput, withDefaultClassNames, withInlineBlocks } from './core/blocks'
+export { defineBlock, defineSection, type SectionBlockInput, type SectionInput, sectionsWithVariants, withDefaultClassNames, withInlineBlocks } from './core/blocks'
 export { EMPTY_LAYOUT } from './core/types'
 export type {
   BindingField,
@@ -65,6 +65,7 @@ export type {
   EditorOptions,
   Layout,
   SectionDefinition,
+  SectionVariant,
   TemplateContext,
   TemplatesClientConfig,
 } from './core/types'

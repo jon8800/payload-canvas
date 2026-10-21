@@ -166,6 +166,18 @@ describe('saved sections in the prompts', () => {
   })
 })
 
+describe('section variants in the assistant', () => {
+  const variant: SectionDefinition = { id: 'hero/split', label: 'Hero (Split)', category: 'Heroes', blocks: hero.blocks, variantOf: 'hero' }
+  it('listSections and the catalog mark variants, and insertSection offers their ids', async () => {
+    const withVariant = env({ sections: [hero, variant] })
+    const outcome = await runTool('listSections', {}, new Workspace(emptyLayout(), blocks), withVariant)
+    assert.deepEqual((JSON.parse(outcome.content) as Array<{ variantOf?: string }>).map((s) => s.variantOf), [undefined, 'hero'])
+    const sectionId = schemaOf(toolDefinitions(withVariant), 'insertSection')?.properties.sectionId
+    assert.ok((sectionId?.enum as string[] | undefined)?.includes('hero/split'))
+    assert.match(systemPrompt({ blocks, sections: [hero, variant], tokens: null, bindings: false }), /## hero\/split: Hero \(Split\) \(Heroes\) \[variant of hero\]/)
+  })
+})
+
 describe('Workspace in a locale', () => {
   const localized: BlockDefinition[] = [{ type: 'heading', label: 'Heading', fields: [{ name: 'text', type: 'text', required: true, localized: true }] }]
   const settings = { locales: ['en', 'de'], defaultLocale: 'en', fallback: true }
