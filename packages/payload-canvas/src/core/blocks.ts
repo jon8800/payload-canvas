@@ -113,6 +113,28 @@ export function sectionsWithDefaultClassNames(sections: readonly SectionDefiniti
   return sections.map((section) => ({ ...section, blocks: withDefaultClassNames(section.blocks, definitions) }))
 }
 
+/**
+ * The blocks with every `allowInline` slot accepting the block types marked `inline: true`: they
+ * join the slot's `allow` list. The plugin and `builderMcpTools` run it on their block list, so
+ * the editor, the checks and the AI tools all see the same rule. Returns the same list when no
+ * block is inline.
+ */
+export function withInlineBlocks(blocks: BlockDefinition[]): BlockDefinition[] {
+  const inline = blocks.filter((b) => b.inline).map((b) => b.type)
+  if (inline.length === 0) return blocks
+  return blocks.map((def) => {
+    const slots = def.slots
+    if (!slots || !Object.values(slots).some((slot) => slot.allowInline && slot.allow)) return def
+    const next = Object.fromEntries(
+      Object.entries(slots).map(([name, slot]) => [
+        name,
+        slot.allowInline && slot.allow ? { ...slot, allow: [...new Set([...slot.allow, ...inline.filter((t) => !slot.disallow?.includes(t))])] } : slot,
+      ]),
+    )
+    return { ...def, slots: next }
+  })
+}
+
 export function getBlockDefinition(blocks: readonly BlockDefinition[], type: string): BlockDefinition | undefined {
   return blocks.find((b) => b.type === type)
 }

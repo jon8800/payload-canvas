@@ -362,12 +362,14 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     fields: [linkField({ collections: linkCollections })],
     // Interactive content inside <a> is invalid HTML. `allow` limits direct children; `disallow`
     // refuses these types at any depth (a button inside a stack inside the link, for example).
-    slots: { children: { label: 'Content', allow: LINK_CONTENT, disallow: INTERACTIVE } },
+    // `allowInline`: custom blocks marked `inline: true` (an icon, a badge) may go in directly too.
+    slots: { children: { label: 'Content', allow: LINK_CONTENT, disallow: INTERACTIVE, allowInline: true } },
     defaultClassName: 'block',
     ai: {
       description:
         'A clickable container: everything inside it links to one place. Use it for cards that link to a page. ' +
-        `It holds only ${LINK_CONTENT.join(', ')} blocks, and never links, buttons, forms, menus or lists of links.`,
+        `It holds only ${LINK_CONTENT.join(', ')} blocks and the site's inline blocks (see the slot's accepted types), ` +
+        'and never links, buttons, forms, menus or lists of links.',
       example: {
         type: 'link',
         props: { link: exampleLink },
