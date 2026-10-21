@@ -303,9 +303,10 @@ export function applyFontFamilies(fonts: ThemeToken[], families: FontFamilies): 
  */
 /**
  * `@utility name {` with an optional comment right above it. Only static names: `tab-*` (a
- * functional utility) has no single class to offer.
+ * functional utility) has no single class to offer. The comment may not hold `*\/`, so two
+ * comments in a row never merge: only the last one, right above the rule, counts.
  */
-const UTILITY_RULE = /(?:\/\*([^]*?)\*\/\s*)?@utility\s+([A-Za-z_][\w-]*)\s*\{/g
+const UTILITY_RULE = /(?:\/\*((?:(?!\*\/)[^])*)\*\/\s*)?@utility\s+([A-Za-z_][\w-]*)\s*\{/g
 const CANVAS_LABEL = /^\s*@canvas\s+(?:([^:]+?)\s*:\s*)?(.+?)\s*$/s
 const PREVIEW_LENGTH = 160
 
