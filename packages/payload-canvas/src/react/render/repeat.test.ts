@@ -158,3 +158,18 @@ describe('$visible', () => {
     assert.match(canvas, /data-builder-hidden="true"/)
   })
 })
+
+describe('collection list empty slot', () => {
+  const list: Block = {
+    id: 'l',
+    type: 'collectionList',
+    props: { collection: 'models' },
+    slots: { item: [{ id: 'h', type: 'heading', bindings: { text: 'title' } }], empty: [{ id: 'e', type: 'text', props: { text: 'Nobody is available today' } }] },
+  }
+  it('shows the empty slot instead of items when no document matches', () => {
+    assert.ok(render({ layout: attachListItems(layoutOf(list), new Map([['l', []]])) }).includes('Nobody is available today'))
+    const full = render({ layout: attachListItems(layoutOf(list), new Map([['l', [{ id: 2, title: 'Bea' }]]])) })
+    assert.ok(full.includes('Bea'))
+    assert.ok(!full.includes('Nobody'))
+  })
+})

@@ -634,11 +634,35 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         type: 'json',
         label: 'Where',
         admin: {
-          description: 'A Payload where query, added to the filter. Example: { "featured": { "equals": true } }.',
+          description:
+            'A Payload where query, added to the filter. Example: { "featured": { "equals": true } }. Dates may use ' +
+            '"$now", "$now-30d" or "$now+12h".',
         },
       },
+      {
+        name: 'queryFilters',
+        type: 'json',
+        label: 'URL filters',
+        admin: {
+          description:
+            'Filters from the page URL: { "param": { "value": where } }. Example: { "available": { "today": { "availableToday": ' +
+            '{ "equals": true } } } } filters on ?available=today. Several values of one parameter are OR-ed, parameters are AND-ed.',
+        },
+      },
+      { name: 'offset', type: 'number', label: 'Skip items', min: 0, admin: { description: 'Documents to leave out at the start.' } },
+      {
+        name: 'depth',
+        type: 'select',
+        label: 'Related data depth',
+        defaultValue: '1',
+        options: [
+          { label: '1: the related documents of each item', value: '1' },
+          { label: '2: also their related documents (larger)', value: '2' },
+        ],
+        admin: { description: 'How far related documents of each item load, for example 2 to reach a category\'s image.' },
+      },
     ],
-    slots: { [LIST_ITEM_SLOT]: { label: 'Item' } },
+    slots: { [LIST_ITEM_SLOT]: { label: 'Item' }, [LIST_EMPTY_SLOT]: { label: 'When empty' } },
     defaultClassName: 'grid grid-cols-1 gap-6 md:grid-cols-3',
     ai: {
       description:
@@ -653,7 +677,12 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         '(e.g. similar models with a "category" in common, posts with the same "category" text); "linked" lists ' +
         'the documents the current document\'s filterField points to (e.g. on a model template, the model\'s ' +
         '"services"). With "shared" or "linked" and an empty field, the list is empty. "where" is a static Payload ' +
-        'where query AND-ed with the rest, e.g. { "featured": { "equals": true } }.',
+        'where query AND-ed with the rest, e.g. { "featured": { "equals": true } }; date values may be "$now", ' +
+        '"$now-30d" or "$now+7d" (units d and h). "queryFilters" filters by the page URL: { "<param>": { "<value>": where } }, ' +
+        'e.g. { "available": { "today": { "availableToday": { "equals": true } } } } for ?available=today; values of one ' +
+        'param (repeated or comma-separated) are OR-ed, params are AND-ed; the canvas ignores them. "offset" skips ' +
+        'documents. "depth" ("1" or "2") is how deep related documents load. The "empty" slot shows instead of the ' +
+        'items when no document matches (e.g. a text "Nobody is available today").',
       example: {
         type: COLLECTION_LIST_BLOCK,
         props: { collection: 'posts', limit: 3, sort: '-createdAt' },

@@ -1532,6 +1532,7 @@ A collection list can show only the documents related to the current document (t
 - With `shared` or `linked`, a current document without values shows an empty list. The plugin sends no query.
 - On a normal page (no current document), `filterField` is ignored and the list is not filtered.
 - `where` is a static Payload `where` query, AND-ed with the filter. For example `{ "featured": { "equals": true } }` or `{ "district": { "equals": "north" } }`. Only a plain object counts; anything else is ignored.
+- Date values in `where` and `queryFilters` can be tokens: `"$now"`, `"$now-30d"`, `"$now+12h"` (units `d` and `h`). They become ISO dates, rounded down to the minute. Example: `{ "createdAt": { "greater_than": "$now-30d" } }` lists documents from the last 30 days.
 
 ```json
 {
@@ -1542,35 +1543,62 @@ A collection list can show only the documents related to the current document (t
 
 Lists load with the visitor's access (`overrideAccess: false`). The site (`loadLayoutData`), the canvas and server blocks in the canvas build the same query (`listQueries`), so a template's canvas preview shows the list filtered by its sample document.
 
+#### Filter by the URL query
+
+`queryFilters` filters a list by the page's URL query: `{ "<param>": { "<value>": where } }`.
+
+```json
+{
+  "type": "collectionList",
+  "props": {
+    "collection": "models",
+    "queryFilters": {
+      "available": { "today": { "availableToday": { "equals": true } } },
+      "new": { "month": { "createdAt": { "greater_than": "$now-30d" } } },
+      "district": { "north": { "district": { "equals": "north" } }, "south": { "district": { "equals": "south" } } }
+    }
+  }
+}
+```
+
+- Each `param=value` in the URL adds its `where`. `?available=today&district=north` lists the models available today in the north.
+- Several values of one param are OR-ed: `?district=north,south` or `?district=north&district=south`.
+- Params are AND-ed with each other and with the list's other filters. Unknown params and values are ignored.
+- Pass the query to `loadLayoutData`: `loadLayoutData(layout, blocks, payload, { query: await searchParams })`. It takes `URLSearchParams` or a Next.js `searchParams` object. Without `query`, the filters are off.
+- The canvas has no URL query, so it shows the list without these filters.
+- Filtered URLs show the same page with fewer items. Set `robots: { index: false, follow: true }` (`noindex, follow`) in the route's metadata when the URL has a filter param, so search engines index only the unfiltered page.
+
 #### Repeat the rows of a field
 
-The **Field list** block (`fieldList`) repeats its `item` slot once per row of a list field of the current document. Use it for an array field (FAQs `faqs: [{ question, answer }]`, rates `rates: [{ duration, price }]`), a hasMany upload (a gallery), a hasMany relationship (the services of a model) or a hasMany text or select field (tags).
+The **Repeat** block (`repeat`) repeats its `item` slot once per row of a list field of the current document. Use it for an array field (FAQs `faqs: [{ question, answer }]`, rates `rates: [{ duration, price }]`), a hasMany upload (a gallery), a hasMany relationship (the services of a model) or a hasMany text or select field (tags).
 
 | Prop | Type | What it does |
 | --- | --- | --- |
-| `path` | text, required | The field, as a dot path in the current document, for example `faqs` or `galleryImages`. |
+| `path` | text, required | The field, as a dot path in the current document, for example `faqs` or `galleryImages`. `$parent.` and `$page.` paths work too. |
 | `limit` | number | The most rows to show. Empty shows every row. |
 | `offset` | number | Rows to skip at the start. `1` skips the first photo. |
 | `collection` | text (a select of the collections with a `url` when the plugin knows them) | For a relationship field: the related collection, so `$url` links to each document. A `{ relationTo, value }` row names its own collection. |
 
 Blocks in the `item` slot bind to the **row**:
 
-- An array row's fields by name: `question`, `answer`.
+- An array row's fields by name: `question`, `price`.
 - A related document's fields: `title`, `name`, `url` (uploads), and `$url` when `collection` is set.
 - `$item`: the row value itself. Bind an image's `image` to `$item` in a list of uploads, or a text's `text` to `$item` in a hasMany text list.
 - `$index`: the row number, from 1.
+- `$parent.<path>`: the enclosing document, for example `"Photos of {{$parent.name}}"`. `$page.<path>`: the page's document.
 
 ```json
 {
-  "type": "fieldList",
+  "type": "repeat",
   "props": { "path": "galleryImages", "offset": 1 },
   "slots": { "item": [{ "type": "image", "bindings": { "image": "$item" } }] }
 }
 ```
 
-- The current document is the template's document, the listed document inside a collection list item, and the row inside another field list.
+- The current document is the template's document, the listed document inside a collection list item, and the row inside another repeat.
 - Without a current document (a normal page), the site shows nothing. The canvas shows the item design once.
-- On the canvas, the first row is the editable one. The other rows are repeats (`data-builder-repeat`), as in a collection list. In the inspector, the field picker for `path` offers array and hasMany fields, and blocks in the item bind to the row's fields, `$item` and `$index`.
+- On the canvas, the first row is the editable one. The other rows are repeats (`data-builder-repeat`), as in a collection list. In the inspector, the field picker for `path` offers array and hasMany fields, and blocks in the item bind to the row's fields, `$item`, `$index`, `$parent` and `$page`.
+- After `loadLayoutData`, a repeat outside list items carries its rows as the runtime `$items` prop, like a collection list. A layout walker can read them there. A repeat inside a collection list item expands at render time, once per listed document.
 - Load the document with `depth: 1` (or more). Then relationship and upload rows are documents, not IDs. An ID row still gives `$item` and `$index`, but no fields.
 
 ### Render a document through its template

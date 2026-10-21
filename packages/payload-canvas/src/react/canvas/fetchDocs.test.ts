@@ -65,3 +65,16 @@ test('collection lists send their where and cache per where; none loads nothing'
   assert.deepEqual(await fetchListItems(api, { ...base, none: true }), [])
   assert.equal(urls.length, 2)
 })
+
+test('collection lists skip `offset` documents and send `depth`', async () => {
+  const urls: string[] = []
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    urls.push(String(input))
+    return new Response(JSON.stringify({ docs: [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }] }), { status: 200 })
+  }) as typeof fetch
+  const docs = await fetchListItems('/api-list-offset-test', { blockId: 'b', collection: 'posts', limit: 2, sort: '-createdAt', offset: 1, depth: 2, exclude: 2 })
+  assert.deepEqual(docs.map((d) => d.id), [3, 4])
+  const params = new URL(urls[0], 'http://x').searchParams
+  assert.equal(params.get('limit'), '4')
+  assert.equal(params.get('depth'), '2')
+})
