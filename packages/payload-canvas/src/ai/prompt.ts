@@ -63,6 +63,11 @@ function stylingGuide(tokens: StyleTokens | null): string {
   if (tokens.radius.length > 0) lines.push(`- Radius (rounded-<name>): ${names(tokens.radius)}.`)
   if (tokens.shadows.length > 0) lines.push(`- Shadows (shadow-<name>): ${names(tokens.shadows)}.`)
   if (tokens.containers.length > 0) lines.push(`- Container widths (max-w-<name>): ${names(tokens.containers)}.`)
+  const site = tokens.siteClasses ?? []
+  if (site.length > 0) {
+    const list = site.slice(0, 80).map((c) => (c.label ? `${c.name} (${c.group ? `${c.group}: ` : ''}${c.label})` : c.name))
+    lines.push(`- The site's own classes (its look; prefer them over rebuilding the same look from utilities): ${list.join(', ')}.`)
+  }
   return lines.join('\n')
 }
 

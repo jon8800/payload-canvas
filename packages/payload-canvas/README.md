@@ -1277,6 +1277,16 @@ A saved section runs the same field logic as a page save: the `beforeValidate` a
 
 - **Classes.** Each block stores Tailwind v4 classes in `className`. Variants use normal Tailwind syntax: `md:flex-row`, `hover:bg-primary`, `dark:text-white`.
 - **Styles panel.** Visual controls for layout, spacing, size, position, typography, background, border and effects read and write classes. The breakpoint bar (`base`, `sm`, `md`, `lg`, `xl`, `2xl`) and the state bar (Default, Hover, Focus, Active) set the variant prefix. The **Classes** box accepts any class.
+- **Site classes.** The Styles panel lists your CSS entry's own static `@utility` classes (`type-h2`, `btn-primary`, `glass`) in a **Site classes** group, apart from Tailwind's classes. A click adds the class to the block, or removes it when the block has it, like typing it in **Classes**. Each button's tooltip shows the rule's CSS. A comment right above the rule sets a label and a group: `/* @canvas Buttons: Primary button */` (group "Buttons", label "Primary button") or `/* @canvas Primary button */` (a label only). Without a comment the button shows the class name. Classes from the files the entry imports count too, but not from packages in `node_modules`, and not functional utilities such as `tab-*`. `getStyleTokens()` returns them as `siteClasses` (`{ name, label?, group?, css }`). The MCP tool `listBlocks` and the assistant's prompt list them, so agents use the site's look.
+
+  ```css
+  /* @canvas Buttons: Primary button */
+  @utility btn-primary {
+    background: var(--color-brand);
+    color: var(--color-ground);
+  }
+  ```
+
 - **Theme tokens.** Classes compile against your CSS entry, so tokens from your `@theme` work: `bg-primary`, `font-heading`, `rounded-card`. The Styles panel lists your colors, fonts and sizes.
 - **In the editor.** The canvas compiles the classes in the browser with Tailwind's own compiler. A new class shows at once.
 - **On save.** The `beforeChange` hook compiles only the classes the layout uses and stores the CSS in `<field>Css` (`{ hash, css }`). The output holds the utilities, their `@property` and `@keyframes` rules, and the theme variables. It has no Preflight. `RenderLayout` writes it into a `<style>` tag, so the site does not need a Tailwind build of its own. If the site has one, import the same CSS entry in your site layout for Preflight and base styles.
