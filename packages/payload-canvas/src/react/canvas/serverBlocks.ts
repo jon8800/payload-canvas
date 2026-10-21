@@ -24,6 +24,11 @@ export type ServerBlocks = {
   subscribe(key: string, listener: () => void): () => void
   /** A mounted block needs the render of this stored block. Returns the release function. */
   want(key: string, block: Block): () => void
+  /**
+   * Data the server output may read changed (a document saved in the editor): forget every
+   * result and ask again for the mounted blocks. They keep their output on screen meanwhile.
+   */
+  refresh(): void
   setScope(scope: CanvasScope): void
   scope(): CanvasScope
   /** Loads the page data for the current scope. */
@@ -50,6 +55,17 @@ export type ServerBlocksOptions = {
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
 const EMPTY_SCOPE: CanvasScope = { document: null, context: null }
+
+/**
+ * A block subtree without its animation settings, at every depth. The server preview never
+ * renders them (the canvas puts them on the output itself), so a change in the Motion tab does
+ * not ask the server again.
+ */
+export function withoutMotion(block: Block): Block {
+  const { motion: _motion, slots, ...rest } = block
+  if (!slots) return rest
+  return { ...rest, slots: Object.fromEntries(Object.entries(slots).map(([name, list]) => [name, list.map(withoutMotion)])) }
+}
 
 export function createServerBlocks(server: CanvasServer, options: ServerBlocksOptions = {}): ServerBlocks {
   const debounceMs = options.debounceMs ?? 250
@@ -145,7 +161,7 @@ export function createServerBlocks(server: CanvasServer, options: ServerBlocksOp
     keyOf(block) {
       let subtree = subtreeKeys.get(block)
       if (subtree === undefined) {
-        subtree = JSON.stringify(block)
+        subtree = JSON.stringify(withoutMotion(block))
         subtreeKeys.set(block, subtree)
       }
       return `${scopeKey}\u0000${subtree}`
@@ -178,6 +194,19 @@ export function createServerBlocks(server: CanvasServer, options: ServerBlocksOp
         if (now.count <= 1) wanted.delete(key)
         else wanted.set(key, { ...now, count: now.count - 1 })
       }
+    },
+    refresh() {
+      for (const key of entries.keys()) {
+        if (entries.get(key)?.status !== 'pending') entries.delete(key)
+      }
+      // A key already on its way is asked again after its answer: that answer may predate the change.
+      for (const key of wanted.keys()) {
+        queue.add(key)
+        if (entries.has(key)) continue
+        entries.set(key, { status: 'pending' })
+        notify(key)
+      }
+      if (queue.size > 0) schedule()
     },
     setScope(next) {
       const nextKey = JSON.stringify(next)

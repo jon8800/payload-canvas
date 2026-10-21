@@ -751,7 +751,7 @@ How it works in the editor:
 
 - The first render shows a gray box with the block's name. Then the server output shows.
 - After a change to the block (its props, its classes or its children), the canvas asks again 250 ms after the last change, and at the latest after 1 s. The changes of several blocks go in one request, because Next runs server actions one at a time. The old output stays on the screen until the new one is ready. It dims only when the answer takes longer than 300 ms.
-- The canvas keeps the results by the block's content, so undo shows the earlier output at once. A block that did not change never asks again while the editor is open. Data that changes somewhere else (a new post) shows when you open the editor again.
+- The canvas keeps the results by the block's content, so undo shows the earlier output at once. A block that did not change never asks again while the editor is open. Animation settings are not part of the content: the canvas puts them on the output itself, so the Motion tab never asks the server. When the editor saves a document (an image's alt text), the server blocks on screen ask again and keep their output meanwhile. Data that changes somewhere else (a new post) shows when you open the editor again.
 - The data loads as on the site (`loadLayoutData`): the latest drafts, uploads and relationships one level deep, and the user's access for collection lists. In a template, bindings use the sample document.
 - Only signed-in users of the admin collection get an answer.
 - When a component fails, that block shows "Name: the preview failed" with the error. The other blocks are not affected.
