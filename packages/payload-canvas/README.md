@@ -1559,6 +1559,7 @@ Which template a document uses: its own `template`, else the newest default temp
 | --- | --- | --- |
 | A path | `"title"`, `"author.name"` | The field's value. |
 | `$url` | `{ "link": "$url" }` | The document's page URL (the collection's `url` option). |
+| `<path>.$url` | `{ "link": "categories.0.$url" }` | The page URL of a related document: the first category of a model, `home.region.$url` through two relationships. See "URLs of related documents" below. |
 | A fallback chain | `"heading\|name"` | The first path that has a value. |
 | Formatters | `"publishedAt\|date:en-AU:Australia/Brisbane"`, `"price\|currency:AUD"`, `"price\|number"`, `"bio\|firstSentence"` | Text. `date[:locale[:timeZone]]` (default `en`, UTC), `currency[:code[:locale]]` (`$1,200`; whole amounts have no cents), `number[:locale]` (`1,200`), `firstSentence`. Put them after the paths: `"heading\|name\|firstSentence"`. |
 | A template string | `{ "text": "Enquire about {{name}}" }`, `"From {{price\|currency:AUD}}"` | Text with each `{{expression}}` filled in. A missing expression becomes empty. When every expression is missing, the prop keeps its own value. |
@@ -1579,6 +1580,20 @@ Which template a document uses: its own `template`, else the newest default temp
 | `"field#>=3"` | `field#` is the number of items: a list's length, `0` for an empty value, `1` for any other value. It works with every test above, for example `"galleryImages#>=3"` (at least 3 photos), `"services#=0"` or `"!galleryImages#"`. |
 
 The first operator in the text counts, so a value may hold `=` or `>` (`"title=a=b"` compares with `a=b`).
+
+URLs of related documents (`<path>.$url`):
+
+- The URL comes from your `resolveLink`, called as for a link to that document: `{ type: 'reference', reference: { relationTo, value: doc } }`. So `resolveLink` is the site's "URL of a document" function, for pages and for `$url`.
+- The renderer must know the related collection. A `{ relationTo, value }` value (a relationship to several collections) names it. For a relationship to one collection, pass `relations`: `bindingRelations(payload.config.collections)` from `payload-canvas/core` maps each relationship and upload field to its collection (in groups, named tabs and arrays too). The plugin sends the same map to the canvas.
+
+  ```tsx
+  const relations = bindingRelations(payload.config.collections)
+  const loaded = await loadLayoutData(layout, blocks, payload, { context, relations, resolveLink })
+  <RenderLayout layout={loaded} blocks={blocks} context={context} relations={relations} resolveLink={resolveLink} />
+  ```
+
+- The related document must be loaded (list items load with `depth: 1`; use `depth: "2"` on the list for a relationship of a related document). An id alone gives no URL, and the prop keeps its own value.
+- `$parent.` and `$page.` paths do not take `.$url`.
 
 A block hidden by `$visible` renders nothing on the site. On the canvas it shows dimmed, like a hidden block. Expressions and `$visible` are not checked against the collection's fields when you publish. The inspector shows an expression as text with a preview of its value. Add or change one in the layout JSON or through the MCP tools.
 

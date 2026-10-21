@@ -62,7 +62,7 @@ ${motionGuide()}`.trim()
 export const BINDINGS_GUIDE = [
   'BINDINGS. A block in a template (or in a collection list item) binds props to document fields: "bindings": { "<prop path>": "<field path>" }.',
   'Examples: heading { "text": "title" }, text { "text": "excerpt" }, image { "image": "featuredImage" }, button or link { "link": "$url" }.',
-  `"${URL_PATH}" is the document's page URL. Nested props use dots: { "link.url": "$url" }.`,
+  `"${URL_PATH}" is the document's page URL. Nested props use dots: { "link.url": "$url" }. "<relationship path>.${URL_PATH}" is the page URL of a related document, e.g. { "link": "categories.0.${URL_PATH}" } (the first category of a listed model).`,
   'Values are converted to the prop type: rich text and dates become plain text in text props. When the document has no value, the literal prop stays, so bound props may stay empty.',
   `The "${FIELD_BLOCK}" block shows any field by its type (rich text, image, date, text): props { "path": "content" }.`,
   `In a "${COLLECTION_LIST_BLOCK}" block, blocks in the "item" slot bind to each LISTED document, not to the page.`,

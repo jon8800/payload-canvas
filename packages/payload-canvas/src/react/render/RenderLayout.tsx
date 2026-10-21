@@ -15,6 +15,7 @@ import {
   type Block,
   type BlockDefinition,
   type BindingOptions,
+  type BindingRelations,
   type TemplateContext,
 } from '../../core'
 import { defaultBlocks, isLinkField, withBuilderCssClass } from '../../blocks'
@@ -256,6 +257,7 @@ function createContext(
   resolveLink: ResolveLink,
   context: TemplateContext | null,
   pageData: PageData | null,
+  relations: BindingRelations | null = null,
 ): Context {
   return {
     mode,
@@ -263,7 +265,7 @@ function createContext(
     components: { ...defaultComponents, richText: richTextFor(resolveLink), field: fieldFor(resolveLink), ...components },
     definitions: new Map((blocks ?? DEFAULT_DEFINITIONS).map((definition) => [definition.type, definition])),
     resolveLinks: linkVisitor(resolveLink),
-    binding: { url: urlResolver(resolveLink) },
+    binding: { url: urlResolver(resolveLink), ...(relations ? { relations } : {}) },
     context,
     repeat: false,
     copy: false,
@@ -285,11 +287,12 @@ function contextFor(
   resolveLink: ResolveLink,
   context: TemplateContext | null,
   pageData: PageData | null,
+  relations: BindingRelations | null,
 ): Context {
-  if (mode !== 'canvas') return createContext(mode, components, blocks, resolveLink, context, pageData)
-  const inputs = [components, blocks, resolveLink, context, pageData]
+  if (mode !== 'canvas') return createContext(mode, components, blocks, resolveLink, context, pageData, relations)
+  const inputs = [components, blocks, resolveLink, context, pageData, relations]
   if (canvasContext && canvasContext.inputs.every((input, i) => input === inputs[i])) return canvasContext.ctx
-  canvasContext = { inputs, ctx: createContext(mode, components, blocks, resolveLink, context, pageData) }
+  canvasContext = { inputs, ctx: createContext(mode, components, blocks, resolveLink, context, pageData, relations) }
   return canvasContext.ctx
 }
 
@@ -312,8 +315,9 @@ export function RenderLayout({
   resolveLink = defaultResolveLink,
   context,
   pageData,
+  relations,
 }: RenderLayoutProps): ReactNode {
-  const ctx = contextFor(mode, components, blocks, resolveLink, context ?? null, pageData ?? null)
+  const ctx = contextFor(mode, components, blocks, resolveLink, context ?? null, pageData ?? null, relations ?? null)
   const motion = mode === 'site' && blocksHaveMotion(layout.blocks)
   return (
     <>

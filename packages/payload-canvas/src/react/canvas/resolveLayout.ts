@@ -19,8 +19,9 @@ export async function resolveCanvasLayout(
   definitions: BlockDefinition[],
   resolveLink: ResolveLink,
   locale?: string | null,
+  relations?: Record<string, Record<string, string>> | null,
 ): Promise<Layout> {
-  const bound = context ? resolveBindings(layout, context, definitions, { url: urlResolver(resolveLink) }) : layout
+  const bound = context ? resolveBindings(layout, context, definitions, { url: urlResolver(resolveLink), ...(relations ? { relations } : {}) }) : layout
   const queries = listQueries(bound, context)
   const lists = await Promise.all(queries.map((query) => fetchListPage(api, query, locale, CANVAS_SEED)))
   // A paginated list shows page 1 with its page links.
