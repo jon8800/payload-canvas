@@ -1513,10 +1513,11 @@ A block stores its animations in `motion`. Every kind is optional. Times are mil
 | `enter` | `fade`, `fade-up`, `fade-down`, `fade-left`, `fade-right`, `zoom-in`, `zoom-out`, `blur-in`, `wipe-up`, `wipe-down`, `wipe-left`, `wipe-right` | `duration` (600), `delay` (0), `easing` (`ease-out`, `ease-in-out`, `linear`, `spring`, `bouncy`), `distance` (24, fade-up/down/left/right), `trigger` (`view`, or `load` for the first section), `amount` in view 0-1 (0.2), `offset` px inside the window (0), `repeat` (false: once), `stagger` |
 | `hover` | `lift`, `grow`, `tilt` | `distance` (lift, 4), `scale` (grow, 1.03), `angle` (tilt, 6) |
 | `press` | `shrink` | `scale` (0.97) |
-| `scroll` | `parallax`, `fade`, `zoom` | `distance` (parallax, 60; negative moves with the scroll), `scale` (zoom start, 0.9) |
+| `scroll` | `parallax`, `fade`, `zoom`, `recede` | `distance` (parallax, 60; negative moves with the scroll), `scale` (zoom start or recede end, 0.9) |
 | `loop` | `float`, `pulse` | `duration` (3000 float, 1500 pulse), `distance` (float, 8), `scale` (pulse, 1.04) |
 
 - **Stagger.** `enter.stagger` is the gap in milliseconds between children. The block itself stays still, and its direct child blocks play the entrance one after another. Use it on grids and lists of cards, and on Collection lists. A child's own entrance does not play there (its hover, press, scroll and loop do).
+- **Stacked cards.** `scroll.recede` shrinks a card to `scale` and dims it to 70 % brightness while the next card scrolls over it. Give each card `sticky top-…` (and `origin-top` to shrink toward the top), and put `recede` on every card but the last. The effect follows the next sibling element from the window's bottom edge to its top edge, so `position: sticky` on the card does not stop it. A card with no next sibling does not recede.
 - **Edits.** An `update` operation takes `motion` as a patch: each kind listed replaces that kind, `null` removes a kind, kinds left out stay, and `motion: null` removes all. The operations refuse unknown presets, unknown keys and values out of range, with a message that names the problem.
 - The presets, limits and defaults live in `core/motion.ts` (`MOTION_SPECS`, `MOTION_PRESET_INFO`). The layout JSON Schema has the motion schema under `$defs.$motion`. The MCP tools and the assistant document it from the same source.
 
@@ -1527,12 +1528,12 @@ A block stores its animations in `motion`. Every kind is optional. Times are mil
 - `MotionRuntime` loads the runtime as its own chunk (about 14 KB gzipped, Motion included) and starts it once per page, however many layouts render it. The runtime finds the elements, watches for new ones (client navigation, streaming), and drives them:
   - Entrances run on the Web Animations API (`animate` from `motion/mini`), so the browser runs them off the main thread. They animate only `opacity`, `transform`, `filter` and `clip-path`, then hand the element back to its classes. Nothing changes layout, so there is no layout shift.
   - Hover and press use Motion's `hover` and `press` gestures with short springs. Hover runs only on devices with a fine pointer. Press does not make a block focusable.
-  - Scroll effects use Motion's `scroll`, which uses a native `ViewTimeline` where the browser has one. Scroll and loop effects use the separate `translate`, `scale` and `opacity` properties, so they add to the other effects.
+  - Scroll effects use Motion's `scroll`, which uses a native `ViewTimeline` where the browser has one. Scroll and loop effects use the separate `translate`, `scale` and `opacity` properties (and `filter` for the recede dim), so they add to the other effects. Where the browser has no `ViewTimeline`, Motion follows the scroll in JavaScript.
   - Loops pause while the block is out of view.
 - **Entrances on load start at first paint.** An entrance with `trigger: "load"` plays in plain CSS: `MotionStyle` writes one rule per such block (it matches the block's `data-motion` value) with keyframes from the same preset data. It does not wait for JavaScript, so the block paints with the page. The runtime sees the CSS animation and leaves the block alone.
 - **Entrances on scroll: no flash, and nothing hidden without JavaScript.** The style hides these blocks until the runtime takes them over, only under `@media (scripting: enabled) and (prefers-reduced-motion: no-preference)`. Visitors and crawlers without JavaScript see every block. The hiding is a 1.2-second CSS animation, so if the runtime never starts (a script error), the blocks show after 1.2 seconds.
 - **Keep the largest element still.** Do not put an entrance on the page's main title or hero image: it is the page's Largest Contentful Paint. Animate the text and buttons around it. The starter's hero sections do this.
-- **Reduced motion.** When the visitor's system asks for less motion (`prefers-reduced-motion: reduce`), nothing is hidden and blocks in the window at load show at once. Blocks further down fade in briefly as they scroll into view. Hover, press, parallax, zoom and loops do not run. The scroll fade stays.
+- **Reduced motion.** When the visitor's system asks for less motion (`prefers-reduced-motion: reduce`), nothing is hidden and blocks in the window at load show at once. Blocks further down fade in briefly as they scroll into view. Hover, press, parallax, zoom, recede and loops do not run. The scroll fade stays.
 
 ### Custom components and renderers
 

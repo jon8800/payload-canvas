@@ -84,7 +84,8 @@ describe('reduced motion', () => {
   it('drops scroll movement and loops but keeps the scroll fade', () => {
     assert.equal(scrollPlan({ preset: 'parallax' }, true), null)
     assert.equal(scrollPlan({ preset: 'zoom' }, true), null)
-    assert.equal(scrollPlan({ preset: 'fade' }, true)?.property, 'opacity')
+    assert.equal(scrollPlan({ preset: 'recede' }, true), null)
+    assert.deepStrictEqual(scrollPlan({ preset: 'fade' }, true)?.keyframes, { opacity: [0, 1] })
     assert.equal(loopPlan({ preset: 'float' }, true), null)
   })
 })
@@ -97,7 +98,18 @@ describe('plans', () => {
   })
 
   it('builds parallax against the scroll', () => {
-    assert.deepStrictEqual(scrollPlan({ preset: 'parallax', distance: 50 })?.keyframes, ['0px 50px', '0px -50px'])
+    assert.deepStrictEqual(scrollPlan({ preset: 'parallax', distance: 50 })?.keyframes, { translate: ['0px 50px', '0px -50px'] })
+  })
+
+  it('recedes while the next block scrolls from the window bottom to its top', () => {
+    assert.deepStrictEqual(scrollPlan({ preset: 'recede' }), {
+      keyframes: { scale: [1, 0.9], filter: ['brightness(1)', 'brightness(0.7)'] },
+      offset: [[0, 1], [0, 0]],
+      target: 'next',
+    })
+    assert.deepStrictEqual(scrollPlan({ preset: 'recede', scale: 0.8 })?.keyframes.scale, [1, 0.8])
+    assert.deepStrictEqual(checkMotion({ scroll: { preset: 'recede', scale: 0.85 } }), { scroll: { preset: 'recede', scale: 0.85 } })
+    assert.equal(describeMotion({ scroll: { preset: 'recede' } }), 'Recede while scrolling')
   })
 
   it('combines hover and press transforms', () => {
