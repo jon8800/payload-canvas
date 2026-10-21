@@ -33,6 +33,7 @@ Read `AGENTS.md` and `docs/architecture.md` first. The gap numbers (8.x) match p
 | 21 | Menu dropdowns | `menu.items[].children` (one level), `<details>` dropdowns, `submenuLabel`, `MENU_CLASS_MAP.submenu*` |
 | 22 | Links in list items | `listItem` `link` (one link per item). Links inside the text are not built: see the changelog |
 | 23 | `scroll: recede` | `motion.scroll = { preset: 'recede', scale? }`, CSS view timeline with Motion's fallback |
+| 24 | Live saved sections | `builtinBlocks({ include: ['sectionRef'] })`: renders a saved section's current blocks, **Detach section** in the block menu, "Used in" on saved sections. Sites compile the page CSS from the loaded layout |
 | 25 | Section variants | `SectionDefinition.variants`; each shows as a section `hero/split` (`sectionsWithVariants()`) |
 | 26 | Where builder | condition rows for `collectionList.where`, **Edit as JSON**; `admin.custom.builderWhere` on any JSON field. `queryFilters` stays JSON |
 | 27 | Server block cache | the canvas cache existed (per scope and block JSON, 200 entries); its key now ignores `motion`, and `refresh()` runs after document saves. Limit: data changed outside the editor shows after a reload |
@@ -47,5 +48,4 @@ More work from the same night is in `[Unreleased]` too: button icons, control la
 
 | # | Gap | Change |
 | --- | --- | --- |
-| 24 | 8.16 | A `sectionRef` block that renders a saved section live, with a "detach" action. |
 | 30 | — | Decide whether sites use the Theme global for brand colours and fonts. The starter turns it off (`theme: false`) and keeps them in `brand.config.ts` and its CSS. |
