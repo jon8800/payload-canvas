@@ -1573,6 +1573,10 @@ Which template a document uses: its own `template`, else the newest default temp
 | `"!field"` | the field is empty. |
 | `"field=value"` | the field equals the value. For a list (hasMany), any item or document id matches. |
 | `"field!=value"` | the field does not equal the value. |
+| `"field>3"`, `"field>=3"`, `"field<3"`, `"field<=3"` | the field is a number (or a numeric text) and the comparison holds. Any other value fails. |
+| `"field#>=3"` | `field#` is the number of items: a list's length, `0` for an empty value, `1` for any other value. It works with every test above, for example `"galleryImages#>=3"` (at least 3 photos), `"services#=0"` or `"!galleryImages#"`. |
+
+The first operator in the text counts, so a value may hold `=` or `>` (`"title=a=b"` compares with `a=b`).
 
 A block hidden by `$visible` renders nothing on the site. On the canvas it shows dimmed, like a hidden block. Expressions and `$visible` are not checked against the collection's fields when you publish. The inspector shows an expression as text with a preview of its value. Add or change one in the layout JSON or through the MCP tools.
 
