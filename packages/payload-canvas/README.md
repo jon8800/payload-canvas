@@ -1791,6 +1791,7 @@ A collection list can show only the documents related to the current document (t
 - With `shared` or `linked`, a current document without values shows an empty list. The plugin sends no query.
 - On a normal page (no current document), `filterField` is ignored and the list is not filtered.
 - `where` is a static Payload `where` query, AND-ed with the filter. For example `{ "featured": { "equals": true } }` or `{ "district": { "equals": "north" } }`. Only a plain object counts; anything else is ignored.
+- The inspector edits `where` as condition rows: a field of the chosen collection, an operator (`equals`, `not_equals`, `in`, `not_in`, `greater_than`, `greater_than_equal`, `less_than`, `less_than_equal`, `like`, `contains`, `exists`) and a value. Rows are AND-ed. Values of number and checkbox fields are stored as numbers and booleans; `in` and `not_in` take a comma-separated list. **Edit as JSON** switches to the raw query. A query the rows cannot show (with `or` or nested groups) opens as JSON. The stored value is the same Payload `where` object either way. A JSON field of your own block gets the rows with `admin: { custom: { builderWhere: { collectionField: 'collection' } } }`, where `collectionField` names the sibling prop that holds the collection slug.
 - Date values in `where` and `queryFilters` can be tokens: `"$now"`, `"$now-30d"`, `"$now+12h"` (units `d` and `h`). They become ISO dates, rounded down to the minute. Example: `{ "createdAt": { "greater_than": "$now-30d" } }` lists documents from the last 30 days.
 
 ```json
