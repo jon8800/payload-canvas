@@ -3,7 +3,7 @@
 import type { Payload, Where } from 'payload'
 import { resolveBindings, type Block, type BlockDefinition, type Layout, type TemplateContext } from '../../core'
 import { isRecord, mapFieldValues, type FieldLike, type VisitField } from './fields'
-import { attachListItems, listQueries, type ListQuery } from './lists'
+import { attachListItems, listQueries, type ListQuery, type ListQueryParams } from './lists'
 import type { FetchDocs, ResolveLink } from './types'
 import { localeArgs, localizeLayout, type LocaleArgs, type RenderLocale } from './locale'
 
@@ -152,12 +152,18 @@ export type LoadLayoutOptions = RenderLocale & {
    * the visitor may not read, such as a user's email. Pass the user in draft mode.
    */
   user?: unknown
+  /**
+   * The request's URL query (`URLSearchParams`, or a Next.js page's awaited `searchParams`).
+   * Collection lists apply their `queryFilters` with it. Without it the filters are off. A route
+   * that filters lists by the URL should send `noindex, follow` for filtered URLs.
+   */
+  query?: ListQueryParams | null
 }
 
 /**
  * Server helper: prepares a layout for `RenderLayout` with Payload's Local API.
  * 1. Resolves bindings and Field blocks against `options.context` (when given).
- * 2. Loads every collection list's documents (`depth: 1`; published only unless `draft`), with the
+ * 2. Loads every collection list's documents (`depth: 1` or the list's `depth`; published only unless `draft`), with the
  *    access of `options.user` (anonymous without it).
  * 3. Replaces upload/relationship IDs in block props with documents (one batched `find` per collection).
  */
@@ -176,7 +182,7 @@ export async function loadLayoutData(
     ? resolveBindings(localized, context, blocks, options?.resolveLink ? { url: urlResolver(options.resolveLink) } : undefined)
     : localized
 
-  const queries = listQueries(bound, context)
+  const queries = listQueries(bound, context, options?.query)
   const items = new Map<string, Array<Record<string, unknown>>>()
   await Promise.all(
     queries.map(async (query) => {
@@ -226,15 +232,16 @@ async function findListItems(
       collection: query.collection as never,
       where: where.length > 0 ? { and: where } : {},
       sort: query.sort,
-      limit: query.limit,
-      depth: 1,
+      // Payload has no offset: load the skipped documents too and drop them below.
+      limit: query.limit + (query.offset ?? 0),
+      depth: query.depth ?? 1,
       draft,
       // The visitor's access: unreadable documents and relationships stay out (or stay IDs).
       overrideAccess: false,
       user: user as never,
       ...locale,
     })
-    return result.docs as Array<Record<string, unknown>>
+    return (result.docs as Array<Record<string, unknown>>).slice(query.offset ?? 0)
   } catch (error) {
     payload.logger.error({ err: error, msg: `[builder] Collection list "${query.collection}" failed to load.` })
     return []

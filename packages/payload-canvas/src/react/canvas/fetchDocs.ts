@@ -55,7 +55,7 @@ export function createRestFetchDocs(api: string, locale?: string | null): FetchD
   }
 }
 
-/** One promise per list query. Key: api + locale + collection + limit + sort + where. */
+/** One promise per list query. Key: api + locale + collection + limit + sort + depth + where. */
 const listCache = new Map<string, Promise<Doc[]>>()
 
 /**
@@ -76,12 +76,14 @@ export function whereParams(value: unknown, prefix = 'where'): Array<[string, st
  */
 export function fetchListItems(api: string, query: ListQuery, locale?: string | null): Promise<Doc[]> {
   if (query.none) return Promise.resolve([])
-  const limit = query.limit + (query.exclude === undefined ? 0 : 1)
+  const offset = query.offset ?? 0
+  const limit = query.limit + offset + (query.exclude === undefined ? 0 : 1)
+  const depth = String(query.depth ?? 1)
   const where = whereParams(query.where)
-  const key = `${api}\u0000${locale ?? ''}\u0000${query.collection}\u0000${limit}\u0000${query.sort}\u0000${JSON.stringify(where)}`
+  const key = `${api}\u0000${locale ?? ''}\u0000${query.collection}\u0000${limit}\u0000${query.sort}\u0000${depth}\u0000${JSON.stringify(where)}`
   let request = listCache.get(key)
   if (!request) {
-    const params = withLocale(new URLSearchParams({ limit: String(limit), sort: query.sort, depth: '1', draft: 'true' }), locale)
+    const params = withLocale(new URLSearchParams({ limit: String(limit), sort: query.sort, depth, draft: 'true' }), locale)
     for (const [name, value] of where) params.append(name, value)
     request = fetch(`${api}/${encodeURIComponent(query.collection)}?${params}`, { credentials: 'include' })
       .then(async (res) => {
@@ -96,7 +98,7 @@ export function fetchListItems(api: string, query: ListQuery, locale?: string | 
     listCache.set(key, request)
   }
   return request.then((docs) =>
-    docs.filter((doc) => query.exclude === undefined || String(doc.id) !== String(query.exclude)).slice(0, query.limit),
+    docs.filter((doc) => query.exclude === undefined || String(doc.id) !== String(query.exclude)).slice(offset, offset + query.limit),
   )
 }
 

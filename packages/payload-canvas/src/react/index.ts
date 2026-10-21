@@ -49,7 +49,7 @@ export type {
   CanvasServerResult,
 } from './render/canvasServerTypes'
 export { loadLayoutData, resolveLayoutData, urlResolver, type LoadLayoutOptions } from './render/resolve'
-export { attachListItems, listItemsOf, listQueries, type ListQuery } from './render/lists'
+export { attachListItems, listItemsOf, listQueries, withDateTokens, type ListQuery, type ListQueryParams } from './render/lists'
 export { fieldFor } from './components/Field'
 export { renderRichText } from './components/RichText'
 export { applyThemeOutput, ThemeLive } from './theme/ThemeLive'
