@@ -15,7 +15,7 @@ import { aiClientConfig } from '../ai/config'
 import { AI_IMAGES_KEY, createImageService } from '../ai/images/service'
 import type { AiOptions } from '../ai/types'
 import { defaultBlocks } from '../blocks'
-import { richTextFieldName, sectionsWithDefaultClassNames } from '../core/blocks'
+import { richTextFieldName, sectionsWithDefaultClassNames, withInlineBlocks } from '../core/blocks'
 import { DEFAULT_TEMPLATES_SLUG, DOCUMENT_TEMPLATE_FIELD, TEMPLATE_TARGET_FIELD } from '../core/bindings'
 import { localeSettingsOf } from '../core/locale'
 import { resolveRegions, type RegionOption } from '../core/regions'
@@ -336,7 +336,8 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       builderOptions[templatesSlug] = { field: TEMPLATE_LAYOUT_FIELD, ...(options.templates?.localization === false ? { localization: false } : {}) }
     }
 
-    const blocks = listCollectionsOf(options.blocks ?? defaultBlocks(), [...withUrl])
+    // Inline blocks (`inline: true`) may sit in a link: they join its `allow` list.
+    const blocks = withInlineBlocks(listCollectionsOf(options.blocks ?? defaultBlocks(), [...withUrl]))
     // A section block without a className gets its type's default classes (JSON layouts only).
     const sections = sectionsWithDefaultClassNames(options.sections ?? [], blocks)
     const duplicate = blocks.find((b, i) => blocks.findIndex((other) => other.type === b.type) !== i)

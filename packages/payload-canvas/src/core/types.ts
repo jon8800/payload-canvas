@@ -99,6 +99,11 @@ export type SlotDefinition = {
   /** Fewest direct children the slot needs (Payload's `minRows`). Fewer blocks only publishing. */
   min?: number
   /**
+   * With `allow`: the slot also accepts every block type whose definition sets `inline: true`
+   * (`withInlineBlocks` adds them to `allow`). The link block's content slot sets it.
+   */
+  allowInline?: boolean
+  /**
    * The slot renders in an element of its own that takes classes (`block.slotClassName[slot]`).
    * The Styles panel then offers the slot as a style target. The component spreads
    * `slotAttributes[slot]` (which carries the `className`) on that element. Default false.
@@ -119,6 +124,11 @@ export type BlockDefinition = {
   parents?: string[]
   /** Adds `className` and the style controls. Default true. */
   styles?: boolean
+  /**
+   * The block renders no link, button or other control of its own, so it may sit inside a link
+   * (an icon, a badge, a rating). Slots with `allowInline` accept it. Default false.
+   */
+  inline?: boolean
   /** Classes a newly inserted block starts with (e.g. "flex flex-col gap-4" for a stack). */
   defaultClassName?: string
   /**
