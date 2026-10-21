@@ -12,7 +12,7 @@ Read `AGENTS.md` and `docs/architecture.md` first. The gap numbers (8.x) match p
 - Each item names the starter workaround that it replaces. Remove the workaround in the starter in the same round, and run its checks: `pnpm canvas:index`, `pnpm typecheck`, `pnpm lint`, `pnpm test`.
 - Keep blocks unstyled. They take every look from `className`, like the existing blocks. Client components only where the block needs browser state.
 
-## Done (P0 and P1, in `[Unreleased]` of `CHANGELOG.md`)
+## Done (see `[Unreleased]` in `CHANGELOG.md`)
 
 | # | Item | API |
 | --- | --- | --- |
@@ -29,6 +29,7 @@ Read `AGENTS.md` and `docs/architecture.md` first. The gap numbers (8.x) match p
 | 11 | `$url` of a related document | `<path>.$url` from `resolveLink`; `bindingRelations()` as `relations` |
 | 12 | The `random` prop warning | Not from the plugin. No plugin block or motion code passes `random`. |
 | 13 to 19 | Built-in blocks | `builtinBlocks({ include, icons, mediaCollection })` and `builtinComponents({ icons })`: `icon`, `carousel`, `lightbox`, `accordion` and `disclosure` (`faqItems`, `faqJsonLd`), `mediaBackdrop`, `tableOfContents`, `filterLink` (`filterHref`) |
+| 29 | `create-payload-canvas` version | installs `payload-canvas` `^0.3.0` |
 
 Delete `anchor` from the starter now that item 2 is done; it is not in the plugin. These stay in the starter, because they hold site rules: `contactLink`, `form`, `breadcrumbs`, `jsonLd`, `documentLayout`, `glossaryTerm`, `letterFilter` and `rating`.
 
@@ -45,5 +46,4 @@ Delete `anchor` from the starter now that item 2 is done; it is not in the plugi
 | 26 | 8.18 | A small where builder in the inspector (field, operator, value) in place of raw JSON. |
 | 27 | 8.19 | Cache server block output in the canvas per block id and props, so data blocks do not wait 250 to 1000 ms per edit. |
 | 28 | 8.20 | Template `conditions` (a where query), so touring models or VIP types can get their own default layout. |
-| 29 | — | `create-payload-canvas` still pins `payload-canvas` `^0.2.0`. Bump it with the next release. |
 | 30 | — | Decide whether sites use the Theme global for brand colours and fonts. The starter turns it off (`theme: false`) and keeps them in `brand.config.ts` and its CSS. |

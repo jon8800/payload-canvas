@@ -28,6 +28,10 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 - Classes on slots: a slot with `styles: true` takes its own classes in `block.slotClassName` (`{ [slot]: classes }`). The renderer puts them in `slotAttributes[slot].className`, the save hook and the canvas compile them, and the Styles tab gets a **Style target** select for the block or its styled slots. `update` merges them per slot. The `collectionList` `empty` slot takes classes. The MCP tools, the assistant and the JSON Schema know them.
 - Block HTML attributes: `block.attrs` `{ id?, ariaLabel?, ariaHidden? }` render as `id`, `aria-label` and `aria-hidden`. The inspector's new **Advanced** tab edits them, `update` merges them per key (`attrs`), and the MCP tools, the assistant and the block JSON Schema know them. An id must be unique in the layout: insert and update refuse a repeated id, duplicates, pastes and section copies leave it out, and `validateLayout` flags it for publishing. Copies of a list item or repeat row leave out the id. New in `payload-canvas/core`: `checkAttrs`, `patchAttrs`, `htmlAttributes`, `htmlIdProblem`, `htmlIdsOf`, `htmlIdClash` and `withoutTakenHtmlIds`.
 
+### Changed
+
+- New projects created by `create-payload-canvas` install `payload-canvas` 0.3.x (`^0.3.0`).
+
 ## [0.3.0] - 2026-10-21
 
 ### Added
