@@ -187,3 +187,19 @@ test('image: resolved doc renders an img, unresolved id is empty or a placeholde
   assert.equal(render({ layout: unresolved }), '')
   assert.match(render({ layout: unresolved, mode: 'canvas' }), /<div data-block-id="i" data-block-type="image" data-builder-image="image" data-builder-placeholder="" class="rounded builder-css" style=/)
 })
+
+test('class props get the marker class, and a missing one its default', () => {
+  const def = {
+    type: 'chip',
+    label: 'Chip',
+    fields: [
+      { name: 'dot', type: 'text' as const, defaultValue: 'size-2', admin: { custom: { builderClasses: true } } },
+      { name: 'ring', type: 'text' as const, admin: { custom: { builderClasses: true } } },
+    ],
+  }
+  const components: BlockComponents = { chip: ({ props }) => createElement('span', { className: String(props.dot), 'data-ring': String(props.ring) }) }
+  const html = renderToStaticMarkup(
+    createElement(RenderLayout, { layout: { version: 1, blocks: [{ id: 'a', type: 'chip', props: { ring: 'ring-2' } }] }, blocks: [def], components }),
+  )
+  assert.match(html, /class="size-2 builder-css" data-ring="ring-2 builder-css"/)
+})

@@ -251,12 +251,21 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     label: 'Rich text',
     icon: 'richText',
     category: 'Content',
-    fields: [{ name: 'content', type: 'richText', label: 'Content', required: true, localized: true }],
+    fields: [
+      { name: 'content', type: 'richText', label: 'Content', required: true, localized: true },
+      {
+        name: 'headingIds',
+        type: 'checkbox',
+        label: 'Heading ids',
+        admin: { description: 'Each heading gets an id from its text, so a table of contents can link to it ("#prices").' },
+      },
+    ],
     defaultClassName: 'prose',
     ai: {
       description:
         'Formatted text (Lexical JSON): paragraphs, headings, bold and italic, links and lists. ' +
-        'Use it for articles and longer copy. The "prose" class styles the content.',
+        'Use it for articles and longer copy. The "prose" class styles the content. "headingIds": true gives each ' +
+        'heading an id from its text, for "#id" links.',
       example: {
         type: 'richText',
         className: 'prose',
@@ -362,12 +371,14 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     fields: [linkField({ collections: linkCollections })],
     // Interactive content inside <a> is invalid HTML. `allow` limits direct children; `disallow`
     // refuses these types at any depth (a button inside a stack inside the link, for example).
-    slots: { children: { label: 'Content', allow: LINK_CONTENT, disallow: INTERACTIVE } },
+    // `allowInline`: custom blocks marked `inline: true` (an icon, a badge) may go in directly too.
+    slots: { children: { label: 'Content', allow: LINK_CONTENT, disallow: INTERACTIVE, allowInline: true } },
     defaultClassName: 'block',
     ai: {
       description:
         'A clickable container: everything inside it links to one place. Use it for cards that link to a page. ' +
-        `It holds only ${LINK_CONTENT.join(', ')} blocks, and never links, buttons, forms, menus or lists of links.`,
+        `It holds only ${LINK_CONTENT.join(', ')} blocks and the site's inline blocks (see the slot's accepted types), ` +
+        'and never links, buttons, forms, menus or lists of links.',
       example: {
         type: 'link',
         props: { link: exampleLink },
@@ -606,6 +617,22 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         localized: true,
         admin: { description: 'Shown when this field is empty.' },
       },
+      {
+        name: 'format',
+        type: 'text',
+        label: 'Format',
+        admin: {
+          description:
+            'For a number, date or text: "currency:AUD" ($1,200), "number" (1,200), "date:en-AU:Australia/Brisbane" ' +
+            '(a date in that language and time zone) or "firstSentence". Empty: the value as it is.',
+        },
+      },
+      {
+        name: 'headingIds',
+        type: 'checkbox',
+        label: 'Heading ids',
+        admin: { description: 'For rich text: each heading gets an id from its text, so a table of contents can link to it ("#prices").' },
+      },
     ],
     classes: FIELD_CLASSES,
     ai: {
@@ -613,7 +640,9 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         'Shows one field of the current document in a template, rendered by its value: rich text as formatted ' +
         'text, an upload as an image, a date as a formatted date, a relationship as its title, text as text. ' +
         '"path" is a dot path from getBindingSources (e.g. "content", "author.name"). Only works in templates ' +
-        'and inside a collection list item.',
+        'and inside a collection list item. "format" formats a number, date or text with a binding formatter: ' +
+        '"currency:AUD", "number", "date:en-AU:Australia/Brisbane" or "firstSentence". "headingIds": true gives each ' +
+        'rich-text heading an id from its text (e.g. "Our prices" -> "our-prices", repeats get "-2"), for "#id" links.',
       example: { type: FIELD_BLOCK, props: { path: 'content' }, className: 'prose max-w-none' },
     },
   })
@@ -634,8 +663,29 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         type: 'text',
         label: 'Sort',
         defaultValue: '-createdAt',
-        admin: { description: 'The field to sort by, for example "publishedAt". Put a "-" in front for newest or largest first: "-publishedAt".' },
+        admin: {
+          description:
+            'The field to sort by, for example "publishedAt". Put a "-" in front for newest or largest first: "-publishedAt". ' +
+            '"$random" shuffles the newest 100 matches once per page build.',
+        },
       },
+      listCollections && listCollections.length > 0
+        ? {
+            name: 'ids',
+            type: 'relationship',
+            label: 'Picked documents',
+            // The slugs come from the app, so they cannot match Payload's generated slug type.
+            relationTo: (listCollections.length === 1 ? listCollections[0] : listCollections) as never,
+            hasMany: true,
+            admin: { description: 'Only these documents, in this order. Limit, sort, skip and pages then do not apply.' },
+          }
+        : {
+            name: 'ids',
+            type: 'text',
+            label: 'Picked document ids',
+            hasMany: true,
+            admin: { description: 'Only these documents, in this order. Limit, sort, skip and pages then do not apply.' },
+          },
       {
         name: 'excludeCurrent',
         type: 'checkbox',
@@ -687,6 +737,30 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
       },
       { name: 'offset', type: 'number', label: 'Skip items', min: 0, admin: { description: 'Documents to leave out at the start.' } },
       {
+        name: 'paginate',
+        type: 'select',
+        label: 'Pages',
+        defaultValue: 'none',
+        options: [
+          { label: 'None: only the first items', value: 'none' },
+          { label: 'Pages with ?page=N links', value: 'pages' },
+        ],
+        admin: { description: 'Pages: "Number of items" per page, with links to every page under the list. "Skip items" does not apply.' },
+      },
+      {
+        name: 'pagerClassName',
+        type: 'text',
+        label: 'Page links: classes',
+        defaultValue: 'flex flex-wrap gap-2',
+        admin: { description: 'Classes of the element that holds the page links.', custom: { builderClasses: true } },
+      },
+      {
+        name: 'pageLinkClassName',
+        type: 'text',
+        label: 'Page link: classes',
+        admin: { description: 'Classes of each page link. The current page has aria-current="page", e.g. "aria-[current=page]:font-bold".', custom: { builderClasses: true } },
+      },
+      {
         name: 'depth',
         type: 'select',
         label: 'Related data depth',
@@ -698,7 +772,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         admin: { description: 'How far related documents of each item load, for example 2 to reach a category\'s image.' },
       },
     ],
-    slots: { [LIST_ITEM_SLOT]: { label: 'Item' }, [LIST_EMPTY_SLOT]: { label: 'When empty' } },
+    slots: { [LIST_ITEM_SLOT]: { label: 'Item' }, [LIST_EMPTY_SLOT]: { label: 'When empty', styles: true } },
     defaultClassName: 'grid grid-cols-1 gap-6 md:grid-cols-3',
     ai: {
       description:
@@ -717,8 +791,13 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         '"$now-30d" or "$now+7d" (units d and h). "queryFilters" filters by the page URL: { "<param>": { "<value>": where } }, ' +
         'e.g. { "available": { "today": { "availableToday": { "equals": true } } } } for ?available=today; values of one ' +
         'param (repeated or comma-separated) are OR-ed, params are AND-ed; the canvas ignores them. "offset" skips ' +
-        'documents. "depth" ("1" or "2") is how deep related documents load. The "empty" slot shows instead of the ' +
-        'items when no document matches (e.g. a text "Nobody is available today").',
+        'documents. "depth" ("1" or "2") is how deep related documents load. "ids" picks documents by id and keeps the ' +
+        'pick order (limit, sort, offset and pages then do not apply). "sort": "$random" shuffles the newest 100 ' +
+        'matches once per page build. "paginate": "pages" shows "limit" items per page with crawlable ?page=N links ' +
+        'under the list ("pagerClassName" and "pageLinkClassName" style them; the current link has aria-current="page"). ' +
+        'The "empty" slot shows instead of the ' +
+        'items when no document matches (e.g. a text "Nobody is available today"); it renders in its own div, styled ' +
+        'with "slotClassName": { "empty": "col-span-full ..." }.',
       example: {
         type: COLLECTION_LIST_BLOCK,
         props: { collection: 'posts', limit: 3, sort: '-createdAt' },
@@ -776,6 +855,21 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
             label: 'Related collection',
             admin: { description: 'For a relationship field: the collection of its documents, so "$url" links to each one.' },
           },
+      {
+        name: 'as',
+        type: 'select',
+        label: 'Wrapper',
+        defaultValue: 'div',
+        options: [
+          { label: 'A div around the rows', value: 'div' },
+          { label: 'None: the rows sit in the parent', value: 'none' },
+        ],
+        admin: {
+          description:
+            'None: the rows become direct children of the parent block, for example the cells of a grid or the items of a list. ' +
+            "The repeat's own classes and animations then do nothing.",
+        },
+      },
     ],
     slots: { [LIST_ITEM_SLOT]: { label: 'Row' } },
     defaultClassName: 'flex flex-col gap-4',
@@ -788,7 +882,10 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         `document's fields (e.g. "name"; "$url" when "collection" names its collection), "${ITEM_PATH}" (the row value ` +
         `itself: an upload for an image, a text for a text block), "${INDEX_PATH}" (the row number from 1), ` +
         `"${PARENT_PATH}.<field>" (the enclosing document, e.g. "${PARENT_PATH}.name") and "${PAGE_PATH}.<field>" (the page's ` +
-        'document). "limit" and "offset" pick rows (offset 1 skips the first). On a page without a current document ' +
+        'document). "limit" and "offset" pick rows (offset 1 skips the first). "as": "div" (default) wraps the rows in ' +
+        'a div that takes the className; "none" renders the rows with no wrapper, as direct children of the parent ' +
+        '(e.g. cells of a grid, items of a stack with as "ul"), and then className and motion do nothing. ' +
+        'On a page without a current document ' +
         'it shows nothing. Example 2 (photos): { "type": "repeat", "props": { "path": "galleryImages", "offset": 1 }, ' +
         `"slots": { "item": [{ "type": "image", "bindings": { "image": "${ITEM_PATH}" } }] } }.`,
       example: {

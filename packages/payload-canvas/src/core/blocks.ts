@@ -90,6 +90,51 @@ export function defineSection(input: SectionInput): SectionDefinition {
   return { ...input, blocks: fill(input.blocks) }
 }
 
+/**
+ * The blocks with each block's `defaultClassName` filled where the block has no `className` key, at
+ * any depth. A `className` of `''` stays empty. Blocks of unknown types stay as they are. The
+ * plugin and `builderMcpTools` run it on the app's `sections`, so a section tree may leave out a
+ * block's default classes. Seeds that build layouts by hand can run it too.
+ */
+export function withDefaultClassNames(list: readonly Block[], definitions: readonly BlockDefinition[]): Block[] {
+  return list.map((block) => {
+    const next: Block = { ...block }
+    const fallback = block.className === undefined ? getBlockDefinition(definitions, block.type)?.defaultClassName : undefined
+    if (fallback) next.className = fallback
+    if (block.slots) {
+      next.slots = Object.fromEntries(Object.entries(block.slots).map(([name, children]) => [name, withDefaultClassNames(children, definitions)]))
+    }
+    return next
+  })
+}
+
+/** `withDefaultClassNames` on the blocks of every section. */
+export function sectionsWithDefaultClassNames(sections: readonly SectionDefinition[], definitions: readonly BlockDefinition[]): SectionDefinition[] {
+  return sections.map((section) => ({ ...section, blocks: withDefaultClassNames(section.blocks, definitions) }))
+}
+
+/**
+ * The blocks with every `allowInline` slot accepting the block types marked `inline: true`: they
+ * join the slot's `allow` list. The plugin and `builderMcpTools` run it on their block list, so
+ * the editor, the checks and the AI tools all see the same rule. Returns the same list when no
+ * block is inline.
+ */
+export function withInlineBlocks(blocks: BlockDefinition[]): BlockDefinition[] {
+  const inline = blocks.filter((b) => b.inline).map((b) => b.type)
+  if (inline.length === 0) return blocks
+  return blocks.map((def) => {
+    const slots = def.slots
+    if (!slots || !Object.values(slots).some((slot) => slot.allowInline && slot.allow)) return def
+    const next = Object.fromEntries(
+      Object.entries(slots).map(([name, slot]) => [
+        name,
+        slot.allowInline && slot.allow ? { ...slot, allow: [...new Set([...slot.allow, ...inline.filter((t) => !slot.disallow?.includes(t))])] } : slot,
+      ]),
+    )
+    return { ...def, slots: next }
+  })
+}
+
 export function getBlockDefinition(blocks: readonly BlockDefinition[], type: string): BlockDefinition | undefined {
   return blocks.find((b) => b.type === type)
 }

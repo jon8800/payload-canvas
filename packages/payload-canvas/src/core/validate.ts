@@ -2,6 +2,7 @@
 // the rules a schema cannot express (unique ids). Optional props may be `null` (Payload's own
 // "empty" value); the schema leaves that out to keep it simple for AI tools.
 
+import { checkAttrs } from './attrs'
 import { getBlockDefinition, slotLabel, slotLimitText } from './blocks'
 import { conditionMet, readCondition } from './conditions'
 import { formatProblem } from './formats'
@@ -61,7 +62,7 @@ export function isBlockingError(error: Pick<LayoutError, 'code'>, publishing: bo
   return publishing || !PUBLISH_ONLY_CODES.has(error.code)
 }
 
-const BLOCK_KEYS = new Set(['id', 'type', 'props', 'className', 'slots', 'bindings', 'hidden', 'label', 'locales', 'motion'])
+const BLOCK_KEYS = new Set(['id', 'type', 'props', 'className', 'slots', 'bindings', 'hidden', 'label', 'locales', 'motion', 'attrs', 'slotClassName'])
 
 /** Checks structure, unique ids, known block types, slot rules and prop types. */
 export function validateLayout(layout: unknown, blocks: BlockDefinition[], options: ValidateOptions = {}): LayoutError[] {
@@ -74,7 +75,8 @@ export function validateLayout(layout: unknown, blocks: BlockDefinition[], optio
   }
   const seen = new Set<string>()
   const localization = options.localization ?? null
-  layout.blocks.forEach((block, i) => checkBlock(block, `blocks[${i}]`, null, [], blocks, seen, errors, localization))
+  const htmlIds = new Map<string, string>()
+  layout.blocks.forEach((block, i) => checkBlock(block, `blocks[${i}]`, null, [], blocks, seen, errors, localization, htmlIds))
   return errors
 }
 
@@ -95,6 +97,7 @@ function checkBlock(
   seen: Set<string>,
   errors: LayoutError[],
   localization: LocaleSettings | null,
+  htmlIds: Map<string, string>,
 ): void {
   if (!isPlainObject(value)) {
     errors.push({ path, message: 'Block must be an object', code: 'invalid' })
@@ -148,11 +151,28 @@ function checkBlock(
     if (typeof value.className !== 'string') report(`${path}.className`, 'className must be a string')
     else if (def?.styles === false) report(`${path}.className`, `Block type "${type}" does not take a className`)
   }
+  if (value.slotClassName !== undefined) {
+    if (!isPlainObject(value.slotClassName)) report(`${path}.slotClassName`, 'slotClassName must be an object of slot name -> classes')
+    else {
+      for (const [slot, classes] of Object.entries(value.slotClassName)) {
+        if (typeof classes !== 'string') report(`${path}.slotClassName.${slot}`, 'Slot classes must be a string')
+        else if (def && !def.slots?.[slot]?.styles) report(`${path}.slotClassName.${slot}`, `The "${slot}" slot of ${def.label} takes no classes`)
+      }
+    }
+  }
   if (value.hidden !== undefined && typeof value.hidden !== 'boolean') {
     report(`${path}.hidden`, 'hidden must be a boolean')
   }
   if (value.label !== undefined && typeof value.label !== 'string') {
     report(`${path}.label`, 'label must be a string')
+  }
+  const attrs = checkAttrs(value.attrs)
+  if (typeof attrs === 'string') report(`${path}.attrs`, attrs)
+  else if (attrs?.id) {
+    // Publish-only: a page with two equal anchors still saves as a draft.
+    const usedBy = htmlIds.get(attrs.id)
+    if (usedBy) report(`${path}.attrs.id`, `The HTML id "${attrs.id}" is also used by block "${usedBy}". Every id is unique in a layout.`, 'constraint')
+    else htmlIds.set(attrs.id, blockId ?? path)
   }
   for (const problem of motionProblems(value.motion)) {
     report(`${path}.${problem.path}`, problem.message, problem.unknown ? 'unknown-key' : 'invalid')
@@ -184,7 +204,7 @@ function checkBlock(
     const label = nameOf(value, def, type ?? '')
     const childOwner: Owner = slotDef && type ? { type, label, slot: name, def: slotDef } : null
     const childBanned = slotDef?.disallow?.length ? [...banned, ...slotDef.disallow.map((t) => ({ type: t, by: label }))] : banned
-    children.forEach((child, i) => checkBlock(child, `${slotPath}[${i}]`, childOwner, childBanned, blocks, seen, errors, localization))
+    children.forEach((child, i) => checkBlock(child, `${slotPath}[${i}]`, childOwner, childBanned, blocks, seen, errors, localization, htmlIds))
   }
 }
 

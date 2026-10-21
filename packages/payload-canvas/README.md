@@ -678,6 +678,7 @@ type BlockComponentProps = {
 ```
 
 - Spread `attributes` on the root element. In the canvas it holds `data-block-id`, which the editor needs to select and measure the block.
+- Spread `slotAttributes[slot]` on the element that holds a slot's children. For a slot with `styles: true` it also carries the slot's `className` (see [Classes on slots](#classes-on-slots)), so spread it after any `className` you set on that element, or join the two.
 - Props are plain data. A component can be a client component (`'use client'`).
 - Use one components map for the site and the canvas, in a file without server code:
 
@@ -940,9 +941,16 @@ export const blocks = [...defaultBlocks({ linkCollections: ['pages'] }), pricing
 ```
 
 - `slots` declares where child blocks go. `allow` lists the accepted block types, or `['*']`. `max` caps the number of direct children: a full slot refuses insert, move, paste and duplicate (also from MCP and the assistant), and the canvas offers no drop target or "+" there. `min` is the fewest children: fewer block **Publish** but not draft saves.
+- `inline: true` says the block renders no link, button or other control of its own (an icon, a badge, a rating). Such a block may go directly inside a `link` block, whose content slot sets `allowInline: true`. A slot of your own can set `allowInline: true` too. `websiteBuilder` and `builderMcpTools` add the inline types to those slots' `allow` lists (`withInlineBlocks`); a slot's `disallow` still wins. Blocks without `inline` stay out of links.
 - `parents` limits where a block may go: only directly inside the listed block types (never in the root list). The `listItem` block uses `parents: ['list']`. A new block whose slot accepts exactly one such type starts with one child of it, so a new list starts with one item.
 - `classes`: classes your component uses itself that your site's CSS does not have. Components in your app need no list: Tailwind finds their classes in your files, and the site's CSS has them on the site and on the canvas. List classes only for a component in a package that your CSS entry does not scan (no `@source` for it). The generated CSS styles only elements with the class `builder-css` (`BUILDER_CSS_CLASS` from `payload-canvas/blocks`), so add that class to each element that uses the listed classes. The built-in Menu block does this for its toggle, panel and links.
 - Block fields keep Payload's `validate`, `hooks` and `access`. See [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields).
+- `admin.custom.builderClasses: true` on a top-level `text` field says the prop holds Tailwind classes, for example a carousel's `arrowClassName`. The save hook and the canvas compile its values (in every locale) and its `defaultValue`, like `className`. The renderer adds the `builder-css` marker to the value and fills a missing one with the default, so the component uses `props.arrowClassName` as it is. Clearing the prop (`null`) leaves it empty. The MCP tools and the assistant list such props as holding Tailwind classes.
+
+  ```ts
+  { name: 'arrowClassName', type: 'text', defaultValue: 'size-10 rounded-full bg-white/80', admin: { custom: { builderClasses: true } } }
+  ```
+
 - `admin.custom.builderFormat` on a `text` field names a value check, for example `custom: { builderFormat: 'videoUrl' }` (the Video block's URL). The inspector shows the message while the user types, and a bad value blocks **Publish** but not draft saves. `videoUrl` is the only built-in format. Formats live in a registry in `payload-canvas/core` (`FORMATS`, `formatProblem`). The renderer can use the same parser (`parseVideoUrl`).
 - `linkField()` stores `{ type, url, reference, newTab }`. The component receives it resolved, with `href`, `target` and `rel`.
 - The default blocks are `stack`, `grid`, `heading`, `text`, `richText`, `image`, `video`, `button`, `link`, `menu`, `list` with its `listItem` blocks, `quote`, `divider`, `spacer`, `collectionList` (documents from a collection), `field` (a field of the document a template renders) and `repeat` (the rows of an array or hasMany field of that document).
@@ -952,6 +960,8 @@ export const blocks = [...defaultBlocks({ linkCollections: ['pages'] }), pricing
   - `stack`: `as` also takes `ol`, `ul`, `li`, `dl`, `dt`, `dd`, `figure`, `figcaption`, `p` and `span`, for lists, term lists and captions.
 - The `menu` block folds its links into a "Menu" button and a panel on small screens. Set `ctaLabel` and `cta` (a link) to add a button as the last row of that panel, for example the header's call to action, which a header hides on phones. The inline links, and so the wide-screen header, do not change.
 - The `field` block renders rich text with the `prose` typography (and `max-w-none`) when its own `className` has no `prose` class. Add `prose prose-lg` or another `prose` class to take control.
+- `field` `format` formats a number, date or text with a binding formatter (`BINDING_FORMATTERS`): `currency:AUD` gives `$1,200`, `number` gives `1,200`, `date:en-AU:Australia/Brisbane` gives a date in that language and time zone (in a `<time>` element), and `firstSentence` the first sentence. An unknown format, or a value the formatter cannot read, renders as without `format`. Rich text and uploads ignore it. `formatBindingValue(value, format)` in `payload-canvas/core` does the same.
+- `field` and `richText` `headingIds: true` give each rich-text heading an `id` from its text, for `#id` links: `headingId('Über uns & Preise')` is `uber-uns-preise`. A repeated text gets `-2`, `-3`, and a heading without letters or digits gets `section`. `richTextHeadings(value)` in `payload-canvas/core` lists the headings with the same ids (`{ id, text, level }`), for a table of contents.
 - A list holds its items as `listItem` blocks in its `items` slot, so each item can be selected, dragged, styled and edited on the canvas. Enter at the end of an item adds the next one; Backspace at the start of an item joins it to the one before. Older layouts stored the items as a prop (`props.items: [{ text }]`). `normalizeLayout` turns them into `listItem` blocks when a layout loads, and the List component still renders the old prop until the layout is saved again. A list whose `items` prop is bound to document data keeps the old form.
 
 ### Validation, hooks and access on block fields
@@ -1339,6 +1349,8 @@ export const sections: SectionDefinition[] = [
 
 Pass them to `websiteBuilder({ sections })` and to `builderMcpTools({ sections })`. Block ids are regenerated on every insert.
 
+A section block without a `className` key gets its block type's `defaultClassName`, as a block inserted from the library does. `websiteBuilder` and `builderMcpTools` fill it, so the library, its pictures, the MCP tools and the assistant all see the classes. To keep a block without classes, set `className: ''`. A seed that builds layouts by hand can run the same step: `withDefaultClassNames(blocks, blockDefinitions)` (from `payload-canvas` or `payload-canvas/blocks`). A collection that stores a Payload `blocks` field gets the sections as written, because that field holds no classes.
+
 `defineSection()` (from `payload-canvas` or `payload-canvas/blocks`) writes the block ids for you. Leave out `id` on any block, at any depth. It fills each missing id as `<section id>_1`, `_2`, … in tree order and skips ids you gave. The same input always gives the same ids. It throws an `Error` when the section has no `id` or `label`, or when two blocks have the same id. The input type is `SectionInput`.
 
 ```ts
@@ -1380,6 +1392,16 @@ A saved section runs the same field logic as a page save: the `beforeValidate` a
 
 - **Classes.** Each block stores Tailwind v4 classes in `className`. Variants use normal Tailwind syntax: `md:flex-row`, `hover:bg-primary`, `dark:text-white`.
 - **Styles panel.** Visual controls for layout, spacing, size, position, typography, background, border and effects read and write classes. The breakpoint bar (`base`, `sm`, `md`, `lg`, `xl`, `2xl`) and the state bar (Default, Hover, Focus, Active) set the variant prefix. The **Classes** box accepts any class.
+- **Site classes.** The Styles panel lists your CSS entry's own static `@utility` classes (`type-h2`, `btn-primary`, `glass`) in a **Site classes** group, apart from Tailwind's classes. A click adds the class to the block, or removes it when the block has it, like typing it in **Classes**. Each button's tooltip shows the rule's CSS. A comment right above the rule sets a label and a group: `/* @canvas Buttons: Primary button */` (group "Buttons", label "Primary button") or `/* @canvas Primary button */` (a label only). Without a comment the button shows the class name. Classes from the files the entry imports count too, but not from packages in `node_modules`, and not functional utilities such as `tab-*`. `getStyleTokens()` returns them as `siteClasses` (`{ name, label?, group?, css }`). The MCP tool `listBlocks` and the assistant's prompt list them, so agents use the site's look.
+
+  ```css
+  /* @canvas Buttons: Primary button */
+  @utility btn-primary {
+    background: var(--color-brand);
+    color: var(--color-ground);
+  }
+  ```
+
 - **Theme tokens.** Classes compile against your CSS entry, so tokens from your `@theme` work: `bg-primary`, `font-heading`, `rounded-card`. The Styles panel lists your colors, fonts and sizes.
 - **In the editor.** The canvas compiles the classes in the browser with Tailwind's own compiler. A new class shows at once.
 - **On save.** The `beforeChange` hook compiles only the classes the layout uses and stores the CSS in `<field>Css` (`{ hash, css }`). The output holds the utilities, their `@property` and `@keyframes` rules, and the theme variables. It has no Preflight. `RenderLayout` writes it into a `<style>` tag, so the site does not need a Tailwind build of its own. If the site has one, import the same CSS entry in your site layout for Preflight and base styles.
@@ -1403,6 +1425,50 @@ export default function CanvasPage() {
 
 - **Theme variables in the canvas.** The canvas gets the Theme global from `<ThemeStyle live />` in its layout. If you set other variables at runtime, render the same tag in the canvas layout too.
 - **Standalone output** needs `outputFileTracingIncludes`. See [step 8](#8-add-the-standalone-tracing-lines).
+
+### Classes on slots
+
+A slot that renders in an element of its own can take classes of its own: the `summary` and `content` of a disclosure, or the `empty` slot of a collection list. Set `styles: true` on the slot in the block definition. The classes live in `block.slotClassName`, by slot name.
+
+```ts
+defineBlock({
+  type: 'disclosure',
+  label: 'Disclosure',
+  fields: [],
+  slots: { summary: { label: 'Summary', styles: true }, content: { label: 'Content', styles: true } },
+})
+```
+
+```json
+{ "type": "collectionList", "className": "grid grid-cols-3 gap-6", "slotClassName": { "empty": "col-span-full text-center" } }
+```
+
+- The component gets the classes in `slotAttributes[slot].className`, with the `builder-css` marker. A component that spreads `slotAttributes[slot]` on the slot's element needs nothing else.
+- The save hook and the canvas compile them like `className`.
+- In the Styles tab, a block with such slots shows a **Style target** select: **This block**, or one of its slots. The panel then edits that slot's classes.
+- An update merges per slot: `{ "type": "update", "id": "b_list01", "slotClassName": { "empty": "p-8" } }`. `null` or `""` removes a slot's classes.
+- `validateLayout` refuses classes on a slot without `styles: true`.
+- The built-in `collectionList` `empty` slot takes classes.
+
+### HTML attributes
+
+Each block can carry three HTML attributes in `block.attrs`. Edit them in the inspector's **Advanced** tab.
+
+| Key | HTML | What it does |
+| --- | --- | --- |
+| `id` | `id` | An anchor for `#id` links, for example `contact`. Letters, digits, `-` and `_`, starting with a letter. Unique in the layout. |
+| `ariaLabel` | `aria-label` | The name screen readers read, for example for a link that shows only an icon. |
+| `ariaHidden` | `aria-hidden="true"` | Screen readers skip the block: decorative shapes, dots and repeated links. |
+
+```json
+{ "id": "b_k3x9qa", "type": "stack", "attrs": { "id": "contact", "ariaLabel": "Contact us" } }
+```
+
+- `RenderLayout` puts them in `attributes`, which every block component spreads on its root element.
+- An update merges per key: `{ "type": "update", "id": "b_k3x9qa", "attrs": { "ariaHidden": true, "ariaLabel": null } }`. `null` removes a key, and `attrs: null` removes all.
+- Inserting a block with an id the layout already uses fails, and so does an update to such an id. A duplicate, a paste and a second copy of a section leave out the id. `validateLayout` reports a repeated id as a `constraint` problem, which blocks publishing.
+- Inside a collection list item or a repeat row, only the first item keeps the `id`. The other items leave it out, so the id stays unique on the page.
+- A Payload `blocks` field cannot store them, so the Advanced tab is hidden there.
 
 ## Animations
 
@@ -1618,6 +1684,7 @@ Which template a document uses: its own `template`, else the newest default temp
 | --- | --- | --- |
 | A path | `"title"`, `"author.name"` | The field's value. |
 | `$url` | `{ "link": "$url" }` | The document's page URL (the collection's `url` option). |
+| `<path>.$url` | `{ "link": "categories.0.$url" }` | The page URL of a related document: the first category of a model, `home.region.$url` through two relationships. See "URLs of related documents" below. |
 | A fallback chain | `"heading\|name"` | The first path that has a value. |
 | Formatters | `"publishedAt\|date:en-AU:Australia/Brisbane"`, `"price\|currency:AUD"`, `"price\|number"`, `"bio\|firstSentence"` | Text. `date[:locale[:timeZone]]` (default `en`, UTC), `currency[:code[:locale]]` (`$1,200`; whole amounts have no cents), `number[:locale]` (`1,200`), `firstSentence`. Put them after the paths: `"heading\|name\|firstSentence"`. |
 | A template string | `{ "text": "Enquire about {{name}}" }`, `"From {{price\|currency:AUD}}"` | Text with each `{{expression}}` filled in. A missing expression becomes empty. When every expression is missing, the prop keeps its own value. |
@@ -1634,6 +1701,24 @@ Which template a document uses: its own `template`, else the newest default temp
 | `"!field"` | the field is empty. |
 | `"field=value"` | the field equals the value. For a list (hasMany), any item or document id matches. |
 | `"field!=value"` | the field does not equal the value. |
+| `"field>3"`, `"field>=3"`, `"field<3"`, `"field<=3"` | the field is a number (or a numeric text) and the comparison holds. Any other value fails. |
+| `"field#>=3"` | `field#` is the number of items: a list's length, `0` for an empty value, `1` for any other value. It works with every test above, for example `"galleryImages#>=3"` (at least 3 photos), `"services#=0"` or `"!galleryImages#"`. |
+
+The first operator in the text counts, so a value may hold `=` or `>` (`"title=a=b"` compares with `a=b`).
+
+URLs of related documents (`<path>.$url`):
+
+- The URL comes from your `resolveLink`, called as for a link to that document: `{ type: 'reference', reference: { relationTo, value: doc } }`. So `resolveLink` is the site's "URL of a document" function, for pages and for `$url`.
+- The renderer must know the related collection. A `{ relationTo, value }` value (a relationship to several collections) names it. For a relationship to one collection, pass `relations`: `bindingRelations(payload.config.collections)` from `payload-canvas/core` maps each relationship and upload field to its collection (in groups, named tabs and arrays too). The plugin sends the same map to the canvas.
+
+  ```tsx
+  const relations = bindingRelations(payload.config.collections)
+  const loaded = await loadLayoutData(layout, blocks, payload, { context, relations, resolveLink })
+  <RenderLayout layout={loaded} blocks={blocks} context={context} relations={relations} resolveLink={resolveLink} />
+  ```
+
+- The related document must be loaded (list items load with `depth: 1`; use `depth: "2"` on the list for a relationship of a related document). An id alone gives no URL, and the prop keeps its own value.
+- `$parent.` and `$page.` paths do not take `.$url`.
 
 A block hidden by `$visible` renders nothing on the site. On the canvas it shows dimmed, like a hidden block. Expressions and `$visible` are not checked against the collection's fields when you publish. The inspector shows an expression as text with a preview of its value. Add or change one in the layout JSON or through the MCP tools.
 
@@ -1687,6 +1772,22 @@ Lists load with the visitor's access (`overrideAccess: false`). The site (`loadL
 - The canvas has no URL query, so it shows the list without these filters.
 - Filtered URLs show the same page with fewer items. Set `robots: { index: false, follow: true }` (`noindex, follow`) in the route's metadata when the URL has a filter param, so search engines index only the unfiltered page.
 
+#### Picked documents, random order and pages
+
+| Prop | What it does |
+| --- | --- |
+| `ids` | Picked documents, in the order you pick them. A relationship (hasMany) to the collections with a `url` when the plugin knows them, else a list of ids. The list shows only these, up to 100. `limit`, `sort`, `offset` and `paginate` do not apply; the other filters still do. A pick from another collection than `collection` is left out. |
+| `sort: "$random"` | Shuffles the newest 100 matching documents, then applies `offset` and `limit`. `loadLayoutData` picks a new seed per call, so a cached page shuffles once per cache build. Pass `randomSeed` to fix the order. The canvas keeps one order while you edit. Two random lists on a page get different orders. |
+| `paginate: "pages"` | Shows `limit` documents per page and links to every page under the items: `?page=2`, `?page=3` (`PAGE_PARAM`). The links keep the rest of the URL query (filters), and page 1 has no `page` param. Pass the query to `loadLayoutData` (`query`), as for `queryFilters`. `offset` does not apply. |
+| `pagerClassName` | Classes of the `<nav aria-label="Pages">` around the links. Default `flex flex-wrap gap-2`. |
+| `pageLinkClassName` | Classes of each page link. The current page has `aria-current="page"`, so `aria-[current=page]:font-bold` styles it. |
+
+- The page links are plain `<a href>` links, so search engines can crawl every page. Give `?page=N` pages their own canonical URL (with the page), not the first page.
+- One paginated list per page: every list reads the same `page` param.
+- On the canvas a paginated list shows page 1 with its links.
+- After `loadLayoutData`, a paginated list carries its links as the runtime `$pages` prop (`LIST_PAGES_PROP`, type `ListPages`). A custom collection list component can render them its own way.
+- Not built: a "Load more" button. Use the page links.
+
 #### Repeat the rows of a field
 
 The **Repeat** block (`repeat`) repeats its `item` slot once per row of a list field of the current document. Use it for an array field (FAQs `faqs: [{ question, answer }]`, rates `rates: [{ duration, price }]`), a hasMany upload (a gallery), a hasMany relationship (the services of a model) or a hasMany text or select field (tags).
@@ -1697,6 +1798,7 @@ The **Repeat** block (`repeat`) repeats its `item` slot once per row of a list f
 | `limit` | number | The most rows to show. Empty shows every row. |
 | `offset` | number | Rows to skip at the start. `1` skips the first photo. |
 | `collection` | text (a select of the collections with a `url` when the plugin knows them) | For a relationship field: the related collection, so `$url` links to each document. A `{ relationTo, value }` row names its own collection. |
+| `as` | select: `div` (default), `none` | `div` wraps the rows in a `div` that takes the repeat's classes. `none` renders the rows with no wrapper, so they are direct children of the parent block: the cells of a grid, or the `li` items of a stack with `as: ul`. With `none`, the repeat's own classes and animations do nothing. On the canvas a `none` repeat is an element with `display: contents`, so the editor still selects and outlines it. |
 
 Blocks in the `item` slot bind to the **row**:
 

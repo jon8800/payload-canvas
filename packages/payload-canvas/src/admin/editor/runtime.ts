@@ -202,6 +202,7 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
     api,
     document: { collection: document.collection, id: document.id },
     ...(config.regions?.length ? { regions: config.regions } : {}),
+    ...(config.relations && Object.keys(config.relations).length > 0 ? { relations: config.relations } : {}),
   }
   const runtime: Runtime = {
     config,

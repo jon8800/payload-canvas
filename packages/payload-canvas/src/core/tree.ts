@@ -1,7 +1,8 @@
+import { checkAttrs } from './attrs'
 import { createId } from './ids'
 import { normalizeMotion } from './motion'
 import { migrateTextList } from './textList'
-import type { Block, Layout } from './types'
+import type { Block, BlockAttrs, Layout } from './types'
 
 /** Slot name used when a position or a location does not name one. The root list uses it too. */
 export const DEFAULT_SLOT = 'children'
@@ -83,11 +84,13 @@ export function subtreeIds(block: Block, out: string[] = []): string[] {
 // - `hidden` is stored only when true, `label` only when non-empty (trimmed)
 // - `locales` holds no empty locale objects, and is left out when empty
 // - `motion` holds only valid kinds and values (motion.ts), and is left out when empty
+// - `attrs` holds only valid, non-empty values (attrs.ts), and is left out when empty
+// - `slotClassName` holds only non-blank class strings, and is left out when empty
 // - every id is a non-empty string, unique in the layout
 // - old list blocks (`props.items` rows) hold `listItem` blocks in their `items` slot (textList.ts)
 // The operations module relies on this form for exact undo.
 
-const BLOCK_KEYS = new Set(['id', 'type', 'blockType', 'blockName', 'props', 'className', 'slots', 'children', 'bindings', 'hidden', 'label', 'locales', 'motion'])
+const BLOCK_KEYS = new Set(['id', 'type', 'blockType', 'blockName', 'props', 'className', 'slots', 'children', 'bindings', 'hidden', 'label', 'locales', 'motion', 'attrs', 'slotClassName'])
 
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
@@ -176,9 +179,26 @@ function normalizeBlock(value: unknown, seen: Set<string>): Block | null {
   }
   const motion = normalizeMotion(value.motion)
   if (motion) block.motion = motion
+  // A bad value is dropped key by key: a stored layout never fails to load.
+  const attrs = normalizeAttrs(value.attrs)
+  if (attrs) block.attrs = attrs
+  if (isPlainObject(value.slotClassName)) {
+    const kept = Object.fromEntries(Object.entries(value.slotClassName).filter(([, v]) => typeof v === 'string' && v.trim() !== ''))
+    if (Object.keys(kept).length > 0) block.slotClassName = kept as Record<string, string>
+  }
   // Old shapes of built-in blocks (see textList.ts).
   migrateTextList(block, (raw) => uniqueId(raw, seen))
   return block
+}
+
+function normalizeAttrs(value: unknown): BlockAttrs | undefined {
+  if (!isPlainObject(value)) return undefined
+  const kept: BlockAttrs = {}
+  for (const key of ['id', 'ariaLabel', 'ariaHidden'] as const) {
+    const one = checkAttrs({ [key]: value[key] })
+    if (one && typeof one !== 'string') Object.assign(kept, one)
+  }
+  return Object.keys(kept).length > 0 ? kept : undefined
 }
 
 function normalizeProps(value: Record<string, unknown>): Record<string, unknown> | null {

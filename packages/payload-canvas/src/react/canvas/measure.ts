@@ -32,9 +32,32 @@ function toRect(r: DOMRect): Rect {
   return { x: r.x, y: r.y, width: r.width, height: r.height }
 }
 
+/** The smallest rect around all the rects that have a size. Null when none has. */
+export function unionRect(rects: readonly Rect[]): Rect | null {
+  const sized = rects.filter((r) => r.width > 0 || r.height > 0)
+  if (sized.length === 0) return null
+  const left = Math.min(...sized.map((r) => r.x))
+  const top = Math.min(...sized.map((r) => r.y))
+  const right = Math.max(...sized.map((r) => r.x + r.width))
+  const bottom = Math.max(...sized.map((r) => r.y + r.height))
+  return { x: left, y: top, width: right - left, height: bottom - top }
+}
+
+/**
+ * The element's box. An element with `display: contents` (a repeat without a wrapper, or a block
+ * with the `contents` class) has no box of its own: it gets the box around its children.
+ */
+function boxOf(el: Element): Rect {
+  const own = toRect(el.getBoundingClientRect())
+  if (own.width > 0 || own.height > 0 || getComputedStyle(el).display !== 'contents') return own
+  return unionRect(Array.from(el.children, boxOf)) ?? own
+}
+
 /** The direction children flow in: from flex direction or the number of grid columns. */
 export function axisOf(el: Element): Axis {
   const style = getComputedStyle(el)
+  // No box of its own: its children flow in the parent.
+  if (style.display === 'contents' && el.parentElement) return axisOf(el.parentElement)
   if (style.display.includes('flex')) return style.flexDirection.startsWith('row') ? 'x' : 'y'
   if (style.display.includes('grid')) {
     return style.gridTemplateColumns.split(' ').filter(Boolean).length > 1 ? 'x' : 'y'
@@ -50,7 +73,7 @@ export function axisOf(el: Element): Axis {
 export function measure(root: HTMLElement): CanvasMeasurement {
   const blocks = Array.from(root.querySelectorAll<HTMLElement>('[data-block-id]'), (el) => ({
     id: el.dataset.blockId ?? '',
-    rect: toRect(el.getBoundingClientRect()),
+    rect: boxOf(el),
   }))
 
   const slots = new Map<string, SlotRect>()
@@ -62,7 +85,7 @@ export function measure(root: HTMLElement): CanvasMeasurement {
     if (slots.get(key)?.empty && !empty) continue
     // An empty placeholder takes the container's axis, so the drop indicator matches the layout.
     const axis = empty && el.parentElement ? axisOf(el.parentElement) : axisOf(el)
-    slots.set(key, { ownerId, slot, rect: toRect(el.getBoundingClientRect()), axis, empty })
+    slots.set(key, { ownerId, slot, rect: boxOf(el), axis, empty })
   }
 
   // In a page frame the layout fills its outlet, not the whole canvas: the root list's axis and

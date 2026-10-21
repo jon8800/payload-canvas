@@ -15,8 +15,8 @@ import { aiClientConfig } from '../ai/config'
 import { AI_IMAGES_KEY, createImageService } from '../ai/images/service'
 import type { AiOptions } from '../ai/types'
 import { defaultBlocks } from '../blocks'
-import { richTextFieldName } from '../core/blocks'
-import { DEFAULT_TEMPLATES_SLUG, DOCUMENT_TEMPLATE_FIELD, TEMPLATE_TARGET_FIELD } from '../core/bindings'
+import { richTextFieldName, sectionsWithDefaultClassNames, withInlineBlocks } from '../core/blocks'
+import { bindingRelations, DEFAULT_TEMPLATES_SLUG, DOCUMENT_TEMPLATE_FIELD, TEMPLATE_TARGET_FIELD } from '../core/bindings'
 import { localeSettingsOf } from '../core/locale'
 import { resolveRegions, type RegionOption } from '../core/regions'
 import { decodePayloadBlocks, payloadBlocksProblems, payloadBlocksStorage, type PayloadBlocksStorage } from '../core/payloadBlocks'
@@ -336,7 +336,10 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       builderOptions[templatesSlug] = { field: TEMPLATE_LAYOUT_FIELD, ...(options.templates?.localization === false ? { localization: false } : {}) }
     }
 
-    const blocks = listCollectionsOf(options.blocks ?? defaultBlocks(), [...withUrl])
+    // Inline blocks (`inline: true`) may sit in a link: they join its `allow` list.
+    const blocks = withInlineBlocks(listCollectionsOf(options.blocks ?? defaultBlocks(), [...withUrl]))
+    // A section block without a className gets its type's default classes (JSON layouts only).
+    const sections = sectionsWithDefaultClassNames(options.sections ?? [], blocks)
     const duplicate = blocks.find((b, i) => blocks.findIndex((other) => other.type === b.type) !== i)
     if (duplicate) {
       throw new Error(
@@ -424,6 +427,8 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       regionsOf[slug] = resolveRegions(slug, source?.fields ?? [], o.regions, { fields: new Set(own), legacy: new Set(o.legacyFields ?? []) })
     }
     const clientBlocks = toJsonSafe(blocks)
+    // Relationship targets of every collection, so the canvas resolves `<path>.$url` bindings.
+    const relations = bindingRelations(collections)
     const css: CssOptions = {
       entry: path.resolve(process.cwd(), options.css.entry),
       plugins: options.css.plugins,
@@ -520,7 +525,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           // Only sections the field can store as they are.
           sections: storage
             ? (options.sections ?? []).filter((section) => payloadBlocksProblems({ version: 1, blocks: section.blocks }, storage).length === 0)
-            : (options.sections ?? []),
+            : sections,
           liveEndpoint: `${apiRoute}${LIVE_PATH}`,
           templates: clientTemplates,
           ai: options.ai ? aiClientConfig(options.ai, `${apiRoute}${AI_PATH}`) : null,
@@ -531,6 +536,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           localization: localizationOf(collection.slug),
           ...(regionsOf[collection.slug] ? { regions: toJsonSafe(regionsOf[collection.slug]) } : {}),
           ...(storage ? { storage: 'payload-blocks' as const, payloadRootTypes: [...storage.rootTypes] } : {}),
+          ...(Object.keys(relations).length > 0 ? { relations } : {}),
         }
         const isSections = collection.slug === savedSections?.slug
         const built = addBuilder(collection, {
@@ -590,7 +596,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
               images: imageService ?? undefined,
               collections: liveCollections,
               blocks,
-              sections: options.sections ?? [],
+              sections,
               savedSections,
               getTokens: () => getStyleTokens(css),
               templates: templates ? { slug: templatesSlug, sources: templates.sources } : null,

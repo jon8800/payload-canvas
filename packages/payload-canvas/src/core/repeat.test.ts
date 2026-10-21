@@ -145,6 +145,23 @@ describe('$visible', () => {
     assert.equal(isVisible(model, 'services=6'), true)
     assert.equal(isVisible(model, 'tags=tall'), true)
   })
+  it('greater and less for numbers, and the number of items with "#"', () => {
+    const doc: TemplateContext = { collection: 'models', doc: { id: 1, age: 27, price: '450', photos: [1, 2, 3], none: [], name: 'Ada' } }
+    assert.equal(isVisible(doc, 'age>25'), true)
+    assert.equal(isVisible(doc, 'age >= 27'), true)
+    assert.equal(isVisible(doc, 'age<27'), false)
+    assert.equal(isVisible(doc, 'age<=27'), true)
+    assert.equal(isVisible(doc, 'price>400'), true)
+    assert.equal(isVisible(doc, 'name>3'), false)
+    assert.equal(isVisible(doc, 'missing<5'), false)
+    assert.equal(isVisible(doc, 'photos#>=3'), true)
+    assert.equal(isVisible(doc, 'photos#>3'), false)
+    assert.equal(isVisible(doc, 'none#=0'), true)
+    assert.equal(isVisible(doc, 'none#'), false)
+    assert.equal(isVisible(doc, '!none#'), true)
+    assert.equal(isVisible(doc, 'name#=1'), true)
+    assert.deepEqual(bindingPaths('$visible', 'photos#>=3'), ['photos'])
+  })
   it('hides the block when the condition fails, and is applied once', () => {
     const block: Block = { id: 'b', type: 'text', props: { text: 'New' }, bindings: { $visible: 'newThisMonth' } }
     const hidden = resolveBlockBindings(block, model, undefined)
