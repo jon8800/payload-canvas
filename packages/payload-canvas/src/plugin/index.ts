@@ -15,7 +15,7 @@ import { aiClientConfig } from '../ai/config'
 import { AI_IMAGES_KEY, createImageService } from '../ai/images/service'
 import type { AiOptions } from '../ai/types'
 import { defaultBlocks } from '../blocks'
-import { richTextFieldName, sectionsWithDefaultClassNames, sectionsWithVariants, withInlineBlocks } from '../core/blocks'
+import { richTextFieldName, sectionsWithDefaultClassNames, sectionsWithVariants } from '../core/blocks'
 import { bindingRelations, DEFAULT_TEMPLATES_SLUG, DOCUMENT_TEMPLATE_FIELD, TEMPLATE_TARGET_FIELD } from '../core/bindings'
 import { localeSettingsOf } from '../core/locale'
 import { resolveRegions, type RegionOption } from '../core/regions'
@@ -71,7 +71,7 @@ import {
 import { syncSectionBlocks } from './sectionsBuilder'
 import { toJsonSafe } from './jsonSafe'
 import { collectionLabel } from './labels'
-import { listCollectionsOf } from './listCollections'
+import { prepareBlocks } from './listCollections'
 import { addReferences, REFERENCES_CONFIG_KEY, resolveReferences, type ReferencesOptions } from './references'
 import {
   bindingSources,
@@ -337,7 +337,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
     }
 
     // Inline blocks (`inline: true`) may sit in a link: they join its `allow` list.
-    const blocks = withInlineBlocks(listCollectionsOf(options.blocks ?? defaultBlocks(), [...withUrl]))
+    const blocks = prepareBlocks(options.blocks ?? defaultBlocks(), [...withUrl])
     // Each section variant is listed as a section of its own (`<id>/<variant id>`).
     const appSections = sectionsWithVariants(options.sections ?? [])
     // A section block without a className gets its type's default classes (JSON layouts only).

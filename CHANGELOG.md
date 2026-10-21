@@ -49,6 +49,7 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 - Site classes: a comment before a rule's `/* @canvas Group: Label */` comment no longer merges with it, so the rule keeps its label. Only the comment right above the rule counts. In the escort-starter's CSS, 10 of 32 labels were lost.
 - Media backdrop and image: Payload's default 50/50 focal point no longer sets `object-position`, so the block's position classes crop the photo. Any other focal point still wins. New `builtinComponents({ mediaUrl })` (and `mediaBackdropComponent(mediaUrl)`) maps the media backdrop's upload URLs, for example absolute URLs to paths; they were used exactly as stored.
+- `prepareBlocks(blocks, listCollections)` in `payload-canvas/blocks`: the block preparation of `websiteBuilder` and `builderMcpTools` (`listCollectionsOf`, then `withInlineBlocks`) as a function. A site's own list lacked it, so a seed's `validateLayout` refused an icon in a link and checked a list's `ids` as text. `listCollectionsOf` is exported too.
 
 ## [0.3.0] - 2026-10-21
 

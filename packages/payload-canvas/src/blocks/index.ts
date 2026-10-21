@@ -8,6 +8,7 @@ export { isLinkField, linkField, type BuilderCondition, type LinkFieldOptions } 
 export { fromPayloadBlocks, type FromPayloadBlocksOptions, type PayloadBlockOverride } from './payload'
 export { defineBlock, defineSection, type SectionBlockInput, type SectionInput, sectionsWithVariants, withDefaultClassNames, withInlineBlocks } from '../core/blocks'
 export { BUILDER_CSS_CLASS, withBuilderCssClass } from '../css/marker'
+export { listCollectionsOf, prepareBlocks } from '../plugin/listCollections'
 export type {
   Block,
   BlockDefinition,
