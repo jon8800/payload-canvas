@@ -1046,6 +1046,22 @@ export const icons = { arrowRight: ArrowRight, check: Check, close: Close } sati
 - Each icon component gets `className`, the ARIA attributes and, on the canvas, the editor attributes. Spread its props on the `<svg>`.
 - An unknown name renders nothing on the site and a note on the canvas.
 
+#### Disclosure and accordion
+
+`disclosure` is one show/hide item: a native `<details>` with a `summary` slot (always visible) and a `content` slot. It opens with the mouse and the keyboard without script, and the closed content stays in the HTML for search engines. `accordion` is a list of disclosures in its `items` slot (also a `repeat` or `collectionList` of disclosures). Include both: `include: ['disclosure', 'accordion']`.
+
+- `disclosure` props: `open` (open at first) and `animate` (the height opens in 300 ms, in CSS only; off with reduced motion, and in browsers without `::details-content`). The canvas always shows it open.
+- The summary slot refuses links, buttons and other controls: a `<summary>` is the button.
+- Style the summary row with `[&>summary]:` classes and the content with `[&>div]:` classes on the disclosure. `open:` and `group-open:` classes style the open state, for example `group-open:rotate-45` on an icon in the summary.
+- `accordion` props: `multiple` (default on; off keeps one item open, with the browser's exclusive `<details name>`) and `faqSchema` (default on).
+- FAQPage JSON-LD: `faqItems(layout, blocks)` from `payload-canvas/blocks` reads the questions (summary text) and answers (content text) of the accordions with `faqSchema` on. Call it after `loadLayoutData`, so bound props, `field` blocks, repeats and collection lists hold the document's values. `faqJsonLd(items)` turns them into the JSON-LD object (null without items):
+
+```tsx
+const items = [layout, templateLayout].flatMap((value) => faqItems(value, blocks))
+const jsonLd = faqJsonLd(items)
+// <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\u003c') }} />
+```
+
 ## Using existing Payload blocks
 
 A site that already has a Payload `blocks` field (for example `pages.layout` with sections and nested blocks) keeps its field, its block configs, its components and its content. Point the builder at that field. The builder then edits the field itself: there is one source of truth, no second copy of the page, and nothing to migrate.
