@@ -843,6 +843,8 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
           description:
             'A Payload where query, added to the filter. Example: { "featured": { "equals": true } }. Dates may use ' +
             '"$now", "$now-30d" or "$now+12h".',
+          // The inspector edits it as condition rows over the fields of the chosen collection.
+          custom: { builderWhere: { collectionField: 'collection' } },
         },
       },
       {
