@@ -4,7 +4,8 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { BlockComponentProps } from '../../render/types'
 import { Lightbox } from '.'
-import { stepIndex } from './Lightbox'
+import { stepIndex, swipeStep } from './Lightbox'
+import { LIGHTBOX_CLASS_MAP } from '../../../blocks/builtins/lightbox'
 
 const render = (props: Record<string, unknown>) =>
   renderToStaticMarkup(
@@ -32,5 +33,15 @@ describe('Lightbox', () => {
     assert.equal(stepIndex(2, 1, 3), 0)
     assert.equal(stepIndex(0, -1, 3), 2)
     assert.equal(stepIndex(0, 1, 0), 0)
+  })
+
+  test('a sideways swipe steps: left is next, right is previous; short or vertical moves do not', () => {
+    assert.equal(swipeStep(-80, 10), 1)
+    assert.equal(swipeStep(80, -10), -1)
+    assert.equal(swipeStep(-30, 0), 0)
+    assert.equal(swipeStep(-60, 90), 0)
+    assert.equal(swipeStep(-60, 60), 0)
+    // The dialog lets sideways swipes reach the script.
+    assert.ok(LIGHTBOX_CLASS_MAP.dialog.split(' ').includes('touch-pan-y'))
   })
 })

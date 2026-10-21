@@ -1082,7 +1082,7 @@ const jsonLd = faqJsonLd(items)
 
 `lightbox` is a container whose images open full screen. Lay out the images with its `className` (a grid by default), or put a `repeat` of images in it (path `galleryImages`, the image bound to `$item`).
 
-- A click on an image, or Enter or Space on a focused image, opens it in a native modal `<dialog>`. The dialog keeps the focus inside, makes the page inert, closes on Escape and gives the focus back. Arrow keys and the arrow buttons step through the images. A click beside the photo closes it.
+- A click on an image, or Enter or Space on a focused image, opens it in a native modal `<dialog>`. The dialog keeps the focus inside, makes the page inert, closes on Escape and gives the focus back. Arrow keys and the arrow buttons step through the images. On touch screens a sideways swipe steps too: left for the next photo, right for the previous one (pointer events, at least 50 px and more sideways than down; a mouse drag does not swipe). A click beside the photo closes it.
 - The images get `tabindex="0"`, `role="button"` and `aria-haspopup="dialog"`. Images inside a link or a button keep that element as the control.
 - Props: `label` (the dialog's name for screen readers, default "Photos"), `group` (lightboxes with the same group on a page open as one set) and `captions` (shows the alt text under the photo; screen readers always hear "2 of 6").
 - The large photo is the image the page already loaded, with its `srcset` and `sizes="100vw"`, so the browser picks a larger file when it has one.
