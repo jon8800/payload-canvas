@@ -45,6 +45,10 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 - New projects created by `create-payload-canvas` install `payload-canvas` 0.3.x (`^0.3.0`).
 
+### Fixed
+
+- Site classes: a comment before a rule's `/* @canvas Group: Label */` comment no longer merges with it, so the rule keeps its label. Only the comment right above the rule counts. In the escort-starter's CSS, 10 of 32 labels were lost.
+
 ## [0.3.0] - 2026-10-21
 
 ### Added
