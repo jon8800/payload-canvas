@@ -1,21 +1,15 @@
 // Heading ids shared by the tableOfContents block and the rich text that holds the headings, so a
-// table of contents link (`#id`) finds its heading. Pure and client-safe.
+// table of contents link (`#id`) finds its heading. Pure and client-safe. The ids come from
+// `richTextHeadings` in core, which the field and richText blocks (`headingIds`) use too.
 
-/**
- * The URL fragment for a heading: lower case, accents dropped, every run of other characters one
- * hyphen. Letters and digits of any script stay. "Über uns?" -> "uber-uns". Empty for a heading
- * without letters or digits.
- */
-export function headingId(text: string): string {
-  return text
-    .normalize('NFKD')
-    .replace(/\p{M}+/gu, '')
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, '-')
-    .replace(/^-+|-+$/g, '')
-}
+import { headingId, richTextHeadings } from '../../core/headings'
 
-type LexicalNode = { type?: unknown; tag?: unknown; text?: unknown; children?: unknown }
+export { headingId }
+
+/** One entry of a table of contents. */
+export type RichTextHeading = { id: string; text: string }
+
+type LexicalNode = { text?: unknown; children?: unknown }
 
 function collect(node: unknown, parts: string[]) {
   if (!node || typeof node !== 'object') return
@@ -31,19 +25,17 @@ export function lexicalText(node: unknown): string {
   return parts.join('').replace(/\s+/g, ' ').trim()
 }
 
-export type RichTextHeading = { id: string; text: string }
-
 /**
- * The top-level headings of one level (default `h2`) of Lexical rich text, with their ids
- * (`headingId`). Headings without text or id are left out.
+ * The top-level headings of one level (default `h2`) of Lexical rich text, with the same ids the
+ * rendered rich text gives them (`richTextHeadings`: repeated texts get "-2", "-3"). Headings
+ * without letters or digits are left out.
  */
 export function lexicalHeadings(value: unknown, tag = 'h2'): RichTextHeading[] {
   const children = (value as { root?: { children?: unknown } } | null)?.root?.children
   if (!Array.isArray(children)) return []
-  return children.flatMap((node: LexicalNode) => {
-    if (!node || node.type !== 'heading' || node.tag !== tag) return []
-    const text = lexicalText(node)
-    const id = headingId(text)
-    return text && id ? [{ id, text }] : []
-  })
+  const level = Number(tag.slice(1)) || 2
+  const topLevel = new Set<unknown>(children)
+  return richTextHeadings(value)
+    .filter((heading) => heading.level === level && topLevel.has(heading.node) && headingId(heading.text))
+    .map((heading) => ({ id: heading.id, text: lexicalText(heading.node) }))
 }

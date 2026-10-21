@@ -1,4 +1,5 @@
 import { DISCLOSURE_CLASS_MAP as C } from '../../../blocks/builtins/disclosure'
+import { joinClasses } from '../../../blocks/builtins/shared'
 import type { BlockComponentProps } from '../../render/types'
 
 /**
@@ -11,7 +12,7 @@ export function Disclosure({ props, className, attributes, slotAttributes, slots
   const classes = props.animate === false ? className : className ? `${className} ${C.animate}` : C.animate
   return (
     <details {...attributes} className={classes} open={open || undefined}>
-      <summary {...slotAttributes.summary} className={C.summary}>
+      <summary {...slotAttributes.summary} className={joinClasses(C.summary, slotAttributes.summary?.className)}>
         {slots.summary}
       </summary>
       <div {...slotAttributes.content}>{slots.content}</div>

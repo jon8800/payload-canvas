@@ -73,7 +73,7 @@ export function carouselBlock(): BlockDefinition {
       { name: 'label', type: 'text', label: 'Label for screen readers', defaultValue: 'Carousel', localized: true },
     ],
     slots: {
-      slides: { label: 'Slides' },
+      slides: { label: 'Slides', styles: true },
       previous: { label: 'Previous button', allow: ARROW_CONTENT, max: 1 },
       next: { label: 'Next button', allow: ARROW_CONTENT, max: 1 },
     },

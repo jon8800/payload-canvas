@@ -38,8 +38,8 @@ export function disclosureBlock(): BlockDefinition {
     ],
     slots: {
       // A <summary> is the button: links and controls inside it are invalid HTML.
-      summary: { label: 'Summary', disallow: INTERACTIVE },
-      content: { label: 'Content' },
+      summary: { label: 'Summary', disallow: INTERACTIVE, styles: true },
+      content: { label: 'Content', styles: true },
     },
     defaultClassName: DISCLOSURE_CLASS,
     classes: classesOf(DISCLOSURE_CLASS_MAP),

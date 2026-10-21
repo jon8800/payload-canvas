@@ -36,6 +36,14 @@ describe('lexicalHeadings', () => {
     assert.deepEqual(lexicalHeadings(value, 'h3'), [{ id: 'sub', text: 'Sub' }])
   })
 
+  it('gives repeated texts the same suffixed ids as the rendered rich text', () => {
+    const value = { root: { children: [heading('h2', 'Rates'), heading('h2', 'Rates')] } }
+    assert.deepEqual(lexicalHeadings(value), [
+      { id: 'rates', text: 'Rates' },
+      { id: 'rates-2', text: 'Rates' },
+    ])
+  })
+
   it('reads nothing from values that are not rich text', () => {
     assert.deepEqual(lexicalHeadings(null), [])
     assert.deepEqual(lexicalHeadings('text'), [])
