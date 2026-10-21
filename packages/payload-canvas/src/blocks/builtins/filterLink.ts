@@ -1,3 +1,4 @@
+import { PAGE_PARAM } from '../../core/bindings'
 import { defineBlock } from '../../core/blocks'
 import type { BlockDefinition } from '../../core/types'
 import { INTERACTIVE } from './shared'
@@ -24,7 +25,8 @@ export type FilterLinkTarget = { param: string; value: string; multiple?: boolea
  * `path` is the page path; with an empty path the href is relative (`?a=b`, or `?` for none).
  */
 export function filterHref(path: string, query: FilterQuery, { param, value, multiple }: FilterLinkTarget): { href: string; active: boolean } {
-  const params = keysOf(query).filter((key) => valuesOf(query, key).length > 0)
+  // A new filter starts again at page 1, so the page number is dropped.
+  const params = keysOf(query).filter((key) => key !== PAGE_PARAM && valuesOf(query, key).length > 0)
   const link = (search: string) => (search ? `${path}?${search}` : path || '?')
   if (!param) return { href: link(''), active: params.length === 0 }
   const current = valuesOf(query, param)
