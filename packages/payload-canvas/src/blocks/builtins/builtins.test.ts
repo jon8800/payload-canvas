@@ -86,3 +86,16 @@ describe('tableOfContents block', () => {
     assert.deepEqual(resolved.blocks[0]?.props, { content: body })
   })
 })
+
+describe('mediaBackdrop block', () => {
+  it('uses the media collection option for its uploads', () => {
+    const uploads = (fieldsOf(builtinBlocks({ mediaCollection: 'assets' }), 'mediaBackdrop') as Array<LooseField & { relationTo?: string }>)
+      .filter((f) => f.type === 'upload')
+      .map((f) => [f.name, f.relationTo])
+    assert.deepEqual(uploads, [
+      ['image', 'assets'],
+      ['video', 'assets'],
+      ['poster', 'assets'],
+    ])
+  })
+})
