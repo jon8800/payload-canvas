@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import type { CollectionConfig } from 'payload'
 
-import { defaultBlocks } from '../blocks'
+import { defaultBlocks, sectionRefBlock } from '../blocks'
 import type { Layout } from '../core/types'
 import { addReferences, referencesBeforeChange, resolveReferences, usedByMessage, usedInFieldName } from './references'
 
@@ -34,6 +34,15 @@ describe('resolveReferences', () => {
     assert.equal(config.sources.pages.drafts, true)
     assert.equal(config.sources.pages.title, 'title')
     assert.equal(config.sources.sections.label, 'Sections')
+  })
+
+  it('gives shared collections (saved sections) "Used in" and delete protection when a block points at them', () => {
+    const withRef = [...blocks, sectionRefBlock('sections')]
+    const shared = resolveReferences({ options: undefined, collections, blocks: withRef, sources: {}, shared: ['sections'] })!
+    assert.deepEqual(shared.usedIn, ['media', 'sections'])
+    assert.deepEqual(shared.protectDelete, ['media', 'sections'])
+    // No sectionRef block: nothing points at the saved sections.
+    assert.deepEqual(resolveReferences({ options: undefined, collections, blocks, sources: {}, shared: ['sections'] })!.usedIn, ['media'])
   })
 
   it('is off with false and refuses unknown collections', () => {

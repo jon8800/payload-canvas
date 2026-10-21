@@ -401,6 +401,8 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       options: options.references,
       collections,
       blocks,
+      // Live saved sections (sectionRef): the section lists the pages that show it, and stays while one does.
+      ...(savedSections ? { shared: [savedSections.slug] } : {}),
       sources: {
         ...Object.fromEntries(
           Object.entries(builderOptions).map(([slug, o]) => {

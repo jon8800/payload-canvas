@@ -1420,6 +1420,21 @@ The plugin stores them in the `builder-sections` collection (next to Templates i
 
 A saved section runs the same field logic as a page save: the `beforeValidate` and `beforeChange` hooks of block props change its values before it is stored. The props' `validate` messages and other problems that block **Publish** (a missing required prop, a value outside its limits) do not stop the save: a section is never published. They go to the server log as warnings.
 
+#### Live saved sections (`sectionRef`)
+
+An inserted section is a copy: later edits of the saved section do not reach the page. A `sectionRef` block shows a saved section **live** instead: the page renders the section's current blocks, so one edit changes every page that uses it. Use it for blocks many pages share, such as a call to action or a footer band.
+
+```ts
+...builtinBlocks({ include: ['sectionRef'] }), // `sectionsCollection` if you set `savedSections.slug`
+```
+
+- `builtinBlocks()` adds it only when `include` lists it, because it needs the plugin's saved sections. `builtinComponents()` has its component.
+- Prop: `section`, a relationship to the saved sections collection. It has no classes and no slots. On the site it renders the section's blocks with no element of its own.
+- `loadLayoutData` loads the sections first, so their lists, images, bindings and translations load like the page's own. The canvas does the same. Copies of the section's blocks get ids prefixed with the ref's id (`<ref id>_<block id>`). One level only: a `sectionRef` inside a saved section renders nothing, so a section never includes itself.
+- CSS: the save hook compiles only the page's own classes. Output the page CSS with `compilePageCss(payload, [{ layout: loaded }])` (from `payload-canvas/react/server`), with the layout `loadLayoutData` returned, so the section's classes are in it.
+- On the canvas the section's blocks show but cannot be edited there: a click selects the `sectionRef`. **Detach section** in its **…** menu replaces it with a copy of the blocks (new ids), as one undo step.
+- References: the saved section lists the pages that show it (**Used in**), and it cannot be deleted while a page uses it, as with media. Adding `sectionRef` to the blocks adds the saved sections collection to the references field: run `pnpm payload migrate:create` for production.
+
 ## Styling
 
 - **Classes.** Each block stores Tailwind v4 classes in `className`. Variants use normal Tailwind syntax: `md:flex-row`, `hover:bg-primary`, `dark:text-white`.

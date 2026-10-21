@@ -5,10 +5,12 @@
 
 import { memo, useCallback } from 'react'
 
+import { SECTION_REF_BLOCK, sectionRefId } from '../../../blocks/builtins/sectionRef'
 import { findBlock, findLocation } from '../../../core'
 import {
   copyBlock,
   copyStyles,
+  detachSection,
   duplicateBlock,
   inRow,
   moveBy,
@@ -117,6 +119,9 @@ export function blockMenuEntries(runtime: Runtime, id: string, origin: MenuOrigi
       : []),
     ...(runtime.sections.enabled
       ? [{ icon: 'section' as const, label: 'Save as section…', ownFocus: true, run: () => requestSaveSection(runtime, block) }]
+      : []),
+    ...(runtime.sections.enabled && block.type === SECTION_REF_BLOCK && sectionRefId(block.props?.section) !== null
+      ? [{ icon: 'section' as const, label: 'Detach section', run: () => void detachSection(runtime, id) }]
       : []),
     'separator',
     { icon: 'delete', label: 'Delete', keys: keys('delete'), danger: true, run: () => removeBlock(runtime, id) },

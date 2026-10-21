@@ -9,14 +9,18 @@ import { filterLinkBlock } from './filterLink'
 import { iconBlock } from './icon'
 import { lightboxBlock } from './lightbox'
 import { mediaBackdropBlock } from './mediaBackdrop'
+import { sectionRefBlock } from './sectionRef'
 import { tableOfContentsBlock } from './tableOfContents'
 
-export const BUILTIN_TYPES = ['icon', 'disclosure', 'accordion', 'lightbox', 'carousel', 'tableOfContents', 'filterLink', 'mediaBackdrop'] as const
+export const BUILTIN_TYPES = ['icon', 'disclosure', 'accordion', 'lightbox', 'carousel', 'tableOfContents', 'filterLink', 'mediaBackdrop', 'sectionRef'] as const
 
 export type BuiltinType = (typeof BUILTIN_TYPES)[number]
 
 export type BuiltinBlocksOptions = {
-  /** The built-ins to add. Default: all of them (`icon` only when `icons` is given). */
+  /**
+   * The built-ins to add. Default: all of them, but `icon` only when `icons` is given and
+   * `sectionRef` only when listed here (it needs the plugin's saved sections).
+   */
   include?: readonly BuiltinType[]
   /**
    * The names of the site's icons, for the `icon` block: the keys of the map the site gives
@@ -25,6 +29,8 @@ export type BuiltinBlocksOptions = {
   icons?: readonly string[]
   /** Upload collection for the mediaBackdrop block. Default "media". */
   mediaCollection?: string
+  /** The saved sections collection, for the sectionRef block. Default "builder-sections" (`websiteBuilder({ savedSections: { slug } })`). */
+  sectionsCollection?: string
 }
 
 /**
@@ -34,7 +40,7 @@ export type BuiltinBlocksOptions = {
  */
 export function builtinBlocks(options: BuiltinBlocksOptions = {}): BlockDefinition[] {
   const icons = options.icons ?? []
-  const include = new Set<string>(options.include ?? BUILTIN_TYPES.filter((type) => type !== 'icon' || icons.length > 0))
+  const include = new Set<string>(options.include ?? BUILTIN_TYPES.filter((type) => type !== 'sectionRef' && (type !== 'icon' || icons.length > 0)))
   for (const type of include) {
     if (!(BUILTIN_TYPES as readonly string[]).includes(type)) throw new Error(`builtinBlocks: there is no built-in block "${type}".`)
   }
@@ -50,6 +56,7 @@ export function builtinBlocks(options: BuiltinBlocksOptions = {}): BlockDefiniti
     tableOfContents: tableOfContentsBlock,
     filterLink: filterLinkBlock,
     mediaBackdrop: () => mediaBackdropBlock(options.mediaCollection),
+    sectionRef: () => sectionRefBlock(options.sectionsCollection),
   }
   return BUILTIN_TYPES.filter((type) => include.has(type)).map((type) => make[type]())
 }
@@ -62,4 +69,5 @@ export { headingId, lexicalHeadings, lexicalText, type RichTextHeading } from '.
 export { ICON_BLOCK, iconBlock } from './icon'
 export { LIGHTBOX_BLOCK, LIGHTBOX_CLASS_MAP, lightboxBlock } from './lightbox'
 export { MEDIA_BACKDROP_BLOCK, MEDIA_BACKDROP_CLASS_MAP, mediaBackdropBlock } from './mediaBackdrop'
+export { SECTION_REF_BLOCK, SECTION_REF_SLOT, sectionDetachOps, sectionRefBlock, sectionRefBlocks, sectionRefId } from './sectionRef'
 export { TABLE_OF_CONTENTS_BLOCK, tableOfContentsBlock } from './tableOfContents'
