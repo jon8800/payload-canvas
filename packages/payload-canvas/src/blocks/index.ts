@@ -6,7 +6,7 @@ export { defaultBlocks, FIELD_CLASS_MAP, MENU_CLASS_MAP, type DefaultBlocksOptio
 export * from './builtins'
 export { isLinkField, linkField, type BuilderCondition, type LinkFieldOptions } from './link'
 export { fromPayloadBlocks, type FromPayloadBlocksOptions, type PayloadBlockOverride } from './payload'
-export { defineBlock, defineSection, type SectionBlockInput, type SectionInput } from '../core/blocks'
+export { defineBlock, defineSection, type SectionBlockInput, type SectionInput, withDefaultClassNames, withInlineBlocks } from '../core/blocks'
 export { BUILDER_CSS_CLASS, withBuilderCssClass } from '../css/marker'
 export type {
   Block,

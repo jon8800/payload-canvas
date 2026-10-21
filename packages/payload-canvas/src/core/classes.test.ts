@@ -48,3 +48,23 @@ describe('collectClasses with block definitions', () => {
     assert.deepEqual(collectClasses({ version: 1, blocks: [{ id: 'c', type: 'card' }] }, loose), ['ok'])
   })
 })
+
+describe('class props', () => {
+  const carousel: BlockDefinition = {
+    type: 'carousel',
+    label: 'Carousel',
+    fields: [
+      { name: 'arrowClassName', type: 'text', defaultValue: 'size-10 rounded-full', admin: { custom: { builderClasses: true } } },
+      { name: 'dotClassName', type: 'text', admin: { custom: { builderClasses: true } } },
+      { name: 'title', type: 'text' },
+    ],
+  }
+  it('compiles the values of class props in every locale, and their defaults', () => {
+    const list: Layout = {
+      version: 1,
+      blocks: [{ id: 'c', type: 'carousel', props: { dotClassName: 'bg-white', title: 'not-a-class' }, locales: { de: { dotClassName: 'bg-black' } } }],
+    }
+    assert.deepEqual(collectClasses(list, [carousel]), ['bg-black', 'bg-white', 'rounded-full', 'size-10'])
+    assert.deepEqual(collectClasses(list), [])
+  })
+})

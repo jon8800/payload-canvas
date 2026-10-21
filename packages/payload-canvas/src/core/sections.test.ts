@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { defineSection } from '../blocks'
+import { defineSection, withDefaultClassNames } from '../blocks'
+import { sectionsWithDefaultClassNames } from './blocks'
 
 describe('defineSection', () => {
   it('fills missing block ids in walk order, at any depth, without clashing with given ids', () => {
@@ -41,5 +42,25 @@ describe('defineSection', () => {
       () => defineSection({ id: 'x', label: 'X', blocks: [{ id: 'a', type: 'stack', slots: { children: [{ id: 'a', type: 'text' }] } }] }),
       /two blocks have the id "a"/,
     )
+  })
+})
+
+describe('withDefaultClassNames', () => {
+  const defs = [
+    { type: 'stack', label: 'Stack', fields: [], defaultClassName: 'flex flex-col', slots: { children: {} } },
+    { type: 'text', label: 'Text', fields: [], defaultClassName: 'break-words' },
+  ]
+  it('fills a missing className at any depth and keeps given or empty ones', () => {
+    const blocks = withDefaultClassNames(
+      [{ id: 'a', type: 'stack', slots: { children: [{ id: 'b', type: 'text' }, { id: 'c', type: 'text', className: '' }, { id: 'd', type: 'text', className: 'p-4' }, { id: 'e', type: 'unknown' }] } }],
+      defs,
+    )
+    assert.equal(blocks[0].className, 'flex flex-col')
+    assert.deepEqual(blocks[0].slots?.children?.map((b) => b.className), ['break-words', '', 'p-4', undefined])
+    assert.equal('className' in (blocks[0].slots?.children?.[3] ?? {}), false)
+  })
+  it('runs on every section', () => {
+    const [section] = sectionsWithDefaultClassNames([{ id: 's', label: 'S', blocks: [{ id: 'a', type: 'text' }] }], defs)
+    assert.equal(section.blocks[0].className, 'break-words')
   })
 })

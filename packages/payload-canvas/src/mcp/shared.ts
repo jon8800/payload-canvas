@@ -2,7 +2,9 @@
 // No zod and no Payload runtime here, so the assistant does not need the MCP dependencies.
 
 import { COLLECTION_LIST_BLOCK, FIELD_BLOCK, INDEX_PATH, ITEM_PATH, PAGE_PATH, PARENT_PATH, REPEAT_BLOCK, URL_PATH, VISIBLE_BINDING } from '../core/bindings'
+import { classFields } from '../core/classes'
 import { dataFields, optionValues } from '../core/fields'
+import { htmlIdsOf, withoutTakenHtmlIds } from '../core/attrs'
 import { createId } from '../core/ids'
 import { MOTION_EASING_INFO, MOTION_KINDS, MOTION_PRESET_INFO, MOTION_SPECS } from '../core/motion'
 import { DEFAULT_SLOT, indexLayout } from '../core/tree'
@@ -42,7 +44,7 @@ export function motionGuide(): string {
  */
 export function layoutGuide(blocksFrom: string): string {
   return `
-LAYOUT MODEL. A layout is JSON: { "version": 1, "blocks": Block[] }. A Block is { id, type, props?, className?, slots?, bindings?, hidden?, motion? }.
+LAYOUT MODEL. A layout is JSON: { "version": 1, "blocks": Block[] }. A Block is { id, type, props?, className?, slots?, bindings?, hidden?, motion?, attrs?, slotClassName? }.
 - id: a string, unique in the whole layout. Operations target blocks by id, never by array index. New blocks need new ids: use "b_" plus 6 lowercase letters or digits (e.g. "b_k3x9qa").
 - type: a block type from ${blocksFrom}.
 - props: the block's own values. Get the exact shape with getBlockSchema. Upload and relationship props hold document IDs.
@@ -50,6 +52,8 @@ LAYOUT MODEL. A layout is JSON: { "version": 1, "blocks": Block[] }. A Block is 
 - slots: child blocks by slot name, e.g. { "children": [ ...blocks ] }. Only block types with slots take children. ${blocksFrom} shows which types each slot accepts. A type with "onlyInside" goes only directly inside those types (e.g. "listItem" only in a "list"). A slot with "maxBlocks" holds at most that many direct children: inserting into a full slot fails, so replace (update or remove) the block there instead. A slot with "minBlocks" needs that many before the page can be published.
 - bindings: (templates and collection list items only) prop path -> document field path, e.g. { "text": "title" }, { "image": "featuredImage" }, { "link": "$url" }. At render time the prop takes the document's value; when the document has no value the literal prop stays. Get field paths from getBindingSources.
 - motion: animations of the block (see MOTION below). Leave it out when the block has none.
+- slotClassName: Tailwind classes of a slot's own element, by slot name, e.g. { "empty": "col-span-full text-center" }. Only slots marked with "classes" in ${blocksFrom} take them. In "update" it merges per slot; null removes a slot's classes.
+- attrs: HTML attributes of the block element: { id?, ariaLabel?, ariaHidden? }. "id" is an anchor for "#id" links (e.g. "contact"), unique in the layout, letters, digits, - and _, starting with a letter; never the block id. "ariaLabel" names the element for screen readers (e.g. a nav or an icon-only link). "ariaHidden": true hides decorative blocks from screen readers. Copies of a section or a block leave out an id the page already uses.
 - Canonical form: leave out empty props, slots, bindings and motion objects and empty slot lists. Set hidden only when true.
 POSITION = { parentId, slot?, index }. parentId null means the page root, whose only slot is "children". slot defaults to "children". index is the block's FINAL index in the target list (0 = first; the list length = append). For a move inside the same list, count positions after the block is taken out.
 ${motionGuide()}`.trim()
@@ -58,7 +62,7 @@ ${motionGuide()}`.trim()
 export const BINDINGS_GUIDE = [
   'BINDINGS. A block in a template (or in a collection list item) binds props to document fields: "bindings": { "<prop path>": "<field path>" }.',
   'Examples: heading { "text": "title" }, text { "text": "excerpt" }, image { "image": "featuredImage" }, button or link { "link": "$url" }.',
-  `"${URL_PATH}" is the document's page URL. Nested props use dots: { "link.url": "$url" }.`,
+  `"${URL_PATH}" is the document's page URL. Nested props use dots: { "link.url": "$url" }. "<relationship path>.${URL_PATH}" is the page URL of a related document, e.g. { "link": "categories.0.${URL_PATH}" } (the first category of a listed model).`,
   'Values are converted to the prop type: rich text and dates become plain text in text props. When the document has no value, the literal prop stays, so bound props may stay empty.',
   `The "${FIELD_BLOCK}" block shows any field by its type (rich text, image, date, text): props { "path": "content" }.`,
   `In a "${COLLECTION_LIST_BLOCK}" block, blocks in the "item" slot bind to each LISTED document, not to the page.`,
@@ -67,7 +71,7 @@ export const BINDINGS_GUIDE = [
   'Fallbacks: "heading|name" uses the first path with a value.',
   'Formatters after the paths: "publishedAt|date:en-AU:Australia/Brisbane", "price|currency:AUD" ($1,200), "price|number", "bio|firstSentence".',
   'Template strings: a binding with {{…}} is text with expressions, e.g. { "text": "Enquire about {{name}}" } or "From {{price|currency:AUD}}". A missing expression becomes empty; when all are missing the literal prop stays.',
-  `Conditional blocks: "${VISIBLE_BINDING}" in bindings shows the block only when the condition holds: "availableToday" (filled; false counts as empty), "!availableToday" (empty), "district=north" (equals; for lists, any item or document id), "district!=north". A hidden block renders nothing on the site.`,
+  `Conditional blocks: "${VISIBLE_BINDING}" in bindings shows the block only when the condition holds: "availableToday" (filled; false counts as empty), "!availableToday" (empty), "district=north" (equals; for lists, any item or document id), "district!=north", and for numbers "price>100", "price>=100", "age<30", "age<=30". "field#" is the number of items of a list: "galleryImages#>=3" (at least 3 photos), "services#=0". A hidden block renders nothing on the site.`,
 ].join('\n')
 
 /** Copies a block tree with new ids that are not in `used`. */
@@ -151,15 +155,18 @@ export function sectionInsertOps(
   const start = at.index ?? list.length
   if (start < 0 || start > list.length) return `Index ${start} is out of range (0-${list.length})`
   const used = new Set(index.keys())
-  return section.blocks.map((block, i) => ({
-    type: 'insert' as const,
-    block: withNewIds(block, used),
-    to: { parentId, slot, index: start + i },
-  }))
+  // A second copy of a section leaves out the HTML ids the page already uses.
+  const taken = htmlIdsOf(layout.blocks)
+  return section.blocks.map((block, i) => {
+    const copy = withoutTakenHtmlIds(withNewIds(block, used), taken)
+    htmlIdsOf([copy], taken)
+    return { type: 'insert' as const, block: copy, to: { parentId, slot, index: start + i } }
+  })
 }
 
 /** A block type as plain data for AI models: props, slots, where it may go, description and example. */
 export function describeBlock(def: BlockDefinition) {
+  const classProps = new Set(classFields(def).map((f) => f.name))
   const props = dataFields(def.fields as unknown[]).map((f) => {
     const options = f.type === 'select' || f.type === 'radio' ? optionValues(f) : undefined
     return {
@@ -169,6 +176,7 @@ export function describeBlock(def: BlockDefinition) {
       ...(f.hasMany ? { hasMany: true } : {}),
       ...(options?.length ? { options } : {}),
       ...(f.relationTo ? { relationTo: f.relationTo } : {}),
+      ...(classProps.has(f.name) ? { holds: 'Tailwind classes (compiled like className)' } : {}),
     }
   })
   const slots = def.slots
@@ -180,6 +188,7 @@ export function describeBlock(def: BlockDefinition) {
             accepts: slot.allow && !slot.allow.includes('*') ? slot.allow : 'any block',
             ...(typeof slot.min === 'number' ? { minBlocks: slot.min } : {}),
             ...(typeof slot.max === 'number' ? { maxBlocks: slot.max } : {}),
+            ...(slot.styles ? { classes: 'takes its own classes in "slotClassName"' } : {}),
           },
         ]),
       )

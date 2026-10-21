@@ -13,11 +13,24 @@ export function listCollectionsOf(blocks: BlockDefinition[], slugs: string[]): B
     if (block.type !== COLLECTION_LIST_BLOCK && block.type !== REPEAT_BLOCK) return block
     // A field list's collection is optional (only for `$url`).
     const required = block.type === COLLECTION_LIST_BLOCK
-    const fields = block.fields.map((field): Field =>
-      'name' in field && field.name === 'collection' && field.type === 'text'
-        ? { name: 'collection', type: 'select', label: field.label ?? 'Collection', options: slugs, required, admin: { description: field.admin?.description } }
-        : field,
-    )
+    const fields = block.fields.map((field): Field => {
+      if (!('name' in field)) return field
+      if (field.name === 'collection' && field.type === 'text') {
+        return { name: 'collection', type: 'select', label: field.label ?? 'Collection', options: slugs, required, admin: { description: field.admin?.description } }
+      }
+      // Picked documents: a relationship to the collections the list can show.
+      if (block.type === COLLECTION_LIST_BLOCK && field.name === 'ids' && field.type === 'text') {
+        return {
+          name: 'ids',
+          type: 'relationship',
+          label: 'Picked documents',
+          relationTo: slugs.length === 1 ? slugs[0]! : slugs,
+          hasMany: true,
+          admin: { description: field.admin?.description },
+        } as Field
+      }
+      return field
+    })
     return { ...block, fields }
   })
 }

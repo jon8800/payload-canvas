@@ -24,7 +24,7 @@ import {
 } from '../core/bindings'
 import { createId } from '../core/ids'
 import { blockJsonSchema } from '../core/schema'
-import { getBlockDefinition } from '../core/blocks'
+import { getBlockDefinition, sectionsWithDefaultClassNames, withInlineBlocks } from '../core/blocks'
 import { localeSettingsOf, localizedKeys, resolveLayoutLocale, stampLocale, untranslatedKeys } from '../core/locale'
 import { normalizeLayout, subtreeIds, walkBlocks } from '../core/tree'
 import type { BlockDefinition, Layout, LocaleSettings, Operation, SectionDefinition } from '../core/types'
@@ -40,7 +40,9 @@ import type { CommitResult } from '../live/session'
 import type { LiveActor } from '../live/types'
 import { storedLayout } from '../plugin/hook'
 import { builderViewPath, documentPath, draftPreviewPath } from '../plugin/links'
+import { siteCssConfigOf } from '../plugin'
 import { listCollectionsOf } from '../plugin/listCollections'
+import { getStyleTokens } from '../css'
 import { findSection, loadSavedSections, savedSectionsConfigOf } from '../plugin/sections'
 import { templatesConfigOf } from '../plugin/templates'
 import { generateImageToMedia, imageServiceOf } from '../ai/images/service'
@@ -106,6 +108,14 @@ const motionArg = z.record(z.string(), z.unknown())
 const MOTION_HINT =
   'Animations: { enter?, hover?, press?, scroll?, loop? }, each kind { preset, ...options }, e.g. { "enter": { "preset": "fade-up" } } (see MOTION in the layout guide).'
 
+const attrsArg = z
+  .object({
+    id: z.string().nullable().optional().describe('The element id, for "#id" links. Unique in the layout. Letters, digits, - and _, starting with a letter.'),
+    ariaLabel: z.string().nullable().optional().describe('aria-label: the name screen readers read.'),
+    ariaHidden: z.boolean().nullable().optional().describe('true: aria-hidden, screen readers skip the block (decorative shapes, repeated links).'),
+  })
+  .describe('HTML attributes of the block element.')
+
 const positionSchema = z
   .object({
     parentId: z.string().nullable().describe('Id of the parent block, or null for the page root.'),
@@ -125,6 +135,8 @@ const blockSchema = z
     hidden: z.boolean().optional(),
     label: z.string().optional().describe('Name for editors, shown in the outline (e.g. "Hero"). Never rendered. Give each top-level section one.'),
     motion: motionArg.optional().describe(MOTION_HINT),
+    attrs: attrsArg.optional(),
+    slotClassName: z.record(z.string(), z.string()).optional().describe('Tailwind classes of a slot\'s own element, by slot name. Only slots marked "classes" in listBlocks take them.'),
   })
   .passthrough()
 
@@ -156,6 +168,11 @@ const operationSchema = z.discriminatedUnion('type', [
         .nullable()
         .optional()
         .describe(`${MOTION_HINT} Merges per kind: a kind you send replaces that kind, null removes a kind, kinds you leave out stay. null removes all motion.`),
+      attrs: attrsArg.nullable().optional().describe('HTML attributes. A key replaces that key, null removes it. null removes all.'),
+      slotClassName: z
+        .record(z.string(), z.string().nullable())
+        .optional()
+        .describe('Classes of a slot\'s own element, by slot name. Each slot given replaces its classes; null removes them.'),
       locale: z
         .string()
         .optional()
@@ -239,13 +256,28 @@ async function loadDraft(req: PayloadRequest, collection: string, id: string): P
 // Tools
 // ---------------------------------------------------------------------------
 
+/** The site's own `@utility` classes for `listBlocks`, or nothing without the plugin's CSS config. */
+async function siteClassesOf(req: PayloadRequest | undefined): Promise<Record<string, unknown>> {
+  const site = req?.payload?.config ? siteCssConfigOf(req.payload) : null
+  if (!site) return {}
+  const list = await getStyleTokens(site.css)
+    .then((tokens) => tokens.siteClasses ?? [])
+    .catch(() => [])
+  if (list.length === 0) return {}
+  return {
+    siteClasses: list.map(({ name, label, group }) => ({ name, ...(label ? { label } : {}), ...(group ? { group } : {}) })),
+    siteClassesNote: "The site's own classes (its look: type styles, buttons, cards, surfaces). Prefer them in className over rebuilding the same look from utilities.",
+  }
+}
+
 export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool[] {
-  const { sections = [] } = options
   const templateTargets = Object.entries(options.collections).filter(([, c]) => c.templates).map(([slug]) => slug)
   const templatesSlug = templateTargets.length > 0 ? (options.templates?.slug ?? DEFAULT_TEMPLATES_SLUG) : null
   const listable = Object.entries(options.collections).filter(([, c]) => c.url).map(([slug]) => slug)
   // The same block list the plugin validates against (collection list: only collections with a url).
-  const blocks = listCollectionsOf(options.blocks, listable)
+  const blocks = withInlineBlocks(listCollectionsOf(options.blocks, listable))
+  // A section block without a className gets its type's default classes, as in the plugin.
+  const sections = sectionsWithDefaultClassNames(options.sections ?? [], blocks)
   const collections: Record<string, BuilderMcpCollection> = templatesSlug
     ? { ...options.collections, [templatesSlug]: { field: TEMPLATE_LAYOUT_FIELD } }
     : options.collections
@@ -390,9 +422,10 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       LAYOUT_GUIDE,
     ].join('\n\n'),
     parameters: { collection: collectionArg },
-    handler: async () =>
+    handler: async (_args, req) =>
       text({
         blocks: blocks.map(describeBlock),
+        ...(await siteClassesOf(req)),
         sections: sections.length,
         bindings: BINDINGS_GUIDE,
         ...(templatesSlug ? { templates: { collection: templatesSlug, targets: templateTargets } } : {}),
@@ -552,7 +585,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     routing: { kind: 'collection', action: 'update' },
     description: [
       'Edits the layout of a document with a list of operations, applied in order, all or nothing. Saves a draft about a second later (never publishes). People with the page open in the editor see each change live.',
-      'Operations: insert { block, to }, move { id, to }, remove { id }, duplicate { id, newId? }, update { id, props?, unsetProps?, className?, hidden?, bindings?, label?, motion? }. "update" merges props and bindings; className REPLACES all classes, so send the full list. `motion` (animations, see MOTION below) merges per kind: a kind replaces that kind, null removes it, null alone removes all.',
+      'Operations: insert { block, to }, move { id, to }, remove { id }, duplicate { id, newId? }, update { id, props?, unsetProps?, className?, hidden?, bindings?, label?, motion?, attrs?, slotClassName? }. "update" merges props and bindings; className REPLACES all classes, so send the full list. `motion` (animations, see MOTION below) merges per kind: a kind replaces that kind, null removes it, null alone removes all. `attrs` (HTML id, ariaLabel, ariaHidden) merges per key; null removes a key. `slotClassName` merges per slot; null removes the classes of a slot.',
       'Templates are edited the same way: collection = the templates collection, id = the template id from listTemplates.',
       'If any operation fails, nothing is saved and the error names the failing operation. Call getLayout for current ids first. The result is validated against the block schemas: missing required props are allowed in drafts (warnings), wrong types are errors. insert and move refuse a block that a slot does not accept, also deeper inside (for example no button or form anywhere inside a link). insert, move and duplicate refuse to add a block to a slot that already holds its maxBlocks (listBlocks).',
       'Localized sites: with `locale`, "update" props change that locale\'s values of localized props (a translation); other props and everything else (insert, move, remove, classes) change every locale. Blocks you insert with `locale` hold their localized props in that locale only: the default locale stays empty until someone writes it (required props then block publishing). Without `locale` they hold the default locale\'s values. Sections (insertSection) keep their own text.',

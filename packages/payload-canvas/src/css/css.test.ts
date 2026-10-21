@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { describe, test } from 'node:test'
@@ -209,8 +209,33 @@ describe('getStyleTokens', () => {
     const tokens = await getStyleTokens(options)
     const input = (await getCanvasCssInput(options)) as unknown as CanvasCssData
     const fallback = tokensFromTheme(parseThemeEntries(input), null)
-    assert.deepEqual({ ...fallback, classList: undefined }, { ...tokens, classList: undefined })
+    assert.deepEqual({ ...fallback, classList: undefined, siteClasses: undefined }, { ...tokens, classList: undefined, siteClasses: undefined })
     assert.deepEqual(fallback.classList, [])
+  })
+
+  test("lists the entry's own static @utility classes with their @canvas labels", async () => {
+    // Written at test time (not in src, so the build never ships it), inside the package so
+    // `@import "tailwindcss"` resolves.
+    const dir = path.join(here, '../../node_modules/.cache/payload-canvas-test')
+    await mkdir(dir, { recursive: true })
+    const css = [
+      '@import "tailwindcss";',
+      '/* @canvas Surfaces: Glass panel */',
+      '@utility glass {\n  backdrop-filter: blur(8px);\n}',
+      '/* A comment that is not a preset label. */',
+      '@utility btn-primary {\n  background: black;\n  color: white;\n}',
+      '@utility tab-* {\n  tab-size: --value(integer);\n}',
+    ].join('\n')
+    await writeFile(path.join(dir, 'utilities.css'), css)
+    const fixture = { entry: path.join(dir, 'utilities.css') }
+    const tokens = await getStyleTokens(fixture)
+    // The class list has them too, but mixed into every Tailwind class.
+    assert.ok(tokens.classList.includes('glass') && tokens.classList.includes('btn-primary'))
+    assert.deepEqual(tokens.siteClasses, [
+      { name: 'glass', label: 'Glass panel', group: 'Surfaces', css: 'backdrop-filter: blur(8px);' },
+      { name: 'btn-primary', css: 'background: black; color: white;' },
+    ])
+    assert.deepEqual((await getStyleTokens(options)).siteClasses, [])
   })
 
   test('caches per entry content: a cache hit returns the same object', async () => {

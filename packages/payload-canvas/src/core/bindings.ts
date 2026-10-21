@@ -350,6 +350,61 @@ export type BindingOptions = {
    * resolver here. Without it, `$url` bindings stay unresolved.
    */
   url?: (context: TemplateContext) => string | null | undefined
+  /**
+   * Which collection each relationship and upload field points to (`bindingRelations`), so
+   * `<path>.$url` (e.g. `categories.0.$url`) knows the related document's collection. A
+   * `{ relationTo, value }` value names its own collection without it.
+   */
+  relations?: BindingRelations
+}
+
+/** Collection slug -> field path (no row numbers, e.g. "gallery.photo") -> the related collection. */
+export type BindingRelations = Record<string, Record<string, string>>
+
+/**
+ * The related collection of every relationship and upload field with one `relationTo`, at any
+ * depth of groups, named tabs and arrays (blocks fields are left out). Plain JSON: pass it to
+ * `RenderLayout` and `loadLayoutData` as `relations`. The plugin sends it to the canvas itself.
+ */
+export function bindingRelations(collections: ReadonlyArray<{ slug: string; fields: readonly unknown[] }>): BindingRelations {
+  const out: BindingRelations = {}
+  for (const collection of collections) {
+    const into: Record<string, string> = {}
+    walkRelations(collection.fields, '', into)
+    if (Object.keys(into).length > 0) out[collection.slug] = into
+  }
+  return out
+}
+
+function walkRelations(fields: readonly unknown[], prefix: string, into: Record<string, string>): void {
+  for (const field of dataFields(fields)) {
+    const path = prefix ? `${prefix}.${field.name}` : field.name
+    if ((field.type === 'relationship' || field.type === 'upload') && typeof field.relationTo === 'string') into[path] = field.relationTo
+    else if (field.type === 'group' || field.type === 'array') walkRelations(field.fields ?? [], path, into)
+  }
+}
+
+/** `<path>.$url`: the URL of the related document at `path`. */
+const RELATED_URL_SUFFIX = `.${URL_PATH}`
+
+/**
+ * The collection of the document at `path` of the context document, by `relations`: each
+ * relationship on the way moves to its collection. Row numbers are skipped. Undefined when the
+ * path does not end on a relationship.
+ */
+function relationOf(collection: string, path: string, relations: BindingRelations | undefined): string | undefined {
+  let current = collection
+  let local = ''
+  for (const part of path.split('.')) {
+    if (/^\d+$/.test(part)) continue
+    local = local ? `${local}.${part}` : part
+    const next = relations?.[current]?.[local]
+    if (next) {
+      current = next
+      local = ''
+    }
+  }
+  return local === '' && path !== '' ? current : undefined
 }
 
 /**
@@ -358,6 +413,18 @@ export type BindingOptions = {
  */
 function pathValue(context: TemplateContext, path: string, options?: BindingOptions): unknown {
   if (path === URL_PATH) return options?.url?.(context) ?? undefined
+  if (path.endsWith(RELATED_URL_SUFFIX)) {
+    const target = path.slice(0, -RELATED_URL_SUFFIX.length)
+    const value = pathValue(context, target, options)
+    const pair = isRelationPair(value)
+    const doc = pair ? value.value : value
+    // Only a loaded document has the fields a URL needs (an id alone does not).
+    const head = target.split('.')[0]
+    const own = head === PARENT_PATH || head === PAGE_PATH || head === ITEM_PATH ? undefined : relationOf(context.collection, target, options?.relations)
+    const collection = pair ? value.relationTo : own
+    if (!collection || !isPlainObject(doc)) return undefined
+    return options?.url?.({ collection, doc }) ?? undefined
+  }
   const dot = path.indexOf('.')
   const head = dot < 0 ? path : path.slice(0, dot)
   const rest = dot < 0 ? '' : path.slice(dot + 1)
@@ -442,6 +509,17 @@ export const BINDING_FORMATTERS: Record<string, (value: unknown, args: string[])
   },
 }
 
+/**
+ * A value through one formatter, written as in a binding: "currency:AUD", "date:en-AU:Australia/Brisbane",
+ * "number" or "firstSentence". Undefined for an unknown formatter, a missing value or a value the
+ * formatter cannot read. The field block's `format` prop uses it.
+ */
+export function formatBindingValue(value: unknown, format: string): string | undefined {
+  const formatter = formatterOf(format.trim())
+  if (!formatter || isMissing(value)) return undefined
+  return BINDING_FORMATTERS[formatter.name]!(value, formatter.args)
+}
+
 /** One `|` part of an expression: a formatter (by name, after the first part) or a path. */
 function formatterOf(part: string): { name: string; args: string[] } | null {
   const [name = '', ...args] = part.split(':')
@@ -506,21 +584,50 @@ export function bindingPaths(key: string, binding: string): string[] {
       .split('|')
       .map((part) => part.trim())
       .filter((part, i) => part && (i === 0 || !formatterOf(part)))
+      .map((path) => (path.endsWith(RELATED_URL_SUFFIX) ? path.slice(0, -RELATED_URL_SUFFIX.length) : path))
       .filter((path) => path !== URL_PATH && path.split('.')[0] !== ITEM_PATH && path !== INDEX_PATH),
   )
 }
 
-type Condition = { path: string; test: 'filled' | 'empty' | 'equals' | 'differs'; value: string }
+type Comparison = '=' | '!=' | '>' | '>=' | '<' | '<='
+/** `count`: the condition tests the number of items (`path#`), not the value. */
+type Condition = { path: string; test: 'filled' | 'empty' | Comparison; value: string; count: boolean }
 
-/** `field`, `!field`, `field=value`, `field!=value`. */
+/** The first operator wins, so a value may hold "=" or ">" (`title=a=b`). Two-character operators first. */
+const COMPARISON = /^(.+?)\s*(>=|<=|!=|>|<|=)\s*(.*)$/s
+
+/** `path#`: the condition counts the items. */
+const counts = (path: string) => path.endsWith('#')
+const bare = (path: string) => (counts(path) ? path.slice(0, -1).trim() : path)
+
+/**
+ * `field`, `!field`, `field=value`, `field!=value`, and for numbers `field>3`, `field>=3`,
+ * `field<3`, `field<=3`. `field#` is the number of items of a list (0 when empty, 1 for any other
+ * filled value), e.g. `galleryImages#>=3`.
+ */
 function conditionOf(condition: string): Condition {
   const text = condition.trim()
-  const differs = text.indexOf('!=')
-  if (differs > 0) return { path: text.slice(0, differs).trim(), test: 'differs', value: text.slice(differs + 2).trim() }
-  const equals = text.indexOf('=')
-  if (equals > 0) return { path: text.slice(0, equals).trim(), test: 'equals', value: text.slice(equals + 1).trim() }
-  if (text.startsWith('!')) return { path: text.slice(1).trim(), test: 'empty', value: '' }
-  return { path: text, test: 'filled', value: '' }
+  const match = COMPARISON.exec(text)
+  if (match && match[1].trim() !== '!') {
+    const path = match[1].trim()
+    return { path: bare(path), test: match[2] as Comparison, value: match[3].trim(), count: counts(path) }
+  }
+  if (text.startsWith('!')) return { path: bare(text.slice(1).trim()), test: 'empty', value: '', count: counts(text) }
+  return { path: bare(text), test: 'filled', value: '', count: counts(text) }
+}
+
+/** The number of items: a list's length, 0 for an empty value, 1 for any other value. */
+function itemCount(value: unknown): number {
+  if (Array.isArray(value)) return value.length
+  return isMissing(value) || value === false ? 0 : 1
+}
+
+/** A number from a number or a numeric text; null otherwise. */
+function numberOf(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value !== 'string' || value.trim() === '') return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 /** True when a value matches `expected`: itself, a document's id, or any item of a list. */
@@ -533,12 +640,21 @@ function matches(value: unknown, expected: string): boolean {
 
 /** True when the `$visible` condition holds for the context. `false` counts as empty. */
 export function isVisible(context: TemplateContext, condition: string, options?: BindingOptions): boolean {
-  const { path, test, value: expected } = conditionOf(condition)
-  const value = expressionValue(context, path, options)
-  const filled = !isMissing(value) && value !== false
+  const { path, test, value: expected, count } = conditionOf(condition)
+  const raw = expressionValue(context, path, options)
+  const value = count ? itemCount(raw) : raw
+  const filled = count ? value !== 0 : !isMissing(value) && value !== false
   if (test === 'filled') return filled
   if (test === 'empty') return !filled
-  return matches(value, expected) === (test === 'equals')
+  if (test === '=' || test === '!=') return matches(value, expected) === (test === '=')
+  // Greater and less compare numbers only: a value that is not a number never passes.
+  const actual = numberOf(value)
+  const limit = numberOf(expected)
+  if (actual === null || limit === null) return false
+  if (test === '>') return actual > limit
+  if (test === '>=') return actual >= limit
+  if (test === '<') return actual < limit
+  return actual <= limit
 }
 
 /**
@@ -819,7 +935,8 @@ export function validateBindings(
           // Expressions (templates, fallbacks, formatters), `$visible` and the row's own value are not checked.
           if (propPath === VISIBLE_BINDING || isBindingExpression(fieldPath)) continue
           if (fieldPath.split('.')[0] === ITEM_PATH || fieldPath === INDEX_PATH) continue
-          const source = fieldPath === URL_PATH ? { path: URL_PATH, label: 'Page URL', type: 'text' } : findBindingField(fields, fieldPath)
+          const source =
+            fieldPath === URL_PATH || fieldPath.endsWith(RELATED_URL_SUFFIX) ? { path: URL_PATH, label: 'Page URL', type: 'text' } : findBindingField(fields, fieldPath)
           if (!source) continue
           const problem = bindingProblem(definition.fields as unknown[], propPath, source)
           if (problem) {

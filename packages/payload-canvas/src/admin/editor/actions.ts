@@ -3,7 +3,7 @@
 // Editor actions shared by the toolbar, the overlay, the outline, the inspector, the menus and the
 // shortcuts: insert, duplicate, remove, hide, move, copy and paste (blocks and styles).
 
-import { createId, findBlock, findLocation, getBlockDefinition, slotAcceptsAt, slotNames } from '../../core'
+import { createId, findBlock, findLocation, getBlockDefinition, htmlIdsOf, slotAcceptsAt, slotNames, withoutTakenHtmlIds } from '../../core'
 import type { Block, CanvasMeasurement, Layout, Operation, Position } from '../../core/types'
 import { normalizeClasses, parseStyles, setStylesOps, stylesText, type CopiedStyles } from './menu/styleClipboard'
 import type { Runtime } from './runtime'
@@ -95,9 +95,17 @@ export function currentPosition(layout: Layout, to: Position): Position | null {
   return { ...to, index: Math.min(to.index, parent.slots?.[to.slot ?? 'children']?.length ?? 0) }
 }
 
-/** Inserts copies (new ids) of `blocks` as one undo step and selects the first one. */
+/**
+ * Inserts copies (new ids) of `blocks` as one undo step and selects the first one. A copy leaves
+ * out the HTML ids (`attrs.id`) the page already uses, so a paste or a second section stays valid.
+ */
 export function insertBlocks(runtime: Runtime, blocks: Block[], to: Position): boolean {
-  const fresh = blocks.map(withNewIds)
+  const taken = htmlIdsOf(runtime.store.getState().layout.blocks)
+  const fresh = blocks.map((block) => {
+    const copy = withoutTakenHtmlIds(withNewIds(block), taken)
+    htmlIdsOf([copy], taken)
+    return copy
+  })
   const first = fresh[0]
   if (!first) return false
   const ops: Operation[] = fresh.map((block, i) => ({ type: 'insert', block, to: { ...to, index: to.index + i } }))
