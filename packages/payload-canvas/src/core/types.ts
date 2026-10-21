@@ -49,6 +49,12 @@ export type Block = {
    * blocks, so they live here. Stored only when one is set.
    */
   attrs?: BlockAttrs
+  /**
+   * Tailwind classes of a slot's own element, by slot name, for slots whose definition sets
+   * `styles: true` (e.g. the `empty` slot of a collection list). Compiled like `className`.
+   * Stored only when one is set.
+   */
+  slotClassName?: Record<string, string>
 }
 
 /** A block's own HTML attributes. Empty values are left out. */
@@ -92,6 +98,12 @@ export type SlotDefinition = {
   max?: number
   /** Fewest direct children the slot needs (Payload's `minRows`). Fewer blocks only publishing. */
   min?: number
+  /**
+   * The slot renders in an element of its own that takes classes (`block.slotClassName[slot]`).
+   * The Styles panel then offers the slot as a style target. The component spreads
+   * `slotAttributes[slot]` (which carries the `className`) on that element. Default false.
+   */
+  styles?: boolean
 }
 
 export type BlockDefinition = {
@@ -422,6 +434,8 @@ export type Operation =
       motion?: MotionPatch | null
       /** HTML attributes. Each key given replaces that key, `null` removes it. `attrs: null` removes all. */
       attrs?: BlockAttrsPatch | null
+      /** Classes per slot. Each slot given replaces that slot's classes, `null` or "" removes them. */
+      slotClassName?: Record<string, string | null>
     }
 
 /** `inverse` undoes this operation when applied in order to the resulting layout. */

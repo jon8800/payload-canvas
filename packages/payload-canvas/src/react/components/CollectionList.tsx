@@ -22,6 +22,7 @@ export function CollectionList({ block, props, className, attributes, slots, slo
   return (
     <div {...attributes} {...slotAttributes[LIST_ITEM_SLOT]} className={className}>
       {items}
+      {/* The empty slot takes its own classes (`slotClassName.empty`) through its slot attributes. */}
       {empty && <div {...slotAttributes[LIST_EMPTY_SLOT]}>{empty}</div>}
     </div>
   )

@@ -222,6 +222,22 @@ function update(layout: Layout, op: Extract<Operation, { type: 'update' }>): App
     else delete next.motion
   }
 
+  if (op.slotClassName !== undefined) {
+    if (!isPlainObject(op.slotClassName)) return fail('`slotClassName` must be an object of slot name -> classes')
+    const old = before.slotClassName ?? {}
+    const merged: Record<string, string> = { ...old }
+    const inv: Record<string, string | null> = {}
+    for (const [slot, value] of Object.entries(op.slotClassName)) {
+      if (value !== null && typeof value !== 'string') return fail(`slotClassName.${slot} must be a string or null`)
+      setOwn(inv, slot, Object.hasOwn(old, slot) ? old[slot] : null)
+      if (value?.trim()) setOwn(merged, slot, value)
+      else delete merged[slot]
+    }
+    inverse.slotClassName = inv
+    if (Object.keys(merged).length > 0) next.slotClassName = merged
+    else delete next.slotClassName
+  }
+
   if (op.attrs !== undefined) {
     const patched = patchAttrs(before.attrs, op.attrs)
     if (typeof patched === 'string') return fail(patched)
@@ -336,6 +352,7 @@ function cloneWithNewIds(block: Block, id: string, used: Set<string>): Block {
   if (block.locales) clone.locales = structuredClone(block.locales)
   if (block.bindings) clone.bindings = { ...block.bindings }
   if (block.attrs) clone.attrs = { ...block.attrs }
+  if (block.slotClassName) clone.slotClassName = { ...block.slotClassName }
   if (block.slots) {
     clone.slots = Object.fromEntries(
       Object.entries(block.slots).map(([name, children]) => [
@@ -360,7 +377,7 @@ function freshId(used: Set<string>): string {
  */
 function checkBlock(value: unknown, used: Set<string>, path = 'block'): Block | string {
   if (!isPlainObject(value)) return `${path} must be an object`
-  const { id, type, props, className, slots, bindings, hidden, label, locales, motion, attrs } = value
+  const { id, type, props, className, slots, bindings, hidden, label, locales, motion, attrs, slotClassName } = value
   if (typeof id !== 'string' || id === '') return `${path}.id must be a non-empty string`
   if (used.has(id)) return `Block id "${id}" already exists`
   used.add(id)
@@ -419,6 +436,13 @@ function checkBlock(value: unknown, used: Set<string>, path = 'block'): Block | 
     const checked = checkMotion(motion)
     if (typeof checked === 'string') return `${path}.${checked}`
     if (checked) block.motion = checked
+  }
+  if (slotClassName !== undefined) {
+    if (!isPlainObject(slotClassName) || !Object.values(slotClassName).every((v) => typeof v === 'string')) {
+      return `${path}.slotClassName must be an object of slot name -> classes`
+    }
+    const kept = Object.fromEntries(Object.entries(slotClassName as Record<string, string>).filter(([, v]) => v.trim()))
+    if (Object.keys(kept).length > 0) block.slotClassName = kept
   }
   const checkedAttrs = checkAttrs(attrs)
   if (typeof checkedAttrs === 'string') return `${path}.${checkedAttrs}`

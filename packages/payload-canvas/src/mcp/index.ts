@@ -134,6 +134,7 @@ const blockSchema = z
     label: z.string().optional().describe('Name for editors, shown in the outline (e.g. "Hero"). Never rendered. Give each top-level section one.'),
     motion: motionArg.optional().describe(MOTION_HINT),
     attrs: attrsArg.optional(),
+    slotClassName: z.record(z.string(), z.string()).optional().describe('Tailwind classes of a slot\'s own element, by slot name. Only slots marked "classes" in listBlocks take them.'),
   })
   .passthrough()
 
@@ -166,6 +167,10 @@ const operationSchema = z.discriminatedUnion('type', [
         .optional()
         .describe(`${MOTION_HINT} Merges per kind: a kind you send replaces that kind, null removes a kind, kinds you leave out stay. null removes all motion.`),
       attrs: attrsArg.nullable().optional().describe('HTML attributes. A key replaces that key, null removes it. null removes all.'),
+      slotClassName: z
+        .record(z.string(), z.string().nullable())
+        .optional()
+        .describe('Classes of a slot\'s own element, by slot name. Each slot given replaces its classes; null removes them.'),
       locale: z
         .string()
         .optional()
@@ -563,7 +568,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     routing: { kind: 'collection', action: 'update' },
     description: [
       'Edits the layout of a document with a list of operations, applied in order, all or nothing. Saves a draft about a second later (never publishes). People with the page open in the editor see each change live.',
-      'Operations: insert { block, to }, move { id, to }, remove { id }, duplicate { id, newId? }, update { id, props?, unsetProps?, className?, hidden?, bindings?, label?, motion?, attrs? }. "update" merges props and bindings; className REPLACES all classes, so send the full list. `motion` (animations, see MOTION below) merges per kind: a kind replaces that kind, null removes it, null alone removes all. `attrs` (HTML id, ariaLabel, ariaHidden) merges per key; null removes a key.',
+      'Operations: insert { block, to }, move { id, to }, remove { id }, duplicate { id, newId? }, update { id, props?, unsetProps?, className?, hidden?, bindings?, label?, motion?, attrs?, slotClassName? }. "update" merges props and bindings; className REPLACES all classes, so send the full list. `motion` (animations, see MOTION below) merges per kind: a kind replaces that kind, null removes it, null alone removes all. `attrs` (HTML id, ariaLabel, ariaHidden) merges per key; null removes a key. `slotClassName` merges per slot; null removes the classes of a slot.',
       'Templates are edited the same way: collection = the templates collection, id = the template id from listTemplates.',
       'If any operation fails, nothing is saved and the error names the failing operation. Call getLayout for current ids first. The result is validated against the block schemas: missing required props are allowed in drafts (warnings), wrong types are errors. insert and move refuse a block that a slot does not accept, also deeper inside (for example no button or form anywhere inside a link). insert, move and duplicate refuse to add a block to a slot that already holds its maxBlocks (listBlocks).',
       'Localized sites: with `locale`, "update" props change that locale\'s values of localized props (a translation); other props and everything else (insert, move, remove, classes) change every locale. Blocks you insert with `locale` hold their localized props in that locale only: the default locale stays empty until someone writes it (required props then block publishing). Without `locale` they hold the default locale\'s values. Sections (insertSection) keep their own text.',

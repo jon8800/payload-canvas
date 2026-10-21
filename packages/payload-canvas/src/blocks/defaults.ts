@@ -698,7 +698,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         admin: { description: 'How far related documents of each item load, for example 2 to reach a category\'s image.' },
       },
     ],
-    slots: { [LIST_ITEM_SLOT]: { label: 'Item' }, [LIST_EMPTY_SLOT]: { label: 'When empty' } },
+    slots: { [LIST_ITEM_SLOT]: { label: 'Item' }, [LIST_EMPTY_SLOT]: { label: 'When empty', styles: true } },
     defaultClassName: 'grid grid-cols-1 gap-6 md:grid-cols-3',
     ai: {
       description:
@@ -718,7 +718,8 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         'e.g. { "available": { "today": { "availableToday": { "equals": true } } } } for ?available=today; values of one ' +
         'param (repeated or comma-separated) are OR-ed, params are AND-ed; the canvas ignores them. "offset" skips ' +
         'documents. "depth" ("1" or "2") is how deep related documents load. The "empty" slot shows instead of the ' +
-        'items when no document matches (e.g. a text "Nobody is available today").',
+        'items when no document matches (e.g. a text "Nobody is available today"); it renders in its own div, styled ' +
+        'with "slotClassName": { "empty": "col-span-full ..." }.',
       example: {
         type: COLLECTION_LIST_BLOCK,
         props: { collection: 'posts', limit: 3, sort: '-createdAt' },

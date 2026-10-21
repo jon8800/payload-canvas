@@ -677,6 +677,7 @@ type BlockComponentProps = {
 ```
 
 - Spread `attributes` on the root element. In the canvas it holds `data-block-id`, which the editor needs to select and measure the block.
+- Spread `slotAttributes[slot]` on the element that holds a slot's children. For a slot with `styles: true` it also carries the slot's `className` (see [Classes on slots](#classes-on-slots)), so spread it after any `className` you set on that element, or join the two.
 - Props are plain data. A component can be a client component (`'use client'`).
 - Use one components map for the site and the canvas, in a file without server code:
 
@@ -1290,6 +1291,30 @@ export default function CanvasPage() {
 
 - **Theme variables in the canvas.** The canvas gets the Theme global from `<ThemeStyle live />` in its layout. If you set other variables at runtime, render the same tag in the canvas layout too.
 - **Standalone output** needs `outputFileTracingIncludes`. See [step 8](#8-add-the-standalone-tracing-lines).
+
+### Classes on slots
+
+A slot that renders in an element of its own can take classes of its own: the `summary` and `content` of a disclosure, or the `empty` slot of a collection list. Set `styles: true` on the slot in the block definition. The classes live in `block.slotClassName`, by slot name.
+
+```ts
+defineBlock({
+  type: 'disclosure',
+  label: 'Disclosure',
+  fields: [],
+  slots: { summary: { label: 'Summary', styles: true }, content: { label: 'Content', styles: true } },
+})
+```
+
+```json
+{ "type": "collectionList", "className": "grid grid-cols-3 gap-6", "slotClassName": { "empty": "col-span-full text-center" } }
+```
+
+- The component gets the classes in `slotAttributes[slot].className`, with the `builder-css` marker. A component that spreads `slotAttributes[slot]` on the slot's element needs nothing else.
+- The save hook and the canvas compile them like `className`.
+- In the Styles tab, a block with such slots shows a **Style target** select: **This block**, or one of its slots. The panel then edits that slot's classes.
+- An update merges per slot: `{ "type": "update", "id": "b_list01", "slotClassName": { "empty": "p-8" } }`. `null` or `""` removes a slot's classes.
+- `validateLayout` refuses classes on a slot without `styles: true`.
+- The built-in `collectionList` `empty` slot takes classes.
 
 ### HTML attributes
 
