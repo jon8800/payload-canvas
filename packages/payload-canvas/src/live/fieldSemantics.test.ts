@@ -199,8 +199,12 @@ describe('hook changes reach every editor', () => {
     await db.commit([{ type: 'update', id: 'p', props: { slug: 'Second Try' } }])
     first.release()
     // The first save ends, then the session saves again after its pause: steps of the manual clock
-    // until it did (bounded by steps, never by the machine's speed).
-    for (let step = 0; step < 100 && db.writes.length < 2; step++) await clock.advance(5)
+    // until it did (bounded by steps). Each step also waits 5 ms: the save hook's CSS compile reads
+    // files (real I/O), which the manual clock cannot speed up on a busy machine.
+    for (let step = 0; step < 200 && db.writes.length < 2; step++) {
+      await clock.advance(5)
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
     await clock.advance(10_000)
     assert.equal(propsOf(db.sessions.peek('pages', 'p1')?.layout).slug, 'second-try')
     assert.equal(propsOf(db.latest.layout).slug, 'second-try')
