@@ -20,6 +20,7 @@ import { isRecord } from './render/fields'
 import { localeArgs, type RenderLocale } from './render/locale'
 
 export { loadLayoutData, type LoadLayoutOptions } from './render/resolve'
+export { loadedLists, type LoadedList } from './render/lists'
 export { localeArgs, localizeLayout, type RenderLocale } from './render/locale'
 export { createCanvasServer, type CanvasFrameArgs, type CanvasServerOptions, type PageDataArgs } from './render/canvasServer'
 export { siteRegion, type RegionMark } from './render/regions'

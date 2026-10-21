@@ -343,6 +343,27 @@ export function withPageParams(layout: Layout, queries: readonly ListQuery[]): L
   return { ...layout, blocks: visit(layout.blocks) }
 }
 
+/** One collection list of a loaded layout (`loadedLists`). */
+export type LoadedList = { blockId: string; collection: string; docs: Doc[] }
+
+/**
+ * The collection lists of a layout after `loadLayoutData`, with the documents each one shows, in
+ * order: for ItemList JSON-LD without a second query. Hidden blocks (and lists inside them) are
+ * left out. A list inside another list's item counts once.
+ */
+export function loadedLists(layout: Layout): LoadedList[] {
+  const out: LoadedList[] = []
+  const seen = new Set<string>()
+  walkBlocks(layout, (block) => {
+    if (block.hidden) return false
+    if (block.type !== COLLECTION_LIST_BLOCK || seen.has(block.id) || !Array.isArray(block.props?.[LIST_ITEMS_PROP])) return
+    seen.add(block.id)
+    const collection = typeof block.props?.collection === 'string' ? block.props.collection.trim() : ''
+    out.push({ blockId: block.id, collection, docs: listItemsOf(block.props) })
+  })
+  return out
+}
+
 /** The documents a list block carries (`$items`), or an empty list. */
 export function listItemsOf(props: Record<string, unknown> | undefined): Doc[] {
   const value = props?.[LIST_ITEMS_PROP]

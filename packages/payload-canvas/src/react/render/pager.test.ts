@@ -7,7 +7,7 @@ import type { Payload } from 'payload'
 import { builtinBlocks, defaultBlocks, filterHref } from '../../blocks'
 import type { Block, Layout } from '../../core'
 import { loadLayoutData, RenderLayout } from '../index'
-import { LIST_PAGE_PARAMS_PROP, listQueries, pageLinks, pageParamOf, pageWindow, withPageParams } from './lists'
+import { LIST_PAGE_PARAMS_PROP, listQueries, loadedLists, pageLinks, pageParamOf, pageWindow, withPageParams } from './lists'
 
 const blocks = [...defaultBlocks(), ...builtinBlocks({ include: ['filterLink'] })]
 const docs = Array.from({ length: 40 }, (_, i) => ({ id: i + 1, title: `Doc ${i + 1}` }))
@@ -71,5 +71,26 @@ describe('pager', () => {
     assert.match(html, /<nav aria-label="Seiten"[^>]*><a href="\?">1<\/a><span data-page-gap="" aria-hidden="true">…<\/span><a href="\?page=9">9<\/a><a href="\?page=10" aria-current="page">10<\/a><a href="\?page=11">11<\/a><span data-page-gap="" aria-hidden="true">…<\/span><a href="\?page=20">20<\/a><\/nav>/)
     const english = await loadLayoutData({ version: 1, blocks: [list('a', {})] }, blocks, fakePayload())
     assert.match(renderToStaticMarkup(createElement(RenderLayout, { layout: english, blocks })), /<nav aria-label="Pages"/)
+  })
+})
+
+describe('loadedLists', () => {
+  it('lists the documents each collection list of a loaded layout shows, without a second query', async () => {
+    let calls = 0
+    const payload = fakePayload()
+    const counting = { ...payload, find: async (args: { limit?: number; page?: number }) => (calls++, payload.find(args as never)) } as unknown as Payload
+    const layout: Layout = {
+      version: 1,
+      blocks: [
+        { id: 's', type: 'stack', slots: { children: [list('a', { paginate: 'none', limit: 3 })] } },
+        { ...list('hid', {}), hidden: true },
+      ],
+    }
+    const loaded = await loadLayoutData(layout, blocks, counting)
+    const before = calls
+    const lists = loadedLists(loaded)
+    assert.equal(calls, before)
+    assert.deepEqual(lists.map((l) => [l.blockId, l.collection, l.docs.map((d) => d.id)]), [['a', 'posts', [1, 2, 3]]])
+    assert.deepEqual(loadedLists(layout), [])
   })
 })
