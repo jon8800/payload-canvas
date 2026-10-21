@@ -1224,6 +1224,8 @@ export const sections: SectionDefinition[] = [
 
 Pass them to `websiteBuilder({ sections })` and to `builderMcpTools({ sections })`. Block ids are regenerated on every insert.
 
+A section block without a `className` key gets its block type's `defaultClassName`, as a block inserted from the library does. `websiteBuilder` and `builderMcpTools` fill it, so the library, its pictures, the MCP tools and the assistant all see the classes. To keep a block without classes, set `className: ''`. A seed that builds layouts by hand can run the same step: `withDefaultClassNames(blocks, blockDefinitions)` (from `payload-canvas` or `payload-canvas/blocks`). A collection that stores a Payload `blocks` field gets the sections as written, because that field holds no classes.
+
 `defineSection()` (from `payload-canvas` or `payload-canvas/blocks`) writes the block ids for you. Leave out `id` on any block, at any depth. It fills each missing id as `<section id>_1`, `_2`, … in tree order and skips ids you gave. The same input always gives the same ids. It throws an `Error` when the section has no `id` or `label`, or when two blocks have the same id. The input type is `SectionInput`.
 
 ```ts
