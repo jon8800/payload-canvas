@@ -189,11 +189,12 @@ export function pageOf(query?: ListQueryParams | null, param = PAGE_PARAM): numb
 }
 
 /**
- * The page links of a paginated list: `?page=N` (or the list's own `param`) with the rest of the
- * URL query kept (filters and other lists' pages), and no page param for page 1. Long lists get
- * gaps (`pageWindow`). Empty with one page or fewer.
+ * The page links of a paginated list: `path?page=N` (or the list's own `param`) with the rest of
+ * the URL query kept (filters and other lists' pages), and no page param for page 1: page 1 of
+ * `/guides` is `/guides`. Without a `path` the links are relative (`?page=2`), and page 1 with no
+ * other values is `?`. Long lists get gaps (`pageWindow`). Empty with one page or fewer.
  */
-export function pageLinks(query: ListQueryParams | null | undefined, current: number, totalPages: number, param = PAGE_PARAM): ListPages {
+export function pageLinks(query: ListQueryParams | null | undefined, current: number, totalPages: number, param = PAGE_PARAM, path = ''): ListPages {
   const links: ListPages['links'] = []
   if (totalPages <= 1) return { current, links }
   const base = new URLSearchParams()
@@ -205,7 +206,7 @@ export function pageLinks(query: ListQueryParams | null | undefined, current: nu
     const params = new URLSearchParams(base)
     if (page > 1) params.set(param, String(page))
     const text = params.toString()
-    links.push({ page, href: text ? `?${text}` : '?', current: page === current, ...(page > previous + 1 ? { gapBefore: true as const } : {}) })
+    links.push({ page, href: text ? `${path}?${text}` : path || '?', current: page === current, ...(page > previous + 1 ? { gapBefore: true as const } : {}) })
     previous = page
   }
   return { current, links }

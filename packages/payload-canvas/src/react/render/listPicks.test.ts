@@ -70,6 +70,13 @@ describe('collection list picks, random order and pages', () => {
     assert.ok(html.includes('Doc 4') && !html.includes('Doc 1<'))
     assert.match(html, /<nav aria-label="Pages" class="flex flex-wrap gap-2 builder-css"><a href="\?">1<\/a><a href="\?page=2" aria-current="page">2<\/a><a href="\?page=3">3<\/a><\/nav>/)
   })
+  it('pages with a path: page 1 is the bare path, or the path with the other params', async () => {
+    assert.deepEqual(pageLinks({ page: '2' }, 2, 3, undefined, '/guides').links.map((l) => l.href), ['/guides', '/guides?page=2', '/guides?page=3'])
+    assert.deepEqual(pageLinks({ available: 'today', page: '2' }, 2, 2, undefined, '/escorts').links.map((l) => l.href), ['/escorts?available=today', '/escorts?available=today&page=2'])
+    const loaded = await loadLayoutData(layoutOf(list({ paginate: 'pages' })), blocks, fakePayload([]), { query: { page: '2' }, path: '/guides' })
+    const html = renderToStaticMarkup(createElement(RenderLayout, { layout: loaded, blocks }))
+    assert.match(html, /<a href="\/guides">1<\/a><a href="\/guides\?page=2" aria-current="page">2<\/a>/)
+  })
   it('the plugin turns ids into a relationship to the listable collections', () => {
     const def = listCollectionsOf(blocks, ['posts', 'models']).find((b) => b.type === 'collectionList')
     const ids = def?.fields.find((f) => 'name' in f && f.name === 'ids') as { type: string; relationTo: unknown } | undefined
