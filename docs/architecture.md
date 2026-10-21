@@ -346,6 +346,7 @@ Blocks that need data are server components on the site. The canvas renders them
 - **Binding:** a block stores `bindings: { "text": "title", "image": "author.avatar" }`, keyed by prop path. At render time, bound props take the document's value. Missing values fall back to the literal prop.
 - The binding picker lists only compatible fields. It builds the list by walking the target collection's schema, including one relationship hop.
 - In the editor, a template previews against a sample document the designer picks.
+- **Collection list queries:** `listQueries(layout, context)` (`src/react/render/lists.ts`) builds one query per list block: collection, limit, sort, the current document left out, and a `where`. The `where` AND-s the `filterField` filter (`filterBy`: `current`, `shared` or `linked`, read from `context.doc`; ignored without a context) with the block's static `where` prop. A `shared` or `linked` filter without values marks the query `none`, and nothing loads. The site and server blocks load the queries with the Local API (`loadLayoutData`, the visitor's access); the canvas loads them over REST (`fetchListItems`, `where` as a bracket query and in the cache key).
 
 ## 12. Operations, multiplayer and live AI edits
 

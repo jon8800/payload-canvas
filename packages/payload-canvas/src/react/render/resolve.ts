@@ -204,7 +204,10 @@ export async function loadLayoutData(
   })
 }
 
-/** One collection list's documents. An unknown collection or a failed query gives an empty list. */
+/**
+ * One collection list's documents. An unknown collection, a filter that matches nothing (`none`) or
+ * a failed query gives an empty list.
+ */
 async function findListItems(
   payload: Payload,
   query: ListQuery,
@@ -213,9 +216,10 @@ async function findListItems(
   locale: LocaleArgs,
 ): Promise<Array<Record<string, unknown>>> {
   const config = (payload.collections as Record<string, { config: { versions?: { drafts?: unknown } } } | undefined>)[query.collection]?.config
-  if (!config) return []
+  if (!config || query.none) return []
   const where: Where[] = []
   if (query.exclude !== undefined) where.push({ id: { not_equals: query.exclude } })
+  if (query.where) where.push(query.where)
   if (!draft && config.versions?.drafts) where.push({ _status: { equals: 'published' } })
   try {
     const result = await payload.find({

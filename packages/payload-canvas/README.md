@@ -1465,7 +1465,31 @@ Which template a document uses: its own `template`, else the newest default temp
 
 - A **binding** connects a block prop to a document field: `bindings: { "text": "title", "image": "author.avatar" }`. Paths are dot paths from the document root. At render time the prop takes the document's value. A missing value falls back to the prop's own value. In the editor, the binding picker lists only compatible fields of the target collection, including one relationship hop.
 - The **Field** block (`field`) shows one field of the document by path, rendered by its type: rich text, an upload as an image, a date, a relationship's title, or text. Use it for the post body.
-- The **Collection list** block (`collectionList`) lists the latest documents of a collection (`collection`, `limit`, `sort`, `excludeCurrent`). Its `item` slot is the design of one item and repeats for every document. Blocks in it bind to the item's fields, for example a heading with `bindings: { "text": "title" }` and a link with `bindings: { "link": "$url" }` (the item's URL from the collection's `url` option). The site shows published documents only. It works on normal pages too, not only in templates.
+- The **Collection list** block (`collectionList`) lists the latest documents of a collection (`collection`, `limit`, `sort`, `excludeCurrent`, and the filters `filterField`, `filterBy` and `where` below). Its `item` slot is the design of one item and repeats for every document. Blocks in it bind to the item's fields, for example a heading with `bindings: { "text": "title" }` and a link with `bindings: { "link": "$url" }` (the item's URL from the collection's `url` option). The site shows published documents only. It works on normal pages too, not only in templates.
+
+#### Filter a collection list
+
+A collection list can show only the documents related to the current document (the one a template renders). Set `filterField` to a field name and `filterBy` to one of three values:
+
+| `filterBy` | The list shows | Payload query | Example |
+| --- | --- | --- | --- |
+| `current` (default) | documents whose `filterField` holds the current document | `{ [filterField]: { in: [doc.id] } }` | On a service template: the models whose `services` include this service. |
+| `shared` | documents whose `filterField` shares a value with the current document's own `filterField` | `{ [filterField]: { in: values } }` | Similar models with a `category` in common. Related posts with the same `category` text. |
+| `linked` | the documents that the current document's `filterField` points to | `{ id: { in: values } }` | On a model template: the services this model offers. |
+
+- `values` are read from the current document with `getByPath`. Populated documents (`{ id }`), `{ relationTo, value }` pairs, strings and numbers all work, one value or many.
+- With `shared` or `linked`, a current document without values shows an empty list. The plugin sends no query.
+- On a normal page (no current document), `filterField` is ignored and the list is not filtered.
+- `where` is a static Payload `where` query, AND-ed with the filter. For example `{ "featured": { "equals": true } }` or `{ "district": { "equals": "north" } }`. Only a plain object counts; anything else is ignored.
+
+```json
+{
+  "type": "collectionList",
+  "props": { "collection": "models", "filterField": "services", "filterBy": "current", "where": { "featured": { "equals": true } } }
+}
+```
+
+Lists load with the visitor's access (`overrideAccess: false`). The site (`loadLayoutData`), the canvas and server blocks in the canvas build the same query (`listQueries`), so a template's canvas preview shows the list filtered by its sample document.
 
 ### Render a document through its template
 
