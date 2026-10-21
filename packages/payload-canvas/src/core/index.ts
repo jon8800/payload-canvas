@@ -7,7 +7,7 @@ export { createId } from './ids'
 export { findBlock, findLocation, walkBlocks, isSelfOrDescendant, normalizeLayout, type BlockLocation } from './tree'
 export { applyOperation, applyOperations, type ApplyOptions } from './operations'
 export { deepestBlockAt, canvasDropTarget, outlineDropTarget } from './dropTarget'
-export { collectClasses } from './classes'
+export { classFields, collectClasses } from './classes'
 export { blockJsonSchema, layoutJsonSchema } from './schema'
 export { validateLayout, isBlockingError, isLayoutWarning, PUBLISH_ONLY_CODES, type LayoutError, type LayoutErrorCode, type ValidateOptions } from './validate'
 export {
