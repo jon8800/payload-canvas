@@ -120,6 +120,16 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
           { label: 'Navigation (nav)', value: 'nav' },
           { label: 'Article or post (article)', value: 'article' },
           { label: 'Side note (aside)', value: 'aside' },
+          { label: 'Numbered list (ol)', value: 'ol' },
+          { label: 'Bullet list (ul)', value: 'ul' },
+          { label: 'List item (li)', value: 'li' },
+          { label: 'Term list (dl)', value: 'dl' },
+          { label: 'Term (dt)', value: 'dt' },
+          { label: 'Term description (dd)', value: 'dd' },
+          { label: 'Figure (figure)', value: 'figure' },
+          { label: 'Figure caption (figcaption)', value: 'figcaption' },
+          { label: 'Paragraph (p)', value: 'p' },
+          { label: 'Inline group (span)', value: 'span' },
         ],
         defaultValue: 'div',
         admin: {
@@ -134,7 +144,8 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     ai: {
       description:
         'A container that lays out its children in a column (or a row with "flex-row"). ' +
-        'Use it to group blocks and build sections. Set "as" to "section", "header", "footer" and so on for semantic HTML.',
+        'Use it to group blocks and build sections. Set "as" to "section", "header", "footer" and so on for semantic HTML; ' +
+        '"ol"/"ul" with "li" children for lists, "dl" with "dt"/"dd" for term lists, "figure" with "figcaption", "p" or "span" for text runs.',
       example: {
         type: 'stack',
         props: { as: 'section' },
@@ -202,11 +213,22 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
             'Heading 2 for each section, and Heading 3 inside a section.',
         },
       },
+      {
+        name: 'accent',
+        type: 'text',
+        label: 'Accent words',
+        localized: true,
+        admin: {
+          description: 'Words of the heading to highlight, for example "Brisbane". They render as <em>; style them with classes like [&_em]:text-primary.',
+        },
+      },
     ],
     // `break-words`: a long word (a URL, a product code) wraps instead of widening the page.
     defaultClassName: 'text-3xl font-bold break-words',
     ai: {
-      description: 'A page or section heading. Use level "1" once per page, "2" for sections.',
+      description:
+        'A page or section heading. Use level "1" once per page, "2" for sections. "accent" names words of the text ' +
+        'to highlight: they render as <em>, styled with className variants such as "[&_em]:text-primary [&_em]:not-italic".',
       example: { type: 'heading', props: { text: 'Our services', level: '2' }, className: 'text-3xl font-bold' },
     },
   })
@@ -285,11 +307,25 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         localized: true,
         admin: { description: 'Describes the image for people who cannot see it. Leave empty to use the alt text saved with the image.' },
       },
+      {
+        name: 'priority',
+        type: 'checkbox',
+        label: 'Load first',
+        admin: { description: 'For the main image at the top of the page: it loads at once with high priority instead of lazily.' },
+      },
+      {
+        name: 'sizes',
+        type: 'text',
+        label: 'Sizes',
+        admin: { description: 'The width the image shows at, for the browser to pick a file, for example "(min-width: 768px) 50vw, 100vw". Empty: the full width.' },
+      },
     ],
     ai: {
       description:
         `An image from the "${mediaCollection}" collection, stored by its document ID. ` +
-        'Without an image it renders nothing on the site.',
+        'Without an image it renders nothing on the site. Set "priority": true on the hero image (the largest image ' +
+        'at the top: it loads eagerly with fetchpriority high). "sizes" is the HTML sizes attribute, e.g. ' +
+        '"(min-width: 768px) 50vw, 100vw". The media focal point (focalX, focalY) sets object-position.',
       example: { type: 'image', props: { image: 1, alt: 'Team photo' }, className: 'w-full rounded-lg' },
     },
   })

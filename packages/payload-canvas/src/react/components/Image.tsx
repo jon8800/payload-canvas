@@ -51,18 +51,26 @@ export function Image({ props, className, attributes, mode }: BlockComponentProp
     return <PlaceholderBox attributes={{ ...attributes, ...editableImage(mode, 'image') }} className={className} label="Image" />
   }
   const srcSet = srcSetOf(doc)
+  const priority = props.priority === true
+  const sizes = asString(props.sizes)?.trim()
+  // The media focal point (percent, Payload's focalX/focalY) keeps the subject in view when the image is cropped.
+  const focalX = asNumber(doc.focalX)
+  const focalY = asNumber(doc.focalY)
+  const style = focalX !== undefined && focalY !== undefined ? { objectPosition: `${focalX}% ${focalY}%` } : undefined
   return (
     <img
       {...attributes}
       {...editableImage(mode, 'image')}
       className={className}
       src={doc.url as string}
-      // `sizes="auto"` lets the browser use the rendered width (lazy images); 100vw elsewhere.
-      {...(srcSet ? { srcSet, sizes: 'auto, 100vw' } : {})}
+      // `sizes="auto"` lets the browser use the rendered width (lazy images only); 100vw elsewhere.
+      {...(srcSet ? { srcSet, sizes: sizes || (priority ? '100vw' : 'auto, 100vw') } : {})}
       alt={asString(props.alt) ?? asString(doc.alt) ?? ''}
       width={asNumber(doc.width)}
       height={asNumber(doc.height)}
-      loading="lazy"
+      style={style}
+      loading={priority ? 'eager' : 'lazy'}
+      {...(priority ? { fetchPriority: 'high' as const } : {})}
     />
   )
 }

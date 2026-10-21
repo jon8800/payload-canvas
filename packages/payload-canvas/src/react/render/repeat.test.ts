@@ -173,3 +173,28 @@ describe('collection list empty slot', () => {
     assert.ok(!full.includes('Nobody'))
   })
 })
+
+describe('small block props', () => {
+  it('image: priority, sizes and the focal point', () => {
+    const doc = { ...image(7), width: 1200, height: 800, focalX: 30, focalY: 70, sizes: { card: { url: '/media/7-600.png', width: 600, height: 400 } } }
+    const html = render({ layout: layoutOf({ id: 'i', type: 'image', props: { image: doc, priority: true, sizes: '50vw' } }) })
+    assert.match(html, /loading="eager"/)
+    assert.match(html, /fetchPriority="high"|fetchpriority="high"/)
+    assert.match(html, /sizes="50vw"/)
+    assert.match(html, /object-position:30% 70%/)
+    const lazy = render({ layout: layoutOf({ id: 'i', type: 'image', props: { image: image(7) } }) })
+    assert.match(lazy, /loading="lazy"/)
+  })
+  it('heading: the accent words render as <em>', () => {
+    const html = render({ layout: layoutOf({ id: 'h', type: 'heading', props: { text: 'Escorts in Brisbane', accent: 'Brisbane', level: '1' } }) })
+    assert.match(html, /<h1[^>]*>Escorts in <em>Brisbane<\/em><\/h1>/)
+    const none = render({ layout: layoutOf({ id: 'h', type: 'heading', props: { text: 'Escorts', accent: 'Sydney' } }) })
+    assert.ok(!none.includes('<em>'))
+  })
+  it('stack: list and figure tags', () => {
+    const html = render({
+      layout: layoutOf({ id: 's', type: 'stack', props: { as: 'ol' }, slots: { children: [{ id: 'li', type: 'stack', props: { as: 'li' }, slots: { children: [{ id: 't', type: 'text', props: { text: 'Step' } }] } }] } }),
+    })
+    assert.match(html, /<ol[^>]*><li[^>]*>/)
+  })
+})
