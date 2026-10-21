@@ -1,0 +1,24 @@
+// Components of the opt-in built-in blocks (`builtinBlocks()` in `payload-canvas/blocks`).
+// Client-safe: the site and the canvas use the same map.
+
+import type { BlockComponents } from '../../render/types'
+import { iconComponent, type IconMap } from './Icon'
+
+export type BuiltinComponentsOptions = {
+  /** The site's icons by name, for the `icon` block. The same names as `builtinBlocks({ icons })`. */
+  icons?: IconMap
+}
+
+/**
+ * The components of every built-in block. Merge them into your components map:
+ * `{ ...builtinComponents({ icons }), ...yours }`. A key of yours with the same type wins.
+ * Components of blocks you did not include are never rendered. To keep their code out of the
+ * bundle, import single components (`Carousel`, `Lightbox`, …) instead.
+ */
+export function builtinComponents(options: BuiltinComponentsOptions = {}): BlockComponents {
+  const components: BlockComponents = {}
+  if (options.icons) components.icon = iconComponent(options.icons)
+  return components
+}
+
+export { iconComponent, type IconComponent, type IconMap } from './Icon'

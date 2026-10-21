@@ -3,6 +3,7 @@
 // No `node:` imports and no Payload runtime imports here (type imports only). A test checks it.
 
 export { defaultBlocks, FIELD_CLASS_MAP, MENU_CLASS_MAP, type DefaultBlocksOptions } from './defaults'
+export { builtinBlocks, BUILTIN_TYPES, type BuiltinBlocksOptions, type BuiltinType } from './builtins'
 export { isLinkField, linkField, type BuilderCondition, type LinkFieldOptions } from './link'
 export { fromPayloadBlocks, type FromPayloadBlocksOptions, type PayloadBlockOverride } from './payload'
 export { defineBlock, defineSection, type SectionBlockInput, type SectionInput } from '../core/blocks'
