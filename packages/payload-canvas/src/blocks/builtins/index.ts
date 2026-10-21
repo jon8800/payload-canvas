@@ -5,8 +5,9 @@
 import type { BlockDefinition } from '../../core/types'
 import { accordionBlock, disclosureBlock } from './disclosure'
 import { iconBlock } from './icon'
+import { lightboxBlock } from './lightbox'
 
-export const BUILTIN_TYPES = ['icon', 'disclosure', 'accordion'] as const
+export const BUILTIN_TYPES = ['icon', 'disclosure', 'accordion', 'lightbox'] as const
 
 export type BuiltinType = (typeof BUILTIN_TYPES)[number]
 
@@ -38,6 +39,7 @@ export function builtinBlocks(options: BuiltinBlocksOptions = {}): BlockDefiniti
     icon: () => iconBlock(icons),
     disclosure: disclosureBlock,
     accordion: accordionBlock,
+    lightbox: lightboxBlock,
   }
   return BUILTIN_TYPES.filter((type) => include.has(type)).map((type) => make[type]())
 }
@@ -45,3 +47,4 @@ export function builtinBlocks(options: BuiltinBlocksOptions = {}): BlockDefiniti
 export { ACCORDION_BLOCK, accordionBlock, DISCLOSURE_BLOCK, DISCLOSURE_CLASS_MAP, disclosureBlock } from './disclosure'
 export { faqItems, faqJsonLd, type FaqItem } from './faq'
 export { ICON_BLOCK, iconBlock } from './icon'
+export { LIGHTBOX_BLOCK, LIGHTBOX_CLASS_MAP, lightboxBlock } from './lightbox'
