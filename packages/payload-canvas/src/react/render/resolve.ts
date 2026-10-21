@@ -3,7 +3,7 @@
 import type { Payload, Where } from 'payload'
 import { resolveBindings, type BindingRelations, type Block, type BlockDefinition, type Layout, type TemplateContext } from '../../core'
 import { isRecord, mapFieldValues, type FieldLike, type VisitField } from './fields'
-import { arrangeListDocs, attachListItems, listQueries, listRequest, pageLinks, type ListPages, type ListQuery, type ListQueryParams } from './lists'
+import { arrangeListDocs, attachListItems, listQueries, listRequest, pageLinks, withPageParams, type ListPages, type ListQuery, type ListQueryParams } from './lists'
 import type { FetchDocs, ResolveLink } from './types'
 import { localeArgs, localizeLayout, type LocaleArgs, type RenderLocale } from './locale'
 
@@ -200,10 +200,10 @@ export async function loadLayoutData(
     queries.map(async (query) => {
       const result = await findListItems(payload, query, draft, options?.user ?? null, locale)
       items.set(query.blockId, arrangeListDocs(result.docs, query, seed))
-      if (query.page) pages.set(query.blockId, pageLinks(options?.query, query.page, result.totalPages))
+      if (query.page) pages.set(query.blockId, pageLinks(options?.query, query.page, result.totalPages, query.pageParam))
     }),
   )
-  const withItems = attachListItems(bound, items, pages)
+  const withItems = withPageParams(attachListItems(bound, items, pages), queries)
 
   return resolveLayoutData(withItems, blocks, async (collection, ids) => {
     const result = await payload.find({

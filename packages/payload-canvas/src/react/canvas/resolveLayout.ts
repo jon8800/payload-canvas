@@ -1,7 +1,7 @@
 import { resolveBindings, type BlockDefinition, type Layout, type TemplateContext } from '../../core'
 
 import { attachListItems, listQueries, resolveLayoutData, urlResolver, type ResolveLink } from '../index'
-import { pageLinks } from '../render/lists'
+import { pageLinks, withPageParams } from '../render/lists'
 import { createRestFetchDocs, fetchListPage } from './fetchDocs'
 
 /** One shuffle per canvas: `$random` lists keep their order while someone edits. */
@@ -25,7 +25,7 @@ export async function resolveCanvasLayout(
   const queries = listQueries(bound, context)
   const lists = await Promise.all(queries.map((query) => fetchListPage(api, query, locale, CANVAS_SEED)))
   // A paginated list shows page 1 with its page links.
-  const pages = new Map(queries.flatMap((query, i) => (query.page ? [[query.blockId, pageLinks(null, query.page, lists[i]!.totalPages)] as const] : [])))
-  const withItems = attachListItems(bound, new Map(queries.map((query, i) => [query.blockId, lists[i]!.docs])), pages)
+  const pages = new Map(queries.flatMap((query, i) => (query.page ? [[query.blockId, pageLinks(null, query.page, lists[i]!.totalPages, query.pageParam)] as const] : [])))
+  const withItems = withPageParams(attachListItems(bound, new Map(queries.map((query, i) => [query.blockId, lists[i]!.docs])), pages), queries)
   return resolveLayoutData(withItems, definitions, createRestFetchDocs(api, locale))
 }

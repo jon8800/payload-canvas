@@ -52,14 +52,18 @@ export type {
 export { loadLayoutData, resolveLayoutData, urlResolver, type LoadLayoutOptions } from './render/resolve'
 export {
   attachListItems,
+  LIST_PAGE_PARAMS_PROP,
   LIST_PAGES_PROP,
   listItemsOf,
   listQueries,
   PAGE_PARAM,
   pageLinks,
   pageOf,
+  pageParamOf,
+  pageWindow,
   RANDOM_SORT,
   withDateTokens,
+  withPageParams,
   type ListPages,
   type ListQuery,
   type ListQueryParams,

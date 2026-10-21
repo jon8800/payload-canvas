@@ -1117,8 +1117,9 @@ const jsonLd = faqJsonLd(items)
 
 - Props: `param`, `value` and `multiple`. An empty `param` clears every query value (the "All" link). An empty `value` clears its param. `multiple` adds or removes the value in a comma list (`?hair=blonde,red`) instead of replacing it. The page's other query values stay.
 - The current filter gets `aria-current="true"`. Style it with `aria-[current=true]:` classes.
+- A new filter starts the lists at page 1: the link drops `page`, and the `pageParam` of every paginated list in the same layout (`loadLayoutData` and the canvas give each filter link these as the runtime `$pageParams` prop). Limit: a list in another layout (a page region) is not known, so its own page param stays.
 - It is a client component that reads the browser's URL. The server renders a relative href (`?available=today`), so the link works before the script runs and search engines can follow it. The active state and the kept query values appear after hydration.
-- `filterHref(path, query, { param, value, multiple })` in `payload-canvas/blocks` is the same rule as a pure function, for a server component of your own.
+- `filterHref(path, query, { param, value, multiple, pageParams })` in `payload-canvas/blocks` is the same rule as a pure function, for a server component of your own.
 - Send `noindex, follow` for filtered URLs.
 
 #### Media backdrop
@@ -1831,12 +1832,14 @@ Lists load with the visitor's access (`overrideAccess: false`). The site (`loadL
 | --- | --- |
 | `ids` | Picked documents, in the order you pick them. A relationship (hasMany) to the collections with a `url` when the plugin knows them, else a list of ids. The list shows only these, up to 100. `limit`, `sort`, `offset` and `paginate` do not apply; the other filters still do. A pick from another collection than `collection` is left out. |
 | `sort: "$random"` | Shuffles the newest 100 matching documents, then applies `offset` and `limit`. `loadLayoutData` picks a new seed per call, so a cached page shuffles once per cache build. Pass `randomSeed` to fix the order. The canvas keeps one order while you edit. Two random lists on a page get different orders. |
-| `paginate: "pages"` | Shows `limit` documents per page and links to every page under the items: `?page=2`, `?page=3` (`PAGE_PARAM`). The links keep the rest of the URL query (filters), and page 1 has no `page` param. Pass the query to `loadLayoutData` (`query`), as for `queryFilters`. `offset` does not apply. |
-| `pagerClassName` | Classes of the `<nav aria-label="Pages">` around the links. Default `flex flex-wrap gap-2`. |
+| `paginate: "pages"` | Shows `limit` documents per page and page links under the items: `?page=2`, `?page=3` (`PAGE_PARAM`). The links keep the rest of the URL query (filters, other lists' pages), and page 1 has no page param. Seven pages or fewer: a link to each. More: the first, the last and the pages next to the current one, with a gap between (`1 … 4 5 6 … 20`; `pageWindow`). Pass the query to `loadLayoutData` (`query`), as for `queryFilters`. `offset` does not apply. |
+| `pageParam` | The URL parameter of the page number. Empty: `page`. Give each paginated list on one page its own (`reviewsPage`), so they page apart. Letters, digits, `_` and `-`; any other value counts as `page`. |
+| `pagerLabel` | The name of the page links for screen readers (`aria-label` of the `<nav>`). Localized, default "Pages". |
+| `pagerClassName` | Classes of the `<nav>` around the links. Default `flex flex-wrap gap-2`. A gap is `<span data-page-gap aria-hidden="true">…</span>`: style it with `[&_[data-page-gap]]:` classes. |
 | `pageLinkClassName` | Classes of each page link. The current page has `aria-current="page"`, so `aria-[current=page]:font-bold` styles it. |
 
 - The page links are plain `<a href>` links, so search engines can crawl every page. Give `?page=N` pages their own canonical URL (with the page), not the first page.
-- One paginated list per page: every list reads the same `page` param.
+- Two paginated lists on one page share `page` unless one sets its own `pageParam`.
 - On the canvas a paginated list shows page 1 with its links.
 - After `loadLayoutData`, a paginated list carries its links as the runtime `$pages` prop (`LIST_PAGES_PROP`, type `ListPages`). A custom collection list component can render them its own way.
 - Not built: a "Load more" button. Use the page links.

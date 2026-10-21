@@ -26,6 +26,8 @@ export function FilterLink({ props, className, attributes, slotAttributes, slots
     param: textOr(props.param, ''),
     value: textOr(props.value, ''),
     multiple: props.multiple === true,
+    // The page parameters of the layout's lists with their own `pageParam` (`withPageParams`).
+    pageParams: Array.isArray(props.$pageParams) ? props.$pageParams.filter((item): item is string => typeof item === 'string') : [],
   })
   return (
     <a

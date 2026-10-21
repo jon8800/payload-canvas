@@ -1,7 +1,8 @@
-import { createElement } from 'react'
+import { createElement, Fragment } from 'react'
 import { LIST_EMPTY_SLOT, LIST_ITEM_SLOT, REPEAT_BLOCK } from '../../core'
 import { LIST_PAGES_PROP, type ListPages } from '../render/lists'
 import type { BlockComponentProps } from '../render/types'
+import { asText } from './placeholder'
 
 const CONTENTS = { display: 'contents' } as const
 
@@ -27,16 +28,18 @@ export function CollectionList({ block, props, className, attributes, slots, slo
       {/* The empty slot takes its own classes (`slotClassName.empty`) through its slot attributes. */}
       {empty && <div {...slotAttributes[LIST_EMPTY_SLOT]}>{empty}</div>}
       {pages && pages.links.length > 1 && (
-        <nav aria-label="Pages" className={typeof props.pagerClassName === 'string' ? props.pagerClassName : undefined}>
+        <nav aria-label={asText(props.pagerLabel).trim() || 'Pages'} className={typeof props.pagerClassName === 'string' ? props.pagerClassName : undefined}>
           {pages.links.map((link) => (
-            <a
-              key={link.page}
-              href={link.href}
-              aria-current={link.current ? 'page' : undefined}
-              className={typeof props.pageLinkClassName === 'string' ? props.pageLinkClassName : undefined}
-            >
-              {link.page}
-            </a>
+            <Fragment key={link.page}>
+              {link.gapBefore && <span data-page-gap="" aria-hidden="true">…</span>}
+              <a
+                href={link.href}
+                aria-current={link.current ? 'page' : undefined}
+                className={typeof props.pageLinkClassName === 'string' ? props.pageLinkClassName : undefined}
+              >
+                {link.page}
+              </a>
+            </Fragment>
           ))}
         </nav>
       )}
