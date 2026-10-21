@@ -1584,6 +1584,7 @@ The **Repeat** block (`repeat`) repeats its `item` slot once per row of a list f
 | `limit` | number | The most rows to show. Empty shows every row. |
 | `offset` | number | Rows to skip at the start. `1` skips the first photo. |
 | `collection` | text (a select of the collections with a `url` when the plugin knows them) | For a relationship field: the related collection, so `$url` links to each document. A `{ relationTo, value }` row names its own collection. |
+| `as` | select: `div` (default), `none` | `div` wraps the rows in a `div` that takes the repeat's classes. `none` renders the rows with no wrapper, so they are direct children of the parent block: the cells of a grid, or the `li` items of a stack with `as: ul`. With `none`, the repeat's own classes and animations do nothing. On the canvas a `none` repeat is an element with `display: contents`, so the editor still selects and outlines it. |
 
 Blocks in the `item` slot bind to the **row**:
 

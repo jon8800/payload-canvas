@@ -776,6 +776,21 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
             label: 'Related collection',
             admin: { description: 'For a relationship field: the collection of its documents, so "$url" links to each one.' },
           },
+      {
+        name: 'as',
+        type: 'select',
+        label: 'Wrapper',
+        defaultValue: 'div',
+        options: [
+          { label: 'A div around the rows', value: 'div' },
+          { label: 'None: the rows sit in the parent', value: 'none' },
+        ],
+        admin: {
+          description:
+            'None: the rows become direct children of the parent block, for example the cells of a grid or the items of a list. ' +
+            "The repeat's own classes and animations then do nothing.",
+        },
+      },
     ],
     slots: { [LIST_ITEM_SLOT]: { label: 'Row' } },
     defaultClassName: 'flex flex-col gap-4',
@@ -788,7 +803,10 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         `document's fields (e.g. "name"; "$url" when "collection" names its collection), "${ITEM_PATH}" (the row value ` +
         `itself: an upload for an image, a text for a text block), "${INDEX_PATH}" (the row number from 1), ` +
         `"${PARENT_PATH}.<field>" (the enclosing document, e.g. "${PARENT_PATH}.name") and "${PAGE_PATH}.<field>" (the page's ` +
-        'document). "limit" and "offset" pick rows (offset 1 skips the first). On a page without a current document ' +
+        'document). "limit" and "offset" pick rows (offset 1 skips the first). "as": "div" (default) wraps the rows in ' +
+        'a div that takes the className; "none" renders the rows with no wrapper, as direct children of the parent ' +
+        '(e.g. cells of a grid, items of a stack with as "ul"), and then className and motion do nothing. ' +
+        'On a page without a current document ' +
         'it shows nothing. Example 2 (photos): { "type": "repeat", "props": { "path": "galleryImages", "offset": 1 }, ' +
         `"slots": { "item": [{ "type": "image", "bindings": { "image": "${ITEM_PATH}" } }] } }.`,
       example: {
