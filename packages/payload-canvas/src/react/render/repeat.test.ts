@@ -116,6 +116,18 @@ describe('repeat rendering', () => {
     assert.equal(canvas.match(/data-builder-repeat=""/g)?.length, 4)
     assert.ok(canvas.includes('Second question'))
   })
+  it('as "none": the rows sit in the parent on the site; the canvas keeps a display: contents element', () => {
+    const bare: Block = { ...faq, className: 'flex', props: { path: 'faqs', as: 'none' } }
+    const grid: Block = { id: 'g', type: 'grid', className: 'grid', slots: { children: [bare] } }
+    const html = render({ layout: layoutOf(grid), context: model })
+    assert.match(html, /^<div class="grid builder-css"><div><h3>/)
+    assert.equal(html.match(/<div/g)?.length, 3)
+    assert.ok(html.includes('Second question'))
+    const canvas = render({ layout: layoutOf(bare), context: model, mode: 'canvas' })
+    assert.match(canvas, /^<div data-block-id="faq" data-block-type="repeat" data-slot-owner="faq" data-slot="item" style="display:contents">/)
+    // The default keeps the wrapper with its classes.
+    assert.match(render({ layout: layoutOf({ ...faq, className: 'flex' }), context: model }), /^<div class="flex builder-css">/)
+  })
 })
 
 describe('canvas client resolution', () => {
