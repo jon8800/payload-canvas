@@ -4,12 +4,28 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ## [Unreleased]
 
-## [0.2.2] - 2026-10-21
+## [0.3.0] - 2026-10-21
 
 ### Added
 
-- The **Field list** block (`fieldList`): repeats its `item` slot once per row of an array or hasMany field of the current document (`path`), for example FAQs, rates, a photo gallery, the services of a model or tags. `limit` and `offset` pick the rows. Blocks in the item bind to the row's fields, to `$item` (the row value, for example an upload for an image) and to `$index` (the row number from 1). `collection` names the related collection, so `$url` links to each related document. It works in templates, inside collection list items and inside other field lists. On the canvas the first row is editable and the other rows are repeats. Without a current document the site shows nothing. See the README's "Repeat the rows of a field".
-- Binding checks, the outline and the inspector's field picker read the row's fields inside a field list. `itemSources`, `scopeSources`, `repeatAncestors`, `fieldListRows` and `fieldListRowContext` in `payload-canvas/core`.
+- The **Repeat** block (`repeat`): repeats its `item` slot once per row of an array or hasMany field of the current document (`path`), for example FAQs, rates, a photo gallery, the services of a model or tags. `limit` and `offset` pick the rows. `collection` names the related collection, so `$url` links to each related document. Blocks in the item bind to the row's fields and to `$item` (the row value, for example an upload for an image). It works in templates, inside collection list items and inside other repeats. On the canvas the first row is editable and the other rows are repeats. Without a current document the site shows nothing. After `loadLayoutData`, a repeat outside list items carries its rows as `$items`. See the README's "Repeat the rows of a field".
+- Item bindings in collection lists and repeats: `$index` (the item number from 1), `$parent.<path>` (the enclosing document) and `$page.<path>` (the page's own document).
+- Binding expressions: fallback chains (`heading|name`), formatters (`publishedAt|date:en-AU:Australia/Brisbane`, `price|currency:AUD`, `price|number`, `bio|firstSentence`) and template strings (`"Enquire about {{name}}"`). See the README's "Binding syntax".
+- Conditional blocks: the `$visible` binding key shows a block only when its condition holds: `"field"` (filled), `"!field"` (empty), `"field=value"`, `"field!=value"`. A hidden block renders nothing on the site and shows dimmed on the canvas.
+- Collection list `queryFilters`: `{ param: { value: where } }` filters by the page's URL query. Pass it as the new `loadLayoutData` option `query` (`URLSearchParams` or a Next.js `searchParams` object). Values of one param are OR-ed, params are AND-ed. The canvas shows lists without these filters. Routes should send `noindex, follow` for filtered URLs.
+- Date tokens in a list's `where` and `queryFilters`: `$now`, `$now-30d`, `$now+12h`.
+- Collection list `offset`, `depth` (`1` or `2`) and an `empty` slot that shows when no document matches.
+- `image`: `priority` (loads eagerly with `fetchpriority="high"`) and `sizes`. The media focal point sets `object-position`.
+- `heading`: `accent` words render as `<em>`.
+- `stack` `as`: `ol`, `ul`, `li`, `dl`, `dt`, `dd`, `figure`, `figcaption`, `p` and `span`.
+- In `payload-canvas/core`: `bindingValue` with expressions, `bindingPaths`, `isVisible`, `BINDING_FORMATTERS`, `repeatRows`, `repeatRowContext`, `listItemContext`, `itemSources`, `scopeSources` and `repeatAncestors`. In `payload-canvas/react`: `withDateTokens` and the `ListQueryParams` type.
+- Binding checks, the outline and the inspector read the row's fields inside a repeat and offer `$item`, `$index`, `$parent` and `$page`. The inspector shows an expression binding with a preview of its value.
+
+### Changed
+
+- `TemplateContext` has the optional fields `item`, `index`, `parent` and `page` for list and repeat items.
+
+0.2.2 was never released. Its Field list block is the Repeat block here.
 
 ## [0.2.1] - 2026-10-21
 
