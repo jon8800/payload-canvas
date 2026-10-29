@@ -272,32 +272,31 @@ export default buildConfig({
       blocks: builderBlocks,
       sections: sectionLibrary,
       templates: { hooks: { afterChange: [revalidateTemplate] } },
-      // AI assistant in the editor. The app picks the adapter from .env: BUILDER_AI_FAKE=1 (dev only)
-      // plays a scripted model, OPENROUTER_API_KEY turns on OpenRouter. No adapter: the panel shows the
-      // setup card. Other adapters (Anthropic, Cloudflare, any OpenAI-compatible API): docs/ai/providers.md.
+      // AI assistant in the editor. BUILDER_AI_FAKE=1 (dev only) plays a scripted model. Else OpenRouter:
+      // the key comes from OPENROUTER_API_KEY, or an admin pastes one in the "AI settings" global
+      // (that key wins). Without either, the panel shows the setup card with a link to the settings.
+      // Other adapters (Anthropic, Cloudflare, any OpenAI-compatible API): docs/ai/providers.md.
       ai: {
         adapter:
           process.env.BUILDER_AI_FAKE === '1' && process.env.NODE_ENV !== 'production'
             ? fakeAdapter()
-            : process.env.OPENROUTER_API_KEY
-              ? openRouterAdapter({
-                  apiKey: process.env.OPENROUTER_API_KEY,
-                  model: process.env.OPENROUTER_MODEL,
-                  siteUrl: process.env.NEXT_PUBLIC_SERVER_URL,
-                })
-              : null,
+            : openRouterAdapter({
+                apiKey: process.env.OPENROUTER_API_KEY,
+                model: process.env.OPENROUTER_MODEL,
+                siteUrl: process.env.NEXT_PUBLIC_SERVER_URL,
+              }),
         // Image generation (assistant, the inspector's "Generate image", the MCP generateImage tool).
         // Its own adapter, so it works with any chat model and with Claude Code or Codex over MCP.
-        // OPENROUTER_IMAGE_MODEL picks the model; BUILDER_AI_FAKE=1 without a key draws local gradients.
-        images: process.env.OPENROUTER_API_KEY
-          ? openRouterImageAdapter({
-              apiKey: process.env.OPENROUTER_API_KEY,
-              model: process.env.OPENROUTER_IMAGE_MODEL,
-              siteUrl: process.env.NEXT_PUBLIC_SERVER_URL,
-            })
-          : process.env.BUILDER_AI_FAKE === '1' && process.env.NODE_ENV !== 'production'
+        // It shares the OpenRouter key (one field in AI settings). OPENROUTER_IMAGE_MODEL picks the
+        // model; BUILDER_AI_FAKE=1 without a key draws local gradients.
+        images:
+          process.env.BUILDER_AI_FAKE === '1' && process.env.NODE_ENV !== 'production' && !process.env.OPENROUTER_API_KEY
             ? fakeImageAdapter({ delayMs: 1500 })
-            : null,
+            : openRouterImageAdapter({
+                apiKey: process.env.OPENROUTER_API_KEY,
+                model: process.env.OPENROUTER_IMAGE_MODEL,
+                siteUrl: process.env.NEXT_PUBLIC_SERVER_URL,
+              }),
       },
       css: {
         entry: 'src/app/(frontend)/globals.css',

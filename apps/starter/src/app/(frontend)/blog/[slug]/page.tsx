@@ -1,12 +1,13 @@
 import type { Metadata } from 'next'
 import { draftMode } from 'next/headers'
+import { cache } from 'react'
 import { getPayload } from 'payload'
 import configPromise from '@payload-config'
 import { renderRichText } from 'payload-canvas/react'
 import { loadTemplate } from 'payload-canvas/react/server'
 import { resolveLink } from '@/builder'
 import { partOf, SiteFrame, visitorOf, type LayoutPart } from '@/components/BuilderContent'
-import { LivePreviewListener } from '@/components/LivePreviewListener'
+import { LivePreviewListener } from '@/components/LivePreviewLoader'
 import { generateMeta, notFoundMeta } from '@/utilities/generateMeta'
 import { MissingPage } from '@/components/NotFoundContent'
 import { requestLocale } from '@/lib/i18n'
@@ -17,9 +18,10 @@ type Props = {
 
 /**
  * The post at a slug, read with the visitor's access: a template bound to `author.email` (or any
- * field the visitor may not read) shows nothing to anonymous visitors.
+ * field the visitor may not read) shows nothing to anonymous visitors. React `cache`:
+ * `generateMetadata` and the page share one query per request.
  */
-async function findPost(slug: string, draft: boolean, depth = 1) {
+const findPost = cache(async (slug: string, draft: boolean) => {
   const payload = await getPayload({ config: configPromise })
   const { docs } = await payload.find({
     collection: 'posts',
@@ -27,14 +29,14 @@ async function findPost(slug: string, draft: boolean, depth = 1) {
     limit: 1,
     draft,
     // Depth 1: bound uploads and relationships (featured image, author, categories) arrive as documents.
-    depth,
+    depth: 1,
     overrideAccess: false,
     user: (await visitorOf(payload, draft)) as never,
     // Translation demo: the post's fields and layout in the page's language (/de/blog/…).
     locale: (await requestLocale()) as never,
   })
   return { payload, post: docs[0] ?? null }
-}
+})
 
 /**
  * A blog post renders through its template: the post's own template, else the default "Post
@@ -86,7 +88,7 @@ export async function generateStaticParams() {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { isEnabled: draft } = await draftMode()
   const { slug } = await params
-  const { post } = await findPost(slug, draft, 1)
+  const { post } = await findPost(slug, draft)
   if (!post) return notFoundMeta()
   return generateMeta({ doc: post, path: `/blog/${slug}` })
 }

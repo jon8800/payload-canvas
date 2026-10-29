@@ -7,7 +7,7 @@ export type LinkInput =
   | { type: 'url'; url: string; newTab?: boolean }
   | { type: 'reference'; reference: { relationTo: 'pages' | 'posts'; value: number | string }; newTab?: boolean }
 
-export type StackTag = 'div' | 'section' | 'header' | 'footer' | 'main' | 'nav' | 'article' | 'aside'
+export type StackTag = 'div' | 'section' | 'header' | 'footer' | 'main' | 'nav' | 'article' | 'aside' | 'ul' | 'ol' | 'li'
 export type HeadingLevel = '1' | '2' | '3' | '4' | '5' | '6'
 
 /**
@@ -87,6 +87,11 @@ function block(type: string, props?: Record<string, unknown>, className?: string
   return result
 }
 
+/** A block with named slots, for blocks whose slot is not `children` (accordion, carousel). */
+export function slotted(type: string, props: Record<string, unknown> | undefined, className: string | undefined, slots: Record<string, Block[]>): Block {
+  return { ...block(type, props, className), slots }
+}
+
 export const stack = (as: StackTag, className: string, children: Block[]) => block('stack', { as }, className, children)
 export const grid = (className: string, children: Block[]) => block('grid', undefined, className, children)
 export const heading = (text: string, level: HeadingLevel, className?: string) => block('heading', { text, level }, className)
@@ -103,6 +108,7 @@ export function list(items: string[], ordered: boolean, className?: string, item
   return result
 }
 export const quote = (value: string, cite: string, className?: string) => block('quote', { quote: value, cite }, className)
+export const icon = (name: string, className?: string) => block('icon', { name }, className)
 export const divider = (className?: string) => block('divider', undefined, className)
 export const spacer = (className?: string) => block('spacer', undefined, className)
 export const form = (id: number | string, className?: string) => block('form', { form: id }, className)

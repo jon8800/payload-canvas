@@ -54,6 +54,7 @@ import { GlobalScopesMatrix as GlobalScopesMatrix_60f30f580e97936338e112b8b2cc71
 import { LinkToDoc as LinkToDoc_aead06e4cbf6b2620c5c51c9ab283634 } from '@payloadcms/plugin-search/client'
 import { ReindexButton as ReindexButton_aead06e4cbf6b2620c5c51c9ab283634 } from '@payloadcms/plugin-search/client'
 import { TemplateDefaultCell as TemplateDefaultCell_1611a9327f20600aee6a9d537ba4315b } from 'payload-canvas/client'
+import { TemplateConditionsField as TemplateConditionsField_1611a9327f20600aee6a9d537ba4315b } from 'payload-canvas/client'
 import { FolderTypeField as FolderTypeField_2b8867833a34864a02ddf429b0728a40 } from '@payloadcms/next/client'
 import { QueryPresetsAccessCell as QueryPresetsAccessCell_2b8867833a34864a02ddf429b0728a40 } from '@payloadcms/next/client'
 import { QueryPresetsWhereCell as QueryPresetsWhereCell_2b8867833a34864a02ddf429b0728a40 } from '@payloadcms/next/client'
@@ -66,6 +67,7 @@ import { ThemeColorField as ThemeColorField_d408ea8a7b9c9e7b6f237d6bc68a93d5 } f
 import { ThemeFontField as ThemeFontField_d408ea8a7b9c9e7b6f237d6bc68a93d5 } from 'payload-canvas/theme-client'
 import { ThemeSliderField as ThemeSliderField_d408ea8a7b9c9e7b6f237d6bc68a93d5 } from 'payload-canvas/theme-client'
 import { ThemeSaveSignal as ThemeSaveSignal_d408ea8a7b9c9e7b6f237d6bc68a93d5 } from 'payload-canvas/theme-client'
+import { AiKeyField as AiKeyField_1611a9327f20600aee6a9d537ba4315b } from 'payload-canvas/client'
 import { AgentConnectPill as AgentConnectPill_60f30f580e97936338e112b8b2cc7161 } from 'payload-mcp-toolkit/client'
 import { ImportExportProvider as ImportExportProvider_cdf7e044479f899a31f804427d568b36 } from '@payloadcms/plugin-import-export/rsc'
 import { OAuthView as OAuthView_60f30f580e97936338e112b8b2cc7161 } from 'payload-mcp-toolkit/client'
@@ -130,6 +132,7 @@ export const importMap = {
   "@payloadcms/plugin-search/client#LinkToDoc": LinkToDoc_aead06e4cbf6b2620c5c51c9ab283634,
   "@payloadcms/plugin-search/client#ReindexButton": ReindexButton_aead06e4cbf6b2620c5c51c9ab283634,
   "payload-canvas/client#TemplateDefaultCell": TemplateDefaultCell_1611a9327f20600aee6a9d537ba4315b,
+  "payload-canvas/client#TemplateConditionsField": TemplateConditionsField_1611a9327f20600aee6a9d537ba4315b,
   "@payloadcms/next/client#FolderTypeField": FolderTypeField_2b8867833a34864a02ddf429b0728a40,
   "@payloadcms/next/client#QueryPresetsAccessCell": QueryPresetsAccessCell_2b8867833a34864a02ddf429b0728a40,
   "@payloadcms/next/client#QueryPresetsWhereCell": QueryPresetsWhereCell_2b8867833a34864a02ddf429b0728a40,
@@ -142,6 +145,7 @@ export const importMap = {
   "payload-canvas/theme-client#ThemeFontField": ThemeFontField_d408ea8a7b9c9e7b6f237d6bc68a93d5,
   "payload-canvas/theme-client#ThemeSliderField": ThemeSliderField_d408ea8a7b9c9e7b6f237d6bc68a93d5,
   "payload-canvas/theme-client#ThemeSaveSignal": ThemeSaveSignal_d408ea8a7b9c9e7b6f237d6bc68a93d5,
+  "payload-canvas/client#AiKeyField": AiKeyField_1611a9327f20600aee6a9d537ba4315b,
   "payload-mcp-toolkit/client#AgentConnectPill": AgentConnectPill_60f30f580e97936338e112b8b2cc7161,
   "@payloadcms/plugin-import-export/rsc#ImportExportProvider": ImportExportProvider_cdf7e044479f899a31f804427d568b36,
   "payload-mcp-toolkit/client#OAuthView": OAuthView_60f30f580e97936338e112b8b2cc7161,

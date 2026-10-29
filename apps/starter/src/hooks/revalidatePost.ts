@@ -1,6 +1,12 @@
 import { revalidatePath, revalidateTag } from 'next/cache'
 import type { CollectionAfterChangeHook } from 'payload'
 
+/**
+ * After a post is published or unpublished. Any page can show posts in a collection list (the
+ * blog index, "latest posts" on the home page), and Payload's Local API gives Next no cache tags
+ * to target those pages. So every cached page is marked stale: each renders again on its next visit.
+ */
+
 export const revalidatePost: CollectionAfterChangeHook = ({
   doc,
   previousDoc,
@@ -11,7 +17,7 @@ export const revalidatePost: CollectionAfterChangeHook = ({
       const path = `/blog/${doc.slug}`
       payload.logger.info(`Revalidating post at path: ${path}`)
       revalidatePath(path)
-      revalidatePath('/blog')
+      revalidatePath('/', 'layout')
       revalidateTag('posts-sitemap', { expire: 0 })
     }
 
@@ -19,7 +25,7 @@ export const revalidatePost: CollectionAfterChangeHook = ({
       const oldPath = `/blog/${previousDoc.slug}`
       payload.logger.info(`Revalidating old post at path: ${oldPath}`)
       revalidatePath(oldPath)
-      revalidatePath('/blog')
+      revalidatePath('/', 'layout')
       revalidateTag('posts-sitemap', { expire: 0 })
     }
   }
