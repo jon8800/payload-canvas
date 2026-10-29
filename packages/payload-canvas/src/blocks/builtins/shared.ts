@@ -1,24 +1,23 @@
 import type { Field } from 'payload'
 import { BUILDER_CSS_CLASS } from '../../css/marker'
+import type { ControlLabels } from '../client/helpers'
 
-/**
- * Adds the marker class to every class string of a flat map (see `BUILDER_CSS_CLASS`). A built-in
- * component puts these strings on its own elements; its definition lists them in `classes`
- * (`classesOf`), so the generated CSS has them. Same rule as `withMarker` in `../defaults.ts`.
- */
-export function classMap<T extends Record<string, string>>(map: T): T {
-  return Object.fromEntries(Object.entries(map).map(([key, value]) => [key, `${value} ${BUILDER_CSS_CLASS}`])) as T
-}
+// The render helpers live in a leaf module, so client components can import them alone.
+export { classMap, joinClasses, labelOf, textOr, type ControlLabels } from '../client/helpers'
 
-/** The classes of a class map, for a definition's `classes`, without the marker. */
-export function classesOf(map: Record<string, string>): string[] {
-  const all = Object.values(map).flatMap((value) => value.split(' '))
+type ClassTree = { readonly [key: string]: string | ClassTree }
+
+/** The classes of a class map (nested maps too), for a definition's `classes`, without the marker. */
+export function classesOf(map: ClassTree): string[] {
+  const strings = (tree: ClassTree): string[] => Object.values(tree).flatMap((value) => (typeof value === 'string' ? [value] : strings(value)))
+  const all = strings(map).flatMap((value) => value.split(' '))
   return [...new Set(all)].filter((cls) => cls && cls !== BUILDER_CSS_CLASS)
 }
 
 /**
- * Block types that hold links or controls. Slots that render inside an `<a>`, a `<button>` or a
- * `<summary>` refuse them at any depth. A type that does not exist is ignored.
+ * Block types that hold links or controls. A link block and slots that render inside a
+ * `<button>` or a `<summary>` refuse them at any depth. `form` is a common custom block; a type
+ * that does not exist is ignored.
  */
 export const INTERACTIVE = [
   'link',
@@ -30,22 +29,32 @@ export const INTERACTIVE = [
   'form',
   'filterLink',
   'carousel',
-  'lightbox',
+  'imageViewer',
   'accordion',
   'disclosure',
 ]
 
-/** Plain string props: trimmed, or the fallback when empty. */
-export const textOr = (value: unknown, fallback: string): string =>
-  typeof value === 'string' && value.trim() ? value.trim() : fallback
-
-/** Prop name -> English default of a control label (`{n}` and `{count}` are filled in where noted). */
-export type ControlLabels = Record<string, string>
+const braces = (text: string) => [...new Set(text.match(/\{\w+\}/g) ?? [])].join(' and ')
 
 /**
- * A collapsed **Labels** group of localized text props, one per control label, with the English
- * text as the default. The props are flat (`props.closeLabel`); the group only folds them in the
- * inspector. A component reads each one with `labelOf(props, LABELS, name)`.
+ * One localized label prop. It stores no default: empty means the site's label
+ * (`builtinComponents({ labels })`), else the English `text`, which the empty input shows.
+ */
+export function labelField(name: string, text: string, label: string): Field {
+  const filled = text.includes('{') ? ` ${braces(text)} are filled in.` : ''
+  return {
+    name,
+    type: 'text',
+    label,
+    localized: true,
+    admin: { placeholder: text, description: `Empty: the site's default, "${text}" in English.${filled}` },
+  }
+}
+
+/**
+ * A collapsed **Labels** group of label props (`labelField`), one per key of `names`. The props
+ * are flat (`props.closeLabel`); the group only folds them in the inspector. A component reads
+ * each one with `labelOf(props, labels, name)`.
  */
 export function labelsField(labels: ControlLabels, names: Record<string, string>): Field {
   return {
@@ -55,36 +64,11 @@ export function labelsField(labels: ControlLabels, names: Record<string, string>
       initCollapsed: true,
       description: 'The text of the controls, for screen readers and visible buttons. Translate them per locale.',
     },
-    fields: Object.entries(labels).map(([name, text]) => ({
-      name,
-      type: 'text' as const,
-      label: names[name] ?? name,
-      defaultValue: text,
-      localized: true,
-      ...(text.includes('{') ? { admin: { description: `${braces(text)} are filled in.` } } : {}),
-    })),
+    fields: Object.entries(names).map(([name, label]) => labelField(name, labels[name] ?? '', label)),
   }
-}
-
-const braces = (text: string) => [...new Set(text.match(/\{\w+\}/g) ?? [])].join(' and ')
-
-/**
- * A control label: the prop, or its English default when empty. `values` fill `{n}`-style
- * placeholders ("Slide {n} of {count}").
- */
-export function labelOf(
-  props: Record<string, unknown>,
-  labels: ControlLabels,
-  name: string,
-  values: Record<string, string | number> = {},
-): string {
-  const template = textOr(props[name], labels[name] ?? '')
-  return template.replace(/\{(\w+)\}/g, (match, key: string) => (key in values ? String(values[key]) : match))
 }
 
 /** The AI description of a block's label props. */
 export const labelsHelp = (labels: ControlLabels) =>
-  ` Control labels (localized, English defaults): ${Object.entries(labels).map(([name, text]) => `"${name}" ("${text}")`).join(', ')}.`
+  ` Labels (localized; leave them out to use the site's defaults): ${Object.entries(labels).map(([name, text]) => `"${name}" (English "${text}")`).join(', ')}.`
 
-/** Class strings joined with spaces; empty and missing ones are left out. */
-export const joinClasses = (...classes: (string | undefined)[]): string => classes.filter(Boolean).join(' ')

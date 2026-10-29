@@ -5,6 +5,7 @@
 
 import { isRichText, richTextToPlain } from '../core/bindings'
 import { localeLabel } from '../core/locale'
+import { sectionVersions } from '../core/sections'
 import type { BlockDefinition, Layout, LocaleSettings, SectionDefinition, StyleTokens, TemplateContext, ThemeToken } from '../core/types'
 import { BINDINGS_GUIDE, describeBlock, layoutGuide, outline } from '../mcp/shared'
 
@@ -94,12 +95,16 @@ function sectionCatalog(sections: SectionDefinition[], saved: boolean): string {
       : 'SECTION CATALOG\nThis site has no ready-made sections. Build from blocks.'
   }
   const entries = sections.map((s) => {
-    const head = `## ${s.id}: ${s.label}${s.category ? ` (${s.category})` : ''}${s.variantOf ? ` [variant of ${s.variantOf}]` : ''}`
+    const head = `## ${s.id}: ${s.label}${s.category ? ` (${s.category})` : ''}`
     const description = s.description ? `\n${s.description}` : ''
-    return `${head}${description}\n${outline(s.blocks).join('\n')}`
+    // Variants follow their section, each with its own outline.
+    const variants = sectionVersions(s)
+      .slice(1)
+      .map((v) => `\n### variant ${v.variant}: ${v.label}${v.description && v.description !== s.description ? `\n${v.description}` : ''}\n${outline(v.blocks).join('\n')}`)
+    return `${head}${description}\n${outline(s.blocks).join('\n')}${variants.join('')}`
   })
   return [
-    'SECTION CATALOG. Ready-made, designed sections. Insert one with insertSection { sectionId }. The outline shows its blocks (type and start of the text). A variant ("hero/split") is another version of the section before it: pick the one that fits. listSections { full: true } returns the full JSON.' +
+    'SECTION CATALOG. Ready-made, designed sections. Insert one with insertSection { sectionId }. The outline shows its blocks (type and start of the text). A "### variant" under a section is another version of it: pick the one that fits and insert it with insertSection { sectionId, variant }. listSections { full: true } returns the full JSON.' +
       (saved ? `\n${SAVED_SECTIONS_NOTE}` : ''),
     ...entries,
   ].join('\n\n')
@@ -167,6 +172,8 @@ export type ContextInput = {
   sample?: TemplateContext | null
   /** Saved sections the user can read (people made them on this site). Not in the cached system prompt. */
   savedSections?: SectionDefinition[]
+  /** The editable classes (the classes collection). They change at any time, so they go here, not in the cached prompt. */
+  classes?: Array<{ name: string; label?: string; group?: string }>
   /** Localized layouts: the locale the user edits, and how many props still show the fallback language. */
   locale?: { settings: LocaleSettings; locale: string; untranslated: number } | null
 }
@@ -269,6 +276,12 @@ export function contextText(input: ContextInput): string {
     lines.push('Selected block: none.')
   }
   lines.push(...savedSectionsBlock(input.savedSections))
+  if (input.classes && input.classes.length > 0) {
+    const list = input.classes.slice(0, 80).map((c) => (c.label ? `${c.name} (${c.group ? `${c.group}: ` : ''}${c.label})` : c.name))
+    lines.push(
+      `Editable classes (stored in the CMS; they win over a code class with the same name). Prefer them in className over rebuilding the same look from utilities: ${list.join(', ')}.`,
+    )
+  }
   if (input.locale) lines.push(...localeLines(input.locale))
   lines.push(`Current layout (${input.layout.blocks.length} top-level blocks):`, JSON.stringify(input.layout), '</editor_context>')
   return lines.join('\n')

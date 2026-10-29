@@ -24,6 +24,8 @@ import { isPlainObject, normalizeLayout } from '../core/tree'
 import type { BindingField, BlockDefinition, Layout, LocaleSettings } from '../core/types'
 import { isBlockingError, isLayoutWarning, validateLayout, type LayoutError } from '../core/validate'
 import { compileClasses, type CssOptions } from '../css'
+import { withoutClassNames } from '../classes/shared'
+import { classNamesFor } from '../classes/sheet'
 import {
   changedFieldsOf,
   checkStaleSave,
@@ -448,7 +450,8 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
     data[field] = layout
 
     // Block definitions add the classes their components use, so those reach the CSS too.
-    const classes = collectClasses(layout, blocks)
+    // Editable classes come from their own stylesheet: the layout's CSS leaves them out.
+    const classes = withoutClassNames(collectClasses(layout, blocks), new Set(await classNamesFor(req.payload).catch(() => [])))
     const hash = await hashInput(classes, css.entry)
     if (isGeneratedCss(previous) && previous.hash === hash) {
       data[cssField] = previous

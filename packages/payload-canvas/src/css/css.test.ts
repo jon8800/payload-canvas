@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { createCanvasCompiler } from './browser'
 import { clearCssCache, compileClasses, getCanvasCssInput, getStyleTokens, tracingIncludes } from './index'
 import { type CanvasCssData, countUtilityLayers, extractUtilities, splitTopLevel } from './shared'
-import { STARTER_GLOBALS_CSS } from './siteClasses.test-data'
+import { SITE_GLOBALS_CSS } from './siteClasses.test-data'
 import { parseSiteClasses, parseThemeEntries, tokensFromTheme } from './tokens'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -248,17 +248,19 @@ describe('getStyleTokens', () => {
       { name: 'glass', label: 'Glass', group: 'Effects', css: 'color: red;' },
       { name: 'grain', css: '' },
     ])
-    // The escort-starter's globals.css: 41 static utilities, 32 labelled. Before the fix, the 10 that
-    // follow another comment (glass, rule-brand, type-hero, …) had no label.
-    const classes = parseSiteClasses(cssData(STARTER_GLOBALS_CSS))
-    assert.equal(classes.length, 41)
-    assert.equal(classes.filter((site) => site.label).length, 32)
+    // A whole site stylesheet: 12 static utilities, 8 labelled. The 3 labels that follow another
+    // comment (glass, type-h1, btn-primary) still count, and nested rules do not end a rule early.
+    const classes = parseSiteClasses(cssData(SITE_GLOBALS_CSS))
+    assert.equal(classes.length, 12)
+    assert.equal(classes.filter((site) => site.label).length, 8)
     const byName = new Map(classes.map((site) => [site.name, site]))
-    for (const name of ['glass', 'glass-bar', 'glass-lens', 'glass-plate', 'rule-brand', 'ambient-light', 'film-grain', 'type-hero', 'surface-dark', 'text-accent-gradient']) {
+    for (const name of ['glass', 'type-h1', 'btn-primary']) {
       assert.ok(byName.get(name)?.label && byName.get(name)?.group, `${name} has a label and a group`)
     }
     assert.deepEqual({ ...byName.get('glass'), css: undefined }, { name: 'glass', label: 'Glass', group: 'Effects', css: undefined })
-    assert.equal(byName.get('liquid-fill')?.label, undefined)
+    assert.equal(byName.get('shine')?.label, undefined)
+    assert.ok(byName.get('btn-primary')?.css.includes('&:hover'))
+    assert.equal(byName.has('tab-*'), false)
   })
 
   test('caches per entry content: a cache hit returns the same object', async () => {

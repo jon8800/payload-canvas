@@ -2,6 +2,7 @@
 // (slot `allow` / `disallow` / `max` rules), filtered by the search text. Pure: no DOM, no React.
 
 import { slotAcceptsAt, slotRoom } from '../../../core/blocks'
+import { sectionVersion, sectionVersions } from '../../../core/sections'
 import type { BlockDefinition, Layout, SectionDefinition } from '../../../core/types'
 
 export type PickerItem =
@@ -33,7 +34,9 @@ const rank = (category: string | undefined) => {
  * The picker's items for a position: blocks first, then sections. Within each, the best name
  * matches come first; then blocks go by category and sections saved-first. A section fits when
  * each of its top-level blocks, with everything inside, may go into the slot, and the slot has room
- * for all of them (`max`).
+ * for all of them (`max`). A section with variants is one item: it inserts the section's own
+ * version (its root block remembers the section, so the canvas offers the other versions), and
+ * its hint counts the versions.
  */
 export function pickerItems(args: {
   blocks: BlockDefinition[]
@@ -51,20 +54,24 @@ export function pickerItems(args: {
     .toSorted((a, b) => (a.score ?? 0) - (b.score ?? 0) || rank(a.def.category) - rank(b.def.category) || a.order - b.order)
     .map(({ def }) => ({ kind: 'block', id: `block:${def.type}`, label: def.label, hint: def.category, icon: def.icon ?? def.type, type: def.type }))
   const sectionItems: PickerItem[] = args.sections
-    .map((s, order) => ({ s, order, score: matchScore(query, s.label, s.description, s.category, s.savedId === undefined ? undefined : 'saved') }))
+    .map((s, order) => ({ s, order, score: matchScore(query, s.label, s.description, s.category, s.savedId === undefined ? undefined : 'saved', ...(s.variants ?? []).map((v) => v.label)) }))
     .filter(({ s, score }) => score !== null && s.blocks.length > 0)
     .filter(({ s }) => s.blocks.length <= room && s.blocks.every((block) => slotAcceptsAt(blocks, layout, parentId, slot, block)))
     .toSorted(
       (a, b) =>
         (a.score ?? 0) - (b.score ?? 0) || Number(a.s.savedId === undefined) - Number(b.s.savedId === undefined) || a.order - b.order,
     )
-    .map(({ s }) => ({
-      kind: 'section',
-      id: `section:${s.id}`,
-      label: s.label,
-      hint: s.savedId === undefined ? s.category : s.category ? `Saved · ${s.category}` : 'Saved',
-      icon: 'section',
-      section: s,
-    }))
+    .map(({ s }) => {
+      const count = sectionVersions(s).length
+      const versions = count > 1 ? `${count} versions` : undefined
+      return {
+        kind: 'section',
+        id: `section:${s.id}`,
+        label: s.label,
+        hint: s.savedId === undefined ? [s.category, versions].filter(Boolean).join(' · ') || undefined : s.category ? `Saved · ${s.category}` : 'Saved',
+        icon: 'section',
+        section: sectionVersion(s) ?? s,
+      }
+    })
   return [...blockItems, ...sectionItems]
 }

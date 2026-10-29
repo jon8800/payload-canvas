@@ -115,8 +115,12 @@ export function openRouterImageAdapter(options: OpenRouterImageAdapterOptions = 
     setupProblem: apiKey ? null : `No OpenRouter API key for image generation. ${keyHint}`,
     keyEnv: 'OPENROUTER_API_KEY',
     keyUrl: 'https://openrouter.ai/keys',
+    acceptsApiKey: true,
+    missingKey: !apiKey,
     async generate(request): Promise<AiImageResult> {
-      if (!apiKey) throw new AiImageError('auth', `No OpenRouter API key. ${keyHint}`)
+      // A key from the AI settings wins over the key from the options.
+      const key = clean(request.apiKey) ?? apiKey
+      if (!key) throw new AiImageError('auth', `No OpenRouter API key. ${keyHint}`)
       const supported = await modelParams()
       const has = (name: string) => supported.params === null || supported.params.has(name)
       const aspectRatio = supported.aspectRatios?.length ? closestRatio(request.aspectRatio, supported.aspectRatios) : request.aspectRatio
@@ -134,7 +138,7 @@ export function openRouterImageAdapter(options: OpenRouterImageAdapterOptions = 
         ...transport,
         url: `${base}/images`,
         headers: {
-          Authorization: bearer(apiKey),
+          Authorization: bearer(key),
           ...(site ? { 'HTTP-Referer': site } : {}),
           'X-Title': title,
           'X-OpenRouter-Title': title,

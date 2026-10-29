@@ -16,7 +16,7 @@ const render = (props: Record<string, unknown>, mode: 'site' | 'canvas' = 'site'
     className: 'size-6',
     slots: {},
     attributes: mode === 'canvas' ? { 'data-block-id': 'i' } : {},
-    slotAttributes: {},
+    partAttributes: {},
     mode,
   }
   return renderToStaticMarkup(createElement(Icon, input))

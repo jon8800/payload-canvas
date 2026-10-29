@@ -85,8 +85,8 @@ export function isFieldBlockSource(source: BindingField): boolean {
   return !CONTAINER_TYPES.has(source.type)
 }
 
-/** Field list block: a field with rows, an array or any hasMany field. */
-export function isFieldListSource(source: BindingField): boolean {
+/** Repeat block: a field with rows, an array or any hasMany field. */
+export function isRepeatSource(source: BindingField): boolean {
   return source.type === 'array' || source.hasMany === true
 }
 

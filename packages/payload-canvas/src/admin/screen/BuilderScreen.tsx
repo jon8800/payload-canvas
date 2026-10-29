@@ -4,6 +4,7 @@ import { EditDepthProvider, EntityVisibilityProvider, useConfig } from '@payload
 import type { ClientField, VisibleEntities } from 'payload'
 import type { ReactNode } from 'react'
 
+import type { AiClientConfig } from '../../ai/types'
 import type { BuilderClientConfig } from '../../core/types'
 import type { BuilderDocMeta } from '../../live/types'
 import { Editor } from '../editor/Editor'
@@ -31,15 +32,19 @@ export function BuilderScreen({
   icon,
   visibleEntities,
   locale,
+  ai,
 }: {
   meta: BuilderDocMeta
   icon: ReactNode
   visibleEntities?: VisibleEntities
   /** The request's locale (`?locale=`, else Payload's locale preference). Localized layouts open in it. */
   locale?: string | null
+  /** The assistant's config for this request (keys in the AI settings count). Replaces the one from the field config. */
+  ai?: AiClientConfig | null
 }) {
   const { getEntityConfig } = useConfig()
-  const config = builderConfigOf(getEntityConfig({ collectionSlug: meta.collection })?.fields ?? [])
+  const fieldConfig = builderConfigOf(getEntityConfig({ collectionSlug: meta.collection })?.fields ?? [])
+  const config = fieldConfig?.ai && ai ? { ...fieldConfig, ai } : fieldConfig
   if (!config) {
     return <p className="builder-summary__error">The builder config is missing on the “{meta.collection}” collection.</p>
   }

@@ -3,8 +3,8 @@
 import { CheckboxInput, TextInput } from '@payloadcms/ui'
 import { useDeferredValue, useEffect, useState, type ChangeEvent } from 'react'
 
-import { findBlock, getBlockDefinition, htmlIdProblem, htmlIdsOf } from '../../core'
-import type { Block, Operation } from '../../core/types'
+import { blockParts, findBlock, getBlockDefinition, htmlIdProblem, htmlIdsOf } from '../../core'
+import type { Block, BlockDefinition, Operation } from '../../core/types'
 import { BlockIcon, Icon, type IconName } from './icons'
 import { blockMenuEntries } from './menu/blockMenu'
 import { MenuButton } from './menu/Menu'
@@ -127,6 +127,37 @@ function EmptyState() {
 
 type BlockTab = 'content' | 'styles' | 'motion' | 'advanced'
 
+const TAB_STORAGE_KEY = 'payload-builder:inspector-tab'
+const BLOCK_TABS: readonly BlockTab[] = ['content', 'styles', 'motion', 'advanced']
+
+/** The tab the user last chose, kept in this browser. Styles first, as in Webflow. */
+function readTabChoice(): BlockTab {
+  try {
+    const value = localStorage.getItem(TAB_STORAGE_KEY)
+    return BLOCK_TABS.includes(value as BlockTab) ? (value as BlockTab) : 'styles'
+  } catch {
+    return 'styles'
+  }
+}
+
+function saveTabChoice(tab: BlockTab) {
+  try {
+    localStorage.setItem(TAB_STORAGE_KEY, tab)
+  } catch {
+    // Storage blocked: the choice lasts until the editor closes.
+  }
+}
+
+/** The tab a block opens on: the chosen tab, unless the block has nothing to show there. */
+function tabFor(chosen: BlockTab, def: BlockDefinition | undefined, justAdded: boolean): BlockTab {
+  const hasFields = (def?.fields.length ?? 0) > 0
+  // A block that was just added opens on its content, so typing starts at once.
+  if (justAdded && hasFields) return 'content'
+  if (chosen !== 'content' && def?.styles === false) return 'content'
+  if (chosen === 'content' && !hasFields && def?.styles !== false) return 'styles'
+  return chosen
+}
+
 function BlockPane() {
   const runtime = useRuntime()
   // Another block selected: the selection on the canvas and in the outline paints first, the
@@ -136,20 +167,22 @@ function BlockPane() {
   const shownId = useDeferredValue(selectedId)
   // The block in the editor's locale: the inspector shows and edits that locale's values.
   const block = useEditor(runtime.store, (s) => (shownId ? findBlock(s.view, shownId) : null))
-  const [tab, setTab] = useState<BlockTab>('content')
-  const [shownType, setShownType] = useState<string | null>(null)
+  // The user's tab stays chosen across blocks and visits, like Webflow's Style panel.
+  const [chosen, setChosen] = useState<BlockTab>(() => (typeof window === 'undefined' ? 'styles' : readTabChoice()))
   const focusRequest = useValue(runtime.focusRequest)
   // A selected page region shows its own pane.
   const region = useOptionalValue(runtime.regions?.selected ?? null)
-
-  // Styles and Motion stay open while the user edits blocks of one type. Another type opens its content,
-  // so its fields never seem to vanish.
-  if (block && block.type !== shownType) {
-    setShownType(block.type)
-    if (shownType !== null) setTab('content')
+  // A block that was just added keeps its content open while it stays selected, also after the
+  // focus request clears.
+  const [addedId, setAddedId] = useState<string | null>(null)
+  if (block && focusRequest === block.id && addedId !== block.id) setAddedId(block.id)
+  const def = block ? getBlockDefinition(runtime.config.blocks, block.type) : undefined
+  const tab = storesBuilderData(runtime) ? tabFor(chosen, def, block !== null && block.id === addedId) : 'content'
+  const setTab = (next: BlockTab) => {
+    setAddedId(null)
+    setChosen(next)
+    saveTabChoice(next)
   }
-  // A block that was just added opens on its content.
-  if (block && focusRequest === block.id && tab !== 'content') setTab('content')
 
   // A block that was just added: focus its first content field.
   useEffect(() => {
@@ -289,30 +322,30 @@ function BlockHeader({ block }: { block: Block }) {
 function StyleFields({ block }: { block: Block }) {
   const runtime = useRuntime()
   const def = getBlockDefinition(runtime.config.blocks, block.type)
-  // Slots with an element of their own (`styles: true`) are style targets next to the block.
-  const styledSlots = Object.entries(def?.slots ?? {}).filter(([, slot]) => slot.styles)
+  // The block's parts (styled slots and `parts` entries) are style targets next to the block.
+  const parts = blockParts(def)
   const [target, setTarget] = useState<string | null>(null)
-  const slot = target && styledSlots.some(([name]) => name === target) ? target : null
+  const part = target && parts.some(({ name }) => name === target) ? target : null
   const blockStyles = def?.styles !== false
 
   return (
     <div className="builder-editor__fields">
-      {styledSlots.length > 0 && (
+      {parts.length > 0 && (
         <Select
           aria-label="Style target"
           emptyLabel={blockStyles ? 'This block' : undefined}
-          placeholder="Pick a slot"
-          value={slot}
+          placeholder="Pick a part"
+          value={part}
           onValueChange={setTarget}
-          options={styledSlots.map(([name, s]) => ({
+          options={parts.map(({ name, label }) => ({
             value: name,
-            label: `Slot: ${s.label?.trim() || name}`,
-            ...(block.slotClassName?.[name] ? { suffix: <span className="builder-styles__dot" aria-label="has classes" /> } : {}),
+            label,
+            ...(block.partClassName?.[name] ? { suffix: <span className="builder-styles__dot" aria-label="has classes" /> } : {}),
           }))}
         />
       )}
-      {slot ? (
-        <StylesPanel key={slot} block={block} slot={slot} />
+      {part ? (
+        <StylesPanel key={part} block={block} part={part} />
       ) : !blockStyles ? (
         <p className="builder-editor__hint">This block has no style controls.</p>
       ) : (

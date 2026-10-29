@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { Block } from '../../core'
 import { defaultBlocks } from '../../blocks'
 import { defaultResolveLink, parseVideoUrl, RenderLayout, type RenderLayoutProps } from '../index'
+import { eagerComponents } from '../components/eager.test-data'
 
 const blocks = defaultBlocks({ linkCollections: ['pages'] })
 
@@ -29,7 +30,7 @@ const lexical = (...children: unknown[]) => ({ root: { type: 'root', version: 1,
 describe('every default block has a component', () => {
   test('no block renders as unknown in the canvas', () => {
     for (const def of blocks) {
-      const out = canvas({ type: def.type, ...def.ai?.example, slots: undefined })
+      const out = canvas({ type: def.type, ...def.ai?.example, slots: undefined }, { components: eagerComponents })
       assert.ok(!out.includes('data-builder-unknown'), def.type)
       assert.match(out, new RegExp(`data-block-type="${def.type}"`), def.type)
     }

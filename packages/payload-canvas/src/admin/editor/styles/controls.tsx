@@ -51,7 +51,7 @@ function useEditBreakpoint(): (breakpoint: Breakpoint) => void {
  */
 export function OverrideMark({ prop }: { prop: string }) {
   const runtime = useRuntime()
-  const { blockId, slot, tokens, error } = useStyles()
+  const { blockId, part, tokens, error } = useStyles()
   const { def, override } = useProp(prop)
   const edit = useEditBreakpoint()
   const pop = usePopover('auto')
@@ -90,7 +90,7 @@ export function OverrideMark({ prop }: { prop: string }) {
             className="builder-styles__button"
             onClick={() => {
               pop.hide()
-              error.set(writeStyle(runtime, { blockId, slot }, override.variant, tokens, prop, null))
+              error.set(writeStyle(runtime, { blockId, part }, override.variant, tokens, prop, null))
             }}
           >
             Remove {override.className}

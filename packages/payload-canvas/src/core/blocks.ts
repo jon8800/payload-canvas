@@ -1,3 +1,4 @@
+import { defaultPartClassNames } from './classes'
 import { indexLayout, subtreeIds, type IndexedBlock } from './tree'
 import type { Block, BlockDefinition, Layout, SectionDefinition, SectionVariant, SlotDefinition } from './types'
 
@@ -30,7 +31,7 @@ function parentsMessage(blocks: readonly BlockDefinition[], type: string): strin
 /**
  * The children a new block of `type` starts with: one child in each slot that accepts exactly one
  * type made for this block (its `parents` names `type`). A new list starts with one list item.
- * Null when there are none. The children get the child type's `defaultClassName`.
+ * Null when there are none. The children get the child type's default classes (`withDefaultClasses`).
  */
 export function starterSlots(blocks: readonly BlockDefinition[], type: string, makeId: () => string): Record<string, Block[]> | null {
   const slots: Record<string, Block[]> = {}
@@ -38,11 +39,21 @@ export function starterSlots(blocks: readonly BlockDefinition[], type: string, m
     if (slot.allow?.length !== 1) continue
     const child = getBlockDefinition(blocks, slot.allow[0])
     if (!child?.parents?.includes(type)) continue
-    const block: Block = { id: makeId(), type: child.type }
-    if (child.defaultClassName) block.className = child.defaultClassName
-    slots[name] = [block]
+    slots[name] = [withDefaultClasses({ id: makeId(), type: child.type }, child)]
   }
   return Object.keys(slots).length > 0 ? slots : null
+}
+
+/**
+ * The new block with the definition's default classes: `defaultClassName` where it has no
+ * `className` key, and each part's `defaultClassName` where `partClassName` has no key for it.
+ */
+export function withDefaultClasses(block: Block, def: BlockDefinition | undefined): Block {
+  const next: Block = { ...block }
+  if (next.className === undefined && def?.defaultClassName) next.className = def.defaultClassName
+  const parts = defaultPartClassNames(def)
+  if (parts) next.partClassName = { ...parts, ...next.partClassName }
+  return next
 }
 
 export function defineBlock<T extends BlockDefinition>(def: T): T {
@@ -117,12 +128,21 @@ function checkVariants(section: string, variants: readonly { id: string; label: 
 }
 
 /**
- * The sections with each variant as a section of its own, right after its section: id
+ * Throws on a variant without id or label, or two variants of one section with one id. The plugin
+ * and `builderMcpTools` run it on the app's `sections`.
+ */
+export function checkSectionVariants(sections: readonly SectionDefinition[]): void {
+  for (const section of sections) if (section.variants?.length) checkVariants(section.id, section.variants)
+}
+
+/**
+ * The old flat list: each variant as a section of its own, right after its section: id
  * `<section id>/<variant id>`, label `<section label> (<variant label>)`, the section's category,
  * its description unless the variant has one, and `variantOf` set to the section id. The section
- * itself stays the first version and loses its `variants` key. The plugin and `builderMcpTools`
- * run it on the app's `sections`, so the library, the insert picker, MCP and the assistant all
- * list the variants. Throws on a variant without id or label, or two variants with one id.
+ * itself stays the first version and loses its `variants` key. The plugin no longer uses it: the
+ * editor, MCP and the assistant keep variants under their section (`core/sections.ts`), and
+ * `insertSection` still accepts the `<section id>/<variant id>` ids. Throws like
+ * `checkSectionVariants`.
  */
 export function sectionsWithVariants(sections: readonly SectionDefinition[]): SectionDefinition[] {
   return sections.flatMap(({ variants, ...section }) => {
@@ -144,15 +164,14 @@ export function sectionsWithVariants(sections: readonly SectionDefinition[]): Se
 
 /**
  * The blocks with each block's `defaultClassName` filled where the block has no `className` key, at
- * any depth. A `className` of `''` stays empty. Blocks of unknown types stay as they are. The
+ * any depth, and each part's default classes where `partClassName` has no key for the part
+ * (`withDefaultClasses`). A `className` of `''` stays empty. Blocks of unknown types stay as they are. The
  * plugin and `builderMcpTools` run it on the app's `sections`, so a section tree may leave out a
  * block's default classes. Seeds that build layouts by hand can run it too.
  */
 export function withDefaultClassNames(list: readonly Block[], definitions: readonly BlockDefinition[]): Block[] {
   return list.map((block) => {
-    const next: Block = { ...block }
-    const fallback = block.className === undefined ? getBlockDefinition(definitions, block.type)?.defaultClassName : undefined
-    if (fallback) next.className = fallback
+    const next = withDefaultClasses(block, getBlockDefinition(definitions, block.type))
     if (block.slots) {
       next.slots = Object.fromEntries(Object.entries(block.slots).map(([name, children]) => [name, withDefaultClassNames(children, definitions)]))
     }

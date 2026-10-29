@@ -10,6 +10,8 @@ import type { FieldRegistry } from '../core/fieldSemantics'
 import { runPropValidators } from '../core/fieldValidate'
 import { describeLayoutErrors } from '../core/issues'
 import { localeSettingsOf } from '../core/locale'
+import { findSection, withoutSectionOrigin } from '../core/sections'
+import { SAVED_SECTIONS_CONFIG_KEY } from '../blocks/builtins/sectionRef'
 import { isPlainObject, normalizeLayout } from '../core/tree'
 import type { Block, BlockDefinition, Layout, LocaleSettings, SectionDefinition } from '../core/types'
 import { isLayoutWarning, validateLayout } from '../core/validate'
@@ -18,8 +20,8 @@ import { fieldRegistryOf } from '../live/fieldChecks'
 
 export const DEFAULT_SAVED_SECTIONS_SLUG = 'builder-sections'
 
-/** Server-only key in `config.custom`: `{ slug }` of the saved sections collection, for the MCP tools. */
-export const SAVED_SECTIONS_CONFIG_KEY = 'websiteBuilderSavedSections'
+/** Server-only key in `config.custom`: `{ slug }` of the saved sections collection. */
+export { SAVED_SECTIONS_CONFIG_KEY }
 
 /** A saved section's id in section lists: `saved:<document id>`. */
 export const SAVED_SECTION_PREFIX = 'saved:'
@@ -87,24 +89,13 @@ export function savedSectionData(
   return {
     name: text(name, NAME_MAX) ?? fallbackName,
     category: text(category, CATEGORY_MAX) ?? null,
-    blocks: normalizeLayout({ version: 1, blocks: [block] }).blocks,
+    // A saved section has no variants: it forgets the app section it was inserted from.
+    blocks: normalizeLayout({ version: 1, blocks: [withoutSectionOrigin(block)] }).blocks,
   }
 }
 
-/**
- * Finds a section by its id (`hero`, `saved:12`), by a saved section's document id (`12`) or by
- * its name (case-insensitive, the first match). Ids win over names.
- */
-export function findSection(sections: readonly SectionDefinition[], ref: string): SectionDefinition | undefined {
-  const value = ref.trim()
-  if (!value) return undefined
-  const byId = sections.find((s) => s.id === value)
-  if (byId) return byId
-  const bySavedId = sections.find((s) => s.savedId !== undefined && String(s.savedId) === value)
-  if (bySavedId) return bySavedId
-  const name = value.toLowerCase()
-  return sections.find((s) => s.label.trim().toLowerCase() === name)
-}
+/** Finds a section by id, saved document id or name (moved to core/sections.ts). */
+export { findSection }
 
 /** The saved sections the request's user can read, newest first. Empty when the read fails. */
 export async function loadSavedSections(req: PayloadRequest, slug: string): Promise<SectionDefinition[]> {

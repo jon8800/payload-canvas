@@ -1,0 +1,76 @@
+// Section variants: the ‹ 2 / 3 › arrows on a library card and the switch on the canvas action bar.
+// Payload CSS variables only (and the editor's --be-* variables, which map to them).
+
+@layer payload-default {
+  .builder-variants {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    white-space: nowrap;
+  }
+
+  .builder-variants__text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: var(--be-text-s);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .builder-variants__arrow {
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--theme-elevation-100);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--theme-success-500);
+      outline-offset: 1px;
+    }
+  }
+
+  // On a library card: a small pill at the top right of the picture. Saved sections have no
+  // variants, so it never meets their "…" menu there.
+  .builder-variants--card {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 1;
+    max-width: calc(100% - 12px);
+    padding: 1px;
+    border-radius: 6px;
+    background: var(--theme-bg);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
+    color: var(--theme-text);
+
+    .builder-variants__text {
+      padding: 0 2px;
+      color: var(--be-muted);
+    }
+  }
+
+  // On the canvas action bar: white on the accent color, like the bar's other buttons.
+  .builder-variants--bar {
+    max-width: 180px;
+
+    .builder-variants__text {
+      max-width: 120px;
+      padding: 0 2px;
+      color: var(--be-accent-fg);
+    }
+  }
+}

@@ -5,6 +5,7 @@
 import type { Field } from 'payload'
 import type { AiClientConfig } from '../ai/types'
 import type { BlockMotion, MotionPatch } from './motion'
+import type { BlockVisibility } from './visibility'
 
 // ---------------------------------------------------------------------------
 // Layout data (stored in one JSON field)
@@ -23,10 +24,19 @@ export type Block = {
   className?: string
   /** Child blocks by slot name. No depth limit. */
   slots?: Record<string, Block[]>
-  /** Prop path -> document field path. Used by templates (later). */
+  /**
+   * Prop path -> binding (a field path, a fallback chain, formatters or a `{{ }}` template; see
+   * `bindingValue`). Used in templates and inside collection list and repeat items.
+   */
   bindings?: Record<string, string>
   /** Hidden blocks stay in the data but do not render on the site. */
   hidden?: boolean
+  /**
+   * Visibility conditions (`core/visibility.ts`): the block shows only when they match the current
+   * document (a template's document, a list item, a repeat row). Without a current document they
+   * are not checked. Stored only when it holds a condition.
+   */
+  visibility?: BlockVisibility
   /**
    * A name the editor gives the block (outline, breadcrumbs, error messages), e.g. "Hero".
    * Never rendered on the site. Stored only when non-empty.
@@ -50,12 +60,21 @@ export type Block = {
    */
   attrs?: BlockAttrs
   /**
-   * Tailwind classes of a slot's own element, by slot name, for slots whose definition sets
-   * `styles: true` (e.g. the `empty` slot of a collection list). Compiled like `className`.
-   * Stored only when one is set.
+   * Tailwind classes of the block's inner elements, by part name (`blockParts`): a slot whose
+   * definition sets `styles: true` (the `empty` slot of a collection list) or a name in
+   * `BlockDefinition.parts` (a carousel's `arrow`). Compiled like `className`. Stored only when one is set.
    */
-  slotClassName?: Record<string, string>
+  partClassName?: Record<string, string>
+  /**
+   * The ready-made section this block is the root of (`core/sections.ts`): set on insert of an
+   * app section with one root block. The editor offers the section's other variants from it.
+   * Never rendered. Stored only when set.
+   */
+  section?: SectionOrigin
 }
+
+/** Where a section's root block came from: the section id and, for a variant, the variant id. */
+export type SectionOrigin = { id: string; variant?: string }
 
 /** A block's own HTML attributes. Empty values are left out. */
 export type BlockAttrs = {
@@ -104,11 +123,27 @@ export type SlotDefinition = {
    */
   allowInline?: boolean
   /**
-   * The slot renders in an element of its own that takes classes (`block.slotClassName[slot]`).
-   * The Styles panel then offers the slot as a style target. The component spreads
-   * `slotAttributes[slot]` (which carries the `className`) on that element. Default false.
+   * The slot renders in an element of its own that takes classes (`block.partClassName[slot]`):
+   * the slot is a part of the block (see `PartDefinition`). The Styles panel offers it as a style
+   * target. The component spreads `partAttributes[slot]` (which carries the `className`) on that
+   * element. Default false.
    */
   styles?: boolean
+  /** With `styles`: the classes a newly inserted block starts with on the slot's element. */
+  defaultClassName?: string
+}
+
+/**
+ * A styled inner element of a block that is not a slot: a carousel's arrows, a pager's links.
+ * The block stores its classes in `block.partClassName[name]`; the Styles panel offers it as a
+ * style target; the component gets them in `partAttributes[name].className` (with the
+ * `builder-css` marker) and puts them on the element.
+ */
+export type PartDefinition = {
+  /** The name in the Styles panel's "Style target" list, e.g. "Arrows". */
+  label: string
+  /** Classes a newly inserted block starts with on this part (like `defaultClassName`). */
+  defaultClassName?: string
 }
 
 export type BlockDefinition = {
@@ -131,6 +166,11 @@ export type BlockDefinition = {
   inline?: boolean
   /** Classes a newly inserted block starts with (e.g. "flex flex-col gap-4" for a stack). */
   defaultClassName?: string
+  /**
+   * Inner elements that take classes of their own, by name (`PartDefinition`). Slots with
+   * `styles: true` are parts too. A name must not be a slot name.
+   */
+  parts?: Record<string, PartDefinition>
   /**
    * Tailwind classes the block's React component uses itself. They are added to the generated
    * CSS (save hook and canvas) whenever the block type appears in a layout.
@@ -169,18 +209,25 @@ export type SectionDefinition = {
    */
   savedId?: string | number
   /**
-   * Other versions of the section in the same file (a split hero next to a centred one). The
-   * plugin and `builderMcpTools` list each variant as a section of its own after this one
-   * (`sectionsWithVariants`): id `<id>/<variant id>`, label `<label> (<variant label>)`.
+   * Other versions of the section (a split hero next to a centred one). The library shows one
+   * card with arrows to flip between the versions; the editor switches an inserted section to
+   * another version in place; `insertSection` (MCP, assistant) takes `variant`. See
+   * `core/sections.ts`. Give a block the same `id` in each version to carry its edited content
+   * over exactly on a switch.
    */
   variants?: SectionVariant[]
-  /** Set on a variant after `sectionsWithVariants`: the id of the section it belongs to. */
+  /** The name of the section's own version among its variants. Default "Default". */
+  variantLabel?: string
+  /**
+   * Set only by the old flat list (`sectionsWithVariants`): the id of the section this variant
+   * belongs to.
+   */
   variantOf?: string
 }
 
 /** One version of a section (`SectionDefinition.variants`). It shares the section's category. */
 export type SectionVariant = {
-  /** Unique in the section, e.g. "split". The variant's section id is `<section id>/<id>`. */
+  /** Unique in the section, e.g. "split". `insertSection` takes it as `variant`. */
   id: string
   label: string
   description?: string
@@ -210,6 +257,8 @@ export type BindingField = {
   type: string
   relationTo?: string | string[]
   hasMany?: boolean
+  /** The options of a select or radio field, for condition values. */
+  options?: Array<{ label: string; value: string }>
   children?: BindingField[]
 }
 
@@ -279,6 +328,11 @@ export type BuilderClientConfig = {
    * library's section thumbnails follow it. Null without the theme global.
    */
   themeEndpoint: string | null
+  /**
+   * Editable classes (`websiteBuilder({ classes })`): the classes collection and the plugin's class
+   * endpoints. Null or left out when turned off. Shape: `ClassesClientConfig` in `classes/shared.ts`.
+   */
+  classes?: { collection: string; endpoint: string } | null
   /** Editor behaviour from `websiteBuilder({ editor })`. */
   editor: EditorClientConfig
   /**
@@ -366,9 +420,14 @@ export type DragMode = 'indicator' | 'smooth'
 export type EditorOptions = {
   /** The default drag and drop style. Each user can change it in the editor. Default 'indicator'. */
   dragMode?: DragMode
+  /**
+   * While a block is dragged, thin dashed outlines show every slot on the canvas that takes it.
+   * Each user can turn them off in the editor. Default true.
+   */
+  dropOutlines?: boolean
 }
 
-export type EditorClientConfig = { dragMode: DragMode }
+export type EditorClientConfig = { dragMode: DragMode; dropOutlines: boolean }
 
 // ---------------------------------------------------------------------------
 // Design tokens from the app's Tailwind theme (for the Styles panel)
@@ -408,8 +467,8 @@ export type StyleTokens = {
   classList: string[]
   /**
    * The site's own static `@utility` classes (`type-h2`, `btn-primary`, `glass`), in CSS order, from
-   * the CSS entry and the files it imports (not from packages). The Styles panel lists them as
-   * presets. Left out by servers before this field existed.
+   * the CSS entry and the files it imports (not from packages). The Classes box suggests them
+   * first, with their labels. Left out by servers before this field existed.
    */
   siteClasses?: SiteClass[]
 }
@@ -481,8 +540,10 @@ export type Operation =
       motion?: MotionPatch | null
       /** HTML attributes. Each key given replaces that key, `null` removes it. `attrs: null` removes all. */
       attrs?: BlockAttrsPatch | null
-      /** Classes per slot. Each slot given replaces that slot's classes, `null` or "" removes them. */
-      slotClassName?: Record<string, string | null>
+      /** Visibility conditions. Replaces them all; `null` removes them. */
+      visibility?: BlockVisibility | null
+      /** Classes per part (`blockParts`). Each part given replaces that part's classes, `null` or "" removes them. */
+      partClassName?: Record<string, string | null>
     }
 
 /** `inverse` undoes this operation when applied in order to the resulting layout. */

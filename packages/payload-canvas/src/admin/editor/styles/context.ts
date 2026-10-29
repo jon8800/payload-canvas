@@ -3,19 +3,27 @@
 import { createContext, use } from 'react'
 
 import { findBlock, setStyleValue, type Breakpoint, type StyleTokens, type Variant } from '../../../core'
+import type { BuilderClass } from '../../../classes/shared'
+import type { ClassesController } from '../classes/controller'
 import type { ValueStore } from '../valueStore'
 import type { Runtime } from '../runtime'
 import { variantKey, type StyleReader } from './model'
 
-/** What the Styles panel edits: a block's `className`, or with `slot`, that slot's `slotClassName`. */
-export type StyleTarget = { blockId: string; slot?: string | null }
+/** What the Styles panel edits: a block's `className`, or with `part`, that part's `partClassName` (`blockParts`). */
+export type StyleTarget = { blockId: string; part?: string | null }
 
 export type StylesContextValue = {
   blockId: string
-  /** The slot whose own classes the panel edits. Null: the block's `className`. */
-  slot: string | null
+  /** The part (a styled slot or a `parts` entry) whose classes the panel edits. Null: the block's `className`. */
+  part: string | null
   /** The block type: it picks the style groups that open by default. */
   blockType: string
+  /**
+   * The editable class the panel edits instead of the block (its `styles`), or null. Every
+   * control then reads and writes the class: every block that uses it changes.
+   */
+  editingClass: BuilderClass | null
+  /** The classes the panel edits: the block's (or part's), or the edited class's `styles`. */
   className: string
   variant: Variant
   tokens: StyleTokens
@@ -44,18 +52,18 @@ export function useStyles(): StylesContextValue {
 }
 
 /** Reads the latest classes from the store, so two edits in one frame never overwrite each other. */
-function currentClassName(runtime: Runtime, { blockId, slot }: StyleTarget): string {
+function currentClassName(runtime: Runtime, { blockId, part }: StyleTarget): string {
   const block = findBlock(runtime.store.getState().layout, blockId)
-  return (slot ? block?.slotClassName?.[slot] : block?.className) ?? ''
+  return (part ? block?.partClassName?.[part] : block?.className) ?? ''
 }
 
 export function writeClassName(runtime: Runtime, target: StyleTarget, next: string, mergeKey?: string) {
   // One space between classes: double spaces from typing never reach the stored value.
   const normalized = next.trim().replace(/\s+/g, ' ')
   if (normalized === currentClassName(runtime, target)) return
-  const { blockId, slot } = target
-  const op = slot
-    ? ({ type: 'update', id: blockId, slotClassName: { [slot]: normalized || null } } as const)
+  const { blockId, part } = target
+  const op = part
+    ? ({ type: 'update', id: blockId, partClassName: { [part]: normalized || null } } as const)
     : ({ type: 'update', id: blockId, className: normalized || null } as const)
   runtime.store.apply(op, { mergeKey })
 }
@@ -79,6 +87,31 @@ export function writeStyle(
   }
   if (next === before) return null
   // Edits to one property at one variant within a second become one undo step (sliders, typing).
-  writeClassName(runtime, target, next, `style:${target.blockId}:${target.slot ?? ''}:${property}:${variantKey(variant)}`)
+  writeClassName(runtime, target, next, `style:${target.blockId}:${target.part ?? ''}:${property}:${variantKey(variant)}`)
+  return null
+}
+
+/**
+ * Sets one property of an editable class's styles at a variant, like `writeStyle` does for a
+ * block. Returns an error message when the class model refuses the value.
+ */
+export function writeClassStyle(
+  classes: ClassesController,
+  id: string | number,
+  variant: Variant,
+  tokens: StyleTokens,
+  property: string,
+  value: string | null,
+  options?: { negative?: boolean },
+): string | null {
+  const before = classes.byId(id)?.styles ?? ''
+  let next: string
+  try {
+    next = setStyleValue(before, property, variant, value, { ...options, tokens })
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error)
+  }
+  if (next === before) return null
+  classes.edit(id, 'styles', next || null, `class:${id}:${property}:${variantKey(variant)}`)
   return null
 }

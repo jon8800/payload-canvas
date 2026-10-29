@@ -5,6 +5,15 @@ import type { Block, BlockDefinition, Layout, Operation } from '../../core/types
 
 export const SECTION_REF_BLOCK = 'sectionRef'
 
+/** Key in Payload's `config.custom`: `{ slug }` of the saved sections collection (set by the plugin). */
+export const SAVED_SECTIONS_CONFIG_KEY = 'websiteBuilderSavedSections'
+
+/** The saved sections collection of a Payload config, or null when saved sections are off. */
+export function savedSectionsSlugOf(config: { custom?: Record<string, unknown> } | undefined): string | null {
+  const value = config?.custom?.[SAVED_SECTIONS_CONFIG_KEY] as { slug?: unknown } | undefined
+  return typeof value?.slug === 'string' ? value.slug : null
+}
+
 /**
  * Runtime-only slot: the saved section's blocks, put there by `attachSections` (data loading).
  * Never stored. Its blocks are copies with ids prefixed by the ref's id.
@@ -47,14 +56,15 @@ export function sectionDetachOps(layout: Layout, refId: string, copies: readonly
 
 /**
  * A saved section, live: the page shows the section's current blocks, so a change to the section
- * shows on every page that uses it. "Detach" in the block menu replaces it with a copy. The
- * collection is the plugin's saved sections collection (`websiteBuilder({ savedSections })`).
+ * shows on every page that uses it. "Detach" in the block menu replaces it with a copy. The plugin
+ * adds this block when saved sections are on, with its saved sections collection
+ * (`websiteBuilder({ savedSections: { slug } })`); a site does not add it itself.
  */
 export function sectionRefBlock(collection = 'builder-sections'): BlockDefinition {
   return defineBlock({
     type: SECTION_REF_BLOCK,
     label: 'Saved section (live)',
-    icon: 'section',
+    icon: 'sectionRef',
     category: 'Dynamic',
     // It renders the section's blocks with their own classes and no element of its own.
     styles: false,

@@ -16,7 +16,7 @@ const render = (props: Record<string, unknown>, mode: 'site' | 'canvas' = 'site'
       className: 'relative isolate builder-css',
       slots: { children: createElement('h1', null, 'Hello') },
       attributes: {},
-      slotAttributes: { children: { 'data-slot': 'children' } },
+      partAttributes: { children: { 'data-slot': 'children' } },
       mode,
     } satisfies BlockComponentProps),
   )
@@ -60,7 +60,7 @@ describe('MediaBackdrop', () => {
         className: '',
         slots: {},
         attributes: {},
-        slotAttributes: {},
+        partAttributes: {},
         mode: 'site',
       } satisfies BlockComponentProps)
     const image = {

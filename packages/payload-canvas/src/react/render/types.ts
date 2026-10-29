@@ -1,6 +1,6 @@
 // Types shared by the renderer and the default components.
 
-import type { ComponentType, ReactNode } from 'react'
+import type { AnchorHTMLAttributes, ComponentType, ReactNode } from 'react'
 import type { BindingRelations, Block, BlockDefinition, Layout, TemplateContext } from '../../core'
 
 /**
@@ -58,8 +58,15 @@ export type BlockComponentProps = {
   slots: Record<string, ReactNode>
   /** Spread on the component's root element. In canvas mode it holds `data-block-id`. */
   attributes: Record<string, string>
-  /** Spread on the element that directly contains each slot's children. */
-  slotAttributes: Record<string, Record<string, string>>
+  /**
+   * By slot or part name. Spread a slot's entry on the element that directly contains the slot's
+   * children (in the canvas it marks the drop zone). A part's entry (a slot with `styles: true`
+   * or a name in `BlockDefinition.parts`) carries the part's `className`, with the `builder-css`
+   * marker: join it with the element's own classes. Always set for every slot and part.
+   */
+  partAttributes: Record<string, Record<string, string>>
+  /** @deprecated The same object as `partAttributes` (its name before 0.4). */
+  slotAttributes?: Record<string, Record<string, string>>
   mode: RenderMode
   /**
    * The page data (`RenderLayout`'s `pageData`; in the canvas, the `pageData` loader of
@@ -67,7 +74,34 @@ export type BlockComponentProps = {
    * `fromPayloadComponent` component.
    */
   pageData?: PageData
+  /**
+   * Set only when the block renders on the server for the editor (`createCanvasServer`):
+   * `'canvas'`, or `'thumbnail'` for the pictures of the section library. Missing on the site.
+   * Server components read this; client components call `useCanvasMode()` instead.
+   */
+  canvasMode?: 'canvas' | 'thumbnail'
+  /**
+   * The site's link component (`RenderLayout`'s `linkComponent`, for example `next/link`). Only
+   * components marked with `withLinkComponent` get it, and only on the site. Render it in place
+   * of `<a>` when it is set. Server components only: a function cannot reach a client component.
+   */
+  linkComponent?: LinkComponent
+  /**
+   * Set on the site when `RenderLayout` has a `linkComponent`, for client components marked with
+   * `withClientLinks`. Render `next/link` in place of `<a>` when it is true.
+   */
+  clientLinks?: boolean
 }
+
+/** What a link component gets: the `<a>` attributes, with `href` always set. */
+export type LinkComponentProps = AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }
+
+/**
+ * Renders a link in place of `<a>`, for example `next/link` for client-side navigation and
+ * prefetching. Server-rendered blocks get it as a prop. Client blocks cannot get a function from the
+ * server (Next's server `next/link` is one), so they get `clientLinks` and render `next/link` themselves.
+ */
+export type LinkComponent = ComponentType<LinkComponentProps>
 
 /** Data the page loads once for all its blocks, for example a list of services or review totals. */
 export type PageData = Record<string, unknown>
@@ -100,8 +134,10 @@ export type RenderLayoutProps = {
    */
   context?: TemplateContext | null
   /**
-   * Which collection each relationship field points to (`bindingRelations(payload.config.collections)`
-   * from `payload-canvas/core`), for `<path>.$url` bindings such as `categories.0.$url`.
+   * Which collection each relationship field points to (`bindingRelations`), for `<path>.$url`
+   * bindings such as `categories.0.$url`. Sites leave it out: `loadLayoutData` reads it from the
+   * Payload config and gives it to the collection lists and repeats that need it. The canvas,
+   * which has no Payload config, gets it from the plugin.
    */
   relations?: BindingRelations | null
   /**
@@ -110,6 +146,20 @@ export type RenderLayoutProps = {
    * comes from the `pageData` loader of `createCanvasServer`: use the same loader on the site.
    */
   pageData?: PageData | null
+  /**
+   * Renders the links of the built-in button, link and menu blocks (and of components marked with
+   * `withLinkComponent`) on the site. Default: a plain `<a>`. Pass `next/link` for client-side
+   * navigation and prefetching. Server-rendered blocks render it; client blocks marked with
+   * `withClientLinks` (the menu) get `clientLinks: true` and render `next/link`. Ignored in the editor canvas.
+   */
+  linkComponent?: LinkComponent | null
+  /**
+   * How many images of the layout's first section load first (`fetchpriority="high"`, not lazy):
+   * image blocks and media backdrops, in page order, unless their **Load first** (`priority`) prop
+   * is off. Default `1`: the first image of the first section, often the largest thing on screen.
+   * Give a layout further down the page (a footer) `0`. Site only.
+   */
+  priorityImages?: number
 }
 
 /** Loads documents for a batch of ids in one collection. */

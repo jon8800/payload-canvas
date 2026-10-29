@@ -2,14 +2,14 @@ import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { builtinBlocks, defaultBlocks, SECTION_REF_SLOT, sectionDetachOps } from '../../blocks'
+import { defaultBlocks, SECTION_REF_SLOT, sectionDetachOps, sectionRefBlock } from '../../blocks'
 import { applyOperations, collectClasses, type Block, type Layout } from '../../core'
-import { builtinComponents } from '../components/builtins'
 import { RenderLayout } from './RenderLayout'
 import { attachSections } from './sections'
 import type { FetchDocs } from './types'
 
-const blocks = [...defaultBlocks(), ...builtinBlocks({ include: ['sectionRef'] })]
+// The plugin adds the sectionRef definition when saved sections are on.
+const blocks = [...defaultBlocks(), sectionRefBlock()]
 const saved: Record<string, unknown> = {
   id: 7,
   name: 'Call to action',
@@ -63,10 +63,18 @@ describe('attachSections', () => {
     const missing = await attachSections(page(ref('r', 99)), blocks, fakeFetch(calls))
     assert.equal(missing.blocks[1]!.slots, undefined)
   })
+
+  test("a site's own list without the definition loads from the collection it is given", async () => {
+    const calls: Calls = []
+    const out = await attachSections(page(ref('r', 7)), defaultBlocks(), fakeFetch(calls), 'builder-sections')
+    assert.equal(out.blocks[1]!.slots![SECTION_REF_SLOT]![0]!.id, 'r_cta')
+    assert.equal(calls.length, 1)
+  })
 })
 
 const render = (layout: Layout, mode: 'site' | 'canvas') =>
-  renderToStaticMarkup(createElement(RenderLayout, { layout, blocks, components: builtinComponents(), mode }))
+  // The sectionRef component is a default component: no components map needed.
+  renderToStaticMarkup(createElement(RenderLayout, { layout, blocks, mode }))
 
 describe('sectionRef rendering', () => {
   test('the site renders the section blocks with no element of its own', async () => {

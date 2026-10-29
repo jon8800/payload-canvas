@@ -1,14 +1,14 @@
 'use client'
 
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react'
-import { LIGHTBOX_CLASS_MAP as C, LIGHTBOX_LABELS as L } from '../../../blocks/builtins/lightbox'
-import { labelOf, textOr } from '../../../blocks/builtins/shared'
+import { labelOf, textOr } from '../../../blocks/client/helpers'
+import { IMAGE_VIEWER_CLASS_MAP as C, IMAGE_VIEWER_LABELS } from '../../../blocks/client/imageViewer'
 import type { BlockComponentProps } from '../../render/types'
 import { Chevron, CloseIcon } from './glyphs'
 
 type Photo = { src: string; srcSet: string; alt: string }
 
-/** The images of a lightbox, not the large photo of its own dialog. */
+/** The images of an image viewer, not the large photo of its own dialog. */
 const imagesIn = (root: Element): HTMLImageElement[] => [...root.querySelectorAll('img')].filter((img) => !img.closest('dialog'))
 
 /** The image a click or a key on `target` opens: the image itself, or the one inside a link or button. */
@@ -32,14 +32,16 @@ export function swipeStep(dx: number, dy: number, distance = SWIPE_DISTANCE): -1
   return dx < 0 ? 1 : -1
 }
 
+export type ImageViewerLabels = Partial<typeof IMAGE_VIEWER_LABELS>
+
 /**
- * A container whose images open full screen. The native modal dialog traps the focus, makes the
+ * A container whose images open full screen in a photo popup. The native modal dialog traps the focus, makes the
  * page inert, closes on Escape and gives the focus back. Arrow keys step through the images.
  * Images get `tabindex="0"` and `role="button"`, so the keyboard can open them. On touch screens a
  * sideways swipe steps too (pointer events; a mouse drag does not). Off on the canvas,
  * so a click selects an image there.
  */
-export function Lightbox({ props, className, attributes, slotAttributes, slots, mode }: BlockComponentProps) {
+export function ImageViewer({ props, className, attributes, partAttributes, slots, mode, labels }: BlockComponentProps & { labels?: ImageViewerLabels }) {
   const root = useRef<HTMLDivElement>(null)
   const dialog = useRef<HTMLDialogElement>(null)
   const [photos, setPhotos] = useState<Photo[]>([])
@@ -67,7 +69,7 @@ export function Lightbox({ props, className, attributes, slotAttributes, slots, 
   }, [open])
 
   const show = (target: HTMLImageElement) => {
-    const scope = group ? [...document.querySelectorAll(`[data-lightbox-group="${CSS.escape(group)}"]`)] : [root.current!]
+    const scope = group ? [...document.querySelectorAll(`[data-viewer-group="${CSS.escape(group)}"]`)] : [root.current!]
     const images = scope.flatMap(imagesIn)
     setPhotos(images.map((img) => ({ src: img.currentSrc || img.src, srcSet: img.srcset, alt: img.alt })))
     setIndex(Math.max(0, images.indexOf(target)))
@@ -99,7 +101,8 @@ export function Lightbox({ props, className, attributes, slotAttributes, slots, 
     swiped.current = true
     step(by)
   }
-  const label = (name: keyof typeof L) => labelOf(props, L, name, { n: index + 1, count: photos.length })
+  const L = labels ? { ...IMAGE_VIEWER_LABELS, ...labels } : IMAGE_VIEWER_LABELS
+  const label = (name: keyof typeof IMAGE_VIEWER_LABELS) => labelOf(props, L, name, { n: index + 1, count: photos.length })
   const photo = photos[index]
   const caption = props.captions === true && photo?.alt ? photo.alt : ''
 
@@ -108,10 +111,10 @@ export function Lightbox({ props, className, attributes, slotAttributes, slots, 
     // oxlint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events
     <div
       {...attributes}
-      {...slotAttributes.children}
+      {...partAttributes.children}
       ref={root}
       className={className ? `${className} ${C.root}` : C.root}
-      data-lightbox-group={group || undefined}
+      data-viewer-group={group || undefined}
       onClick={onClick}
       onKeyDown={onKeyDown}
     >
@@ -119,7 +122,7 @@ export function Lightbox({ props, className, attributes, slotAttributes, slots, 
       {open && photo ? (
         <dialog
           ref={dialog}
-          aria-label={textOr(props.label, 'Photos')}
+          aria-label={label('label')}
           className={C.dialog}
           onClose={() => setPhotos([])}
           onPointerDown={onSwipeStart}
@@ -140,7 +143,7 @@ export function Lightbox({ props, className, attributes, slotAttributes, slots, 
           {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/click-events-have-key-events */}
           <figure className={C.figure} onClick={(event) => event.target === event.currentTarget && close()}>
             <img
-              data-lightbox-photo=""
+              data-viewer-photo=""
               className={C.photo}
               src={photo.src}
               {...(photo.srcSet ? { srcSet: photo.srcSet, sizes: '100vw' } : {})}
@@ -151,15 +154,15 @@ export function Lightbox({ props, className, attributes, slotAttributes, slots, 
               {label('countLabel')}
             </figcaption>
           </figure>
-          <button type="button" data-lightbox-button="close" aria-label={label('closeLabel')} className={`${C.button} ${C.close}`} onClick={close}>
+          <button type="button" data-viewer-button="close" aria-label={label('closeLabel')} className={`${C.button} ${C.close}`} onClick={close}>
             <CloseIcon className={C.icon} />
           </button>
           {photos.length > 1 ? (
             <>
-              <button type="button" data-lightbox-button="previous" aria-label={label('previousLabel')} className={`${C.button} ${C.previous}`} onClick={() => step(-1)}>
+              <button type="button" data-viewer-button="previous" aria-label={label('previousLabel')} className={`${C.button} ${C.previous}`} onClick={() => step(-1)}>
                 <Chevron className={C.icon} direction="left" />
               </button>
-              <button type="button" data-lightbox-button="next" aria-label={label('nextLabel')} className={`${C.button} ${C.next}`} onClick={() => step(1)}>
+              <button type="button" data-viewer-button="next" aria-label={label('nextLabel')} className={`${C.button} ${C.next}`} onClick={() => step(1)}>
                 <Chevron className={C.icon} direction="right" />
               </button>
             </>

@@ -3,7 +3,8 @@ import { describe, test } from 'node:test'
 import { createElement, type ComponentType, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { BlockComponentProps } from '../../render/types'
-import { Accordion, Disclosure } from '.'
+import { Accordion } from './Accordion'
+import { Disclosure } from '.'
 
 const render = (
   Component: ComponentType<BlockComponentProps>,
@@ -18,7 +19,7 @@ const render = (
       className: 'group builder-css',
       slots,
       attributes: {},
-      slotAttributes: { summary: { 'data-slot': 'summary' }, content: { 'data-slot': 'content' }, items: { 'data-slot': 'items' } },
+      partAttributes: { summary: { 'data-slot': 'summary' }, content: { 'data-slot': 'content' }, items: { 'data-slot': 'items' } },
       mode,
     }),
   )

@@ -1,0 +1,213 @@
+// Editable classes in the Styles panel: the target chips, the class banner, the custom CSS box and
+// the class dialogs. Payload CSS variables only, no Tailwind (it would leak into the admin).
+
+@layer payload-default {
+  .builder-classes {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0 0 8px;
+  }
+
+  .builder-classes__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .builder-classes__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    max-width: 100%;
+    height: var(--bs-h);
+    padding: 0 9px;
+    border: 1px solid var(--bs-border);
+    border-radius: 999px;
+    background: var(--theme-elevation-0);
+    color: var(--theme-text);
+    font: inherit;
+    font-size: var(--be-text-m);
+    cursor: pointer;
+
+    &:hover {
+      border-color: var(--theme-elevation-300);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--bs-accent);
+      outline-offset: 1px;
+    }
+
+    &[aria-pressed='true'] {
+      border-color: var(--bs-accent);
+      background: color-mix(in srgb, var(--bs-accent) 12%, var(--theme-elevation-0));
+      color: var(--bs-accent-text);
+    }
+  }
+
+  .builder-classes__chip--class {
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: var(--be-text-s);
+  }
+
+  .builder-classes__chip-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .builder-classes__draft-dot {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--theme-warning-500, #d97706);
+  }
+
+  .builder-classes__add {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: var(--bs-h);
+    height: var(--bs-h);
+    padding: 0;
+    border: 1px dashed var(--bs-border);
+    border-radius: 999px;
+    background: none;
+    color: var(--bs-muted);
+    cursor: pointer;
+
+    &:hover,
+    &[data-popup-open] {
+      border-color: var(--theme-elevation-400);
+      color: var(--theme-text);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--bs-accent);
+      outline-offset: 1px;
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // The class being edited
+  // -------------------------------------------------------------------------
+
+  .builder-classes__banner {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 10px;
+    border: 1px solid color-mix(in srgb, var(--bs-accent) 45%, var(--bs-border));
+    border-radius: var(--style-radius-m, 6px);
+    background: color-mix(in srgb, var(--bs-accent) 7%, var(--theme-elevation-0));
+  }
+
+  .builder-classes__title {
+    margin: 0;
+    font-weight: var(--be-weight-strong);
+
+    code {
+      color: var(--bs-accent-text);
+      font-size: var(--be-text-m);
+    }
+  }
+
+  .builder-classes__label {
+    color: var(--bs-muted);
+    font-weight: normal;
+  }
+
+  .builder-classes__text {
+    margin: 0;
+    color: var(--theme-elevation-750, var(--theme-text));
+  }
+
+  .builder-classes__foot {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+
+    .builder-styles__button--primary:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+  }
+
+  .builder-classes__state {
+    flex: 1;
+    min-width: 0;
+    color: var(--bs-muted);
+    font-size: var(--be-text-s);
+    line-height: 1.35;
+
+    &[data-state='error'] {
+      color: var(--theme-error-500);
+    }
+  }
+
+  .builder-classes__css {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 14px;
+
+    .builder-styles__hint {
+      margin: 0;
+      font-size: var(--be-text-s);
+    }
+  }
+
+  .builder-styles__raw-input.builder-classes__css-input {
+    height: auto;
+    min-height: 104px;
+    padding: 6px 8px;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: var(--be-text-s);
+    line-height: 1.5;
+    white-space: pre;
+    tab-size: 2;
+    resize: vertical;
+
+    &[aria-invalid='true'] {
+      border-color: var(--theme-error-500);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Dialogs (Payload's modal: outside the editor root, so no editor variables)
+  // -------------------------------------------------------------------------
+
+  .builder-classes__dialog-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+    min-width: min(420px, 80vw);
+  }
+
+  .builder-classes__dialog-intro {
+    margin: 0;
+    color: var(--theme-elevation-600);
+  }
+
+  .builder-classes__dialog-styles {
+    display: block;
+    padding: 6px 8px;
+    border-radius: var(--style-radius-s, 4px);
+    background: var(--theme-elevation-50);
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+
+  .builder-classes__dialog-error {
+    margin: -8px 0 0;
+    color: var(--theme-error-500);
+  }
+}

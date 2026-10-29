@@ -24,7 +24,7 @@ export function disclosureBlock(): BlockDefinition {
   return defineBlock({
     type: DISCLOSURE_BLOCK,
     label: 'Disclosure',
-    icon: 'chevronDown',
+    icon: 'disclosure',
     category: 'Interactive',
     fields: [
       { name: 'open', type: 'checkbox', label: 'Open at first', defaultValue: false },
@@ -54,8 +54,8 @@ export function disclosureBlock(): BlockDefinition {
         type: DISCLOSURE_BLOCK,
         className: DISCLOSURE_CLASS,
         slots: {
-          summary: [{ id: 'b_example_1', type: 'heading', props: { text: 'How do I book?', level: '3' }, className: 'text-lg font-medium' }],
-          content: [{ id: 'b_example_2', type: 'text', props: { text: 'Send us a message with a date and a time.' } }],
+          summary: [{ id: 'b_example_1', type: 'heading', props: { text: 'How do I reset my password?', level: '3' }, className: 'text-lg font-medium' }],
+          content: [{ id: 'b_example_2', type: 'text', props: { text: 'Use the "Forgot password" link on the sign-in page.' } }],
         },
       },
     },
@@ -66,7 +66,7 @@ export function accordionBlock(): BlockDefinition {
   return defineBlock({
     type: ACCORDION_BLOCK,
     label: 'Accordion',
-    icon: 'list',
+    icon: 'accordion',
     category: 'Interactive',
     fields: [
       {
@@ -79,11 +79,12 @@ export function accordionBlock(): BlockDefinition {
       {
         name: 'faqSchema',
         type: 'checkbox',
-        label: 'FAQ for search engines',
-        defaultValue: true,
+        label: 'Mark up as FAQ for search engines',
+        defaultValue: false,
         admin: {
           description:
-            "The page's FAQPage JSON-LD lists this accordion's items: the summary text is the question, the content text the answer.",
+            'Only for real questions and answers. The page adds FAQPage structured data (JSON-LD) with these items: ' +
+            'the summary text is the question, the content text the answer. The site must output it (`faqItems`, `faqJsonLd`).',
         },
       },
     ],
@@ -91,13 +92,13 @@ export function accordionBlock(): BlockDefinition {
     defaultClassName: 'flex flex-col divide-y border-y',
     ai: {
       description:
-        'A list of disclosure blocks in its "items" slot. "multiple": false keeps one item open at a time. With "faqSchema" ' +
-        '(on by default) its items feed the page\'s FAQPage JSON-LD: the summary text is the question, the content text the ' +
+        'A list of disclosure blocks in its "items" slot. "multiple": false keeps one item open at a time. Set "faqSchema": true ' +
+        'only when the items are questions and answers: they then feed the page\'s FAQPage JSON-LD: the summary text is the question, the content text the ' +
         'answer. In a template, repeat one disclosure over the document\'s FAQs: the items slot holds a repeat with path ' +
         '"faqs" whose item is a disclosure with a text bound to "question" in "summary" and a text bound to "answer" in "content".',
       example: {
         type: ACCORDION_BLOCK,
-        props: { multiple: false },
+        props: { multiple: false, faqSchema: true },
         className: 'flex flex-col divide-y border-y',
         slots: {
           items: [
@@ -106,8 +107,8 @@ export function accordionBlock(): BlockDefinition {
               type: DISCLOSURE_BLOCK,
               className: DISCLOSURE_CLASS,
               slots: {
-                summary: [{ id: 'b_example_2', type: 'text', props: { text: 'How far ahead should I book?' } }],
-                content: [{ id: 'b_example_3', type: 'text', props: { text: 'A day ahead is best.' } }],
+                summary: [{ id: 'b_example_2', type: 'text', props: { text: 'Do you ship abroad?' } }],
+                content: [{ id: 'b_example_3', type: 'text', props: { text: 'Yes, to most countries.' } }],
               },
             },
           ],

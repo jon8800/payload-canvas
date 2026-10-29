@@ -166,7 +166,9 @@ describe('defaultBlocks', () => {
   it('the menu lists the classes of its panel button, and the field lists its rich text classes', () => {
     const blocks = defaultBlocks()
     const menu = blocks.find((b) => b.type === 'menu')
-    for (const name of ['mt-5', 'rounded-full', 'bg-primary']) assert.ok(menu?.classes?.includes(name), name)
+    for (const name of ['mt-5', 'rounded-full', 'bg-[var(--color-primary,CanvasText)]']) assert.ok(menu?.classes?.includes(name), name)
+    // No design-system class names: colours come from CSS variables with a system colour fallback.
+    for (const name of ['bg-background', 'border-border', 'text-foreground', 'bg-primary']) assert.ok(!menu?.classes?.includes(name), name)
     const field = blocks.find((b) => b.type === 'field')
     for (const name of ['prose', 'max-w-none']) assert.ok(field?.classes?.includes(name), name)
   })

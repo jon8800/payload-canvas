@@ -20,13 +20,16 @@ import {
   TEMPLATE_DEFAULT_FIELD,
   TEMPLATE_LAYOUT_FIELD,
   TEMPLATE_PREVIEW_FIELD,
+  TEMPLATE_PRIORITY_FIELD,
   TEMPLATE_TARGET_FIELD,
   templateConditions,
   withoutBoundRequired,
 } from '../core/bindings'
 import { createId } from '../core/ids'
+import { VISIBILITY_OPERATORS } from '../core/visibility'
 import { blockJsonSchema } from '../core/schema'
-import { getBlockDefinition, sectionsWithDefaultClassNames, sectionsWithVariants } from '../core/blocks'
+import { checkSectionVariants, getBlockDefinition, sectionsWithDefaultClassNames } from '../core/blocks'
+import { findSectionVersion } from '../core/sections'
 import { localeSettingsOf, localizedKeys, resolveLayoutLocale, stampLocale, untranslatedKeys } from '../core/locale'
 import { normalizeLayout, subtreeIds, walkBlocks } from '../core/tree'
 import type { BlockDefinition, Layout, LocaleSettings, Operation, SectionDefinition } from '../core/types'
@@ -45,11 +48,13 @@ import { builderViewPath, documentPath, draftPreviewPath } from '../plugin/links
 import { siteCssConfigOf } from '../plugin'
 import { prepareBlocks } from '../plugin/listCollections'
 import { getStyleTokens } from '../css'
-import { findSection, loadSavedSections, savedSectionsConfigOf } from '../plugin/sections'
+import { DEFAULT_SAVED_SECTIONS_SLUG, loadSavedSections, savedSectionsConfigOf } from '../plugin/sections'
 import { templatesConfigOf } from '../plugin/templates'
 import { generateImageToMedia, imageServiceOf } from '../ai/images/service'
 import { IMAGE_ASPECT_RATIOS } from '../ai/images/ratios'
-import { BINDINGS_GUIDE, describeBlock, layoutGuide, outline, repairRootParents, sectionInsertOps, withNewIds } from './shared'
+import { classesConfigOf, loadClasses, mergeSiteClasses } from '../classes'
+import { classMcpTools } from '../classes/mcp'
+import { BINDINGS_GUIDE, describeBlock, layoutGuide, outline, repairRootParents, sectionInsertOps, variantsListing, withNewIds } from './shared'
 
 // ---------------------------------------------------------------------------
 // Types (structurally compatible with payload-mcp-toolkit's ToolFactoryOutput)
@@ -61,7 +66,7 @@ export type BuilderMcpTool = {
   name: string
   description: string
   parameters: Record<string, ZodTypeAny>
-  routing: { kind: 'collection'; action: 'read' | 'update' | 'create' }
+  routing: { kind: 'collection'; action: 'read' | 'update' | 'create' | 'delete' }
   handler: (args: Record<string, unknown>, req: PayloadRequest, extra: unknown) => Promise<McpToolResult>
 }
 
@@ -87,6 +92,12 @@ export type BuilderMcpToolsOptions = {
   templates?: { slug?: string }
   /** The upload collection `generateImage` saves to: the same as `websiteBuilder({ ai: { mediaCollection } })`. Default "media". */
   mediaCollection?: string
+  /**
+   * The class tools (listClasses, getClass, upsertClass, deleteClass) for the editable classes of
+   * `websiteBuilder({ classes })`. On by default; `false` leaves them out. `slug`: the same as
+   * `classes.slug` there.
+   */
+  classes?: { slug?: string } | false
 }
 
 // ---------------------------------------------------------------------------
@@ -109,6 +120,26 @@ const NO_DIRECT_EDIT =
 const motionArg = z.record(z.string(), z.unknown())
 const MOTION_HINT =
   'Animations: { enter?, hover?, press?, scroll?, loop? }, each kind { preset, ...options }, e.g. { "enter": { "preset": "fade-up" } } (see MOTION in the layout guide).'
+
+const visibilityCondition = z.object({
+  field: z.string().describe('A field path of the document, or $index, $item, $parent.<field>, $page.<field>.'),
+  operator: z.enum(VISIBILITY_OPERATORS),
+  value: z
+    .union([z.string(), z.number(), z.boolean(), z.array(z.union([z.string(), z.number()]))])
+    .optional()
+    .describe('Not for is_set and is_empty. A list for in and not_in.'),
+  valueField: z.string().optional().describe('Compare with this field (same paths as field) instead of value.'),
+  count: z.boolean().optional().describe('true: compare the number of items of an array or hasMany field.'),
+})
+
+const visibilityArg = z
+  .object({
+    match: z.enum(['all', 'any']).optional().describe('"all" (default): every condition must match. "any": one is enough.'),
+    conditions: z
+      .array(z.union([visibilityCondition, z.object({ all: z.array(visibilityCondition).describe('Conditions that must all match.') })]))
+      .describe('The conditions. With match "any", an entry may be a group { all: [...] }: an "or" of "and" groups.'),
+  })
+  .describe('Shows the block only when the conditions match the current document (templates and list items).')
 
 const attrsArg = z
   .object({
@@ -138,7 +169,12 @@ const blockSchema = z
     label: z.string().optional().describe('Name for editors, shown in the outline (e.g. "Hero"). Never rendered. Give each top-level section one.'),
     motion: motionArg.optional().describe(MOTION_HINT),
     attrs: attrsArg.optional(),
-    slotClassName: z.record(z.string(), z.string()).optional().describe('Tailwind classes of a slot\'s own element, by slot name. Only slots marked "classes" in listBlocks take them.'),
+    visibility: visibilityArg.optional(),
+    partClassName: z.record(z.string(), z.string()).optional().describe('Tailwind classes of the block\'s inner elements, by part name. Only the "parts" listed in listBlocks take them.'),
+    section: z
+      .object({ id: z.string().min(1), variant: z.string().optional() })
+      .optional()
+      .describe('Set by insertSection on the root block of a ready-made section. Keep it when you copy the block; never set it yourself.'),
   })
   .passthrough()
 
@@ -171,10 +207,11 @@ const operationSchema = z.discriminatedUnion('type', [
         .optional()
         .describe(`${MOTION_HINT} Merges per kind: a kind you send replaces that kind, null removes a kind, kinds you leave out stay. null removes all motion.`),
       attrs: attrsArg.nullable().optional().describe('HTML attributes. A key replaces that key, null removes it. null removes all.'),
-      slotClassName: z
+      visibility: visibilityArg.nullable().optional().describe('Visibility conditions (see VISIBILITY). Replaces all conditions; null removes them.'),
+      partClassName: z
         .record(z.string(), z.string().nullable())
         .optional()
-        .describe('Classes of a slot\'s own element, by slot name. Each slot given replaces its classes; null removes them.'),
+        .describe('Classes of the block\'s inner elements, by part name (the "parts" in listBlocks). Each part given replaces its classes; null removes them.'),
       locale: z
         .string()
         .optional()
@@ -262,13 +299,18 @@ async function loadDraft(req: PayloadRequest, collection: string, id: string): P
 async function siteClassesOf(req: PayloadRequest | undefined): Promise<Record<string, unknown>> {
   const site = req?.payload?.config ? siteCssConfigOf(req.payload) : null
   if (!site) return {}
-  const list = await getStyleTokens(site.css)
+  const code = await getStyleTokens(site.css)
     .then((tokens) => tokens.siteClasses ?? [])
     .catch(() => [])
+  // The editable classes (the classes collection) first; code classes they replace are left out.
+  const editable = req && classesConfigOf(req.payload) ? await loadClasses(req).catch(() => []) : []
+  const list = mergeSiteClasses(editable, code)
   if (list.length === 0) return {}
   return {
     siteClasses: list.map(({ name, label, group }) => ({ name, ...(label ? { label } : {}), ...(group ? { group } : {}) })),
-    siteClassesNote: "The site's own classes (its look: type styles, buttons, cards, surfaces). Prefer them in className over rebuilding the same look from utilities.",
+    siteClassesNote:
+      "The site's own classes (its look: type styles, buttons, cards, surfaces). Prefer them in className over rebuilding the same look from utilities." +
+      (editable.length > 0 ? ' listClasses shows their styles; upsertClass changes a class for every block that uses it.' : ''),
   }
 }
 
@@ -276,11 +318,13 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
   const templateTargets = Object.entries(options.collections).filter(([, c]) => c.templates).map(([slug]) => slug)
   const templatesSlug = templateTargets.length > 0 ? (options.templates?.slug ?? DEFAULT_TEMPLATES_SLUG) : null
   const listable = Object.entries(options.collections).filter(([, c]) => c.url).map(([slug]) => slug)
-  // The same block list the plugin validates against (collection list: only collections with a url).
-  const blocks = prepareBlocks(options.blocks, listable)
+  // The same block list the plugin validates against (collection list: only collections with a url;
+  // the live saved section block, which the plugin adds when saved sections are on).
+  const blocks = prepareBlocks(options.blocks, listable, DEFAULT_SAVED_SECTIONS_SLUG)
   // A section block without a className gets its type's default classes, as in the plugin.
-  // Each variant is a section of its own (`<id>/<variant id>`).
-  const sections = sectionsWithDefaultClassNames(sectionsWithVariants(options.sections ?? []), blocks)
+  // Variants stay under their section (core/sections.ts); insertSection takes `variant`.
+  checkSectionVariants(options.sections ?? [])
+  const sections = sectionsWithDefaultClassNames(options.sections ?? [], blocks)
   const collections: Record<string, BuilderMcpCollection> = templatesSlug
     ? { ...options.collections, [templatesSlug]: { field: TEMPLATE_LAYOUT_FIELD } }
     : options.collections
@@ -456,7 +500,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     routing: { kind: 'collection', action: 'read' },
     description: [
       'Lists ready-made sections (heroes, features, testimonials, calls to action, contact, footers, …) with an outline of their blocks. Sections are the best way to build a page: insert them with insertSection, then change their text, images and classes with applyOperations "update". Set `full: true` to get the complete block JSON of each section.',
-      'A section can come in variants (other versions of the same section): they follow it in the list with an id like "hero/split" and `variantOf: "hero"`. Pick the version that fits the page.',
+      'A section can come in variants (other versions of the same section, e.g. a split hero): they are listed under it in `variants`. Pick the version that fits the page and pass its id as `variant` to insertSection.',
       'The list also has the sections people saved on this site. They have `saved: true` and an id like "saved:12".',
     ].join('\n'),
     parameters: {
@@ -473,10 +517,10 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
           id: s.id,
           label: s.label,
           ...(s.savedId !== undefined ? { saved: true } : {}),
-          ...(s.variantOf ? { variantOf: s.variantOf } : {}),
           ...(s.category ? { category: s.category } : {}),
           ...(s.description ? { description: s.description } : {}),
           ...(args.full ? { blocks: s.blocks } : { outline: outline(s.blocks).join('\n') }),
+          ...variantsListing(s, args.full === true),
         })),
       })
     },
@@ -496,14 +540,16 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       sectionId: z
         .string()
         .min(1)
-        .describe('The section from listSections: its id (e.g. "hero", the variant "hero/split" or "saved:12") or its exact name.'),
+        .describe('The section from listSections: its id (e.g. "hero" or "saved:12") or its exact name.'),
+      variant: z.string().optional().describe('A variant id from the section\'s `variants` in listSections, e.g. "split". Leave it out for the section itself.'),
       parentId: z.string().nullable().optional().describe('Parent block id. Default null (page root).'),
       slot: z.string().optional().describe('Slot of the parent. Default "children".'),
       index: z.number().int().min(0).optional().describe('Final index in the target list. Default: append.'),
     },
     handler: async (args, req) => {
       const all = await allSections(req)
-      const section = findSection(all, String(args.sectionId))
+      const section = findSectionVersion(all, String(args.sectionId), typeof args.variant === 'string' ? args.variant : undefined)
+      if (typeof section === 'string') return fail(section)
       if (!section) {
         const known = all.map((s) => (s.savedId !== undefined ? `${s.id} ("${s.label}")` : s.id))
         return fail(`Unknown section "${String(args.sectionId)}". Known sections: ${known.join(', ') || 'none'}.`)
@@ -521,6 +567,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       return text({
         ok: true,
         section: section.id,
+        ...(section.blocks[0]?.section?.variant ? { variant: section.blocks[0].section.variant } : {}),
         seq: result.seq,
         inserted,
         insertedIds: inserted.flatMap((b) => subtreeIds(b)),
@@ -590,7 +637,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     routing: { kind: 'collection', action: 'update' },
     description: [
       'Edits the layout of a document with a list of operations, applied in order, all or nothing. Saves a draft about a second later (never publishes). People with the page open in the editor see each change live.',
-      'Operations: insert { block, to }, move { id, to }, remove { id }, duplicate { id, newId? }, update { id, props?, unsetProps?, className?, hidden?, bindings?, label?, motion?, attrs?, slotClassName? }. "update" merges props and bindings; className REPLACES all classes, so send the full list. `motion` (animations, see MOTION below) merges per kind: a kind replaces that kind, null removes it, null alone removes all. `attrs` (HTML id, ariaLabel, ariaHidden) merges per key; null removes a key. `slotClassName` merges per slot; null removes the classes of a slot.',
+      'Operations: insert { block, to }, move { id, to }, remove { id }, duplicate { id, newId? }, update { id, props?, unsetProps?, className?, hidden?, bindings?, visibility?, label?, motion?, attrs?, partClassName? }. "update" merges props and bindings; className REPLACES all classes, so send the full list; visibility REPLACES all conditions (null removes them). `motion` (animations, see MOTION below) merges per kind: a kind replaces that kind, null removes it, null alone removes all. `attrs` (HTML id, ariaLabel, ariaHidden) merges per key; null removes a key. `partClassName` merges per slot; null removes the classes of a slot.',
       'Templates are edited the same way: collection = the templates collection, id = the template id from listTemplates.',
       'If any operation fails, nothing is saved and the error names the failing operation. Call getLayout for current ids first. The result is validated against the block schemas: missing required props are allowed in drafts (warnings), wrong types are errors. insert and move refuse a block that a slot does not accept, also deeper inside (for example no button or form anywhere inside a link). insert, move and duplicate refuse to add a block to a slot that already holds its maxBlocks (listBlocks).',
       'Localized sites: with `locale`, "update" props change that locale\'s values of localized props (a translation); other props and everything else (insert, move, remove, classes) change every locale. Blocks you insert with `locale` hold their localized props in that locale only: the default locale stays empty until someone writes it (required props then block publishing). Without `locale` they hold the default locale\'s values. Sections (insertSection) keep their own text.',
@@ -773,15 +820,17 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     },
   }
 
-  const tools = [listBlocks, getBlockSchema, listSections, insertSection, getLayout, applyOperationsTool, validateLayoutTool, getPreviewUrl, generateImage]
+  // Editable classes: listClasses, getClass, upsertClass, deleteClass.
+  const classTools = options.classes === false ? [] : classMcpTools(options.classes)
+  const tools = [listBlocks, getBlockSchema, listSections, insertSection, getLayout, applyOperationsTool, validateLayoutTool, getPreviewUrl, generateImage, ...classTools]
   if (!templatesSlug) return tools
 
   const listTemplates: BuilderMcpTool = {
     name: 'listTemplates',
     routing: { kind: 'collection', action: 'read' },
     description: [
-      `Lists the templates: layouts that render every document of a collection (${templateTargets.join(', ')}). A document uses its own template (its "template" field), else the first published template (by name) whose "${TEMPLATE_CONDITIONS_FIELD}" (a Payload where query against the document, e.g. { "tier": { "equals": "vip" } }) match it, else its collection's default template.`,
-      `To edit a template, call getLayout and applyOperations with collection "${templatesSlug}" and the template id. Bind props to the document's fields with "bindings" (getBindingSources lists the fields). To create a template, use createDocument on "${templatesSlug}" with { name, ${TEMPLATE_TARGET_FIELD}, ${TEMPLATE_DEFAULT_FIELD} } and optional ${TEMPLATE_CONDITIONS_FIELD}.`,
+      `Lists the templates: layouts that render every document of a collection (${templateTargets.join(', ')}). A document uses its own template (its "template" field), else the published template with the highest "${TEMPLATE_PRIORITY_FIELD}" whose "${TEMPLATE_CONDITIONS_FIELD}" (a Payload where query against the document, e.g. { "featured": { "equals": true } }) match it (equal priority: the older template), else its collection's default template.`,
+      `To edit a template, call getLayout and applyOperations with collection "${templatesSlug}" and the template id. Bind props to the document's fields with "bindings" (getBindingSources lists the fields). To create a template, use createDocument on "${templatesSlug}" with { name, ${TEMPLATE_TARGET_FIELD}, ${TEMPLATE_DEFAULT_FIELD} } and optional ${TEMPLATE_CONDITIONS_FIELD} and ${TEMPLATE_PRIORITY_FIELD}.`,
     ].join('\n'),
     parameters: {
       collection: z.enum([templatesSlug]).describe(`Always "${templatesSlug}".`),
@@ -808,6 +857,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
             target: doc[TEMPLATE_TARGET_FIELD],
             isDefault: doc[TEMPLATE_DEFAULT_FIELD] === true,
             ...(templateConditions(doc) ? { conditions: templateConditions(doc) } : {}),
+            ...(typeof doc[TEMPLATE_PRIORITY_FIELD] === 'number' && doc[TEMPLATE_PRIORITY_FIELD] !== 0 ? { priority: doc[TEMPLATE_PRIORITY_FIELD] } : {}),
             ...(doc[TEMPLATE_PREVIEW_FIELD] ? { previewDocument: doc[TEMPLATE_PREVIEW_FIELD] } : {}),
             ...(doc._status ? { status: doc._status } : {}),
             blocks: normalizeLayout(doc[TEMPLATE_LAYOUT_FIELD]).blocks.length,

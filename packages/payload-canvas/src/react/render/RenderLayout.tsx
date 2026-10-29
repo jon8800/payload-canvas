@@ -1,5 +1,6 @@
 import { Fragment, memo, type ReactNode } from 'react'
 import {
+  blockParts,
   blocksHaveMotion,
   COLLECTION_LIST_BLOCK,
   htmlAttributes,
@@ -19,7 +20,6 @@ import {
   type TemplateContext,
 } from '../../core'
 import { defaultBlocks, isLinkField, SECTION_REF_SLOT, withBuilderCssClass } from '../../blocks'
-import { classFields } from '../../core/classes'
 import { defaultComponents } from '../components'
 import { fieldFor } from '../components/Field'
 import { richTextFor } from '../components/RichText'
@@ -28,10 +28,10 @@ import { defaultResolveLink, resolveLinkValue } from './link'
 import { listItemsOf } from './lists'
 import { MotionRuntime } from '../motion/MotionRuntime'
 import { MotionStyle } from '../motion/style'
-import { readsPageData } from './marks'
+import { readsClientLinks, readsLinkComponent, readsPageData } from './marks'
+import { relationsIn, RELATIONS_PROP } from './relations'
 import { urlResolver } from './resolve'
-import { SlotOutlet } from './SlotOutlet'
-import type { BlockComponents, BlockComponentProps, PageData, RenderLayoutProps, RenderMode, ResolveLink } from './types'
+import type { BlockComponents, BlockComponentProps, LinkComponent, PageData, RenderLayoutProps, RenderMode, ResolveLink } from './types'
 
 type Context = {
   mode: RenderMode
@@ -39,10 +39,10 @@ type Context = {
   definitions: Map<string, BlockDefinition>
   resolveLinks: VisitField
   binding: BindingOptions
-  /** The document bindings and Field blocks read. Inside a collection list: the item; inside a field list: the row. */
+  /** The document bindings and Field blocks read. Inside a collection list: the item; inside a repeat: the row. */
   context: TemplateContext | null
   /**
-   * Canvas only: a repeated collection list item or field list row after the first. Its blocks get
+   * Canvas only: a repeated collection list item or repeat row after the first. Its blocks get
    * `data-builder-repeat` instead of editor attributes, so selection maps to the first item.
    */
   repeat: boolean
@@ -53,6 +53,17 @@ type Context = {
   copy: boolean
   /** Given to components that read the page data (see `withPageData`). */
   pageData: PageData | null
+  /** Server renders for the canvas (`renderPreviewBlock`): the components' `canvasMode` prop. */
+  canvasMode?: 'canvas' | 'thumbnail'
+  /** Server renders for the canvas: what stands in for each slot's children (see `preview.tsx`). */
+  slotOutlet?: (slot: string) => ReactNode
+  /** Site only: given to components marked with `withLinkComponent`. */
+  linkComponent: LinkComponent | null
+  /**
+   * Site only: how many more images load first. One object shared by every block of the first
+   * section, so the count runs in page order. `null` outside the first section.
+   */
+  priority: { left: number } | null
 }
 
 const PLACEHOLDER_STYLE = { minHeight: 48, minWidth: 48 }
@@ -125,6 +136,9 @@ const showsEmpty = (block: Block) => block.type === COLLECTION_LIST_BLOCK && lis
  */
 function renderListItems(block: Block, ctx: Context): ReactNode {
   const contexts = repeatContexts(block, ctx.context)
+  // `loadLayoutData` gives lists the relationship map their items' `<path>.$url` bindings need.
+  const relations = relationsIn(block.props)
+  const binding = relations ? { ...ctx.binding, relations } : ctx.binding
   const children = block.slots?.[LIST_ITEM_SLOT] ?? []
   if (contexts.length === 0) {
     if (ctx.mode !== 'canvas') return null
@@ -139,6 +153,7 @@ function renderListItems(block: Block, ctx: Context): ReactNode {
         {
           ...ctx,
           context,
+          binding,
           repeat: ctx.repeat || (ctx.mode === 'canvas' && i > 0),
           copy: ctx.copy || i > 0,
         },
@@ -152,29 +167,33 @@ function renderListItems(block: Block, ctx: Context): ReactNode {
 function componentPropsOf(block: Block, ctx: Context): Record<string, unknown> {
   let props = block.props ?? {}
   // List documents stay with the renderer: components get rendered items, not data.
-  if (LIST_ITEMS_PROP in props) {
-    const { [LIST_ITEMS_PROP]: _items, ...rest } = props
+  if (LIST_ITEMS_PROP in props || RELATIONS_PROP in props) {
+    const { [LIST_ITEMS_PROP]: _items, [RELATIONS_PROP]: _relations, ...rest } = props
     props = rest
   }
   const definition = ctx.definitions.get(block.type)
   const fields = definition?.fields as FieldLike[] | undefined
-  const mapped = fields ? mapFieldValues(props, fields, ctx.resolveLinks) : props
-  // Class props get the marker class, so the generated CSS reaches them. A missing one gets its default.
-  const own = classFields(definition)
-  if (own.length === 0) return mapped
-  const marked = { ...mapped }
-  for (const field of own) {
-    const fallback = (field as { defaultValue?: unknown }).defaultValue
-    const value = field.name in marked ? marked[field.name] : fallback
-    if (typeof value === 'string') marked[field.name] = withBuilderCssClass(value)
-  }
-  return marked
+  return fields ? mapFieldValues(props, fields, ctx.resolveLinks) : props
+}
+
+/**
+ * True when the block's image loads first: its `priority` prop is on, or not set while the
+ * first section still has images to give priority to (`priorityImages`). Each one counts.
+ */
+function takesPriority(block: Block, ctx: Context): boolean {
+  const own = block.props?.priority
+  if (!ctx.priority || ctx.priority.left <= 0 || own === false) return own === true
+  const definition = ctx.definitions.get(block.type)
+  const hasPriority = definition?.fields?.some((field) => 'name' in field && field.name === 'priority')
+  if (!hasPriority) return own === true
+  ctx.priority.left -= 1
+  return true
 }
 
 /**
  * One block. `preview`: the block renders on the server for the canvas (`renderPreviewBlock`).
- * It gets no editor attributes (the canvas adds them to its first element), and each slot is a
- * `SlotOutlet`, where the canvas shows the children it rendered itself.
+ * It gets no editor attributes (the canvas adds them to its first element), and each slot is
+ * `ctx.slotOutlet`, where the canvas shows the children it rendered itself.
  */
 function renderBlock(stored: Block, ctx: Context, preview = false, item = false): ReactNode {
   const canvas = ctx.mode === 'canvas'
@@ -184,7 +203,7 @@ function renderBlock(stored: Block, ctx: Context, preview = false, item = false)
   const block = ctx.context
     ? resolveBlockBindings(stored, ctx.context, ctx.definitions.get(stored.type), ctx.binding)
     : stored
-  // A `$visible` binding that does not hold hides the block (the canvas shows it dimmed).
+  // Visibility conditions that do not match hide the block (the canvas shows it dimmed).
   if (block.hidden && !editor) return null
 
   const attributes: Record<string, string> = preview
@@ -217,43 +236,54 @@ function renderBlock(stored: Block, ctx: Context, preview = false, item = false)
     )
   }
 
+  // Before the slots: a backdrop's image comes before the images inside it.
+  const priority = takesPriority(block, ctx)
   const slots: Record<string, ReactNode> = {}
-  const slotAttributes: Record<string, Record<string, string>> = {}
+  const partAttributes: Record<string, Record<string, string>> = {}
+  const definition = ctx.definitions.get(block.type)
   const isList = isRepeatSlot(block.type, LIST_ITEM_SLOT)
   for (const slot of slotNamesOf(block, ctx)) {
     if (slot === SECTION_REF_SLOT) {
       // A live saved section: its blocks render as repeats on the canvas (the ref is what the
       // editor selects), and its runtime slot is never a drop target.
       slots[slot] = renderBlocks(block.slots?.[slot] ?? [], { ...ctx, repeat: ctx.repeat || canvas })
-      slotAttributes[slot] = {}
+      partAttributes[slot] = {}
       continue
     }
-    if (preview) slots[slot] = <SlotOutlet name={slot} />
+    if (preview) slots[slot] = ctx.slotOutlet?.(slot) ?? null
     else if (isRepeatSlot(block.type, slot)) slots[slot] = renderListItems(block, ctx)
     else if (block.type === COLLECTION_LIST_BLOCK && slot === LIST_EMPTY_SLOT) slots[slot] = showsEmpty(block) ? renderSlot(block, slot, ctx) : null
     else slots[slot] = renderSlot(block, slot, ctx)
-    slotAttributes[slot] = editor ? { 'data-slot-owner': block.id, 'data-slot': slot } : {}
-    // A slot with its own element takes its own classes (`styles: true` on the slot).
-    const slotClass = ctx.definitions.get(block.type)?.slots?.[slot]?.styles ? withBuilderCssClass(stored.slotClassName?.[slot]) : undefined
-    if (slotClass) slotAttributes[slot].className = slotClass
+    partAttributes[slot] = editor ? { 'data-slot-owner': block.id, 'data-slot': slot } : {}
   }
   if (isList && !(LIST_ITEM_SLOT in slots)) {
     slots[LIST_ITEM_SLOT] = renderListItems(block, ctx)
-    slotAttributes[LIST_ITEM_SLOT] = {}
+    partAttributes[LIST_ITEM_SLOT] = {}
+  }
+  // Parts (styled slots and `parts`) carry their own classes, with the marker class.
+  for (const part of blockParts(definition)) {
+    const own = (partAttributes[part.name] ??= {})
+    const partClass = withBuilderCssClass(stored.partClassName?.[part.name])
+    if (partClass) own.className = partClass
   }
 
+  const props = componentPropsOf(block, ctx)
   // Plain data only: a component may be a client component rendered from the server.
   const componentProps: BlockComponentProps = {
     block: stored,
-    props: componentPropsOf(block, ctx),
+    props: priority && props.priority !== true ? { ...props, priority: true } : props,
     // The marker class: the generated CSS styles only elements that have it.
     className: withBuilderCssClass(block.className),
     slots,
     attributes,
-    slotAttributes,
+    partAttributes,
+    slotAttributes: partAttributes,
     mode: ctx.mode,
   }
   if (ctx.pageData && readsPageData(Component)) componentProps.pageData = ctx.pageData
+  if (ctx.canvasMode) componentProps.canvasMode = ctx.canvasMode
+  if (ctx.linkComponent && readsLinkComponent(Component)) componentProps.linkComponent = ctx.linkComponent
+  if (ctx.linkComponent && readsClientLinks(Component)) componentProps.clientLinks = true
   return <Component key={block.id} {...componentProps} />
 }
 
@@ -265,6 +295,7 @@ function createContext(
   context: TemplateContext | null,
   pageData: PageData | null,
   relations: BindingRelations | null = null,
+  linkComponent: LinkComponent | null = null,
 ): Context {
   return {
     mode,
@@ -277,6 +308,9 @@ function createContext(
     repeat: false,
     copy: false,
     pageData,
+    // The editor keeps plain links: a client-side router link would navigate the canvas.
+    linkComponent: mode === 'site' ? linkComponent : null,
+    priority: null,
   }
 }
 
@@ -295,8 +329,9 @@ function contextFor(
   context: TemplateContext | null,
   pageData: PageData | null,
   relations: BindingRelations | null,
+  linkComponent: LinkComponent | null,
 ): Context {
-  if (mode !== 'canvas') return createContext(mode, components, blocks, resolveLink, context, pageData, relations)
+  if (mode !== 'canvas') return createContext(mode, components, blocks, resolveLink, context, pageData, relations, linkComponent)
   const inputs = [components, blocks, resolveLink, context, pageData, relations]
   if (canvasContext && canvasContext.inputs.every((input, i) => input === inputs[i])) return canvasContext.ctx
   canvasContext = { inputs, ctx: createContext(mode, components, blocks, resolveLink, context, pageData, relations) }
@@ -305,6 +340,15 @@ function contextFor(
 
 function linkVisitor(resolveLink: ResolveLink): VisitField {
   return (field, value) => (isLinkField(field) ? resolveLinkValue(value, resolveLink) : value)
+}
+
+/**
+ * The site's top-level blocks. The first shown one (the first section) gives its first
+ * `priorityImages` images priority: it is the part of the page a visitor sees first.
+ */
+function renderSections(blocks: Block[], ctx: Context, priorityImages: number): ReactNode[] {
+  const first = blocks.findIndex((block) => !block.hidden)
+  return blocks.map((block, i) => renderBlock(block, i === first ? { ...ctx, priority: { left: priorityImages } } : ctx))
 }
 
 /**
@@ -323,28 +367,32 @@ export function RenderLayout({
   context,
   pageData,
   relations,
+  linkComponent,
+  priorityImages = 1,
 }: RenderLayoutProps): ReactNode {
-  const ctx = contextFor(mode, components, blocks, resolveLink, context ?? null, pageData ?? null, relations ?? null)
+  const ctx = contextFor(mode, components, blocks, resolveLink, context ?? null, pageData ?? null, relations ?? null, linkComponent ?? null)
   const motion = mode === 'site' && blocksHaveMotion(layout.blocks)
   return (
     <>
       <BuilderStyle css={css} />
       {motion && <MotionStyle blocks={layout.blocks} />}
-      {renderBlocks(layout.blocks, ctx)}
+      {mode === 'site' && priorityImages > 0 ? renderSections(layout.blocks, ctx, priorityImages) : renderBlocks(layout.blocks, ctx)}
       {motion && <MotionRuntime />}
     </>
   )
 }
 
-export type PreviewBlockOptions = Pick<RenderLayoutProps, 'components' | 'blocks' | 'resolveLink' | 'context' | 'pageData'>
+export type PreviewBlockOptions = Pick<RenderLayoutProps, 'components' | 'blocks' | 'resolveLink' | 'context' | 'pageData'> & {
+  /** Which canvas the block renders for. Default `'canvas'`. The component gets it as `canvasMode`. */
+  canvasMode?: 'canvas' | 'thumbnail'
+}
 
 /**
- * Server preview for the canvas (`createCanvasServer`): renders one block (its data already
- * loaded) as the canvas would, with the given components. It gets no editor attributes, and each
- * slot is a `SlotOutlet`: the canvas fills it with the children it renders itself, so they stay
- * editable. Its slot containers get the editor's slot attributes, as on the canvas.
+ * One block rendered as the canvas would, with `slotOutlet` for each slot's children. Use
+ * `renderPreviewBlock` (`preview.tsx`): this module must not import the client `SlotOutlet`, or
+ * every site page would ship it.
  */
-export function renderPreviewBlock(block: Block, options: PreviewBlockOptions = {}): ReactNode {
+export function renderBlockPreview(block: Block, options: PreviewBlockOptions, slotOutlet: (slot: string) => ReactNode): ReactNode {
   const ctx = createContext(
     'canvas',
     options.components,
@@ -353,6 +401,8 @@ export function renderPreviewBlock(block: Block, options: PreviewBlockOptions = 
     options.context ?? null,
     options.pageData ?? null,
   )
+  ctx.canvasMode = options.canvasMode ?? 'canvas'
+  ctx.slotOutlet = slotOutlet
   return renderBlock(block, ctx, true)
 }
 

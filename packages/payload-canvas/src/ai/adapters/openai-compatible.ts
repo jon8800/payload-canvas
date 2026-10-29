@@ -55,6 +55,7 @@ export function openAICompatibleAdapter(options: OpenAICompatibleAdapterOptions 
     url: chatCompletionsUrl(baseURL),
     // No key is fine for local servers: a 401 then says what to set.
     authHeaders: key ? { Authorization: bearer(key) } : {},
+    keyHeaders: (adminKey) => ({ Authorization: bearer(adminKey) }),
     ready: setupProblem === null,
     setupProblem,
     keyEnv: keyEnv ?? null,

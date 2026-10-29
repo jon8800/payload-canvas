@@ -10,6 +10,7 @@ import {
   getBlockDefinition,
   outlineDropTarget,
   starterSlots,
+  withDefaultClasses,
   withFieldDefaults,
 } from '../../core'
 import type {
@@ -38,6 +39,7 @@ import { createThumbnailService, type ThumbnailService } from './sections/thumbn
 import type { CollaboratorCursor, LiveState, Peer, PeerCursor } from './live'
 import { initialTemplateState, type TemplateState } from './templates/state'
 import { createRegionsController, type RegionsController } from './regions/controller'
+import { createClassesController, type ClassesController } from './classes/controller'
 
 export const OUTLINE_INDENT = 16
 
@@ -128,6 +130,8 @@ export type Runtime = {
   insertSpot: ValueStore<InsertSpot | null>
   /** Saved sections and the section dialog. */
   sections: SectionsController
+  /** Editable classes: the list, usage, the class the Styles panel edits, writes. Null when turned off. */
+  classes: ClassesController | null
   /** Real thumbnails of sections for the library. */
   thumbnails: ThumbnailService
   /** Payload's REST route, e.g. "/api". */
@@ -203,6 +207,7 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
     document: { collection: document.collection, id: document.id },
     ...(config.regions?.length ? { regions: config.regions } : {}),
     ...(config.relations && Object.keys(config.relations).length > 0 ? { relations: config.relations } : {}),
+    ...(config.classes ? { classesEndpoint: config.classes.endpoint } : {}),
   }
   const runtime: Runtime = {
     config,
@@ -237,7 +242,11 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
           problemsRequest.set(Date.now())
           return problemSummary(list) || null
         },
-        onPublished: () => problems.set([]),
+        onPublished: () => {
+          problems.set([])
+          // Publishing the page published its classes with unpublished changes.
+          void runtime.classes?.load()
+        },
         // The settings drawer, a region or a rename saved a field: its old problem is gone.
         onFieldsSaved: (fields) => problems.set(withoutSavedFields(problems.get(), fields)),
       },
@@ -247,6 +256,7 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
     problemsRequest,
     assistant: null,
     regions: null,
+    classes: null,
     assistantFlash: createValueStore<ReadonlyMap<string, number>>(new Map()),
     assistantFocus: createValueStore(0),
     toggleAssistant(open) {
@@ -297,13 +307,12 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
     createBlock(type) {
       const def = getBlockDefinition(config.blocks, type)
       if (!def) return null
-      const block: Block = { id: createId(), type }
+      // A Payload blocks field stores no classes: a new block there starts without them.
+      const block: Block = config.storage === 'payload-blocks' ? { id: createId(), type } : withDefaultClasses({ id: createId(), type }, def)
       // Field defaults that are plain data, inside groups, rows and tabs too (function defaults
       // were stripped from the client config). From now on the block stores its own values.
       const props = withFieldDefaults({}, def.fields)
       if (Object.keys(props).length > 0) block.props = props
-      // A Payload blocks field stores no classes: a new block there starts without them.
-      if (def.defaultClassName && config.storage !== 'payload-blocks') block.className = def.defaultClassName
       // A new list starts with one list item (see `starterSlots`).
       const slots = starterSlots(config.blocks, type, createId)
       if (slots) block.slots = slots
@@ -320,6 +329,10 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
     runtime.notify('Blocks, styles and fields that are not translated change in every language.')
   })
   if (config.ai) runtime.assistant = createAssistant(runtime, config.ai.endpoint)
+  if (config.classes) {
+    runtime.classes = createClassesController(config.classes, api, store)
+    if (typeof window !== 'undefined') void runtime.classes.load()
+  }
   if (config.regions?.length) {
     const regions = createRegionsController({
       regions: config.regions,

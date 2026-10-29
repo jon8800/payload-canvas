@@ -170,7 +170,7 @@ describe('websiteBuilder theme option', () => {
 
   it('leaves the theme out with theme: false', () => {
     const config = run(false)
-    assert.equal(config.globals?.length, 0)
+    assert.ok(!config.globals?.some((g) => g.slug === 'theme-settings'))
     assert.equal(config.custom?.[THEME_CONFIG_KEY], undefined)
     assert.ok(!config.endpoints?.some((e) => e.path === '/builder/theme'))
   })

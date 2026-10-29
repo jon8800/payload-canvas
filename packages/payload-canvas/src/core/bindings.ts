@@ -6,10 +6,12 @@
 // literal prop.
 
 import { isLinkField } from '../blocks/link'
+import { COLLECTION_LIST_BLOCK, PAGE_PARAM, REPEAT_BLOCK } from './blockNames'
 import { dataFields, type DataField } from './fields'
 import { isPlainObject, walkBlocks } from './tree'
 import type { Block, BindingField, BlockDefinition, BlockProps, Layout, TemplateContext } from './types'
 import type { LayoutError } from './validate'
+import { VALUELESS_OPERATORS, visibilityConditions, visibilityGroups, type BlockVisibility, type VisibilityCondition } from './visibility'
 
 // ---------------------------------------------------------------------------
 // Names shared by the plugin, the renderer and the editor
@@ -27,10 +29,15 @@ export const TEMPLATE_PREVIEW_FIELD = 'previewDocument'
 export const TEMPLATE_LAYOUT_FIELD = 'layout'
 /**
  * Templates collection: an optional Payload `where` query against the document. A document
- * without a template of its own uses the first published template (by name) whose conditions
- * match it, before the default template.
+ * without a template of its own uses the matching template with the highest priority
+ * (`TEMPLATE_PRIORITY_FIELD`), before the default template.
  */
 export const TEMPLATE_CONDITIONS_FIELD = 'conditions'
+/**
+ * Templates collection: a number that orders templates with conditions. When several match a
+ * document, the highest priority wins; on equal priority the older template wins.
+ */
+export const TEMPLATE_PRIORITY_FIELD = 'priority'
 /** Template-enabled collections: the relationship to the document's own template. */
 export const DOCUMENT_TEMPLATE_FIELD = 'template'
 
@@ -43,13 +50,14 @@ export function templateConditions(template: Record<string, unknown> | null | un
   return isPlainObject(value) && Object.keys(value).length > 0 ? value : null
 }
 
+// The block and query names client components need live in a module without imports.
+export { COLLECTION_LIST_BLOCK, PAGE_PARAM, REPEAT_BLOCK }
+
 /** Virtual binding path: the frontend URL of the context document (from the link resolver). */
 export const URL_PATH = '$url'
 
 /** The Field block: shows the context document's value at `props.path`. */
 export const FIELD_BLOCK = 'field'
-/** The collection list block: renders its `item` slot once per loaded document. */
-export const COLLECTION_LIST_BLOCK = 'collectionList'
 /** Slot of the collection list block that holds the template for one item. */
 export const LIST_ITEM_SLOT = 'item'
 /**
@@ -59,15 +67,8 @@ export const LIST_ITEM_SLOT = 'item'
 export const LIST_ITEMS_PROP = '$items'
 /** Runtime-only prop of the Field block: the resolved value. It is never stored. */
 export const FIELD_VALUE_PROP = 'value'
-/**
- * The repeat block: renders its `item` slot once per row of an array or hasMany field of the
- * current document (`props.path`). The rows are its runtime-only `$items` prop.
- */
-export const REPEAT_BLOCK = 'repeat'
 /** Collection list slot shown when the list has no documents. */
 export const LIST_EMPTY_SLOT = 'empty'
-/** The URL query parameter of a paginated list's page (`?page=3`). Filter links drop it. */
-export const PAGE_PARAM = 'page'
 /** Virtual binding path inside a repeat item: the row value itself (a document, an upload, a text). */
 export const ITEM_PATH = '$item'
 /** Virtual binding path inside a collection list or repeat item: the item number, from 1. */
@@ -76,11 +77,6 @@ export const INDEX_PATH = '$index'
 export const PARENT_PATH = '$parent'
 /** Virtual path prefix: the page's own document (`$page.title`), also inside list and repeat items. */
 export const PAGE_PATH = '$page'
-/**
- * Binding key that shows or hides the block: `"field"` shows it when the field is filled,
- * `"!field"` when it is empty, `"field=value"` when it equals the value, `"field!=value"` when not.
- */
-export const VISIBLE_BINDING = '$visible'
 
 /** True for the slot that repeats per item: the `item` slot of a collection list or a repeat. */
 export function isRepeatSlot(type: string, slot: string): boolean {
@@ -466,18 +462,37 @@ function pathValue(context: TemplateContext, path: string, options?: BindingOpti
 
 const currencyFormats = new Map<string, Intl.NumberFormat>()
 
-/** First sentence of plain text: up to the first ".", "!" or "?" followed by a space or the end. */
-function firstSentence(text: string): string {
-  const match = /^.*?[.!?](?=\s|$)/s.exec(text.trim())
-  return (match ? match[0] : text).trim()
+/** A number from a number or a numeric text; null otherwise. */
+function numberOf(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value !== 'string' || value.trim() === '') return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 /**
- * Formatters for binding expressions (`price|currency:AUD`). Each takes a value that is not
- * missing and returns text, or undefined when it cannot format the value.
+ * `text` cut to `count` words or characters, with "…" when something was cut. A cut by characters
+ * ends on a whole word when that keeps at least half of them.
+ */
+function truncate(text: string, count: number, unit: 'words' | 'characters'): string {
+  const flat = text.replace(/\s+/g, ' ').trim()
+  if (unit === 'words') {
+    const words = flat.split(' ')
+    return words.length <= count ? flat : `${words.slice(0, count).join(' ')}…`
+  }
+  if (flat.length <= count) return flat
+  const cut = flat.slice(0, count)
+  const space = cut.lastIndexOf(' ')
+  return `${(space >= count / 2 ? cut.slice(0, space) : cut).trimEnd()}…`
+}
+
+/**
+ * Formatters for binding expressions (`price|currency:EUR`). Each takes a value that is not
+ * missing and returns text, or undefined when it cannot format the value. Arguments follow the
+ * name, separated by ":". The editor's format picker lists them (`BINDING_FORMATTER_INFO`).
  */
 export const BINDING_FORMATTERS: Record<string, (value: unknown, args: string[]) => string | undefined> = {
-  /** `date[:locale[:timeZone]]`, e.g. `date:en-AU:Australia/Brisbane`. Default `en`, UTC. */
+  /** `date[:locale[:timeZone]]`, e.g. `date:en-GB:Europe/London`. Default `en`, UTC. */
   date(value, [locale, timeZone]) {
     const date = value instanceof Date ? value : typeof value === 'string' || typeof value === 'number' ? new Date(value) : null
     if (!date || Number.isNaN(date.getTime())) return undefined
@@ -487,18 +502,20 @@ export const BINDING_FORMATTERS: Record<string, (value: unknown, args: string[])
       return formatDate(date)
     }
   },
-  /** `currency[:code[:locale]]`, e.g. `currency:AUD` gives "$1,200". Whole amounts have no cents. */
-  currency(value, [code = 'USD', locale = 'en']) {
-    const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN
-    if (!Number.isFinite(n)) return undefined
+  /** `currency[:code[:locale]]`, e.g. `currency:EUR` gives "€1,200". Whole amounts have no cents. */
+  currency(value, [code, locale]) {
+    const n = numberOf(value)
+    if (n === null) return undefined
+    const currency = (code || 'USD').toUpperCase()
+    const language = locale || 'en'
     const whole = Number.isInteger(n)
-    const key = `${code}\u0000${locale}\u0000${whole}`
+    const key = `${currency}\u0000${language}\u0000${whole}`
     try {
       let format = currencyFormats.get(key)
       if (!format) {
-        format = new Intl.NumberFormat(locale, {
+        format = new Intl.NumberFormat(language, {
           style: 'currency',
-          currency: code.toUpperCase(),
+          currency,
           currencyDisplay: 'narrowSymbol',
           ...(whole ? { minimumFractionDigits: 0, maximumFractionDigits: 0 } : {}),
         })
@@ -510,25 +527,82 @@ export const BINDING_FORMATTERS: Record<string, (value: unknown, args: string[])
     }
   },
   /** `number[:locale]`: digit grouping, e.g. "1,200". */
-  number(value, [locale = 'en']) {
-    const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN
-    if (!Number.isFinite(n)) return undefined
+  number(value, [locale]) {
+    const n = numberOf(value)
+    if (n === null) return undefined
     try {
-      return new Intl.NumberFormat(locale).format(n)
+      return new Intl.NumberFormat(locale || 'en').format(n)
     } catch {
       return String(n)
     }
   },
-  /** `firstSentence`: the first sentence of the plain text (rich text too). */
-  firstSentence(value) {
+  /** `uppercase`: the plain text in capitals. */
+  uppercase(value) {
+    return toPlainText(value)?.toUpperCase()
+  },
+  /** `lowercase`: the plain text in small letters. */
+  lowercase(value) {
+    return toPlainText(value)?.toLowerCase()
+  },
+  /**
+   * `truncate:count[:words]`: the plain text (rich text too) cut to `count` characters, or to
+   * `count` words with `:words`, with "…" when something was cut. E.g. `truncate:160`, `truncate:25:words`.
+   */
+  truncate(value, [count, unit]) {
     const text = toPlainText(value)
-    return text ? firstSentence(text) : undefined
+    if (text === undefined) return undefined
+    const n = numberOf(count)
+    if (n === null || n < 1) return text
+    return truncate(text, Math.floor(n), unit === 'words' ? 'words' : 'characters')
+  },
+}
+
+/** One argument of a formatter, for the editor's format picker. */
+export type BindingFormatterArg = {
+  label: string
+  /** An example value, shown as the input's placeholder. */
+  placeholder?: string
+  /** A fixed choice instead of free text. */
+  options?: ReadonlyArray<{ value: string; label: string }>
+}
+
+/** The formatters the editor offers: a label and the arguments in order. */
+export const BINDING_FORMATTER_INFO: Record<string, { label: string; args: BindingFormatterArg[] }> = {
+  date: {
+    label: 'Date',
+    args: [
+      { label: 'Language', placeholder: 'en' },
+      { label: 'Time zone', placeholder: 'UTC' },
+    ],
+  },
+  number: { label: 'Number', args: [{ label: 'Language', placeholder: 'en' }] },
+  currency: {
+    label: 'Currency',
+    args: [
+      { label: 'Currency code', placeholder: 'USD' },
+      { label: 'Language', placeholder: 'en' },
+    ],
+  },
+  uppercase: { label: 'Uppercase', args: [] },
+  lowercase: { label: 'Lowercase', args: [] },
+  truncate: {
+    label: 'Shorten',
+    args: [
+      { label: 'Length', placeholder: '160' },
+      {
+        label: 'Count',
+        options: [
+          { value: '', label: 'characters' },
+          { value: 'words', label: 'words' },
+        ],
+      },
+    ],
   },
 }
 
 /**
- * A value through one formatter, written as in a binding: "currency:AUD", "date:en-AU:Australia/Brisbane",
- * "number" or "firstSentence". Undefined for an unknown formatter, a missing value or a value the
+ * A value through one formatter, written as in a binding: "currency:EUR", "date:en-GB:Europe/London",
+ * "number" or "truncate:160". Undefined for an unknown formatter, a missing value or a value the
  * formatter cannot read. The field block's `format` prop uses it.
  */
 export function formatBindingValue(value: unknown, format: string): string | undefined {
@@ -537,31 +611,76 @@ export function formatBindingValue(value: unknown, format: string): string | und
   return BINDING_FORMATTERS[formatter.name]!(value, formatter.args)
 }
 
-/** One `|` part of an expression: a formatter (by name, after the first part) or a path. */
+/** One `|` part read as a formatter (`name:arg:arg`). Null when the name is not a formatter. */
 function formatterOf(part: string): { name: string; args: string[] } | null {
   const [name = '', ...args] = part.split(':')
   return Object.hasOwn(BINDING_FORMATTERS, name) ? { name, args } : null
 }
 
+/** A formatter with its arguments, e.g. `{ name: 'currency', args: ['EUR'] }` for "currency:EUR". */
+export type BindingFormat = { name: string; args: string[] }
+type Formatter = BindingFormat
+
+/** The text of a formatter: the name and the arguments joined by ":", without trailing empty arguments. */
+export function bindingFormatText(format: BindingFormat): string {
+  const args = format.args.map((arg) => arg.trim())
+  while (args.length > 0 && !args.at(-1)) args.pop()
+  return [format.name, ...args].join(':')
+}
+
 /**
- * One expression: paths separated by `|` (the first that is not missing wins), then formatters
- * (`a|b|date:en-AU`). The first part is always a path.
+ * The paths and formatters of one expression. The first part is always a path. After it, a part
+ * whose name (before the first ":") is a formatter is a formatter, also when a field has that
+ * name: `title|date` formats `title` and never falls back to a field called `date` (put such a
+ * field first: `date|title`). The other parts are fallback paths. Paths after a formatter are
+ * ignored.
  */
+function splitExpression(expression: string): { paths: string[]; formatters: Formatter[] } {
+  const paths: string[] = []
+  const formatters: Formatter[] = []
+  expression.split('|').forEach((raw, i) => {
+    const part = raw.trim()
+    if (!part) return
+    const formatter = i > 0 ? formatterOf(part) : null
+    if (formatter) formatters.push(formatter)
+    else if (formatters.length === 0) paths.push(part)
+  })
+  return { paths, formatters }
+}
+
+/** One expression: the first path whose value is not missing, through the formatters in order. */
 function expressionValue(context: TemplateContext, expression: string, options?: BindingOptions): unknown {
-  const parts = expression.split('|').map((part) => part.trim())
+  const { paths, formatters } = splitExpression(expression)
   let value: unknown
-  let i = 0
-  for (; i < parts.length; i++) {
-    if (i > 0 && formatterOf(parts[i]!)) break
-    if (isMissing(value)) value = pathValue(context, parts[i]!, options)
+  for (const path of paths) {
+    value = pathValue(context, path, options)
+    if (!isMissing(value)) break
   }
-  for (; i < parts.length; i++) {
-    const formatter = formatterOf(parts[i]!)
-    if (!formatter) continue
+  for (const formatter of formatters) {
     if (isMissing(value)) return undefined
     value = BINDING_FORMATTERS[formatter.name]!(value, formatter.args)
   }
   return value
+}
+
+/**
+ * A binding as the editor shows it: one or more paths (a fallback chain) and at most one
+ * formatter, e.g. `publishedAt|date:en-GB`. Null for templates (`{{ }}`) and for several
+ * formatters: the editor shows those as text.
+ */
+export type BindingParts = { paths: string[]; format: Formatter | null }
+
+export function bindingParts(binding: string): BindingParts | null {
+  if (binding.includes('{{')) return null
+  const { paths, formatters } = splitExpression(binding)
+  if (paths.length === 0 || formatters.length > 1) return null
+  return { paths, format: formatters[0] ?? null }
+}
+
+/** The binding string of `BindingParts`. Trailing empty arguments are left out. */
+export function bindingFromParts(parts: BindingParts): string {
+  const head = parts.paths.join('|')
+  return parts.format ? `${head}|${bindingFormatText(parts.format)}` : head
 }
 
 const TEMPLATE = /\{\{([^{}]+)\}\}/g
@@ -572,10 +691,11 @@ export function isBindingExpression(binding: string): boolean {
 }
 
 /**
- * The value of a binding:
+ * The value of a binding. The syntax is fixed to these forms:
  * - a path: `title`, `author.name`, or a virtual path (`$url`, `$item`, `$index`, `$parent.name`, `$page.title`);
- * - a fallback chain: `heading|name` (the first value that is not missing);
- * - formatters after the paths: `publishedAt|date:en-AU:Australia/Brisbane`, `price|currency:AUD`, `bio|firstSentence`;
+ * - a fallback chain: `subtitle|title` (the first value that is not missing);
+ * - formatters after the paths: `publishedAt|date:en-GB:Europe/London`, `price|currency:EUR`, `summary|truncate:160`
+ *   (after the first part, a name that is a formatter is always a formatter, see `expressionValue`);
  * - a template string: `Enquire about {{name}}`. Each `{{expression}}` becomes text; a missing one
  *   becomes empty. When every one is missing, the value is missing (the literal prop stays).
  */
@@ -592,59 +712,28 @@ export function bindingValue(context: TemplateContext, binding: string, options?
 }
 
 /** The plain field paths a binding reads (no formatters, no virtual `$url`, `$item`, `$index`). */
-export function bindingPaths(key: string, binding: string): string[] {
-  const expressions = binding.includes('{{')
-    ? [...binding.matchAll(TEMPLATE)].map((m) => m[1]!)
-    : [key === VISIBLE_BINDING ? conditionOf(binding).path : binding]
-  return expressions.flatMap((expression) =>
-    expression
-      .split('|')
-      .map((part) => part.trim())
-      .filter((part, i) => part && (i === 0 || !formatterOf(part)))
-      .map((path) => (path.endsWith(RELATED_URL_SUFFIX) ? path.slice(0, -RELATED_URL_SUFFIX.length) : path))
-      .filter((path) => path !== URL_PATH && path.split('.')[0] !== ITEM_PATH && path !== INDEX_PATH),
-  )
+export function bindingPaths(binding: string): string[] {
+  const expressions = binding.includes('{{') ? [...binding.matchAll(TEMPLATE)].map((m) => m[1]!) : [binding]
+  return expressions.flatMap((expression) => splitExpression(expression).paths.map(plainPath).filter(isFieldPath))
 }
 
-type Comparison = '=' | '!=' | '>' | '>=' | '<' | '<='
-/** `count`: the condition tests the number of items (`path#`), not the value. */
-type Condition = { path: string; test: 'filled' | 'empty' | Comparison; value: string; count: boolean }
+/** `<path>.$url` reads the field at `path`. */
+const plainPath = (path: string) => (path.endsWith(RELATED_URL_SUFFIX) ? path.slice(0, -RELATED_URL_SUFFIX.length) : path)
+/** False for virtual paths that are not fields: `$url`, `$item...`, `$index`. */
+const isFieldPath = (path: string) => path !== URL_PATH && path.split('.')[0] !== ITEM_PATH && path !== INDEX_PATH
 
-/** The first operator wins, so a value may hold "=" or ">" (`title=a=b`). Two-character operators first. */
-const COMPARISON = /^(.+?)\s*(>=|<=|!=|>|<|=)\s*(.*)$/s
-
-/** `path#`: the condition counts the items. */
-const counts = (path: string) => path.endsWith('#')
-const bare = (path: string) => (counts(path) ? path.slice(0, -1).trim() : path)
-
-/**
- * `field`, `!field`, `field=value`, `field!=value`, and for numbers `field>3`, `field>=3`,
- * `field<3`, `field<=3`. `field#` is the number of items of a list (0 when empty, 1 for any other
- * filled value), e.g. `galleryImages#>=3`.
- */
-function conditionOf(condition: string): Condition {
-  const text = condition.trim()
-  const match = COMPARISON.exec(text)
-  if (match && match[1].trim() !== '!') {
-    const path = match[1].trim()
-    return { path: bare(path), test: match[2] as Comparison, value: match[3].trim(), count: counts(path) }
-  }
-  if (text.startsWith('!')) return { path: bare(text.slice(1).trim()), test: 'empty', value: '', count: counts(text) }
-  return { path: bare(text), test: 'filled', value: '', count: counts(text) }
+/** The field paths a block's visibility conditions read (no virtual `$item`, `$index`). */
+export function visibilityFieldPaths(visibility: BlockVisibility | undefined): string[] {
+  return visibilityConditions(visibility)
+    .flatMap((condition) => [condition.field, ...(condition.valueField ? [condition.valueField] : [])])
+    .map(plainPath)
+    .filter(isFieldPath)
 }
 
 /** The number of items: a list's length, 0 for an empty value, 1 for any other value. */
 function itemCount(value: unknown): number {
   if (Array.isArray(value)) return value.length
   return isMissing(value) || value === false ? 0 : 1
-}
-
-/** A number from a number or a numeric text; null otherwise. */
-function numberOf(value: unknown): number | null {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null
-  if (typeof value !== 'string' || value.trim() === '') return null
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : null
 }
 
 /** True when a value matches `expected`: itself, a document's id, or any item of a list. */
@@ -655,29 +744,112 @@ function matches(value: unknown, expected: string): boolean {
   return value !== undefined && value !== null && String(value) === expected
 }
 
-/** True when the `$visible` condition holds for the context. `false` counts as empty. */
-export function isVisible(context: TemplateContext, condition: string, options?: BindingOptions): boolean {
-  const { path, test, value: expected, count } = conditionOf(condition)
-  const raw = expressionValue(context, path, options)
-  const value = count ? itemCount(raw) : raw
-  const filled = count ? value !== 0 : !isMissing(value) && value !== false
-  if (test === 'filled') return filled
-  if (test === 'empty') return !filled
-  if (test === '=' || test === '!=') return matches(value, expected) === (test === '=')
-  // Greater and less compare numbers only: a value that is not a number never passes.
-  const actual = numberOf(value)
-  const limit = numberOf(expected)
+/** A number to compare: a number, a numeric text, or a date (its time). Null otherwise. */
+function comparable(value: unknown): number | null {
+  const number = numberOf(value)
+  if (number !== null) return number
+  if (value instanceof Date) return value.getTime()
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    const time = Date.parse(value)
+    return Number.isNaN(time) ? null : time
+  }
+  return null
+}
+
+/** The values another field holds, to compare with: list items, document ids and plain values. */
+function fieldValues(value: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap(fieldValues)
+  if (isRelationPair(value)) return fieldValues(value.value)
+  if (isPlainObject(value)) return value.id === undefined || value.id === null ? [] : [String(value.id)]
+  return isMissing(value) ? [] : [String(value)]
+}
+
+/**
+ * A condition with `valueField`: compares the field's value with the other field's value
+ * (`other`). Equal means one shared value or document. A missing other value never equals.
+ */
+function fieldConditionHolds(value: unknown, condition: VisibilityCondition, other: unknown): boolean {
+  switch (condition.operator) {
+    case 'equals':
+    case 'in':
+      return fieldValues(other).some((item) => matches(value, item))
+    case 'not_equals':
+    case 'not_in':
+      return !fieldValues(other).some((item) => matches(value, item))
+    case 'like':
+    case 'contains':
+      return textHolds(value, toPlainText(other) ?? '', condition.operator)
+    default:
+      return compareHolds(value, Array.isArray(other) ? other[0] : other, condition.operator)
+  }
+}
+
+/** `contains` (any case) or `like` (every word, any case). An empty wanted text always holds. */
+function textHolds(value: unknown, wanted: string, operator: 'like' | 'contains'): boolean {
+  const text = (toPlainText(value) ?? '').toLowerCase()
+  const words = wanted.trim().toLowerCase()
+  if (!words) return true
+  return operator === 'contains' ? text.includes(words) : words.split(/\s+/).every((word) => text.includes(word))
+}
+
+/** Greater and less compare numbers and dates only: other values never pass. */
+function compareHolds(value: unknown, limitValue: unknown, operator: VisibilityCondition['operator']): boolean {
+  const actual = comparable(value)
+  const limit = comparable(limitValue)
   if (actual === null || limit === null) return false
-  if (test === '>') return actual > limit
-  if (test === '>=') return actual >= limit
-  if (test === '<') return actual < limit
+  if (operator === 'greater_than') return actual > limit
+  if (operator === 'greater_than_equal') return actual >= limit
+  if (operator === 'less_than') return actual < limit
   return actual <= limit
+}
+
+/** True when one visibility condition holds for the context. `false` counts as empty. */
+function conditionHolds(context: TemplateContext, condition: VisibilityCondition, options?: BindingOptions): boolean {
+  const raw = pathValue(context, condition.field, options)
+  const value = condition.count ? itemCount(raw) : raw
+  const filled = condition.count ? value !== 0 : !isMissing(value) && value !== false
+  if (condition.valueField !== undefined && !VALUELESS_OPERATORS.has(condition.operator)) {
+    return fieldConditionHolds(value, condition, pathValue(context, condition.valueField, options))
+  }
+  const expected = condition.value
+  switch (condition.operator) {
+    case 'is_set':
+      return filled
+    case 'is_empty':
+      return !filled
+    case 'equals':
+    case 'not_equals': {
+      // A checkbox without a value counts as false.
+      const actual = (value === undefined || value === null) && typeof expected === 'boolean' ? false : value
+      return matches(actual, String(expected ?? '')) === (condition.operator === 'equals')
+    }
+    case 'in':
+    case 'not_in': {
+      const list = Array.isArray(expected) ? expected : expected === undefined ? [] : [expected]
+      return list.some((item) => matches(value, String(item))) === (condition.operator === 'in')
+    }
+    case 'like':
+    case 'contains':
+      return textHolds(value, String(expected ?? ''), condition.operator)
+    default:
+      return compareHolds(value, expected, condition.operator)
+  }
+}
+
+/**
+ * True when the block's visibility conditions match the context: all of them, or any entry with
+ * `match: "any"` (a group entry matches when all its conditions match). No conditions: true.
+ */
+export function isVisible(context: TemplateContext, visibility: BlockVisibility | undefined, options?: BindingOptions): boolean {
+  const groups = visibilityGroups(visibility)
+  if (groups.length === 0) return true
+  return groups.some((group) => group.every((condition) => conditionHolds(context, condition, options)))
 }
 
 /**
  * Resolves one block's bindings (not its children). Bound props with a value take it; applied
- * bindings are removed from the result, unresolved ones stay. A `$visible` binding that does not
- * hold makes the block `hidden`. A Field block gets `props.value`, a repeat its rows (`$items`).
+ * bindings are removed from the result, unresolved ones stay. Visibility conditions that do not
+ * match make the block `hidden`. A Field block gets `props.value`, a repeat its rows (`$items`).
  * Returns the same block when nothing changes.
  */
 export function resolveBlockBindings(
@@ -690,13 +862,9 @@ export function resolveBlockBindings(
   let changed = false
   const left: Record<string, string> = {}
 
-  let hidden = false
+  const hidden = block.visibility ? !isVisible(context, block.visibility, options) : false
+  if (hidden) changed = true
   for (const [propPath, fieldPath] of Object.entries(block.bindings ?? {})) {
-    if (propPath === VISIBLE_BINDING) {
-      hidden = !isVisible(context, fieldPath, options)
-      changed = true
-      continue
-    }
     const field = definition ? propField(definition.fields as unknown[], propPath) : undefined
     const value = coerceValue(bindingValue(context, fieldPath, options), field)
     if (value === undefined) {
@@ -912,8 +1080,8 @@ export function repeatAncestors(layout: Layout, id: string): Block[] {
 }
 
 /**
- * The bindable fields a block reads: the template collection's sources, narrowed by every
- * collection list and repeat around it. Undefined when unknown (no collection, or a repeat path
+ * The bindable fields a block reads: the template collection's sources (with a `$page` group),
+ * narrowed by every collection list and repeat around it. Undefined when unknown (no collection, or a repeat path
  * missing from the sources).
  */
 export function scopeSources(
@@ -923,7 +1091,9 @@ export function scopeSources(
   collection: string | null,
 ): BindingField[] | undefined {
   const page = collection ? sources[collection] : undefined
-  let fields: BindingField[] | undefined = page?.slice()
+  // `$page.<path>` reads the page's document at the top level too (the same document there).
+  const pageGroup = underRoot(PAGE_PATH, 'Page', page)
+  let fields: BindingField[] | undefined = page ? [...page, ...(pageGroup ? [pageGroup] : [])] : undefined
   for (const repeat of repeatAncestors(layout, id)) fields = itemSources(repeat, fields, sources, page)
   return fields
 }
@@ -933,7 +1103,7 @@ export function scopeSources(
  * target collection, inside a collection list's `item` slot the listed collection, and inside a
  * repeat's `item` slot the row (`itemSources`). Problems have the code `binding` (they block
  * publishing only). Paths missing from `sources` are left alone: the renderer keeps the literal
- * value. `$item`, `$index`, `$visible` and expressions are always allowed.
+ * value. `$item`, `$index` and expressions are always allowed.
  */
 export function validateBindings(
   layout: Layout,
@@ -949,8 +1119,8 @@ export function validateBindings(
       const definition = definitions.get(block.type)
       if (definition && fields) {
         for (const [propPath, fieldPath] of Object.entries(block.bindings ?? {})) {
-          // Expressions (templates, fallbacks, formatters), `$visible` and the row's own value are not checked.
-          if (propPath === VISIBLE_BINDING || isBindingExpression(fieldPath)) continue
+          // Expressions (templates, fallbacks, formatters) and the row's own value are not checked.
+          if (isBindingExpression(fieldPath)) continue
           if (fieldPath.split('.')[0] === ITEM_PATH || fieldPath === INDEX_PATH) continue
           const source =
             fieldPath === URL_PATH || fieldPath.endsWith(RELATED_URL_SUFFIX) ? { path: URL_PATH, label: 'Page URL', type: 'text' } : findBindingField(fields, fieldPath)

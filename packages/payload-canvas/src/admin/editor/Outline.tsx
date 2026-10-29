@@ -26,8 +26,10 @@ import { blockPreview, blockSummary, childrenOf, customLabel, typeName } from '.
 import { OUTLINE_INDENT, useRuntime, type DragData, type Runtime } from './runtime'
 import { RegionRows } from './regions/RegionRows'
 import { useEditor } from './store'
-import { bindingPaths, scopeSources } from '../../core/bindings'
+import { bindingPaths, scopeSources, visibilityFieldPaths } from '../../core/bindings'
 import { findBindingField } from './templates/binding'
+import { visibilityRows } from './templates/visibilityRows'
+import { conditionSummary } from './fields/conditions'
 import { useValue, useValueSelector } from './valueStore'
 
 type Row = {
@@ -107,16 +109,16 @@ function brokenBindingIds(runtime: Runtime, layout: Layout, templateTarget: stri
 const NO_ISSUES: string[] = []
 
 /**
- * True when a binding of the block reads a field its document does not have (or there is no
- * document): the template's, each list item's, or each field list row's.
+ * True when a binding or a visibility condition of the block reads a field its document does not
+ * have (or there is no document): the template's, each list item's, or each repeat row's.
  */
 function hasBrokenBinding(runtime: Runtime, layout: Layout, block: Block, templateTarget: string | null): boolean {
-  const bindings = Object.entries(block.bindings ?? {})
-  if (bindings.length === 0) return false
+  // Every plain path the bindings read (templates and fallback chains have several), and the conditions' fields.
+  const paths = [...Object.values(block.bindings ?? {}).flatMap(bindingPaths), ...visibilityFieldPaths(block.visibility)]
+  if (paths.length === 0) return false
   const fields = scopeSources(layout, block.id, runtime.config.templates?.sources ?? {}, templateTarget)
-  if (!fields) return true
-  // Every plain path a binding reads (templates and fallback chains have several).
-  return bindings.some(([key, binding]) => bindingPaths(key, binding).some((path) => !findBindingField(fields, path)))
+  if (!fields) return Object.keys(block.bindings ?? {}).length > 0
+  return paths.some((path) => !findBindingField(fields, path))
 }
 
 /**
@@ -490,14 +492,24 @@ const OutlineRow = memo(function OutlineRow({
           <Icon name="motion" size={12} />
         </span>
       )}
-      {bindingCount > 0 && (
+      {block.visibility && (
+        <span
+          className="builder-editor__row-motion"
+          aria-label="Shows only when its conditions match"
+          data-tooltip={`Shows only when ${conditionSummary(visibilityRows(block.visibility), [])}`}
+          data-tooltip-side="right"
+        >
+          <Icon name="eye" size={12} />
+        </span>
+      )}
+      {(bindingCount > 0 || broken) && (
         <span
           className={`builder-editor__row-bound${broken ? ' builder-editor__row-bound--broken' : ''}`}
           aria-label={broken ? 'A bound field is missing' : `${bindingCount} bound ${bindingCount === 1 ? 'field' : 'fields'}`}
           data-tooltip-side="right"
           data-tooltip={
             broken
-              ? 'A bound field is missing from the collection. Select the block to fix it.'
+              ? 'A field a binding or a visibility condition reads is missing from the collection. Select the block to fix it.'
               : `Shows data: ${Object.entries(block.bindings ?? {})
                   .map(([prop, field]) => `${prop} ← ${field}`)
                   .join(', ')}`

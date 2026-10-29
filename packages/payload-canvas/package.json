@@ -186,7 +186,7 @@
     "prepublishOnly": "node ../../scripts/check-publish.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint",
-    "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "test": "node --import tsx --import ./test/setup.mjs --test \"src/**/*.test.ts\"",
     "generate:fonts": "node scripts/generate-google-fonts.mjs"
   },
   "dependencies": {

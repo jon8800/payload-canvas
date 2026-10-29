@@ -1,8 +1,8 @@
 'use client'
 
 import { useSyncExternalStore } from 'react'
-import { filterHref } from '../../../blocks/builtins/filterLink'
-import { textOr } from '../../../blocks/builtins/shared'
+import { filterHref } from '../../../blocks/client/filterLink'
+import { textOr } from '../../../blocks/client/helpers'
 import type { BlockComponentProps } from '../../render/types'
 
 const subscribe = (onChange: () => void) => {
@@ -19,7 +19,7 @@ const serverUrl = () => null
  * After hydration it keeps the page's other query values and marks the current filter with
  * `aria-current="true"`.
  */
-export function FilterLink({ props, className, attributes, slotAttributes, slots }: BlockComponentProps) {
+export function FilterLink({ props, className, attributes, partAttributes, slots }: BlockComponentProps) {
   const url = useSyncExternalStore(subscribe, clientUrl, serverUrl)
   const parsed = url === null ? null : new URL(url, 'http://localhost')
   const { href, active } = filterHref(parsed?.pathname ?? '', parsed?.searchParams ?? new URLSearchParams(), {
@@ -32,7 +32,7 @@ export function FilterLink({ props, className, attributes, slotAttributes, slots
   return (
     <a
       {...attributes}
-      {...slotAttributes.children}
+      {...partAttributes.children}
       href={href}
       aria-current={url !== null && active ? 'true' : undefined}
       className={className}

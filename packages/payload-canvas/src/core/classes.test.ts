@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { collectClasses } from './classes'
+import { blockParts, collectClasses, defaultPartClassNames } from './classes'
 import type { BlockDefinition, Layout } from './types'
 
 const layout: Layout = {
@@ -49,22 +49,31 @@ describe('collectClasses with block definitions', () => {
   })
 })
 
-describe('class props', () => {
+describe('parts', () => {
   const carousel: BlockDefinition = {
     type: 'carousel',
     label: 'Carousel',
-    fields: [
-      { name: 'arrowClassName', type: 'text', defaultValue: 'size-10 rounded-full', admin: { custom: { builderClasses: true } } },
-      { name: 'dotClassName', type: 'text', admin: { custom: { builderClasses: true } } },
-      { name: 'title', type: 'text' },
-    ],
+    fields: [],
+    slots: { slides: { label: 'Slides', styles: true, defaultClassName: 'gap-4' }, next: { label: 'Next' } },
+    parts: { arrow: { label: 'Arrows', defaultClassName: 'size-10 rounded-full' }, dot: { label: 'Dots' }, slides: { label: 'Ignored' } },
   }
-  it('compiles the values of class props in every locale, and their defaults', () => {
-    const list: Layout = {
-      version: 1,
-      blocks: [{ id: 'c', type: 'carousel', props: { dotClassName: 'bg-white', title: 'not-a-class' }, locales: { de: { dotClassName: 'bg-black' } } }],
-    }
-    assert.deepEqual(collectClasses(list, [carousel]), ['bg-black', 'bg-white', 'rounded-full', 'size-10'])
-    assert.deepEqual(collectClasses(list), [])
+
+  it('lists styled slots first, then the parts, without part names that are slots', () => {
+    assert.deepEqual(blockParts(carousel), [
+      { name: 'slides', label: 'Slides', slot: true, defaultClassName: 'gap-4' },
+      { name: 'arrow', label: 'Arrows', slot: false, defaultClassName: 'size-10 rounded-full' },
+      { name: 'dot', label: 'Dots', slot: false },
+    ])
+    assert.deepEqual(blockParts(undefined), [])
+  })
+
+  it('gives a new block the default classes of its parts', () => {
+    assert.deepEqual(defaultPartClassNames(carousel), { slides: 'gap-4', arrow: 'size-10 rounded-full' })
+    assert.equal(defaultPartClassNames({ slots: {} }), null)
+  })
+
+  it('compiles the classes of every part', () => {
+    const list: Layout = { version: 1, blocks: [{ id: 'c', type: 'carousel', partClassName: { arrow: 'bg-white', slides: 'gap-4' } }] }
+    assert.deepEqual(collectClasses(list, [carousel]), ['bg-white', 'gap-4'])
   })
 })

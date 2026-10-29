@@ -63,7 +63,7 @@ openRouterImageAdapter({
 
 | Option | Default | What it does |
 |---|---|---|
-| `apiKey` | none | The OpenRouter key. Without it the adapter is not ready. |
+| `apiKey` | none | The OpenRouter key. Without it the adapter is not ready, unless an admin set a key in AI settings ([providers.md](providers.md#api-keys-in-the-admin)). A key there wins. |
 | `model` | `black-forest-labs/flux.2-klein-4b` | An image model id. |
 | `outputFormat` | the model's default | `png`, `jpeg` or `webp`, when the model takes it. |
 | `resolution` | the model's default | For example `1K` or `2K`, when the model takes it. |

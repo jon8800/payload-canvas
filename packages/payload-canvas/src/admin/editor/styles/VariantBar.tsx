@@ -39,7 +39,7 @@ export function breakpointLabel(bp: Breakpoint, widths: Record<Breakpoint, numbe
 export function VariantBar() {
   const runtime = useRuntime()
   const { store } = runtime
-  const { className, variant, tokens } = useStyles()
+  const { className, variant, tokens, editingClass } = useStyles()
   const frame = useValue(runtime.frame)
   const widths = useMemo(() => breakpointWidths(tokens), [tokens])
   const inUse = useMemo(() => safeVariantsInUse(className, tokens), [className, tokens])
@@ -76,7 +76,9 @@ export function VariantBar() {
       </fieldset>
       <div className="builder-styles__state-row">
         <p className="builder-styles__variant-hint">
-          Editing <strong>{breakpointLabel(variant.breakpoint, widths)}</strong>
+          Editing {editingClass ? <code>.{editingClass.name}</code> : null}
+          {editingClass ? ' at ' : null}
+          <strong>{breakpointLabel(variant.breakpoint, widths)}</strong>
           {prefix && (
             <>
               {' '}
