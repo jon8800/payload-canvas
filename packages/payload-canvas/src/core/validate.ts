@@ -25,6 +25,9 @@ import type { BlockDefinition, LocaleSettings, SlotDefinition } from './types'
  *   publishing. Each of them can be true while someone is still typing, so drafts, autosave and
  *   live sessions keep saving unfinished work.
  * - `unknown-prop`, `unknown-key`: warnings, never blocking.
+ * - `no-effect`: a warning, never blocking: a key that does nothing where it is (for example
+ *   `visibility` on a normal page, see `contextOnlyWarnings` in src/mcp/shared.ts). `validateLayout`
+ *   never returns it: it does not know where the layout renders.
  */
 export type LayoutErrorCode =
   | 'invalid'
@@ -36,6 +39,7 @@ export type LayoutErrorCode =
   | 'binding'
   | 'unknown-prop'
   | 'unknown-key'
+  | 'no-effect'
 
 /**
  * `locale`: the problem is in that locale's own values (a translation), not the default locale's.
@@ -56,7 +60,7 @@ export const PUBLISH_ONLY_CODES: ReadonlySet<LayoutErrorCode> = new Set(['requir
 
 /** True when the error never blocks a save (only logged or shown). */
 export function isLayoutWarning(error: Pick<LayoutError, 'code'>): boolean {
-  return error.code === 'unknown-prop' || error.code === 'unknown-key'
+  return error.code === 'unknown-prop' || error.code === 'unknown-key' || error.code === 'no-effect'
 }
 
 /** True when the error blocks this save: everything but warnings, and publish-only codes only when publishing. */

@@ -12,14 +12,16 @@ import {
   LIST_ITEM_SLOT,
   LIST_ITEMS_PROP,
   repeatRowContext,
+  resolveBindings,
   resolveBlockBindings,
   type Block,
   type BlockDefinition,
   type BindingOptions,
   type BindingRelations,
+  type Layout,
   type TemplateContext,
 } from '../../core'
-import { defaultBlocks, isLinkField, SECTION_REF_SLOT, withBuilderCssClass } from '../../blocks'
+import { ACCORDION_BLOCK, defaultBlocks, faqItems, faqJsonLd, isLinkField, SECTION_REF_SLOT, withBuilderCssClass } from '../../blocks'
 import { defaultComponents } from '../components'
 import { fieldFor } from '../components/Field'
 import { richTextFor } from '../components/RichText'
@@ -369,6 +371,7 @@ export function RenderLayout({
   relations,
   linkComponent,
   priorityImages = 1,
+  faqJsonLd: faqMarkup = true,
 }: RenderLayoutProps): ReactNode {
   const ctx = contextFor(mode, components, blocks, resolveLink, context ?? null, pageData ?? null, relations ?? null, linkComponent ?? null)
   const motion = mode === 'site' && blocksHaveMotion(layout.blocks)
@@ -378,8 +381,30 @@ export function RenderLayout({
       {motion && <MotionStyle blocks={layout.blocks} />}
       {mode === 'site' && priorityImages > 0 ? renderSections(layout.blocks, ctx, priorityImages) : renderBlocks(layout.blocks, ctx)}
       {motion && <MotionRuntime />}
+      {mode === 'site' && faqMarkup && <FaqJsonLd layout={layout} definitions={[...ctx.definitions.values()]} context={ctx.context} binding={ctx.binding} />}
     </>
   )
+}
+
+/** True when a block in the list (children included) is an accordion with `faqSchema` on. */
+function hasFaqAccordion(list: Block[]): boolean {
+  return list.some(
+    (block) => (block.type === ACCORDION_BLOCK && block.props?.faqSchema === true) || Object.values(block.slots ?? {}).some(hasFaqAccordion),
+  )
+}
+
+/**
+ * FAQPage JSON-LD for the accordions with `faqSchema` on: one `<script>` per layout, nothing when
+ * no accordion opts in or no item has a question and an answer. Bindings resolve against the
+ * layout's document first, so a layout that skipped `loadLayoutData` still gets the values.
+ */
+function FaqJsonLd({ layout, definitions, context, binding }: { layout: Layout; definitions: BlockDefinition[]; context: TemplateContext | null; binding: BindingOptions }) {
+  if (!hasFaqAccordion(layout.blocks)) return null
+  const resolved = context ? resolveBindings(layout, context, definitions, binding) : layout
+  const data = faqJsonLd(faqItems(resolved, definitions))
+  if (!data) return null
+  // `<` escaped, so a "</script>" in an answer cannot end the element.
+  return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(data).replace(/</g, '\\u003c') }} />
 }
 
 export type PreviewBlockOptions = Pick<RenderLayoutProps, 'components' | 'blocks' | 'resolveLink' | 'context' | 'pageData'> & {

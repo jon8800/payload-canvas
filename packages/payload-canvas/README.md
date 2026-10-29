@@ -1141,12 +1141,14 @@ export const icons = { arrowRight: ArrowRight, check: Check, close: Close } sati
 - The summary slot refuses links, buttons and other controls: a `<summary>` is the button.
 - Style the summary row with `[&>summary]:` classes and the content with `[&>div]:` classes on the disclosure. `open:` and `group-open:` classes style the open state, for example `group-open:rotate-45` on an icon in the summary.
 - `accordion` props: `multiple` (default on; off keeps one item open, with the browser's exclusive `<details name>`) and `faqSchema`, **Mark up as FAQ for search engines** (default off). Turn it on only for real questions and answers: search engines treat FAQ markup on other content as spam.
-- FAQPage JSON-LD: `faqItems(layout, blocks)` from `payload-canvas/blocks` reads the questions (summary text) and answers (content text) of the accordions with `faqSchema` on. Call it after `loadLayoutData`, so bound props, `field` blocks, repeats and collection lists hold the document's values. `faqJsonLd(items)` turns them into the JSON-LD object (null without items):
+- FAQPage JSON-LD: `RenderLayout` outputs it on the site by itself. When an accordion in the layout has `faqSchema` on, the layout renders one `<script type="application/ld+json">` with the questions (summary text) and answers (content text), with `<` escaped. Bound props, `field` blocks, repeats and collection lists give the document's values. Nothing is output on the canvas, or when no accordion opts in.
+- `<RenderLayout faqJsonLd={false} />` turns it off, for a site that writes its own. `faqItems(layout, blocks)` and `faqJsonLd(items)` from `payload-canvas/blocks` build the same data, for example to merge the FAQs of several layouts into one script:
 
 ```tsx
 const items = [layout, templateLayout].flatMap((value) => faqItems(value, blocks))
 const jsonLd = faqJsonLd(items)
 // <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }} />
+// and <RenderLayout faqJsonLd={false} … /> for those layouts
 ```
 
 #### Image viewer
@@ -1684,10 +1686,10 @@ The canvas keeps the same order: the classes' stylesheet (compiled in the browse
 
 ### MCP tools
 
-`builderMcpTools()` adds `listClasses`, `getClass`, `upsertClass` and `deleteClass`. Each takes `collection: "builder-classes"`, so the API key needs access to the classes collection.
+`builderMcpTools()` adds `listClasses`, `getClass`, `upsertClass` and `deleteClass`. Each takes `collection: "builder-classes"` (the default, so agents may leave it out), and the API key needs access to the classes collection.
 
-- `upsertClass` creates or changes a class (a draft; `publish: true` publishes it). `newName` renames it on every page, as the Styles panel does.
-- `deleteClass` refuses a class that blocks use and lists the pages, unless `removeFromBlocks: true`.
+- `upsertClass` creates or changes a class (a draft; `publish: true` publishes it). `newName` renames it on every page, as the Styles panel does. Without `publish`, the result lists the published pages that still show the old version (`publishedPagesWithOldVersion`).
+- `deleteClass` refuses a class that blocks use and lists the pages, unless `removeFromBlocks: true`. The result lists the published pages that still use the class and need publishing again.
 - `listBlocks` lists the editable classes with the code classes (`siteClasses`), so agents use them in `className`.
 - `builderMcpTools({ classes: false })` leaves the tools out; `classes: { slug }` matches a custom slug.
 
@@ -2014,7 +2016,7 @@ A block in a template, a collection list item or a repeat row can show only when
 - `"valueField"` compares with another field of the same document instead of a fixed `value`: `{ "field": "salePrice", "operator": "less_than", "valueField": "price" }`. A condition has `value` or `valueField`, never both. In the inspector, pick **Other field** next to the value.
 - `match` is `"all"` (the default, left out) or `"any"`. With `"any"`, an entry can be a group `{ "all": [conditions] }` that matches when all its conditions match. So `{ "match": "any", "conditions": [{ "all": [a, b] }, c] }` means "(a and b) or c". This is how the inspector stores "or" groups.
 - The inspector offers the operators that fit the field's type ("is after" for dates, "contains" for text, "includes" for hasMany fields) and a value input of the same type: a select's options, checked or not checked, a number, a date, or a document picker for relationships and uploads.
-- A block that fails renders nothing on the site, and lists inside it load no documents. On the canvas it shows dimmed, like a hidden block. Without a current document (a normal page) the conditions are not checked, and the block shows.
+- A block that fails renders nothing on the site, and lists inside it load no documents. On the canvas it shows dimmed, like a hidden block. Without a current document (a normal page, outside list and repeat items) the conditions are not checked, and the block shows. The MCP tools return a `no-effect` warning for them there.
 - The outline marks a block whose condition reads a field the collection does not have.
 
 #### Filter a collection list
@@ -2525,6 +2527,12 @@ plugins: [
 - Agents connect to `POST <your site>/api/mcp` with an API key from **Admin > MCP > API Keys**. Claude Code and Codex setup: [docs/ai/connect-claude-code-and-codex.md](https://github.com/jon8800/payload-canvas/blob/main/docs/ai/connect-claude-code-and-codex.md).
 - Sign-in with the website account (OAuth, no key to copy) is a `payload-mcp-toolkit` feature: pass `oauth: { canAuthorize, access: 'editor' }` to `mcpToolkitPlugin()` and add the discovery rewrites. The starter shows the setup, and the doc above has the Claude Code and Codex commands. API keys keep working next to it.
 - Tools (`listSections` and `insertSection` include [saved sections](#saved-sections)): `listBlocks`, `getBlockSchema`, `listSections`, `insertSection`, `getLayout`, `applyOperations`, `validateLayout`, `getPreviewUrl`, `generateImage`, plus `listTemplates` and `getBindingSources` for templates.
+- Builder layouts change only through `applyOperations` and `insertSection`. The tool descriptions say so; agents must not write the layout field with `updateDocument` or `patchLayout`.
+- `listBlocks` returns the layout guide (`guide`: block keys, ids, positions, classes, motion presets, HTML attributes) and the bindings guide (`bindings`). The guides are in the result, not in the tool descriptions, so `tools/list` stays small.
+- `update` operations take `className` (replaces the list), `addClassName` and `removeClassName` (space-separated, the other classes stay).
+- `applyOperations` returns `changes` (id, type, changed keys, and the new class list after class changes) and the warnings of the blocks it touched. `insertSection` returns `needsContent`: blocks whose image, form or other upload or relationship is still empty.
+- `visibility` and `bindings` work only in templates and inside collection list or repeat items. On a normal page they do nothing, and `applyOperations`, `insertSection` and `validateLayout` return a `no-effect` warning.
+- When an argument has one possible value (`collection` of the class tools, `generateImage`, `listTemplates`, and every builder tool with one builder collection), agents may leave it out.
 - `generateImage` makes an image with the site's image adapter (`ai.images` in `websiteBuilder`) and saves it in the media collection. Clients that cannot make images (Claude Code with a Claude plan) use the site's adapter this way. The key needs `create` on the media collection.
 - Every tool checks the key's access to the collection. Handlers run as the key's user with `overrideAccess: false`.
 - Writes are commits to the document's live session, like an editor's own changes. Open editors show them at once, and the agent appears in the collaborator list while it works. The draft is saved about a second later. `getLayout` returns the session's layout, unsaved changes included.

@@ -528,6 +528,13 @@ export type Operation =
       locale?: string
       /** `null` removes the className. */
       className?: string | null
+      /**
+       * Classes to add (space-separated). Each class not already there goes at the end. Runs after
+       * `className` and `removeClassName`. The inverse sets the old `className`.
+       */
+      addClassName?: string
+      /** Classes to remove (space-separated, exact match, variant prefix included). Runs after `className`. */
+      removeClassName?: string
       hidden?: boolean
       /** Shallow merge into `bindings`. A `null` value removes that binding. */
       bindings?: Record<string, string | null>

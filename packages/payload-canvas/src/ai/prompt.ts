@@ -47,7 +47,7 @@ function stylingGuide(tokens: StyleTokens | null): string {
   const lines = [
     'STYLING',
     "- Blocks have no built-in styles. All styling comes from each block's className: Tailwind CSS v4 utility classes. Use real Tailwind classes. Prefer the theme scale over arbitrary values like w-[37rem].",
-    '- In an "update" operation, className REPLACES all classes. Send the full list: the current classes from the layout, changed as needed.',
+    '- In an "update" operation, className REPLACES all classes: send the full list, the current classes from the layout, changed as needed. To add or remove a few classes, use addClassName and removeClassName (space-separated) instead.',
     '- Mobile first: classes without a prefix apply at every width. sm:, md:, lg:, xl:, 2xl: apply from that breakpoint up.',
     '- Keep spacing, widths and type sizes consistent with the sections already on the page.',
   ]

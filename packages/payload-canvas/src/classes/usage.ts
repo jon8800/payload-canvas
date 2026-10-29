@@ -63,9 +63,10 @@ const configOf = (req: PayloadRequest, collection: string) =>
 /**
  * Every layout of the builder collections (JSON layouts; a Payload blocks field holds no classes):
  * the latest drafts, with the open live session's layout instead where one is open. `asUser`:
- * only the documents the request's user may read.
+ * only the documents the request's user may read. `published`: the published layouts instead (what
+ * the live site renders; a collection without drafts: every document), saved sections left out.
  */
-async function scanLayouts(req: PayloadRequest, asUser: boolean): Promise<ScannedLayout[]> {
+async function scanLayouts(req: PayloadRequest, asUser: boolean, published = false): Promise<ScannedLayout[]> {
   const builder = builderConfigOf(req.payload)
   if (!builder) return []
   const sessions = liveRuntimeOf(req.payload).sessions
@@ -75,14 +76,18 @@ async function scanLayouts(req: PayloadRequest, asUser: boolean): Promise<Scanne
     if (options.payloadBlocks) continue
     const config = configOf(req, collection)
     if (!config) continue
+    // The site never renders a saved section on its own.
+    if (published && collection === sectionsSlug) continue
     // Saved sections keep their blocks in `blocks`; the builder's `layout` there is virtual.
     const field = collection === sectionsSlug ? 'blocks' : options.field
+    const drafts = Boolean(config.versions?.drafts)
     const title = config.admin?.useAsTitle && config.admin.useAsTitle !== 'id' ? config.admin.useAsTitle : null
     const result = await req.payload.find({
       collection: collection as never,
       depth: 0,
       pagination: false,
-      draft: Boolean(config.versions?.drafts),
+      draft: drafts && !published,
+      ...(published && drafts ? { where: { _status: { equals: 'published' } } } : {}),
       select: { [field]: true, ...(title ? { [title]: true } : {}) } as never,
       context: { [RAW_LAYOUT_CONTEXT]: true },
       overrideAccess: !asUser,
@@ -91,7 +96,7 @@ async function scanLayouts(req: PayloadRequest, asUser: boolean): Promise<Scanne
     })
     for (const doc of result.docs as unknown as Record<string, unknown>[]) {
       const id = doc.id as string | number
-      const open = sessions.peek(collection, id)
+      const open = published ? undefined : sessions.peek(collection, id)
       const stored = collection === sectionsSlug ? { version: 1, blocks: doc.blocks } : doc[field]
       const name = title ? doc[title] : null
       out.push({ collection, id, title: typeof name === 'string' && name.trim() ? name.trim() : String(id), layout: open?.layout ?? normalizeLayout(stored) })
@@ -116,6 +121,22 @@ export async function classUsage(req: PayloadRequest, names: Iterable<string>, o
     }
   }
   return usage
+}
+
+/**
+ * The published documents whose published layout uses one of `names` (the live site renders those
+ * layouts), as the request's user may read them. Each document once, with the block count.
+ */
+export async function publishedClassUsage(req: PayloadRequest, names: Iterable<string>): Promise<ClassUsage['documents']> {
+  const wanted = new Set(names)
+  if (wanted.size === 0) return []
+  const out: ClassUsage['documents'] = []
+  for (const { collection, id, title, layout } of await scanLayouts(req, true, true)) {
+    let blocks = 0
+    for (const count of countClassUses(layout, wanted).values()) blocks += count
+    if (blocks > 0) out.push({ collection, id, title, blocks })
+  }
+  return out
 }
 
 export type ReplaceResult = {

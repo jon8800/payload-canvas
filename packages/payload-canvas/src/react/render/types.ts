@@ -160,6 +160,13 @@ export type RenderLayoutProps = {
    * Give a layout further down the page (a footer) `0`. Site only.
    */
   priorityImages?: number
+  /**
+   * Site only. Default `true`: when an accordion in the layout has "Mark up as FAQ for search
+   * engines" on (`faqSchema`), the layout outputs one `<script type="application/ld+json">` with
+   * FAQPage data for those items (`faqItems`, `faqJsonLd`). `false` leaves it out, for a site that
+   * outputs its own.
+   */
+  faqJsonLd?: boolean
 }
 
 /** Loads documents for a batch of ids in one collection. */

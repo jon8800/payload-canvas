@@ -199,3 +199,38 @@ test('parts get their classes with the marker class', () => {
   )
   assert.match(html, /<span class="size-2 builder-css" data-ring="undefined"><\/span>/)
 })
+
+const faqItem = (id: string, question: string, answer: string): Block => ({
+  id,
+  type: 'disclosure',
+  slots: { summary: [{ id: `${id}q`, type: 'text', props: { text: question } }], content: [{ id: `${id}a`, type: 'text', props: { text: answer } }] },
+})
+const ldScripts = (html: string) => html.match(/<script type="application\/ld\+json">(.*?)<\/script>/g) ?? []
+
+test('the site outputs FAQPage JSON-LD for accordions with faqSchema, once and escaped', async () => {
+  const { builtinBlocks, defaultBlocks } = await import('../../blocks')
+  const blocks = [...defaultBlocks(), ...builtinBlocks()]
+  const faq: Layout = {
+    version: 1,
+    blocks: [
+      { id: 'acc', type: 'accordion', props: { faqSchema: true }, slots: { items: [faqItem('d1', 'Is </script> safe?', 'Yes.'), faqItem('d2', 'Bound?', 'Fallback')] } },
+      { id: 'acc2', type: 'accordion', props: { faqSchema: false }, slots: { items: [faqItem('d3', 'Not marked', 'Skip')] } },
+    ],
+  }
+  const html = render({ layout: faq, blocks })
+  assert.equal(ldScripts(html).length, 1)
+  assert.ok(!html.includes('Is </script>'))
+  const json = JSON.parse(ldScripts(html)[0]!.replace(/^<script[^>]*>|<\/script>$/g, '')) as { '@type': string; mainEntity: Array<{ name: string; acceptedAnswer: { text: string } }> }
+  assert.equal(json['@type'], 'FAQPage')
+  assert.deepEqual(json.mainEntity.map((q) => q.name), ['Is </script> safe?', 'Bound?'])
+  // Bindings resolve against the context, also without loadLayoutData.
+  const bound: Layout = structuredClone(faq)
+  bound.blocks[0]!.slots!.items![1]!.slots!.content![0]!.bindings = { text: 'answer' }
+  const withContext = render({ layout: bound, blocks, context: { collection: 'pages', doc: { answer: 'From the document.' } } })
+  assert.equal(ldScripts(withContext).length, 1)
+  assert.match(ldScripts(withContext)[0]!, /From the document\./)
+  // Not on the canvas, not with the opt-out, not without an opted-in accordion.
+  assert.equal(ldScripts(render({ layout: faq, blocks, mode: 'canvas' })).length, 0)
+  assert.equal(ldScripts(render({ layout: faq, blocks, faqJsonLd: false })).length, 0)
+  assert.equal(ldScripts(render({ layout: { version: 1, blocks: [faq.blocks[1]!] }, blocks })).length, 0)
+})

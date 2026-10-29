@@ -84,7 +84,7 @@ export function accordionBlock(): BlockDefinition {
         admin: {
           description:
             'Only for real questions and answers. The page adds FAQPage structured data (JSON-LD) with these items: ' +
-            'the summary text is the question, the content text the answer. The site must output it (`faqItems`, `faqJsonLd`).',
+            'the summary text is the question, the content text the answer. RenderLayout outputs it on the site by itself.',
         },
       },
     ],
@@ -93,7 +93,7 @@ export function accordionBlock(): BlockDefinition {
     ai: {
       description:
         'A list of disclosure blocks in its "items" slot. "multiple": false keeps one item open at a time. Set "faqSchema": true ' +
-        'only when the items are questions and answers: they then feed the page\'s FAQPage JSON-LD: the summary text is the question, the content text the ' +
+        'only when the items are questions and answers: the site then outputs FAQPage JSON-LD for them by itself (nothing else to do): the summary text is the question, the content text the ' +
         'answer. In a template, repeat one disclosure over the document\'s FAQs: the items slot holds a repeat with path ' +
         '"faqs" whose item is a disclosure with a text bound to "question" in "summary" and a text bound to "answer" in "content".',
       example: {

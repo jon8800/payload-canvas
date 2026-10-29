@@ -178,11 +178,15 @@ function update(layout: Layout, op: Extract<Operation, { type: 'update' }>): App
     }
   }
 
-  if (op.className !== undefined) {
-    if (op.className !== null && typeof op.className !== 'string') return fail('`className` must be a string or null')
+  if (op.className !== undefined || op.addClassName !== undefined || op.removeClassName !== undefined) {
+    if (op.className !== undefined && op.className !== null && typeof op.className !== 'string') return fail('`className` must be a string or null')
+    if (op.addClassName !== undefined && typeof op.addClassName !== 'string') return fail('`addClassName` must be a string of classes separated by spaces')
+    if (op.removeClassName !== undefined && typeof op.removeClassName !== 'string') return fail('`removeClassName` must be a string of classes separated by spaces')
+    // The inverse sets the whole old list, so undo restores the exact string (order and spaces).
     inverse.className = before.className ?? null
-    if (op.className === null) delete next.className
-    else next.className = op.className
+    const className = patchClassName(op.className === undefined ? before.className : op.className, op.addClassName, op.removeClassName)
+    if (className === null) delete next.className
+    else next.className = className
   }
 
   if (op.hidden !== undefined) {
@@ -266,6 +270,21 @@ function update(layout: Layout, op: Extract<Operation, { type: 'update' }>): App
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * The class list after `update`: `base` (the new `className`, else the old one), minus the classes
+ * in `drop`, plus the classes in `add` that are not there yet (at the end). Without `add` and
+ * `drop`, `base` as it is. An empty result is null (no className).
+ */
+export function patchClassName(base: string | null | undefined, add?: string, drop?: string): string | null {
+  if (add === undefined && drop === undefined) return base ?? null
+  const removed = new Set(splitClasses(drop))
+  const tokens = splitClasses(base).filter((token) => !removed.has(token))
+  for (const token of splitClasses(add)) if (!tokens.includes(token)) tokens.push(token)
+  return tokens.length > 0 ? tokens.join(' ') : null
+}
+
+const splitClasses = (value: string | null | undefined): string[] => (value ?? '').split(/\s+/).filter(Boolean)
 
 function ok(layout: Layout, inverse: Operation[]): Ok {
   return { ok: true, layout, inverse }
