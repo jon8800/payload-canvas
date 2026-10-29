@@ -20,6 +20,11 @@ export type CanvasScope = {
    * site loads them in the page's locale. Missing or null: the default locale.
    */
   locale?: string | null
+  /**
+   * Which canvas asks: the editor (`'canvas'`, the default) or the hidden renderer of the section
+   * thumbnails (`'thumbnail'`). Server blocks get it as their `canvasMode` prop.
+   */
+  mode?: 'canvas' | 'thumbnail'
 }
 
 export type CanvasServerRequest =

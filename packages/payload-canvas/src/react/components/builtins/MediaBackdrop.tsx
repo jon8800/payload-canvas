@@ -48,7 +48,7 @@ export function mediaBackdropComponent(mediaUrl?: MediaUrl) {
 export const MediaBackdrop = mediaBackdropComponent()
 
 function backdrop(block: BlockComponentProps, mediaUrl: MediaUrl | undefined) {
-  const { props, className, attributes, slotAttributes, slots, mode } = block
+  const { props, className, attributes, partAttributes, slots, mode } = block
   const image = docOf(props.image, mediaUrl)
   // `videoUrl` is a link an editor typed, not a stored upload, so it stays as it is.
   const videoSrc = docOf(props.video, mediaUrl)?.url ?? textOr(props.videoUrl, '')
@@ -90,7 +90,7 @@ function backdrop(block: BlockComponentProps, mediaUrl: MediaUrl | undefined) {
   }
 
   return (
-    <div {...attributes} {...slotAttributes.children} className={className}>
+    <div {...attributes} {...partAttributes.children} className={className}>
       {media}
       {props.overlay === true ? <div data-backdrop-overlay="" aria-hidden="true" className={C.overlay} /> : null}
       {slots.children}

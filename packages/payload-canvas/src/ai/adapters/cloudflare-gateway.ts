@@ -45,9 +45,13 @@ export function cloudflareGatewayAdapter(options: CloudflareGatewayAdapterOption
   const keyHint =
     'Set CF_AIG_TOKEN (the gateway token, for stored provider keys or unified billing) and/or a provider key in .env and restart the server.'
   let setupProblem: string | null = null
+  let missingKey = false
   if (!accountId || !gatewayId) setupProblem = 'Set the Cloudflare account id and gateway id (CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AI_GATEWAY_ID in .env).'
   else if (!model) setupProblem = 'Set the model for Cloudflare AI Gateway, for example "openai/gpt-5.2".'
-  else if (!token && !key) setupProblem = `No Cloudflare AI Gateway credentials. ${keyHint}`
+  else if (!token && !key) {
+    setupProblem = `No Cloudflare AI Gateway credentials. ${keyHint}`
+    missingKey = true
+  }
   return createOpenAIFormatAdapter({
     ...transport,
     name: 'cloudflare-gateway',
@@ -58,7 +62,10 @@ export function cloudflareGatewayAdapter(options: CloudflareGatewayAdapterOption
       ...(key ? { Authorization: bearer(key) } : {}),
       ...(token ? { 'cf-aig-authorization': bearer(token) } : {}),
     },
+    // A key from the AI settings is the gateway token (CF_AIG_TOKEN).
+    keyHeaders: (adminToken) => ({ 'cf-aig-authorization': bearer(adminToken) }),
     ready: setupProblem === null,
+    missingKey,
     setupProblem,
     keyEnv: 'CF_AIG_TOKEN',
     keyUrl: 'https://dash.cloudflare.com/?to=/:account/ai/ai-gateway',

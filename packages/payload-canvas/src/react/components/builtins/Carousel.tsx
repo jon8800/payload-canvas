@@ -1,8 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { CAROUSEL_CLASS_MAP as C, CAROUSEL_LABELS as L } from '../../../blocks/builtins/carousel'
-import { joinClasses, labelOf, textOr } from '../../../blocks/builtins/shared'
+import { CAROUSEL_CLASS_MAP as C, CAROUSEL_LABELS } from '../../../blocks/client/carousel'
+import { joinClasses, labelOf } from '../../../blocks/client/helpers'
+import { COLLECTION_LIST_BLOCK, REPEAT_BLOCK } from '../../../core/blockNames'
+import type { Block } from '../../../core/types'
 import type { BlockComponentProps } from '../../render/types'
 import { Chevron } from './glyphs'
 
@@ -13,6 +15,19 @@ function slidesOf(track: HTMLElement): HTMLElement[] {
     return getComputedStyle(child).display === 'contents' ? slidesOf(child) : [child]
   })
 }
+
+/**
+ * True when the slides slot holds one collection list or repeat that renders a wrapper: the track
+ * unwraps it, so its items are the slides. A repeat with `as: 'none'` has no wrapper.
+ */
+export function unwrapsList(slides: readonly Block[]): boolean {
+  const shown = slides.filter((block) => !block.hidden)
+  if (shown.length !== 1) return false
+  const only = shown[0]!
+  return only.type === COLLECTION_LIST_BLOCK || (only.type === REPEAT_BLOCK && only.props?.as !== 'none')
+}
+
+export type CarouselLabels = Partial<typeof CAROUSEL_LABELS>
 
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -37,7 +52,7 @@ export function nearestSlide(offsets: number[], scrollLeft: number, maxScroll: n
  * on hover and focus, and never runs with reduced motion. On the canvas the slides always scroll
  * and never autoplay, so each one can be selected.
  */
-export function Carousel({ block, props, className, attributes, slotAttributes, slots, mode }: BlockComponentProps) {
+export function Carousel({ block, props, className, attributes, partAttributes, slots, mode, labels }: BlockComponentProps & { labels?: CarouselLabels }) {
   const track = useRef<HTMLDivElement>(null)
   const [count, setCount] = useState(0)
   const [index, setIndex] = useState(0)
@@ -60,9 +75,11 @@ export function Carousel({ block, props, className, attributes, slotAttributes, 
     return () => observer.disconnect()
   }, [])
 
-  const label = (name: keyof typeof L, values?: Record<string, number>) => labelOf(props, L, name, values)
+  const L = labels ? { ...CAROUSEL_LABELS, ...labels } : CAROUSEL_LABELS
+  const label = (name: keyof typeof CAROUSEL_LABELS, values?: Record<string, number>) => labelOf(props, L, name, values)
   const slideRole = label('slideRole')
-  const slideLabel = textOr(props.slideLabel, L.slideLabel)
+  // The template, filled in per slide below.
+  const slideLabel = label('slideLabel')
 
   // Label each slide "i of n"; in fade mode hide all but the current one.
   useEffect(() => {
@@ -71,7 +88,7 @@ export function Carousel({ block, props, className, attributes, slotAttributes, 
     slidesOf(el).forEach((slide, i) => {
       slide.setAttribute('role', 'group')
       slide.setAttribute('aria-roledescription', slideRole)
-      slide.setAttribute('aria-label', labelOf({ slideLabel }, L, 'slideLabel', { n: i + 1, count }))
+      slide.setAttribute('aria-label', labelOf({}, { slideLabel }, 'slideLabel', { n: i + 1, count }))
       if (!fade) return
       slide.toggleAttribute('data-slide-off', i !== index)
       slide.inert = i !== index
@@ -127,7 +144,13 @@ export function Carousel({ block, props, className, attributes, slotAttributes, 
 
   const showArrows = props.arrows !== false && count > 1
   const showDots = props.dots === true && count > 1
-  const trackClass = fade ? `${C.fade} ${count ? C.fadeReady : C.fadeBefore}` : C.scroll
+  const list = unwrapsList(block.slots?.slides ?? [])
+  const trackClass = fade
+    ? joinClasses(C.fade, list ? C.fadeList : undefined, count ? C.fadeReady : C.fadeBefore, !count && list ? C.fadeBeforeList : undefined)
+    : joinClasses(C.scroll, list ? C.scrollList : undefined)
+  // The parts' own classes (`block.partClassName`) join the component's classes.
+  const arrowClass = joinClasses(C.button, partAttributes.arrow?.className)
+  const dotClass = joinClasses(C.button, partAttributes.dot?.className)
   // An empty arrow slot shows a chevron; on the canvas a filled one shows its blocks.
   const arrowContent = (slot: 'previous' | 'next') =>
     (block.slots?.[slot]?.length ?? 0) > 0 ? slots[slot] : <Chevron className={C.icon} direction={slot === 'previous' ? 'left' : 'right'} />
@@ -138,7 +161,7 @@ export function Carousel({ block, props, className, attributes, slotAttributes, 
     <section
       {...attributes}
       aria-roledescription={label('carouselRole')}
-      aria-label={textOr(props.label, 'Carousel')}
+      aria-label={label('label')}
       className={className}
       onFocus={() => setPaused(true)}
       onBlur={(event) => {
@@ -150,10 +173,10 @@ export function Carousel({ block, props, className, attributes, slotAttributes, 
       {/* A scroll container takes the keyboard focus, so arrow keys can move it. */}
       {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex, jsx-a11y/no-static-element-interactions */}
       <div
-        {...slotAttributes.slides}
+        {...partAttributes.slides}
         ref={track}
         data-carousel-track=""
-        className={joinClasses(trackClass, slotAttributes.slides?.className)}
+        className={joinClasses(trackClass, partAttributes.slides?.className)}
         aria-live={playing ? 'off' : 'polite'}
         tabIndex={fade || canvas ? undefined : 0}
         onKeyDown={onTrackKey}
@@ -161,7 +184,7 @@ export function Carousel({ block, props, className, attributes, slotAttributes, 
         {slots.slides}
       </div>
       {showArrows || showDots || autoplay > 0 ? (
-        <div data-carousel-controls="" className={C.controls}>
+        <div data-carousel-controls="" className={joinClasses(C.controls, partAttributes.controls?.className)}>
           {showDots ? (
             <div data-carousel-dots="" className={C.dots}>
               {Array.from({ length: count }, (_, i) => (
@@ -169,7 +192,7 @@ export function Carousel({ block, props, className, attributes, slotAttributes, 
                   key={i}
                   type="button"
                   data-carousel-dot=""
-                  className={C.button}
+                  className={dotClass}
                   aria-label={label('dotLabel', { n: i + 1, count })}
                   aria-current={i === index ? 'true' : undefined}
                   onClick={() => goTo(i)}
@@ -179,17 +202,17 @@ export function Carousel({ block, props, className, attributes, slotAttributes, 
           ) : null}
           <div data-carousel-arrows="" className={C.arrows}>
             {autoplay > 0 ? (
-              <button type="button" data-carousel-pause="" className={C.button} onClick={() => setStopped((value) => !value)}>
+              <button type="button" data-carousel-pause="" className={joinClasses(C.button, partAttributes.pause?.className)} onClick={() => setStopped((value) => !value)}>
                 {stopped ? label('playLabel') : label('pauseLabel')}
               </button>
             ) : null}
             {showArrows ? (
               <>
                 <button
-                  {...slotAttributes.previous}
+                  {...partAttributes.previous}
                   type="button"
                   data-carousel-arrow="previous"
-                  className={C.button}
+                  className={arrowClass}
                   aria-label={label('previousLabel')}
                   disabled={!loop && index <= 0}
                   onClick={() => goTo(index - 1)}
@@ -197,10 +220,10 @@ export function Carousel({ block, props, className, attributes, slotAttributes, 
                   {arrowContent('previous')}
                 </button>
                 <button
-                  {...slotAttributes.next}
+                  {...partAttributes.next}
                   type="button"
                   data-carousel-arrow="next"
-                  className={C.button}
+                  className={arrowClass}
                   aria-label={label('nextLabel')}
                   disabled={!loop && index >= count - 1}
                   onClick={() => goTo(index + 1)}

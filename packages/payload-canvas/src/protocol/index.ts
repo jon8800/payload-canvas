@@ -28,6 +28,11 @@ export type CanvasInit = {
   regions?: RegionConfig[]
   /** Collection -> relationship field path -> related collection, for `<path>.$url` bindings. */
   relations?: Record<string, Record<string, string>>
+  /**
+   * Full API path that lists the editable classes (`GET {api}/builder/classes`). The canvas compiles
+   * their latest drafts, and follows the editor's edits on `CLASSES_CHANNEL`. Left out: no classes.
+   */
+  classesEndpoint?: string
 }
 
 export type PointerKind = 'move' | 'leave' | 'click'

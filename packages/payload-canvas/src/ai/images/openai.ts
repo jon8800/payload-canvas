@@ -92,7 +92,8 @@ export function openAIImageAdapter(options: OpenAIImageAdapterOptions = {}): AiI
   const keyHint = `Check ${keyEnv} in .env and restart the server.`
   const context = { label, model, keyHint }
   // Only OpenAI itself needs a key for sure; a local server may not.
-  const setupProblem = !hostOf(base) ? 'Set baseURL to the API base URL, for example https://api.openai.com/v1.' : official && !apiKey ? `No OpenAI API key for image generation. Set ${keyEnv} in .env and restart the server.` : null
+  const keyMissing = Boolean(hostOf(base)) && official && !apiKey
+  const setupProblem = !hostOf(base) ? 'Set baseURL to the API base URL, for example https://api.openai.com/v1.' : keyMissing ? `No OpenAI API key for image generation. Set ${keyEnv} in .env and restart the server.` : null
   const url = base.endsWith('/images/generations') ? base : `${base}/images/generations`
 
   return {
@@ -103,13 +104,17 @@ export function openAIImageAdapter(options: OpenAIImageAdapterOptions = {}): AiI
     setupProblem,
     keyEnv,
     keyUrl: official ? 'https://platform.openai.com/api-keys' : null,
+    acceptsApiKey: true,
+    missingKey: keyMissing,
     async generate(request): Promise<AiImageResult> {
-      if (setupProblem) throw new AiImageError('auth', setupProblem)
+      // A key from the AI settings wins over the key from the options.
+      const key = clean(request.apiKey) ?? apiKey
+      if (setupProblem && !(keyMissing && key)) throw new AiImageError('auth', setupProblem)
       const sizeValue = size ? size(request.aspectRatio, model) : openAIImageSize(model, request.aspectRatio)
       const response = await postImageRequest({
         ...transport,
         url,
-        headers: { ...(apiKey ? { Authorization: bearer(apiKey) } : {}), ...transport.headers },
+        headers: { ...(key ? { Authorization: bearer(key) } : {}), ...transport.headers },
         body: {
           model,
           prompt: request.prompt,

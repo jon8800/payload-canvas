@@ -16,6 +16,8 @@ import {
 } from '../../core'
 import type { CanvasCssInput, TailwindPlugins } from '../../css'
 import { createCanvasCompiler, type CanvasCompiler } from '../../css/browser'
+import { classNamesOf, withoutClassNames } from '../../classes/shared'
+import { useCanvasClasses, useClassSheet } from './classes'
 import {
   keyAction,
   post,
@@ -31,6 +33,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import { flushSync } from 'react-dom'
 
 import { defaultResolveLink, RenderLayout, type BlockComponents, type PageData, type ResolveLink } from '../index'
+import { CanvasModeContext } from '../render/canvasMode'
 import type { CanvasScope, CanvasServer } from '../render/canvasServerTypes'
 import { LayoutOutlet, LayoutOutletContext, LayoutOutletPresence } from '../render/LayoutOutlet'
 import { LAYOUT_ROOT_ATTRIBUTE, REGION_ATTRIBUTE } from '../render/regions'
@@ -182,8 +185,21 @@ const canvasMode = () => (new URLSearchParams(window.location.search).get('mode'
 export function BuilderCanvas(props: BuilderCanvasProps) {
   // Null on the server and in the hydration render: the page reads its URL in the browser only.
   const mode = useSyncExternalStore(subscribeNothing, canvasMode, () => null)
-  if (mode === 'thumbnail') return <ThumbnailCanvas {...props} />
-  if (mode === 'editor') return <EditorCanvas {...props} />
+  // `useCanvasMode()` in block components (and client components inside server blocks) reads it.
+  if (mode === 'thumbnail') {
+    return (
+      <CanvasModeContext.Provider value="thumbnail">
+        <ThumbnailCanvas {...props} />
+      </CanvasModeContext.Provider>
+    )
+  }
+  if (mode === 'editor') {
+    return (
+      <CanvasModeContext.Provider value="canvas">
+        <EditorCanvas {...props} />
+      </CanvasModeContext.Provider>
+    )
+  }
   return null
 }
 
@@ -791,6 +807,7 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
 
   // The CSS endpoint comes from the admin, or from `?cssEndpoint=` when the page is opened alone.
   const cssEndpoint = init?.cssEndpoint ?? null
+  const [cssInput, setCssInput] = useState<CanvasCssInput | null>(null)
   useEffect(() => {
     const endpoint = cssEndpoint ?? new URLSearchParams(window.location.search).get('cssEndpoint')
     if (!endpoint) return
@@ -798,8 +815,31 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     fetch(endpoint, { credentials: 'include' })
       .then(async (res) => {
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-        return createCanvasCompiler((await res.json()) as CanvasCssInput, pluginsRef.current)
+        const input = (await res.json()) as CanvasCssInput
+        if (!cancelled) setCssInput(input)
       })
+      .catch((error: unknown) => {
+        if (cancelled) return
+        setCompiler({ status: 'failed' })
+        send({ type: 'error', message: `Canvas CSS failed to load: ${String(error)}` })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [cssEndpoint])
+
+  // Editable classes: their own stylesheet, compiled from the latest drafts. The layout's CSS
+  // leaves their names out, as the site's page CSS does.
+  const dbClasses = useCanvasClasses(init ? (init.classesEndpoint ?? null) : null)
+  const classSheet = useClassSheet(cssInput, dbClasses, pluginsRef.current)
+  const classNames = useMemo(() => classNamesOf(dbClasses ?? []), [dbClasses])
+  const namesKey = useMemo(() => [...classNames].toSorted().join(' '), [classNames])
+  // A fresh compiler for every new set of class names: a compiler outputs every class it ever
+  // built, and a class name may have been built as a code `@utility` before.
+  useEffect(() => {
+    if (!cssInput) return
+    let cancelled = false
+    createCanvasCompiler(cssInput, pluginsRef.current)
       .then((next) => {
         if (!cancelled) setCompiler({ status: 'ready', compiler: next })
       })
@@ -811,7 +851,7 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     return () => {
       cancelled = true
     }
-  }, [cssEndpoint])
+  }, [cssInput, namesKey])
 
   // Bind the template to the sample document, load collection lists, then replace upload and
   // relationship IDs with documents. The newest layout wins.
@@ -902,8 +942,8 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
   // One compile per distinct class set (about 4 ms). `null` until a layout is resolved.
   // Block definitions add the classes their components use (`BlockDefinition.classes`).
   const classKey = useMemo(
-    () => (resolved ? collectClasses(resolved, definitions).join(' ') : null),
-    [resolved, definitions],
+    () => (resolved ? withoutClassNames(collectClasses(resolved, definitions), classNames).join(' ') : null),
+    [resolved, definitions, classNames],
   )
   const css = useMemo(() => {
     if (compiler.status !== 'ready' || classKey === null) return ''
@@ -950,7 +990,9 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
 
   // With regions the first frame is awaited too (also in the render before its request starts), so nothing moves when it arrives.
   const frameLoading = Boolean(init?.regions?.length) && (frame.status === 'loading' || frame.status === 'off')
-  const visible = shown && compiler.status !== 'loading' && pageData !== undefined && !frameLoading
+  // The classes' stylesheet first, so blocks never show without their classes.
+  const classesReady = !init?.classesEndpoint || compiler.status === 'failed' || classSheet !== null
+  const visible = shown && compiler.status !== 'loading' && pageData !== undefined && !frameLoading && classesReady
 
   // Observes the current block and slot elements and measures.
   const observeBlocks = useCallback(() => {
@@ -1056,6 +1098,9 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
   return (
     <>
       <style data-builder-editor-css="">{EDITOR_CSS}</style>
+      {/* After the site's CSS and the theme (head), before the layout's CSS (in the root): a class
+          beats a code `@utility` with its name, and a block's own classes beat its class. */}
+      {classSheet?.css ? <style data-builder-classes="">{classSheet.css}</style> : null}
       <div ref={rootRef} data-builder-root="">
         {page}
       </div>

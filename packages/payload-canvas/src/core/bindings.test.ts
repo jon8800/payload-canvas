@@ -197,8 +197,8 @@ describe('validation', () => {
 
 describe('templateConditions', () => {
   it('returns a non-empty plain object, else null', () => {
-    assert.deepEqual(templateConditions({ conditions: { tier: { equals: 'vip' } } }), { tier: { equals: 'vip' } })
-    for (const conditions of [undefined, null, {}, [], 'tier', 3]) assert.equal(templateConditions({ conditions }), null)
+    assert.deepEqual(templateConditions({ conditions: { category: { equals: 'news' } } }), { category: { equals: 'news' } })
+    for (const conditions of [undefined, null, {}, [], 'category', 3]) assert.equal(templateConditions({ conditions }), null)
     assert.equal(templateConditions(null), null)
   })
 })

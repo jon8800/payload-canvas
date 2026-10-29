@@ -5,6 +5,7 @@ import type { CSSProperties } from 'react'
 
 import { findBlock, findLocation } from '../../core'
 import type { DropIndicator, Rect } from '../../core/types'
+import { DropOutlines } from './dnd/DropOutlines'
 import { smoothView } from './dnd/smooth'
 import { BlockIcon, Icon } from './icons'
 import { inlineEditing } from './inline'
@@ -16,6 +17,7 @@ import { MenuButton } from './menu/Menu'
 import { blockName } from './names'
 import { PeerCursors, PeerSelections } from './live/PresenceUI'
 import { RegionOverlay } from './regions/RegionOverlay'
+import { SectionVariantSwitch } from './sections/variants'
 import { shortName } from './live/presence'
 import { toRect, useRuntime, type DragData, type DragState } from './runtime'
 import { useEditor } from './store'
@@ -146,6 +148,7 @@ export function Overlay() {
           )
         })}
       {parentRect && <div className="builder-editor__parent-hint" style={box(parentRect)} />}
+      <DropOutlines />
       {smooth?.placeholder && (
         // The outer box follows the canvas scroll at once; the gap inside glides to each new place.
         <div className="builder-dnd-scroll" style={{ transform: `translate3d(${-gapShift.x}px, ${-gapShift.y}px, 0)` }}>
@@ -298,6 +301,8 @@ function ActionBar({ id, label, icon, parentId, rect, inside, below, hidden }: A
 
   return (
     <div className={`builder-editor__actions builder-editor__actions--${place}`} style={style}>
+      {/* A ready-made section with variants: ‹ Split › switches it in place. */}
+      <SectionVariantSwitch id={id} />
       <button
         ref={setNodeRef}
         type="button"

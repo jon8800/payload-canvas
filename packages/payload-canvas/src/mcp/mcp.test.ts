@@ -109,6 +109,10 @@ describe('builderMcpTools', () => {
         'validateLayout:read',
         'getPreviewUrl:read',
         'generateImage:create',
+        'listClasses:read',
+        'getClass:read',
+        'upsertClass:update',
+        'deleteClass:delete',
       ],
     )
     for (const t of tools) {
@@ -303,17 +307,25 @@ describe('section variants', () => {
     collections: { pages: { field: 'layout', url: (doc) => `/${String(doc.slug)}` } },
   })
   const variantTool = (name: string) => variantTools.find((t) => t.name === name) as BuilderMcpTool
-  it('listSections lists a variant after its section, and insertSection inserts it by id', async () => {
+  it('listSections lists variants under their section, and insertSection inserts one by `variant`', async () => {
     const { req } = fakeRequest({ version: 1, blocks: [] })
     const listed = json(await variantTool('listSections').handler({ collection: 'pages' }, req, {})).sections as Record<string, unknown>[]
-    assert.deepEqual(listed.map((s) => [s.id, s.label, s.variantOf, s.category]), [
-      ['hero', 'Hero', undefined, 'Heroes'],
-      ['hero/plain', 'Hero (Plain)', 'hero', 'Heroes'],
-    ])
-    const inserted = json(await variantTool('insertSection').handler({ collection: 'pages', id: 'p1', sectionId: 'hero/plain' }, req, {}))
-    assert.equal(inserted.section, 'hero/plain')
+    assert.deepEqual(listed.map((s) => [s.id, s.label, s.category]), [['hero', 'Hero', 'Heroes']])
+    assert.deepEqual(listed[0]?.variants, [{ id: 'plain', label: 'Plain', outline: 'heading "Plain hero"' }])
+    const inserted = json(await variantTool('insertSection').handler({ collection: 'pages', id: 'p1', sectionId: 'hero', variant: 'plain' }, req, {}))
+    assert.equal(inserted.section, 'hero')
+    assert.equal(inserted.variant, 'plain')
     const layout = json(await variantTool('getLayout').handler({ collection: 'pages', id: 'p1' }, req, {})).layout as Layout
     assert.equal(layout.blocks[0]?.props?.text, 'Plain hero')
+    // The root block remembers its section, so editors can switch it to another version.
+    assert.deepEqual(layout.blocks[0]?.section, { id: 'hero', variant: 'plain' })
+  })
+  it('insertSection still takes the old "<section>/<variant>" id and explains an unknown variant', async () => {
+    const { req } = fakeRequest({ version: 1, blocks: [] })
+    const inserted = json(await variantTool('insertSection').handler({ collection: 'pages', id: 'p1', sectionId: 'hero/plain' }, req, {}))
+    assert.equal(inserted.variant, 'plain')
+    const wrong = await variantTool('insertSection').handler({ collection: 'pages', id: 'p1', sectionId: 'hero', variant: 'nope' }, req, {})
+    assert.match(JSON.stringify(wrong), /no variant \\"nope\\"/)
   })
 })
 
@@ -597,7 +609,7 @@ describe('template tools', () => {
           return {
             docs: [
               { id: 5, name: 'Post template', targetCollection: 'posts', isDefault: true, _status: 'published', layout: { version: 1, blocks: [{ id: 'a', type: 'stack' }] } },
-              { id: 6, name: 'VIP', targetCollection: 'posts', isDefault: false, conditions: { tier: { equals: 'vip' } } },
+              { id: 6, name: 'Featured posts', targetCollection: 'posts', isDefault: false, priority: 2, conditions: { featured: { equals: true } } },
             ],
           }
         },
@@ -614,7 +626,8 @@ describe('template tools', () => {
       blocks: 1,
       editorPath: '/admin/builder/builder-templates/5',
     })
-    assert.deepEqual(body.templates[1].conditions, { tier: { equals: 'vip' } })
+    assert.deepEqual(body.templates[1].conditions, { featured: { equals: true } })
+    assert.equal(body.templates[1].priority, 2)
   })
 })
 

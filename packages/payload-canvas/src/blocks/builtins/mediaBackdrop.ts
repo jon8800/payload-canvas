@@ -21,7 +21,7 @@ export function mediaBackdropBlock(mediaCollection = 'media'): BlockDefinition {
   return defineBlock({
     type: MEDIA_BACKDROP_BLOCK,
     label: 'Media backdrop',
-    icon: 'image',
+    icon: 'mediaBackdrop',
     category: 'Media',
     fields: [
       { name: 'image', type: 'upload', relationTo, label: 'Photo' },

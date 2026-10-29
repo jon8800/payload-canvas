@@ -4,33 +4,34 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 import { defaultBlocks } from '../blocks'
-import { attachListItems, RenderLayout, type ResolveLink } from '../react'
+import { attachListItems, loadLayoutData, RenderLayout, type ResolveLink } from '../react'
 import { bindingPaths, bindingRelations, bindingValue, type BindingOptions } from './bindings'
 import type { Layout, TemplateContext } from './types'
 
-const relations = bindingRelations([
+const collections = [
   {
-    slug: 'models',
+    slug: 'posts',
     fields: [
-      { name: 'name', type: 'text' },
+      { name: 'title', type: 'text' },
       { name: 'categories', type: 'relationship', relationTo: 'categories', hasMany: true },
-      { name: 'agency', type: 'relationship', relationTo: ['agencies', 'pages'] },
+      { name: 'source', type: 'relationship', relationTo: ['authors', 'pages'] },
       { name: 'gallery', type: 'array', fields: [{ name: 'photo', type: 'upload', relationTo: 'media' }] },
-      { type: 'row', fields: [{ name: 'home', type: 'relationship', relationTo: 'locations' }] },
+      { type: 'row', fields: [{ name: 'venue', type: 'relationship', relationTo: 'venues' }] },
     ],
   },
-  { slug: 'locations', fields: [{ name: 'region', type: 'relationship', relationTo: 'regions' }] },
+  { slug: 'venues', fields: [{ name: 'city', type: 'relationship', relationTo: 'cities' }] },
   { slug: 'plain', fields: [{ name: 'title', type: 'text' }] },
-])
+]
+const relations = bindingRelations(collections)
 const url: BindingOptions['url'] = (context) => `/${context.collection}/${String(context.doc.slug)}`
-const model: TemplateContext = {
-  collection: 'models',
+const post: TemplateContext = {
+  collection: 'posts',
   doc: {
     id: 1,
-    slug: 'ada',
-    categories: [{ id: 3, slug: 'vip' }, 4],
-    agency: { relationTo: 'agencies', value: { id: 9, slug: 'luxe' } },
-    home: { id: 2, slug: 'north', region: { id: 5, slug: 'qld' } },
+    slug: 'hello',
+    categories: [{ id: 3, slug: 'news' }, 4],
+    source: { relationTo: 'authors', value: { id: 9, slug: 'jane' } },
+    venue: { id: 2, slug: 'town-hall', city: { id: 5, slug: 'springfield' } },
   },
 }
 
@@ -40,41 +41,53 @@ const resolveLink: ResolveLink = (link) => {
   return doc?.slug ? `/${link.reference?.relationTo}/${doc.slug}` : null
 }
 
+const listLayout: Layout = {
+  version: 1,
+  blocks: [
+    {
+      id: 'l',
+      type: 'collectionList',
+      props: { collection: 'posts' },
+      slots: { item: [{ id: 'k', type: 'link', bindings: { link: 'categories.0.$url' }, slots: { children: [{ id: 't', type: 'text', props: { text: 'Category' } }] } }] },
+    },
+  ],
+}
+
 describe('$url of related documents', () => {
   it('bindingRelations maps each relationship path to its collection', () => {
     assert.deepEqual(relations, {
-      models: { categories: 'categories', 'gallery.photo': 'media', home: 'locations' },
-      locations: { region: 'regions' },
+      posts: { categories: 'categories', 'gallery.photo': 'media', venue: 'venues' },
+      venues: { city: 'cities' },
     })
   })
   it('<path>.$url links to the related document, through rows and several hops', () => {
     const options = { url, relations }
-    assert.equal(bindingValue(model, 'categories.0.$url', options), '/categories/vip')
-    assert.equal(bindingValue(model, 'home.region.$url', options), '/regions/qld')
+    assert.equal(bindingValue(post, 'categories.0.$url', options), '/categories/news')
+    assert.equal(bindingValue(post, 'venue.city.$url', options), '/cities/springfield')
     // A { relationTo, value } pair names its own collection.
-    assert.equal(bindingValue(model, 'agency.$url', { url }), '/agencies/luxe')
+    assert.equal(bindingValue(post, 'source.$url', { url }), '/authors/jane')
     // An id alone, an unknown path or no relations: no URL.
-    assert.equal(bindingValue(model, 'categories.1.$url', options), undefined)
-    assert.equal(bindingValue(model, 'name.$url', options), undefined)
-    assert.equal(bindingValue(model, 'categories.0.$url', { url }), undefined)
-    assert.deepEqual(bindingPaths('link', 'categories.0.$url'), ['categories.0'])
+    assert.equal(bindingValue(post, 'categories.1.$url', options), undefined)
+    assert.equal(bindingValue(post, 'title.$url', options), undefined)
+    assert.equal(bindingValue(post, 'categories.0.$url', { url }), undefined)
+    assert.deepEqual(bindingPaths('categories.0.$url'), ['categories.0'])
   })
-  it('RenderLayout resolves it in list items with the `relations` prop', () => {
-    const layout: Layout = attachListItems(
-      {
-        version: 1,
-        blocks: [
-          {
-            id: 'l',
-            type: 'collectionList',
-            props: { collection: 'models' },
-            slots: { item: [{ id: 'k', type: 'link', bindings: { link: 'categories.0.$url' }, slots: { children: [{ id: 't', type: 'text', props: { text: 'Type' } }] } }] },
-          },
-        ],
-      },
-      new Map([['l', [model.doc]]]),
-    )
+  it('RenderLayout resolves it in list items with the `relations` prop (the canvas)', () => {
+    const layout = attachListItems(listLayout, new Map([['l', [post.doc]]]))
     const html = renderToStaticMarkup(createElement(RenderLayout, { layout, blocks: defaultBlocks(), resolveLink, relations }))
-    assert.match(html, /href="\/categories\/vip"/)
+    assert.match(html, /href="\/categories\/news"/)
+  })
+  it('loadLayoutData reads the relations from the Payload config: the site passes them nowhere', async () => {
+    const payload = {
+      config: { collections },
+      collections: { posts: { config: {} } },
+      find: async () => ({ docs: [post.doc], totalPages: 1 }),
+      logger: { error() {} },
+    }
+    const layout = await loadLayoutData(listLayout, defaultBlocks(), payload as never)
+    const html = renderToStaticMarkup(createElement(RenderLayout, { layout, blocks: defaultBlocks(), resolveLink }))
+    assert.match(html, /href="\/categories\/news"/)
+    // The runtime prop never reaches the component's props as HTML.
+    assert.doesNotMatch(html, /\$relations/)
   })
 })

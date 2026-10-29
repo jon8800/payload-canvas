@@ -1,6 +1,7 @@
 // Names for blocks in the outline, the breadcrumbs, the inspector and the publish problems.
 // Pure functions: the type label comes from the caller (the block definition's `label`).
 
+import { iconLabel } from '../../blocks/builtins/icon'
 import type { Block } from '../../core/types'
 import { FIELD_BLOCK, LIST_BLOCK } from './templates/binding'
 
@@ -8,7 +9,7 @@ import { FIELD_BLOCK, LIST_BLOCK } from './templates/binding'
 const PREVIEW_MAX = 80
 
 /** Block types whose text names a container only when nothing else inside has text. */
-const CHROME_TYPES = new Set(['menu', 'button'])
+const CHROME_TYPES = new Set(['menu', 'button', 'icon'])
 
 /** HTML tags of a Stack that read better as a name than "Stack". */
 const TAG_NAMES: Record<string, string> = {
@@ -115,6 +116,9 @@ function ownPreview(block: Block): string {
       return innerTitle(block) || linkText(props.link)
     case 'video':
       return str('url')
+    case 'icon':
+      // The label for screen readers, else the icon's name ("arrowRight" -> "arrow right").
+      return clip(str('label') || iconLabel(str('name')))
     default:
       if (childrenOf(block).length > 0) return innerTitle(block)
       return clip(str('text') || str('label') || str('quote') || str('title') || str('alt'))

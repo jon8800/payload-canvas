@@ -5,6 +5,7 @@ import { useConfig, useRouteTransition } from '@payloadcms/ui'
 import { useRouter } from 'next/navigation'
 import { memo, useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 
+import { sectionVersion, sectionVersions } from '../../core/sections'
 import type { Block, BlockDefinition, SectionDefinition } from '../../core/types'
 import { builderViewPath } from '../../plugin/links'
 import { insertBlocks, insertNewBlock, sectionPosition } from './actions'
@@ -13,6 +14,7 @@ import { MenuButton } from './menu/Menu'
 import { useRuntime, type DragData } from './runtime'
 import { requestDeleteSection, requestRenameSection } from './sections/SectionDialog'
 import { useSectionThumbnail } from './sections/useThumbnail'
+import { VariantArrows } from './sections/variants'
 import { useValue } from './valueStore'
 
 const BLOCK_CATEGORIES = ['Layout', 'Content', 'Media', 'Interactive', 'Dynamic']
@@ -150,7 +152,10 @@ const SectionList = memo(function SectionList({ query }: { query: string }) {
   }, [controller])
   const groups = useMemo(() => {
     const own = (saved ?? []).filter((s) => matches(query, s.label, s.category, SAVED))
-    const rest = groupBy(builtIn.filter((s) => matches(query, s.label, s.description, s.category)), SECTION_CATEGORIES)
+    const rest = groupBy(
+      builtIn.filter((s) => matches(query, s.label, s.description, s.category, ...(s.variants ?? []).map((v) => v.label))),
+      SECTION_CATEGORIES,
+    )
     return own.length > 0 ? ([[SAVED, own], ...rest] as [string, SectionDefinition[]][]) : rest
   }, [builtIn, saved, query])
   if (builtIn.length === 0 && (saved?.length ?? 0) === 0) {
@@ -196,21 +201,30 @@ export function SectionThumb({ section }: { section: SectionDefinition }) {
   )
 }
 
+/**
+ * One card per section. A section with variants gets ‹ 2 / 3 › arrows that flip the card between
+ * its versions; a click or a drag inserts the version shown.
+ */
 function SectionCard({ section }: { section: SectionDefinition }) {
   const runtime = useRuntime()
-  const root = section.blocks[0]
+  const versions = useMemo(() => sectionVersions(section), [section])
+  const [index, setIndex] = useState(0)
+  const at = Math.min(index, versions.length - 1)
+  // The version shown, ready to insert: its root block remembers the section and the variant.
+  const shown = useMemo(() => sectionVersion(section, versions[at]?.variant) ?? section, [section, versions, at])
+  const root = shown.blocks[0]
   const isSaved = section.savedId !== undefined
   const data: DragData = {
     // Drop rules check the root block's type.
     source: { kind: 'new', blockType: root?.type ?? 'stack' },
-    label: section.label,
+    label: shown.label,
     icon: 'section',
-    blocks: section.blocks,
+    blocks: shown.blocks,
   }
   const { setNodeRef, listeners, attributes } = useDraggable({ id: `section:${section.id}`, data, disabled: !root })
 
   const insert = () => {
-    if (insertBlocks(runtime, section.blocks, sectionPosition(runtime))) runtime.notify(`Added ${section.label}`)
+    if (insertBlocks(runtime, shown.blocks, sectionPosition(runtime))) runtime.notify(`Added ${shown.label}`)
   }
 
   return (
@@ -219,18 +233,28 @@ function SectionCard({ section }: { section: SectionDefinition }) {
         ref={setNodeRef}
         type="button"
         className="builder-editor__card"
-        data-tooltip={`Add ${section.label}`}
+        data-tooltip={`Add ${shown.label}`}
         onClick={insert}
         {...listeners}
         {...attributes}
       >
-        <SectionThumb section={section} />
+        <SectionThumb section={shown} />
         <span className="builder-editor__card-text">
-          <span className="builder-editor__card-label">{section.label}</span>
+          <span className="builder-editor__card-label">{shown.label}</span>
           {isSaved && section.category && <span className="builder-editor__card-desc">{section.category}</span>}
-          {!isSaved && section.description && <span className="builder-editor__card-desc">{section.description}</span>}
+          {!isSaved && shown.description && <span className="builder-editor__card-desc">{shown.description}</span>}
         </span>
       </button>
+      {versions.length > 1 && (
+        <VariantArrows
+          count={versions.length}
+          index={at}
+          text={`${at + 1} / ${versions.length}`}
+          label={`${section.label} versions`}
+          className="builder-variants--card"
+          onChange={setIndex}
+        />
+      )}
       {isSaved && <SavedSectionMenu section={section} />}
     </div>
   )

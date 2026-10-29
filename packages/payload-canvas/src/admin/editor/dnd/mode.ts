@@ -62,3 +62,44 @@ export function dragMode(runtime: Runtime): DragMode {
 export function useDragModeSetting(runtime: Runtime): DragMode {
   return useValue(dragModeChoice(runtime)) ?? defaultDragMode(runtime)
 }
+
+// Drop outlines: while a block is dragged, thin outlines show every slot that takes it. The plugin
+// option `editor.dropOutlines` sets the default; a user's choice overrides it in this browser.
+
+const OUTLINES_KEY = 'payload-builder:drop-outlines'
+
+function readOutlines(): boolean | null {
+  try {
+    const value = localStorage.getItem(OUTLINES_KEY)
+    return value === 'on' ? true : value === 'off' ? false : null
+  } catch {
+    return null
+  }
+}
+
+const outlineChoices = new WeakMap<Runtime, ValueStore<boolean | null>>()
+
+/** The user's own choice for drop outlines, or null to follow the plugin's default. */
+export function dropOutlinesChoice(runtime: Runtime): ValueStore<boolean | null> {
+  let store = outlineChoices.get(runtime)
+  if (!store) {
+    store = createValueStore<boolean | null>(typeof window === 'undefined' ? null : readOutlines())
+    const own = store
+    own.subscribe(() => {
+      try {
+        const value = own.get()
+        if (value === null) localStorage.removeItem(OUTLINES_KEY)
+        else localStorage.setItem(OUTLINES_KEY, value ? 'on' : 'off')
+      } catch {
+        // Storage blocked: the choice lasts for this session only.
+      }
+    })
+    outlineChoices.set(runtime, store)
+  }
+  return store
+}
+
+/** True when drags show drop outlines: the user's choice, else the plugin's default (on). */
+export function useDropOutlines(runtime: Runtime): boolean {
+  return useValue(dropOutlinesChoice(runtime)) ?? runtime.config.editor?.dropOutlines ?? true
+}

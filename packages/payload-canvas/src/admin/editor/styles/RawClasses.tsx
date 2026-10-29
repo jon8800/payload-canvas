@@ -1,22 +1,17 @@
 'use client'
 
 // Every class of the block in one editable field, with autocomplete from the theme's class list.
-// Typed variant prefixes ("md:hover:") and "!" / "-" stay in front of the picked class.
+// The site's own classes come first, with their labels; the field lists them when it gets the
+// focus or after a typed variant ("md:"). Typed variant prefixes ("md:hover:") and "!" / "-" stay
+// in front of the picked class.
 
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 
 import { unmanagedClasses, type StyleTokens } from '../../../core'
 import { useStyles } from './context'
 import { ResetIcon } from './icons'
-import { filterSuggestions, Popover, SuggestList, usePopover, type Suggestion } from './popover'
-
-const classSuggestionCache = new WeakMap<StyleTokens, Suggestion[]>()
-
-function classSuggestions(tokens: StyleTokens): Suggestion[] {
-  let list = classSuggestionCache.get(tokens)
-  if (!list) classSuggestionCache.set(tokens, (list = tokens.classList.map((value) => ({ value }))))
-  return list
-}
+import { Popover, SuggestList, usePopover, type Suggestion } from './popover'
+import { classSuggestions, siteClassOf } from './suggestions'
 
 /** The word around the caret, split into its prefix ("md:hover:-") and the utility being typed. */
 function wordAt(text: string, caret: number) {
@@ -40,7 +35,8 @@ function knownClasses(tokens: StyleTokens): Known {
     const stem = NUMERIC.exec(name)?.[1]
     if (stem) numericStems.add(stem)
   }
-  known = { names: new Set(tokens.classList), numericStems }
+  // The site's own classes count too (editable classes are in no Tailwind class list).
+  known = { names: new Set([...tokens.classList, ...(tokens.siteClasses ?? []).map((c) => c.name)]), numericStems }
   knownCache.set(tokens, known)
   return known
 }
@@ -70,37 +66,49 @@ function safeUnmanaged(className: string, tokens: StyleTokens): string[] {
 }
 
 export function RawClasses() {
-  const { blockId, className, tokens, setClassName } = useStyles()
+  const { blockId, className, tokens, setClassName, editingClass } = useStyles()
   const listId = useId()
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const pop = usePopover('manual', true)
   const [draft, setDraft] = useState<string | null>(null)
   const [caret, setCaret] = useState(0)
+  // -1: no item is chosen yet, so Enter and Tab keep their usual job.
   const [active, setActive] = useState(0)
+  // The field got the focus: it lists the site classes until the user types or picks one.
+  const [browse, setBrowse] = useState(false)
 
   const text = draft ?? className
   const word = wordAt(text, caret)
-  const all = classSuggestions(tokens)
-  const items = useMemo(() => (word.query ? filterSuggestions(all, word.query, 60) : []), [all, word.query])
+  const listSite = !word.query && (browse || (draft !== null && word.prefix !== ''))
+  const own = useMemo(() => new Set(className.split(/\s+/)), [className])
+  const items = useMemo(
+    () => (word.query || listSite ? classSuggestions(tokens, word.query, 60, own) : []),
+    [tokens, word.query, listSite, own],
+  )
   const others = useMemo(() => safeUnmanaged(className, tokens), [className, tokens])
 
   const update = (next: string, nextCaret: number) => {
     setDraft(next)
     setCaret(nextCaret)
     setActive(0)
+    setBrowse(false)
     setClassName(next, `className:${blockId}`)
   }
 
+  // The picked class replaces the word at the caret, with the word's variant prefix. With the
+  // caret inside a class and nothing typed, it goes at the end instead, so no class is lost.
   const pick = (item: Suggestion) => {
-    const rest = text.slice(word.end).replace(/^\s*/, '')
     const inserted = `${word.prefix}${item.value} `
-    const next = `${text.slice(0, word.start)}${inserted}${rest}`
-    const nextCaret = word.start + inserted.length
+    const append = !word.query && !word.prefix && word.end > caret
+    const head = append ? `${text.trimEnd()}${text.trim() ? ' ' : ''}` : text.slice(0, word.start)
+    const rest = append ? '' : text.slice(word.end).replace(/^\s*/, '')
+    const next = `${head}${inserted}${rest}`
+    const nextCaret = head.length + inserted.length
     update(next, nextCaret)
     requestAnimationFrame(() => inputRef.current?.setSelectionRange(nextCaret, nextCaret))
   }
 
-  const open = draft !== null && items.length > 0
+  const open = (draft !== null || browse) && items.length > 0
   const { show, hide } = pop
   useEffect(() => {
     const el = inputRef.current
@@ -119,19 +127,21 @@ export function RawClasses() {
       const step = e.key === 'ArrowDown' ? 1 : -1
       setActive((i) => Math.max(0, Math.min(items.length - 1, i + step)))
     } else if (e.key === 'Enter' || e.key === 'Tab') {
-      e.preventDefault()
       const item = items[active]
+      if (e.key === 'Enter' || item) e.preventDefault()
       if (item) pick(item)
+      else setBrowse(false)
     } else if (e.key === 'Escape') {
       e.stopPropagation()
       setDraft(null)
+      setBrowse(false)
     }
   }
 
   return (
     <div className="builder-styles__raw">
       <label className="builder-styles__raw-label" htmlFor={`${listId}-input`}>
-        Classes
+        {editingClass ? `Classes of .${editingClass.name}` : 'Classes'}
       </label>
       <textarea
         id={`${listId}-input`}
@@ -144,7 +154,15 @@ export function RawClasses() {
         placeholder="bg-red-500 p-8 md:flex"
         onChange={(e) => update(e.target.value.replace(/\n/g, ' '), e.target.selectionStart)}
         onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
-        onBlur={() => setDraft(null)}
+        onFocus={(e) => {
+          setCaret(e.currentTarget.selectionStart)
+          setActive(-1)
+          setBrowse(true)
+        }}
+        onBlur={() => {
+          setDraft(null)
+          setBrowse(false)
+        }}
         onKeyDown={onKeyDown}
       />
       <Popover {...pop.props} className="builder-styles__popover--list">
@@ -158,14 +176,28 @@ export function RawClasses() {
           <ul className="builder-styles__chips">
             {others.map((name) => {
               const unknown = isUnknownClass(name, tokens)
+              // A site class shows its label, with the class name small after it.
+              const site = siteClassOf(name, tokens.siteClasses)
+              const tooltip = unknown
+                ? `“${name}” is not in the theme’s class list, so it may have no effect. Check the spelling.`
+                : site?.site.css
+                  ? `.${site.site.name} { ${site.site.css} }`
+                  : undefined
               return (
               <li
                 key={name}
                 className={`builder-styles__class-chip${unknown ? ' builder-styles__class-chip--unknown' : ''}`}
-                data-tooltip={unknown ? `“${name}” is not in the theme’s class list, so it may have no effect. Check the spelling.` : undefined}
+                data-tooltip={tooltip}
               >
                 {unknown && <span className="builder-styles__visually-hidden">Unknown class: </span>}
-                <code>{name}</code>
+                {site?.site.label ? (
+                  <span className="builder-styles__class-chip-label">
+                    {site.prefix}
+                    {site.site.label} <code className="builder-styles__suggest-name">{site.site.name}</code>
+                  </span>
+                ) : (
+                  <code>{name}</code>
+                )}
                 <button
                   type="button"
                   className="builder-styles__reset"

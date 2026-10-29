@@ -3,6 +3,7 @@ import { PayloadIcon } from '@payloadcms/ui/shared'
 import { notFound, redirect } from 'next/navigation'
 import type { AdminViewServerProps } from 'payload'
 
+import { aiSettingsOf } from '../../ai/settings'
 import { builderConfigOf, liveRuntimeOf, loadDocMeta, sessionTargetOf } from '../../live'
 import { fieldRegistryOf } from '../../live/fieldChecks'
 import type { BuilderDocMeta } from '../../live/types'
@@ -63,6 +64,9 @@ export async function BuilderView({ initPageResult, params, searchParams }: Admi
   if (!meta) notFound()
   if (!canUpdate) redirect(`${admin}/collections/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`)
 
+  // The assistant's readiness now: a key pasted in the AI settings counts without a restart.
+  const ai = await (aiSettingsOf(payload)?.clientConfig(req) ?? Promise.resolve(null)).catch(() => null)
+
   // oxlint-disable-next-line react/capitalized-calls -- Payload's helper (a function) renders the app's icon component
   const icon = RenderServerComponent({
     Component: payload.config.admin.components?.graphics?.Icon,
@@ -71,5 +75,13 @@ export async function BuilderView({ initPageResult, params, searchParams }: Admi
     serverProps: { i18n: req.i18n, locale: req.locale, params, payload, permissions, searchParams, user: req.user },
   })
 
-  return <BuilderScreen meta={meta} icon={icon} visibleEntities={initPageResult.visibleEntities} locale={typeof req.locale === 'string' ? req.locale : null} />
+  return (
+    <BuilderScreen
+      meta={meta}
+      icon={icon}
+      visibleEntities={initPageResult.visibleEntities}
+      locale={typeof req.locale === 'string' ? req.locale : null}
+      ai={ai}
+    />
+  )
 }

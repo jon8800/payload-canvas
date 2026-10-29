@@ -14,6 +14,7 @@ import {
   type RenderLayoutProps,
   type ResolvedLink,
 } from '../index'
+import { eagerComponents } from '../components/eager.test-data'
 
 const page = { id: 7, slug: 'about', title: 'About' }
 const pageRef = { type: 'reference', reference: { relationTo: 'pages', value: page } }
@@ -188,7 +189,7 @@ describe('editor attributes: canvas only', () => {
   })
 
   test('canvas mode marks every block, hidden and unknown ones included', () => {
-    const html = render({ layout: everything, components: { card: Card }, mode: 'canvas' })
+    const html = render({ layout: everything, components: { ...eagerComponents, card: Card }, mode: 'canvas' })
     const ids: string[] = []
     const walk = (list: Block[]) => {
       for (const block of list) {

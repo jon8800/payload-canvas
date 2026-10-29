@@ -22,7 +22,8 @@ import { isStructuralChange } from './fields/arrayState'
 import { CheckedTextField, NumberField } from './fields/CheckedInputs'
 import { FieldSection, GroupField } from './fields/GroupField'
 import { JsonField } from './fields/JsonField'
-import { WhereField } from './fields/WhereField'
+import { QueryFiltersField } from './fields/QueryFiltersField'
+import { ListWhereField } from './fields/ListWhereField'
 import { ManyValuesField } from './fields/ManyValuesField'
 import { PointField } from './fields/PointField'
 import { RichTextField } from './fields/RichTextField'
@@ -36,6 +37,7 @@ import { focusedField, propPathOf } from './live/field'
 import { PeerFieldNote } from './live/PresenceUI'
 import { useRuntime } from './runtime'
 import { BindingScopeProvider, FieldSlot } from './templates/Bindable'
+import { VisibilityField } from './templates/Visibility'
 import './fields/fields.scss'
 
 type Props = {
@@ -275,7 +277,23 @@ export function RenderBlockField({ field, onChange, path, value, siblings }: Pro
       if (where) {
         const collection = where.collectionField ? siblings?.[where.collectionField] : undefined
         return (
-          <WhereField
+          <ListWhereField
+            collection={typeof collection === 'string' ? collection : undefined}
+            description={description}
+            label={label}
+            onChange={onChange}
+            path={path}
+            required={required}
+            value={value}
+          />
+        )
+      }
+      // `admin.custom.builderQueryFilters`: a collection list's URL filters, edited as rows.
+      const queryFilters = field.admin?.custom?.builderQueryFilters as { collectionField?: string } | undefined
+      if (queryFilters) {
+        const collection = queryFilters.collectionField ? siblings?.[queryFilters.collectionField] : undefined
+        return (
+          <QueryFiltersField
             collection={typeof collection === 'string' ? collection : undefined}
             description={description}
             label={label}
@@ -525,6 +543,7 @@ export function BlockContentFields({ block }: { readonly block: Block }) {
             </FieldAccessProvider>
           </LocaleFieldsProvider>
         </FieldProblemsProvider>
+        <VisibilityField block={block} />
       </BindingScopeProvider>
     </div>
   )

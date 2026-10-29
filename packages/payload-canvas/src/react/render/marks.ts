@@ -7,6 +7,7 @@ import type { BlockComponentProps } from './types'
 
 const pageDataComponents = new WeakSet<object>()
 const serverComponents = new WeakSet<object>()
+const linkComponents = new WeakSet<object>()
 
 /**
  * Marks a block component that reads the page data (`BlockComponentProps.pageData`, the
@@ -21,6 +22,35 @@ export function withPageData<C extends ComponentType<BlockComponentProps>>(compo
 
 export const readsPageData = (component: unknown): boolean =>
   typeof component === 'function' && pageDataComponents.has(component)
+
+/**
+ * Marks a block component that renders links with the site's link component
+ * (`BlockComponentProps.linkComponent`, the `linkComponent` of `RenderLayout`, for example
+ * `next/link`). Other components never get it. The built-in button, link and menu are marked.
+ */
+export function withLinkComponent<C extends ComponentType<BlockComponentProps>>(component: C): C {
+  linkComponents.add(component)
+  return component
+}
+
+export const readsLinkComponent = (component: unknown): boolean =>
+  typeof component === 'function' && linkComponents.has(component)
+
+const clientLinkComponents = new WeakSet<object>()
+
+/**
+ * Marks a client block component that renders links. A function cannot pass from the server to a
+ * client component (and Next's server `next/link` is a function), so it gets
+ * `BlockComponentProps.clientLinks: true` instead when the site sets `linkComponent`, and renders
+ * `next/link` itself. The built-in menu is marked.
+ */
+export function withClientLinks<C extends ComponentType<BlockComponentProps>>(component: C): C {
+  clientLinkComponents.add(component)
+  return component
+}
+
+export const readsClientLinks = (component: unknown): boolean =>
+  typeof component === 'function' && clientLinkComponents.has(component)
 
 /** Marks a block component that must render on the server in the canvas, even if the canvas can import it. */
 export function renderOnServer<C extends ComponentType<BlockComponentProps>>(component: C): C {

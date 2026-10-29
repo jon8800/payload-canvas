@@ -7,15 +7,15 @@ import type { BlockComponentProps } from '../../render/types'
  * content stays in the HTML. The height animation is CSS only. Open on the canvas, so both slots
  * can be edited.
  */
-export function Disclosure({ props, className, attributes, slotAttributes, slots, mode }: BlockComponentProps) {
+export function Disclosure({ props, className, attributes, partAttributes, slots, mode }: BlockComponentProps) {
   const open = mode === 'canvas' || props.open === true
   const classes = props.animate === false ? className : className ? `${className} ${C.animate}` : C.animate
   return (
     <details {...attributes} className={classes} open={open || undefined}>
-      <summary {...slotAttributes.summary} className={joinClasses(C.summary, slotAttributes.summary?.className)}>
+      <summary {...partAttributes.summary} className={joinClasses(C.summary, partAttributes.summary?.className)}>
         {slots.summary}
       </summary>
-      <div {...slotAttributes.content}>{slots.content}</div>
+      <div {...partAttributes.content}>{slots.content}</div>
     </details>
   )
 }

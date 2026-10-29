@@ -12,37 +12,45 @@ const CONTENTS = { display: 'contents' } as const
  * slot instead. Nothing on the site when both are empty. A repeat with `as: 'none'` has no wrapper:
  * its rows sit in the parent. The canvas keeps an element with `display: contents` there, so the
  * editor can still find and measure the repeat.
+ *
+ * With page links, a plain wrapper (the block element, no classes) holds two elements: the items
+ * with the block's classes, and the pager. So a grid of items never makes the pager a grid cell.
  */
-export function CollectionList({ block, props, className, attributes, slots, slotAttributes, mode }: BlockComponentProps) {
+export function CollectionList({ block, props, className, attributes, slots, partAttributes, mode }: BlockComponentProps) {
   const items = slots[LIST_ITEM_SLOT]
   const empty = slots[LIST_EMPTY_SLOT]
   if (!items && !empty && mode !== 'canvas') return null
   if (block.type === REPEAT_BLOCK && props.as === 'none') {
     if (mode !== 'canvas') return items
-    return createElement('div', { ...attributes, ...slotAttributes[LIST_ITEM_SLOT], style: CONTENTS }, items)
+    return createElement('div', { ...attributes, ...partAttributes[LIST_ITEM_SLOT], style: CONTENTS }, items)
   }
   const pages = props[LIST_PAGES_PROP] as ListPages | undefined
-  return (
-    <div {...attributes} {...slotAttributes[LIST_ITEM_SLOT]} className={className}>
+  const pager = pages && pages.links.length > 1
+  const list = (
+    <div {...(pager ? {} : attributes)} {...partAttributes[LIST_ITEM_SLOT]} className={className}>
       {items}
-      {/* The empty slot takes its own classes (`slotClassName.empty`) through its slot attributes. */}
-      {empty && <div {...slotAttributes[LIST_EMPTY_SLOT]}>{empty}</div>}
-      {pages && pages.links.length > 1 && (
-        <nav aria-label={asText(props.pagerLabel).trim() || 'Pages'} className={typeof props.pagerClassName === 'string' ? props.pagerClassName : undefined}>
-          {pages.links.map((link) => (
-            <Fragment key={link.page}>
-              {link.gapBefore && <span data-page-gap="" aria-hidden="true">…</span>}
-              <a
-                href={link.href}
-                aria-current={link.current ? 'page' : undefined}
-                className={typeof props.pageLinkClassName === 'string' ? props.pageLinkClassName : undefined}
-              >
-                {link.page}
-              </a>
-            </Fragment>
-          ))}
-        </nav>
-      )}
+      {/* The empty slot takes its own classes (`partClassName.empty`) through its slot attributes. */}
+      {empty && <div {...partAttributes[LIST_EMPTY_SLOT]}>{empty}</div>}
+    </div>
+  )
+  if (!pager) return list
+  return (
+    <div {...attributes}>
+      {list}
+      <nav aria-label={asText(props.pagerLabel).trim() || 'Pages'} className={partAttributes.pager?.className}>
+        {pages.links.map((link) => (
+          <Fragment key={link.page}>
+            {link.gapBefore && <span data-page-gap="" aria-hidden="true">…</span>}
+            <a
+              href={link.href}
+              aria-current={link.current ? 'page' : undefined}
+              className={partAttributes.pageLink?.className}
+            >
+              {link.page}
+            </a>
+          </Fragment>
+        ))}
+      </nav>
     </div>
   )
 }

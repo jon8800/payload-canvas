@@ -313,3 +313,24 @@ export function outlineDropTarget(
   const hasChildren = names.some((name) => countOf(name) > 0)
   return (hasChildren ? firstChild() : beside('after')) ?? inside()
 }
+
+/** A slot that takes the dragged block. `ownerId` null is the root list. */
+export type AcceptingSlot = { ownerId: string | null; slot: string }
+
+/**
+ * Every slot the dragged block may drop into, by the same rules as the drop targets (`allow`,
+ * `disallow`, `max`, `parents`). Slots of the dragged block and its descendants are left out.
+ * The root list comes first when it accepts the block; then the slots in layout order.
+ */
+export function acceptingSlots(layout: Layout, blocks: BlockDefinition[], source: DragSource): AcceptingSlot[] {
+  const { index, type, excluded, slotsOf, accepts } = context(layout, blocks, source)
+  if (type === null) return []
+  const result: AcceptingSlot[] = accepts(null, DEFAULT_SLOT) ? [{ ownerId: null, slot: DEFAULT_SLOT }] : []
+  for (const entry of index.values()) {
+    if (excluded.has(entry.block.id)) continue
+    for (const slot of slotsOf(entry)) {
+      if (accepts(entry.block.id, slot)) result.push({ ownerId: entry.block.id, slot })
+    }
+  }
+  return result
+}

@@ -11,17 +11,10 @@
 import { Button, useConfig } from '@payloadcms/ui'
 import { useEffect, useId, useMemo, useState } from 'react'
 
-import {
-  DOCUMENT_TEMPLATE_FIELD,
-  TEMPLATE_CONDITIONS_FIELD,
-  TEMPLATE_DEFAULT_FIELD,
-  TEMPLATE_LAYOUT_FIELD,
-  TEMPLATE_TARGET_FIELD,
-  templateConditions,
-} from '../../../core/bindings'
+import { APPLIED_TEMPLATE_PATH, type AppliedTemplateResponse } from '../../../core/templateChoice'
+import { sectionVersion } from '../../../core/sections'
 import type { SectionDefinition } from '../../../core/types'
 import { builderViewPath } from '../../../plugin/links'
-import { whereParams } from '../../../react/canvas/fetchDocs'
 import { insertBlocks, sectionPosition } from '../actions'
 import { Icon } from '../icons'
 import { selectLeftTab } from '../layout/leftTabs'
@@ -37,8 +30,8 @@ const SUGGESTED = ['Heroes', 'Features', 'Calls to action']
 const SUGGESTION_COUNT = 3
 
 function suggestions(all: SectionDefinition[]): SectionDefinition[] {
-  // One version of each section: its variants stay in the library.
-  const sections = all.filter((s) => !s.variantOf)
+  // Each section's own version, ready to insert: the canvas offers its variants afterwards.
+  const sections = all.map((s) => sectionVersion(s) ?? s)
   const picked = SUGGESTED.flatMap((category) => sections.find((s) => s.category === category) ?? [])
   const rest = sections.filter((s) => !picked.includes(s))
   return [...picked, ...rest].slice(0, SUGGESTION_COUNT)
@@ -46,71 +39,20 @@ function suggestions(all: SectionDefinition[]): SectionDefinition[] {
 
 type AppliedTemplate = { id: string | number; name: string }
 
-const hasBlocks = (doc: Record<string, unknown> | undefined) => {
-  const layout = doc?.[TEMPLATE_LAYOUT_FIELD] as { blocks?: unknown[] } | null | undefined
-  return Boolean(layout?.blocks?.length)
-}
-
-async function getJson(url: string): Promise<Record<string, unknown> | null> {
-  const response = await fetch(url, { credentials: 'include', headers: { Accept: 'application/json' } })
-  return response.ok ? ((await response.json()) as Record<string, unknown>) : null
-}
-
 /**
- * The published template the site renders this document through: its own template, else the
- * first template (by name) whose conditions match the latest draft, else the collection's newest
- * default template with blocks. The same rule as `loadTemplate`.
+ * The published template the site renders this document through, by the site's own rule
+ * (`loadTemplate`), with the conditions matched against the latest draft. The plugin's endpoint
+ * runs the rule on the server.
  */
 async function appliedTemplate(runtime: Runtime, id: string | number): Promise<AppliedTemplate | null> {
   const templates = runtime.config.templates
-  // Only collections that templates can target: filtering the templates on another slug is an
-  // invalid select value, which the database rejects (500).
+  // Only collections that templates can target.
   if (!templates || !(runtime.config.collection in templates.sources)) return null
-  const base = `${runtime.api}/${encodeURIComponent(templates.collection)}`
-  const doc = await getJson(
-    `${runtime.api}/${encodeURIComponent(runtime.config.collection)}/${encodeURIComponent(String(id))}?depth=0&draft=true&select[${DOCUMENT_TEMPLATE_FIELD}]=true`,
-  )
-  // Only template-enabled collections have the field (it is null when the document has no template of its own).
-  if (!doc || !(DOCUMENT_TEMPLATE_FIELD in doc)) return null
-  const own = doc[DOCUMENT_TEMPLATE_FIELD]
-  const ownId = own && typeof own === 'object' ? (own as { id?: unknown }).id : own
-  if (typeof ownId === 'string' || typeof ownId === 'number') {
-    const template = await getJson(`${base}/${encodeURIComponent(String(ownId))}?depth=0`)
-    if (template && hasBlocks(template)) return { id: ownId, name: String(template.name ?? 'Untitled') }
-  }
-  const conditioned = await getJson(
-    `${base}?${new URLSearchParams({
-      [`where[and][0][${TEMPLATE_TARGET_FIELD}][equals]`]: runtime.config.collection,
-      'where[and][1][_status][equals]': 'published',
-      [`select[${TEMPLATE_CONDITIONS_FIELD}]`]: 'true',
-      sort: 'name',
-      depth: '0',
-      limit: '100',
-    }).toString()}`,
-  )
-  for (const candidate of (conditioned?.docs as Record<string, unknown>[] | undefined) ?? []) {
-    const where = templateConditions(candidate)
-    if (!where) continue
-    const match = new URLSearchParams({ 'where[and][0][id][equals]': String(id), depth: '0', limit: '1', draft: 'true', 'select[id]': 'true' })
-    for (const [name, value] of whereParams(where, 'where[and][1]')) match.append(name, value)
-    const found = await getJson(`${runtime.api}/${encodeURIComponent(runtime.config.collection)}?${match.toString()}`)
-    if (!(found?.docs as unknown[] | undefined)?.length) continue
-    const template = await getJson(`${base}/${encodeURIComponent(String(candidate.id))}?depth=0`)
-    if (template && hasBlocks(template)) return { id: candidate.id as string | number, name: String(template.name ?? 'Untitled') }
-  }
-  const query = new URLSearchParams({
-    [`where[and][0][${TEMPLATE_TARGET_FIELD}][equals]`]: runtime.config.collection,
-    [`where[and][1][${TEMPLATE_DEFAULT_FIELD}][equals]`]: 'true',
-    'where[and][2][_status][equals]': 'published',
-    sort: '-updatedAt',
-    depth: '0',
-    limit: '5',
-  })
-  const found = await getJson(`${base}?${query.toString()}`)
-  const docs = (found?.docs as Record<string, unknown>[] | undefined) ?? []
-  const template = docs.find(hasBlocks)
-  if (!template) return null
-  return { id: template.id as string | number, name: String(template.name ?? 'Untitled') }
+  const url = `${runtime.config.liveEndpoint}/${encodeURIComponent(runtime.config.collection)}/${encodeURIComponent(String(id))}/${APPLIED_TEMPLATE_PATH}`
+  const response = await fetch(url, { credentials: 'include', headers: { Accept: 'application/json' } })
+  if (!response.ok) return null
+  const body = (await response.json()) as AppliedTemplateResponse
+  return body.ok ? body.template : null
 }
 
 /** The template that applies to this document. Null while loading, for templates themselves, and for collections without templates. */

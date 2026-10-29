@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { deepestBlockAt } from '../../core'
 import { unwrap, type CanvasToAdmin } from '../../protocol'
 import { ancestors } from './actions'
-import { dragModeChoice, prefersReducedMotion, useDragModeSetting } from './dnd/mode'
+import { dragModeChoice, dropOutlinesChoice, prefersReducedMotion, useDragModeSetting, useDropOutlines } from './dnd/mode'
 import { dropAt } from './dnd/smooth'
 import { BlockIcon, Icon } from './icons'
 import {
@@ -556,9 +556,13 @@ function PlayMotionToggle({ runtime }: { runtime: Runtime }) {
   )
 }
 
-/** Drag and drop style: the drop indicator or the smooth mode. The choice stays in this browser. */
+/**
+ * Drag and drop style: the drop indicator or the smooth mode, and the drop outlines on or off.
+ * The choices stay in this browser.
+ */
 function DragModeMenu({ runtime }: { runtime: Runtime }) {
   const mode = useDragModeSetting(runtime)
+  const outlines = useDropOutlines(runtime)
   const reduced = prefersReducedMotion()
   const choose = (next: 'indicator' | 'smooth') => dragModeChoice(runtime).set(next)
   return (
@@ -574,6 +578,8 @@ function DragModeMenu({ runtime }: { runtime: Runtime }) {
       items={() => [
         { label: 'Show a drop line', icon: 'drag', checked: mode === 'indicator', run: () => choose('indicator') },
         { label: 'Move blocks out of the way', icon: 'layers', checked: mode === 'smooth', disabled: reduced, run: () => choose('smooth') },
+        'separator',
+        { label: 'Outline where blocks can drop', icon: 'grid', checked: outlines, run: () => dropOutlinesChoice(runtime).set(!outlines) },
       ]}
     >
       <Icon name="drag" size={14} />

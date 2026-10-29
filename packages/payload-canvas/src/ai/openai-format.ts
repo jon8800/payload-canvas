@@ -38,7 +38,14 @@ export type OpenAIFormatAdapterOptions = OpenAIFormatTransportOptions & {
   url: string
   /** Credential headers (Authorization, …). Merged before `headers`. Never logged. */
   authHeaders?: Record<string, string>
+  /**
+   * The credential headers for a key from the AI settings (`AiModelRequest.apiKey`). They replace
+   * the same headers of `authHeaders` for that request. Without it the adapter ignores `apiKey`.
+   */
+  keyHeaders?: (apiKey: string) => Record<string, string>
   ready?: boolean
+  /** `ready` is false only because the key is missing: a request with `apiKey` runs anyway. */
+  missingKey?: boolean
   setupProblem?: string | null
   keyEnv?: string | null
   keyUrl?: string | null
@@ -482,11 +489,18 @@ export function createOpenAIFormatAdapter(options: OpenAIFormatAdapterOptions): 
   const idleMs = options.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS
   const maxRetries = options.maxRetries ?? 2
   const baseDelay = options.retryDelayMs ?? 1000
-  const headers = { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...options.authHeaders, ...options.headers }
+  /** The request headers. A key from the AI settings replaces the key from the options. */
+  const headersFor = (apiKey: string | undefined) => ({
+    'Content-Type': 'application/json',
+    Accept: 'text/event-stream',
+    ...options.authHeaders,
+    ...(apiKey && options.keyHeaders ? options.keyHeaders(apiKey) : {}),
+    ...options.headers,
+  })
   let includeUsage = options.includeUsage ?? true
 
   /** One HTTP attempt. The returned controller also stops the body read (idle timeout, abort). */
-  const attempt = async (body: Record<string, unknown>, signal?: AbortSignal) => {
+  const attempt = async (body: Record<string, unknown>, headers: Record<string, string>, signal?: AbortSignal) => {
     if (signal?.aborted) throw abortError()
     const controller = new AbortController()
     let timedOut = false
@@ -515,6 +529,7 @@ export function createOpenAIFormatAdapter(options: OpenAIFormatAdapterOptions): 
   /** Sends the request, retrying 408 / 429 / 5xx / network errors with backoff. */
   const send = async (request: AiModelRequest) => {
     const tools = chatTools(request.tools)
+    const headers = headersFor(clean(request.apiKey))
     for (let retry = 0; ; retry++) {
       const body: Record<string, unknown> = {
         model: options.model,
@@ -527,7 +542,7 @@ export function createOpenAIFormatAdapter(options: OpenAIFormatAdapterOptions): 
       }
       let failure: OpenAiApiError
       try {
-        const sent = await attempt(body, request.signal)
+        const sent = await attempt(body, headers, request.signal)
         if (sent.response.ok && sent.response.body) return sent
         sent.cleanup()
         failure = sent.response.ok ? new OpenAiApiError('The API sent no response body.', { kind: 'stream' }) : await httpError(sent.response)
@@ -557,9 +572,13 @@ export function createOpenAIFormatAdapter(options: OpenAIFormatAdapterOptions): 
     setupProblem: options.setupProblem ?? null,
     keyEnv: options.keyEnv ?? null,
     keyUrl: options.keyUrl ?? null,
+    acceptsApiKey: Boolean(options.keyHeaders),
+    missingKey: options.ready === false && Boolean(options.missingKey),
     async *stream(request) {
-      // Missing key or config: say what to set, without a network call.
-      if (options.ready === false) {
+      // Missing key or config: say what to set, without a network call. A key from the AI settings
+      // is enough when only the key was missing.
+      const keyFromSettings = Boolean(options.keyHeaders && clean(request.apiKey))
+      if (options.ready === false && !(options.missingKey && keyFromSettings)) {
         yield { type: 'error', code: 'auth', message: options.setupProblem || `${options.label} is not set up.` }
         return
       }

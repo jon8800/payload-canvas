@@ -86,6 +86,68 @@ const PATHS = {
     </>
   ),
   layers: <path d="m8 2 6 3-6 3-6-3 6-3ZM2 8l6 3 6-3M2 11l6 3 6-3" />,
+  // Built-in blocks (`builtinBlocks()` and the plugin's sectionRef)
+  // A star: one glyph of the site's icon set.
+  icon: <path d="m8 2 1.76 3.57 3.94.57-2.85 2.78.67 3.92L8 11l-3.52 1.84.67-3.92L2.3 6.14l3.94-.57L8 2Z" />,
+  // The current slide with the edges of its neighbours, and dots.
+  carousel: (
+    <>
+      <rect x="4" y="2.5" width="8" height="8" rx="1" />
+      <path d="M1.5 4v5M14.5 4v5" />
+      {dot(6, 13.25, 0.75)}
+      {dot(8, 13.25, 0.75)}
+      {dot(10, 13.25, 0.75)}
+    </>
+  ),
+  // A photo with the corners of a full screen view.
+  imageViewer: (
+    <>
+      <path d="M2 5.5v-2A1.5 1.5 0 0 1 3.5 2h2M10.5 2h2A1.5 1.5 0 0 1 14 3.5v2M14 10.5v2a1.5 1.5 0 0 1-1.5 1.5h-2M5.5 14h-2A1.5 1.5 0 0 1 2 12.5v-2" />
+      <circle cx="6.5" cy="6.5" r="1" />
+      <path d="m11 10-2-2-3.5 3.5" />
+    </>
+  ),
+  // Rows, each with an arrow; the first is open.
+  accordion: (
+    <>
+      <path d="M2 3h12M2 9h12M2 13h12" />
+      <path d="M4 5.75h6" opacity={0.45} />
+      <path d="m11.5 12 1 1 1-1" />
+    </>
+  ),
+  // One row with an arrow, and its content below.
+  disclosure: (
+    <>
+      <rect x="1.5" y="2.5" width="13" height="4" rx="1" />
+      <path d="m10.5 4 1 1 1-1" />
+      <path d="M3.5 9.5h9M3.5 12.5h6" opacity={0.45} />
+    </>
+  ),
+  // Text over a photo.
+  mediaBackdrop: (
+    <>
+      <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" />
+      <path d="m14.5 9.5-3-3-6 6" opacity={0.45} />
+      <path d="M4 6h4M4 8.5h2.5" />
+    </>
+  ),
+  // Lines, the second level indented.
+  tableOfContents: (
+    <>
+      {dot(2.5, 4)}
+      {dot(2.5, 12)}
+      <path d="M5 4h9M7 8h7M5 12h9" />
+    </>
+  ),
+  filter: <path d="M2 3h12l-4.5 5.5V13l-3-1.5v-3L2 3Z" />,
+  // A section with a link mark: it shows the saved section live.
+  sectionRef: (
+    <>
+      <rect x="2" y="2" width="12" height="5" rx="1" />
+      <path d="M2 10h3M2 13h3" opacity={0.45} />
+      <path d="m9.5 11.5 2-2M10 9.25l.5-.5a1.25 1.25 0 0 1 1.75 1.75l-.5.5M11 13.75l-.5.5a1.25 1.25 0 0 1-1.75-1.75l.5-.5" />
+    </>
+  ),
   // Dynamic blocks (templates and binding)
   field: (
     <>
@@ -218,6 +280,7 @@ const PATHS = {
     </>
   ),
   width: <path d="M1.5 3v10M14.5 3v10M4 8h8M6 6 4 8l2 2M10 6l2 2-2 2" />,
+  chevronLeft: <path d="m10 4-4 4 4 4" />,
   chevronRight: <path d="m6 4 4 4-4 4" />,
   chevronDown: <path d="m4 6 4 4 4-4" />,
   search: (

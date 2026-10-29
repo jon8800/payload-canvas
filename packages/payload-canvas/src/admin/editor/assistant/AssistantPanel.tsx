@@ -354,13 +354,26 @@ function SetupState({ assistant, message }: { assistant: AssistantController; me
   const noAdapter = !ai || ai.adapter === 'none'
   const keyEnv = ai?.keyEnv ?? null
   const keyPage = ai?.keyUrl ?? null
+  // The user may open the AI settings, where an API key makes the assistant work.
+  const settingsUrl = ai?.settingsUrl ?? null
   return (
     <>
       <output className="builder-assistant__card builder-assistant__card--setup">
         <p className="builder-assistant__card-title">The AI assistant is not set up yet</p>
-        <p className="builder-assistant__card-text">
-          The AI assistant is not set up on this site yet. Ask your developer to add an API key.
-        </p>
+        {settingsUrl ? (
+          <>
+            <p className="builder-assistant__card-text">The AI assistant needs an API key. Paste one in the AI settings, then check again.</p>
+            <div className="builder-assistant__card-actions">
+              <a className="builder-assistant__link" href={settingsUrl} target="_blank" rel="noopener noreferrer">
+                Open AI settings <Icon name="external" size={12} />
+              </a>
+            </div>
+          </>
+        ) : (
+          <p className="builder-assistant__card-text">
+            The AI assistant is not set up on this site yet. Ask your developer to add an API key.
+          </p>
+        )}
         <details className="builder-assistant__details">
           <summary>Details for developers</summary>
           <div className="builder-assistant__details-body">

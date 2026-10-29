@@ -1,7 +1,8 @@
 'use client'
 
 // Data binding in the block inspector: the "bind" button next to bindable props, the bound chip
-// with a live sample value, the Field block's field picker and the collection list's inputs.
+// with a live sample value and a format picker, the Field block's field picker and the collection
+// list's inputs.
 
 import { FieldLabel, SelectInput, TextInput, useConfig } from '@payloadcms/ui'
 import { createContext, use, useCallback, useState, type ChangeEvent, type ReactNode } from 'react'
@@ -9,10 +10,12 @@ import type { Field, OptionObject } from 'payload'
 
 import { isLinkField } from '../../../blocks/link'
 import {
+  BINDING_FORMATTER_INFO,
+  bindingFromParts,
+  bindingParts,
   bindingValue,
   COLLECTION_LIST_BLOCK,
   getBlockDefinition,
-  isBindingExpression,
   itemSources,
   listItemContext,
   propField,
@@ -20,11 +23,13 @@ import {
   repeatRowContext,
   repeatRows,
 } from '../../../core'
+import type { BindingFormat } from '../../../core/bindings'
 import type { BindingField, Block, BlockDefinition, TemplateContext } from '../../../core/types'
 import { Icon } from '../icons'
 import { useRuntime } from '../runtime'
 import { useEditor } from '../store'
 import { usePopover } from '../styles/popover'
+import { Select } from '../ui/Select'
 import { useValue } from '../valueStore'
 import {
   bindingTrail,
@@ -35,7 +40,7 @@ import {
   hasBindableField,
   isCompatible,
   isFieldBlockSource,
-  isFieldListSource,
+  isRepeatSource,
   isObviousPath,
   LIST_BLOCK,
   previewDoc,
@@ -232,12 +237,74 @@ function useAccept(kind: PropKind, field: Field) {
   return useCallback((source: BindingField) => isCompatible(kind, source, { type: field.type, relationTo }), [kind, field.type, relationTo])
 }
 
+/** Sets the prop's binding (`null` unbinds). `what` names the new source for the notice; none: no notice. */
 function useBind(block: Block, propPath: string, propLabel: string) {
   const runtime = useRuntime()
-  return (source: BindingField | null) => {
-    const done = runtime.store.apply({ type: 'update', id: block.id, bindings: { [propPath]: source ? source.path : null } })
-    if (done) runtime.notify(source ? `${propLabel} now shows ${source.label}` : `${propLabel} is no longer bound`)
+  return (binding: string | null, what?: string) => {
+    const done = runtime.store.apply({ type: 'update', id: block.id, bindings: { [propPath]: binding } })
+    if (!done) return
+    if (binding === null) runtime.notify(`${propLabel} is no longer bound`)
+    else if (what) runtime.notify(`${propLabel} now shows ${what}`)
   }
+}
+
+const FORMAT_OPTIONS = Object.entries(BINDING_FORMATTER_INFO).map(([value, info]) => ({ value, label: info.label }))
+/** ":" and "|" separate the parts of a binding, so an argument cannot hold them. */
+const cleanArg = (text: string) => text.replace(/[:|{}]/g, '')
+
+/**
+ * How a bound value shows as text: a formatter (date, number, currency, uppercase, shorten…) and
+ * its arguments as small inputs. Writes the binding's `|name:arg` part, so nobody types it.
+ */
+function FormatPicker({ format, onChange, label }: { format: BindingFormat | null; onChange: (format: BindingFormat | null) => void; label: string }) {
+  const info = format ? BINDING_FORMATTER_INFO[format.name] : undefined
+  const setArg = (index: number, value: string) => {
+    if (!format) return
+    const args = [...format.args]
+    while (args.length < index) args.push('')
+    args[index] = value
+    onChange({ ...format, args })
+  }
+  return (
+    <fieldset className="builder-format" aria-label={`${label}: format`}>
+      <Select
+        className="builder-format__name"
+        aria-label={`${label}: format`}
+        emptyLabel="No format"
+        value={format?.name ?? null}
+        options={FORMAT_OPTIONS}
+        onValueChange={(name) => onChange(name ? { name, args: [] } : null)}
+      />
+      {format &&
+        info?.args.map((arg, index) => {
+          const value = format.args[index] ?? ''
+          if (arg.options) {
+            const [first, ...rest] = arg.options
+            return (
+              <Select
+                key={arg.label}
+                aria-label={`${label}: ${arg.label.toLowerCase()}`}
+                emptyLabel={first?.value === '' ? first.label : undefined}
+                value={value || null}
+                options={first?.value === '' ? rest : [...arg.options]}
+                onValueChange={(next) => setArg(index, next ?? '')}
+              />
+            )
+          }
+          return (
+            <input
+              key={arg.label}
+              type="text"
+              className="builder-where__input"
+              aria-label={`${label}: ${arg.label.toLowerCase()}`}
+              placeholder={arg.placeholder ? `${arg.label}: ${arg.placeholder}` : arg.label}
+              value={value}
+              onChange={(e) => setArg(index, cleanArg(e.target.value))}
+            />
+          )
+        })}
+    </fieldset>
+  )
 }
 
 function BindButton({
@@ -280,7 +347,7 @@ function BindButton({
         sample={scope.sample}
         current={null}
         emptyText={`${collectionLabel} has no ${KIND_NAMES[kind]} fields.`}
-        onPick={bind}
+        onPick={(source) => bind(source.path, source.label)}
       />
     </>
   )
@@ -302,9 +369,16 @@ function BoundField({
   const collectionLabel = useCollectionLabel(scope?.collection ?? null)
   const [showFallback, setShowFallback] = useState(false)
   const fields = scope?.collection ? scope.fields : [urlField(scope?.kind ?? 'list')]
-  const expression = isBindingExpression(bound)
-  const source = expression ? { path: bound, label: bound, type: 'text' } : findBindingField(fields, bound)
-  const trail = source && !expression ? bindingTrail(fields, bound) : [bound]
+  // One field with at most one formatter shows as the field and a format; templates and fallback
+  // chains show as their text.
+  const parts = bindingParts(bound)
+  const single = parts && parts.paths.length === 1 ? parts.paths[0]! : null
+  const expression = single === null
+  // In a template, `$page.<path>` is the template's own document.
+  const own = single && scope?.kind === 'template' && single.startsWith('$page.') ? single.slice('$page.'.length) : single
+  const source = expression ? { path: bound, label: bound, type: 'text' } : findBindingField(fields, own!)
+  const trail = source && !expression ? bindingTrail(fields, own!) : [bound]
+  const shownPath = single ?? bound
   const required = 'required' in field ? Boolean(field.required) : false
 
   return (
@@ -326,22 +400,25 @@ function BoundField({
         >
           <Icon name={source ? fieldIcon(source) : 'warning'} size={13} />
           <span className="builder-bind__chip-label">{trail.join(' › ')}</span>
-          {!isObviousPath(source?.label ?? '', bound) && <code className="builder-bind__chip-path">{bound}</code>}
+          {!isObviousPath(source?.label ?? '', shownPath) && <code className="builder-bind__chip-path">{shownPath}</code>}
         </button>
         <button type="button" className="builder-bind__chip-x" aria-label="Unbind" data-tooltip="Unbind" onClick={() => bind(null)}>
           <Icon name="close" size={12} />
         </button>
       </div>
-      {expression ? (
-        <ExpressionPreview scope={scope} binding={bound} />
-      ) : source ? (
-        <SamplePreview scope={scope} source={source} />
-      ) : (
+      {kind === 'text' && parts && (
+        <FormatPicker label={label} format={parts.format} onChange={(format) => bind(bindingFromParts({ paths: parts.paths, format }))} />
+      )}
+      {!expression && !source ? (
         <p className="builder-bind__note builder-bind__note--warn">
           {scope?.collection
-            ? `${collectionLabel} has no field “${bound}”. The fallback shows instead.`
+            ? `${collectionLabel} has no field “${shownPath}”. The fallback shows instead.`
             : 'This block is not inside a template or a collection list, so the binding has no data. Unbind it or move the block.'}
         </p>
+      ) : expression || parts?.format ? (
+        <ExpressionPreview scope={scope} binding={bound} />
+      ) : (
+        source && <SamplePreview scope={scope} source={source} />
       )}
       <button
         type="button"
@@ -360,22 +437,24 @@ function BoundField({
           fields={scope.fields}
           accept={accept}
           sample={scope.sample}
-          current={bound}
+          current={shownPath}
           emptyText={`${collectionLabel} has no ${KIND_NAMES[kind]} fields.`}
-          onPick={bind}
+          onPick={(picked) => bind(bindingFromParts({ paths: [picked.path], format: parts?.format ?? null }), picked.label)}
         />
       )}
     </div>
   )
 }
 
-/** The sample's value for a binding expression (a template string, a fallback chain, formatters). */
+/** The sample's value for a binding with a format, a fallback chain or a template string. */
 function ExpressionPreview({ scope, binding }: { scope: BindingScope | null; binding: string }) {
-  if (!scope?.context) return <p className="builder-bind__note">A binding expression. No sample to preview.</p>
+  if (!scope?.context) return <p className="builder-bind__note">No sample to preview.</p>
   const text = previewValue(bindingValue(scope.context, binding), 'text')
   return (
     <div className="builder-bind__preview">
-      <span className="builder-bind__preview-from">Expression</span>
+      <span className="builder-bind__preview-from" title={scope.sampleTitle}>
+        {scope.kind === 'list' ? 'First item' : scope.kind === 'row' ? 'First row' : 'Sample'}: {scope.sampleTitle || 'untitled'}
+      </span>
       {text.kind === 'text' ? <span className="builder-bind__preview-text">{text.text}</span> : <span className="builder-bind__preview-empty">Empty here. The fallback shows instead.</span>}
     </div>
   )
@@ -415,12 +494,18 @@ export function SamplePreview({ scope, source }: { scope: BindingScope | null; s
   )
 }
 
-/** The Field block's `path`: picks any field of the scope's document. `rows`: a field list's path (fields with rows). */
+/**
+ * The Field block's `path`: picks any field of the scope's document, with a format. `rows`: a
+ * repeat's path (fields with rows), without a format.
+ */
 function FieldPathInput({ value, onChange, label, children, scope, rows = false }: SlotProps & { scope: BindingScope | null; rows?: boolean }) {
   const popover = usePopover('auto')
-  const accept = rows ? isFieldListSource : isFieldBlockSource
+  const accept = rows ? isRepeatSource : isFieldBlockSource
   const collectionLabel = useCollectionLabel(scope?.collection ?? null)
-  const path = typeof value === 'string' && value ? value : null
+  const stored = typeof value === 'string' && value ? value : null
+  // The Field block's path may end in a formatter ("price|currency:EUR"): the picker shows the field.
+  const parts = stored && !rows ? bindingParts(stored) : null
+  const path = parts && parts.paths.length === 1 ? parts.paths[0]! : stored
 
   if (!scope?.collection) {
     return (
@@ -431,7 +516,7 @@ function FieldPathInput({ value, onChange, label, children, scope, rows = false 
             : scope?.kind === 'template'
               ? 'Choose which collection this template is for. Then pick a field here.'
               : rows
-                ? 'A Field list repeats the rows of a field of the template’s document or of each list item. Use it in a template or inside a collection list.'
+                ? 'A repeat shows the rows of a field of the template’s document or of each list item. Use it in a template or inside a collection list.'
                 : 'A Field block shows a field of the template’s document or of each list item. Use it in a template or inside a collection list.'}
         </p>
         {children}
@@ -462,7 +547,10 @@ function FieldPathInput({ value, onChange, label, children, scope, rows = false 
         )}
         <Icon name="chevronDown" size={12} className="builder-bind__select-caret" />
       </button>
-      {source && <SamplePreview scope={scope} source={source} />}
+      {parts && (
+        <FormatPicker label={label} format={parts.format} onChange={(format) => onChange(bindingFromParts({ paths: parts.paths, format }))} />
+      )}
+      {source && (parts?.format ? <ExpressionPreview scope={scope} binding={stored ?? ''} /> : <SamplePreview scope={scope} source={source} />)}
       {path && !source && <p className="builder-bind__note builder-bind__note--warn">{collectionLabel} has no field “{path}”.</p>}
       <FieldPicker
         popover={popover}
@@ -472,7 +560,7 @@ function FieldPathInput({ value, onChange, label, children, scope, rows = false 
         sample={scope.sample}
         current={path}
         emptyText={`${collectionLabel} has no fields.`}
-        onPick={(picked) => onChange(picked.path)}
+        onPick={(picked) => onChange(rows ? picked.path : bindingFromParts({ paths: [picked.path], format: parts?.format ?? null }))}
       />
     </div>
   )

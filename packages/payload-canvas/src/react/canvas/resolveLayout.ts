@@ -28,7 +28,8 @@ export async function resolveCanvasLayout(
   const bound = context
     ? resolveBindings(withSections, context, definitions, { url: urlResolver(resolveLink), ...(relations ? { relations } : {}) })
     : withSections
-  const queries = listQueries(bound, context)
+  // The canvas shows hidden blocks dimmed, so their lists load too.
+  const queries = listQueries(bound, context, null, { includeHidden: true })
   const lists = await Promise.all(queries.map((query) => fetchListPage(api, query, locale, CANVAS_SEED)))
   // A paginated list shows page 1 with its page links.
   const pages = new Map(queries.flatMap((query, i) => (query.page ? [[query.blockId, pageLinks(null, query.page, lists[i]!.totalPages, query.pageParam)] as const] : [])))

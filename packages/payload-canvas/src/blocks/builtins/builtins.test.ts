@@ -14,8 +14,7 @@ const fieldsOf = (blocks: BlockDefinition[], type: string) => (blocks.find((b) =
 
 describe('builtinBlocks', () => {
   it('adds every built-in by default, and the icon block only with icon names', () => {
-    assert.deepEqual(builtinBlocks({ icons: ICONS }).map((b) => b.type), BUILTIN_TYPES.filter((type) => type !== 'sectionRef'))
-    assert.ok(builtinBlocks({ include: ['sectionRef'] }).some((b) => b.type === 'sectionRef'))
+    assert.deepEqual(builtinBlocks({ icons: ICONS }).map((b) => b.type), [...BUILTIN_TYPES])
     assert.ok(!builtinBlocks().some((b) => b.type === 'icon'))
   })
 
@@ -33,6 +32,14 @@ describe('builtinBlocks', () => {
   it('is plain JSON data, so it can reach the admin client', () => {
     const blocks = builtinBlocks({ icons: ICONS })
     assert.deepStrictEqual(JSON.parse(JSON.stringify(blocks)), blocks)
+  })
+
+  it('every block has its own editor icon, a category and a description', () => {
+    const glyphs = new Set(['icon', 'disclosure', 'accordion', 'imageViewer', 'carousel', 'tableOfContents', 'filter', 'mediaBackdrop'])
+    for (const def of builtinBlocks({ icons: ICONS })) {
+      assert.ok(def.icon && glyphs.has(def.icon), `${def.type} icon "${def.icon}"`)
+      assert.ok(['Content', 'Media', 'Interactive', 'Dynamic'].includes(def.category ?? ''), `${def.type} category`)
+    }
   })
 
   it('has no type of the default blocks', () => {

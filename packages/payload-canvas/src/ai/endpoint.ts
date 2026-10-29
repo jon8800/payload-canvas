@@ -11,10 +11,12 @@ import { indexLayout, isPlainObject, normalizeLayout } from '../core/tree'
 import type { BindingField, BlockDefinition, Layout, LocaleSettings, SectionDefinition, StyleTokens, TemplateContext } from '../core/types'
 import { SSE_HEADERS, sseFrame } from '../live/endpoints'
 import { loadSavedSections } from '../plugin/sections'
-import { missingAdapterProblem } from './config'
+import { missingAdapterProblem, SETTINGS_KEY_HINT } from './config'
 import { createImageService, generateImageToMedia, type GenerateImageOutcome, type ImageService } from './images/service'
 import { adapterIdentity, runAgent } from './loop'
+import { classesConfigOf, loadClasses } from '../classes'
 import { breakpointsPx, contextText, systemPrompt } from './prompt'
+import { withSettingsKey, type AiSettingsRuntime } from './settings'
 import { toolDefinitions, Workspace, type MediaItem, type ToolEnv } from './tools'
 import type { AiChatRequest, AiMessage, AiOptions, AiStreamEvent, AiSystemPart } from './types'
 
@@ -39,6 +41,8 @@ export type AiEndpointOptions = {
   savedSections?: { slug: string } | null
   /** Image generation, shared with the MCP tools (one hourly limit). Default: built from `ai`. */
   images?: ImageService
+  /** The AI settings global: its chat key is read on every request and wins over the adapter's own key. Null: off. */
+  settings?: AiSettingsRuntime | null
   /** Tests: replaces the update-access check (default: Payload's docAccessOperation). */
   canUpdate?: (req: PayloadRequest, collection: string, id: string | number, field: string) => Promise<boolean>
 }
@@ -282,6 +286,10 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
         )
       }
       const { system, breakpoints } = await getPrompt()
+      // The key from the AI settings, read now: a new key works without a restart.
+      const settings = options.settings ?? null
+      const settingsKey = settings && adapter.acceptsApiKey ? await settings.keyFor(req.payload, 'chat') : undefined
+      const model = withSettingsKey(adapter, settingsKey, settings ? SETTINGS_KEY_HINT : null)
 
       const layout = normalizeLayout(body.layout)
       // Localized layouts: the assistant reads and writes the editor's locale.
@@ -293,6 +301,8 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
       const title = titleField && typeof doc[titleField] === 'string' ? (doc[titleField] as string) : undefined
       // Saved sections differ per user and change often: they go in the context, not the cached prompt.
       const saved = savedSections ? await loadSavedSections(req, savedSections.slug) : []
+      // Editable classes change at any time too.
+      const classes = classesConfigOf(req.payload) ? await loadClasses(req).catch(() => []) : []
       const isTemplate = templates !== null && body.collection === templates.slug
       const templateTarget = isTemplate
         ? (typeof doc[TEMPLATE_TARGET_FIELD] === 'string' ? (doc[TEMPLATE_TARGET_FIELD] as string) : (body.context?.collection ?? null))
@@ -316,6 +326,7 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
               templateTarget,
               sample: isTemplate ? body.context : null,
               savedSections: saved,
+              classes: classes.map(({ name, label, group }) => ({ name, ...(label ? { label } : {}), ...(group ? { group } : {}) })),
             }),
           },
         ],
@@ -343,7 +354,7 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
           heartbeat = setInterval(() => write(': ping\n\n'), HEARTBEAT_MS)
           try {
             await runAgent({
-              adapter,
+              adapter: model,
               system,
               tools,
               effort: ai.effort,

@@ -3,8 +3,8 @@ import { describe, test } from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { BlockComponentProps } from '../../render/types'
-import { Carousel } from '.'
-import { nearestSlide, slideIndex } from './Carousel'
+import { CAROUSEL_CLASS_MAP } from '../../../blocks/builtins/carousel'
+import { Carousel, nearestSlide, slideIndex, unwrapsList } from './Carousel'
 
 const render = (props: Record<string, unknown>, mode: 'site' | 'canvas' = 'site') =>
   renderToStaticMarkup(
@@ -14,8 +14,20 @@ const render = (props: Record<string, unknown>, mode: 'site' | 'canvas' = 'site'
       className: 'flex flex-col builder-css',
       slots: { slides: 'slides' },
       attributes: {},
-      slotAttributes: { slides: { 'data-slot': 'slides' } },
+      partAttributes: { slides: { 'data-slot': 'slides' } },
       mode,
+    } satisfies BlockComponentProps),
+  )
+
+const track = (slides: BlockComponentProps['block']['slots']) =>
+  renderToStaticMarkup(
+    createElement(Carousel, {
+      block: { id: 'c', type: 'carousel', slots: slides },
+      props: {},
+      slots: { slides: 'x' },
+      attributes: {},
+      partAttributes: {},
+      mode: 'site',
     } satisfies BlockComponentProps),
   )
 
@@ -39,6 +51,18 @@ describe('Carousel', () => {
     const canvas = render({ autoplay: 4000, mode: 'fade' }, 'canvas')
     assert.doesNotMatch(canvas, /data-carousel-pause|tabindex/)
     assert.match(canvas, /class="flex snap-x/)
+  })
+
+  test('unwraps only a single collection list or repeat with a wrapper, never one hand-made slide', () => {
+    assert.equal(unwrapsList([{ id: 'l', type: 'collectionList' }]), true)
+    assert.equal(unwrapsList([{ id: 'r', type: 'repeat', props: { path: 'photos' } }]), true)
+    assert.equal(unwrapsList([{ id: 'r', type: 'repeat', props: { as: 'none' } }]), false)
+    assert.equal(unwrapsList([{ id: 's', type: 'stack' }]), false)
+    assert.equal(unwrapsList([{ id: 'l', type: 'collectionList' }, { id: 's', type: 'stack' }]), false)
+    assert.equal(unwrapsList([{ id: 'l', type: 'collectionList' }, { id: 'h', type: 'stack', hidden: true }]), true)
+    const unwrap = CAROUSEL_CLASS_MAP.scrollList.split(' ')[0]!.replace('&', '&amp;').replace('>', '&gt;')
+    assert.ok(track({ slides: [{ id: 'l', type: 'collectionList' }] }).includes(unwrap))
+    assert.ok(!track({ slides: [{ id: 's', type: 'stack' }] }).includes(unwrap))
   })
 })
 
@@ -64,5 +88,22 @@ describe('carousel positions', () => {
     const html = render({ autoplay: 4000, pauseLabel: 'Anhalten', carouselRole: 'Karussell' })
     assert.match(html, /^<section aria-roledescription="Karussell"/)
     assert.match(html, />Anhalten<\/button>/)
+  })
+})
+
+describe('Carousel parts', () => {
+  test('the pause button and the controls row take their part classes', () => {
+    const html = renderToStaticMarkup(
+      createElement(Carousel, {
+        block: { id: 'c', type: 'carousel' },
+        props: { autoplay: 4000 },
+        slots: { slides: 'slides' },
+        attributes: {},
+        partAttributes: { slides: {}, pause: { className: 'text-sm underline builder-css' }, controls: { className: 'mt-6 builder-css' } },
+        mode: 'site',
+      } satisfies BlockComponentProps),
+    )
+    assert.match(html, /data-carousel-controls="" class="flex [^"]* mt-6 builder-css"/)
+    assert.match(html, /data-carousel-pause="" class="inline-flex [^"]* text-sm underline builder-css"/)
   })
 })
