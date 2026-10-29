@@ -85,6 +85,7 @@ export interface Config {
     search: Search;
     'builder-templates': BuilderTemplate;
     'builder-sections': BuilderSection;
+    'builder-classes': BuilderClass;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-folders': FolderInterface;
@@ -95,6 +96,13 @@ export interface Config {
   };
   collectionsJoins: {
     media: {
+      usedInPages: 'pages';
+      usedInPosts: 'posts';
+      usedInTemplateParts: 'template-parts';
+      usedInBuilderTemplates: 'builder-templates';
+      usedInBuilderSections: 'builder-sections';
+    };
+    'builder-sections': {
       usedInPages: 'pages';
       usedInPosts: 'posts';
       usedInTemplateParts: 'template-parts';
@@ -123,6 +131,7 @@ export interface Config {
     search: SearchSelect<false> | SearchSelect<true>;
     'builder-templates': BuilderTemplatesSelect<false> | BuilderTemplatesSelect<true>;
     'builder-sections': BuilderSectionsSelect<false> | BuilderSectionsSelect<true>;
+    'builder-classes': BuilderClassesSelect<false> | BuilderClassesSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-folders': PayloadFoldersSelect<false> | PayloadFoldersSelect<true>;
@@ -138,10 +147,14 @@ export interface Config {
   globals: {
     'site-settings': SiteSetting;
     'theme-settings': ThemeSetting;
+    'builder-classes-sheet': BuilderClassesSheet;
+    'builder-ai-settings': BuilderAiSetting;
   };
   globalsSelect: {
     'site-settings': SiteSettingsSelect<false> | SiteSettingsSelect<true>;
     'theme-settings': ThemeSettingsSelect<false> | ThemeSettingsSelect<true>;
+    'builder-classes-sheet': BuilderClassesSheetSelect<false> | BuilderClassesSheetSelect<true>;
+    'builder-ai-settings': BuilderAiSettingsSelect<false> | BuilderAiSettingsSelect<true>;
   };
   locale: null;
   widgets: {
@@ -414,6 +427,10 @@ export interface Page {
             value: number | Form;
           }
         | {
+            relationTo: 'builder-sections';
+            value: number | BuilderSection;
+          }
+        | {
             relationTo: 'exports';
             value: number | Export;
           }
@@ -469,7 +486,7 @@ export interface Post {
     image?: (number | null) | Media;
   };
   /**
-   * Leave empty to use the default template.
+   * Leave empty to use the matching template with the highest priority, else the default template.
    */
   template?: (number | null) | BuilderTemplate;
   builder?:
@@ -527,6 +544,10 @@ export interface Post {
             value: number | Form;
           }
         | {
+            relationTo: 'builder-sections';
+            value: number | BuilderSection;
+          }
+        | {
             relationTo: 'exports';
             value: number | Export;
           }
@@ -573,7 +594,7 @@ export interface Tag {
   createdAt: string;
 }
 /**
- * Layouts for collection documents. Each document renders through its own template or the default one.
+ * Layouts for collection documents. Each document renders through its own template, else the matching template with the highest priority, else the default one.
  *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "builder-templates".
@@ -589,6 +610,22 @@ export interface BuilderTemplate {
    * Used by every document of the collection that has no template of its own. Takes effect when you publish this template. It needs at least one block.
    */
   isDefault?: boolean | null;
+  /**
+   * Optional. Documents that match these conditions use this template when they have no template of their own, before the default template.
+   */
+  conditions?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  /**
+   * When the conditions of several templates match a document, the highest priority wins. Equal priority: the older template wins.
+   */
+  priority?: number | null;
   /**
    * The editor shows the template with this document's data.
    */
@@ -649,6 +686,10 @@ export interface BuilderTemplate {
         | {
             relationTo: 'forms';
             value: number | Form;
+          }
+        | {
+            relationTo: 'builder-sections';
+            value: number | BuilderSection;
           }
         | {
             relationTo: 'exports';
@@ -835,6 +876,127 @@ export interface Form {
   createdAt: string;
 }
 /**
+ * Sections saved from the page builder with "Save as section…". The builder lists them in the Sections tab, under "Saved".
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "builder-sections".
+ */
+export interface BuilderSection {
+  id: number;
+  name: string;
+  /**
+   * Optional, e.g. "Heroes" or "Pricing". Search in the library finds it.
+   */
+  category?: string | null;
+  /**
+   * The section's blocks. Edit them in the builder: open the Builder tab. Pages that inserted this section keep their own copy.
+   */
+  blocks:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  layout?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  layoutCss?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  layoutRichText?: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  } | null;
+  /**
+   * Filled by the website builder from the layout on every save.
+   */
+  builderRefs?:
+    | (
+        | {
+            relationTo: 'media';
+            value: number | Media;
+          }
+        | {
+            relationTo: 'pages';
+            value: number | Page;
+          }
+        | {
+            relationTo: 'posts';
+            value: number | Post;
+          }
+        | {
+            relationTo: 'forms';
+            value: number | Form;
+          }
+        | {
+            relationTo: 'builder-sections';
+            value: number | BuilderSection;
+          }
+        | {
+            relationTo: 'exports';
+            value: number | Export;
+          }
+        | {
+            relationTo: 'imports';
+            value: number | Import;
+          }
+      )[]
+    | null;
+  usedInPages?: {
+    docs?: (number | Page)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
+  usedInPosts?: {
+    docs?: (number | Post)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
+  usedInTemplateParts?: {
+    docs?: (number | TemplatePart)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
+  usedInBuilderTemplates?: {
+    docs?: (number | BuilderTemplate)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
+  usedInBuilderSections?: {
+    docs?: (number | BuilderSection)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "exports".
  */
@@ -976,6 +1138,10 @@ export interface TemplatePart {
             value: number | Form;
           }
         | {
+            relationTo: 'builder-sections';
+            value: number | BuilderSection;
+          }
+        | {
             relationTo: 'exports';
             value: number | Export;
           }
@@ -989,98 +1155,6 @@ export interface TemplatePart {
   createdAt: string;
   deletedAt?: string | null;
   _status?: ('draft' | 'published') | null;
-}
-/**
- * Sections saved from the page builder with "Save as section…". The builder lists them in the Sections tab, under "Saved".
- *
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "builder-sections".
- */
-export interface BuilderSection {
-  id: number;
-  name: string;
-  /**
-   * Optional, e.g. "Heroes" or "Pricing". Search in the library finds it.
-   */
-  category?: string | null;
-  /**
-   * The section's blocks. Edit them in the builder: open the Builder tab. Pages that inserted this section keep their own copy.
-   */
-  blocks:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  layout?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  layoutCss?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  layoutRichText?: {
-    root: {
-      type: string;
-      children: {
-        type: any;
-        version: number;
-        [k: string]: unknown;
-      }[];
-      direction: ('ltr' | 'rtl') | null;
-      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
-      indent: number;
-      version: number;
-    };
-    [k: string]: unknown;
-  } | null;
-  /**
-   * Filled by the website builder from the layout on every save.
-   */
-  builderRefs?:
-    | (
-        | {
-            relationTo: 'media';
-            value: number | Media;
-          }
-        | {
-            relationTo: 'pages';
-            value: number | Page;
-          }
-        | {
-            relationTo: 'posts';
-            value: number | Post;
-          }
-        | {
-            relationTo: 'forms';
-            value: number | Form;
-          }
-        | {
-            relationTo: 'exports';
-            value: number | Export;
-          }
-        | {
-            relationTo: 'imports';
-            value: number | Import;
-          }
-      )[]
-    | null;
-  updatedAt: string;
-  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1220,6 +1294,10 @@ export interface PayloadMcpApiKey {
         | 'validateLayout'
         | 'getPreviewUrl'
         | 'generateImage'
+        | 'listClasses'
+        | 'getClass'
+        | 'upsertClass'
+        | 'deleteClass'
         | 'listTemplates'
         | 'getBindingSources'
       )[]
@@ -1253,6 +1331,10 @@ export interface PayloadMcpApiKey {
         | 'validateLayout'
         | 'getPreviewUrl'
         | 'generateImage'
+        | 'listClasses'
+        | 'getClass'
+        | 'upsertClass'
+        | 'deleteClass'
         | 'listTemplates'
         | 'getBindingSources'
       )[]
@@ -1334,6 +1416,42 @@ export interface Search {
   slug?: string | null;
   updatedAt: string;
   createdAt: string;
+}
+/**
+ * Shared styles for blocks. Edit a class once and every block that uses it changes. The builder’s Styles panel edits them on the canvas.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "builder-classes".
+ */
+export interface BuilderClass {
+  id: number;
+  /**
+   * The class name blocks use, without the dot. Rename a class in the builder’s Styles panel (or with the MCP tools): that also updates every page that uses it.
+   */
+  name: string;
+  /**
+   * Shown next to the name in the Classes box.
+   */
+  label?: string | null;
+  /**
+   * Groups classes in the Classes box, for example “Buttons”.
+   */
+  group?: string | null;
+  /**
+   * Tailwind classes with variants, for example “rounded-xl p-6 md:p-8 hover:shadow-lg”. Another class’s name applies that class.
+   */
+  styles?: string | null;
+  /**
+   * Declarations and nested rules for what Tailwind classes cannot express: layered gradients, “&::before { … }”, @keyframes.
+   */
+  css?: string | null;
+  /**
+   * Former published names. Published pages that still use them keep their look until they are published again.
+   */
+  previousNames?: string[] | null;
+  updatedAt: string;
+  createdAt: string;
+  _status?: ('draft' | 'published') | null;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1510,6 +1628,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'builder-sections';
         value: number | BuilderSection;
+      } | null)
+    | ({
+        relationTo: 'builder-classes';
+        value: number | BuilderClass;
       } | null)
     | ({
         relationTo: 'payload-folders';
@@ -2131,6 +2253,8 @@ export interface BuilderTemplatesSelect<T extends boolean = true> {
   name?: T;
   targetCollection?: T;
   isDefault?: T;
+  conditions?: T;
+  priority?: T;
   previewDocument?: T;
   layout?: T;
   layoutCss?: T;
@@ -2152,8 +2276,28 @@ export interface BuilderSectionsSelect<T extends boolean = true> {
   layoutCss?: T;
   layoutRichText?: T;
   builderRefs?: T;
+  usedInPages?: T;
+  usedInPosts?: T;
+  usedInTemplateParts?: T;
+  usedInBuilderTemplates?: T;
+  usedInBuilderSections?: T;
   updatedAt?: T;
   createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "builder-classes_select".
+ */
+export interface BuilderClassesSelect<T extends boolean = true> {
+  name?: T;
+  label?: T;
+  group?: T;
+  styles?: T;
+  css?: T;
+  previousNames?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  _status?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -2373,6 +2517,61 @@ export interface ThemeSetting {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "builder-classes-sheet".
+ */
+export interface BuilderClassesSheet {
+  id: number;
+  hash?: string | null;
+  css?: string | null;
+  names?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  errors?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  input?: string | null;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+}
+/**
+ * API keys for the AI features. A key set here wins over the key in the server environment.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "builder-ai-settings".
+ */
+export interface BuilderAiSetting {
+  id: number;
+  /**
+   * Used for the AI assistant and image generation. It wins over OPENROUTER_API_KEY in the server environment. Saved encrypted. Nobody can read it back here.
+   */
+  chatApiKey?: string | null;
+  imageApiKey?: string | null;
+  keyStatus?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "site-settings_select".
  */
 export interface SiteSettingsSelect<T extends boolean = true> {
@@ -2413,6 +2612,32 @@ export interface ThemeSettingsSelect<T extends boolean = true> {
       };
   borderRadius?: T;
   derivedTokens?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  globalType?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "builder-classes-sheet_select".
+ */
+export interface BuilderClassesSheetSelect<T extends boolean = true> {
+  hash?: T;
+  css?: T;
+  names?: T;
+  errors?: T;
+  input?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  globalType?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "builder-ai-settings_select".
+ */
+export interface BuilderAiSettingsSelect<T extends boolean = true> {
+  chatApiKey?: T;
+  imageApiKey?: T;
+  keyStatus?: T;
   updatedAt?: T;
   createdAt?: T;
   globalType?: T;

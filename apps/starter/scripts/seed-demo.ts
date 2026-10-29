@@ -17,20 +17,28 @@ import {
   features,
   footer,
   header,
+  heading,
   hero,
+  icon,
+  image,
   imageText,
   lexical,
   pageLink,
   postList,
   postTemplate,
+  sectionHeader,
+  slotted,
+  stack,
+  styles,
   testimonials,
+  text,
   url,
   work,
 } from '@/data/sections'
 import { DEMO_IMAGES, renderDemoImage, type DemoImage } from './seed-demo-images'
 
 const SITE_NAME = 'Northwind Studio'
-const PAGE_SLUGS = [HOME_SLUG, 'about', 'services', 'contact', 'blog']
+const PAGE_SLUGS = [HOME_SLUG, 'about', 'services', 'contact', 'blog', 'components']
 const POST_SLUGS = ['designing-with-blocks', 'a-faster-launch', 'theme-tokens-explained']
 const PART_TITLES = ['Header', 'Footer']
 const TEMPLATE_NAME = 'Post template'
@@ -337,6 +345,75 @@ async function seed() {
     blog: [
       hero.create({ title: 'Blog', text: 'Notes on design, process and building websites with blocks.' }),
       postList.create({ limit: 12 }),
+    ],
+    // The plugin's opt-in built-in blocks, one section each.
+    components: [
+      hero.create({ title: 'Components', text: 'The built-in blocks: icons, an accordion, a carousel and an image viewer.' }),
+      stack('section', 'px-5 py-16 md:px-8', [
+        stack('div', 'mx-auto flex w-full max-w-6xl flex-col gap-10', [
+          sectionHeader('Icons', 'An icon block takes a name from the site icon set.'),
+          stack(
+            'ul',
+            'grid grid-cols-2 gap-6 md:grid-cols-4',
+            [
+              ['sparkles', 'Design'],
+              ['check', 'Build'],
+              ['star', 'Launch'],
+              ['mail', 'Support'],
+            ].map(([name, label]) =>
+              stack('li', 'flex items-center gap-3', [icon(name, 'size-6 text-primary'), text(label, 'text-lg font-medium')]),
+            ),
+          ),
+        ]),
+      ]),
+      stack('section', 'px-5 py-16 md:px-8', [
+        stack('div', 'mx-auto flex w-full max-w-3xl flex-col gap-8', [
+          heading('Accordion', '2', styles.sectionTitle),
+          slotted('accordion', { faqSchema: true }, 'flex flex-col divide-y border-y border-border', {
+            items: [
+              ['How long does a project take?', 'Most sites launch in four to eight weeks.'],
+              ['Can we edit the site ourselves?', 'Yes. Every page is built with blocks in the visual builder.'],
+              ['Do you host the site?', 'We deploy to your server or a VPS of your choice.'],
+            ].map(([question, answer]) =>
+              slotted('disclosure', undefined, 'py-4', {
+                summary: [text(question, 'text-lg font-medium')],
+                content: [text(answer, 'pt-3 text-muted-foreground')],
+              }),
+            ),
+          }),
+        ]),
+      ]),
+      stack('section', 'px-5 py-16 md:px-8', [
+        stack('div', 'mx-auto flex w-full max-w-6xl flex-col gap-8', [
+          heading('Carousel', '2', styles.sectionTitle),
+          slotted('carousel', { dots: true }, 'flex flex-col gap-4', {
+            slides: [
+              { title: 'Linden Bakery', meta: 'Ordering site and weekly menu', photo: media['work-bakery'] },
+              { title: 'Hale Architects', meta: 'Portfolio and project archive', photo: media['work-architects'] },
+              { title: 'Riverside Arts', meta: 'Festival programme and venues', photo: media['work-festival'] },
+              { title: 'Oakmoor Clinic', meta: 'Service pages and appointments', photo: media['work-clinic'] },
+            ].map(({ title, meta, photo }) =>
+              stack('article', 'flex w-[85%] shrink-0 flex-col gap-3 md:w-[40%]', [
+                image(photo.id, `${title} website`, 'aspect-[4/3] w-full rounded-lg object-cover'),
+                heading(title, '3', 'text-xl font-semibold'),
+                text(meta, 'text-muted-foreground'),
+              ]),
+            ),
+          }),
+        ]),
+      ]),
+      stack('section', 'px-5 py-16 md:px-8', [
+        stack('div', 'mx-auto flex w-full max-w-6xl flex-col gap-8', [
+          sectionHeader('Image viewer', 'Click a photo to open it full screen. Arrows, swipe and Escape work.'),
+          slotted('imageViewer', { captions: true }, 'grid grid-cols-2 gap-4 md:grid-cols-3', {
+            children: [
+              image(media['studio-desk'].id, 'The studio desk', 'aspect-square w-full rounded-lg object-cover'),
+              image(media['workshop-wall'].id, 'The workshop wall', 'aspect-square w-full rounded-lg object-cover'),
+              image(media['work-festival'].id, 'A festival site', 'aspect-square w-full rounded-lg object-cover'),
+            ],
+          }),
+        ]),
+      ]),
     ],
     contact: [
       hero.create({ title: 'Contact', text: 'Tell us about your project and we will get back to you.' }),

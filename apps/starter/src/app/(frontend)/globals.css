@@ -1,9 +1,14 @@
-@import "tailwindcss";
+/* source(none): Tailwind scans only the files below, not the whole app. The site's own components
+   need their classes here. Builder layouts (and the seed sections in src/data) get their classes
+   from the generated page CSS instead, and the shadcn files in components/ui are not on the site. */
+@import "tailwindcss" source(none);
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@source "../../components/**/*.tsx";
 @source "../**/*.tsx";
+@source "../../components/*.tsx";
+@source "../../components/blocks/*.{ts,tsx}";
+@source "../../legacy-fixture/*.{ts,tsx}";
 @source "../../lib/**/*.ts";
 
 @custom-variant dark (&:is(.dark *));

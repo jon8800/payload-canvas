@@ -50,9 +50,11 @@ const nav = [
 ]
 
 export const sectionLibrary: SectionDefinition[] = [
+  // One section with three versions: the library card and the canvas switch between them with ‹ ›.
   {
-    id: 'hero-two-buttons',
-    label: 'Hero, two buttons',
+    id: 'hero',
+    label: 'Hero',
+    variantLabel: 'Two buttons',
     description: 'A large title and intro text with a main button and a second button.',
     category: 'Heroes',
     blocks: [
@@ -64,27 +66,27 @@ export const sectionLibrary: SectionDefinition[] = [
         variant: 'home',
       }),
     ],
-  },
-  {
-    id: 'hero-one-button',
-    label: 'Hero, one button',
-    description: 'A large title and intro text with one clear button.',
-    category: 'Heroes',
-    blocks: [
-      hero.create({
-        title: 'Run your business with less busywork',
-        text: 'Northwind automates the small tasks, so you can spend your day on customers.',
-        primary: toContact,
-        variant: 'home',
-      }),
+    variants: [
+      {
+        id: 'one-button',
+        label: 'One button',
+        description: 'A large title and intro text with one clear button.',
+        blocks: [
+          hero.create({
+            title: 'Run your business with less busywork',
+            text: 'Northwind automates the small tasks, so you can spend your day on customers.',
+            primary: toContact,
+            variant: 'home',
+          }),
+        ],
+      },
+      {
+        id: 'page-header',
+        label: 'Page header',
+        description: 'An inner page title with one line of text beside it, above a thin line.',
+        blocks: [hero.create({ title: 'About Northwind', text: 'A small team that builds tools people enjoy using.' })],
+      },
     ],
-  },
-  {
-    id: 'hero-title-only',
-    label: 'Page header',
-    description: 'An inner page title with one line of text beside it, above a thin line.',
-    category: 'Heroes',
-    blocks: [hero.create({ title: 'About Northwind', text: 'A small team that builds tools people enjoy using.' })],
   },
   {
     id: 'work-four',
