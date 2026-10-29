@@ -15,6 +15,7 @@ export function iconBlock(names: readonly string[]): BlockDefinition {
   return defineBlock({
     type: ICON_BLOCK,
     label: 'Icon',
+    description: 'A small icon from the site’s icon set.',
     icon: 'icon',
     category: 'Content',
     // An icon may go straight into a link (an arrow at the end of a linked row).
@@ -31,13 +32,9 @@ export function iconBlock(names: readonly string[]): BlockDefinition {
       {
         name: 'label',
         type: 'text',
-        label: 'Label for screen readers',
+        label: 'Name for screen readers',
         localized: true,
-        admin: {
-          description:
-            'Empty: the icon is decoration and screen readers skip it. Fill it when the icon says something on its own, ' +
-            'for example "Yes" for a check mark in a table.',
-        },
+        admin: { placeholder: 'None: decoration only' },
       },
     ],
     defaultClassName: 'size-6',

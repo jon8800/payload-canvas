@@ -279,7 +279,7 @@ export function templatesCollection(args: {
       useAsTitle: 'name',
       defaultColumns: ['name', TEMPLATE_TARGET_FIELD, TEMPLATE_DEFAULT_FIELD, '_status', 'updatedAt'],
       description:
-        'Layouts for collection documents. Each document renders through its own template, else the matching template with the highest priority, else the default one.',
+        'Page designs for the documents of a collection.',
     },
     versions: { maxPerDoc: 20, drafts: { autosave: { interval: 300 } } },
     hooks: {
@@ -305,8 +305,7 @@ export function templatesCollection(args: {
         defaultValue: false,
         admin: {
           position: 'sidebar',
-          description:
-            'Used by every document of the collection that has no template of its own. Takes effect when you publish this template. It needs at least one block.',
+          description: 'For documents that no other template matches.',
           components: { Cell: 'payload-canvas/client#TemplateDefaultCell' },
         },
       },
@@ -316,8 +315,7 @@ export function templatesCollection(args: {
         label: 'Conditions',
         validate: validateConditions,
         admin: {
-          description:
-            'Optional. Documents that match these conditions use this template when they have no template of their own, before the default template.',
+          description: 'Only for documents that match.',
           // Condition rows (field, operator, value) over the target collection's fields; "Edit as JSON" for the rest.
           components: { Field: 'payload-canvas/client#TemplateConditionsField' },
         },
@@ -329,7 +327,7 @@ export function templatesCollection(args: {
         defaultValue: 0,
         admin: {
           position: 'sidebar',
-          description: 'When the conditions of several templates match a document, the highest priority wins. Equal priority: the older template wins.',
+          description: 'When several templates match, the highest number wins.',
           condition: (data) => Boolean(data?.[TEMPLATE_CONDITIONS_FIELD] && Object.keys(data[TEMPLATE_CONDITIONS_FIELD] as object).length > 0),
         },
       },
@@ -339,7 +337,7 @@ export function templatesCollection(args: {
         label: 'Preview document',
         relationTo: targets as CollectionSlug[],
         filterOptions: ({ relationTo, data }) => relationTo === data?.[TEMPLATE_TARGET_FIELD],
-        admin: { position: 'sidebar', description: 'The editor shows the template with this document\'s data.' },
+        admin: { position: 'sidebar', description: 'The editor shows its data.' },
       },
     ],
   }
@@ -353,7 +351,7 @@ export function documentTemplateField(target: string, templatesSlug: string): Re
     label: 'Template',
     relationTo: templatesSlug as CollectionSlug,
     filterOptions: { [TEMPLATE_TARGET_FIELD]: { equals: target } },
-    admin: { position: 'sidebar', description: 'Leave empty to use the matching template with the highest priority, else the default template.' },
+    admin: { position: 'sidebar', description: 'Empty: the matching template.' },
   }
 }
 

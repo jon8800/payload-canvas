@@ -1,10 +1,10 @@
-// Seeds the demo site: theme, media, a contact form, 5 pages, 3 posts, the post template, a header and a footer.
+// Seeds the demo site: theme, editable classes, media, a contact form, 5 pages, 3 posts, the post template, a header and a footer.
 // Idempotent: it deletes the documents it owns (matched by slug, title or filename) first.
 // Run with `pnpm seed:demo`.
 import { getPayload, type Payload } from 'payload'
 import config from '@payload-config'
 import { FORCE_DELETE_CONTEXT } from 'payload-canvas'
-import { validateLayout, withoutBoundRequired, type Block, type Layout } from 'payload-canvas/core'
+import { validateLayout, withDefaultClassNames, withoutBoundRequired, type Block, type Layout } from 'payload-canvas/core'
 
 import { builderBlocks } from '@/builder'
 import { HOME_SLUG } from '@/lib/links'
@@ -17,25 +17,19 @@ import {
   features,
   footer,
   header,
-  heading,
   hero,
-  icon,
-  image,
   imageText,
   lexical,
   pageLink,
   postList,
   postTemplate,
-  sectionHeader,
-  slotted,
-  stack,
-  styles,
   testimonials,
-  text,
   url,
   work,
 } from '@/data/sections'
+import { componentsPage } from '@/data/sections/components'
 import { DEMO_IMAGES, renderDemoImage, type DemoImage } from './seed-demo-images'
+import { seedClasses } from './lib/classes'
 
 const SITE_NAME = 'Northwind Studio'
 const PAGE_SLUGS = [HOME_SLUG, 'about', 'services', 'contact', 'blog', 'components']
@@ -165,6 +159,7 @@ async function seed() {
 
   await clear(payload)
   await seedTheme(payload)
+  await seedClasses(payload, context)
   const media = await seedMedia(payload)
   const formId = await seedForm(payload)
 
@@ -347,74 +342,7 @@ async function seed() {
       postList.create({ limit: 12 }),
     ],
     // The plugin's opt-in built-in blocks, one section each.
-    components: [
-      hero.create({ title: 'Components', text: 'The built-in blocks: icons, an accordion, a carousel and an image viewer.' }),
-      stack('section', 'px-5 py-16 md:px-8', [
-        stack('div', 'mx-auto flex w-full max-w-6xl flex-col gap-10', [
-          sectionHeader('Icons', 'An icon block takes a name from the site icon set.'),
-          stack(
-            'ul',
-            'grid grid-cols-2 gap-6 md:grid-cols-4',
-            [
-              ['sparkles', 'Design'],
-              ['check', 'Build'],
-              ['star', 'Launch'],
-              ['mail', 'Support'],
-            ].map(([name, label]) =>
-              stack('li', 'flex items-center gap-3', [icon(name, 'size-6 text-primary'), text(label, 'text-lg font-medium')]),
-            ),
-          ),
-        ]),
-      ]),
-      stack('section', 'px-5 py-16 md:px-8', [
-        stack('div', 'mx-auto flex w-full max-w-3xl flex-col gap-8', [
-          heading('Accordion', '2', styles.sectionTitle),
-          slotted('accordion', { faqSchema: true }, 'flex flex-col divide-y border-y border-border', {
-            items: [
-              ['How long does a project take?', 'Most sites launch in four to eight weeks.'],
-              ['Can we edit the site ourselves?', 'Yes. Every page is built with blocks in the visual builder.'],
-              ['Do you host the site?', 'We deploy to your server or a VPS of your choice.'],
-            ].map(([question, answer]) =>
-              slotted('disclosure', undefined, 'py-4', {
-                summary: [text(question, 'text-lg font-medium')],
-                content: [text(answer, 'pt-3 text-muted-foreground')],
-              }),
-            ),
-          }),
-        ]),
-      ]),
-      stack('section', 'px-5 py-16 md:px-8', [
-        stack('div', 'mx-auto flex w-full max-w-6xl flex-col gap-8', [
-          heading('Carousel', '2', styles.sectionTitle),
-          slotted('carousel', { dots: true }, 'flex flex-col gap-4', {
-            slides: [
-              { title: 'Linden Bakery', meta: 'Ordering site and weekly menu', photo: media['work-bakery'] },
-              { title: 'Hale Architects', meta: 'Portfolio and project archive', photo: media['work-architects'] },
-              { title: 'Riverside Arts', meta: 'Festival programme and venues', photo: media['work-festival'] },
-              { title: 'Oakmoor Clinic', meta: 'Service pages and appointments', photo: media['work-clinic'] },
-            ].map(({ title, meta, photo }) =>
-              stack('article', 'flex w-[85%] shrink-0 flex-col gap-3 md:w-[40%]', [
-                image(photo.id, `${title} website`, 'aspect-[4/3] w-full rounded-lg object-cover'),
-                heading(title, '3', 'text-xl font-semibold'),
-                text(meta, 'text-muted-foreground'),
-              ]),
-            ),
-          }),
-        ]),
-      ]),
-      stack('section', 'px-5 py-16 md:px-8', [
-        stack('div', 'mx-auto flex w-full max-w-6xl flex-col gap-8', [
-          sectionHeader('Image viewer', 'Click a photo to open it full screen. Arrows, swipe and Escape work.'),
-          slotted('imageViewer', { captions: true }, 'grid grid-cols-2 gap-4 md:grid-cols-3', {
-            children: [
-              image(media['studio-desk'].id, 'The studio desk', 'aspect-square w-full rounded-lg object-cover'),
-              image(media['workshop-wall'].id, 'The workshop wall', 'aspect-square w-full rounded-lg object-cover'),
-              image(media['work-festival'].id, 'A festival site', 'aspect-square w-full rounded-lg object-cover'),
-            ],
-          }),
-        ]),
-      ]),
-    ],
+    components: withDefaultClassNames(componentsPage(media), builderBlocks),
     contact: [
       hero.create({ title: 'Contact', text: 'Tell us about your project and we will get back to you.' }),
       contact.create({
@@ -504,7 +432,7 @@ async function seed() {
   })
 
   payload.logger.info(
-    `Seeded: theme, ${DEMO_IMAGES.length} images, 1 form, ${CATEGORIES.length} categories, ${PAGE_SLUGS.length} pages, ${posts.length} posts, the post template, header and footer.`,
+    `Seeded: theme, classes, ${DEMO_IMAGES.length} images, 1 form, ${CATEGORIES.length} categories, ${PAGE_SLUGS.length} pages, ${posts.length} posts, the post template, header and footer.`,
   )
 }
 

@@ -8,6 +8,7 @@ import type { DefaultDocumentIDType } from 'payload'
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
 
 import { findBlock } from '../../../core'
+import { editViewPath } from '../../../plugin/links'
 import { BlockIcon, Icon } from '../icons'
 import { MenuButton, type MenuEntry } from '../menu/Menu'
 import { blockSummary } from '../names'
@@ -239,7 +240,7 @@ export function PageSettings() {
 
 /**
  * "Publish changes" (disabled when nothing changed since the last publish) with a menu: Unpublish,
- * Revert to published, the versions and the API screen (in a drawer), and links to the edit view
+ * Revert to published, the versions and the API screen (in a drawer), and links to all fields
  * and the live page. Collections without drafts get the menu only.
  */
 export function PublishButton() {
@@ -253,8 +254,8 @@ export function PublishButton() {
   const {
     config: { routes },
   } = useConfig()
-  const admin = routes.admin === '/' ? '' : routes.admin
-  const docPath = `${admin}/collections/${encodeURIComponent(meta.collection)}/${encodeURIComponent(meta.id)}`
+  // Payload's form with every field. `form`: it stays open also with `editor.openInBuilder`.
+  const docPath = editViewPath(routes.admin, meta.collection, meta.id, { form: true })
   const revertSlug = `builder-revert-${meta.collection}-${meta.id}`
   const unpublishSlug = `builder-unpublish-${meta.collection}-${meta.id}`
   useModalA11y(revertSlug, { alert: true })
@@ -268,7 +269,7 @@ export function PublishButton() {
   // Versions and API open Payload's screens in a drawer, so the builder stays open.
   const items = (): MenuEntry[] => [
     ...(meta.url && (published || !meta.drafts) ? [{ icon: 'external' as const, label: 'View the live page', href: meta.url, newTab: true }] : []),
-    { icon: 'compose', label: 'Open in edit view', run: () => startRouteTransition(() => router.push(docPath)) },
+    { icon: 'compose', label: 'All fields', run: () => startRouteTransition(() => router.push(docPath)) },
     ...(meta.versions !== null
       ? [{ icon: 'layers' as const, label: meta.versions > 0 ? `Versions (${meta.versions})` : 'Versions', ownFocus: true, run: () => runtime.doc.openScreen('versions') }]
       : []),

@@ -5,9 +5,12 @@ export type TestimonialsInput = {
   items: Array<{ quote: string; cite: string }>
 }
 
-const QUOTE =
-  'flex flex-col gap-6 border-t border-foreground/20 pt-8 font-display text-2xl leading-snug tracking-[-0.01em] md:text-3xl ' +
-  '[&_cite]:font-sans [&_cite]:text-base [&_cite]:not-italic [&_cite]:tracking-normal [&_cite]:text-muted-foreground'
+/** One quote: a line above, the quote in the heading font, the source below it. */
+export const QUOTE_CLASSES = {
+  figure: 'flex flex-col gap-6 border-t border-foreground/20 pt-8',
+  quote: 'font-display text-2xl leading-snug tracking-[-0.01em] md:text-3xl',
+  cite: 'text-base text-muted-foreground',
+}
 
 export const testimonials = defineSection<TestimonialsInput>({
   name: 'Testimonials',
@@ -17,7 +20,7 @@ export const testimonials = defineSection<TestimonialsInput>({
       stack('div', styles.container, [
         heading(title, '2', styles.sectionTitle),
         withMotion(
-          grid('grid grid-cols-1 gap-12 md:grid-cols-2 md:gap-16', items.map((item) => quote(item.quote, item.cite, QUOTE))),
+          grid('grid grid-cols-1 gap-12 md:grid-cols-2 md:gap-16', items.map((item) => quote(item.quote, item.cite, QUOTE_CLASSES))),
           motions.staggerChildren,
         ),
       ]),

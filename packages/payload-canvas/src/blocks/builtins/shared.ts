@@ -29,7 +29,9 @@ export const INTERACTIVE = [
   'form',
   'filterLink',
   'carousel',
-  'imageViewer',
+  'popup',
+  'tabs',
+  'adjacentLinks',
   'accordion',
   'disclosure',
 ]
@@ -38,7 +40,8 @@ const braces = (text: string) => [...new Set(text.match(/\{\w+\}/g) ?? [])].join
 
 /**
  * One localized label prop. It stores no default: empty means the site's label
- * (`builtinComponents({ labels })`), else the English `text`, which the empty input shows.
+ * (`builtinComponents({ labels })`), else the English `text`, which the empty input shows. The
+ * AI text says the same.
  */
 export function labelField(name: string, text: string, label: string): Field {
   const filled = text.includes('{') ? ` ${braces(text)} are filled in.` : ''
@@ -47,7 +50,8 @@ export function labelField(name: string, text: string, label: string): Field {
     type: 'text',
     label,
     localized: true,
-    admin: { placeholder: text, description: `Empty: the site's default, "${text}" in English.${filled}` },
+    admin: { placeholder: text },
+    custom: { ai: { description: `Empty: the site's default, "${text}" in English.${filled}` } },
   }
 }
 
@@ -60,10 +64,7 @@ export function labelsField(labels: ControlLabels, names: Record<string, string>
   return {
     type: 'collapsible',
     label: 'Labels',
-    admin: {
-      initCollapsed: true,
-      description: 'The text of the controls, for screen readers and visible buttons. Translate them per locale.',
-    },
+    admin: { initCollapsed: true },
     fields: Object.entries(names).map(([name, label]) => labelField(name, labels[name] ?? '', label)),
   }
 }

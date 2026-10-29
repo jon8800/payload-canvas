@@ -60,14 +60,23 @@ const HEAVY = [
   /^css\/(?!marker\.ts$)/,
 ]
 // next/link: the menu's client-side navigation (`clientLinks`). Next ships it on every page anyway.
-const ALLOWED_PACKAGES = new Set(['react', 'react-dom', 'next/dynamic', 'next/link', 'next/navigation'])
+// Embla: the carousel, which loads only on pages that have one.
+const ALLOWED_PACKAGES = new Set([
+  'react',
+  'react-dom',
+  'next/dynamic',
+  'next/link',
+  'next/navigation',
+  'embla-carousel-react',
+  'embla-carousel-fade',
+])
 
 describe('site client components', () => {
   const modules = clientModules(path.join(src, 'react'))
 
   it('finds the client components', () => {
     const names = modules.map((file) => path.basename(file))
-    for (const name of ['Menu.tsx', 'Carousel.tsx', 'ImageViewer.tsx', 'lazy.tsx']) assert.ok(names.includes(name), name)
+    for (const name of ['Menu.tsx', 'Carousel.tsx', 'Popup.tsx', 'Tabs.tsx', 'lazy.tsx']) assert.ok(names.includes(name), name)
   })
 
   for (const file of modules) {

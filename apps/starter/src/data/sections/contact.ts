@@ -21,7 +21,7 @@ export const contact = defineSection<ContactInput>({
       // Phones: intro, form, details. Wide screens: intro and details on the left, the form on the right.
       stack('div', 'mx-auto grid w-full max-w-6xl grid-cols-1 gap-10 md:grid-cols-12 md:grid-rows-[auto_1fr] md:gap-x-16 md:gap-y-8', [
         stack('div', 'flex flex-col gap-5 md:col-span-5', [heading(title, '2', styles.sectionTitle), text(body, styles.body)]),
-        form(formId, 'rounded-lg border border-border bg-card p-6 sm:p-8 md:col-span-7 md:row-span-2 md:p-10'),
+        form(formId, `${styles.card} md:col-span-7 md:row-span-2`),
         ...(details && details.length > 0
           ? [
               stack(

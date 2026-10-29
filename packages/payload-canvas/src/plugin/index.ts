@@ -217,7 +217,10 @@ export type WebsiteBuilderOptions = {
    * `payload-canvas/react/server`. See the README's "Theme" section.
    */
   theme?: ThemeOptions | false
-  /** Editor behaviour, e.g. `{ dragMode: 'smooth', dropOutlines: false }`. See the README's "Drag and drop" section. */
+  /**
+   * Editor behaviour, e.g. `{ dragMode: 'smooth', dropOutlines: false }` (see the README's "Drag and
+   * drop" section), or `{ openInBuilder: true }`: opening a saved document goes straight to the builder.
+   */
   editor?: EditorOptions
   /**
    * References: a hidden `builderRefs` field on every builder collection lists the media and
@@ -237,6 +240,7 @@ export type WebsiteBuilderOptions = {
 
 const LAYOUT_FIELD_COMPONENT = 'payload-canvas/client#LayoutField'
 const BUILDER_TAB_COMPONENT = 'payload-canvas/client#BuilderTab'
+const DOCUMENT_EDIT_VIEW_COMPONENT = 'payload-canvas/client#DocumentEditView'
 const PUBLISH_BUTTON_COMPONENT = 'payload-canvas/client#PublishButton'
 const BUILDER_VIEW_COMPONENT = 'payload-canvas/rsc#BuilderView'
 const BUILDER_REDIRECT_COMPONENT = 'payload-canvas/rsc#BuilderRedirect'
@@ -570,7 +574,11 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           themeEndpoint: theme ? theme.endpoint : null,
           // A Payload blocks field stores no classes.
           classes: classes && !storage ? classes.client : null,
-          editor: { dragMode: options.editor?.dragMode ?? 'indicator', dropOutlines: options.editor?.dropOutlines ?? true },
+          editor: {
+            dragMode: options.editor?.dragMode ?? 'indicator',
+            dropOutlines: options.editor?.dropOutlines ?? true,
+            openInBuilder: options.editor?.openInBuilder ?? false,
+          },
           validateTypes: [...fieldRegistry.types('validate')],
           localization: localizationOf(collection.slug),
           ...(regionsOf[collection.slug] ? { regions: toJsonSafe(regionsOf[collection.slug]) } : {}),
@@ -804,6 +812,7 @@ function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): Collect
   // Payload's edit view type mixes an index signature with known keys, so a literal never fits.
   const edit = {
     ...views?.edit,
+    ...openInBuilderView(views?.edit, clientConfig),
     builder: {
       Component: BUILDER_REDIRECT_COMPONENT,
       path: '/builder',
@@ -878,6 +887,7 @@ function addPayloadBlocksBuilder(collection: CollectionConfig, args: AddBuilderA
   }
   const edit = {
     ...views?.edit,
+    ...openInBuilderView(views?.edit, clientConfig),
     builder: { Component: BUILDER_REDIRECT_COMPONENT, path: '/builder', tab: { Component: BUILDER_TAB_COMPONENT } },
   } as EditViews
   // The builder view reads its config from here: a hidden virtual field, so the blocks field stays untouched.
@@ -919,6 +929,16 @@ function addPayloadBlocksBuilder(collection: CollectionConfig, args: AddBuilderA
       },
     },
   }
+}
+
+/**
+ * `editor.openInBuilder`: the default edit view becomes `DocumentEditView`, which opens a saved
+ * document in the builder and otherwise renders Payload's own edit view. A collection with its own
+ * default edit view keeps it.
+ */
+function openInBuilderView(edit: Record<string, unknown> | undefined, clientConfig: BuilderClientConfig): { default?: { Component: string } } {
+  if (!clientConfig.editor.openInBuilder || edit?.default) return {}
+  return { default: { Component: DOCUMENT_EDIT_VIEW_COMPONENT } }
 }
 
 /** A block definition without style controls (classes, parts, animations, default classes). */

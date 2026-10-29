@@ -26,7 +26,9 @@ import { QueryFiltersField } from './fields/QueryFiltersField'
 import { ListWhereField } from './fields/ListWhereField'
 import { ManyValuesField } from './fields/ManyValuesField'
 import { PointField } from './fields/PointField'
+import { RelatedField } from './fields/RelatedField'
 import { RichTextField } from './fields/RichTextField'
+import { SortField } from './fields/SortField'
 import { fieldMergeKey } from './fields/undoPath'
 import { asId, formatProblem, fromRelationshipInput, isFieldVisible, isRecord, toRelationshipInput, type FieldShape } from './fields/values'
 import { FieldAccessFrame, FieldAccessProvider, HiddenFieldsNote, useFieldAccessCheck } from './fields/access'
@@ -48,6 +50,14 @@ type Props = {
   readonly onChange: (value: unknown) => void
   /** The other values of the same object (block props, group or row), for fields that read a sibling. */
   readonly siblings?: Record<string, unknown>
+  /** Sets several props of the same object in one change. `undefined` removes a prop. */
+  readonly onSiblingsChange?: (patch: Record<string, unknown>) => void
+}
+
+/** The value of a sibling prop named in `admin.custom` (for example the list's `collection`), when it is text. */
+const siblingText = (siblings: Record<string, unknown> | undefined, name: string | undefined) => {
+  const value = name ? siblings?.[name] : undefined
+  return typeof value === 'string' ? value : undefined
 }
 
 function text(value: unknown): string | undefined {
@@ -96,22 +106,44 @@ function Unsupported({ label, reason }: { label: string; reason: string }) {
  * `{ relationTo, value }`: we store IDs, or `{ relationTo, value: id }` for polymorphic fields.
  * SelectInput returns the option object. DatePicker returns a Date, stored as an ISO string.
  */
-export function RenderBlockField({ field, onChange, path, value, siblings }: Props) {
+export function RenderBlockField({ field, onChange, path, value, siblings, onSiblingsChange }: Props) {
   const { config } = useConfig()
   // In another locale, an untranslated text shows the fallback language's text as its placeholder.
-  const placeholder = useLocalePlaceholder(path)
+  const localePlaceholder = useLocalePlaceholder(path)
   const label = fieldLabel(field)
   const description = fieldDescription(field)
   const required = 'required' in field ? Boolean(field.required) : false
   // A missing value renders as the field's default; a cleared one (`null`, `''`) renders empty.
   const missing = value === undefined
   const textDefault = missing && 'defaultValue' in field && typeof field.defaultValue === 'string' ? field.defaultValue : undefined
+  // `admin.placeholder`: a hint inside the empty input ("100vw", the site's default label).
+  const ownPlaceholder = text((field.admin as { placeholder?: unknown } | undefined)?.placeholder)
+  const placeholder = localePlaceholder ?? textDefault ?? ownPlaceholder
 
   switch (field.type) {
     case 'text':
     case 'email': {
       if (field.type === 'text' && field.hasMany) {
         return <ManyValuesField description={description} kind="text" label={label} onChange={onChange} path={path} required={required} value={value} />
+      }
+      // `admin.custom.builderSort`: a list's sort, as a field select and a direction.
+      const sort = field.admin?.custom?.builderSort as { collectionField?: string } | undefined
+      if (sort) {
+        return <SortField collection={siblingText(siblings, sort.collectionField)} label={label} onChange={onChange} value={missing ? field.defaultValue : value} />
+      }
+      // `admin.custom.builderRelated`: a list's "Related to this page", which also sets the mode prop.
+      const related = field.admin?.custom?.builderRelated as { collectionField?: string; modeField?: string } | undefined
+      if (related?.modeField && onSiblingsChange) {
+        const modeField = related.modeField
+        return (
+          <RelatedField
+            collection={siblingText(siblings, related.collectionField)}
+            field={value}
+            label={label}
+            mode={siblings?.[modeField]}
+            onChange={(next, mode) => onSiblingsChange({ [field.name]: next, [modeField]: mode })}
+          />
+        )
       }
       if (field.admin?.custom?.builderFormat) {
         return (
@@ -121,6 +153,7 @@ export function RenderBlockField({ field, onChange, path, value, siblings }: Pro
             label={label}
             onChange={onChange}
             path={path}
+            placeholder={placeholder}
             required={required}
             value={asString(value)}
           />
@@ -132,7 +165,7 @@ export function RenderBlockField({ field, onChange, path, value, siblings }: Pro
           label={label}
           onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
           path={path}
-          placeholder={placeholder ?? textDefault}
+          placeholder={placeholder}
           required={required}
           value={asString(value)}
         />
@@ -150,7 +183,7 @@ export function RenderBlockField({ field, onChange, path, value, siblings }: Pro
           limits={{ min: field.min, max: field.max, required }}
           onChange={onChange}
           path={path}
-          placeholder={missing && typeof field.defaultValue === 'number' ? String(field.defaultValue) : undefined}
+          placeholder={missing && typeof field.defaultValue === 'number' ? String(field.defaultValue) : ownPlaceholder}
           required={required}
           value={value}
         />
@@ -165,7 +198,7 @@ export function RenderBlockField({ field, onChange, path, value, siblings }: Pro
           label={label}
           onChange={(e: ChangeEvent<HTMLTextAreaElement>) => onChange(e.target.value)}
           path={path}
-          placeholder={placeholder ?? textDefault}
+          placeholder={placeholder}
           required={required}
           rows={field.type === 'code' ? 8 : 4}
           value={asString(value)}
@@ -383,6 +416,15 @@ export function RenderBlockFields({ fields, data, path, onChange, scope = fields
     else delete next[name]
     onChange(Object.keys(next).length > 0 ? next : undefined)
   }
+  // Several props in one change (one undo step): `undefined` removes a prop.
+  const setFields = (patch: Record<string, unknown>) => {
+    const next = { ...record }
+    for (const [name, value] of Object.entries(patch)) {
+      if (value === undefined) delete next[name]
+      else next[name] = value
+    }
+    onChange(Object.keys(next).length > 0 ? next : undefined)
+  }
 
   const out: ReactNode[] = []
   fields.forEach((field, index) => {
@@ -442,6 +484,15 @@ export function RenderBlockFields({ fields, data, path, onChange, scope = fields
     const access = accessOf(fieldPath)
     if (!access.read) return
     const onFieldChange = (value: unknown) => setField(name, value, field)
+    // `admin.custom.builderHeading`: a small heading above the field starts a group of fields.
+    const heading = text(field.admin?.custom?.builderHeading)
+    if (heading) {
+      out.push(
+        <h4 key={`heading-${name}`} className="builder-field-heading">
+          {heading}
+        </h4>,
+      )
+    }
     out.push(
       // `data-builder-field`: the field the focus is in, for collaborators ("Anna is editing this field").
       <div key={name} data-builder-field={fieldPath} style={{ display: 'contents' }}>
@@ -450,7 +501,7 @@ export function RenderBlockFields({ fields, data, path, onChange, scope = fields
           <LocaleFieldFrame path={fieldPath} name={name}>
             {/* The slot adds binding controls (templates, collection lists) around the normal input. */}
             <FieldSlot field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} label={fieldLabel(field)}>
-              <RenderBlockField field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} siblings={record} />
+              <RenderBlockField field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} siblings={record} onSiblingsChange={setFields} />
             </FieldSlot>
           </LocaleFieldFrame>
         </FieldAccessFrame>

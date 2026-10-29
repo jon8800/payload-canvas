@@ -127,6 +127,11 @@ async function main() {
     p.log.step('Seeding demo content...')
     seeded = run(manager, ['run', 'seed:demo'], targetDir)
     if (!seeded) p.log.warn(`Seeding failed. Run "${manager} run seed:demo" in ${targetDir} to try again.`)
+  } else if (installed && !options.skipDb) {
+    // The ready-made sections use the site's editable classes (card, button-primary...): add them
+    // without the demo pages, or the sections look unstyled.
+    p.log.step('Adding the editable classes...')
+    if (!run(manager, ['run', 'seed:classes'], targetDir)) p.log.warn(`Adding the classes failed. Run "${manager} run seed:classes" in ${targetDir} to try again.`)
   }
 
   // 6. Summary.

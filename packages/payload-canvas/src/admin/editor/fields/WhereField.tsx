@@ -60,7 +60,7 @@ export function WhereField({ label, description, path, required, value, onChange
           </button>
         ) : (
           <p className="builder-field-group__description">
-            This query uses parts the condition rows cannot show (for example a group inside a group), so it opens as JSON.
+            Too complex for condition rows, so it opens as JSON.
           </p>
         )}
       </div>

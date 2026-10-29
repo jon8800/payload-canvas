@@ -73,4 +73,18 @@
       color: var(--be-accent-fg);
     }
   }
+
+  // A library card with versions keeps one height while the arrows flip it: one label line and
+  // room for two description lines, whatever the version shown.
+  .builder-editor__card-wrap[data-versions] {
+    .builder-editor__card-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .builder-editor__card-desc {
+      min-height: 2lh;
+    }
+  }
 }

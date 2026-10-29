@@ -238,7 +238,7 @@ function renderBlock(stored: Block, ctx: Context, preview = false, item = false)
     )
   }
 
-  // Before the slots: a backdrop's image comes before the images inside it.
+  // Before the slots: a block's own image comes before the images of its children.
   const priority = takesPriority(block, ctx)
   const slots: Record<string, ReactNode> = {}
   const partAttributes: Record<string, Record<string, string>> = {}

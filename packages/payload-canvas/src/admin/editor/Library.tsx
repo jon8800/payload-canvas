@@ -95,7 +95,7 @@ const BlockList = memo(function BlockList({ query }: { query: string }) {
         // Blocks with `parents` (e.g. a list item) only fit inside their parent: the "+" picker
         // offers them there, so the library leaves them out.
         config.blocks.filter(
-          (def) => !def.parents && matches(query, def.label, def.type, def.category, def.ai?.description),
+          (def) => !def.parents && matches(query, def.label, def.type, def.category, def.description, def.ai?.description),
         ),
         BLOCK_CATEGORIES,
       ),
@@ -126,7 +126,8 @@ function BlockTile({ def }: { def: BlockDefinition }) {
       ref={setNodeRef}
       type="button"
       className="builder-editor__tile"
-      data-tooltip={def.ai?.description ?? `Add ${def.label}`}
+      // The editor's short description. The AI text is long and technical: search still matches it.
+      data-tooltip={def.description ?? def.label}
       onClick={insert}
       {...listeners}
       {...attributes}
@@ -227,8 +228,11 @@ function SectionCard({ section }: { section: SectionDefinition }) {
     if (insertBlocks(runtime, shown.blocks, sectionPosition(runtime))) runtime.notify(`Added ${shown.label}`)
   }
 
+  // Versions flip in place: the card keeps one height (one label line, two description lines).
+  const flips = versions.length > 1
+  const description = isSaved ? section.category : shown.description
   return (
-    <div className="builder-editor__card-wrap">
+    <div className="builder-editor__card-wrap" data-versions={flips || undefined}>
       <button
         ref={setNodeRef}
         type="button"
@@ -241,11 +245,10 @@ function SectionCard({ section }: { section: SectionDefinition }) {
         <SectionThumb section={shown} />
         <span className="builder-editor__card-text">
           <span className="builder-editor__card-label">{shown.label}</span>
-          {isSaved && section.category && <span className="builder-editor__card-desc">{section.category}</span>}
-          {!isSaved && shown.description && <span className="builder-editor__card-desc">{shown.description}</span>}
+          {(description || (flips && versions.some((v) => v.description))) && <span className="builder-editor__card-desc">{description}</span>}
         </span>
       </button>
-      {versions.length > 1 && (
+      {flips && (
         <VariantArrows
           count={versions.length}
           index={at}

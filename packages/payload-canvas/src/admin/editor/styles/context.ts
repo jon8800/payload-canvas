@@ -37,8 +37,6 @@ export type StylesContextValue = {
   canvasBreakpoint: Breakpoint
   /** Sets (or with `null` clears) one property at the current variant. */
   set: (property: string, value: string | null, options?: { negative?: boolean }) => void
-  /** Replaces the whole className (raw classes field). */
-  setClassName: (className: string, mergeKey?: string) => void
   /** Last refused value ("lg" is not a text color), shown under the variant bar. */
   error: ValueStore<string | null>
 }

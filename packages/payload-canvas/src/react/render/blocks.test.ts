@@ -47,21 +47,22 @@ describe('stack and grid', () => {
 })
 
 describe('text-like blocks', () => {
-  test('heading, text, quote with content', () => {
+  test('heading and text with content', () => {
     assert.equal(site({ type: 'heading', props: { text: 'Hi', level: '1' } }), '<h1>Hi</h1>')
     assert.equal(site({ type: 'text', props: { text: 'a\nb' }, className: 'x' }), '<p class="x builder-css">a<br/>b</p>')
-    assert.equal(
-      site({ type: 'quote', props: { quote: 'Great', cite: 'Jane' }, className: 'italic' }),
-      '<blockquote class="italic builder-css"><p>Great</p><footer><cite>Jane</cite></footer></blockquote>',
-    )
-    assert.equal(site({ type: 'quote', props: { quote: 'Great' } }), '<blockquote><p>Great</p></blockquote>')
+  })
+
+  test('a stored block of a removed type (quote, spacer): nothing on the site, a note in the canvas', () => {
+    for (const type of ['quote', 'spacer']) {
+      assert.equal(site({ type, props: { quote: 'Great' } }), '', type)
+      assert.match(canvas({ type }), new RegExp(`data-builder-unknown=""[^>]*>Unknown block: ${type}<`), type)
+    }
   })
 
   test('empty blocks: nothing on the site, a muted placeholder in the canvas', () => {
     const cases: Array<[Omit<Block, 'id'>, RegExp]> = [
       [{ type: 'heading', props: { level: '3' }, className: 'text-3xl' }, /^<h3 data-block-id="b" data-block-type="heading" data-builder-text="text" class="text-3xl builder-css"><span data-builder-placeholder="" style="opacity:0.4">Heading<\/span><\/h3>$/],
       [{ type: 'text', props: { text: '' } }, /^<p [^>]+><span data-builder-placeholder="[^"]*" style="opacity:0.4">Text<\/span><\/p>$/],
-      [{ type: 'quote' }, /^<blockquote [^>]+><p data-builder-text="quote"><span data-builder-placeholder[^>]*>Quote<\/span><\/p><\/blockquote>$/],
       [{ type: 'button', props: { link: { type: 'url', url: '/x' } } }, /^<a [^>]*href="\/x"[^>]*><span data-builder-placeholder[^>]*>Button<\/span><\/a>$/],
       [{ type: 'listItem' }, /^<li data-block-id="b" data-block-type="listItem" data-builder-text="text"><span data-builder-placeholder[^>]*>List item<\/span><\/li>$/],
       [{ type: 'richText', props: { content: lexical(paragraph()) } }, /^<div [^>]+><p><span data-builder-placeholder[^>]*>Rich text<\/span><\/p><\/div>$/],
@@ -183,13 +184,9 @@ describe('list', () => {
   })
 })
 
-describe('divider and spacer', () => {
-  test('divider is an hr, spacer an empty div', () => {
+describe('divider', () => {
+  test('divider is an hr', () => {
     assert.equal(site({ type: 'divider', className: 'my-8 border-t' }), '<hr class="my-8 border-t builder-css"/>')
-    assert.equal(site({ type: 'spacer', className: 'h-8' }), '<div aria-hidden="true" class="h-8 builder-css"></div>')
-    assert.equal(site({ type: 'spacer' }), '<div aria-hidden="true"></div>')
-    assert.match(canvas({ type: 'spacer' }), /style="min-height:16px"/)
-    assert.ok(!canvas({ type: 'spacer', className: 'h-8' }).includes('style='))
   })
 })
 

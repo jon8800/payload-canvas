@@ -1,9 +1,10 @@
 'use client'
 
-import { Button, FieldLabel } from '@payloadcms/ui'
+import { FieldLabel } from '@payloadcms/ui'
 import { useState } from 'react'
 
 import { Select } from '../ui/Select'
+import { AddButton, RemoveRowButton } from './AddButton'
 import { useCollectionFields } from './collectionFields'
 import { JsonField } from './JsonField'
 import { queryFilterRows, rowsQueryFilters, type QueryFilterRow } from './queryFilterRows'
@@ -43,7 +44,7 @@ export function QueryFiltersField({ label, description, path, required, value, o
           </button>
         ) : (
           <p className="builder-field-group__description">
-            These filters map URL values to queries, which the rows cannot show, so they open as JSON.
+            Too complex for rows, so they open as JSON.
           </p>
         )}
       </div>
@@ -102,28 +103,11 @@ export function QueryFiltersField({ label, description, path, required, value, o
                 onChange={(e) => change(index, { field: e.target.value })}
               />
             )}
-            <button
-              type="button"
-              className="builder-where__remove"
-              aria-label={`Remove ${name.toLowerCase()}`}
-              onClick={() => update(draft.rows.filter((_, i) => i !== index))}
-            >
-              ×
-            </button>
+            <RemoveRowButton label={`Remove ${name.toLowerCase()}`} onClick={() => update(draft.rows.filter((_, i) => i !== index))} />
           </fieldset>
         )
       })}
-      <Button
-        buttonStyle="secondary"
-        icon="plus"
-        iconPosition="left"
-        iconStyle="with-border"
-        margin={false}
-        onClick={() => update([...draft.rows, { param: '', field: '' }])}
-        size="small"
-      >
-        Add URL filter
-      </Button>
+      <AddButton onClick={() => update([...draft.rows, { param: '', field: '' }])}>Add URL filter</AddButton>
     </div>
   )
 }

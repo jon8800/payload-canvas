@@ -155,7 +155,7 @@ export type RenderLayoutProps = {
   linkComponent?: LinkComponent | null
   /**
    * How many images of the layout's first section load first (`fetchpriority="high"`, not lazy):
-   * image blocks and media backdrops, in page order, unless their **Load first** (`priority`) prop
+   * image blocks (and other blocks with a `priority` prop), in page order, unless their **Load first** prop
    * is off. Default `1`: the first image of the first section, often the largest thing on screen.
    * Give a layout further down the page (a footer) `0`. Site only.
    */

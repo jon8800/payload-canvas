@@ -172,7 +172,7 @@ function SampleList({
           ))}
         </ul>
       )}
-      <p className="builder-bind__picker-foot">Only changes the preview. The template stays the same for every document.</p>
+      <p className="builder-bind__picker-foot">Changes only the preview.</p>
     </div>
   )
 }

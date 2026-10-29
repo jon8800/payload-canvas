@@ -486,7 +486,7 @@ export interface Post {
     image?: (number | null) | Media;
   };
   /**
-   * Leave empty to use the matching template with the highest priority, else the default template.
+   * Empty: the matching template.
    */
   template?: (number | null) | BuilderTemplate;
   builder?:
@@ -594,7 +594,7 @@ export interface Tag {
   createdAt: string;
 }
 /**
- * Layouts for collection documents. Each document renders through its own template, else the matching template with the highest priority, else the default one.
+ * Page designs for the documents of a collection.
  *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "builder-templates".
@@ -607,11 +607,11 @@ export interface BuilderTemplate {
    */
   targetCollection: 'posts';
   /**
-   * Used by every document of the collection that has no template of its own. Takes effect when you publish this template. It needs at least one block.
+   * For documents that no other template matches.
    */
   isDefault?: boolean | null;
   /**
-   * Optional. Documents that match these conditions use this template when they have no template of their own, before the default template.
+   * Only for documents that match.
    */
   conditions?:
     | {
@@ -623,11 +623,11 @@ export interface BuilderTemplate {
     | boolean
     | null;
   /**
-   * When the conditions of several templates match a document, the highest priority wins. Equal priority: the older template wins.
+   * When several templates match, the highest number wins.
    */
   priority?: number | null;
   /**
-   * The editor shows the template with this document's data.
+   * The editor shows its data.
    */
   previewDocument?: {
     relationTo: 'posts';

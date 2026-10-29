@@ -555,6 +555,18 @@ export const BINDING_FORMATTERS: Record<string, (value: unknown, args: string[])
     if (n === null || n < 1) return text
     return truncate(text, Math.floor(n), unit === 'words' ? 'words' : 'characters')
   },
+  /**
+   * `readingTime[:wordsPerMinute[:suffix]]`: the time to read the text (rich text too), rounded up
+   * to whole minutes, at least 1. E.g. "5 min read"; `readingTime:200:Min. Lesezeit` gives
+   * "5 Min. Lesezeit". Default 200 words per minute. Undefined for a text without words.
+   */
+  readingTime(value, [wordsPerMinute, suffix]) {
+    const words = toPlainText(value)?.match(/\S+/g)?.length ?? 0
+    if (words === 0) return undefined
+    const rate = numberOf(wordsPerMinute)
+    const minutes = Math.max(1, Math.ceil(words / (rate !== null && rate > 0 ? rate : 200)))
+    return `${minutes} ${suffix?.trim() || 'min read'}`
+  },
 }
 
 /** One argument of a formatter, for the editor's format picker. */
@@ -596,6 +608,13 @@ export const BINDING_FORMATTER_INFO: Record<string, { label: string; args: Bindi
           { value: 'words', label: 'words' },
         ],
       },
+    ],
+  },
+  readingTime: {
+    label: 'Reading time',
+    args: [
+      { label: 'Words per minute', placeholder: '200' },
+      { label: 'Text after the number', placeholder: 'min read' },
     ],
   },
 }

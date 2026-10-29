@@ -351,15 +351,6 @@ function StyleFields({ block }: { block: Block }) {
       ) : (
         <StylesPanel block={block} />
       )}
-      <CheckboxInput
-        id={`builder-${block.id}-hidden`}
-        name={`builder.${block.id}.hidden`}
-        label="Hide on the site"
-        checked={block.hidden === true}
-        onToggle={(e: ChangeEvent<HTMLInputElement>) =>
-          runtime.store.apply({ type: 'update', id: block.id, hidden: e.target.checked })
-        }
-      />
     </div>
   )
 }
@@ -413,6 +404,19 @@ function AdvancedFields({ block }: { block: Block }) {
         path={`builder.${block.id}.attrs.ariaLabel`}
         value={block.attrs?.ariaLabel ?? ''}
       />
+      <div>
+        <CheckboxInput
+          id={`builder-${block.id}-hidden`}
+          name={`builder.${block.id}.hidden`}
+          label="Hide at all screen sizes"
+          checked={block.hidden === true}
+          onToggle={(e: ChangeEvent<HTMLInputElement>) => runtime.store.apply({ type: 'update', id: block.id, hidden: e.target.checked })}
+        />
+        <p className="field-description">
+          The site does not show this block. To hide it on some screens only, open Styles, pick a screen size, and set
+          Display to Hidden. That hides it at this size and wider.
+        </p>
+      </div>
       <CheckboxInput
         id={`builder-${block.id}-aria-hidden`}
         name={`builder.${block.id}.attrs.ariaHidden`}

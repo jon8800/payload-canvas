@@ -4,7 +4,9 @@ import { describe, it } from 'node:test'
 import { defaultBlocks } from '../blocks/defaults'
 import { listCollectionsOf } from '../plugin/listCollections'
 import {
+  BINDING_FORMATTER_INFO,
   coerceValue,
+  formatBindingValue,
   formatDate,
   getByPath,
   plainToRichText,
@@ -200,5 +202,42 @@ describe('templateConditions', () => {
     assert.deepEqual(templateConditions({ conditions: { category: { equals: 'news' } } }), { category: { equals: 'news' } })
     for (const conditions of [undefined, null, {}, [], 'category', 3]) assert.equal(templateConditions({ conditions }), null)
     assert.equal(templateConditions(null), null)
+  })
+})
+
+const words = (n: number) => Array.from({ length: n }, (_, i) => `word${i}`).join(' ')
+
+describe('readingTime formatter', () => {
+
+  it('rounds up to whole minutes at 200 words per minute, at least 1', () => {
+    assert.equal(formatBindingValue(words(1), 'readingTime'), '1 min read')
+    assert.equal(formatBindingValue(words(200), 'readingTime'), '1 min read')
+    assert.equal(formatBindingValue(words(201), 'readingTime'), '2 min read')
+    assert.equal(formatBindingValue(words(1000), 'readingTime'), '5 min read')
+  })
+
+  it('reads Lexical rich text', () => {
+    assert.equal(formatBindingValue(plainToRichText([words(150), words(150)].join('\n')), 'readingTime'), '2 min read')
+  })
+
+  it('takes the words per minute and the text after the number', () => {
+    assert.equal(formatBindingValue(words(1000), 'readingTime:250'), '4 min read')
+    assert.equal(formatBindingValue(words(1000), 'readingTime:200:Min. Lesezeit'), '5 Min. Lesezeit')
+    assert.equal(formatBindingValue(words(1000), 'readingTime::Min.'), '5 Min.')
+    assert.equal(formatBindingValue(words(1000), 'readingTime:0'), '5 min read')
+    assert.equal(formatBindingValue(words(1000), 'readingTime:fast'), '5 min read')
+  })
+
+  it('gives nothing for a value without words', () => {
+    assert.equal(formatBindingValue('   ', 'readingTime'), undefined)
+    assert.equal(formatBindingValue(plainToRichText(''), 'readingTime'), undefined)
+    assert.equal(formatBindingValue(null, 'readingTime'), undefined)
+  })
+
+  it('works in a binding expression and is in the editor format list', () => {
+    const context: TemplateContext = { collection: 'posts', doc: { body: plainToRichText(words(450)) } }
+    const bound: Layout = { version: 1, blocks: [{ id: 't', type: 'text', bindings: { text: 'body|readingTime' } }] }
+    assert.equal(resolveBindings(bound, context, blocks).blocks[0]?.props?.text, '3 min read')
+    assert.deepEqual(BINDING_FORMATTER_INFO.readingTime?.args.map((arg) => arg.label), ['Words per minute', 'Text after the number'])
   })
 })

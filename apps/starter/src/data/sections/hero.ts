@@ -41,7 +41,7 @@ export const hero = defineSection<HeroInput>({
                 ...(notes && notes.length > 0
                   ? [
                       stack('div', 'mt-6 flex flex-col gap-3 border-t border-border pt-6 sm:flex-row sm:items-baseline sm:gap-10', [
-                        ...(notesLabel ? [text(notesLabel, 'text-sm font-medium text-foreground')] : []),
+                        ...(notesLabel ? [text(notesLabel, styles.eyebrow)] : []),
                         list(notes, false, 'flex list-none flex-col gap-2 text-base text-muted-foreground sm:flex-row sm:flex-wrap sm:gap-x-10'),
                       ]),
                     ]

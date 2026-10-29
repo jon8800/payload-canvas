@@ -180,6 +180,8 @@ export type BlockDefinition = {
   icon?: string
   /** Group in the block library, e.g. "Layout", "Content", "Media", "Interactive". */
   category?: string
+  /** One short plain sentence for editors. The block library shows it as the tooltip. */
+  description?: string
   /** Text for AI tools: what the block is for, plus a small example. */
   ai?: { description: string; example?: Omit<Partial<Block>, 'id'> }
   /**
@@ -425,9 +427,15 @@ export type EditorOptions = {
    * Each user can turn them off in the editor. Default true.
    */
   dropOutlines?: boolean
+  /**
+   * Opening a saved document of a builder collection in the admin goes straight to the
+   * full-screen builder. A new document keeps Payload's create form until its first save. The
+   * builder's "All fields" menu item still opens the form. Default false.
+   */
+  openInBuilder?: boolean
 }
 
-export type EditorClientConfig = { dragMode: DragMode; dropOutlines: boolean }
+export type EditorClientConfig = { dragMode: DragMode; dropOutlines: boolean; openInBuilder: boolean }
 
 // ---------------------------------------------------------------------------
 // Design tokens from the app's Tailwind theme (for the Styles panel)

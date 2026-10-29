@@ -13,28 +13,18 @@ export function tableOfContentsBlock(): BlockDefinition {
   return defineBlock({
     type: TABLE_OF_CONTENTS_BLOCK,
     label: 'Table of contents',
+    description: 'Links to the headings of the page text.',
     icon: 'tableOfContents',
     category: 'Dynamic',
     fields: [
       {
         name: 'content',
         type: 'richText',
-        label: 'Rich text',
-        admin: {
-          description:
-            'Bind it to the rich text field of the document, for example "content". Its H2 headings become the links. ' +
-            'The rich text on the page gives its headings the same ids.',
-        },
+        label: 'Text with headings',
+        admin: { description: 'Bind it to the page’s text field.' },
       },
-      {
-        name: 'minHeadings',
-        type: 'number',
-        label: 'Fewest headings',
-        defaultValue: 3,
-        min: 1,
-        admin: { description: 'With fewer H2 headings the block shows nothing.' },
-      },
-      labelField('label', TABLE_OF_CONTENTS_LABELS.label, 'Label for screen readers'),
+      { name: 'minHeadings', type: 'number', label: 'Hide below this many headings', defaultValue: 3, min: 1 },
+      labelField('label', TABLE_OF_CONTENTS_LABELS.label, 'Name for screen readers'),
     ],
     defaultClassName: TOC_CLASS,
     ai: {

@@ -24,17 +24,12 @@ export function disclosureBlock(): BlockDefinition {
   return defineBlock({
     type: DISCLOSURE_BLOCK,
     label: 'Disclosure',
+    description: 'A title that opens and closes the content below it.',
     icon: 'disclosure',
     category: 'Interactive',
     fields: [
       { name: 'open', type: 'checkbox', label: 'Open at first', defaultValue: false },
-      {
-        name: 'animate',
-        type: 'checkbox',
-        label: 'Animate the height',
-        defaultValue: true,
-        admin: { description: 'Opens and closes in 300 ms. Off when the visitor asks for less motion.' },
-      },
+      { name: 'animate', type: 'checkbox', label: 'Animate', defaultValue: true },
     ],
     slots: {
       // A <summary> is the button: links and controls inside it are invalid HTML.
@@ -47,7 +42,7 @@ export function disclosureBlock(): BlockDefinition {
       description:
         'One show/hide item: an FAQ question and answer, a "read more". The "summary" slot is always visible (a heading or ' +
         'text, often with an icon); the "content" slot opens below it. A native <details>, so it works without script, opens ' +
-        'with the keyboard and closed content stays in the HTML for search engines. The canvas shows it open. Style the ' +
+        'with the keyboard and closed content stays in the HTML for search engines. In the canvas, selecting a block inside opens it. Style the ' +
         'summary row with [&>summary]: classes and the content with [&>div]: classes on the disclosure; open: and ' +
         'group-open: classes style the open state (e.g. "group-open:rotate-45" on an icon in the summary).',
       example: {
@@ -66,26 +61,17 @@ export function accordionBlock(): BlockDefinition {
   return defineBlock({
     type: ACCORDION_BLOCK,
     label: 'Accordion',
+    description: 'A stack of items that open and close, like an FAQ.',
     icon: 'accordion',
     category: 'Interactive',
     fields: [
-      {
-        name: 'multiple',
-        type: 'checkbox',
-        label: 'Several open at a time',
-        defaultValue: true,
-        admin: { description: 'Off: opening one item closes the others.' },
-      },
+      { name: 'multiple', type: 'checkbox', label: 'Several open at a time', defaultValue: true },
       {
         name: 'faqSchema',
         type: 'checkbox',
-        label: 'Mark up as FAQ for search engines',
+        label: 'FAQ for search engines',
         defaultValue: false,
-        admin: {
-          description:
-            'Only for real questions and answers. The page adds FAQPage structured data (JSON-LD) with these items: ' +
-            'the summary text is the question, the content text the answer. RenderLayout outputs it on the site by itself.',
-        },
+        admin: { description: 'Only for real questions and answers.' },
       },
     ],
     slots: { items: { label: 'Items', allow: [DISCLOSURE_BLOCK, 'repeat', 'collectionList'] } },

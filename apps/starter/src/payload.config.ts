@@ -81,6 +81,14 @@ const MCP_HOSTED_CALLBACKS = [
   'https://chatgpt.com/connector_platform_oauth_redirect',
 ]
 
+// Development only: the admin opens signed in as this user, with no login form. Set
+// DEV_AUTOLOGIN_EMAIL in .env (the dev user from scripts/_dev-user.ts: builder-dev@local.test).
+// Payload then treats every request without a login cookie as this user, so it never runs in production.
+const devAutoLogin =
+  process.env.NODE_ENV === 'development' && process.env.DEV_AUTOLOGIN_EMAIL
+    ? { email: process.env.DEV_AUTOLOGIN_EMAIL }
+    : false
+
 const smtpAdapter: EmailAdapter = ({ payload }) => {
   const transport = createTransport({
     host: process.env.SMTP_HOST || 'localhost',
@@ -113,6 +121,7 @@ export default buildConfig({
       baseDir: path.resolve(dirname),
     },
     user: Users.slug,
+    autoLogin: devAutoLogin,
     livePreview: {
       breakpoints: [
         { label: 'Mobile', name: 'mobile', width: 375, height: 667 },
@@ -272,6 +281,8 @@ export default buildConfig({
       blocks: builderBlocks,
       sections: sectionLibrary,
       templates: { hooks: { afterChange: [revalidateTemplate] } },
+      // Opening a saved page or post goes straight to the visual builder. "All fields" in the builder's menu opens the form.
+      editor: { openInBuilder: true },
       // AI assistant in the editor. BUILDER_AI_FAKE=1 (dev only) plays a scripted model. Else OpenRouter:
       // the key comes from OPENROUTER_API_KEY, or an admin pastes one in the "AI settings" global
       // (that key wins). Without either, the panel shows the setup card with a link to the settings.

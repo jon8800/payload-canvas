@@ -35,6 +35,7 @@ import { LayoutField as LayoutField_1611a9327f20600aee6a9d537ba4315b } from 'pay
 import { LayoutDiff as LayoutDiff_57c6923ff8049349bee2a220c5ac4c2a } from 'payload-canvas/rsc'
 import { NoDiff as NoDiff_57c6923ff8049349bee2a220c5ac4c2a } from 'payload-canvas/rsc'
 import { PublishButton as PublishButton_1611a9327f20600aee6a9d537ba4315b } from 'payload-canvas/client'
+import { DocumentEditView as DocumentEditView_1611a9327f20600aee6a9d537ba4315b } from 'payload-canvas/client'
 import { BuilderRedirect as BuilderRedirect_57c6923ff8049349bee2a220c5ac4c2a } from 'payload-canvas/rsc'
 import { BuilderTab as BuilderTab_1611a9327f20600aee6a9d537ba4315b } from 'payload-canvas/client'
 import { FormatField as FormatField_cdf7e044479f899a31f804427d568b36 } from '@payloadcms/plugin-import-export/rsc'
@@ -113,6 +114,7 @@ export const importMap = {
   "payload-canvas/rsc#LayoutDiff": LayoutDiff_57c6923ff8049349bee2a220c5ac4c2a,
   "payload-canvas/rsc#NoDiff": NoDiff_57c6923ff8049349bee2a220c5ac4c2a,
   "payload-canvas/client#PublishButton": PublishButton_1611a9327f20600aee6a9d537ba4315b,
+  "payload-canvas/client#DocumentEditView": DocumentEditView_1611a9327f20600aee6a9d537ba4315b,
   "payload-canvas/rsc#BuilderRedirect": BuilderRedirect_57c6923ff8049349bee2a220c5ac4c2a,
   "payload-canvas/client#BuilderTab": BuilderTab_1611a9327f20600aee6a9d537ba4315b,
   "@payloadcms/plugin-import-export/rsc#FormatField": FormatField_cdf7e044479f899a31f804427d568b36,

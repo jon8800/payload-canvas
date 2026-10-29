@@ -27,6 +27,15 @@ export const EDGE_BAND = 12
 const LINE = 2
 /** Height of the empty page's spot area. */
 const EMPTY_PAGE_HEIGHT = 120
+/** Size of the "+" button, in iframe pixels at zoom 1. */
+export const INSERT_BUTTON = 20
+/**
+ * A block is too small for the "+" beside it when it is under this many button sizes along the
+ * list's axis (48 px at zoom 1)…
+ */
+const MIN_ALONG = 2.4
+/** …and under this many across it (160 px). A one-line text across the page still gets the "+". */
+const MIN_ACROSS = 8
 
 export type InsertSpotOptions = {
   /** Width of a container's edge band, in iframe pixels. Default EDGE_BAND. */
@@ -37,6 +46,35 @@ export type InsertSpotOptions = {
    * within `tolerance` iframe pixels of the edge. A neighbour's edge still offers that spot.
    */
   selected?: { id: string; tolerance: number }
+  /** Size of the "+" button in iframe pixels (its screen size divided by the zoom). Default INSERT_BUTTON. */
+  button?: number
+}
+
+const along = (rect: Rect, axis: Axis) => (axis === 'x' ? rect.width : rect.height)
+const across = (rect: Rect, axis: Axis) => (axis === 'x' ? rect.height : rect.width)
+
+/**
+ * True when a block is too small for the "+" to sit beside it on `axis` without covering much of
+ * it: short along the axis (an icon in a row, a badge) and not wide across it.
+ */
+export function tooSmallForInsert(rect: Rect, axis: Axis, button = INSERT_BUTTON): boolean {
+  return along(rect, axis) < button * MIN_ALONG && across(rect, axis) < button * MIN_ACROSS
+}
+
+/** The "+" may cover at most this share of a block, so the block stays easy to click. */
+const MAX_COVER = 0.2
+
+/** True when a "+" centered at `at` would cover more than MAX_COVER of a block (an icon beside it). */
+function coversBlock(at: Point, rects: Iterable<Rect>, button: number): boolean {
+  const half = button / 2
+  for (const r of rects) {
+    const area = r.width * r.height
+    if (area <= 0) continue
+    const w = Math.min(at.x + half, r.x + r.width) - Math.max(at.x - half, r.x)
+    const h = Math.min(at.y + half, r.y + r.height) - Math.max(at.y - half, r.y)
+    if (w > 0 && h > 0 && (w * h) / area > MAX_COVER) return true
+  }
+  return false
 }
 
 export function spotPosition(spot: Pick<InsertSpot, 'parentId' | 'slot' | 'index'>): Position {
@@ -87,7 +125,9 @@ function indexOf(layout: Layout): Map<string, IndexedBlock> {
  * 3. In an empty slot of the block under the pointer: inside it.
  * 4. In a filled slot, between children: before/after the nearest child.
  * 5. Otherwise: before/after the block under the pointer, by the pointer's side of its center.
- * A spot whose list accepts no block type moves up to the parent block, and so on.
+ * A spot whose list accepts no block type moves up to the parent block, and so on. So does a
+ * spot beside a block too small for the "+" (`tooSmallForInsert`: an icon, a badge) and a spot
+ * whose "+" would cover much of a block: the "+" never takes the clicks of a small block.
  */
 export function insertSpotAt(
   layout: Layout,
@@ -98,6 +138,7 @@ export function insertSpotAt(
 ): InsertSpot | null {
   const band = options.band ?? EDGE_BAND
   const selected = options.selected
+  const button = options.button ?? INSERT_BUTTON
   // Set when the spot under the pointer is on the selected block's edge: no "+" at all then, not
   // one further away (the parent's edge).
   let onSelectedEdge = false
@@ -121,6 +162,8 @@ export function insertSpotAt(
     const next = rects.get(list[at]?.id ?? '')
     const own = rects.get(list[i]?.id ?? '')
     if (!own) return null
+    // Too small for the "+" beside it: none here. The search goes on with the parent.
+    if (tooSmallForInsert(own, axis, button)) return null
     // On the list's axis: the middle of the gap, or the edge when there is no neighbor.
     let pos = side === 'before' ? start(own, axis) : end(own, axis)
     if (prev && next) pos = (end(prev, axis) + start(next, axis)) / 2
@@ -139,15 +182,10 @@ export function insertSpotAt(
       axis === 'y'
         ? { x: lo, y: pos - LINE / 2, width: hi - lo, height: LINE }
         : { x: pos - LINE / 2, y: lo, width: LINE, height: hi - lo }
-    return {
-      parentId: ownerId,
-      slot,
-      index: at,
-      kind: 'between',
-      axis,
-      at: axis === 'y' ? { x: (lo + hi) / 2, y: pos } : { x: pos, y: (lo + hi) / 2 },
-      rect,
-    }
+    const point = axis === 'y' ? { x: (lo + hi) / 2, y: pos } : { x: pos, y: (lo + hi) / 2 }
+    // The button would take the clicks of a block under it (an icon beside the gap).
+    if (coversBlock(point, rects.values(), button)) return null
+    return { parentId: ownerId, slot, index: at, kind: 'between', axis, at: point, rect }
   }
 
   /** Before or after `entry`, by the pointer's side of its center. Climbs up while a list accepts nothing. */
