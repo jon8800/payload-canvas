@@ -9,9 +9,11 @@ import { Menu } from '../../react/components/Menu'
 import type { BlockComponentProps } from '../../react/render/types'
 import { defaultBlocks, MENU_LABELS } from '../defaults'
 import { CAROUSEL_LABELS, carouselBlock } from './carousel'
-import { IMAGE_VIEWER_LABELS, imageViewerBlock } from './imageViewer'
+import { ADJACENT_LINKS_LABELS, adjacentLinksBlock } from './adjacentLinks'
+import { POPUP_LABELS, popupBlock } from './popup'
 import { labelOf } from './shared'
 import { TABLE_OF_CONTENTS_LABELS, tableOfContentsBlock } from './tableOfContents'
+import { TABS_LABELS, tabsBlock } from './tabs'
 
 const props = (extra: Record<string, unknown>): BlockComponentProps => ({
   block: { id: 't', type: 'tableOfContents' },
@@ -26,8 +28,8 @@ describe('labels', () => {
   it('fills placeholders and falls back to the default when empty', () => {
     assert.equal(labelOf({}, CAROUSEL_LABELS, 'dotLabel', { n: 2 }), 'Slide 2')
     assert.equal(labelOf({ dotLabel: 'Folie {n} von {count}' }, CAROUSEL_LABELS, 'dotLabel', { n: 2, count: 5 }), 'Folie 2 von 5')
-    assert.equal(labelOf({ closeLabel: null }, IMAGE_VIEWER_LABELS, 'closeLabel'), 'Close')
-    assert.equal(labelOf({ closeLabel: '  ' }, IMAGE_VIEWER_LABELS, 'closeLabel'), 'Close')
+    assert.equal(labelOf({ closeLabel: null }, POPUP_LABELS, 'closeLabel'), 'Close')
+    assert.equal(labelOf({ closeLabel: '  ' }, POPUP_LABELS, 'closeLabel'), 'Close')
     assert.equal(labelOf({ slideLabel: '{n} / {total}' }, CAROUSEL_LABELS, 'slideLabel', { n: 1 }), '1 / {total}')
   })
 
@@ -35,7 +37,9 @@ describe('labels', () => {
     const menu = defaultBlocks().find((def) => def.type === 'menu')!
     for (const [def, labels] of [
       [carouselBlock(), CAROUSEL_LABELS],
-      [imageViewerBlock(), IMAGE_VIEWER_LABELS],
+      [popupBlock(), POPUP_LABELS],
+      [tabsBlock(), TABS_LABELS],
+      [adjacentLinksBlock(), ADJACENT_LINKS_LABELS],
       [tableOfContentsBlock(), TABLE_OF_CONTENTS_LABELS],
       [menu, MENU_LABELS],
     ] as const) {

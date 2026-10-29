@@ -7,7 +7,7 @@ import { FormBlock } from './FormLoader'
 import { icons } from './icons'
 
 export const blockComponents: BlockComponents = {
-  // The plugin's opt-in blocks: icon, accordion, carousel, image viewer, table of contents and more.
+  // The plugin's opt-in blocks: icon, accordion, carousel, table of contents and more.
   ...builtinComponents({ icons }),
   form: FormBlock,
   // Dev fixture: components written for Payload's blocks data (NEXT_PUBLIC_BUILDER_LEGACY_DEMO=1).

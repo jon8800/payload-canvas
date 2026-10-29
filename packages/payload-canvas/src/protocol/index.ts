@@ -120,8 +120,12 @@ export type CanvasToAdmin =
   /** Repeated until the iframe has both `init` and a layout, so a reload never races. */
   | { type: 'ready' }
   | { type: 'measure'; measurement: CanvasMeasurement }
-  /** Pointer position in iframe viewport coordinates. */
-  | { type: 'pointer'; kind: PointerKind; x: number; y: number }
+  /**
+   * Pointer position in iframe viewport coordinates. `control`: the pointer is over a canvas
+   * control (`data-builder-control`, a carousel's arrow), which acts as on the site: the editor
+   * shows no hover outline and no "+" there. A click on a control sends no `click`.
+   */
+  | { type: 'pointer'; kind: PointerKind; x: number; y: number; control?: boolean }
   | { type: 'key'; key: KeyAction }
   /** A press anywhere in the canvas. The editor closes its open menus and popovers. */
   | { type: 'pointerDown' }

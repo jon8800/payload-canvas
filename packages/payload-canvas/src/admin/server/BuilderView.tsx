@@ -8,7 +8,7 @@ import { builderConfigOf, liveRuntimeOf, loadDocMeta, sessionTargetOf } from '..
 import { fieldRegistryOf } from '../../live/fieldChecks'
 import type { BuilderDocMeta } from '../../live/types'
 import { siteCssConfigOf } from '../../plugin'
-import { builderViewPath } from '../../plugin/links'
+import { builderViewPath, editViewPath } from '../../plugin/links'
 import { savedSectionsConfigOf } from '../../plugin/sections'
 import { BuilderScreen } from '../screen/BuilderScreen'
 
@@ -62,7 +62,8 @@ export async function BuilderView({ initPageResult, params, searchParams }: Admi
     meta = null
   }
   if (!meta) notFound()
-  if (!canUpdate) redirect(`${admin}/collections/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`)
+  // `form`: with `editor.openInBuilder` the edit view must not send the user back here.
+  if (!canUpdate) redirect(editViewPath(routes.admin, collection, id, { form: true }))
 
   // The assistant's readiness now: a key pasted in the AI settings counts without a restart.
   const ai = await (aiSettingsOf(payload)?.clientConfig(req) ?? Promise.resolve(null)).catch(() => null)

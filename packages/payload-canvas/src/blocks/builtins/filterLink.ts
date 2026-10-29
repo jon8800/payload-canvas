@@ -12,27 +12,13 @@ export function filterLinkBlock(): BlockDefinition {
   return defineBlock({
     type: FILTER_LINK_BLOCK,
     label: 'Filter link',
+    description: 'A link that filters a collection list on this page.',
     icon: 'filter',
     category: 'Dynamic',
     fields: [
-      {
-        name: 'param',
-        type: 'text',
-        label: 'URL parameter',
-        admin: { description: 'The query parameter this link sets, for example "category". Empty: the link clears every filter ("All").' },
-      },
-      {
-        name: 'value',
-        type: 'text',
-        label: 'Value',
-        admin: { description: 'The value it sets, for example "news" (makes ?category=news). Empty: the link clears this parameter.' },
-      },
-      {
-        name: 'multiple',
-        type: 'checkbox',
-        label: 'Several values',
-        admin: { description: 'The link adds or removes its value in a comma list (?tag=css,react) instead of replacing it.' },
-      },
+      { name: 'param', type: 'text', label: 'URL parameter', admin: { placeholder: 'Empty: clear all filters' } },
+      { name: 'value', type: 'text', label: 'Value', admin: { placeholder: 'Empty: clear this filter' } },
+      { name: 'multiple', type: 'checkbox', label: 'Add to the other values' },
     ],
     slots: { children: { label: 'Content', disallow: INTERACTIVE } },
     defaultClassName: FILTER_CLASS,

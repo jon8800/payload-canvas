@@ -690,11 +690,14 @@
     -webkit-line-clamp: 2;
   }
 
-  // Wireframe thumbnail of a section.
+  // The thumbnail of a section: the wireframe, then the picture, in one box of a fixed shape. The
+  // box keeps its size when the picture loads, so the list never jumps. 2:1 is the top 1280 x 640 px
+  // of a section at the width pictures are made at (sections/thumbnails.ts).
   .builder-editor__thumb {
     position: relative;
-    display: block;
-    height: 76px;
+    display: flex;
+    flex-direction: column;
+    aspect-ratio: 2 / 1;
     overflow: hidden;
     background: var(--theme-elevation-0);
     transition: background-color 120ms ease;
@@ -704,6 +707,7 @@
   .builder-editor__thumb-inner {
     box-sizing: border-box;
     display: flex;
+    flex: 1 0 auto;
     flex-direction: column;
     justify-content: center;
     gap: 4px;
@@ -2064,57 +2068,7 @@
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Compact summary in the normal Edit tab
-  // ---------------------------------------------------------------------------
-
-  .builder-summary__box {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--base);
-    padding: calc(var(--base) * 0.75);
-    border: 1px solid var(--theme-elevation-150);
-    border-radius: var(--style-radius-s);
-    background: var(--theme-elevation-50);
-
-    .btn {
-      margin: 0;
-    }
-  }
-
-  .builder-summary__text {
-    margin: 0;
-    color: var(--theme-elevation-600);
-  }
-
-  .builder-summary__body {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 0;
-  }
-
-  .builder-summary__list {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    color: var(--theme-text);
-
-    li {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-  }
-
-  .builder-summary__more {
-    color: var(--theme-elevation-600);
-  }
-
-  .builder-summary__error {
-    color: var(--theme-error-500);
-  }
+  // The layout field in Payload's edit view: admin/layoutField.scss.
 
   // Live editing: changes from AI agents and other editors.
   .builder-editor {
@@ -2608,19 +2562,20 @@
     transition: opacity 120ms ease, background-color 120ms ease;
   }
 
-  // A picture of the section: the top of it, full width. Short sections give short cards.
+  // A picture of the section, full width. A tall section shows its top part; a short one sits in
+  // the middle of the box.
   .builder-editor__thumb--picture {
-    height: auto;
-    min-height: 40px;
-    max-height: 132px;
     background: #fff;
     mask-image: none;
   }
 
   .builder-editor__thumb-img {
     display: block;
+    flex: none;
     width: 100%;
     height: auto;
+    // Auto margins center a short picture. A tall one overflows at the bottom, so its top shows.
+    margin-block: auto;
     animation: builder-fade-in 160ms ease both;
   }
 }

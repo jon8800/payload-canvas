@@ -58,7 +58,6 @@ const PATHS = {
       <path d="M4 4.5h8M4 11.5h8" opacity={0.4} />
     </>
   ),
-  spacer: <path d="M2.5 2.5h11M2.5 13.5h11M8 5.25v5.5M6.25 7 8 5.25 9.75 7M6.25 9 8 10.75 9.75 9" />,
   video: (
     <>
       <rect x="1.5" y="3" width="13" height="10" rx="1.5" />
@@ -99,12 +98,43 @@ const PATHS = {
       {dot(10, 13.25, 0.75)}
     </>
   ),
-  // A photo with the corners of a full screen view.
-  imageViewer: (
+  // A panel with a close mark, over the page.
+  popup: (
     <>
-      <path d="M2 5.5v-2A1.5 1.5 0 0 1 3.5 2h2M10.5 2h2A1.5 1.5 0 0 1 14 3.5v2M14 10.5v2a1.5 1.5 0 0 1-1.5 1.5h-2M5.5 14h-2A1.5 1.5 0 0 1 2 12.5v-2" />
-      <circle cx="6.5" cy="6.5" r="1" />
-      <path d="m11 10-2-2-3.5 3.5" />
+      <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" opacity={0.45} />
+      <rect x="3.5" y="4.5" width="9" height="7" rx="1" />
+      <path d="m9.25 6.25 1.5 1.5M10.75 6.25l-1.5 1.5M5.25 9.5h3" />
+    </>
+  ),
+  // A row of tabs, the first one open, over its panel.
+  tabs: (
+    <>
+      <path d="M1.5 13.5v-9a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1V6h6.5a1 1 0 0 1 1 1v5.5a1 1 0 0 1-1 1h-11Z" />
+      <path d="M7 6V4.5a1 1 0 0 1 1-1h2.5a1 1 0 0 1 1 1V6" opacity={0.45} />
+    </>
+  ),
+  // One tab and its panel.
+  tab: (
+    <>
+      <path d="M2.5 6.5v-2a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+      <rect x="1.5" y="6.5" width="13" height="7" rx="1" />
+      <path d="M4 9.5h6" opacity={0.45} />
+    </>
+  ),
+  // Items in a row that move along.
+  marquee: (
+    <>
+      <rect x="1.5" y="4" width="3.5" height="4.5" rx="0.75" />
+      <rect x="6.25" y="4" width="3.5" height="4.5" rx="0.75" />
+      <rect x="11" y="4" width="3.5" height="4.5" rx="0.75" opacity={0.45} />
+      <path d="M2 12.25h11M11.25 10.75l1.75 1.5-1.75 1.5" />
+    </>
+  ),
+  // Back and forward between two documents.
+  adjacentLinks: (
+    <>
+      <path d="M5 4.5 1.75 8 5 11.5M11 4.5 14.25 8 11 11.5" />
+      <path d="M2 8h4M10 8h4" opacity={0.45} />
     </>
   ),
   // Rows, each with an arrow; the first is open.
@@ -121,14 +151,6 @@ const PATHS = {
       <rect x="1.5" y="2.5" width="13" height="4" rx="1" />
       <path d="m10.5 4 1 1 1-1" />
       <path d="M3.5 9.5h9M3.5 12.5h6" opacity={0.45} />
-    </>
-  ),
-  // Text over a photo.
-  mediaBackdrop: (
-    <>
-      <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" />
-      <path d="m14.5 9.5-3-3-6 6" opacity={0.45} />
-      <path d="M4 6h4M4 8.5h2.5" />
     </>
   ),
   // Lines, the second level indented.

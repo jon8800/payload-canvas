@@ -29,7 +29,7 @@ import { FollowFrame } from './live/PresenceUI'
 import { FrameResize } from './layout/FrameResize'
 import { imageEditor, updateImageEditor, uploadImage } from './media/actions'
 import { EmptyStart } from './empty/EmptyStart'
-import { EDGE_BAND, insertSpotAt, sameSpot } from './insert/spots'
+import { EDGE_BAND, INSERT_BUTTON, insertSpotAt, sameSpot } from './insert/spots'
 import { Overlay } from './Overlay'
 import { useRuntime, type Runtime } from './runtime'
 import { bindShortcuts } from './shortcuts'
@@ -148,6 +148,13 @@ export function Canvas() {
             spotTimer = window.setTimeout(() => runtime.insertSpot.set(null), SPOT_LINGER_MS)
             return
           }
+          // Over a canvas control (a carousel's arrow): it acts as on the site, so no hover and no "+".
+          if (message.control) {
+            store.hover(null)
+            runtime.regions?.hovered.set(null)
+            setSpot(null)
+            return
+          }
           const m = measurement.get()
           if (!m) return
           const { layout } = store.getState()
@@ -161,7 +168,8 @@ export function Canvas() {
             // Not on the selected block's own edges, where its frame, name tag and action bar are.
             const { selectedId } = store.getState()
             const selected = selectedId ? { id: selectedId, tolerance: SELECTED_EDGE_PX / (runtime.frame.get().zoom || 1) } : undefined
-            setSpot(inline.get() ? null : insertSpotAt(layout, runtime.config.blocks, m, message, { band, selected }))
+            const button = INSERT_BUTTON / (runtime.frame.get().zoom || 1)
+            setSpot(inline.get() ? null : insertSpotAt(layout, runtime.config.blocks, m, message, { band, selected, button }))
           }
           if (message.kind === 'click') {
             if (region && runtime.regions) runtime.regions.selected.set(region)

@@ -53,6 +53,73 @@ function boxOf(el: Element): Rect {
   return unionRect(Array.from(el.children, boxOf)) ?? own
 }
 
+/** The area children may show in, by its edges. A missing edge does not clip. */
+export type ClipArea = { left: number; top: number; right: number; bottom: number }
+
+const NO_CLIP: ClipArea = { left: -Infinity, top: -Infinity, right: Infinity, bottom: Infinity }
+
+/** The part of `rect` inside `area`. Outside it: an empty rect on the area's nearest edge. */
+export function clipRect(rect: Rect, area: ClipArea | null): Rect {
+  if (!area) return rect
+  const left = Math.min(Math.max(rect.x, area.left), area.right)
+  const top = Math.min(Math.max(rect.y, area.top), area.bottom)
+  const right = Math.max(Math.min(rect.x + rect.width, area.right), left)
+  const bottom = Math.max(Math.min(rect.y + rect.height, area.bottom), top)
+  if (left === rect.x && top === rect.y && right === rect.x + rect.width && bottom === rect.y + rect.height) return rect
+  return { x: left, y: top, width: right - left, height: bottom - top }
+}
+
+const intersect = (a: ClipArea, b: ClipArea): ClipArea => ({
+  left: Math.max(a.left, b.left),
+  top: Math.max(a.top, b.top),
+  right: Math.min(a.right, b.right),
+  bottom: Math.min(a.bottom, b.bottom),
+})
+
+/** A fixed element and an open modal or popover (the top layer) escape the clipping of their ancestors. */
+function escapesClip(el: Element, style: CSSStyleDeclaration): boolean {
+  if (style.position === 'fixed') return true
+  try {
+    return el.matches(':modal, :popover-open')
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The area each element's children show in: its ancestors' boxes that clip their overflow
+ * (`overflow` other than `visible`), up to `root`. A carousel's viewport hides the slides outside
+ * it, so their rects shrink to the visible part (empty when hidden), and the pointer never finds
+ * a hidden slide. Cached per measurement.
+ */
+function createClipper(root: HTMLElement) {
+  const areas = new Map<Element, ClipArea | null>()
+  const areaInside = (el: Element | null): ClipArea | null => {
+    if (!el || el === root || !root.contains(el)) return null
+    const cached = areas.get(el)
+    if (cached !== undefined) return cached
+    const style = getComputedStyle(el)
+    const outer = escapesClip(el, style) ? null : areaInside(el.parentElement)
+    let area = outer
+    if (style.display !== 'contents' && (style.overflowX !== 'visible' || style.overflowY !== 'visible')) {
+      const box = el.getBoundingClientRect()
+      const own: ClipArea = {
+        ...NO_CLIP,
+        ...(style.overflowX !== 'visible' ? { left: box.left, right: box.right } : {}),
+        ...(style.overflowY !== 'visible' ? { top: box.top, bottom: box.bottom } : {}),
+      }
+      area = outer ? intersect(own, outer) : own
+    }
+    areas.set(el, area)
+    return area
+  }
+  /** The element's box, clipped by the ancestors that clip it. */
+  return (el: Element): Rect => {
+    const box = boxOf(el)
+    return escapesClip(el, getComputedStyle(el)) ? box : clipRect(box, areaInside(el.parentElement))
+  }
+}
+
 /** The direction children flow in: from flex direction or the number of grid columns. */
 export function axisOf(el: Element): Axis {
   const style = getComputedStyle(el)
@@ -71,9 +138,10 @@ export function axisOf(el: Element): Axis {
  * The placeholder wins, so the drop target sees `empty: true`.
  */
 export function measure(root: HTMLElement): CanvasMeasurement {
+  const visibleBox = createClipper(root)
   const blocks = Array.from(root.querySelectorAll<HTMLElement>('[data-block-id]'), (el) => ({
     id: el.dataset.blockId ?? '',
-    rect: boxOf(el),
+    rect: visibleBox(el),
   }))
 
   const slots = new Map<string, SlotRect>()
@@ -85,7 +153,7 @@ export function measure(root: HTMLElement): CanvasMeasurement {
     if (slots.get(key)?.empty && !empty) continue
     // An empty placeholder takes the container's axis, so the drop indicator matches the layout.
     const axis = empty && el.parentElement ? axisOf(el.parentElement) : axisOf(el)
-    slots.set(key, { ownerId, slot, rect: boxOf(el), axis, empty })
+    slots.set(key, { ownerId, slot, rect: visibleBox(el), axis, empty })
   }
 
   // In a page frame the layout fills its outlet, not the whole canvas: the root list's axis and

@@ -1,89 +1,41 @@
-// Editable classes in the Styles panel: the target chips, the class banner, the custom CSS box and
-// the class dialogs. Payload CSS variables only, no Tailwind (it would leak into the admin).
+// The classes field of the Styles panel, the class banner, the custom CSS box and the class
+// dialogs. Payload CSS variables only, no Tailwind (it would leak into the admin).
 
 @layer payload-default {
   .builder-classes {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    margin: 0 0 8px;
+    margin: 0 0 10px;
+
+    .builder-styles__raw-input {
+      min-height: 52px;
+    }
   }
 
-  .builder-classes__row {
+  .builder-classes__head {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    gap: 4px;
+    justify-content: space-between;
+    min-height: 20px;
   }
 
-  .builder-classes__chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    min-width: 0;
-    max-width: 100%;
-    height: var(--bs-h);
-    padding: 0 9px;
-    border: 1px solid var(--bs-border);
-    border-radius: 999px;
-    background: var(--theme-elevation-0);
-    color: var(--theme-text);
-    font: inherit;
-    font-size: var(--be-text-m);
-    cursor: pointer;
-
-    &:hover {
-      border-color: var(--theme-elevation-300);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--bs-accent);
-      outline-offset: 1px;
-    }
-
-    &[aria-pressed='true'] {
-      border-color: var(--bs-accent);
-      background: color-mix(in srgb, var(--bs-accent) 12%, var(--theme-elevation-0));
-      color: var(--bs-accent-text);
-    }
-  }
-
-  .builder-classes__chip--class {
-    font-family: var(--font-mono, ui-monospace, monospace);
-    font-size: var(--be-text-s);
-  }
-
-  .builder-classes__chip-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .builder-classes__draft-dot {
-    flex: none;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--theme-warning-500, #d97706);
-  }
-
-  .builder-classes__add {
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-    width: var(--bs-h);
-    height: var(--bs-h);
+  .builder-classes__menu {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 20px;
+    margin-right: -3px;
     padding: 0;
-    border: 1px dashed var(--bs-border);
-    border-radius: 999px;
+    border: 0;
+    border-radius: var(--style-radius-s, 4px);
     background: none;
     color: var(--bs-muted);
     cursor: pointer;
 
     &:hover,
     &[data-popup-open] {
-      border-color: var(--theme-elevation-400);
+      background: var(--theme-elevation-100);
       color: var(--theme-text);
     }
 
@@ -91,6 +43,190 @@
       outline: 2px solid var(--bs-accent);
       outline-offset: 1px;
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // The classes field: chips and an input in one box that looks like an input
+  // -------------------------------------------------------------------------
+
+  .builder-classfield {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    min-height: var(--bs-h);
+    padding: 2px;
+    border: 1px solid var(--bs-border);
+    border-radius: var(--style-radius-s, 4px);
+    background: var(--theme-input-bg, var(--theme-elevation-0));
+
+    &:hover {
+      border-color: var(--theme-elevation-250);
+    }
+
+    &:focus-within {
+      border-color: var(--bs-accent);
+      box-shadow: 0 0 0 1px var(--bs-accent);
+    }
+  }
+
+  .builder-classfield__chip {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    max-width: 100%;
+    height: 20px;
+    border-radius: 3px;
+    font-size: var(--be-text-s);
+    line-height: 1;
+  }
+
+  .builder-classfield__chip-main {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    height: 100%;
+    padding: 0 2px 0 6px;
+    border: 0;
+    border-radius: inherit;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+
+    &:focus-visible {
+      outline: 2px solid var(--bs-accent);
+      outline-offset: 0;
+    }
+  }
+
+  .builder-classfield__chip-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .builder-classfield__chip-code {
+    color: var(--bs-muted);
+    font-family: var(--font-mono, ui-monospace, monospace);
+  }
+
+  .builder-classfield__remove {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 18px;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 0 3px 3px 0;
+    background: none;
+    color: inherit;
+    opacity: 0.55;
+    cursor: pointer;
+
+    svg {
+      width: 12px;
+      height: 12px;
+    }
+
+    &:hover,
+    &:focus-visible {
+      opacity: 1;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--bs-accent);
+      outline-offset: -2px;
+    }
+  }
+
+  // An editable class: a solid chip in the text font. Chosen (the controls edit it): the accent.
+  .builder-classfield__chip--class {
+    background: var(--theme-elevation-150);
+    color: var(--theme-text);
+    font-weight: var(--be-weight-strong);
+
+    &:hover {
+      background: var(--theme-elevation-200);
+    }
+
+    &[data-selected] {
+      background: var(--bs-accent);
+      color: var(--theme-elevation-0);
+    }
+  }
+
+  .builder-classfield__draft-dot {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--theme-warning-500, #d97706);
+    box-shadow: 0 0 0 1.5px var(--theme-elevation-0);
+  }
+
+  // A class no control shows: quiet, in monospace, as the code writes it.
+  .builder-classfield__chip--raw {
+    box-shadow: inset 0 0 0 1px var(--bs-border);
+    color: var(--theme-elevation-700, var(--bs-muted));
+    font-family: var(--font-mono, ui-monospace, monospace);
+
+    &:hover {
+      background: var(--theme-elevation-50);
+      color: var(--theme-text);
+    }
+
+    // Not in the theme's class list: probably a typo.
+    &[data-unknown] {
+      background: color-mix(in srgb, var(--theme-warning-500, #b7791f) 10%, transparent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--theme-warning-500, #b7791f) 60%, transparent);
+
+      .builder-classfield__chip-name {
+        text-decoration: wavy underline var(--theme-warning-500, #b7791f);
+        text-underline-offset: 3px;
+      }
+    }
+  }
+
+  .builder-classfield__input,
+  .builder-classfield__edit {
+    height: 20px;
+    padding: 0 4px;
+    border: 0;
+    background: none;
+    color: var(--theme-text);
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: var(--be-text-s);
+    outline: 0;
+
+    &::placeholder {
+      color: var(--bs-dim);
+      font-family: var(--font-body, inherit);
+    }
+  }
+
+  .builder-classfield__input {
+    flex: 1 0 56px;
+    min-width: 56px;
+  }
+
+  // A quiet chip while it is edited in place.
+  .builder-classfield__edit {
+    field-sizing: content;
+    min-width: 40px;
+    max-width: 100%;
+    border-radius: 3px;
+    box-shadow: inset 0 0 0 1px var(--bs-accent);
+  }
+
+  // While a class is edited: the classes in it that no control shows.
+  .builder-classes__extras {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 14px;
   }
 
   // -------------------------------------------------------------------------
@@ -107,6 +243,13 @@
     background: color-mix(in srgb, var(--bs-accent) 7%, var(--theme-elevation-0));
   }
 
+  .builder-classes__banner-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
+
   .builder-classes__title {
     margin: 0;
     font-weight: var(--be-weight-strong);
@@ -117,9 +260,34 @@
     }
   }
 
-  .builder-classes__label {
+  .builder-classes__close {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    margin: -2px -4px -2px 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--style-radius-s, 4px);
+    background: none;
     color: var(--bs-muted);
-    font-weight: normal;
+    cursor: pointer;
+
+    svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    &:hover {
+      background: color-mix(in srgb, var(--bs-accent) 12%, transparent);
+      color: var(--theme-text);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--bs-accent);
+      outline-offset: 1px;
+    }
   }
 
   .builder-classes__text {

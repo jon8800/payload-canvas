@@ -4,8 +4,8 @@
 // with a live sample value and a format picker, the Field block's field picker and the collection
 // list's inputs.
 
-import { FieldLabel, SelectInput, TextInput, useConfig } from '@payloadcms/ui'
-import { createContext, use, useCallback, useState, type ChangeEvent, type ReactNode } from 'react'
+import { FieldLabel, SelectInput, useConfig } from '@payloadcms/ui'
+import { createContext, use, useCallback, useState, type ReactNode } from 'react'
 import type { Field, OptionObject } from 'payload'
 
 import { isLinkField } from '../../../blocks/link'
@@ -195,7 +195,6 @@ export function FieldSlot(props: SlotProps) {
   if (block.type === FIELD_BLOCK && propPath === 'path') return <FieldPathInput {...props} scope={scope} />
   if (block.type === REPEAT_BLOCK && propPath === 'path') return <FieldPathInput {...props} scope={scope} rows />
   if (block.type === LIST_BLOCK && propPath === 'collection') return <ListCollectionInput {...props} />
-  if (block.type === LIST_BLOCK && propPath === 'sort') return <ListSortInput {...props} block={block} />
   if (block.type === FIELD_BLOCK || block.type === LIST_BLOCK || block.type === REPEAT_BLOCK) return props.children
 
   const kind = propKind(props.field as { type: string; hasMany?: boolean })
@@ -413,7 +412,7 @@ function BoundField({
         <p className="builder-bind__note builder-bind__note--warn">
           {scope?.collection
             ? `${collectionLabel} has no field “${shownPath}”. The fallback shows instead.`
-            : 'This block is not inside a template or a collection list, so the binding has no data. Unbind it or move the block.'}
+            : 'No data here: the block is not in a template or a collection list.'}
         </p>
       ) : expression || parts?.format ? (
         <ExpressionPreview scope={scope} binding={bound} />
@@ -512,12 +511,10 @@ function FieldPathInput({ value, onChange, label, children, scope, rows = false 
       <div className="builder-bind__stack">
         <p className="builder-bind__note">
           {scope?.kind === 'list'
-            ? 'Choose the list’s collection first. Then pick the field each item shows.'
+            ? 'Choose the list’s collection first.'
             : scope?.kind === 'template'
-              ? 'Choose which collection this template is for. Then pick a field here.'
-              : rows
-                ? 'A repeat shows the rows of a field of the template’s document or of each list item. Use it in a template or inside a collection list.'
-                : 'A Field block shows a field of the template’s document or of each list item. Use it in a template or inside a collection list.'}
+              ? 'Choose the template’s collection first.'
+              : 'Works only in a template or a collection list.'}
         </p>
         {children}
       </div>
@@ -593,53 +590,6 @@ function ListCollectionInput({ value, onChange, label, path, field }: SlotProps)
   )
 }
 
-const CUSTOM = '__custom'
-
-/** Collection list: sort presets (newest, oldest, title A–Z and Z–A) and a custom sort field. */
-function ListSortInput({ value, onChange, label, path, field, block }: SlotProps & { block: Block }) {
-  const collection = typeof block.props?.collection === 'string' ? block.props.collection : null
-  const titleField = useTitleField(collection) ?? 'title'
-  const current = typeof value === 'string' ? value : ''
-  const presets: OptionObject[] = [
-    { label: 'Newest first', value: '-createdAt' },
-    { label: 'Oldest first', value: 'createdAt' },
-    { label: 'Title A–Z', value: titleField },
-    { label: 'Title Z–A', value: `-${titleField}` },
-  ]
-  const isPreset = presets.some((p) => p.value === current)
-  const [custom, setCustom] = useState(() => current !== '' && !isPreset)
-  const selected = custom || (current !== '' && !isPreset) ? CUSTOM : current || undefined
-
-  return (
-    <div className="builder-bind__stack">
-      <SelectInput
-        label={label}
-        name={'name' in field ? field.name : 'sort'}
-        path={path}
-        options={[...presets, { label: 'Custom…', value: CUSTOM }]}
-        value={selected}
-        onChange={(option: { value: unknown } | { value: unknown }[] | null) => {
-          const next = Array.isArray(option) ? null : (option?.value ?? null)
-          if (next === CUSTOM) {
-            setCustom(true)
-            return
-          }
-          setCustom(false)
-          onChange(next)
-        }}
-      />
-      {selected === CUSTOM && (
-        <TextInput
-          label="Sort by field"
-          description="A field name. Start with - for descending, e.g. -publishedAt."
-          path={`${path}.custom`}
-          value={current}
-          onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value.trim() || null)}
-        />
-      )}
-    </div>
-  )
-}
 
 /** A one-line explanation above a bindable block's fields: what bindings read from, or what is missing. */
 function ScopeBanner({ block, scope }: { block: Block; scope: BindingScope | null }) {
@@ -655,7 +605,7 @@ function ScopeBanner({ block, scope }: { block: Block; scope: BindingScope | nul
       <div className="builder-bind__banner builder-bind__banner--warn">
         <Icon name="warning" size={14} />
         <div>
-          <p>Choose which collection this template is for. Then you can bind this block to its fields.</p>
+          <p>Choose the template’s collection first.</p>
           <button type="button" className="builder-bind__link" onClick={() => runtime.doc.openSettings()}>
             Open the template settings
           </button>
@@ -667,7 +617,7 @@ function ScopeBanner({ block, scope }: { block: Block; scope: BindingScope | nul
     return (
       <div className="builder-bind__banner builder-bind__banner--warn">
         <Icon name="collectionList" size={14} />
-        <p>This block is inside a collection list. Choose the list’s collection to bind fields of each item.</p>
+        <p>Choose the list’s collection first.</p>
       </div>
     )
   }

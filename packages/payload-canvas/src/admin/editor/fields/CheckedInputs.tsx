@@ -40,7 +40,12 @@ export function CheckedTextField({
   onChange,
   value,
   ...props
-}: BaseProps & { readonly check: (value: string) => string | null; readonly value: string; readonly onChange: (value: string) => void }) {
+}: BaseProps & {
+  readonly check: (value: string) => string | null
+  readonly value: string
+  readonly onChange: (value: string) => void
+  readonly placeholder?: string
+}) {
   const { focused, handlers } = useFocusWithin()
   const problem = focused ? null : check(value)
   return (

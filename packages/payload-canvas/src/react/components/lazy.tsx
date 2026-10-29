@@ -11,7 +11,8 @@
 import dynamic from 'next/dynamic'
 import type { BlockComponentProps } from '../render/types'
 import type { CarouselLabels } from './builtins/Carousel'
-import type { ImageViewerLabels } from './builtins/ImageViewer'
+import type { PopupLabels } from './builtins/Popup'
+import type { TabsLabels } from './builtins/Tabs'
 import { lazyBlock } from './lazyBlock'
 import type { MenuLabels } from './Menu'
 
@@ -21,6 +22,6 @@ export const Carousel = lazyBlock(
   dynamic<BlockComponentProps & { labels?: CarouselLabels }>(() => import('./builtins/Carousel').then((module) => module.Carousel)),
 )
 export const FilterLink = lazyBlock(dynamic<BlockComponentProps>(() => import('./builtins/FilterLink').then((module) => module.FilterLink)))
-export const ImageViewer = lazyBlock(
-  dynamic<BlockComponentProps & { labels?: ImageViewerLabels }>(() => import('./builtins/ImageViewer').then((module) => module.ImageViewer)),
-)
+export const Popup = lazyBlock(dynamic<BlockComponentProps & { labels?: PopupLabels }>(() => import('./builtins/Popup').then((module) => module.Popup)))
+export const Tabs = lazyBlock(dynamic<BlockComponentProps & { labels?: TabsLabels }>(() => import('./builtins/Tabs').then((module) => module.Tabs)))
+export const Tab = lazyBlock(dynamic<BlockComponentProps>(() => import('./builtins/Tab').then((module) => module.Tab)))

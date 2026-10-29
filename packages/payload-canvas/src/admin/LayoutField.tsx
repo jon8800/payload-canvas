@@ -9,18 +9,21 @@ import type { BuilderClientConfig } from '../core/types'
 import { builderViewPath } from '../plugin/links'
 import { blockSummary } from './editor/names'
 import { SettingsDrawerSlug } from './editor/topbar/settingsDrawer'
-import './editor/editor.scss'
+import { forgetForm } from './formChoice'
+import './layoutField.scss'
 
 /** Top-level blocks named in the summary. */
-const SUMMARY_SECTIONS = 4
+const SUMMARY_SECTIONS = 5
 
 function readConfig(props: JSONFieldClientProps): BuilderClientConfig | null {
   const custom = props.field.admin?.custom as { builder?: BuilderClientConfig } | undefined
   return custom?.builder ?? null
 }
 
+const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
+
 /**
- * Field component of the layout JSON field: a compact summary of the page and an "Open builder"
+ * Field component of the layout JSON field: the page's sections in a box, with an "Open builder"
  * button. The builder itself opens full screen (`{admin}/builder/:collection/:id`). Inside the
  * builder's own settings drawer it renders nothing: the builder is already open.
  */
@@ -39,6 +42,7 @@ function LayoutSummary(props: JSONFieldClientProps) {
   const {
     config: { routes },
   } = useConfig()
+  const label = typeof props.field.label === 'string' ? props.field.label : 'Layout'
 
   if (!config) {
     return <p className="builder-summary__error">Builder config missing on field “{props.field.name}” (admin.custom.builder).</p>
@@ -53,36 +57,42 @@ function LayoutSummary(props: JSONFieldClientProps) {
   const names = layout.blocks.slice(0, SUMMARY_SECTIONS).map((block) => blockSummary(block, labelOf(block.type)))
   const more = layout.blocks.length - names.length
   const saved = id !== undefined && id !== null && id !== ''
-  const label = typeof props.field.label === 'string' ? props.field.label : 'Layout'
+  const collection = collectionSlug ?? config.collection
 
   return (
     <div className="field-type builder-summary">
       <FieldLabel label={label} path={path} />
       <div className="builder-summary__box">
-        <div className="builder-summary__body">
-          <p className="builder-summary__text">
+        <div className="builder-summary__head">
+          <p className="builder-summary__count">
             {total === 0
-              ? 'The page is empty.'
-              : `${layout.blocks.length} ${layout.blocks.length === 1 ? 'section' : 'sections'}, ${total} ${total === 1 ? 'block' : 'blocks'} in total.`}
+              ? 'No blocks yet'
+              : `${count(layout.blocks.length, 'section', 'sections')} · ${count(total, 'block', 'blocks')}`}
           </p>
-          {names.length > 0 && (
-            <ul className="builder-summary__list">
-              {names.map((name, i) => (
-                // oxlint-disable-next-line react/no-array-index-key -- names can repeat; the order is the identity
-                <li key={i}>{name}</li>
-              ))}
-              {more > 0 && <li className="builder-summary__more">and {more} more</li>}
-            </ul>
+          {saved && (
+            <Button
+              buttonStyle="primary"
+              el="link"
+              size="small"
+              margin={false}
+              url={builderViewPath(routes.admin, collection, id)}
+              onClick={() => forgetForm(collection, id)}
+            >
+              Open builder
+            </Button>
           )}
         </div>
-        {saved ? (
-          <Button buttonStyle="primary" el="link" size="medium" margin={false} url={builderViewPath(routes.admin, collectionSlug ?? config.collection, id)}>
-            Open builder
-          </Button>
-        ) : (
-          <p className="builder-summary__text">Save the document first. Then you can open the builder.</p>
+        {names.length > 0 && (
+          <ol className="builder-summary__list">
+            {names.map((name, i) => (
+              // oxlint-disable-next-line react/no-array-index-key -- names can repeat; the order is the identity
+              <li key={i}>{name}</li>
+            ))}
+          </ol>
         )}
+        {more > 0 && <p className="builder-summary__more">and {count(more, 'more section', 'more sections')}</p>}
       </div>
+      {!saved && <p className="field-description">Save the document first. Then you can open the builder.</p>}
     </div>
   )
 }

@@ -45,6 +45,7 @@ npx create-payload-canvas my-website
 7. [Server components in the canvas](#server-components-in-the-canvas)
    - [Whole-page editing: regions outside the layout](#whole-page-editing-regions-outside-the-layout)
 8. [Custom blocks](#custom-blocks)
+   - [Interactive blocks on the canvas](#interactive-blocks-on-the-canvas)
    - [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields)
    - [Built-in blocks](#built-in-blocks)
 9. [Using existing Payload blocks](#using-existing-payload-blocks)
@@ -428,18 +429,21 @@ The builder is a full-screen admin view at `/admin/builder/<collection>/<id>`. I
 How editors open it:
 
 - the document's **Builder** tab (a link to the view),
-- the **Open builder** button on the layout field in the normal Edit view (a new document must be saved first),
-- the old tab URL `/admin/collections/<collection>/<id>/builder`, which redirects to the view.
+- the **Open builder** button on the layout field in the normal Edit view (a new document must be saved first). The field also shows "3 sections · 24 blocks" and the list of sections,
+- the old tab URL `/admin/collections/<collection>/<id>/builder`, which redirects to the view,
+- with `editor.openInBuilder: true`, a click on a saved document in the collection list.
+
+**Open documents in the builder.** `websiteBuilder({ editor: { openInBuilder: true } })` (default `false`) makes the builder the document's main view. Opening a saved document goes straight to `/admin/builder/<collection>/<id>`. Payload's form stays for new documents until their first save, in drawers, for users who cannot save, for documents in the trash, and with `?form=1` in the URL. The builder's **All fields** menu item opens the form with `?form=1`. The form then stays for that document until a full page load, or until you open the builder for it again. The builder's back arrow goes to the collection list. A collection that sets its own `admin.components.views.edit.default` keeps it. The option registers `payload-canvas/client#DocumentEditView`, so run `pnpm payload generate:importmap` after you turn it on.
 
 The top bar, left to right:
 
-- **Back** to the document's Edit view, the admin icon (to the dashboard), and `Collection › Title`. Click the title to rename the document: Enter or leaving the field saves it (as a draft when the collection has drafts). Escape cancels.
+- **Back** to the document's Edit view (to the collection list with `openInBuilder`), the admin icon (to the dashboard), and `Collection › Title`. Click the title to rename the document: Enter or leaving the field saves it (as a draft when the collection has drafts). Escape cancels.
 - The status: **Draft** (never published), **Published**, or **Changed** (published, with newer draft changes). Hover it for the last change, the creation date, the last publish and the number of versions (opens the Versions drawer).
 - Undo and redo, the canvas width and the active breakpoint. **Fluid** (the default) fills the space between the sidebars, so the breakpoint follows the free width. Desktop (1280 px), tablet, mobile and a custom width are fixed widths. In a template: the sample document the canvas previews.
 - The people on the page, and the save state: **Saving…** while changes are on their way, then **Saved · 12:04**.
 - **Preview** opens the draft preview (the collection's `admin.livePreview.url`, else `admin.preview`), or the public page (the plugin's `url` option), in a new tab.
 - **Page settings** opens the document's own edit form in a Payload drawer: title, slug, SEO, and for a template its collection and sample document. The top bar updates after each save.
-- The AI assistant (with the `ai` option), the keyboard shortcuts, and **Publish changes**. Its menu has **Unpublish**, **Revert to published** (drops all draft changes, after a confirmation), **Versions** and **API** (Payload's own screens, in a drawer over the builder), and links to the Edit view and the live page. In the Versions drawer, open a version to compare it, then **Restore as draft**: every open editor gets the restored layout, and the site keeps the published version until you publish.
+- The AI assistant (with the `ai` option), the keyboard shortcuts, and **Publish changes**. Its menu has **Unpublish**, **Revert to published** (drops all draft changes, after a confirmation), **Versions** and **API** (Payload's own screens, in a drawer over the builder), **All fields** (Payload's edit form) and a link to the live page. In the Versions drawer, open a version to compare it, then **Restore as draft**: every open editor gets the restored layout, and the site keeps the published version until you publish.
 
 The left sidebar has three tabs: **Layers** (the block tree), **Blocks** and **Sections**. Each fills the sidebar. Alt+1, Alt+2 and Alt+3 (⌥1, ⌥2, ⌥3 on a Mac) open them, and the browser keeps the last tab. To drop a block or section into the tree, drag it onto the **Layers** tab and hold it there for a moment: the tab opens.
 
@@ -451,7 +455,9 @@ Publishing. All editors of a document share one live session (see [Multiplayer e
 
 Save rules. Every save checks the layout. A broken layout (wrong shape, duplicate ids, unknown block types, wrong prop types) blocks every save. Unfinished blocks do not block drafts, autosave or live sessions: a missing required prop, a prop whose value does not match its `builderFormat` (for example a half-typed video URL), a value outside the field's limits (`minLength`, `maxLength`, `min`, `max`, `minRows`, `maxRows`, an email address without a valid form), a message from the field's own `validate` function, a block in a slot that refuses it, and a binding the prop cannot use. All of these can be true while someone is still typing. They block **Publish** only, and the problem list names the block ("Video: this YouTube link does not point to a video", "Product: SKU: use a SKU like ABC-123"). Click a problem to select the block. See [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields).
 
-Adding blocks on the canvas. Hover the canvas: a small **+** shows on the edge between two blocks next to the pointer (above or below in a column, left or right in a row), and in the middle of an empty container. Click it to open a picker with the blocks and sections that fit there (slot rules apply). Type to search, use the arrow keys and Enter, or click. The new block goes in exactly that place and is selected. The **+** hides while you drag and while you edit text on the canvas.
+Adding blocks on the canvas. Hover the canvas: a small **+** shows on the edge between two blocks next to the pointer (above or below in a column, left or right in a row), and in the middle of an empty container. Click it to open a picker with the blocks and sections that fit there (slot rules apply). Type to search, use the arrow keys and Enter, or click. The new block goes in exactly that place and is selected. The **+** hides while you drag and while you edit text on the canvas. It does not show next to a small block (under 48 px along the list and under 160 px across, at 100 % zoom), and it never covers more than a fifth of a block: the parent gets the **+** instead. It also hides over the controls of interactive blocks (a carousel's arrows, a tab).
+
+Interactive blocks on the canvas. Select a block inside a closed accordion item, a hidden tab, another slide or a closed popup, on the canvas or in Layers: the canvas opens the item, the tab or the popup, or moves to the slide, and scrolls the block into view. Arrows, dots, tab buttons and popup triggers work as on the site: a click on them selects nothing. Outlines of blocks inside a container that hides its overflow (a carousel's viewport) are cut at the container's edge.
 
 Drag and drop. Drag a block by its row in the outline, by the grip on the selected block's bar, or from the **Blocks** and **Sections** tabs. Slot rules apply: a slot that refuses the block is never a target. Escape cancels the drag. One drop is one undo step, and collaborators see the move at once. There are two styles:
 
@@ -551,7 +557,7 @@ websiteBuilder({
   live: { heartbeatMs: 15000 },
   ai: { adapter: openRouterAdapter({ apiKey: process.env.OPENROUTER_API_KEY }) }, // the AI assistant
   theme: { admin: { group: 'Settings' } }, // the Theme global; `false` leaves it out
-  editor: { dragMode: 'smooth' }, // the default drag and drop style; each user can change it
+  editor: { dragMode: 'smooth', openInBuilder: true }, // drag and drop style; open saved documents in the builder
   references: { usedIn: ['media'], protectDelete: ['media'] }, // "Used in" lists; `false` turns them off
 })
 ```
@@ -579,6 +585,7 @@ websiteBuilder({
 | `theme` | `ThemeOptions \| false` | The Theme global. On by default. `false` leaves it out. See [Theme](#theme). |
 | `editor.dragMode` | `'indicator' \| 'smooth'` | The default drag and drop style. `indicator` (the default) shows a drop line; `smooth` lifts the block and moves the other blocks out of the way. Each user can change it in the editor. See [The builder view](#the-builder-view). |
 | `editor.dropOutlines` | `boolean` | Thin outlines of every container that takes the dragged block, while you drag. Default `true`. Each user can change it in the editor. See [The builder view](#the-builder-view). |
+| `editor.openInBuilder` | `boolean` | Opening a saved document goes straight to the builder instead of Payload's form. Default `false`. Run `generate:importmap` after you turn it on. See [The builder view](#the-builder-view). |
 | `css.fontFamilies` | `(payload) => Record<name, family>` | Font families set at runtime some other way than the Theme global, for the Styles panel's Font list. Its names win over the theme's. |
 | `references` | `{ field?, usedIn?, protectDelete?, maxListed? } \| false` | Which media and documents each layout uses: "Used in" lists and delete protection. On by default. `false` turns it off. See [References and Used in](#references-and-used-in). |
 
@@ -626,9 +633,9 @@ It also adds these endpoints (signed-in users only):
 | `payload-canvas/ai/openrouter`, `/ai/cloudflare-gateway`, `/ai/cloudflare-workers-ai`, `/ai/openai-compatible`, `/ai/anthropic`, `/ai/fake` | `payload.config.ts` (server) | one AI adapter each. See [Adapters](#adapters). |
 | `payload-canvas/ai/images/openrouter`, `/ai/images/openai`, `/ai/images/cloudflare-workers-ai`, `/ai/images/fake` | `payload.config.ts` (server) | one image adapter each. See [Image generation](#image-generation). |
 | `payload-canvas/live` | server | the live sessions and endpoints |
-| `payload-canvas/client` | Payload import map only | admin client components (layout field, Builder tab) |
+| `payload-canvas/client` | Payload import map only | admin client components (layout field, Builder tab, `DocumentEditView` for `openInBuilder`) |
 | `payload-canvas/rsc` | Payload import map only | admin server components (the builder view, the tab redirect) |
-| `payload-canvas/react` | your site and the canvas (server and client) | `RenderLayout`, `defaultComponents`, `fromPayloadComponent(s)`, `withPageData`, `withLinkComponent`, `lazyBlock`, `renderOnServer`, `editableText`, `editableImage`, link helpers, `ThemeLive`, types |
+| `payload-canvas/react` | your site and the canvas (server and client) | `RenderLayout`, `defaultComponents`, `fromPayloadComponent(s)`, `withPageData`, `withLinkComponent`, `lazyBlock`, `renderOnServer`, `editableText`, `editableImage`, `useCanvasMode`, `useCanvasReveal`, `REVEAL_EVENT`, `CANVAS_CONTROL_ATTRIBUTE`, `builtinComponents`, link helpers, `ThemeLive`, types |
 | `payload-canvas/react/server` | server only | `loadLayoutData`, `loadTemplate`, `loadTheme`, `ThemeStyle`, `createCanvasServer` (they call Payload's Local API) |
 | `payload-canvas/react/canvas` | client only | `BuilderCanvas`, the runtime for the editor's iframe |
 | `payload-canvas/protocol`, `/css-browser` | used by `payload-canvas/react` | the editor–canvas message types, the in-browser CSS compiler. You do not import them yourself. |
@@ -657,7 +664,7 @@ import Link from 'next/link'
 <RenderLayout layout={layout} blocks={blocks} components={components} linkComponent={Link} />
 ```
 
-The interactive blocks (menu, carousel, image viewer, accordion, filter link) load their JavaScript only on pages that render them: their components load with `next/dynamic`. Do the same for a heavy client block of your own, in a `'use client'` module:
+The interactive blocks (menu, carousel, popup, tabs, accordion, filter link) load their JavaScript only on pages that render them: their components load with `next/dynamic`. Do the same for a heavy client block of your own, in a `'use client'` module:
 
 ```tsx
 'use client'
@@ -723,7 +730,7 @@ export const components: BlockComponents = { pricingTable: PricingTable }
 
 ## Server components in the canvas
 
-Some block components load their own data: a model grid that calls `payload.find`, a review carousel, a blog listing, a FAQ from a collection. They are async server components, and they import Payload and your config. The canvas iframe is a client page, so it cannot import them. The canvas sends these blocks to a server action in the canvas route instead. The action renders them with your site's components and sends back the result as React Server Component output. Client components inside it (a carousel, an image viewer) work in the canvas as on the site. You do not change your components.
+Some block components load their own data: a model grid that calls `payload.find`, a review carousel, a blog listing, a FAQ from a collection. They are async server components, and they import Payload and your config. The canvas iframe is a client page, so it cannot import them. The canvas sends these blocks to a server action in the canvas route instead. The action renders them with your site's components and sends back the result as React Server Component output. Client components inside it (a carousel, a popup) work in the canvas as on the site. You do not change your components.
 
 You keep two component maps:
 
@@ -945,6 +952,7 @@ import { defaultBlocks, defineBlock, linkField } from 'payload-canvas/blocks'
 export const pricingTable = defineBlock({
   type: 'pricingTable',
   label: 'Pricing table',
+  description: 'A price card with a button.', // the block library's tooltip, for editors
   icon: 'grid',               // a name from the editor's icon set; unknown names get a generic icon
   category: 'Marketing',      // group in the block library
   fields: [
@@ -964,23 +972,25 @@ export const pricingTable = defineBlock({
 export const blocks = [...defaultBlocks({ linkCollections: ['pages'] }), pricingTable]
 ```
 
+- `description` is one short plain sentence for editors. The block library shows it as the tooltip. Without it, the tooltip shows only the label. The library search also reads `ai.description`. Keep code and syntax out of it: those go in `ai.description`.
 - `slots` declares where child blocks go. `allow` lists the accepted block types, or `['*']`. `max` caps the number of direct children: a full slot refuses insert, move, paste and duplicate (also from MCP and the assistant), and the canvas offers no drop target or "+" there. `min` is the fewest children: fewer block **Publish** but not draft saves.
 - `inline: true` says the block renders no link, button or other control of its own (an icon, a badge, a rating). Such a block may go directly inside a `link` block, whose content slot sets `allowInline: true`. A slot of your own can set `allowInline: true` too. `websiteBuilder` and `builderMcpTools` add the inline types to those slots' `allow` lists (`withInlineBlocks`); a slot's `disallow` still wins. Blocks without `inline` stay out of links. `validateLayout` applies the same rule itself, so a seed or a test can check a layout against your own block list. To check a collection list's picked `ids` as a relationship, give that list `defaultBlocks({ listCollections })`, as the plugin does with the collections that have a `url`.
-- `parents` limits where a block may go: only directly inside the listed block types (never in the root list). The `listItem` block uses `parents: ['list']`. A new block whose slot accepts exactly one such type starts with one child of it, so a new list starts with one item.
+- `parents` limits where a block may go: only directly inside the listed block types (never in the root list). The `listItem` block uses `parents: ['list']`. A new block whose slot accepts exactly one such type starts with children of it: the slot's `min`, or one. So a new list starts with one item, and new tabs start with two tabs.
 - `classes`: classes your component uses itself that your site's CSS does not have. Components in your app need no list: Tailwind finds their classes in your files, and the site's CSS has them on the site and on the canvas. List classes only for a component in a package that your CSS entry does not scan (no `@source` for it). The generated CSS styles only elements with the class `builder-css` (`BUILDER_CSS_CLASS` from `payload-canvas/blocks`), so add that class to each element that uses the listed classes. The built-in Menu block does this for its toggle, panel and links.
 - Block fields keep Payload's `validate`, `hooks` and `access`. See [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields).
 - `parts` names inner elements that take classes of their own, for example a carousel's arrows. See [Classes on inner elements](#classes-on-inner-elements).
 - `admin.custom.builderFormat` on a `text` field names a value check, for example `custom: { builderFormat: 'videoUrl' }` (the Video block's URL). The inspector shows the message while the user types, and a bad value blocks **Publish** but not draft saves. `videoUrl` is the only built-in format. Formats live in a registry in `payload-canvas/core` (`FORMATS`, `formatProblem`). The renderer can use the same parser (`parseVideoUrl`).
 - `linkField()` stores `{ type, url, reference, newTab }`. The component receives it resolved, with `href`, `target` and `rel`.
-- The default blocks are `stack`, `grid`, `heading`, `text`, `richText`, `image`, `video`, `button`, `link`, `menu`, `list` with its `listItem` blocks, `quote`, `divider`, `spacer`, `collectionList` (documents from a collection), `field` (a field of the document a template renders) and `repeat` (the rows of an array or hasMany field of that document).
+- The 15 default blocks are `stack`, `grid`, `heading`, `text`, `richText`, `image`, `video`, `button`, `link`, `menu`, `list` with its `listItem` blocks, `divider`, `collectionList` (documents from a collection), `field` (a field of the document a template renders) and `repeat` (the rows of an array or hasMany field of that document).
+- Field help in the inspector stays short. Put syntax and examples for agents in the field's `custom.ai.description`, and a hint inside an empty input in `admin.placeholder` (the inspector shows it).
 - Props worth knowing on the default blocks:
   - `image`: `priority` (load first: `loading="eager"` and `fetchpriority="high"`, for the hero image; the first image of the first section gets it unless switched off, see `priorityImages`) and `sizes` (the HTML `sizes` attribute, for example `(min-width: 768px) 50vw, 100vw`). The media's focal point (`focalX`, `focalY`) sets `object-position`, so a cropped image keeps its subject. Payload's default 50/50 counts as unset, so an `object-position` class (`object-top`) sets the crop of a photo whose focal point nobody moved. Limit: a focal point set to exactly 50/50 loses to such a class.
   - `heading`: `accent`, words of the text to highlight. They render as `<em>`. Style them with classes on the heading, for example `[&_em]:text-primary [&_em]:not-italic`.
-  - `stack`: `as` also takes `ol`, `ul`, `li`, `dl`, `dt`, `dd`, `figure` and `figcaption`, for lists, term lists and captions. It takes no `p` or `span`: those cannot hold block children such as a heading.
+  - `stack`: `as` (the inspector's **Tag**) also takes `ol`, `ul`, `li`, `dl`, `dt`, `dd`, `figure` and `figcaption`, for lists, term lists and captions. It takes no `p` or `span`: those cannot hold block children such as a heading.
 - The `menu` block folds its links into a "Menu" button and a panel on small screens. Set `ctaLabel` and `cta` (a link) to add a button as the last row of that panel, for example the header's call to action, which a header hides on phones. The inline links, and so the wide-screen header, do not change. `toggleLabel` is the text of the menu button (default "Menu"). The menu's labels (`label`, `toggleLabel`, `submenuLabel`) store nothing until someone types one: empty, they use the site's labels (`builtinComponents({ labels: { menu } })`, see [Labels](#labels)) or English. The panel and dropdown colours read the theme's CSS variables (`--color-background`, `--color-foreground`, `--color-border`, `--color-primary`) with the system colours as the fallback, so the menu needs no particular design system.
 - A `menu` item can have `children`: one level of links (`label`, `link`) in a dropdown. The item's own link is optional. With a link, the item shows the link and a small arrow toggle beside it, which screen readers hear as `submenuLabel` (default "{label} menu", localized). Without a link, the label is the toggle. The dropdown is a native `<details>`: Enter and Space open it, Escape closes it and returns the focus to the toggle, and it closes when the focus or a click leaves it. Opening one closes the others. A current child gets `aria-current="page"` and its parent `aria-current="true"`. In the small-screen panel the children show as a nested list. Its classes are in `MENU_CLASS_MAP` (`submenu`, `submenuToggle`, `submenuList`, `submenuLink`, `panelSubList`, `panelSubLink`); restyle them from the menu's `className`, for example `[&_li>details>ul]:rounded-lg`. Items without children render as before.
 - The `field` block renders rich text with the `prose` typography (and `max-w-none`) when its own `className` has no `prose` class. Add `prose prose-lg` or another `prose` class to take control.
-- `field` `path` takes a binding formatter after a `|` (see "Binding syntax"): `price|currency:EUR` gives `€1,200`, `publishedAt|date:en-GB` a date in that language. The inspector edits it with the **Format** select under the field. `formatBindingValue(value, "currency:EUR")` in `payload-canvas/core` formats a value the same way.
+- `field` `path` takes a binding formatter after a `|` (see "Binding syntax"): `price|currency:EUR` gives `€1,200`, `publishedAt|date:en-GB` a date in that language, `content|readingTime` gives `5 min read`. The inspector edits it with the **Format** select under the field. `formatBindingValue(value, "currency:EUR")` in `payload-canvas/core` formats a value the same way.
 - `field` and `richText` give each rich-text heading an `id` from its text, for `#id` links and the [table of contents](#table-of-contents): `headingId('Über uns & Preise')` is `uber-uns-preise`. A repeated text gets `-2`, `-3`, and a heading without letters or digits gets `section`. `richTextHeadings(value)` in `payload-canvas/core` lists the headings with the same ids (`{ id, text, level, node }`). Two rich texts on one page with the same heading text give two elements the same id; the first one wins a `#id` link.
 - A list holds its items as `listItem` blocks in its `items` slot, so each item can be selected, dragged, styled and edited on the canvas. Enter at the end of an item adds the next one; Backspace at the start of an item joins it to the one before. Older layouts stored the items as a prop (`props.items: [{ text }]`). `normalizeLayout` turns them into `listItem` blocks when a layout loads, and the List component still renders the old prop until the layout is saved again. A list whose `items` prop is bound to document data keeps the old form. A `listItem` takes an optional `link` (the same link group as `button`): the item renders as `<li><a href>text</a></li>`, and the text stays editable in place. Do not set it on items of a list inside a `link` block, because a link cannot hold another link; the item's link is a prop, so the link block's type rules do not catch it.
 
@@ -1019,6 +1029,44 @@ export function ProductScene({ props, className, attributes }: BlockComponentPro
 ```
 
 A server component cannot call hooks. When the canvas renders a block on the server (see [Server components in the canvas](#server-components-in-the-canvas)), the component gets the same value as its `canvasMode` prop: `'canvas'` or `'thumbnail'`. On the site the prop is missing. A component made with `fromPayloadComponent` gets it as `builder.canvasMode`, so a `{ block, context }` component can pass it on: `props: (block, context, builder) => ({ block, context: { ...context, mode: builder.canvasMode ?? 'site' } })`. Client components inside a server block call `useCanvasMode()` as usual.
+
+### Interactive blocks on the canvas
+
+A tab, a slide or a popup keeps some content out of view. On the canvas, an editor must still reach that content, and must still use the block's buttons. `payload-canvas/react` has three tools for this:
+
+- `useCanvasReveal(ref, onReveal)`: calls `onReveal(target)` when the editor selects a block inside the element of `ref` (on the canvas or in Layers), or that element itself. Show the hidden part there: open the item, scroll to the slide, pick the tab. Only the canvas sends the event, so on the site it never fires.
+- `REVEAL_EVENT` (`'builder:reveal'`): the DOM event behind the hook. The canvas sends it from the selected block's element, and it bubbles. Listen for it yourself in code that is not a React component.
+- `CANVAS_CONTROL_ATTRIBUTE` (`'data-builder-control'`): put it on the block's controls (arrows, dots, tab buttons, a close button). On the canvas a click on such an element works as on the site and selects nothing. The hover outline and the "+" do not show over it.
+
+What the canvas does when a block is selected: it opens every closed `<details>` around the block, sends the reveal event from the block's element, and after two animation frames scrolls the block into view. So a native `<details>` needs no code. A block that moves its content with CSS transforms (a slider) can send `element.dispatchEvent(new Event('scroll'))` after each move, so the canvas measures the block outlines again.
+
+A "Read more" block that hides part of its content:
+
+```tsx
+'use client'
+import { useRef, useState } from 'react'
+import { CANVAS_CONTROL_ATTRIBUTE, useCanvasReveal, type BlockComponentProps } from 'payload-canvas/react'
+
+const CONTROL = { [CANVAS_CONTROL_ATTRIBUTE]: '' }
+
+export function ReadMore({ attributes, className, partAttributes, slots }: BlockComponentProps) {
+  const root = useRef<HTMLDivElement>(null)
+  const [open, setOpen] = useState(false)
+  // The editor selected the block or a block in its hidden part: show it.
+  useCanvasReveal(root, () => setOpen(true))
+  return (
+    <div {...attributes} ref={root} className={className}>
+      <div {...partAttributes.more} hidden={!open}>{slots.more}</div>
+      {/* On the canvas the button opens and closes the part, as on the site. */}
+      <button {...CONTROL} type="button" aria-expanded={open} onClick={() => setOpen(!open)}>
+        {open ? 'Show less' : 'Read more'}
+      </button>
+    </div>
+  )
+}
+```
+
+The built-in carousel, popup and tabs use the hook and mark their controls. The disclosure and the accordion are native `<details>`, so the canvas opens them by itself.
 
 ### Validation, hooks and access on block fields
 
@@ -1068,7 +1116,7 @@ Limits:
 
 ### Built-in blocks
 
-Some blocks most sites need come with the plugin, but they are off until you add them: `icon`, `disclosure`, `accordion`, `imageViewer`, `carousel`, `tableOfContents`, `filterLink` and `mediaBackdrop`. (The live saved section block, `sectionRef`, is not one of them: the plugin adds it, see [Live saved sections](#live-saved-sections-sectionref).) Add the definitions next to `defaultBlocks()`, and the components next to yours:
+Some blocks most sites need come with the plugin, but they are off until you add them: `icon`, `disclosure`, `accordion`, `popup`, `tabs` (with its `tab` blocks), `carousel`, `marquee`, `tableOfContents`, `filterLink` and `adjacentLinks` (previous / next). (The live saved section block, `sectionRef`, is not one of them: the plugin adds it, see [Live saved sections](#live-saved-sections-sectionref).) Add the definitions next to `defaultBlocks()`, and the components next to yours:
 
 ```ts
 // src/builder.ts
@@ -1077,7 +1125,7 @@ import { ICON_NAMES } from './icons/names'
 
 export const blocks = [
   ...defaultBlocks({ mediaCollection: 'media' }),
-  ...builtinBlocks({ include: ['icon', 'carousel', 'imageViewer'], icons: ICON_NAMES }),
+  ...builtinBlocks({ include: ['icon', 'carousel', 'popup'], icons: ICON_NAMES }),
 ]
 ```
 
@@ -1094,17 +1142,20 @@ export const components: BlockComponents = { ...builtinComponents({ icons, label
 - The MCP tools and the AI assistant read the same `blocks` list, so they see each built-in you include, with its description and example.
 - Every built-in takes its look from `className`. The definitions have plain `defaultClassName`s without colours. Inner elements that have their own entry in the **Style target** select are parts (see [Classes on inner elements](#classes-on-inner-elements)). The other inner elements have `data-*` attributes, so you style them from the block's `className` with variants such as `[&_[data-page-gap]]:opacity-50`.
 - **Replace a built-in** with your own block of the same type: leave it out of `include` and add your block. Block types must be unique, so the plugin refuses both at once. In the components map, a key of yours with the same type wins over `builtinComponents()`.
-- `builtinComponents()` returns every built-in component. The interactive ones (carousel, image viewer, accordion, filter link) load their JavaScript only on pages that render them, so blocks you do not use cost nothing on the page.
+- `builtinComponents()` returns every built-in component. The interactive ones (carousel, popup, tabs, accordion, filter link) load their JavaScript only on pages that render them, so blocks you do not use cost nothing on the page. The marquee and previous / next are server components with no JavaScript.
+- For a photo that opens large, use a popup with a small image in its trigger and the large image in its content. For a background, put an `image` or `video` block first in a stack with `relative isolate`, and give the media `absolute inset-0 -z-10 size-full object-cover`.
 
 #### Labels
 
-The carousel, image viewer, table of contents and menu have labels: the text of their controls and their names for screen readers ("Next slide", "Close", "On this page", "Menu"). A new block stores none of them. An empty label uses the site's label, else the English one, which the empty input shows as its placeholder. Set the site's labels once, for example in its language:
+The carousel, popup, tabs, table of contents, previous / next and menu have labels: the text of their controls and their names for screen readers ("Next slide", "Close", "Tab {n}", "On this page", "Previous and next", "Menu"). A new block stores none of them. An empty label uses the site's label, else the English one, which the empty input shows as its placeholder. Set the site's labels once, for example in its language:
 
 ```ts
 const labels = {
   carousel: { label: 'Karussell', previousLabel: 'Vorherige Folie', nextLabel: 'Nächste Folie', dotLabel: 'Folie {n}' },
-  imageViewer: { closeLabel: 'Schließen', countLabel: '{n} von {count}' },
+  popup: { closeLabel: 'Schließen' },
+  tabs: { tabLabel: 'Reiter {n}' },
   tableOfContents: { label: 'Auf dieser Seite' },
+  adjacentLinks: { label: 'Vorheriger und nächster Beitrag' },
   menu: { label: 'Hauptmenü', toggleLabel: 'Menü', submenuLabel: 'Untermenü {label}' },
 } satisfies BuiltinLabels
 builtinComponents({ labels })
@@ -1112,7 +1163,7 @@ builtinComponents({ labels })
 
 - One block can still have its own label: type it in the block's props (under **Labels** for control labels). Label props are localized.
 - With `menu` labels, the map also holds a `menu` component (the default menu with those labels). A `menu` component of yours that comes after it in the map wins.
-- The English defaults are exported: `CAROUSEL_LABELS`, `IMAGE_VIEWER_LABELS`, `TABLE_OF_CONTENTS_LABELS` and `MENU_LABELS` from `payload-canvas/blocks`.
+- The English defaults are exported: `CAROUSEL_LABELS`, `POPUP_LABELS`, `TABS_LABELS`, `TABLE_OF_CONTENTS_LABELS`, `ADJACENT_LINKS_LABELS` and `MENU_LABELS` from `payload-canvas/blocks`.
 
 #### Icon
 
@@ -1137,7 +1188,8 @@ export const icons = { arrowRight: ArrowRight, check: Check, close: Close } sati
 
 `disclosure` is one show/hide item: a native `<details>` with a `summary` slot (always visible) and a `content` slot. It opens with the mouse and the keyboard without script, and the closed content stays in the HTML for search engines. `accordion` is a list of disclosures in its `items` slot (also a `repeat` or `collectionList` of disclosures). Include both: `include: ['disclosure', 'accordion']`.
 
-- `disclosure` props: `open` (open at first) and `animate` (the height opens in 300 ms, in CSS only; off with reduced motion, and in browsers without `::details-content`). The canvas always shows it open.
+- `disclosure` props: `open` (open at first) and `animate` (the height opens in 300 ms, in CSS only; off with reduced motion, and in browsers without `::details-content`).
+- On the canvas it starts open or closed as on the site. A click on the title opens or closes it, a double-click edits the title text, and selecting a block inside opens it.
 - The summary slot refuses links, buttons and other controls: a `<summary>` is the button.
 - Style the summary row with `[&>summary]:` classes and the content with `[&>div]:` classes on the disclosure. `open:` and `group-open:` classes style the open state, for example `group-open:rotate-45` on an icon in the summary.
 - `accordion` props: `multiple` (default on; off keeps one item open, with the browser's exclusive `<details name>`) and `faqSchema`, **Mark up as FAQ for search engines** (default off). Turn it on only for real questions and answers: search engines treat FAQ markup on other content as spam.
@@ -1151,29 +1203,52 @@ const jsonLd = faqJsonLd(items)
 // and <RenderLayout faqJsonLd={false} … /> for those layouts
 ```
 
-#### Image viewer
+#### Popup
 
-`imageViewer` is a container whose images open full screen in a photo popup. Lay out the images with its `className` (a grid by default), or put a `repeat` of images in it (path `gallery`, the image bound to `$item`).
+`popup` is a button that opens a box over the page: a video, a large photo, a form. Its `trigger` slot is what the visitor clicks (a text, an icon, a small image). Its `content` slot is the box. The content stays in the HTML for search engines.
 
-- A click on an image, or Enter or Space on a focused image, opens it in a native modal `<dialog>`. The dialog keeps the focus inside, makes the page inert, closes on Escape and gives the focus back. Arrow keys and the arrow buttons step through the images. On touch screens a sideways swipe steps too: left for the next photo, right for the previous one (pointer events, at least 50 px and more sideways than down; a mouse drag does not swipe). A click beside the photo closes it.
-- The images get `tabindex="0"`, `role="button"` and `aria-haspopup="dialog"`. Images inside a link or a button keep that element as the control.
-- Props: `label` (the dialog's name for screen readers, default "Photos"), `group` (image viewers with the same group on a page open as one set) and `captions` (shows the alt text under the photo; screen readers always hear "2 of 6").
-- The large photo is the image the page already loaded, with its `srcset` and `sizes="100vw"`, so the browser picks a larger file when it has one.
-- Style the dialog from the block's `className`: `[&_dialog]:` for its text colour and backdrop (`[&_dialog]:backdrop:bg-black/85`), `[&_[data-viewer-button]]:` for the close, previous and next buttons (`data-viewer-button` is `close`, `previous` or `next`) and `[&_[data-viewer-photo]]:` for the large photo. The component sets only position and size.
-- The canvas never opens it, so a click selects an image there.
-- Control labels, under **Labels** in the Content tab: `closeLabel` ("Close"), `previousLabel` ("Previous photo"), `nextLabel` ("Next photo") and `countLabel` ("{n} of {count}", the photo number). An empty label uses the site's label or the English one (see [Labels](#labels)).
+- The box is a native modal `<dialog>`. It keeps the focus inside and makes the page inert. Escape, the close button and a click beside the box close it, and the page does not scroll while it is open.
+- The trigger renders inside a `<button>`, so its slot refuses links, buttons, other controls, popups and tabs.
+- Props: `label` (the box's name for screen readers; empty: the first heading in the content) and `anchor`. With `anchor: 'newsletter'`, every link to `#newsletter` on the page opens the popup, and so does a page address that ends in `#newsletter`. With an anchor the trigger may stay empty: the site then renders no button.
+- Parts: the `trigger` and `content` slots, `panel` (the dialog box; `backdrop:` classes colour the backdrop, for example `backdrop:bg-black/60`) and `close` (the close button, placed absolutely in the panel). A new popup starts with a centred panel and a round close button.
+- **A photo that opens large.** Put a small image in the trigger and the large image in the content. Give the panel `max-w-5xl p-0` and the content `gap-0`.
+- On the canvas the box is not modal. It shows in place under the trigger when you click the trigger, or when you select the popup or a block inside it. A second click on the trigger closes it.
+- Control label, under **Labels** in the Content tab: `closeLabel` ("Close"). An empty label uses the site's label or the English one (see [Labels](#labels)).
+
+#### Tabs
+
+`tabs` shows one row of tab names and one panel at a time. Its `tabs` slot takes only `tab` blocks, at least two. A new tabs block starts with two. Each `tab` has a `label` (the tab name) and a `content` slot (its panel). Include `tabs`: it brings the `tab` block with it.
+
+- The first tab is open at first. It follows the WAI-ARIA tabs pattern: the arrow keys move between tabs (and wrap), Home and End jump to the first and last tab, and only the open tab is in the Tab order. Hidden panels stay in the HTML with `hidden`.
+- Props: `label` (the tab row's name for screen readers) and `vertical` (the tabs stand in a column; the up and down arrows move). For a column, lay out the block with `flex flex-row gap-8` and give the `list` part `flex flex-col`.
+- Parts: `list` (the row of tabs), `tab` (each tab button) and `panel` (each panel). The open tab has `aria-selected="true"`, so `aria-selected:` classes style it: a new tabs block starts with `aria-selected:border-current aria-selected:opacity-100`. A `tab` block's own `className` styles its own panel.
+- On the canvas a click on a tab opens it, and selecting a block opens the tab that holds it.
+- Control label: `tabLabel` ("Tab {n}"), the name of a tab without a label. `{n}` is the tab number.
 
 #### Carousel
 
-`carousel` shows the blocks of its `slides` slot as slides. Each direct child is one slide: give it its width with its own `className` (`w-[85%] md:w-1/3`). A single `collectionList` or `repeat` child makes each of its items a slide. Any other single child is one slide.
+`carousel` shows the blocks of its `slides` slot as slides. It runs on [Embla Carousel](https://www.embla-carousel.com/). Each direct child is one slide. Set how many slides show at once with each slide's `className`: `basis-full md:basis-1/2` (or a width such as `w-[85%]`). A single `collectionList` or `repeat` child makes each of its items a slide: set the basis on the item. Any other single child is one slide.
 
-- Props: `mode` (`scroll`: a swipeable scroll-snap track; `fade`: the slides stack and fade), `arrows` (default on), `dots`, `loop`, `autoplay` (milliseconds, 0 is off) and `label` (the region's name, default "Carousel").
+- Visitors swipe or drag the slides, click the arrows or dots, or use the arrow keys when the carousel has the focus.
+- Props: `mode` (`scroll`: the slides slide sideways; `fade`: one slide fades into the next), `align` (**Slide position**: `start` or `center`, where the current slide sits when the slides are narrower than the carousel), `arrows` (default on), `dots`, `loop`, `autoplay` (milliseconds, 0 is off) and `label` (the region's name, default "Carousel").
+- Dots: one per stop, not one per slide. When two slides show at once, six slides have three dots.
 - The optional `previous` and `next` slots hold the content of the arrow buttons, for example an `icon` block. Empty, they show a chevron.
-- Accessibility: the carousel is a `<section>` region with `aria-roledescription="carousel"` and its label. Each slide is a group labelled "2 of 6". The scroll track takes the keyboard focus, and the arrow keys move one slide. In fade mode the hidden slides are `inert`. The track announces slide changes (`aria-live="polite"`) unless autoplay is running.
-- Autoplay shows a Pause button (WCAG 2.2.2), stops while the pointer is over the carousel and while it has focus, and never runs when the visitor asks for less motion. With reduced motion the arrows also jump instead of scroll smoothly.
-- Style the inner elements as parts (`partClassName`, the **Style target** select): `slides` for the track (the gap between slides), `arrow` for both arrows (`disabled:` at either end without `loop`), `dot` for each dot (the current dot has `aria-current="true"`), `controls` for the row of controls and `pause` for the pause button. A new carousel starts with round bordered arrows and small round dots.
+- Accessibility: the carousel is a `<section>` region with `aria-roledescription="carousel"` and its label. Each slide is a group labelled "2 of 6". The viewport takes the keyboard focus. The track announces slide changes (`aria-live="polite"`) unless autoplay is running.
+- Autoplay shows a Pause button (WCAG 2.2.2). It pauses while the pointer is over the carousel and while it has the focus, stops when the visitor swipes, and never runs when the visitor asks for less motion.
+- Style the inner elements as parts (`partClassName`, the **Style target** select): `slides` for the track (the gap between slides), `arrow` for both arrows (`disabled:` at either end without `loop`), `dot` for each dot (the current dot has `aria-current="true"`; its visible mark is its `::after`), `controls` for the row of controls and `pause` for the pause button. A new carousel starts with round bordered arrows and small round dots, in the text colour.
 - Control labels, under **Labels** in the Content tab: `previousLabel` ("Previous slide"), `nextLabel` ("Next slide"), `pauseLabel` ("Pause"), `playLabel` ("Play"), `dotLabel` ("Slide {n}"), `slideLabel` ("{n} of {count}") and the `aria-roledescription` names `carouselRole` ("carousel") and `slideRole` ("slide"). `{n}` is the slide number and `{count}` the number of slides. An empty label uses the site's label or the English one (see [Labels](#labels)).
-- The arrows and dots appear after the script has counted the slides. On the canvas the slides always scroll and never autoplay, so each one can be selected.
+- On the canvas the arrows and dots work, the slides do not drag (you drag blocks there), fade shows as sliding, and autoplay is off. Selecting a block in a slide moves the carousel to that slide.
+- Carousels saved before the move to Embla render as they are.
+
+#### Marquee
+
+`marquee` is a row of logos or words that scrolls sideways without end. It is CSS only: a server component with no JavaScript. Each direct child of its `children` slot is one item; give images a fixed height (`h-8 w-auto`).
+
+- Props: `speed` (`slow`, `normal` or `fast`: 60, 35 or 20 seconds per round), `direction` (`left` or `right`) and `pauseOnHover` (default on; it also stops while a link in it has the focus).
+- The items render twice, so the row loops without a gap. The copy is hidden from screen readers and the keyboard. Keep the row wider than the screen: repeat a short list of items.
+- Space the items with margins in the `children` part (a new marquee has `*:mx-8`), not with a gap, so the loop does not jump.
+- The default `className` fades the edges with a mask, so it works on any background.
+- With reduced motion, and on the canvas, it stands still and the items wrap.
 
 #### Table of contents
 
@@ -1195,17 +1270,18 @@ const jsonLd = faqJsonLd(items)
 - `filterHref(path, query, { param, value, multiple, pageParams })` in `payload-canvas/blocks` is the same rule as a pure function, for a server component of your own.
 - Send `noindex, follow` for filtered URLs.
 
-#### Media backdrop
+#### Previous / next
 
-`mediaBackdrop` puts a photo or a muted looping video behind the blocks of its `children` slot: a hero, a banner, a section with a background. The media and the optional overlay are absolutely placed first children; the block's `className` lays out the content. Keep `relative isolate` in it, so the media stays behind the content and inside the block.
+`adjacentLinks` (**Previous / next**) links to the previous and the next document of the same collection, at the end of a template: blog posts, case studies. It is a `<nav>` with two slots, `previous` and `next`. Each slot holds one collection list that finds its document with a value of the page's own document:
 
-- Props: `image` (a photo), `alt` (empty: decoration, as most backgrounds are), `video` (an upload) or `videoUrl` (a link to a video file), `poster` (empty: the photo), `priority`, `sizes` (default `100vw`) and `overlay`. Uploads come from `builtinBlocks({ mediaCollection })`, default `media`.
-- A video wins over the photo. It starts from script, muted and looping, and never plays when the visitor asks for less motion: the poster stays. It does not play on the canvas.
-- `priority` (the hero only): the photo loads eagerly with `fetchpriority="high"`; for a video the poster is preloaded with high priority.
-- The media focal point (`focalX`, `focalY`) sets `object-position`, unless it is Payload's default 50/50: then the block's `[&>[data-backdrop-media]]:object-top` (or other position) class sets the crop. The photo gets a `srcset` from the media sizes.
-- Media URLs render as stored. When the site serves them from another host or path (Payload stores absolute URLs when `serverURL` is set), map them: `builtinComponents({ mediaUrl: (url) => new URL(url, 'http://x').pathname })`. It applies to the photo, its sizes, the video upload and the poster, not to a typed `videoUrl`. `mediaBackdropComponent(mediaUrl)` is that component alone.
-- Style the media with `[&>[data-backdrop-media]]:` classes (blur, opacity) and the overlay with `[&>[data-backdrop-overlay]]:` classes (`[&>[data-backdrop-overlay]]:bg-black/40`).
-- No WebGL effects.
+- `previous`: `sort: '-publishedAt'`, `limit: 1`, `where: { publishedAt: { less_than: '$page.publishedAt' } }`.
+- `next`: `sort: 'publishedAt'`, `limit: 1`, `where: { publishedAt: { greater_than: '$page.publishedAt' } }`.
+
+`createdAt`, or any date or number field, works the same way. The list's `item` slot is the link: a `link` bound to `$url` around a text ("← Previous") and a heading bound to `title`. The starter's post template shows the full pattern (`apps/starter/src/data/sections/postTemplate.ts`).
+
+- On the site a side without a document renders nothing. With no document on either side, the whole block renders nothing. The canvas always shows both sides.
+- Parts: the `previous` and `next` slots. A new block puts the next link at the end (`ms-auto`).
+- Control label: `label` (the `<nav>`'s name, default "Previous and next").
 
 ## Using existing Payload blocks
 
@@ -1515,8 +1591,10 @@ An inserted section is a copy: later edits of the saved section do not reach the
 ## Styling
 
 - **Classes.** Each block stores Tailwind v4 classes in `className`. Variants use normal Tailwind syntax: `md:flex-row`, `hover:bg-primary`, `dark:text-white`.
-- **Styles panel.** Visual controls for layout, spacing, size, position, typography, background, border and effects read and write classes. The breakpoint bar (`base`, `sm`, `md`, `lg`, `xl`, `2xl`) and the state bar (Default, Hover, Focus, Active) set the variant prefix. The **Classes** box accepts any class.
-- **Site classes.** The **Classes** box in the Styles panel suggests your CSS entry's own static `@utility` classes (`type-h2`, `btn-primary`, `glass`) before Tailwind's classes. When the box gets the focus, it lists them by group, without the ones the block has. Typing filters them by class name or label. After a typed variant such as `md:`, the box lists them again, and the picked class gets the variant, as when you type it. A site class on the block shows its label next to the class name, and its tooltip shows the rule's CSS. A comment right above the rule sets a label and a group: `/* @canvas Buttons: Primary button */` (group "Buttons", label "Primary button") or `/* @canvas Primary button */` (a label only). Without a comment the class shows by its name. Classes from the files the entry imports count too, but not from packages in `node_modules`, and not functional utilities such as `tab-*`. `getStyleTokens()` returns them as `siteClasses` (`{ name, label?, group?, css }`). The MCP tool `listBlocks` and the assistant's prompt list them, so agents use the site's look.
+- **Styles panel.** Visual controls for layout, spacing, size, position, typography, background, border and effects read and write classes. The breakpoint bar (`base`, `sm`, `md`, `lg`, `xl`, `2xl`) and the state bar (Default, Hover, Focus, Active) set the variant prefix. A line under them says what the controls change: "Editing this block at all screen sizes", or "Editing .card at md · 768 px and wider" while you edit a class.
+- **The Classes field** at the top of the Styles tab holds every class the controls do not show. [Editable classes](#editable-classes) are solid chips: click one to edit that class. Other classes (`dark:pt-4`, a code `@utility` class) are quiet chips in monospace: click one to change it, or × to remove it. Classes that a control shows (`p-4`, `md:flex`) have no chip. The input at the end adds any class, with suggestions. The "⋯" menu has **New class from these styles…**, **Import from the site's CSS** and **Edit as text** (the whole class list as one text box).
+- **Hide a block.** The inspector's **Advanced** tab has **Hide at all screen sizes** (`block.hidden`): the site does not render the block. To hide it at some sizes only, use Styles → Layout → **Display** → **Hidden** at a breakpoint. Hidden at `md` writes `md:hidden`: the block hides at `md` and wider. To hide it only on small screens, set Hidden at **All sizes** and a display at `md`: `hidden md:flex`.
+- **Site classes.** The **Classes** field in the Styles panel suggests your CSS entry's own static `@utility` classes (`type-h2`, `btn-primary`, `glass`) before Tailwind's classes. When the input gets the focus, it lists them by group, without the ones the block has. Typing filters them by class name or label. After a typed variant such as `md:`, the input lists them again, and the picked class gets the variant, as when you type it. A site class on the block shows its label next to the class name, and its tooltip shows the rule's CSS. A comment right above the rule sets a label and a group: `/* @canvas Buttons: Primary button */` (group "Buttons", label "Primary button") or `/* @canvas Primary button */` (a label only). Without a comment the class shows by its name. Classes from the files the entry imports count too, but not from packages in `node_modules`, and not functional utilities such as `tab-*`. `getStyleTokens()` returns them as `siteClasses` (`{ name, label?, group?, css }`). The MCP tool `listBlocks` and the assistant's prompt list them, so agents use the site's look.
 
   ```css
   /* @canvas Buttons: Primary button */
@@ -1590,7 +1668,7 @@ function Gallery({ attributes, className, partAttributes, slots }: BlockComponen
 - In the Styles tab, a block with parts shows a **Style target** select: **This block**, or one of its parts. The panel then edits that part's classes. A dot marks parts that have classes.
 - An update merges per part: `{ "type": "update", "id": "b_list01", "partClassName": { "empty": "p-8" } }`. `null` or `""` removes a part's classes.
 - `validateLayout` refuses classes on a name that is not a part. The MCP tools and the assistant list each block's `parts`.
-- Built-in parts: the collection list's `empty` slot, `pager` (the page links' `<nav>`) and `pageLink`; the carousel's `slides` slot (the track), `controls`, `arrow`, `dot` and `pause`; the menu's `link`, `submenu` (a dropdown box), `submenuLink` and `panel` (the small-screen panel); the disclosure's `summary` and `content`.
+- Built-in parts: the collection list's `empty` slot, `pager` (the page links' `<nav>`) and `pageLink`; the carousel's `slides` slot (the track), `controls`, `arrow`, `dot` and `pause`; the menu's `link`, `submenu` (a dropdown box), `submenuLink` and `panel` (the small-screen panel); the disclosure's `summary` and `content`; the popup's `trigger` and `content` slots, `panel` and `close`; the tabs' `list`, `tab` and `panel`; the marquee's `children` slot; the previous / next block's `previous` and `next` slots.
 
 ### HTML attributes
 
@@ -1623,7 +1701,7 @@ It is on by default. `websiteBuilder({ classes: false })` turns it off. Options:
 | Field | Holds |
 |---|---|
 | `name` | The class name, without the dot. Letters, digits, `-` and `_`, starting with a letter or `_`. It must not be a Tailwind class (`flex`, `shadow`, `prose`), and it is unique. A code `@utility` name of your site is allowed: the class replaces that rule. |
-| `label`, `group` | Shown in the Classes box, as for code classes: "Buttons: Primary button". |
+| `label`, `group` | Shown in the Classes field's suggestions, as for code classes: "Buttons: Primary button". |
 | `styles` | Tailwind classes with variants, as in a block's classes: `rounded-xl p-6 md:p-8 hover:shadow-lg`. Another class's name applies that class (`btn bg-primary`). The Styles panel edits this field. |
 | `css` | Custom CSS inside the class rule, for what Tailwind cannot express: layered gradients, `&::before { … }`, `&:hover { … }`, `@keyframes`. `@import`, `@theme`, `@utility` and other rules that change the design system are refused. |
 | `previousNames` | Names the class had when it was published before (read-only). Published pages that still use an old name keep their look until they are published again. |
@@ -1632,9 +1710,9 @@ The collection has drafts and versions, so every class has a history, and Payloa
 
 ### In the Styles panel
 
-- **What the styles change.** A row at the top of the Styles panel shows **This block** and one chip for each class the block uses. **This block** (the default) edits the block's own classes, as before.
-- **Edit a class.** Click a class chip. A banner says "Editing class .card" and "Changes 12 blocks on 3 pages". Every control now reads and writes the class's `styles`. The breakpoint and state bars work as for a block: `md:` and `hover:` go into the class. The Classes box edits the class's Tailwind classes. A **Custom CSS** box edits its `css`.
-- **New class from this block's styles.** In the **+** menu. It moves the block's Tailwind classes into a new class and gives the block the class. Classes the block already had stay on it. Add the class to other blocks in their Classes box: it is suggested first, with its label.
+- **Find a class.** The **Classes** field at the top of the Styles tab shows each editable class of the block as a solid chip. A small dot on a chip means the class has unpublished changes.
+- **Edit a class.** Click its chip. A banner says "Editing .card" and how far a change reaches ("Changes 12 blocks on 3 pages"). Every control now reads and writes the class's `styles`. The breakpoint and state bars work as for a block: `md:` and `hover:` go into the class. Under the controls, **More classes in .card** holds the class's classes that no control shows, and a **Custom CSS** box edits its `css`. Click the chip again, or the banner's back button, to edit the block again.
+- **New class from these styles…** In the Classes field's "⋯" menu. It moves the block's Tailwind classes into a new class and gives the block the class. Classes the block already had stay on it. Add the class to other blocks in their Classes field: it is suggested first, with its label.
 - **Drafts.** A change shows on the canvas at once. It saves as a draft 0.6 s after the last change (one autosave version for a run of changes). **Ctrl+Z** undoes class changes in order with the other edits.
 - **Publish.** The banner's **Publish class** makes the class live on every page that uses it. Publishing a page also publishes the classes it uses that have unpublished changes (as the same user), so the live page looks like the canvas. A class the user may not update stays a draft (the server logs it).
 - **Rename and delete** are in the banner's **…** menu. Both dialogs say where the class is used first. **Rename** changes the class and every block that uses it, in each page's draft, through the live sessions (open editors see it at once). The old published name stays in `previousNames`, so published pages keep their look. **Delete** removes the class from every block's draft, then deletes it. Published pages lose its styles at once.
@@ -1642,7 +1720,7 @@ The collection has drafts and versions, so every class has a history, and Payloa
 
 ### Import from the site's CSS
 
-**Import classes from the site's CSS** (the **+** menu, or `POST /api/builder/classes/import`) makes a published class from each static `@utility` rule of your CSS entry and the files it imports (not packages). The `/* @canvas Group: Label */` comment gives the label and the group. `@apply` lists become `styles`; declarations and nested rules become `css`. Names that are classes already are skipped.
+**Import from the site's CSS** (the Classes field's "⋯" menu, or `POST /api/builder/classes/import`) makes a published class from each static `@utility` rule of your CSS entry and the files it imports (not packages). The `/* @canvas Group: Label */` comment gives the label and the group. `@apply` lists become `styles`; declarations and nested rules become `css`. Names that are classes already are skipped.
 
 After the import, the classes are the source. Delete the `@utility` rules from your CSS: until then, Tailwind may still put them in the site's CSS (when its scanner finds the name in your source files), and properties the class does not set still come from them.
 
@@ -1943,6 +2021,7 @@ Only published templates count (all templates in draft mode). Templates with an 
 - A **binding** connects a block prop to a document field: `bindings: { "text": "title", "image": "author.avatar" }`. Paths are dot paths from the document root. At render time the prop takes the document's value. A missing value falls back to the prop's own value. In the editor, the binding picker lists only compatible fields of the target collection, including one relationship hop.
 - The **Field** block (`field`) shows one field of the document by path, rendered by its type: rich text, an upload as an image, a date, a relationship's title, or text. Use it for the post body.
 - The **Collection list** block (`collectionList`) lists the latest documents of a collection (`collection`, `limit`, `sort`, `excludeCurrent`, `offset`, `depth`, and the filters `filterField`, `filterBy`, `where` and `queryFilters` below). Its `item` slot is the design of one item and repeats for every document. Its `empty` slot shows instead when no document matches, for example a text "No posts yet". Blocks in the item bind to the item's fields, for example a heading with `bindings: { "text": "title" }` and a link with `bindings: { "link": "$url" }` (the item's URL from the collection's `url` option). The site shows published documents only. It works on normal pages too, not only in templates.
+  - In the inspector, the fields show under the headings **Filter**, **Sort and count** and **Pages**. **Sort** is a select of the collection's fields with a direction ("Newest first", "A to Z") and **Random order**. It stores the same `sort` text (`-publishedAt`, `$random`). Your own blocks can use the same controls: `admin.custom.builderSort: { collectionField: 'collection' }` on a text field, and `admin.custom.builderHeading: 'Filter'` for a heading above a field.
   - `offset` skips documents after the sort (at most 100).
   - `depth` is `"1"` (default) or `"2"`: how deep the related documents of each item load. Use `"2"` to reach, for example, `categories.image`.
 - The **Repeat** block (`repeat`) repeats its `item` slot per row of an array or hasMany field. See "Repeat the rows of a field" below.
@@ -1972,6 +2051,7 @@ Formatters. In the inspector, a bound text prop and the Field block have a **For
 | `currency` | currency code (default `USD`), language | `currency:EUR` | `€1,200` (whole amounts have no cents) |
 | `uppercase`, `lowercase` | none | `uppercase` | `DESK LAMP` |
 | `truncate` | length, then `words` to count words | `truncate:160`, `truncate:25:words` | The plain text (rich text too) cut to 160 characters (on a whole word) or 25 words, with `…` |
+| `readingTime` | words per minute (default 200), text after the number (default `min read`) | `readingTime`, `readingTime:200:Min. Lesezeit` | `5 min read`: the time to read the text (rich text too), rounded up, at least 1 minute. Nothing for a text without words. |
 
 After the first part of an expression, a name that is a formatter is always a formatter. So `"title|date"` formats `title`; it never falls back to a field called `date`. A field with a formatter's name works as the first path only: `"date|title"`.
 
@@ -1986,7 +2066,7 @@ Expressions are not checked against the collection's fields when you publish. Th
 
 #### Show a block only when conditions match
 
-A block in a template, a collection list item or a repeat row can show only when its document matches conditions. In the inspector, the **Visibility** section at the end of the Content tab has condition rows: a field, an operator and a value. The rows in a group must all match. **Add "or" group** adds another group, and one matching group is enough. The block stores them as `visibility`:
+A block in a template, a collection list item or a repeat row can show only when its document matches conditions. In the inspector, **Show only when** at the end of the Content tab has condition rows: a field, an operator and a value. The field select lists the fields of the block's document (the template's collection, the listed collection, or the row), else the collection's fields from the Payload config. The rows in a group must all match. **Add "or" group** adds another group, and one matching group is enough. The block stores them as `visibility`:
 
 ```json
 {
@@ -2029,6 +2109,7 @@ A collection list can show only the documents related to the current document (t
 | `shared` | documents whose `filterField` shares a value with the current document's own `filterField` | `{ [filterField]: { in: values } }` | Related posts with a `category` in common. Products with the same `brand` text. |
 | `linked` | the documents that the current document's `filterField` points to | `{ id: { in: values } }` | On a post template: the post's `authors`. |
 
+- In the inspector this is one select, **Related to this page**, under the **Filter** heading. It lists the fields that relate the two collections in words ("Categories links to this page") and sets both props. It shows in templates, or when a filter is already set. Your own block gets it with `admin: { custom: { builderRelated: { collectionField: 'collection', modeField: 'filterBy' } } }` on the text field that stores the field name. `modeField` names the select that stores the mode.
 - `values` are read from the current document with `getByPath`. Populated documents (`{ id }`), `{ relationTo, value }` pairs, strings and numbers all work, one value or many.
 - With `shared` or `linked`, a current document without values shows an empty list. The plugin sends no query.
 - On a normal page (no current document), a list with `filterField` shows nothing (its `empty` slot). The plugin sends no query. The same holds on the canvas for a template without a sample document; the editor still shows the item design once.
@@ -2233,7 +2314,7 @@ buildConfig({
 })
 ```
 
-**Which props translate.** A prop translates when its field config says `localized: true`, as in Payload. A group or array that holds a localized field translates as a whole. The default blocks mark their text as localized: heading, text, rich text, button label, image alt text, list items, quote and source, menu links and name, and the field block's fallback. Images, links, numbers, selects and checkboxes are shared. Add `localized: true` to the fields of your own blocks. Without Payload localization, `localized` does nothing.
+**Which props translate.** A prop translates when its field config says `localized: true`, as in Payload. A group or array that holds a localized field translates as a whole. The default blocks mark their text as localized: heading, text, rich text, button label, image alt text, list items, menu links and name, and the field block's fallback. Images, links, numbers, selects and checkboxes are shared. Add `localized: true` to the fields of your own blocks. Without Payload localization, `localized` does nothing.
 
 **How it is stored.** The default language stays in `props`. Each other language keeps only its own values in `locales`:
 

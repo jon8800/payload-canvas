@@ -64,6 +64,7 @@ export function sectionRefBlock(collection = 'builder-sections'): BlockDefinitio
   return defineBlock({
     type: SECTION_REF_BLOCK,
     label: 'Saved section (live)',
+    description: 'A saved section that stays the same on every page.',
     icon: 'sectionRef',
     category: 'Dynamic',
     // It renders the section's blocks with their own classes and no element of its own.
@@ -75,11 +76,7 @@ export function sectionRefBlock(collection = 'builder-sections'): BlockDefinitio
         label: 'Saved section',
         relationTo: collection as CollectionSlug,
         required: true,
-        admin: {
-          description:
-            'Shows this saved section as it is now: edit the section and every page that uses it changes. ' +
-            'To change it on this page only, use "Detach section" in the block menu.',
-        },
+        admin: { description: 'Changes to it show on every page.' },
       },
     ],
     ai: {

@@ -197,6 +197,8 @@
     "@lexical/rich-text": "0.50.0",
     "@lexical/selection": "0.50.0",
     "@lexical/utils": "0.50.0",
+    "embla-carousel-fade": "^8.6.0",
+    "embla-carousel-react": "^8.6.0",
     "lexical": "0.50.0",
     "motion": "^14.0.0",
     "react-colorful": "^5.8.1"

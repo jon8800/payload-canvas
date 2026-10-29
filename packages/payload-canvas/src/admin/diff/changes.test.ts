@@ -127,7 +127,7 @@ describe('diffLayouts', () => {
     assert.deepEqual(details[0], { kind: 'value', label: 'Content', from: 'Old words', to: 'New words' })
     assert.deepEqual(details[1], { kind: 'note', label: 'Content', text: 'Formatting or details changed' })
     assert.equal(details[2]?.kind, 'value')
-    assert.equal(details[2]?.label, 'Level')
+    assert.equal(details[2]?.label, 'Tag')
   })
 
   it('lists translation changes with their locale, for the selected locales only', () => {

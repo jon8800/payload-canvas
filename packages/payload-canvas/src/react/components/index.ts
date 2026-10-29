@@ -12,9 +12,7 @@ import { Link } from './Link'
 import { List, ListItem } from './List'
 // The menu's JavaScript loads only on pages that render a menu.
 import { Menu } from './lazy'
-import { Quote } from './Quote'
 import { RichText } from './RichText'
-import { Spacer } from './Spacer'
 import { Text } from './Text'
 import { Video } from './Video'
 
@@ -32,9 +30,7 @@ export const defaultComponents: BlockComponents = {
   menu: withClientLinks(Menu),
   list: List,
   listItem: ListItem,
-  quote: Quote,
   divider: Divider,
-  spacer: Spacer,
   video: Video,
   field: Field,
   collectionList: CollectionList,

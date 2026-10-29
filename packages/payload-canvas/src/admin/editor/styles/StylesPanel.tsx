@@ -1,7 +1,8 @@
 'use client'
 
-// The Styles tab: what the styles change (the block, or an editable class it uses), variant bar,
-// visual controls per style group, the raw classes field, and a class's custom CSS.
+// The Styles tab: the classes field (the block's classes; a click on an editable class makes the
+// controls edit it), the variant bar, the visual controls per style group, and while a class is
+// edited, its other classes and custom CSS.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 
@@ -11,13 +12,12 @@ import type { Block, StyleTokens } from '../../../core/types'
 import { useRuntime } from '../runtime'
 import { useEditor } from '../store'
 import { createValueStore, useValue } from '../valueStore'
-import { ClassBar } from './ClassBar'
+import { ClassBar, ClassExtras } from './ClassBar'
 import { ClassCss } from './ClassCss'
 import { ClassDialog } from './ClassDialog'
-import { StylesContext, writeClassName, writeClassStyle, writeStyle, type StylesContextValue } from './context'
+import { StylesContext, writeClassStyle, writeStyle, type StylesContextValue } from './context'
 import { createReader } from './model'
 import { stopEditorKeys } from './popover'
-import { RawClasses } from './RawClasses'
 import { StyleSections } from './sections'
 import { BREAKPOINTS, breakpointAt, breakpointWidths, reloadStyleTokens, useStyleTokens, withFallback } from './tokens'
 import { VariantBar } from './VariantBar'
@@ -92,8 +92,6 @@ export function StylesPanel({ block, part = null }: { block: Block; part?: strin
             ? writeClassStyle(classes, editing.id, variant, tokens, property, v, options)
             : writeStyle(runtime, { blockId, part }, variant, tokens, property, v, options),
         ),
-      setClassName: (next, mergeKey) =>
-        editing && classes ? classes.edit(editing.id, 'styles', next, `class:${editing.id}:raw`) : writeClassName(runtime, { blockId, part }, next, mergeKey),
       error,
     }),
     [runtime, classes, editing, blockId, part, block.type, className, variant, tokens, error, canvasBreakpoint],
@@ -103,7 +101,7 @@ export function StylesPanel({ block, part = null }: { block: Block; part?: strin
     <StylesContext value={value}>
       {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- only stops editor shortcuts from bubbling */}
       <div className="builder-styles" onKeyDown={stopEditorKeys}>
-        {classes && <ClassBar part={part} own={own} />}
+        <ClassBar className={blockClassName} own={own} />
         <VariantBar />
         {message && (
           <p className="builder-styles__hint builder-styles__hint--error" role="alert">
@@ -124,9 +122,9 @@ export function StylesPanel({ block, part = null }: { block: Block; part?: strin
         {STYLE_PROPERTIES.length > 0 ? (
           <StyleSections />
         ) : (
-          <p className="builder-styles__hint">Visual style controls are not available yet. Edit the classes below.</p>
+          <p className="builder-styles__hint">Visual style controls are not available yet. Edit the classes above.</p>
         )}
-        <RawClasses />
+        {editing && <ClassExtras item={editing} />}
         {editing && <ClassCss item={editing} />}
       </div>
       {classes && <ClassDialog />}

@@ -6,9 +6,12 @@
 import { FieldLabel } from '@payloadcms/ui'
 import { useMemo, useState } from 'react'
 
+import { INDEX_PATH } from '../../../core/bindings'
 import type { Block } from '../../../core/types'
 import { storesBuilderData } from '../actions'
+import { useCollectionFields } from '../fields/collectionFields'
 import { ConditionRows, type ConditionRow, type ConditionSources } from '../fields/ConditionRows'
+import { whereFieldOption } from '../fields/WhereField'
 import { useRuntime } from '../runtime'
 import { useBindingScope } from './Bindable'
 import { rowsVisibility, visibilityFields, visibilityRows } from './visibilityRows'
@@ -21,7 +24,15 @@ import { rowsVisibility, visibilityFields, visibilityRows } from './visibilityRo
 export function VisibilityField({ block }: { readonly block: Block }) {
   const runtime = useRuntime()
   const scope = useBindingScope(block)
-  const fields = useMemo(() => visibilityFields(scope?.fields ?? [], scope?.kind === 'list' || scope?.kind === 'row'), [scope?.fields, scope?.kind])
+  // Without binding sources for the collection (templates off for it), its fields from the Payload
+  // config. Not for repeat rows: their fields are the row's, not the collection's.
+  const configFields = useCollectionFields(scope && scope.kind !== 'row' ? (scope.collection ?? undefined) : undefined)
+  const fields = useMemo(() => {
+    const inItem = scope?.kind === 'list' || scope?.kind === 'row'
+    const found = visibilityFields(scope?.fields ?? [], inItem)
+    if (found.some((f) => f.path !== INDEX_PATH) || configFields.length === 0) return found
+    return [...found, ...configFields.map(whereFieldOption)]
+  }, [scope?.fields, scope?.kind, configFields])
   const sources = useMemo<ConditionSources>(() => ({ field: fields }), [fields])
   const stored = block.visibility
   const storedKey = JSON.stringify(stored ?? null)
@@ -43,12 +54,8 @@ export function VisibilityField({ block }: { readonly block: Block }) {
 
   return (
     <div className="builder-where builder-visibility">
-      <FieldLabel as="span" label="Visibility" />
-      <p className="builder-field-group__description">
-        {scope
-          ? 'Show this block only when the conditions match the document. With "or" groups, one matching group is enough. The editor shows a hidden block dimmed.'
-          : 'This block is not inside a template or a collection list, so there is no document to test. The conditions are not checked.'}
-      </p>
+      <FieldLabel as="span" label="Show only when" />
+      {!scope && <p className="builder-field-note">Works only in a template or a collection list.</p>}
       <ConditionRows groups={draft.groups} onChange={save} fields={fields} sources={sources} defaultOperator="is_set" />
     </div>
   )

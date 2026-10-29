@@ -864,8 +864,7 @@
   }
 
   // A site class: its label, with the class name small after it.
-  .builder-styles__suggest-label,
-  .builder-styles__class-chip-label {
+  .builder-styles__suggest-label {
     display: inline-flex;
     align-items: baseline;
     gap: 6px;
@@ -1089,15 +1088,8 @@
   }
 
   // -------------------------------------------------------------------------
-  // Raw classes
+  // Small labels, classes as text ("Edit as text") and the custom CSS box
   // -------------------------------------------------------------------------
-
-  .builder-styles__raw {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 10px 0 4px;
-  }
 
   .builder-styles__raw-label {
     color: var(--bs-muted);
@@ -1118,48 +1110,6 @@
     font-size: var(--be-text-m);
     line-height: 1.5;
     resize: vertical;
-  }
-
-  .builder-styles__others {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin-top: 6px;
-  }
-
-  .builder-styles__chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .builder-styles__class-chip {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    padding: 1px 2px 1px 6px;
-    border-radius: 3px;
-    background: var(--theme-elevation-100);
-
-    .builder-styles__reset {
-      width: 16px;
-      height: 16px;
-    }
-  }
-
-  // Not in the theme's class list: probably a typo.
-  .builder-styles__class-chip--unknown {
-    outline: 1px dashed var(--theme-warning-500, #b7791f);
-    outline-offset: -1px;
-    background: color-mix(in srgb, var(--theme-warning-500, #b7791f) 12%, transparent);
-
-    code {
-      text-decoration: wavy underline var(--theme-warning-500, #b7791f);
-    }
   }
 
   .builder-styles__visually-hidden {

@@ -7,11 +7,12 @@
 // another source (a relative date, a page field, a URL parameter, another field) when the caller
 // offers it. The caller turns the groups into its own stored value. The rules live in conditions.ts.
 
-import { Button, RelationshipInput, SelectInput } from '@payloadcms/ui'
+import { RelationshipInput, SelectInput } from '@payloadcms/ui'
 import { Fragment, useId, useState } from 'react'
 
 import { pageToken, pageTokenPath, parseDateToken, queryToken, queryTokenParam } from '../../../core/whereValues'
 import { Select, type SelectEntry } from '../ui/Select'
+import { AddButton, RemoveRowButton } from './AddButton'
 import {
   changeRelativeDate,
   compatibleFields,
@@ -70,27 +71,21 @@ function fieldEntries(fields: readonly ConditionFieldOption[], row: ConditionRow
 
 const newRow = (operator: string): ConditionRow => ({ field: '', operator, value: '', text: '' })
 
-/** The condition groups, with "Add condition" per group and "Add 'or' group". */
+/**
+ * The condition groups. With one group, "Add condition" and "Add “or” group" sit side by side
+ * under the rows; with several, each boxed group has its own "Add condition".
+ */
 export function ConditionRows({ groups, onChange, fields, sources, defaultOperator }: Props) {
   const multi = groups.length > 1
   const changeGroup = (g: number, rows: ConditionRow[]) =>
     // A group without rows is gone.
     onChange(rows.length === 0 ? groups.filter((_, i) => i !== g) : groups.map((group, i) => (i === g ? rows : group)))
+  const addOrGroup = (
+    <AddButton onClick={() => onChange([...groups, [newRow(defaultOperator)]])}>Add “or” group</AddButton>
+  )
 
   if (groups.length === 0) {
-    return (
-      <Button
-        buttonStyle="secondary"
-        icon="plus"
-        iconPosition="left"
-        iconStyle="with-border"
-        margin={false}
-        onClick={() => onChange([[newRow(defaultOperator)]])}
-        size="small"
-      >
-        Add condition
-      </Button>
-    )
+    return <AddButton onClick={() => onChange([[newRow(defaultOperator)]])}>Add condition</AddButton>
   }
 
   return (
@@ -129,25 +124,22 @@ export function ConditionRows({ groups, onChange, fields, sources, defaultOperat
                   </Fragment>
                 )
               })}
-              <Button
-                buttonStyle="secondary"
-                icon="plus"
-                iconPosition="left"
-                iconStyle="with-border"
-                margin={false}
-                aria-label={multi ? `Add a condition to ${groupName.toLowerCase()}` : undefined}
-                onClick={() => changeGroup(g, [...group, newRow(defaultOperator)])}
-                size="small"
-              >
-                Add condition
-              </Button>
+              {multi && (
+                <AddButton
+                  aria-label={`Add a condition to ${groupName.toLowerCase()}`}
+                  onClick={() => changeGroup(g, [...group, newRow(defaultOperator)])}
+                >
+                  Add condition
+                </AddButton>
+              )}
             </fieldset>
           </Fragment>
         )
       })}
-      <button type="button" className="builder-where__switch" onClick={() => onChange([...groups, [newRow(defaultOperator)]])}>
-        Add &quot;or&quot; group
-      </button>
+      <div className="builder-add-row">
+        {!multi && <AddButton onClick={() => changeGroup(0, [...groups[0]!, newRow(defaultOperator)])}>Add condition</AddButton>}
+        {addOrGroup}
+      </div>
     </div>
   )
 }
@@ -198,9 +190,7 @@ function ConditionRowEditor({ row, name, fields, sources, onChange, onRemove }: 
         options={operatorOptions(field, row.operator)}
         onValueChange={(next) => onChange(withOperator(row, next ?? row.operator, field, sources))}
       />
-      <button type="button" className="builder-where__remove" aria-label={`Remove ${name.toLowerCase()}`} onClick={onRemove}>
-        ×
-      </button>
+      <RemoveRowButton label={`Remove ${name.toLowerCase()}`} onClick={onRemove} />
       {input.kind !== 'none' && (
         <div className="builder-where__value">
           {sourceOptions.length > 1 && (
@@ -275,7 +265,7 @@ function SourceValue({ row, name, field, source, sources, onChange }: ValueProps
             type="text"
             className="builder-where__input"
             aria-label={`${name}: URL parameter`}
-            title="The editor preview has no URL, so it leaves this condition out."
+            title="The editor preview ignores this condition."
             placeholder="category"
             value={queryTokenParam(row.value) ?? ''}
             onChange={(e) => setValue(queryToken(e.target.value.trim()))}

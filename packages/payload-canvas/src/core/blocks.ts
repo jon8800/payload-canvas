@@ -29,9 +29,10 @@ function parentsMessage(blocks: readonly BlockDefinition[], type: string): strin
 }
 
 /**
- * The children a new block of `type` starts with: one child in each slot that accepts exactly one
- * type made for this block (its `parents` names `type`). A new list starts with one list item.
- * Null when there are none. The children get the child type's default classes (`withDefaultClasses`).
+ * The children a new block of `type` starts with: in each slot that accepts exactly one type made
+ * for this block (its `parents` names `type`), the slot's `min` children of it, at least one. A new
+ * list starts with one list item; new tabs (`min: 2`) start with two tabs. Null when there are
+ * none. The children get the child type's default classes (`withDefaultClasses`).
  */
 export function starterSlots(blocks: readonly BlockDefinition[], type: string, makeId: () => string): Record<string, Block[]> | null {
   const slots: Record<string, Block[]> = {}
@@ -39,7 +40,8 @@ export function starterSlots(blocks: readonly BlockDefinition[], type: string, m
     if (slot.allow?.length !== 1) continue
     const child = getBlockDefinition(blocks, slot.allow[0])
     if (!child?.parents?.includes(type)) continue
-    slots[name] = [withDefaultClasses({ id: makeId(), type: child.type }, child)]
+    const count = Math.max(1, Math.min(slot.min ?? 1, slot.max ?? Infinity))
+    slots[name] = Array.from({ length: count }, () => withDefaultClasses({ id: makeId(), type: child.type }, child))
   }
   return Object.keys(slots).length > 0 ? slots : null
 }

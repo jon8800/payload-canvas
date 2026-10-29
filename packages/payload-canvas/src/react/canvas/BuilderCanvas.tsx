@@ -37,6 +37,7 @@ import { CanvasModeContext } from '../render/canvasMode'
 import type { CanvasScope, CanvasServer } from '../render/canvasServerTypes'
 import { LayoutOutlet, LayoutOutletContext, LayoutOutletPresence } from '../render/LayoutOutlet'
 import { LAYOUT_ROOT_ATTRIBUTE, REGION_ATTRIBUTE } from '../render/regions'
+import { blockElement, controlAt, revealInCanvas, summaryOwner } from './controls'
 import { createCanvasDrag } from './drag'
 import { forgetDoc } from './fetchDocs'
 import { editableAt, firstEditable, type EditableTarget } from './inline/dom'
@@ -141,6 +142,11 @@ span[data-builder-passthrough] { display: inline-block; margin: 0 2px; padding: 
 
 /** Room kept above and below a block scrolled into view (the toolbar sits above it). */
 const SCROLL_MARGIN = 48
+/**
+ * A click on a summary that edits in place opens or closes its item this long after the click,
+ * unless a double-click (which edits the text) follows. Other summary clicks act at once.
+ */
+const SUMMARY_TOGGLE_DELAY_MS = 260
 
 function send(message: CanvasToAdmin) {
   post(window.parent, message)
@@ -522,7 +528,9 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     let hasInit = false
     let hasLayout = false
     let lastPointer: { x: number; y: number } | null = null
-    const sendPointer = (kind: PointerKind, x: number, y: number) => send({ type: 'pointer', kind, x, y })
+    // `control`: the pointer is over a canvas control (a carousel arrow): no hover, no "+".
+    const sendPointer = (kind: PointerKind, x: number, y: number, control = false) =>
+      send({ type: 'pointer', kind, x, y, ...(control ? { control: true } : {}) })
 
     // Either side may load first, so repeat `ready` until the init data and a layout arrive.
     const readyTimer = window.setInterval(() => send({ type: 'ready' }), 250)
@@ -533,7 +541,7 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     // Scrolls a block into view with room around it, so it never stops flush at the edge
     // (under the editor's floating toolbar). A block taller than the view shows its top.
     const scrollToBlock = (id: string) => {
-      const el = document.querySelector(`[data-block-id="${CSS.escape(id)}"]`)
+      const el = blockElement(id)
       if (!el) return
       const rect = el.getBoundingClientRect()
       const view = window.innerHeight
@@ -541,6 +549,26 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
       if (rect.top < SCROLL_MARGIN || rect.height > view - 2 * SCROLL_MARGIN) delta = rect.top - SCROLL_MARGIN
       else if (rect.bottom > view - SCROLL_MARGIN) delta = rect.bottom - (view - SCROLL_MARGIN)
       if (delta !== 0) window.scrollBy({ top: delta, behavior: 'smooth' })
+    }
+    // Brings a selected block out of a closed item, another slide or tab first (see
+    // `revealInCanvas`), then scrolls to it once the reveal has rendered (two frames: React's
+    // update, then its layout).
+    let revealFrame = 0
+    // The item a summary click just toggled: the selection that the same click makes (the
+    // disclosure) must not open it again.
+    let toggled: { details: HTMLDetailsElement; at: number } | null = null
+    const justToggled = (details: HTMLDetailsElement) => toggled?.details === details && Date.now() - toggled.at < 300
+    const revealAndScroll = (id: string) => {
+      const el = blockElement(id)
+      if (!el) return
+      revealInCanvas(el, justToggled)
+      cancelAnimationFrame(revealFrame)
+      revealFrame = requestAnimationFrame(() => {
+        revealFrame = requestAnimationFrame(() => {
+          revealFrame = 0
+          scrollToBlock(id)
+        })
+      })
     }
 
     const onMessage = (event: MessageEvent) => {
@@ -566,14 +594,14 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
           return
         }
         case 'selection':
-          if (message.selectedId && message.selectedId !== selectedRef.current) scrollToBlock(message.selectedId)
+          if (message.selectedId && message.selectedId !== selectedRef.current) revealAndScroll(message.selectedId)
           selectedRef.current = message.selectedId
           return
         case 'scrollBy':
           window.scrollBy(message.dx, message.dy)
           return
         case 'scrollIntoView':
-          scrollToBlock(message.id)
+          revealAndScroll(message.id)
           return
         case 'context':
           setContext(message.context)
@@ -713,15 +741,16 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
       e.preventDefault()
       send({ type: 'contextMenu', x: e.clientX, y: e.clientY })
     }
+    // The page or an element in it scrolled (a carousel sends `scroll` from its viewport too).
     const onScroll = () => {
       scheduleMeasure()
       // The block under a still pointer changes when the page scrolls.
-      if (lastPointer) sendPointer('move', lastPointer.x, lastPointer.y)
+      if (lastPointer) sendPointer('move', lastPointer.x, lastPointer.y, Boolean(controlAt(document.elementFromPoint(lastPointer.x, lastPointer.y))))
       scheduleImageHover()
     }
     const onPointerMove = (e: PointerEvent) => {
       lastPointer = { x: e.clientX, y: e.clientY }
-      sendPointer('move', e.clientX, e.clientY)
+      sendPointer('move', e.clientX, e.clientY, Boolean(controlAt(e.target)))
       scheduleImageHover()
     }
     const onPointerLeave = () => {
@@ -734,10 +763,30 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
       scheduleMeasure()
       mapper.invalidate()
     }
-    // Edit mode: links, buttons and forms inside blocks must not act.
+    // A click on a summary opens or closes its item, as on the site, and selects as usual. On text
+    // that a double-click edits, it waits: the double-click edits the text and toggles nothing.
+    let summaryTimer = 0
+    const toggleSummary = (e: MouseEvent) => {
+      const details = summaryOwner(e.target)
+      if (!details || isEditing(e.target)) return
+      window.clearTimeout(summaryTimer)
+      if (e.detail > 1) return
+      const toggle = () => {
+        details.open = !details.open
+        toggled = { details, at: Date.now() }
+      }
+      const ownerEl = e.target instanceof Element ? ownerOf(e.target)?.element : null
+      if (ownerEl) mapper.ensure(ownerEl)
+      if (e.target instanceof Element && editableAt(e.target)) summaryTimer = window.setTimeout(toggle, SUMMARY_TOGGLE_DELAY_MS)
+      else toggle()
+    }
+    // Edit mode: links, buttons and forms inside blocks must not act. Canvas controls (a
+    // carousel's arrows) act as on the site and select nothing.
     const onClick = (e: MouseEvent) => {
+      if (controlAt(e.target) && !isEditing(e.target)) return
       e.preventDefault()
       e.stopPropagation()
+      toggleSummary(e)
       sendPointer('click', e.clientX, e.clientY)
     }
     const block = (e: Event) => e.preventDefault()
@@ -761,7 +810,8 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     }
 
     window.addEventListener('message', onMessage)
-    window.addEventListener('scroll', onScroll, { passive: true })
+    // Capture: element scrolls (a scrolling list, a carousel) do not bubble.
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true })
     window.addEventListener('resize', onResize)
     document.addEventListener('pointermove', onPointerMove)
     document.documentElement.addEventListener('pointerleave', onPointerLeave)
@@ -782,7 +832,9 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     return () => {
       window.clearInterval(readyTimer)
       window.removeEventListener('message', onMessage)
-      window.removeEventListener('scroll', onScroll)
+      document.removeEventListener('scroll', onScroll, { capture: true })
+      window.clearTimeout(summaryTimer)
+      cancelAnimationFrame(revealFrame)
       window.removeEventListener('resize', onResize)
       document.removeEventListener('pointermove', onPointerMove)
       document.documentElement.removeEventListener('pointerleave', onPointerLeave)

@@ -1,6 +1,6 @@
 'use client'
 
-import { Button, Collapsible, DraggableSortable, FieldLabel, useDraggableSortable } from '@payloadcms/ui'
+import { Collapsible, DraggableSortable, FieldLabel, useDraggableSortable } from '@payloadcms/ui'
 import { memo, use, useLayoutEffect, useMemo, useRef } from 'react'
 import type { Field } from 'payload'
 
@@ -8,6 +8,7 @@ import { createId } from '../../../core/ids'
 import { Icon } from '../icons'
 import { RenderBlockFields } from '../renderField'
 import { Popover, usePopover } from '../styles/popover'
+import { AddButton } from './AddButton'
 import { arrayStateKey, cloneRow, fallbackRowLabel, moveItem, toggleId, withRowIds, type ArrayRow } from './arrayRows'
 import { ArrayRowContext, asStructuralChange, generatedRowId, getCollapsedRows, setCollapsedRows, useCollapsedRows } from './arrayState'
 import { rowLabel, type FieldShape } from './values'
@@ -122,18 +123,9 @@ export function ArrayField({ fields, label, singular, description, maxRows, path
           ))}
         </DraggableSortable>
       )}
-      <Button
-        buttonStyle="secondary"
-        disabled={full}
-        icon="plus"
-        iconPosition="left"
-        iconStyle="with-border"
-        margin={false}
-        onClick={() => actions.addBelow(rows.length - 1)}
-        size="small"
-      >
-        {singular ? `Add ${singular}` : 'Add item'}
-      </Button>
+      <AddButton disabled={full} onClick={() => actions.addBelow(rows.length - 1)}>
+        {singular ? `Add ${singular.toLowerCase()}` : 'Add item'}
+      </AddButton>
     </div>
   )
 }
