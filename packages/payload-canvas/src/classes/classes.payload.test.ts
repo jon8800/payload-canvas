@@ -245,5 +245,19 @@ describe('editable classes', { concurrency: false, timeout: 60_000 }, () => {
     // listBlocks shows the editable classes as site classes.
     const blocks = JSON.parse((await tools.listBlocks!.handler({ collection: 'pages' }, req, {})).content[0]!.text) as { siteClasses?: Array<{ name: string }> }
     assert.ok(blocks.siteClasses?.some((c) => c.name === 'tool-card'))
+
+    // Without publish, the result names the published pages that still show the old version.
+    type Live = { publishedPagesWithOldVersion?: Array<{ title: string }>; note?: string }
+    const layout: Layout = { version: 1, blocks: [{ id: 'tc', type: 'heading', props: { text: 'X' }, className: 'tool-card p-2' }] }
+    await payload.create({ collection: 'pages', data: { title: 'Live tool page', layout, _status: 'published' } as never, overrideAccess: true })
+    await payload.create({ collection: 'pages', data: { title: 'Draft tool page', layout, _status: 'draft' } as never, overrideAccess: true })
+    const changed = JSON.parse((await run('upsertClass', { name: 'tool-card', styles: 'p-8' })).body) as Live
+    assert.deepEqual(changed.publishedPagesWithOldVersion?.map((p) => p.title), ['Live tool page'])
+    assert.match(String(changed.note), /publish: true/)
+    const published = JSON.parse((await run('upsertClass', { name: 'tool-card', styles: 'p-8', publish: true })).body) as Live
+    assert.equal(published.publishedPagesWithOldVersion, undefined)
+    const deleted = JSON.parse((await run('deleteClass', { name: 'tool-card', removeFromBlocks: true })).body) as Live
+    assert.deepEqual(deleted.publishedPagesWithOldVersion?.map((p) => p.title), ['Live tool page'])
+    assert.match(String(deleted.note), /publish them again/)
   })
 })

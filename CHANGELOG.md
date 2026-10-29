@@ -35,6 +35,10 @@ Everything since 0.2.0. The 0.2.1, 0.2.2 and 0.3.0 version numbers were set in g
 - `listItem` `link`, `image` `priority` and `sizes`, `heading` `accent`, more stack tags (`ol`, `ul`, `li`, `dl`, `dt`, `dd`, `figure`, `figcaption`), rich text heading ids (for `#anchor` links), the `recede` scroll effect for stacked cards, and inline blocks inside links (`inline: true`).
 - `RenderLayout` `linkComponent` (pass `next/link` for client navigation and prefetch) and `priorityImages` (the first image of the first section loads first by default). `lazyBlock` for your own lazily loaded blocks.
 - `defineSection()` fills missing block ids; new blocks and sections get their type's `defaultClassName`.
+- **`addClassName` and `removeClassName` on `update` operations:** space-separated classes to add or remove, so an agent no longer copies the whole class list. `className` still replaces the list. Undo restores the exact old string. The MCP tools and the in-editor assistant take them.
+- **FAQ markup without code:** `RenderLayout` outputs one FAQPage `<script type="application/ld+json">` on the site when an accordion has `faqSchema` on (not on the canvas). `faqJsonLd={false}` turns it off. A site that already outputs `faqJsonLd(faqItems(...))` itself should remove that call or pass `faqJsonLd={false}`.
+- **MCP results say more:** `applyOperations` returns `changes` (id, type, changed keys, and the new class list after class changes) and only the warnings of the blocks it touched, plus a count of the others. `insertSection` returns `needsContent`: blocks whose image, form or other upload or relationship is still empty, with a hint that points to `generateImage`, `uploadMedia` and `findDocument`. `upsertClass` without `publish` and `deleteClass` list the published pages that still show the old version (`publishedPagesWithOldVersion`).
+- **"no-effect" warnings:** `visibility` and `bindings` on a normal page (outside templates and list or repeat items) do nothing. `applyOperations`, `insertSection` and `validateLayout` now warn about them instead of staying silent. New `LayoutErrorCode` `no-effect`, never blocking.
 
 ### Changed
 
@@ -42,6 +46,8 @@ Everything since 0.2.0. The 0.2.1, 0.2.2 and 0.3.0 version numbers were set in g
 - Interactive blocks load their JavaScript only on pages that render them, and client components no longer ship block definitions or AI text.
 - `slotAttributes` is now `partAttributes` (`slotAttributes` still works, deprecated).
 - New projects created by `create-payload-canvas` install `payload-canvas` `^0.3.0`.
+- **Smaller MCP tool list:** the builder tools' descriptions in `tools/list` shrank from 43 KB to 27 KB (the whole list in the starter: 60 KB to 44 KB). The layout guide is now in the `listBlocks` result (`guide`) instead of in the `listBlocks` and `applyOperations` descriptions, the bindings guide in the `getBindingSources` result, and the classes guide in the `listClasses` result. `visibility` in the tool schemas is a loose object; the operations still check it and return the exact error.
+- The MCP `collection` argument may be left out when it has one possible value: the class tools, `generateImage`, `listTemplates`, and every builder tool when there is one builder collection.
 
 ### Fixed
 

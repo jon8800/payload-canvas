@@ -7,7 +7,7 @@ import { z } from 'zod'
 import type { BuilderMcpTool, McpToolResult } from '../mcp'
 import { deleteClass, findClass, loadClasses, namesOf, upsertClass } from './actions'
 import { DEFAULT_CLASSES_SLUG, type BuilderClass } from './shared'
-import { classUsage } from './usage'
+import { classUsage, publishedClassUsage } from './usage'
 
 const text = (value: unknown): McpToolResult => ({ content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value) }] })
 const fail = (message: string, details?: unknown): McpToolResult => ({
@@ -23,6 +23,12 @@ export const CLASSES_GUIDE = [
   'Saves are drafts: the builder\'s canvas shows them at once. The live site gets a class when it is published (publish: true), or when someone publishes a page that uses it.',
 ].join('\n')
 
+/** The published pages that use one of `names`, for a tool result. Empty when there are none or the scan fails. */
+async function livePages(req: Parameters<BuilderMcpTool['handler']>[1], names: string[]) {
+  const docs = await publishedClassUsage(req, names).catch(() => [])
+  return docs.map(({ collection, id, title }) => ({ collection, id, title }))
+}
+
 const summary = (item: BuilderClass) => ({
   name: item.name,
   ...(item.label ? { label: item.label } : {}),
@@ -35,21 +41,23 @@ const summary = (item: BuilderClass) => ({
 
 export function classMcpTools(options: { slug?: string } = {}): BuilderMcpTool[] {
   const slug = options.slug ?? DEFAULT_CLASSES_SLUG
-  const collectionArg = z.enum([slug]).describe(`Always "${slug}" (the classes collection).`)
+  // One possible value, so it may be left out: the default fills it in before the toolkit's scope check.
+  const collectionArg = z.enum([slug]).default(slug).describe(`Always "${slug}" (the classes collection; may be left out).`)
   const nameArg = z.string().min(1).max(64).describe('The class name without the dot, e.g. "card".')
 
   const listClasses: BuilderMcpTool = {
     name: 'listClasses',
     routing: { kind: 'collection', action: 'read' },
-    description: ['Lists the site\'s classes with their styles, status and how many blocks use each.', CLASSES_GUIDE].join('\n\n'),
+    description: 'Lists the site\'s classes (named, shared styles such as "card" or "btn-primary") with their styles, status and how many blocks use each. The result\'s `guide` explains how classes work.',
     parameters: { collection: collectionArg },
     handler: async (_args, req) => {
       try {
         const classes = await loadClasses(req)
         const usage = await classUsage(req, namesOf(classes))
         return text({
+          guide: CLASSES_GUIDE,
           classes: classes.map((item) => ({ ...summary(item), usedBy: { blocks: usage[item.name]?.blocks ?? 0, pages: usage[item.name]?.documents.length ?? 0 } })),
-          next: 'getClass for where a class is used. upsertClass to create or change one. Use a class on a block with applyOperations: update { id, className: "card …" }.',
+          next: 'getClass for where a class is used. upsertClass to create or change one. Use a class on a block with applyOperations: update { id, addClassName: "card" }.',
         })
       } catch (error) {
         return fail(error instanceof Error ? error.message : String(error))
@@ -78,7 +86,7 @@ export function classMcpTools(options: { slug?: string } = {}): BuilderMcpTool[]
     name: 'upsertClass',
     routing: { kind: 'collection', action: 'update' },
     description: [
-      'Creates the class `name`, or changes it when it exists. Fields you leave out stay as they are; null clears one. Saves a draft; publish: true also publishes it.',
+      'Creates the class `name`, or changes it when it exists. Fields you leave out stay as they are; null clears one. Saves a draft; publish: true also publishes it. Without publish, the result lists the published pages that still show the old version (`publishedPagesWithOldVersion`).',
       '`newName` renames the class and every block on every page that uses it (their drafts). Published pages keep working with the old name until they are published again.',
       'The name must not be a Tailwind class ("flex", "shadow"). Unknown Tailwind classes in `styles` are left out of the stylesheet; invalid custom CSS blocks publishing.',
       CLASSES_GUIDE,
@@ -104,11 +112,24 @@ export function classMcpTools(options: { slug?: string } = {}): BuilderMcpTool[]
         publish: args.publish === true,
       })
       if (!result.ok) return fail(result.error)
+      // Without publish the live site keeps the published class (and, after a rename, the old name)
+      // on every published page that uses it.
+      const oldName = String(args.name)
+      const live = args.publish === true ? [] : await livePages(req, [...new Set([oldName, result.class.name, ...(result.class.previousNames ?? [])])])
+      const renamed = result.class.name !== oldName
       return text({
         ok: true,
         created: result.created,
         class: summary(result.class),
         ...(result.renamed ? { renamedIn: { pages: result.renamed.documents, blocks: result.renamed.blocks, ...(result.renamed.failed.length ? { failed: result.renamed.failed } : {}) } } : {}),
+        ...(live.length > 0
+          ? {
+              publishedPagesWithOldVersion: live,
+              note: renamed
+                ? `These published pages still show the old published version of .${oldName}. Publish the class (upsertClass with publish: true) to make the change live, then publish these pages again (publishDraft) so they use the new name.`
+                : `These published pages still show the old published version of .${result.class.name}. Publish the class (upsertClass with publish: true), or publish one of these pages (that publishes the classes it uses), to make the change live.`,
+            }
+          : {}),
       })
     },
   }
@@ -117,7 +138,7 @@ export function classMcpTools(options: { slug?: string } = {}): BuilderMcpTool[]
     name: 'deleteClass',
     routing: { kind: 'collection', action: 'delete' },
     description:
-      'Deletes a class. While blocks use it, it is refused with the list of pages, unless removeFromBlocks is true: then the class is removed from those blocks (their drafts) first. Published pages lose its styles at once.',
+      'Deletes a class. While blocks use it, it is refused with the list of pages, unless removeFromBlocks is true: then the class is removed from those blocks (their drafts) first. Published pages lose its styles at once: the result lists them (`publishedPagesWithOldVersion`) so you can publish them again.',
     parameters: {
       collection: collectionArg,
       name: nameArg,
@@ -126,9 +147,21 @@ export function classMcpTools(options: { slug?: string } = {}): BuilderMcpTool[]
     handler: async (args, req) => {
       const item = await findClass(req, String(args.name)).catch(() => null)
       if (!item) return fail(`No class named "${String(args.name)}".`)
+      // Read before the delete. The published layouts keep the name after it.
+      const live = await livePages(req, [item.name, ...(item.previousNames ?? [])])
       const result = await deleteClass(req, item.id, { removeFromBlocks: args.removeFromBlocks === true })
       if (!result.ok) return fail(result.error, result.usage ? { usedOn: result.usage.documents } : undefined)
-      return text({ ok: true, deleted: result.name, removedFrom: { pages: result.replaced.documents, blocks: result.replaced.blocks } })
+      return text({
+        ok: true,
+        deleted: result.name,
+        removedFrom: { pages: result.replaced.documents, blocks: result.replaced.blocks },
+        ...(live.length > 0
+          ? {
+              publishedPagesWithOldVersion: live,
+              note: `These published pages still use .${result.name} in their published layout and lost its styles now. Their drafts no longer use it: check them, then publish them again (publishDraft).`,
+            }
+          : {}),
+      })
     },
   }
 

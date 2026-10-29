@@ -14,7 +14,7 @@ export function ownDetails(root: HTMLElement): HTMLDetailsElement[] {
 /**
  * A list of disclosures. With "Several open at a time" off it gives its own disclosures one
  * `name`, so the browser keeps one open (exclusive <details>). Not on the canvas, where every
- * disclosure stays open for editing. The FAQ JSON-LD reads it with `faqItems`.
+ * disclosure stays open for editing. `RenderLayout` outputs the FAQ JSON-LD (`faqItems`).
  */
 export function Accordion({ block, props, className, attributes, partAttributes, slots, mode }: BlockComponentProps) {
   const ref = useRef<HTMLDivElement>(null)

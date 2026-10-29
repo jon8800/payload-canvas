@@ -16,7 +16,7 @@ import { IMAGE_ASPECT_RATIOS } from './images/shared'
 import { IMAGES_NOT_CONFIGURED, type GenerateImageOutcome } from './images/service'
 import { validateLayout, type LayoutError } from '../core/validate'
 import { resolveOperations, splitLayoutErrors } from '../live/apply'
-import { isRootParentId, sectionInsertOps, variantsListing } from '../mcp/shared'
+import { isRootParentId, missingContent, sectionInsertOps, variantsListing } from '../mcp/shared'
 import { findSectionVersion } from '../core/sections'
 
 /** One image (or file) of the media library, as the assistant sees it. */
@@ -213,7 +213,7 @@ const ATTRS_TEXT =
   'HTML attributes { id?, ariaLabel?, ariaHidden? }: id is an anchor for "#id" links, unique in the layout (letters, digits, - and _, starting with a letter); ariaLabel is the name screen readers read; ariaHidden true hides a decorative block from screen readers.'
 
 const VISIBILITY_TEXT =
-  'Visibility conditions (templates and list items) { match?: "all" | "any", conditions: [{ field, operator, value?, valueField?, count? }] }: the block shows only when they match the document. Operators: is_set, is_empty, equals, not_equals, in, not_in (list value), greater_than, greater_than_equal, less_than, less_than_equal, like, contains. valueField compares with another field instead of value. count: true compares the number of items. With match "any", an entry may be a group { all: [conditions] } ("or" of "and" groups). Example: { "conditions": [{ "field": "price", "operator": "greater_than", "value": 100 }] }.'
+  'Visibility conditions (templates and list or repeat items only; on a normal page they do nothing) { match?: "all" | "any", conditions: [{ field, operator, value?, valueField?, count? }] }: the block shows only when they match the document. Operators: is_set, is_empty, equals, not_equals, in, not_in (list value), greater_than, greater_than_equal, less_than, less_than_equal, like, contains. valueField compares with another field instead of value. count: true compares the number of items. With match "any", an entry may be a group { all: [conditions] } ("or" of "and" groups). Example: { "conditions": [{ "field": "price", "operator": "greater_than", "value": 100 }] }.'
 
 const PART_CLASS_TEXT =
   'Tailwind classes of the block\'s inner elements, by part name, e.g. { "empty": "col-span-full" }. Only the "parts" listed in the block catalog take them.'
@@ -264,6 +264,8 @@ const FLAT_OPERATIONS_SCHEMA: Record<string, unknown> = {
           props: { type: 'object', description: 'update: props to merge.' },
           unsetProps: { type: 'array', items: { type: 'string' } },
           className: { type: 'string', description: 'update: the FULL class list (replaces all classes).' },
+          addClassName: { type: 'string', description: 'update: classes to add, space-separated. Other classes stay.' },
+          removeClassName: { type: 'string', description: 'update: classes to remove, space-separated (exact match). Other classes stay.' },
           hidden: { type: 'boolean' },
           bindings: { type: 'object' },
           label: { type: ['string', 'null'], description: 'update: name for editors (outline). null removes it.' },
@@ -362,7 +364,7 @@ export function toolDefinitions(env: ToolEnv): AiToolDefinition[] {
         '- move { id, to }: move a block (with children).',
         '- remove { id }: delete a block and its children.',
         '- duplicate { id, newId? }: copy a block right after itself.',
-        '- update { id, props?, unsetProps?, className?, hidden?, bindings?, visibility?, label?, motion?, attrs?, partClassName? }: props and bindings are merged (shallow); className REPLACES all classes, so send the full list; null removes it; a null binding removes that binding; visibility replaces all conditions (null removes them); label renames the block for editors (null removes it); motion merges per kind (a kind you send replaces that kind, null removes a kind, null alone removes all animations); attrs (HTML id, ariaLabel, ariaHidden) merges per key, null removes a key; partClassName merges per slot (null removes).',
+        '- update { id, props?, unsetProps?, className?, addClassName?, removeClassName?, hidden?, bindings?, visibility?, label?, motion?, attrs?, partClassName? }: props and bindings are merged (shallow); className REPLACES all classes, so send the full list; null removes it; addClassName and removeClassName (space-separated) add or remove single classes and keep the rest; a null binding removes that binding; visibility replaces all conditions (null removes them); label renames the block for editors (null removes it); motion merges per kind (a kind you send replaces that kind, null removes a kind, null alone removes all animations); attrs (HTML id, ariaLabel, ariaHidden) merges per key, null removes a key; partClassName merges per slot (null removes).',
         'Position: { parentId (null = page root), slot? (default "children"), index (final index in the target list) }.',
         'On success the result lists the changed ids and any warnings (e.g. a required prop is empty). On error nothing changes and the error names the failing operation; fix it and call again.',
         'Example (ids come from the layout; block types and props from the block catalog): change a heading, then add a text block after it in the same section:',
@@ -388,6 +390,8 @@ export function toolDefinitions(env: ToolEnv): AiToolDefinition[] {
                     props: { type: 'object', description: 'Merged into the existing props.' },
                     unsetProps: { type: 'array', items: { type: 'string' } },
                     className: { type: ['string', 'null'], description: 'Replaces ALL classes.' },
+                    addClassName: { type: 'string', description: 'Classes to add, space-separated. Other classes stay.' },
+                    removeClassName: { type: 'string', description: 'Classes to remove, space-separated (exact match). Other classes stay.' },
                     hidden: { type: 'boolean' },
                     bindings: { type: 'object', description: 'Prop path -> document field path; null removes.' },
                     label: { type: ['string', 'null'], description: 'Name for editors. null removes it.' },
@@ -674,9 +678,11 @@ export function repairOperations(
       })
     }
     if (op.type === 'update') {
-      if (Array.isArray(op.className)) {
-        op.className = op.className.filter((c) => typeof c === 'string').join(' ')
-        fix('"className" is one string of classes separated by spaces.')
+      for (const key of ['className', 'addClassName', 'removeClassName'] as const) {
+        const classes = op[key]
+        if (!Array.isArray(classes)) continue
+        op[key] = classes.filter((c) => typeof c === 'string').join(' ')
+        fix(`"${key}" is one string of classes separated by spaces.`)
       }
       if (typeof op.props === 'string') op.props = parseJson(op.props)
       if (op.motion !== undefined && op.motion !== null) {
@@ -746,8 +752,18 @@ export async function runTool(name: string, rawInput: unknown, workspace: Worksp
       const result = workspace.apply(ops, { copies: true })
       if (!result.ok) return fail(result.error, `Could not insert ${section.label}`, result.errors)
       const inserted = result.ops.flatMap((op) => (op.type === 'insert' ? [op.block] : []))
+      const needsContent = missingContent(inserted, env.blocks)
       return ok(
-        { ok: true, section: section.id, ...(section.blocks[0]?.section?.variant ? { variant: section.blocks[0].section.variant } : {}), inserted, ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}) },
+        {
+          ok: true,
+          section: section.id,
+          ...(section.blocks[0]?.section?.variant ? { variant: section.blocks[0].section.variant } : {}),
+          inserted,
+          ...(needsContent.length > 0 ? { needsContent, needsContentHint: env.generateImage
+                  ? 'Empty images render nothing on the site: fill them with generateImage (blockId places the image). Tell the user about other empty fields, such as a form to pick.'
+                  : 'Empty images and other empty fields render nothing on the site: tell the user which ones need content.' } : {}),
+          ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}),
+        },
         `Inserted ${section.label}`,
         result.ops,
       )

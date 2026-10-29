@@ -200,6 +200,31 @@ describe('operations', () => {
     assert.equal('hidden' in (findBlock(b, 'hero_heading') ?? {}), false)
   })
 
+  it('adds and removes classes without replacing the list, and undo restores the exact string', () => {
+    const start = roundTrip(sample, { type: 'update', id: 'hero_heading', className: 'text-5xl  md:p-8 flex' })
+    const a = roundTrip(start, { type: 'update', id: 'hero_heading', addClassName: 'gap-4 flex  p-2' })
+    assert.equal(findBlock(a, 'hero_heading')?.className, 'text-5xl md:p-8 flex gap-4 p-2')
+    // Exact match: md:p-8 stays when p-8 is removed.
+    const b = roundTrip(a, { type: 'update', id: 'hero_heading', removeClassName: 'text-5xl p-8 gap-4' })
+    assert.equal(findBlock(b, 'hero_heading')?.className, 'md:p-8 flex p-2')
+    // Removing every class leaves no className key (canonical form).
+    const c = roundTrip(b, { type: 'update', id: 'hero_heading', removeClassName: 'md:p-8 flex p-2' })
+    assert.equal('className' in (findBlock(c, 'hero_heading') ?? {}), false)
+    // A block without classes gets them.
+    const d = roundTrip(c, { type: 'update', id: 'hero_heading', addClassName: 'p-4' })
+    assert.equal(findBlock(d, 'hero_heading')?.className, 'p-4')
+    // className replaces first, then remove, then add.
+    const e = roundTrip(a, { type: 'update', id: 'hero_heading', className: 'p-1 p-2', removeClassName: 'p-1', addClassName: 'p-3' })
+    assert.equal(findBlock(e, 'hero_heading')?.className, 'p-2 p-3')
+    // Undo of a run of edits gives the first string back, double space included.
+    const undone = ok(applyOperations(b, [...ok(applyOperation(a, { type: 'update', id: 'hero_heading', removeClassName: 'text-5xl p-8 gap-4' })).inverse]))
+    assert.equal(findBlock(undone.layout, 'hero_heading')?.className, 'text-5xl md:p-8 flex gap-4 p-2')
+    const first = ok(applyOperation(start, { type: 'update', id: 'hero_heading', addClassName: 'gap-4' }))
+    assert.equal(findBlock(ok(applyOperations(first.layout, first.inverse)).layout, 'hero_heading')?.className, 'text-5xl  md:p-8 flex')
+    assert.equal(applyOperation(sample, { type: 'update', id: 'hero_heading', addClassName: ['p-4'] } as unknown as Operation).ok, false)
+    assert.equal(applyOperation(sample, { type: 'update', id: 'hero_heading', removeClassName: 3 } as unknown as Operation).ok, false)
+  })
+
   it('merges bindings and removes them with null', () => {
     const a = roundTrip(sample, { type: 'update', id: 'hero_heading', bindings: { text: 'title', level: 'x' } })
     assert.deepEqual(findBlock(a, 'hero_heading')?.bindings, { text: 'title', level: 'x' })
@@ -308,6 +333,8 @@ function makeRandom(seed: number) {
         if (chance(0.6)) op.props = { [pick(['text', 'level', 'extra'])]: `v${int(10)}` }
         if (chance(0.3)) op.unsetProps = [pick(['text', 'level', 'extra'])]
         if (chance(0.3)) op.className = chance(0.3) ? null : pick(['', 'p-2', 'grid'])
+        if (chance(0.2)) op.addClassName = pick(['p-2', 'grid md:p-8', 'flex'])
+        if (chance(0.2)) op.removeClassName = pick(['p-4', 'flex text-lg', 'grid'])
         if (chance(0.3)) op.hidden = chance(0.5)
         if (chance(0.3)) op.bindings = { [pick(['text', 'level'])]: chance(0.4) ? null : 'title' }
         return op

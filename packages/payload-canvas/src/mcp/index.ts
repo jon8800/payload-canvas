@@ -54,7 +54,21 @@ import { generateImageToMedia, imageServiceOf } from '../ai/images/service'
 import { IMAGE_ASPECT_RATIOS } from '../ai/images/ratios'
 import { classesConfigOf, loadClasses, mergeSiteClasses } from '../classes'
 import { classMcpTools } from '../classes/mcp'
-import { BINDINGS_GUIDE, describeBlock, layoutGuide, outline, repairRootParents, sectionInsertOps, variantsListing, withNewIds } from './shared'
+import {
+  BINDINGS_GUIDE,
+  changeSummary,
+  contextOnlyWarnings,
+  describeBlock,
+  layoutGuide,
+  missingContent,
+  missingContentHint,
+  outline,
+  repairRootParents,
+  sectionInsertOps,
+  touchedIds,
+  variantsListing,
+  withNewIds,
+} from './shared'
 
 // ---------------------------------------------------------------------------
 // Types (structurally compatible with payload-mcp-toolkit's ToolFactoryOutput)
@@ -104,10 +118,11 @@ export type BuilderMcpToolsOptions = {
 // Texts for the AI. Tool descriptions are prompts: keep them exact and complete.
 // ---------------------------------------------------------------------------
 
+/** The long format guide. listBlocks returns it (`guide`), so tool descriptions stay short. */
 const LAYOUT_GUIDE = layoutGuide('listBlocks')
 
 const NO_DIRECT_EDIT =
-  'Do not change the layout field with updateDocument or patchLayout: those skip this format\'s checks and do not reach open editors.'
+  'Builder layouts change only through applyOperations and insertSection. Never write the layout field with updateDocument or patchLayout: they skip these checks and do not reach open editors.'
 
 // ---------------------------------------------------------------------------
 // Zod schemas for arguments
@@ -119,27 +134,17 @@ const NO_DIRECT_EDIT =
  */
 const motionArg = z.record(z.string(), z.unknown())
 const MOTION_HINT =
-  'Animations: { enter?, hover?, press?, scroll?, loop? }, each kind { preset, ...options }, e.g. { "enter": { "preset": "fade-up" } } (see MOTION in the layout guide).'
+  'Animations: { enter?, hover?, press?, scroll?, loop? }, each kind { preset, ...options }, e.g. { "enter": { "preset": "fade-up" } } (MOTION in the listBlocks guide).'
 
-const visibilityCondition = z.object({
-  field: z.string().describe('A field path of the document, or $index, $item, $parent.<field>, $page.<field>.'),
-  operator: z.enum(VISIBILITY_OPERATORS),
-  value: z
-    .union([z.string(), z.number(), z.boolean(), z.array(z.union([z.string(), z.number()]))])
-    .optional()
-    .describe('Not for is_set and is_empty. A list for in and not_in.'),
-  valueField: z.string().optional().describe('Compare with this field (same paths as field) instead of value.'),
-  count: z.boolean().optional().describe('true: compare the number of items of an array or hasMany field.'),
-})
-
+/**
+ * `visibility` is a loose object here too: the operations check it (core/visibility.ts) and return
+ * the exact error. The format is VISIBILITY in the bindings guide (listBlocks).
+ */
 const visibilityArg = z
-  .object({
-    match: z.enum(['all', 'any']).optional().describe('"all" (default): every condition must match. "any": one is enough.'),
-    conditions: z
-      .array(z.union([visibilityCondition, z.object({ all: z.array(visibilityCondition).describe('Conditions that must all match.') })]))
-      .describe('The conditions. With match "any", an entry may be a group { all: [...] }: an "or" of "and" groups.'),
-  })
-  .describe('Shows the block only when the conditions match the current document (templates and list items).')
+  .record(z.string(), z.unknown())
+  .describe(
+    `{ match?: "all" | "any", conditions: [{ field, operator, value?, valueField?, count? }] }. Operators: ${VISIBILITY_OPERATORS.join(', ')}. Shows the block only when the conditions match the current document: only in templates and in list or repeat items (on a normal page it does nothing). Full format: VISIBILITY in the listBlocks bindings guide.`,
+  )
 
 const attrsArg = z
   .object({
@@ -196,6 +201,8 @@ const operationSchema = z.discriminatedUnion('type', [
       props: z.record(z.string(), z.unknown()).optional().describe('Merged into the existing props (shallow). Other props stay.'),
       unsetProps: z.array(z.string()).optional().describe('Prop names to delete.'),
       className: z.string().nullable().optional().describe('Replaces ALL classes. Send the full class list. null removes it.'),
+      addClassName: z.string().optional().describe('Classes to add, space-separated, e.g. "shadow-lg md:p-8". Other classes stay. Runs after className and removeClassName.'),
+      removeClassName: z.string().optional().describe('Classes to remove, space-separated, exact match ("p-4" leaves "md:p-4"). Other classes stay.'),
       hidden: z.boolean().optional(),
       label: z.string().nullable().optional().describe('Name for editors (outline). null or "" removes it.'),
       bindings: z
@@ -207,7 +214,7 @@ const operationSchema = z.discriminatedUnion('type', [
         .optional()
         .describe(`${MOTION_HINT} Merges per kind: a kind you send replaces that kind, null removes a kind, kinds you leave out stay. null removes all motion.`),
       attrs: attrsArg.nullable().optional().describe('HTML attributes. A key replaces that key, null removes it. null removes all.'),
-      visibility: visibilityArg.nullable().optional().describe('Visibility conditions (see VISIBILITY). Replaces all conditions; null removes them.'),
+      visibility: visibilityArg.nullable().optional().describe('Visibility conditions (format as in insert). Replaces all conditions; null removes them.'),
       partClassName: z
         .record(z.string(), z.string().nullable())
         .optional()
@@ -334,12 +341,22 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
   const apiKeyCollection = options.apiKeyCollection ?? 'payload-mcp-api-keys'
   const keyNames = new Map<string, { name: string | null; at: number }>()
 
-  const collectionArg = z
+  const collectionEnum = z
     .enum(slugs as [string, ...string[]])
     .describe(
       `Collection of the page. One of: ${slugs.join(', ')}.` +
         (templatesSlug ? ` "${templatesSlug}" holds templates (layouts for every document of a collection).` : ''),
     )
+  // With one builder collection the argument may be left out. The default fills it in before the
+  // toolkit's scope check reads it.
+  const collectionArg = slugs.length === 1 ? collectionEnum.default(slugs[0]!) : collectionEnum
+  /**
+   * True when the collection's layouts render without a current document (normal pages): there,
+   * bindings and visibility outside list and repeat items do nothing. Templates and saved sections
+   * (which may go into templates) are left out.
+   */
+  const rendersWithoutDocument = (req: PayloadRequest, collection: string) =>
+    collection !== templatesSlug && collection !== savedSectionsConfigOf(req.payload)?.slug
   const idArg = z.string().min(1).describe('Document id (from findDocument or searchContent).')
   const localeArg = z
     .string()
@@ -427,6 +444,25 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     return result
   }
 
+  /**
+   * The warnings of a commit for the blocks it touched (publish-only problems, unknown keys, and
+   * bindings or visibility that do nothing on a normal page), plus how many other blocks have
+   * warnings. Required props that a binding fills are left out, as in validateLayout.
+   */
+  const touchedWarnings = (req: PayloadRequest, collection: string, result: Extract<CommitResult, { ok: true }>) => {
+    const touched = touchedIds(result.ops)
+    const all = [
+      ...withoutBoundRequired(result.warnings, result.layout),
+      ...(rendersWithoutDocument(req, collection) ? contextOnlyWarnings(result.layout) : []),
+    ]
+    const own = all.filter((warning) => warning.blockId !== undefined && touched.has(warning.blockId))
+    const elsewhere = all.length - own.length
+    return {
+      ...(own.length > 0 ? { warnings: own.slice(0, 30) } : {}),
+      ...(elsewhere > 0 ? { otherWarnings: `${elsewhere} warning${elsewhere === 1 ? '' : 's'} on blocks this call did not change (validateLayout lists them).` } : {}),
+    }
+  }
+
   /** The app's sections, then the saved sections the request's user can read (when turned on). */
   const allSections = async (req: PayloadRequest): Promise<SectionDefinition[]> => {
     const saved = savedSectionsConfigOf(req.payload)
@@ -463,14 +499,14 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     name: 'listBlocks',
     routing: { kind: 'collection', action: 'read' },
     description: [
-      'Lists every block type you can use in page layouts: label, description, props, slots (which child types they accept) and an example. Call this before you build or edit a layout.',
-      'To build whole page parts (hero, features, pricing, call to action, footer), PREFER ready-made sections: listSections, then insertSection. They are designed and tested. Use single blocks for small additions and edits.',
-      `Dynamic blocks: "${FIELD_BLOCK}" shows one field of the current document (templates), "${COLLECTION_LIST_BLOCK}" lists documents of a collection and repeats its "item" slot per document, "${REPEAT_BLOCK}" repeats its "item" slot per row of an array or hasMany field of the current document. Blocks inside a template or a list item can bind props to document fields with "bindings" (see getBindingSources).`,
-      LAYOUT_GUIDE,
+      'Lists every block type you can use in page layouts: label, description, props, slots (which child types they accept), parts and an example, plus the site\'s own classes. Call it once before you build or edit a layout: its `guide` is the layout format (block keys, ids, positions, classes, motion presets, HTML attrs, canonical form) and `bindings` the binding and VISIBILITY format.',
+      'For whole page parts (hero, features, pricing, call to action, footer), PREFER ready-made sections: listSections, then insertSection. Use single blocks for small additions and edits.',
+      `Dynamic blocks: "${FIELD_BLOCK}" shows one field of the current document (templates), "${COLLECTION_LIST_BLOCK}" lists documents of a collection and repeats its "item" slot per document, "${REPEAT_BLOCK}" repeats its "item" slot per row of an array or hasMany field of the current document.`,
     ].join('\n\n'),
     parameters: { collection: collectionArg },
     handler: async (_args, req) =>
       text({
+        guide: LAYOUT_GUIDE,
         blocks: blocks.map(describeBlock),
         ...(await siteClassesOf(req)),
         sections: sections.length,
@@ -532,7 +568,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     description: [
       'Inserts a ready-made or saved section (from listSections) into the draft of a document. All block ids are regenerated. Saves a draft about a second later (never publishes). People with the page open in the editor see the section appear live.',
       'Default position: the end of the page. Set parentId/slot/index to insert elsewhere (index = final index in the target list).',
-      'Returns the inserted blocks with their NEW ids. Then adjust their text and classes with applyOperations "update".',
+      'Returns the inserted blocks with their NEW ids, and `needsContent`: blocks whose image, form or other upload or relationship is still empty (fill them with generateImage, an existing upload, or findDocument). Then adjust text and classes with applyOperations "update".',
     ].join('\n'),
     parameters: {
       collection: collectionArg,
@@ -564,6 +600,8 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       )
       if (!result.ok) return fail(result.error, result.errors)
       const inserted = result.ops.flatMap((op) => (op.type === 'insert' ? [op.block] : []))
+      const needsContent = missingContent(inserted, blocks)
+      const warnings = touchedWarnings(req, collection, result)
       return text({
         ok: true,
         section: section.id,
@@ -571,7 +609,10 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
         seq: result.seq,
         inserted,
         insertedIds: inserted.flatMap((b) => subtreeIds(b)),
-        ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}),
+        ...(needsContent.length > 0
+          ? { needsContent, needsContentHint: missingContentHint(needsContent, { generateImage: Boolean(imageServiceOf(req.payload)?.adapter) }) }
+          : {}),
+        ...warnings,
       })
     },
   }
@@ -636,13 +677,12 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     name: 'applyOperations',
     routing: { kind: 'collection', action: 'update' },
     description: [
-      'Edits the layout of a document with a list of operations, applied in order, all or nothing. Saves a draft about a second later (never publishes). People with the page open in the editor see each change live.',
-      'Operations: insert { block, to }, move { id, to }, remove { id }, duplicate { id, newId? }, update { id, props?, unsetProps?, className?, hidden?, bindings?, visibility?, label?, motion?, attrs?, partClassName? }. "update" merges props and bindings; className REPLACES all classes, so send the full list; visibility REPLACES all conditions (null removes them). `motion` (animations, see MOTION below) merges per kind: a kind replaces that kind, null removes it, null alone removes all. `attrs` (HTML id, ariaLabel, ariaHidden) merges per key; null removes a key. `partClassName` merges per slot; null removes the classes of a slot.',
-      'Templates are edited the same way: collection = the templates collection, id = the template id from listTemplates.',
-      'If any operation fails, nothing is saved and the error names the failing operation. Call getLayout for current ids first. The result is validated against the block schemas: missing required props are allowed in drafts (warnings), wrong types are errors. insert and move refuse a block that a slot does not accept, also deeper inside (for example no button or form anywhere inside a link). insert, move and duplicate refuse to add a block to a slot that already holds its maxBlocks (listBlocks).',
-      'Localized sites: with `locale`, "update" props change that locale\'s values of localized props (a translation); other props and everything else (insert, move, remove, classes) change every locale. Blocks you insert with `locale` hold their localized props in that locale only: the default locale stays empty until someone writes it (required props then block publishing). Without `locale` they hold the default locale\'s values. Sections (insertSection) keep their own text.',
+      'Edits the draft layout of a document (a page, or a template: collection = the templates collection, id from listTemplates) with operations, applied in order, all or nothing. Saves a draft about a second later (never publishes). People with the page open see each change live.',
+      'Operations: insert { block, to }, move { id, to }, remove { id }, duplicate { id, newId? }, update { id, props?, unsetProps?, className?, addClassName?, removeClassName?, hidden?, label?, bindings?, visibility?, motion?, attrs?, partClassName? }. update merges props and bindings (null removes a binding); className REPLACES all classes, while addClassName and removeClassName (space-separated) change single classes and keep the rest; visibility replaces all conditions; motion merges per kind, attrs per key, partClassName per part; null removes.',
+      'Position { parentId (null = page root), slot? (default "children"), index }: index is the FINAL index in the target list (for a move in the same list, count after the block leaves). New ids: "b_" plus 6 lowercase letters or digits. Get current ids with getLayout. The block format, motion presets and visibility are in the listBlocks `guide`.',
+      'Errors name the failing operation, and nothing is saved: wrong prop types, a block type a slot (or a slot further up) does not accept, a full slot (maxBlocks). The result lists `changes` (id, type, changed keys, the new className) and `warnings` for the blocks it touched: allowed in drafts but they block publishing (for example an empty required prop); "no-effect" warnings mark keys that do nothing there.',
+      'Localized sites: with `locale`, update props write that locale\'s values of localized props; everything else changes every locale. Blocks inserted with `locale` hold their localized props in that locale only (the default locale stays empty until written). Without `locale`: the default locale.',
       NO_DIRECT_EDIT,
-      LAYOUT_GUIDE,
     ].join('\n\n'),
     parameters: {
       collection: collectionArg,
@@ -660,21 +700,19 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       )
       // New blocks are written in the locale too: an AI that works in German writes German.
       // A root parentId models send as text ("__PAGE_ROOT__", "root") becomes null, as in insertSection.
-      const result = await apply(req, collection, String(args.id), (layout) =>
-        stampLocale(repairRootParents(layout, ops as Operation[]).ops, at.locale, at.settings, { inserts: true }),
-      )
+      let before: Layout = { version: 1, blocks: [] }
+      const result = await apply(req, collection, String(args.id), (layout) => {
+        before = layout
+        return stampLocale(repairRootParents(layout, ops as Operation[]).ops, at.locale, at.settings, { inserts: true })
+      })
       if (!result.ok) return fail(result.error, result.errors)
-      const changed = new Set<string>()
-      for (const op of result.ops) {
-        if (op.type === 'insert') subtreeIds(op.block).forEach((id) => changed.add(id))
-        else if (op.type === 'move' || op.type === 'update') changed.add(op.id)
-      }
       return text({
         ok: true,
         seq: result.seq,
         applied: result.ops.length,
-        changedIds: [...changed],
-        ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}),
+        changedIds: [...touchedIds(result.ops)],
+        changes: changeSummary(before, result.layout, result.ops),
+        ...touchedWarnings(req, collection, result),
       })
     },
   }
@@ -683,7 +721,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     name: 'validateLayout',
     routing: { kind: 'collection', action: 'read' },
     description:
-      'Checks a layout against the block schemas without saving. Pass `layout` (the JSON object) to check a layout you wrote, or only `id` to check the document\'s current draft. Returns `errors` (block a save) and `warnings` (allowed in drafts, but they block publishing: missing required props, values outside their limits, slots with fewer blocks than their minBlocks, messages from the validate functions of props; unknown props never block).',
+      'Checks a layout against the block schemas without saving. Pass `layout` (the JSON object) to check a layout you wrote, or only `id` to check the document\'s current draft. Returns `errors` (block a save) and `warnings` (allowed in drafts, but they block publishing: missing required props, values outside their limits, slots with fewer blocks than their minBlocks, messages from the validate functions of props; unknown props and "no-effect" keys, such as visibility on a normal page, never block).',
     parameters: {
       collection: collectionArg,
       id: idArg.optional(),
@@ -738,6 +776,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
           })),
         )
       }
+      if (blocking.length === 0 && rendersWithoutDocument(req, String(args.collection))) warnings.push(...contextOnlyWarnings(normalizeLayout(layout)))
       return text({ valid: blocking.length === 0, errors: blocking, warnings })
     },
   }
@@ -788,7 +827,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       'Returns the media `id`, `url`, size and alt text. To show it on a page, set the id as the image prop of a block with applyOperations "update" (getBlockSchema shows the prop name; the default image block uses "image").',
     ].join('\n\n'),
     parameters: {
-      collection: z.enum([mediaCollection]).describe(`The upload collection. Always "${mediaCollection}".`),
+      collection: z.enum([mediaCollection]).default(mediaCollection).describe(`The upload collection. Always "${mediaCollection}" (may be left out).`),
       prompt: z.string().min(3).max(4000).describe('What the image shows, in detail.'),
       aspectRatio: z
         .enum(IMAGE_ASPECT_RATIOS as unknown as [string, ...string[]])
@@ -833,7 +872,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       `To edit a template, call getLayout and applyOperations with collection "${templatesSlug}" and the template id. Bind props to the document's fields with "bindings" (getBindingSources lists the fields). To create a template, use createDocument on "${templatesSlug}" with { name, ${TEMPLATE_TARGET_FIELD}, ${TEMPLATE_DEFAULT_FIELD} } and optional ${TEMPLATE_CONDITIONS_FIELD} and ${TEMPLATE_PRIORITY_FIELD}.`,
     ].join('\n'),
     parameters: {
-      collection: z.enum([templatesSlug]).describe(`Always "${templatesSlug}".`),
+      collection: z.enum([templatesSlug]).default(templatesSlug).describe(`Always "${templatesSlug}" (may be left out).`),
       target: z.enum(templateTargets as [string, ...string[]]).optional().describe('Only templates for this collection.'),
     },
     handler: async (args, req) => {
@@ -877,17 +916,17 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     routing: { kind: 'collection', action: 'read' },
     description: [
       'Lists the fields of a collection that block props can bind to, as dot paths (e.g. "title", "featuredImage", "author.name", "categories.title"). Relationship and upload fields include the related document\'s fields (one level).',
-      BINDINGS_GUIDE,
+      'The result\'s `guide` explains bindings (paths, $url, $item, $index, $parent, $page, fallbacks, formatters, template strings) and VISIBILITY conditions. Both work only in templates and inside collection list or repeat items.',
     ].join('\n'),
     parameters: {
-      collection: z
-        .enum(sourceSlugs as [string, ...string[]])
-        .describe(`A template target or a collection a list can show. One of: ${sourceSlugs.join(', ')}.`),
+      collection: ((arg) => (sourceSlugs.length === 1 ? arg.default(sourceSlugs[0]!) : arg))(
+        z.enum(sourceSlugs as [string, ...string[]]).describe(`A template target or a collection a list can show. One of: ${sourceSlugs.join(', ')}.`),
+      ),
     },
     handler: async (args, req) => {
       const sources = templatesConfigOf(req.payload)?.sources[String(args.collection)]
       if (!sources) return fail(`No bindable fields for "${String(args.collection)}". Is websiteBuilder configured with templates?`)
-      return text({ collection: args.collection, fields: sources })
+      return text({ collection: args.collection, fields: sources, guide: BINDINGS_GUIDE })
     },
   }
 
