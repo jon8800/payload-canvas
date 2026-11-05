@@ -67,7 +67,7 @@ export { FILTER_LINK_BLOCK, filterHref, filterLinkBlock, type FilterLinkTarget, 
 export { faqItems, faqJsonLd, type FaqItem } from './faq'
 export { headingId, lexicalHeadings, lexicalText, type RichTextHeading } from './headingId'
 export { ICON_BLOCK, iconBlock } from './icon'
-export { LIGHTBOX_BLOCK, LIGHTBOX_CLASS_MAP, lightboxBlock } from './lightbox'
+export { LIGHTBOX_BLOCK, LIGHTBOX_CLASS_MAP, LIGHTBOX_CLOSE_EVENT, LIGHTBOX_SKIP_ATTRIBUTE, lightboxBlock } from './lightbox'
 export { MEDIA_BACKDROP_BLOCK, MEDIA_BACKDROP_CLASS_MAP, mediaBackdropBlock } from './mediaBackdrop'
 export { SECTION_REF_BLOCK, SECTION_REF_SLOT, sectionDetachOps, sectionRefBlock, sectionRefBlocks, sectionRefId } from './sectionRef'
 export { TABLE_OF_CONTENTS_BLOCK, tableOfContentsBlock } from './tableOfContents'

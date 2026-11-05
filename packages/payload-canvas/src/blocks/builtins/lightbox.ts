@@ -5,6 +5,19 @@ import { classesOf, classMap, labelsField, labelsHelp } from './shared'
 export const LIGHTBOX_BLOCK = 'lightbox'
 
 /**
+ * Leaves an image out of every lightbox set: put it on the image or on an element round it. A click
+ * on a skipped image still opens the set, at the photo with the same `src`. Use it for a large
+ * photo that repeats one of the set's thumbnails.
+ */
+export const LIGHTBOX_SKIP_ATTRIBUTE = 'data-lightbox-skip'
+
+/**
+ * The event a lightbox sends when it closes, to the page image of the photo it showed last. It
+ * bubbles; `detail.index` is the photo's place in the set. An image switcher can show that photo.
+ */
+export const LIGHTBOX_CLOSE_EVENT = 'lightbox-close'
+
+/**
  * Classes the lightbox component adds itself: the position and size of the dialog and its
  * controls. No colours: those come from the block's className (see `LIGHTBOX_CLASS`).
  */
@@ -12,8 +25,12 @@ export const LIGHTBOX_CLASS_MAP = classMap({
   root: '[&_img:not([data-lightbox-photo])]:cursor-zoom-in',
   /** `touch-pan-y`: a sideways swipe reaches the script as pointer events (pinch zoom still works). */
   dialog: 'fixed inset-0 m-0 size-full max-h-none max-w-none touch-pan-y touch-pinch-zoom overflow-hidden bg-transparent p-0',
-  figure: 'm-0 box-border flex size-full items-center justify-center p-4 md:p-16',
-  photo: 'max-h-full max-w-full object-contain',
+  /** One grid cell: the photo that leaves and the photo that comes in stack in it. */
+  figure: 'm-0 box-border grid size-full grid-cols-1 grid-rows-1 place-items-center p-4 md:p-16',
+  photo: 'col-start-1 row-start-1 max-h-full max-w-full object-contain',
+  /** Shown when the photo takes longer than a moment to load. Its colour is the dialog's text colour. */
+  loading: 'pointer-events-none absolute inset-0 m-auto size-8 animate-spin rounded-full border-2 border-current border-r-transparent',
+  count: 'pointer-events-none absolute top-4 left-4 inline-flex min-h-11 items-center px-1',
   caption: 'absolute inset-x-0 bottom-4 px-16 text-center',
   hidden: 'sr-only',
   button: 'absolute inline-flex cursor-pointer items-center justify-center',
@@ -52,6 +69,7 @@ export function lightboxBlock(): BlockDefinition {
         admin: { description: 'Lightboxes with the same group on a page open as one set. Optional.' },
       },
       { name: 'captions', type: 'checkbox', label: 'Show the alt text as a caption', defaultValue: false },
+      { name: 'count', type: 'checkbox', label: 'Show the photo number', defaultValue: true },
       labelsField(LIGHTBOX_LABELS, LABEL_NAMES),
     ],
     slots: { children: { label: 'Content' } },
@@ -60,10 +78,13 @@ export function lightboxBlock(): BlockDefinition {
     ai: {
       description:
         'A container whose images open full screen in a modal dialog: a click, or Enter on a focused image. Arrow keys, a ' +
-        'sideways swipe on touch screens and the arrow buttons step through the images; Escape closes. Lightboxes with the same "group" open as one set. Lay out the ' +
+        'sideways swipe on touch screens and the arrow buttons step through the images; Escape closes. Lightboxes with the same "group" open as one set; ' +
+        'each photo shows once in a set (by its src). The dialog fades in and out and the photos slide when they step (fades only under reduced motion). ' +
+        '"count" (default on) shows "2 of 6" at the top left. Lay out the ' +
         'images with its className (a grid), or put a repeat of images in it (path "galleryImages", image bound to "$item"). ' +
         'Style the dialog from the className: [&_dialog]: for its text colour and backdrop ([&_dialog]:backdrop:bg-black/85), ' +
-        '[&_[data-lightbox-button]]: for the close, previous and next buttons, [&_[data-lightbox-photo]]: for the large photo. ' +
+        '[&_[data-lightbox-button]]: for the close, previous and next buttons, [&_[data-lightbox-photo]]: for the large photo, ' +
+        '[&_[data-lightbox-count]]: for the photo number, [&_[data-lightbox-loading]]: for the ring shown while a photo loads. ' +
         'The canvas does not open it.' +
         labelsHelp(LIGHTBOX_LABELS) +
         ' In "countLabel", {n} is the photo number and {count} the number of photos.',
