@@ -6,6 +6,7 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ### Added
 
+- Lightbox: the dialog and its backdrop fade in and out (Escape too), the photo grows in on open and slides on each step, with fades only under reduced motion. A photo that is still loading after 150 ms shows a ring (`data-lightbox-loading`). A visible photo number (`count`, default on, `data-lightbox-count`). A set holds each `src` once; `data-lightbox-skip` (`LIGHTBOX_SKIP_ATTRIBUTE`) leaves an image out of the set, and a click on it opens the set at the photo with its `src`. On close the page image of the last photo gets a bubbling `lightbox-close` event (`LIGHTBOX_CLOSE_EVENT`). `photoSet` and `openIndex` are the set rules as pure functions.
 - Filter links drop the list's page number (`?page=N`), so a new filter starts at page 1. `PAGE_PARAM` moved to `payload-canvas/core`; `payload-canvas/react` still exports it.
 - Opt-in built-in blocks: `builtinBlocks({ include, icons })` in `payload-canvas/blocks` and `builtinComponents({ icons })` in `payload-canvas/react`. Leave a type out of `include` to replace it with your own block. See the README's "Built-in blocks".
 - The **Icon** built-in (`icon`): one icon of the site's icon set. The definition takes the names as plain strings; the component map takes the icon components (`IconMap`). Decorative unless it has a `label`.

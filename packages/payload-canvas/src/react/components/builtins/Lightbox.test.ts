@@ -4,8 +4,8 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { BlockComponentProps } from '../../render/types'
 import { Lightbox } from '.'
-import { stepIndex, swipeStep } from './Lightbox'
-import { LIGHTBOX_CLASS_MAP } from '../../../blocks/builtins/lightbox'
+import { openIndex, photoSet, stepIndex, swipeStep, type SetImage } from './Lightbox'
+import { LIGHTBOX_CLASS_MAP, LIGHTBOX_SKIP_ATTRIBUTE } from '../../../blocks/builtins/lightbox'
 
 const render = (props: Record<string, unknown>) =>
   renderToStaticMarkup(
@@ -19,6 +19,16 @@ const render = (props: Record<string, unknown>) =>
       mode: 'site',
     } satisfies BlockComponentProps),
   ).replace(/^<link rel="preload"[^>]*>/, '') // React's image preload hint
+
+/** A page image for the set rules: `skipped` puts it inside a `data-lightbox-skip` element. */
+const image = (src: string, skipped = false): SetImage => ({
+  getAttribute: (name) => (name === 'src' ? src : null),
+  closest: (selector) => (skipped && selector === `[${LIGHTBOX_SKIP_ATTRIBUTE}]` ? {} : null),
+  currentSrc: `${src}?w=80`,
+  src,
+  srcset: `${src}?w=80 80w`,
+  alt: src,
+})
 
 describe('Lightbox', () => {
   test('renders the slot in its container, with no dialog until an image opens', () => {
@@ -43,5 +53,24 @@ describe('Lightbox', () => {
     assert.equal(swipeStep(-60, 60), 0)
     // The dialog lets sideways swipes reach the script.
     assert.ok(LIGHTBOX_CLASS_MAP.dialog.split(' ').includes('touch-pan-y'))
+  })
+
+  test('a set holds each source once, in page order, without skipped images', () => {
+    const stage = image('/c.jpg', true)
+    const list = [stage, image('/a.jpg'), image('/b.jpg'), image('/c.jpg'), image('/a.jpg')]
+    const set = photoSet(list)
+    assert.deepEqual(set.photos.map((photo) => photo.alt), ['/a.jpg', '/b.jpg', '/c.jpg'])
+    assert.deepEqual(set.photos[0], { src: '/a.jpg?w=80', srcSet: '/a.jpg?w=80 80w', alt: '/a.jpg' })
+    assert.equal(set.images[2], list[3])
+    // A skipped image opens the set at the photo with its source; an unknown one at the first.
+    assert.equal(openIndex(set.images, stage), 2)
+    assert.equal(openIndex(set.images, list[4]!), 0)
+    assert.equal(openIndex(set.images, image('/z.jpg')), 0)
+  })
+
+  test('the loading ring spins, and the leaving and the new photo share one grid cell', () => {
+    assert.match(LIGHTBOX_CLASS_MAP.loading, /animate-spin/)
+    assert.match(LIGHTBOX_CLASS_MAP.figure, /grid/)
+    assert.match(LIGHTBOX_CLASS_MAP.photo, /col-start-1 row-start-1/)
   })
 })
