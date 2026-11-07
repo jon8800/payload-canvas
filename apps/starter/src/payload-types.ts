@@ -86,6 +86,7 @@ export interface Config {
     'builder-templates': BuilderTemplate;
     'builder-sections': BuilderSection;
     'builder-classes': BuilderClass;
+    'builder-comments': BuilderComment;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-folders': FolderInterface;
@@ -132,6 +133,7 @@ export interface Config {
     'builder-templates': BuilderTemplatesSelect<false> | BuilderTemplatesSelect<true>;
     'builder-sections': BuilderSectionsSelect<false> | BuilderSectionsSelect<true>;
     'builder-classes': BuilderClassesSelect<false> | BuilderClassesSelect<true>;
+    'builder-comments': BuilderCommentsSelect<false> | BuilderCommentsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-folders': PayloadFoldersSelect<false> | PayloadFoldersSelect<true>;
@@ -1454,6 +1456,31 @@ export interface BuilderClass {
   _status?: ('draft' | 'published') | null;
 }
 /**
+ * Comments people leave on blocks in the builder. Open the page in the builder to discuss and resolve them.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "builder-comments".
+ */
+export interface BuilderComment {
+  id: number;
+  body: string;
+  parent?: (number | null) | BuilderComment;
+  resolved?: boolean | null;
+  resolvedByName?: string | null;
+  resolvedAt?: string | null;
+  docCollection: string;
+  docId: string;
+  blockId?: string | null;
+  x?: number | null;
+  y?: number | null;
+  author?: (number | null) | User;
+  authorName?: string | null;
+  authorKey?: string | null;
+  editedAt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
@@ -1632,6 +1659,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'builder-classes';
         value: number | BuilderClass;
+      } | null)
+    | ({
+        relationTo: 'builder-comments';
+        value: number | BuilderComment;
       } | null)
     | ({
         relationTo: 'payload-folders';
@@ -2298,6 +2329,28 @@ export interface BuilderClassesSelect<T extends boolean = true> {
   updatedAt?: T;
   createdAt?: T;
   _status?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "builder-comments_select".
+ */
+export interface BuilderCommentsSelect<T extends boolean = true> {
+  body?: T;
+  parent?: T;
+  resolved?: T;
+  resolvedByName?: T;
+  resolvedAt?: T;
+  docCollection?: T;
+  docId?: T;
+  blockId?: T;
+  x?: T;
+  y?: T;
+  author?: T;
+  authorName?: T;
+  authorKey?: T;
+  editedAt?: T;
+  updatedAt?: T;
+  createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

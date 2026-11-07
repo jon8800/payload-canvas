@@ -357,6 +357,7 @@ const PATHS = {
   // Assistant
   arrowUp: <path d="M8 13V3.5M4 7.5l4-4 4 4" />,
   stop: <rect x="4" y="4" width="8" height="8" rx="1.5" fill="currentColor" />,
+  comment: <path d="M5 11.5H4A1.5 1.5 0 0 1 2.5 10V4A1.5 1.5 0 0 1 4 2.5h8A1.5 1.5 0 0 1 13.5 4v6a1.5 1.5 0 0 1-1.5 1.5H8.5L5 14v-2.5Z" />,
   compose: <path d="M13.5 9v3.5a1.5 1.5 0 0 1-1.5 1.5H3.5A1.5 1.5 0 0 1 2 12.5V4a1.5 1.5 0 0 1 1.5-1.5H7M11.25 2.25a1.4 1.4 0 0 1 2 2L8 9.5 5.5 10.5l1-2.5 4.75-5.75Z" />,
   key: (
     <>

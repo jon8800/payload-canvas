@@ -60,6 +60,7 @@ npx create-payload-canvas my-website
 17. [AI assistant](#ai-assistant)
 18. [AI editing over MCP](#ai-editing-over-mcp)
 19. [Multiplayer editing](#multiplayer-editing)
+   - [Comments on the canvas](#comments-on-the-canvas)
 20. [Production and Docker](#production-and-docker)
 21. [Deploying](#deploying)
 22. [Troubleshooting](#troubleshooting)
@@ -588,6 +589,7 @@ websiteBuilder({
 | `editor.openInBuilder` | `boolean` | Opening a saved document goes straight to the builder instead of Payload's form. Default `false`. Run `generate:importmap` after you turn it on. See [The builder view](#the-builder-view). |
 | `css.fontFamilies` | `(payload) => Record<name, family>` | Font families set at runtime some other way than the Theme global, for the Styles panel's Font list. Its names win over the theme's. |
 | `references` | `{ field?, usedIn?, protectDelete?, maxListed? } \| false` | Which media and documents each layout uses: "Used in" lists and delete protection. On by default. `false` turns it off. See [References and Used in](#references-and-used-in). |
+| `comments` | `{ slug?, access?, admin?, hooks? } \| boolean` | Comments on blocks in the builder, stored in a `builder-comments` collection. On by default. `false` turns it off. See [Comments on the canvas](#comments-on-the-canvas). |
 
 For each listed collection the plugin adds:
 
@@ -2653,6 +2655,31 @@ Limits:
 - Two people who change the same prop at the same time: the later change wins.
 - On SIGINT/SIGTERM the plugin saves unsaved session edits before the process exits. To make that possible, it holds back `process.exit` for at most 3 seconds, and only while unsaved edits exist. A hard kill (`SIGKILL`, a crash) can still lose the last 1–5 seconds of edits.
 - Two people typing in the same text field at the same moment: the later value wins for the whole field.
+
+### Comments on the canvas
+
+Team members leave comments on blocks, reply, and resolve them, as in Figma or Webflow. Everyone with the page open sees new comments, replies and changes at once.
+
+In the builder:
+
+- Click the speech bubble in the top bar, or press **C**, for comment mode. The comments panel takes the inspector's place. Press **C** or **Esc** to leave.
+- In comment mode, click a block on the canvas. A pin goes on that spot, and a box opens for the comment. **Enter** sends, **Shift+Enter** adds a line.
+- Pins stay on their spot of the block when the page scrolls, the layout changes or the canvas zooms. Comment mode shows the pins; normal editing shows none.
+- Click a pin to open its thread: reply, resolve or reopen. Authors edit and delete their own comments. Deleting a thread deletes its replies.
+- The panel lists the threads: open ones first, then resolved ones. **All**, **Open** and **Resolved** filter the list. Click a thread to select its block and scroll to it.
+- A thread whose block was deleted stays in the panel, marked **Block deleted**. It opens in the panel.
+- The top bar button shows the number of open threads.
+
+Comments are not part of the layout. They never change the layout JSON, undo history, saves or publishing. The canvas does no comment work outside comment mode.
+
+Data and access:
+
+- Each comment is a document of the plugin's **Comments** collection (slug `builder-comments`): the page (`docCollection`, `docId`), the block (`blockId`), the pin (`x`, `y`, 0 to 1 inside the block's box), the text (`body`), the author, and for a thread its resolved state (`resolved`, `resolvedByName`, `resolvedAt`). A reply has `parent` set to its thread.
+- People who may change the page may comment on it, reply, resolve and reopen. A hook checks this on every save, also over REST. Only the author changes the text or deletes a comment. Signed-in users read comments; set `comments.access.read` to restrict that.
+- The editor reads and writes the collection over Payload's REST API. Each save or delete goes to the page's open editors as a `comments` event on the live channel (see [Multiplayer editing](#multiplayer-editing)). A reconnect loads the list again.
+- On by default. `websiteBuilder({ comments: false })` turns it off. Options: `comments: { slug?, access?, admin?, hooks? }`. The new collection needs a migration in production (`pnpm payload migrate:create`).
+
+Not included yet: mentions and email notifications.
 
 ## Production and Docker
 
