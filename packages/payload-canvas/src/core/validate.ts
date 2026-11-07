@@ -3,12 +3,15 @@
 // "empty" value); the schema leaves that out to keep it simple for AI tools.
 
 import { checkAttrs } from './attrs'
-import { getBlockDefinition, slotLabel, slotLimitText } from './blocks'
+import { blockParts } from './classes'
+import { getBlockDefinition, slotLabel, slotLimitText, withInlineBlocks } from './blocks'
 import { conditionMet, readCondition } from './conditions'
 import { formatProblem } from './formats'
 import { dataFields, fieldBlocks, hasStaticDefault, optionValues, type DataField, type LooseField } from './fields'
 import { isPlainObject } from './tree'
 import { motionProblems } from './motion'
+import { checkSectionOrigin } from './sectionOrigin'
+import { checkVisibility } from './visibility'
 import { fallbackChain, localizedKeys } from './locale'
 import type { BlockDefinition, LocaleSettings, SlotDefinition } from './types'
 
@@ -22,6 +25,9 @@ import type { BlockDefinition, LocaleSettings, SlotDefinition } from './types'
  *   publishing. Each of them can be true while someone is still typing, so drafts, autosave and
  *   live sessions keep saving unfinished work.
  * - `unknown-prop`, `unknown-key`: warnings, never blocking.
+ * - `no-effect`: a warning, never blocking: a key that does nothing where it is (for example
+ *   `visibility` on a normal page, see `contextOnlyWarnings` in src/mcp/shared.ts). `validateLayout`
+ *   never returns it: it does not know where the layout renders.
  */
 export type LayoutErrorCode =
   | 'invalid'
@@ -33,6 +39,7 @@ export type LayoutErrorCode =
   | 'binding'
   | 'unknown-prop'
   | 'unknown-key'
+  | 'no-effect'
 
 /**
  * `locale`: the problem is in that locale's own values (a translation), not the default locale's.
@@ -53,7 +60,7 @@ export const PUBLISH_ONLY_CODES: ReadonlySet<LayoutErrorCode> = new Set(['requir
 
 /** True when the error never blocks a save (only logged or shown). */
 export function isLayoutWarning(error: Pick<LayoutError, 'code'>): boolean {
-  return error.code === 'unknown-prop' || error.code === 'unknown-key'
+  return error.code === 'unknown-prop' || error.code === 'unknown-key' || error.code === 'no-effect'
 }
 
 /** True when the error blocks this save: everything but warnings, and publish-only codes only when publishing. */
@@ -62,7 +69,7 @@ export function isBlockingError(error: Pick<LayoutError, 'code'>, publishing: bo
   return publishing || !PUBLISH_ONLY_CODES.has(error.code)
 }
 
-const BLOCK_KEYS = new Set(['id', 'type', 'props', 'className', 'slots', 'bindings', 'hidden', 'label', 'locales', 'motion', 'attrs', 'slotClassName'])
+const BLOCK_KEYS = new Set(['id', 'type', 'props', 'className', 'slots', 'bindings', 'hidden', 'label', 'locales', 'motion', 'attrs', 'visibility', 'partClassName', 'section', 'editableItems'])
 
 /** Checks structure, unique ids, known block types, slot rules and prop types. */
 export function validateLayout(layout: unknown, blocks: BlockDefinition[], options: ValidateOptions = {}): LayoutError[] {
@@ -76,7 +83,9 @@ export function validateLayout(layout: unknown, blocks: BlockDefinition[], optio
   const seen = new Set<string>()
   const localization = options.localization ?? null
   const htmlIds = new Map<string, string>()
-  layout.blocks.forEach((block, i) => checkBlock(block, `blocks[${i}]`, null, [], blocks, seen, errors, localization, htmlIds))
+  // Inline blocks may go into `allowInline` slots, as in the editor, also with a site's own list.
+  const definitions = withInlineBlocks(blocks)
+  layout.blocks.forEach((block, i) => checkBlock(block, `blocks[${i}]`, null, [], definitions, seen, errors, localization, htmlIds))
   return errors
 }
 
@@ -151,17 +160,24 @@ function checkBlock(
     if (typeof value.className !== 'string') report(`${path}.className`, 'className must be a string')
     else if (def?.styles === false) report(`${path}.className`, `Block type "${type}" does not take a className`)
   }
-  if (value.slotClassName !== undefined) {
-    if (!isPlainObject(value.slotClassName)) report(`${path}.slotClassName`, 'slotClassName must be an object of slot name -> classes')
+  if (value.partClassName !== undefined) {
+    if (!isPlainObject(value.partClassName)) report(`${path}.partClassName`, 'partClassName must be an object of part name -> classes')
     else {
-      for (const [slot, classes] of Object.entries(value.slotClassName)) {
-        if (typeof classes !== 'string') report(`${path}.slotClassName.${slot}`, 'Slot classes must be a string')
-        else if (def && !def.slots?.[slot]?.styles) report(`${path}.slotClassName.${slot}`, `The "${slot}" slot of ${def.label} takes no classes`)
+      const parts = def ? new Set(blockParts(def).map((part) => part.name)) : null
+      for (const [part, classes] of Object.entries(value.partClassName)) {
+        if (typeof classes !== 'string') report(`${path}.partClassName.${part}`, 'Part classes must be a string')
+        else if (def && parts && !parts.has(part)) {
+          const known = [...parts].join(', ')
+          report(`${path}.partClassName.${part}`, `${def.label} has no part "${part}" that takes classes${known ? ` (parts: ${known})` : ''}`)
+        }
       }
     }
   }
   if (value.hidden !== undefined && typeof value.hidden !== 'boolean') {
     report(`${path}.hidden`, 'hidden must be a boolean')
+  }
+  if (value.editableItems !== undefined && typeof value.editableItems !== 'boolean') {
+    report(`${path}.editableItems`, 'editableItems must be a boolean')
   }
   if (value.label !== undefined && typeof value.label !== 'string') {
     report(`${path}.label`, 'label must be a string')
@@ -174,6 +190,10 @@ function checkBlock(
     if (usedBy) report(`${path}.attrs.id`, `The HTML id "${attrs.id}" is also used by block "${usedBy}". Every id is unique in a layout.`, 'constraint')
     else htmlIds.set(attrs.id, blockId ?? path)
   }
+  const visibility = checkVisibility(value.visibility)
+  if (typeof visibility === 'string') report(`${path}.visibility`, visibility)
+  const origin = checkSectionOrigin(value.section)
+  if (typeof origin === 'string') report(`${path}.section`, origin)
   for (const problem of motionProblems(value.motion)) {
     report(`${path}.${problem.path}`, problem.message, problem.unknown ? 'unknown-key' : 'invalid')
   }

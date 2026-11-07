@@ -84,3 +84,23 @@ describe('pickerItems', () => {
     assert.deepEqual(pickerItems({ blocks: limited, sections: all, layout: fullLayout, parentId: 'p', slot: 'children', query: '' }), [])
   })
 })
+
+describe('pickerItems and section variants', () => {
+  const withVariants: SectionDefinition = {
+    id: 'hero',
+    label: 'Hero',
+    category: 'Heroes',
+    blocks: [{ id: 'h1', type: 'heading' }],
+    variants: [{ id: 'big', label: 'Big', blocks: [{ id: 'h2', type: 'heading' }] }],
+  }
+  it('offers one item per section that inserts its own version, stamped, and finds it by a variant name', () => {
+    const items = pickerItems({ blocks, sections: [withVariants], layout, parentId: null, slot: 'children', query: '' }).filter((i) => i.kind === 'section')
+    assert.equal(items.length, 1)
+    const [item] = items
+    assert.ok(item?.kind === 'section')
+    assert.equal(item.hint, 'Heroes · 2 versions')
+    assert.deepEqual(item.section.blocks, [{ id: 'h1', type: 'heading', section: { id: 'hero' } }])
+    const found = pickerItems({ blocks, sections: [withVariants], layout, parentId: null, slot: 'children', query: 'big' })
+    assert.deepEqual(found.map((i) => i.id), ['section:hero'])
+  })
+})

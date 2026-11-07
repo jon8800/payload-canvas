@@ -25,9 +25,17 @@ export type FieldEdit = { path: string; before: unknown; after: unknown; beforeS
 export type FieldWriteResult = boolean | 'retry'
 export type FieldWriter = (changes: LiveFieldChange[], locale: string | null) => Promise<FieldWriteResult>
 
+/**
+ * An undo step outside the layout and the document (a shared class's styles): undo hands `before`
+ * to `apply`, redo `after`. Steps with the same merge key within a second merge (a slider drag).
+ */
+export type ExternalStep = { before: unknown; after: unknown; apply: (value: unknown) => void }
+
 type HistoryEntry = {
   /** Applied in order, these undo (or redo) one user action. */
   ops: Operation[]
+  /** A step outside the layout (see `ExternalStep`). */
+  external?: ExternalStep
   /**
    * A step of document field changes (a region's text or image), saved to the document instead of
    * applied to the layout. Undo writes `before` back, redo `after`; each expects the other value
@@ -201,6 +209,8 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
   let tagCounter = 0
   const nextTag = () => `t${++tagCounter}`
   let fieldWriter: FieldWriter | null = null
+  /** Refuses an own edit by its result (content mode). Null: every edit may apply. */
+  let editGuard: ((before: Layout, after: Layout) => string | null) | null = null
   let historyBusy = false
   let historyGeneration = 0
   let editGeneration = 0
@@ -253,6 +263,15 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
 
   const warn = (text: string) => {
     for (const listener of warnings) listener(text)
+  }
+
+  /** Undoes or redoes a step outside the layout: it applies at once, nothing to wait for. */
+  const externalStep = (entry: HistoryEntry, direction: 'undo' | 'redo') => {
+    const step = entry.external!
+    const source = direction === 'undo' ? 'undoStack' : 'redoStack'
+    const destination = direction === 'undo' ? 'redoStack' : 'undoStack'
+    step.apply(direction === 'undo' ? step.before : step.after)
+    set({ [source]: state[source].slice(0, -1), [destination]: [...state[destination], entry], lastError: null })
   }
 
   const set = (patch: Partial<EditorState>) => {
@@ -361,6 +380,15 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
           return false
         }
       }
+      if (editGuard) {
+        // Content mode: a design change is refused here, before the server would refuse it.
+        const next = applyOperations(state.layout, list)
+        const problem = next.ok ? editGuard(state.layout, next.layout) : null
+        if (problem) {
+          set({ lastError: problem })
+          return false
+        }
+      }
       const tag = nextTag()
       const result = sync.local(list, tag)
       if (!result.ok) {
@@ -428,6 +456,10 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
       }
       const entry = state.undoStack.at(-1)
       if (!entry) return
+      if (entry.external) {
+        externalStep(entry, 'undo')
+        return
+      }
       if (entry.fields) {
         fieldStep(entry, 'undo')
         return
@@ -453,6 +485,10 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
       }
       const entry = state.redoStack.at(-1)
       if (!entry) return
+      if (entry.external) {
+        externalStep(entry, 'redo')
+        return
+      }
       if (entry.fields) {
         fieldStep(entry, 'redo')
         return
@@ -485,9 +521,28 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
       })
       set({ undoStack: [...state.undoStack, entry].slice(-HISTORY_LIMIT), redoStack: [] })
     },
+    /**
+     * Records a step outside the layout (a class edit), already applied. Steps with the same
+     * `mergeKey` within a second become one: undo restores the value before the first.
+     */
+    recordExternal(step: ExternalStep, mergeKey?: string) {
+      editGeneration++
+      const now = Date.now()
+      const top = state.undoStack.at(-1)
+      if (mergeKey && top?.external && top.mergeKey === mergeKey && now - top.at < MERGE_WINDOW_MS) {
+        set({ undoStack: [...state.undoStack.slice(0, -1), { ...top, external: { ...top.external, after: step.after }, at: now }], redoStack: [] })
+        return
+      }
+      const entry: HistoryEntry = { ops: [], external: step, selectedId: state.selectedId, mergeKey, tags: [], at: now }
+      set({ undoStack: [...state.undoStack, entry].slice(-HISTORY_LIMIT), redoStack: [] })
+    },
     /** Saves the field changes of undo and redo. Without one, field steps cannot be undone. */
     setFieldWriter(writer: FieldWriter | null) {
       fieldWriter = writer
+    },
+    /** Sets the check that refuses own edits by their result (content mode), or null for none. */
+    setEditGuard(guard: ((before: Layout, after: Layout) => string | null) | null) {
+      editGuard = guard
     },
 
     /**

@@ -3,7 +3,8 @@ import { describe, test } from 'node:test'
 import { createElement, type ComponentType, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { BlockComponentProps } from '../../render/types'
-import { Accordion, Disclosure } from '.'
+import { Accordion } from './Accordion'
+import { Disclosure } from './Disclosure'
 
 const render = (
   Component: ComponentType<BlockComponentProps>,
@@ -18,7 +19,7 @@ const render = (
       className: 'group builder-css',
       slots,
       attributes: {},
-      slotAttributes: { summary: { 'data-slot': 'summary' }, content: { 'data-slot': 'content' }, items: { 'data-slot': 'items' } },
+      partAttributes: { summary: { 'data-slot': 'summary' }, content: { 'data-slot': 'content' }, items: { 'data-slot': 'items' } },
       mode,
     }),
   )
@@ -32,9 +33,10 @@ describe('Disclosure', () => {
     assert.doesNotMatch(html, /open=""/)
   })
 
-  test('opens at first when asked, and always on the canvas', () => {
+  test('opens at first when asked; the canvas starts it as the site does', () => {
     assert.match(render(Disclosure, { open: true }, {}), /^<details[^>]* open="">/)
-    assert.match(render(Disclosure, {}, {}, 'canvas'), /^<details[^>]* open="">/)
+    assert.doesNotMatch(render(Disclosure, {}, {}, 'canvas'), /open=""/)
+    assert.match(render(Disclosure, { open: true }, {}, 'canvas'), /^<details[^>]* open="">/)
   })
 
   test('leaves out the height animation when it is off', () => {

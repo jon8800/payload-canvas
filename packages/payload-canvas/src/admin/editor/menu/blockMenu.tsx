@@ -25,6 +25,7 @@ import {
   storesBuilderData,
   toggleHidden,
 } from '../actions'
+import { contentModeAllows } from '../contentMode'
 import type { IconName } from '../icons'
 import { useRuntime, type Runtime } from '../runtime'
 import { requestSaveSection } from '../sections/SectionDialog'
@@ -66,27 +67,37 @@ export function blockMenuEntries(runtime: Runtime, id: string, origin: MenuOrigi
   const row = inRow(layout, runtime.measurement.get(), id)
   // A Payload blocks field stores no styles (storesBuilderData), whatever the definition says.
   const styled = storesBuilderData(runtime) && hasStyles(runtime.config.blocks, block.type)
+  const selectParent: MenuEntry = { icon: 'parent', label: 'Select parent', keys: keys('parent'), disabled: !parentId, run: () => parentId && runtime.store.select(parentId) }
+  const moveUp: MenuEntry = {
+    icon: row ? 'left' : 'up',
+    label: row ? 'Move left' : 'Move up',
+    keys: keys('moveUp'),
+    disabled: !location || location.index === 0,
+    run: () => moveBy(runtime, id, -1),
+  }
+  const moveDown: MenuEntry = {
+    icon: row ? 'right' : 'down',
+    label: row ? 'Move right' : 'Move down',
+    keys: keys('moveDown'),
+    disabled: !location || location.index >= siblings - 1,
+    run: () => moveBy(runtime, id, 1),
+  }
+  const duplicate: MenuEntry = { icon: 'duplicate', label: 'Duplicate', keys: keys('duplicate'), run: () => duplicateBlock(runtime, id) }
+  const remove: MenuEntry = { icon: 'delete', label: 'Delete', keys: keys('delete'), danger: true, run: () => removeBlock(runtime, id) }
+
+  // Content mode: items of a block that lets editors manage them move, copy and go; nothing else changes.
+  if (runtime.contentMode.get()) {
+    return contentModeAllows('duplicate', layout, id) ? [selectParent, 'separator', moveUp, moveDown, 'separator', duplicate, 'separator', remove] : [selectParent]
+  }
 
   return [
-    { icon: 'parent', label: 'Select parent', keys: keys('parent'), disabled: !parentId, run: () => parentId && runtime.store.select(parentId) },
+    selectParent,
     { icon: 'rename', label: 'Rename', keys: keys('rename'), ownFocus: true, run: () => requestRename(runtime, id, origin === 'outline' ? 'outline' : 'inspector') },
     'separator',
-    {
-      icon: row ? 'left' : 'up',
-      label: row ? 'Move left' : 'Move up',
-      keys: keys('moveUp'),
-      disabled: !location || location.index === 0,
-      run: () => moveBy(runtime, id, -1),
-    },
-    {
-      icon: row ? 'right' : 'down',
-      label: row ? 'Move right' : 'Move down',
-      keys: keys('moveDown'),
-      disabled: !location || location.index >= siblings - 1,
-      run: () => moveBy(runtime, id, 1),
-    },
+    moveUp,
+    moveDown,
     'separator',
-    { icon: 'duplicate', label: 'Duplicate', keys: keys('duplicate'), run: () => duplicateBlock(runtime, id) },
+    duplicate,
     { icon: 'copy', label: 'Copy', keys: keys('copy'), run: () => copyBlock(runtime, id) },
     {
       icon: 'paste',
@@ -124,7 +135,7 @@ export function blockMenuEntries(runtime: Runtime, id: string, origin: MenuOrigi
       ? [{ icon: 'section' as const, label: 'Detach section', run: () => void detachSection(runtime, id) }]
       : []),
     'separator',
-    { icon: 'delete', label: 'Delete', keys: keys('delete'), danger: true, run: () => removeBlock(runtime, id) },
+    remove,
   ]
 }
 

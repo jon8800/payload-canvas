@@ -11,10 +11,12 @@ import { importExportPlugin } from '@payloadcms/plugin-import-export'
 import { mcpToolkitPlugin } from 'payload-mcp-toolkit'
 import { searchPlugin } from '@payloadcms/plugin-search'
 import { websiteBuilder, type WebsiteBuilderOptions } from 'payload-canvas'
+// @feature:ai
 import { fakeAdapter } from 'payload-canvas/ai/fake'
 import { openRouterAdapter } from 'payload-canvas/ai/openrouter'
 import { fakeImageAdapter } from 'payload-canvas/ai/images/fake'
 import { openRouterImageAdapter } from 'payload-canvas/ai/images/openrouter'
+// @end:ai
 import { builderMcpTools } from 'payload-canvas/mcp'
 import typography from '@tailwindcss/typography'
 import { createTransport } from 'nodemailer'
@@ -39,6 +41,10 @@ import { LEGACY_COLLECTION, legacyDemo, SHARED_BLOCKS_COLLECTION } from '@/legac
 import { legacyBlockConfigs } from '@/legacy-fixture/configs'
 import { i18nDemo } from '@/lib/locales'
 import { demoLocalization, withoutFieldLocalization } from '@/lib/localizationDemo'
+// @feature:dashboard
+import { dashboard } from '@/admin/dashboard'
+// @end:dashboard
+import { isDesigner } from '@/access/roles'
 
 /** Collections with the page builder. Shared by the builder plugin and its MCP tools. */
 const builderCollections: WebsiteBuilderOptions['collections'] = {
@@ -81,6 +87,14 @@ const MCP_HOSTED_CALLBACKS = [
   'https://chatgpt.com/connector_platform_oauth_redirect',
 ]
 
+// Development only: the admin opens signed in as this user, with no login form. Set
+// DEV_AUTOLOGIN_EMAIL in .env (the dev user from scripts/_dev-user.ts: builder-dev@local.test).
+// Payload then treats every request without a login cookie as this user, so it never runs in production.
+const devAutoLogin =
+  process.env.NODE_ENV === 'development' && process.env.DEV_AUTOLOGIN_EMAIL
+    ? { email: process.env.DEV_AUTOLOGIN_EMAIL }
+    : false
+
 const smtpAdapter: EmailAdapter = ({ payload }) => {
   const transport = createTransport({
     host: process.env.SMTP_HOST || 'localhost',
@@ -113,6 +127,17 @@ export default buildConfig({
       baseDir: path.resolve(dirname),
     },
     user: Users.slug,
+    autoLogin: devAutoLogin,
+    // @feature:nav
+    // The sidebar: grouped collections and globals with icons (src/admin/nav).
+    components: {
+      Nav: '/admin/nav/Nav#Nav',
+    },
+    // @end:nav
+    // @feature:dashboard
+    // Dashboard widgets (src/admin/dashboard). Each user can rearrange them with "Edit dashboard".
+    dashboard,
+    // @end:dashboard
     livePreview: {
       breakpoints: [
         { label: 'Mobile', name: 'mobile', width: 375, height: 667 },
@@ -272,33 +297,37 @@ export default buildConfig({
       blocks: builderBlocks,
       sections: sectionLibrary,
       templates: { hooks: { afterChange: [revalidateTemplate] } },
-      // AI assistant in the editor. The app picks the adapter from .env: BUILDER_AI_FAKE=1 (dev only)
-      // plays a scripted model, OPENROUTER_API_KEY turns on OpenRouter. No adapter: the panel shows the
-      // setup card. Other adapters (Anthropic, Cloudflare, any OpenAI-compatible API): docs/ai/providers.md.
+      // Opening a saved page or post goes straight to the visual builder. "All fields" in the builder's menu opens the form.
+      // Users with the Editor role get content mode: they change text, images and links, not the design.
+      editor: { openInBuilder: true, canEditDesign: ({ user }) => isDesigner(user) },
+      // @feature:ai
+      // AI assistant in the editor. BUILDER_AI_FAKE=1 (dev only) plays a scripted model. Else OpenRouter:
+      // the key comes from OPENROUTER_API_KEY, or an admin pastes one in the "AI settings" global
+      // (that key wins). Without either, the panel shows the setup card with a link to the settings.
+      // Other adapters (Anthropic, Cloudflare, any OpenAI-compatible API): docs/ai/providers.md.
       ai: {
         adapter:
           process.env.BUILDER_AI_FAKE === '1' && process.env.NODE_ENV !== 'production'
             ? fakeAdapter()
-            : process.env.OPENROUTER_API_KEY
-              ? openRouterAdapter({
-                  apiKey: process.env.OPENROUTER_API_KEY,
-                  model: process.env.OPENROUTER_MODEL,
-                  siteUrl: process.env.NEXT_PUBLIC_SERVER_URL,
-                })
-              : null,
+            : openRouterAdapter({
+                apiKey: process.env.OPENROUTER_API_KEY,
+                model: process.env.OPENROUTER_MODEL,
+                siteUrl: process.env.NEXT_PUBLIC_SERVER_URL,
+              }),
         // Image generation (assistant, the inspector's "Generate image", the MCP generateImage tool).
         // Its own adapter, so it works with any chat model and with Claude Code or Codex over MCP.
-        // OPENROUTER_IMAGE_MODEL picks the model; BUILDER_AI_FAKE=1 without a key draws local gradients.
-        images: process.env.OPENROUTER_API_KEY
-          ? openRouterImageAdapter({
-              apiKey: process.env.OPENROUTER_API_KEY,
-              model: process.env.OPENROUTER_IMAGE_MODEL,
-              siteUrl: process.env.NEXT_PUBLIC_SERVER_URL,
-            })
-          : process.env.BUILDER_AI_FAKE === '1' && process.env.NODE_ENV !== 'production'
+        // It shares the OpenRouter key (one field in AI settings). OPENROUTER_IMAGE_MODEL picks the
+        // model; BUILDER_AI_FAKE=1 without a key draws local gradients.
+        images:
+          process.env.BUILDER_AI_FAKE === '1' && process.env.NODE_ENV !== 'production' && !process.env.OPENROUTER_API_KEY
             ? fakeImageAdapter({ delayMs: 1500 })
-            : null,
+            : openRouterImageAdapter({
+                apiKey: process.env.OPENROUTER_API_KEY,
+                model: process.env.OPENROUTER_IMAGE_MODEL,
+                siteUrl: process.env.NEXT_PUBLIC_SERVER_URL,
+              }),
       },
+      // @end:ai
       css: {
         entry: 'src/app/(frontend)/globals.css',
         plugins: { '@tailwindcss/typography': typography },

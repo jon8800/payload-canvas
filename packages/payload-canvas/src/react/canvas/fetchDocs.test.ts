@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { afterEach, test } from 'node:test'
 
-import { createRestFetchDocs, fetchListItems, whereParams } from './fetchDocs'
+import { createRestFetchDocs, fetchListItems, fetchListPage, whereParams } from './fetchDocs'
 
 const realFetch = globalThis.fetch
 afterEach(() => {
@@ -43,9 +43,9 @@ test('collection lists load in the editor locale', async () => {
 })
 
 test("whereParams writes Payload's bracket query", () => {
-  assert.deepEqual(whereParams({ and: [{ services: { in: [5, 'x'] } }, { featured: { equals: true } }] }), [
-    ['where[and][0][services][in][0]', '5'],
-    ['where[and][0][services][in][1]', 'x'],
+  assert.deepEqual(whereParams({ and: [{ categories: { in: [5, 'x'] } }, { featured: { equals: true } }] }), [
+    ['where[and][0][categories][in][0]', '5'],
+    ['where[and][0][categories][in][1]', 'x'],
     ['where[and][1][featured][equals]', 'true'],
   ])
   assert.deepEqual(whereParams(undefined), [])
@@ -55,13 +55,13 @@ test('collection lists send their where and cache per where; none loads nothing'
   const urls: string[] = []
   fakeFetch(urls)
   const api = '/api-list-where-test'
-  const base = { blockId: 'b', collection: 'models', limit: 3, sort: '-createdAt' }
-  await fetchListItems(api, { ...base, where: { services: { in: [5] } } })
-  await fetchListItems(api, { ...base, where: { services: { in: [6] } } })
-  await fetchListItems(api, { ...base, where: { services: { in: [5] } } })
+  const base = { blockId: 'b', collection: 'posts', limit: 3, sort: '-createdAt' }
+  await fetchListItems(api, { ...base, where: { categories: { in: [5] } } })
+  await fetchListItems(api, { ...base, where: { categories: { in: [6] } } })
+  await fetchListItems(api, { ...base, where: { categories: { in: [5] } } })
   assert.equal(urls.length, 2)
-  assert.equal(new URL(urls[0], 'http://x').searchParams.get('where[services][in][0]'), '5')
-  assert.equal(new URL(urls[1], 'http://x').searchParams.get('where[services][in][0]'), '6')
+  assert.equal(new URL(urls[0], 'http://x').searchParams.get('where[categories][in][0]'), '5')
+  assert.equal(new URL(urls[1], 'http://x').searchParams.get('where[categories][in][0]'), '6')
   assert.deepEqual(await fetchListItems(api, { ...base, none: true }), [])
   assert.equal(urls.length, 2)
 })
@@ -70,11 +70,23 @@ test('collection lists skip `offset` documents and send `depth`', async () => {
   const urls: string[] = []
   globalThis.fetch = (async (input: string | URL | Request) => {
     urls.push(String(input))
-    return new Response(JSON.stringify({ docs: [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }] }), { status: 200 })
+    return new Response(JSON.stringify({ docs: [{ id: 1 }, { id: 3 }, { id: 4 }] }), { status: 200 })
   }) as typeof fetch
   const docs = await fetchListItems('/api-list-offset-test', { blockId: 'b', collection: 'posts', limit: 2, sort: '-createdAt', offset: 1, depth: 2, exclude: 2 })
   assert.deepEqual(docs.map((d) => d.id), [3, 4])
   const params = new URL(urls[0], 'http://x').searchParams
-  assert.equal(params.get('limit'), '4')
+  assert.equal(params.get('limit'), '3')
   assert.equal(params.get('depth'), '2')
+  assert.equal(params.get('where[id][not_equals]'), '2')
+})
+
+test('a paginated list that leaves out the current document asks for exactly one page', async () => {
+  const urls: string[] = []
+  fakeFetch(urls)
+  await fetchListPage('/api-list-page-test', { blockId: 'b', collection: 'posts', limit: 6, sort: '-createdAt', page: 2, exclude: 9, where: { featured: { equals: true } } })
+  const params = new URL(urls[0], 'http://x').searchParams
+  assert.equal(params.get('limit'), '6')
+  assert.equal(params.get('page'), '2')
+  assert.equal(params.get('where[and][0][id][not_equals]'), '9')
+  assert.equal(params.get('where[and][1][featured][equals]'), 'true')
 })

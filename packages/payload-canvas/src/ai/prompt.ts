@@ -5,8 +5,10 @@
 
 import { isRichText, richTextToPlain } from '../core/bindings'
 import { localeLabel } from '../core/locale'
+import { sectionVersions } from '../core/sections'
 import type { BlockDefinition, Layout, LocaleSettings, SectionDefinition, StyleTokens, TemplateContext, ThemeToken } from '../core/types'
 import { BINDINGS_GUIDE, describeBlock, layoutGuide, outline } from '../mcp/shared'
+import { componentProperties } from '../core/components'
 
 export type PromptCatalog = {
   blocks: BlockDefinition[]
@@ -46,7 +48,7 @@ function stylingGuide(tokens: StyleTokens | null): string {
   const lines = [
     'STYLING',
     "- Blocks have no built-in styles. All styling comes from each block's className: Tailwind CSS v4 utility classes. Use real Tailwind classes. Prefer the theme scale over arbitrary values like w-[37rem].",
-    '- In an "update" operation, className REPLACES all classes. Send the full list: the current classes from the layout, changed as needed.',
+    '- In an "update" operation, className REPLACES all classes: send the full list, the current classes from the layout, changed as needed. To add or remove a few classes, use addClassName and removeClassName (space-separated) instead.',
     '- Mobile first: classes without a prefix apply at every width. sm:, md:, lg:, xl:, 2xl: apply from that breakpoint up.',
     '- Keep spacing, widths and type sizes consistent with the sections already on the page.',
   ]
@@ -63,6 +65,13 @@ function stylingGuide(tokens: StyleTokens | null): string {
   if (tokens.radius.length > 0) lines.push(`- Radius (rounded-<name>): ${names(tokens.radius)}.`)
   if (tokens.shadows.length > 0) lines.push(`- Shadows (shadow-<name>): ${names(tokens.shadows)}.`)
   if (tokens.containers.length > 0) lines.push(`- Container widths (max-w-<name>): ${names(tokens.containers)}.`)
+  const variables = tokens.variables ?? []
+  if (variables.length > 0) {
+    const list = variables.slice(0, 60).map((v) => `${v.name} (${v.type}: ${v.value}${v.darkValue ? `, dark ${v.darkValue}` : ''})`)
+    lines.push(
+      `- Design variables (the site's named colors, sizes and fonts; prefer them over raw values): ${list.join(', ')}. Colors: bg-<name>, text-<name>, border-<name>. Sizes: p-<name>, m-<name>, gap-<name>, w-<name>. Fonts: font-<name>.`,
+    )
+  }
   const site = tokens.siteClasses ?? []
   if (site.length > 0) {
     const list = site.slice(0, 80).map((c) => (c.label ? `${c.name} (${c.group ? `${c.group}: ` : ''}${c.label})` : c.name))
@@ -94,12 +103,16 @@ function sectionCatalog(sections: SectionDefinition[], saved: boolean): string {
       : 'SECTION CATALOG\nThis site has no ready-made sections. Build from blocks.'
   }
   const entries = sections.map((s) => {
-    const head = `## ${s.id}: ${s.label}${s.category ? ` (${s.category})` : ''}${s.variantOf ? ` [variant of ${s.variantOf}]` : ''}`
+    const head = `## ${s.id}: ${s.label}${s.category ? ` (${s.category})` : ''}`
     const description = s.description ? `\n${s.description}` : ''
-    return `${head}${description}\n${outline(s.blocks).join('\n')}`
+    // Variants follow their section, each with its own outline.
+    const variants = sectionVersions(s)
+      .slice(1)
+      .map((v) => `\n### variant ${v.variant}: ${v.label}${v.description && v.description !== s.description ? `\n${v.description}` : ''}\n${outline(v.blocks).join('\n')}`)
+    return `${head}${description}\n${outline(s.blocks).join('\n')}${variants.join('')}`
   })
   return [
-    'SECTION CATALOG. Ready-made, designed sections. Insert one with insertSection { sectionId }. The outline shows its blocks (type and start of the text). A variant ("hero/split") is another version of the section before it: pick the one that fits. listSections { full: true } returns the full JSON.' +
+    'SECTION CATALOG. Ready-made, designed sections. Insert one with insertSection { sectionId }. The outline shows its blocks (type and start of the text). A "### variant" under a section is another version of it: pick the one that fits and insert it with insertSection { sectionId, variant }. listSections { full: true } returns the full JSON.' +
       (saved ? `\n${SAVED_SECTIONS_NOTE}` : ''),
     ...entries,
   ].join('\n\n')
@@ -167,8 +180,12 @@ export type ContextInput = {
   sample?: TemplateContext | null
   /** Saved sections the user can read (people made them on this site). Not in the cached system prompt. */
   savedSections?: SectionDefinition[]
+  /** The editable classes (the classes collection). They change at any time, so they go here, not in the cached prompt. */
+  classes?: Array<{ name: string; label?: string; group?: string }>
   /** Localized layouts: the locale the user edits, and how many props still show the fallback language. */
   locale?: { settings: LocaleSettings; locale: string; untranslated: number } | null
+  /** Content mode: the user may change only content (core/contentMode.ts). */
+  contentOnly?: boolean
 }
 
 const MAX_STRING = 160
@@ -225,7 +242,9 @@ function savedSectionsBlock(sections: SectionDefinition[] | undefined): string[]
   const lines = sections.slice(0, CONTEXT_SAVED_SECTIONS).map((s) => {
     const condensed = outline(s.blocks).map((line) => line.trim()).join(', ')
     const short = condensed.length > OUTLINE_MAX ? `${condensed.slice(0, OUTLINE_MAX)}…` : condensed
-    return `- ${s.id}: ${s.label}${s.category ? ` (${s.category})` : ''}: ${short}`
+    const propertyNames = componentProperties(s.blocks, []).map((p) => p.name)
+    const component = propertyNames.length > 0 ? ` [component, properties: ${propertyNames.join(', ')}; insertSection with values]` : ''
+    return `- ${s.id}: ${s.label}${s.category ? ` (${s.category})` : ''}${component}: ${short}`
   })
   const more = sections.length - CONTEXT_SAVED_SECTIONS
   if (more > 0) lines.push(`- …and ${more} more. listSections lists them all.`)
@@ -269,7 +288,18 @@ export function contextText(input: ContextInput): string {
     lines.push('Selected block: none.')
   }
   lines.push(...savedSectionsBlock(input.savedSections))
+  if (input.classes && input.classes.length > 0) {
+    const list = input.classes.slice(0, 80).map((c) => (c.label ? `${c.name} (${c.group ? `${c.group}: ` : ''}${c.label})` : c.name))
+    lines.push(
+      `Editable classes (stored in the CMS; they win over a code class with the same name). Prefer them in className over rebuilding the same look from utilities: ${list.join(', ')}.`,
+    )
+  }
   if (input.locale) lines.push(...localeLines(input.locale))
+  if (input.contentOnly) {
+    lines.push(
+      'CONTENT MODE: this user may change only text, images and links (text, textarea, rich text, upload and link props). Do not add, move, delete or restyle blocks, and do not change classes, motion, visibility, bindings or other settings: such operations are refused. Inside a block with "editableItems": true you may duplicate, delete and reorder its direct children. If the user asks for a design change, say that a designer has to make it.',
+    )
+  }
   lines.push(`Current layout (${input.layout.blocks.length} top-level blocks):`, JSON.stringify(input.layout), '</editor_context>')
   return lines.join('\n')
 }

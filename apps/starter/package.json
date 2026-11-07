@@ -14,8 +14,10 @@
     "payload": "payload",
     "setup": "tsx scripts/setup.ts",
     "seed:demo": "payload run ./scripts/seed-demo.ts",
+    "seed:classes": "payload run ./scripts/seed-classes.ts",
     "create:admin": "payload run ./scripts/create-admin.ts",
     "start": "next start",
+    "test": "node --import tsx --test \"src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

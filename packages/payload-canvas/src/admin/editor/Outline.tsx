@@ -23,11 +23,14 @@ import { missingWords, useUntranslated } from './locale/locale'
 import { BLOCK_KEYS, keyText } from './menu/keys'
 import { openBlockMenu, renameRequest } from './menu/requests'
 import { blockPreview, blockSummary, childrenOf, customLabel, typeName } from './names'
+import { useContentMode } from './contentMode'
 import { OUTLINE_INDENT, useRuntime, type DragData, type Runtime } from './runtime'
 import { RegionRows } from './regions/RegionRows'
 import { useEditor } from './store'
-import { bindingPaths, scopeSources } from '../../core/bindings'
+import { bindingPaths, scopeSources, visibilityFieldPaths } from '../../core/bindings'
 import { findBindingField } from './templates/binding'
+import { visibilityRows } from './templates/visibilityRows'
+import { conditionSummary } from './fields/conditions'
 import { useValue, useValueSelector } from './valueStore'
 
 type Row = {
@@ -107,16 +110,16 @@ function brokenBindingIds(runtime: Runtime, layout: Layout, templateTarget: stri
 const NO_ISSUES: string[] = []
 
 /**
- * True when a binding of the block reads a field its document does not have (or there is no
- * document): the template's, each list item's, or each field list row's.
+ * True when a binding or a visibility condition of the block reads a field its document does not
+ * have (or there is no document): the template's, each list item's, or each repeat row's.
  */
 function hasBrokenBinding(runtime: Runtime, layout: Layout, block: Block, templateTarget: string | null): boolean {
-  const bindings = Object.entries(block.bindings ?? {})
-  if (bindings.length === 0) return false
+  // Every plain path the bindings read (templates and fallback chains have several), and the conditions' fields.
+  const paths = [...Object.values(block.bindings ?? {}).flatMap(bindingPaths), ...visibilityFieldPaths(block.visibility)]
+  if (paths.length === 0) return false
   const fields = scopeSources(layout, block.id, runtime.config.templates?.sources ?? {}, templateTarget)
-  if (!fields) return true
-  // Every plain path a binding reads (templates and fallback chains have several).
-  return bindings.some(([key, binding]) => bindingPaths(key, binding).some((path) => !findBindingField(fields, path)))
+  if (!fields) return Object.keys(block.bindings ?? {}).length > 0
+  return paths.some((path) => !findBindingField(fields, path))
 }
 
 /**
@@ -226,7 +229,7 @@ export function Outline() {
         if (row.childCount > 0) selectRow(runtime, rows[index + 1])
         return
       case 'F2':
-        if (!row) return
+        if (!row || runtime.contentMode.get()) return
         e.preventDefault()
         runtime.store.select(row.block.id)
         setRenaming(row.block.id)
@@ -364,7 +367,9 @@ const OutlineRow = memo(function OutlineRow({
   const typeLabel = runtime.blockLabel(block.type)
   const icon = runtime.blockIcon(block.type)
   const data: DragData = { source: { kind: 'block', id: block.id }, label: typeLabel, icon }
-  const { setNodeRef, listeners, attributes } = useDraggable({ id: `outline:${block.id}`, data, disabled: renaming })
+  // Content mode moves no blocks by dragging (items move with Move up and Move down).
+  const contentMode = useContentMode(runtime)
+  const { setNodeRef, listeners, attributes } = useDraggable({ id: `outline:${block.id}`, data, disabled: renaming || contentMode })
   const label = customLabel(block)
   const name = label ?? typeName(block, typeLabel)
   const bindingCount = Object.keys(block.bindings ?? {}).length
@@ -384,7 +389,7 @@ const OutlineRow = memo(function OutlineRow({
   // Two hover actions, so the row keeps room for its name. Rename, duplicate and delete are in
   // the menu and on their keys.
   const actions: { icon: IconName; label: string; tooltip: string; run: (button: HTMLElement) => void }[] = [
-    ...(storesBuilderData(runtime)
+    ...(storesBuilderData(runtime) && !contentMode
       ? [
           {
             icon: (block.hidden ? 'eye' : 'eyeOff') as IconName,
@@ -413,7 +418,7 @@ const OutlineRow = memo(function OutlineRow({
       data-depth={depth}
       className={className}
       onClick={() => runtime.store.select(block.id)}
-      onDoubleClick={() => onRename(block.id)}
+      onDoubleClick={() => !contentMode && onRename(block.id)}
       onContextMenu={(e) => openRowMenu(runtime, block.id, e)}
       // Not while dragging: the row actions would mount and unmount under the pointer, and every
       // DOM insert restyles the whole admin (Payload's `body:has(...)` rules).
@@ -421,6 +426,8 @@ const OutlineRow = memo(function OutlineRow({
       onPointerLeave={() => !runtime.drag.get() && runtime.store.hover(null)}
       {...listeners}
       {...attributes}
+      // dnd-kit marks a row it may not drag as disabled; the row still selects, so it is not.
+      aria-disabled={undefined}
       role="treeitem"
       aria-label={[
         blockSummary(block, typeLabel),
@@ -436,7 +443,7 @@ const OutlineRow = memo(function OutlineRow({
       aria-expanded={container && childCount > 0 ? open : undefined}
       aria-roledescription="block"
       tabIndex={selected || focusable ? 0 : -1}
-      data-tooltip={`${typeLabel}${tag}${label ? '' : ' · double-click to rename'}`}
+      data-tooltip={`${typeLabel}${tag}${label || contentMode ? '' : ' · double-click to rename'}`}
       data-tooltip-side="right"
     >
       {Array.from({ length: depth }, (_, i) => (
@@ -490,14 +497,24 @@ const OutlineRow = memo(function OutlineRow({
           <Icon name="motion" size={12} />
         </span>
       )}
-      {bindingCount > 0 && (
+      {block.visibility && (
+        <span
+          className="builder-editor__row-motion"
+          aria-label="Shows only when its conditions match"
+          data-tooltip={`Shows only when ${conditionSummary(visibilityRows(block.visibility), [])}`}
+          data-tooltip-side="right"
+        >
+          <Icon name="eye" size={12} />
+        </span>
+      )}
+      {(bindingCount > 0 || broken) && (
         <span
           className={`builder-editor__row-bound${broken ? ' builder-editor__row-bound--broken' : ''}`}
           aria-label={broken ? 'A bound field is missing' : `${bindingCount} bound ${bindingCount === 1 ? 'field' : 'fields'}`}
           data-tooltip-side="right"
           data-tooltip={
             broken
-              ? 'A bound field is missing from the collection. Select the block to fix it.'
+              ? 'A field a binding or a visibility condition reads is missing from the collection. Select the block to fix it.'
               : `Shows data: ${Object.entries(block.bindings ?? {})
                   .map(([prop, field]) => `${prop} ← ${field}`)
                   .join(', ')}`

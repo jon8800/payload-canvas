@@ -17,9 +17,12 @@ import {
   type Stylesheet,
   stylesheetKey,
 } from './shared'
-import { buildStyleTokens } from './tokens'
+import { buildStyleTokens, parseSiteClasses, siteClassRules } from './tokens'
+import { compileClassSheet, type ClassSheet } from './classes'
+import { withoutClassNames, type ClassStyleSource, type SiteClassRule } from '../classes/shared'
 
 export { applyFontFamilies, resolveFontValue, type FontFamilies } from './tokens'
+export type { ClassSheet } from './classes'
 export { BUILDER_CSS_CLASS, withBuilderCssClass } from './marker'
 
 /** Tailwind plugins by the id used in `@plugin "<id>"`, e.g. { '@tailwindcss/typography': typography }. */
@@ -29,6 +32,11 @@ export type CssOptions = {
   /** Absolute path to the app's Tailwind entry CSS (the file with @import "tailwindcss" and @theme). */
   entry: string
   plugins?: TailwindPlugins
+  /**
+   * CSS added after the entry: the theme's design variables (`@theme inline reference { … }`, see
+   * `theme/variables.ts`). Set by the plugin per compile (`withThemeVariables`), not in the config.
+   */
+  themeCss?: string
 }
 
 /**
@@ -189,8 +197,11 @@ async function recordInput(entryFile: string, entryCss: string, plugins?: Tailwi
   return data
 }
 
+/** The entry's CSS with the theme's variables after it. */
+const entryCssOf = async (options: CssOptions) => (await readCached(options.entry)) + (options.themeCss ?? '')
+
 async function getInput(options: CssOptions): Promise<CanvasCssData> {
-  const entryCss = await readCached(options.entry)
+  const entryCss = await entryCssOf(options)
   const key = hash(options.entry, entryCss)
   const cached = inputCache.get(key)
   if (cached) return cached
@@ -211,10 +222,12 @@ const cssCache = new Lru<string>(100)
  * Every rule matches only elements with the `builder-css` class (marker.ts), so the output can
  * load after the app's own CSS without changing the order of the app's classes.
  * Unknown classes are ignored. A `@plugin` id missing from `plugins` throws.
+ * `filter.exclude`: class names to leave out with any variant prefix (the editable classes, which
+ * come from their own stylesheet, `css/classes.ts`).
  * Results are cached (LRU) by entry content, plugin ids and the sorted class set.
  */
-export async function compileClasses(classes: string[], options: CssOptions): Promise<string> {
-  const candidates = normalizeClasses(classes)
+export async function compileClasses(classes: string[], options: CssOptions, filter: { exclude?: Iterable<string> } = {}): Promise<string> {
+  const candidates = withoutClassNames(normalizeClasses(classes), new Set(filter.exclude ?? []))
   if (candidates.length === 0) return ''
 
   const input = await getInput(options)
@@ -241,6 +254,7 @@ export function clearCssCache() {
   inputCache.clear()
   cssCache.clear()
   tokensCache.clear()
+  sheetCache.clear()
 }
 
 /** Escapes glob characters that are common in Next route folders: `(group)`, `[slug]`, `{a,b}`. */
@@ -273,7 +287,7 @@ const tokensCache = new Lru<Promise<StyleTokens>>(8)
  * (see tokens.ts). Cached per entry path, entry content and plugin ids.
  */
 export async function getStyleTokens(options: CssOptions): Promise<StyleTokens> {
-  const entryCss = await readCached(options.entry)
+  const entryCss = await entryCssOf(options)
   const pluginIds = Object.keys(options.plugins ?? {}).toSorted().join(',')
   const key = hash('tokens', options.entry, entryCss, pluginIds)
   const cached = tokensCache.get(key)
@@ -282,4 +296,60 @@ export async function getStyleTokens(options: CssOptions): Promise<StyleTokens> 
   tokensCache.set(key, pending)
   pending.catch(() => tokensCache.delete(key))
   return pending
+}
+
+// ---------------------------------------------------------------------------------------------
+// Editable classes (the classes collection): server side of css/classes.ts
+
+const sheetCache = new Lru<Promise<ClassSheet>>(20)
+const inputKeys = new WeakMap<CanvasCssData, string>()
+
+/**
+ * Compiles the editable classes into one stylesheet against the app's CSS entry (see
+ * `compileClassSheet` in ./classes.ts). Cached (LRU) by the CSS input and the classes' data.
+ */
+export async function compileClassesSheet(classes: readonly ClassStyleSource[], options: CssOptions): Promise<ClassSheet> {
+  const input = await getInput(options)
+  const data = classes
+    .map((c) => JSON.stringify([c.name, c.styles ?? '', c.css ?? '', c.previousNames ?? []]))
+    .toSorted()
+    .join('\n')
+  const key = hash('classes', await cssInputKey(options), data)
+  const cached = sheetCache.get(key)
+  if (cached) return cached
+  const pending = compileClassSheet(input, classes, options.plugins)
+  sheetCache.set(key, pending)
+  pending.catch(() => sheetCache.delete(key))
+  return pending
+}
+
+/**
+ * A key that changes when the compile's input changes: the entry, the stylesheets it imports and
+ * the plugin ids. A stored classes stylesheet with another key is compiled again (a deploy with a
+ * new theme).
+ */
+export async function cssInputKey(options: CssOptions): Promise<string> {
+  const input = await getInput(options)
+  let key = inputKeys.get(input)
+  if (!key) {
+    key = hash(JSON.stringify(input), Object.keys(options.plugins ?? {}).toSorted().join(','))
+    inputKeys.set(input, key)
+  }
+  return key
+}
+
+/** The site's own static `@utility` rules with their full bodies, for "Import from site CSS". */
+export async function getSiteClassRules(options: CssOptions): Promise<SiteClassRule[]> {
+  return siteClassRules(await getInput(options))
+}
+
+/**
+ * True when Tailwind, a Tailwind plugin or a functional `@utility` of the site has a utility with
+ * this name, so a class with it would clash. The site's own static `@utility` classes do not
+ * count: an editable class with their name replaces them.
+ */
+export async function isTailwindUtility(name: string, options: CssOptions): Promise<boolean> {
+  const input = await getInput(options)
+  if (parseSiteClasses(input).some((c) => c.name === name)) return false
+  return (await compileClasses([name], options)) !== ''
 }

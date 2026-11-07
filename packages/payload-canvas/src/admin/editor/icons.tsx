@@ -58,7 +58,6 @@ const PATHS = {
       <path d="M4 4.5h8M4 11.5h8" opacity={0.4} />
     </>
   ),
-  spacer: <path d="M2.5 2.5h11M2.5 13.5h11M8 5.25v5.5M6.25 7 8 5.25 9.75 7M6.25 9 8 10.75 9.75 9" />,
   video: (
     <>
       <rect x="1.5" y="3" width="13" height="10" rx="1.5" />
@@ -86,6 +85,95 @@ const PATHS = {
     </>
   ),
   layers: <path d="m8 2 6 3-6 3-6-3 6-3ZM2 8l6 3 6-3M2 11l6 3 6-3" />,
+  // Built-in blocks (`builtinBlocks()` and the plugin's sectionRef)
+  // A star: one glyph of the site's icon set.
+  icon: <path d="m8 2 1.76 3.57 3.94.57-2.85 2.78.67 3.92L8 11l-3.52 1.84.67-3.92L2.3 6.14l3.94-.57L8 2Z" />,
+  // The current slide with the edges of its neighbours, and dots.
+  carousel: (
+    <>
+      <rect x="4" y="2.5" width="8" height="8" rx="1" />
+      <path d="M1.5 4v5M14.5 4v5" />
+      {dot(6, 13.25, 0.75)}
+      {dot(8, 13.25, 0.75)}
+      {dot(10, 13.25, 0.75)}
+    </>
+  ),
+  // Angle brackets around a slash: custom code.
+  embed: <path d="M5 4.5 1.75 8 5 11.5M11 4.5 14.25 8 11 11.5M9.25 3l-2.5 10" />,
+  // A panel with a close mark, over the page.
+  popup: (
+    <>
+      <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" opacity={0.45} />
+      <rect x="3.5" y="4.5" width="9" height="7" rx="1" />
+      <path d="m9.25 6.25 1.5 1.5M10.75 6.25l-1.5 1.5M5.25 9.5h3" />
+    </>
+  ),
+  // A row of tabs, the first one open, over its panel.
+  tabs: (
+    <>
+      <path d="M1.5 13.5v-9a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1V6h6.5a1 1 0 0 1 1 1v5.5a1 1 0 0 1-1 1h-11Z" />
+      <path d="M7 6V4.5a1 1 0 0 1 1-1h2.5a1 1 0 0 1 1 1V6" opacity={0.45} />
+    </>
+  ),
+  // One tab and its panel.
+  tab: (
+    <>
+      <path d="M2.5 6.5v-2a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+      <rect x="1.5" y="6.5" width="13" height="7" rx="1" />
+      <path d="M4 9.5h6" opacity={0.45} />
+    </>
+  ),
+  // Items in a row that move along.
+  marquee: (
+    <>
+      <rect x="1.5" y="4" width="3.5" height="4.5" rx="0.75" />
+      <rect x="6.25" y="4" width="3.5" height="4.5" rx="0.75" />
+      <rect x="11" y="4" width="3.5" height="4.5" rx="0.75" opacity={0.45} />
+      <path d="M2 12.25h11M11.25 10.75l1.75 1.5-1.75 1.5" />
+    </>
+  ),
+  // Back and forward between two documents.
+  adjacentLinks: (
+    <>
+      <path d="M5 4.5 1.75 8 5 11.5M11 4.5 14.25 8 11 11.5" />
+      <path d="M2 8h4M10 8h4" opacity={0.45} />
+    </>
+  ),
+  // Rows, each with an arrow; the first is open.
+  accordion: (
+    <>
+      <path d="M2 3h12M2 9h12M2 13h12" />
+      <path d="M4 5.75h6" opacity={0.45} />
+      <path d="m11.5 12 1 1 1-1" />
+    </>
+  ),
+  // One row with an arrow, and its content below.
+  disclosure: (
+    <>
+      <rect x="1.5" y="2.5" width="13" height="4" rx="1" />
+      <path d="m10.5 4 1 1 1-1" />
+      <path d="M3.5 9.5h9M3.5 12.5h6" opacity={0.45} />
+    </>
+  ),
+  // Lines, the second level indented.
+  tableOfContents: (
+    <>
+      {dot(2.5, 4)}
+      {dot(2.5, 12)}
+      <path d="M5 4h9M7 8h7M5 12h9" />
+    </>
+  ),
+  filter: <path d="M2 3h12l-4.5 5.5V13l-3-1.5v-3L2 3Z" />,
+  // A section with a link mark: it shows the saved section live.
+  sectionRef: (
+    <>
+      <rect x="2" y="2" width="12" height="5" rx="1" />
+      <path d="M2 10h3M2 13h3" opacity={0.45} />
+      <path d="m9.5 11.5 2-2M10 9.25l.5-.5a1.25 1.25 0 0 1 1.75 1.75l-.5.5M11 13.75l-.5.5a1.25 1.25 0 0 1-1.75-1.75l.5-.5" />
+    </>
+  ),
+  // Four diamonds: a component (a saved section with properties) and its properties.
+  component: <path d="M8 1.75 10.25 4 8 6.25 5.75 4ZM12 5.75 14.25 8 12 10.25 9.75 8ZM8 9.75 10.25 12 8 14.25 5.75 12ZM4 5.75 6.25 8 4 10.25 1.75 8Z" />,
   // Dynamic blocks (templates and binding)
   field: (
     <>
@@ -218,6 +306,7 @@ const PATHS = {
     </>
   ),
   width: <path d="M1.5 3v10M14.5 3v10M4 8h8M6 6 4 8l2 2M10 6l2 2-2 2" />,
+  chevronLeft: <path d="m10 4-4 4 4 4" />,
   chevronRight: <path d="m6 4 4 4-4 4" />,
   chevronDown: <path d="m4 6 4 4 4-4" />,
   search: (
@@ -272,6 +361,7 @@ const PATHS = {
   // Assistant
   arrowUp: <path d="M8 13V3.5M4 7.5l4-4 4 4" />,
   stop: <rect x="4" y="4" width="8" height="8" rx="1.5" fill="currentColor" />,
+  comment: <path d="M5 11.5H4A1.5 1.5 0 0 1 2.5 10V4A1.5 1.5 0 0 1 4 2.5h8A1.5 1.5 0 0 1 13.5 4v6a1.5 1.5 0 0 1-1.5 1.5H8.5L5 14v-2.5Z" />,
   compose: <path d="M13.5 9v3.5a1.5 1.5 0 0 1-1.5 1.5H3.5A1.5 1.5 0 0 1 2 12.5V4a1.5 1.5 0 0 1 1.5-1.5H7M11.25 2.25a1.4 1.4 0 0 1 2 2L8 9.5 5.5 10.5l1-2.5 4.75-5.75Z" />,
   key: (
     <>

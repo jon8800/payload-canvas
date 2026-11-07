@@ -340,3 +340,35 @@ test('restoring a failed field undo keeps its order when newer edits reach the h
   assert.equal(store.getState().undoStack.length, 200)
   assert.deepEqual(store.getState().undoStack.slice(-3), [fieldEntry, ...newerEntries])
 })
+
+test('a class edit is an undo step outside the layout; edits with one merge key merge; layout steps keep their order', () => {
+  const store = createEditorStore(layout(block('a')))
+  let styles: unknown = 'p-4'
+  const record = (after: string, mergeKey?: string) => {
+    const before = styles
+    styles = after
+    store.recordExternal({ before, after, apply: (value) => (styles = value) }, mergeKey)
+  }
+  record('p-5', 'class:1:padding')
+  record('p-6', 'class:1:padding')
+  store.apply(insert('b', 1))
+  record('p-6 rounded', 'class:1:radius')
+  assert.equal(store.getState().undoStack.length, 3)
+
+  store.undo()
+  assert.equal(styles, 'p-6')
+  store.undo()
+  assert.deepEqual(ids(store.getState().layout), ['a'])
+  store.undo()
+  assert.equal(styles, 'p-4', 'the merged slider run undoes to the value before it')
+  store.redo()
+  assert.equal(styles, 'p-6')
+  store.redo()
+  store.redo()
+  assert.equal(styles, 'p-6 rounded')
+  assert.deepEqual(ids(store.getState().layout), ['a', 'b'])
+  // A new edit clears redo.
+  store.undo()
+  record('p-6 shadow')
+  assert.equal(store.getState().redoStack.length, 0)
+})

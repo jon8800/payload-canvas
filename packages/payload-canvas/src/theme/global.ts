@@ -1,16 +1,21 @@
 // The theme global: colors, fonts, radius and spacing, with the plugin's color, font and slider
 // fields. Server-only (the revalidation hook imports next/cache).
 import { revalidatePath, revalidateTag } from 'next/cache'
-import type { Field, GlobalAfterChangeHook, GlobalBeforeChangeHook, GlobalConfig, TextField } from 'payload'
+import type { ArrayField, Field, GlobalAfterChangeHook, GlobalBeforeChangeHook, GlobalConfig, TextField } from 'payload'
 
 import { deriveColors } from './colors'
 import { DEFAULT_THEME_SLUG, type ThemeOptions } from './config'
+import { forgetThemeVariables } from './server'
+import { VARIABLE_TYPES, variableNameProblem, variableValueProblem, type ThemeVariableType } from './variables'
 
 const CLIENT = 'payload-canvas/theme-client'
 const COLOR_FIELD = `${CLIENT}#ThemeColorField`
 const FONT_FIELD = `${CLIENT}#ThemeFontField`
 const SLIDER_FIELD = `${CLIENT}#ThemeSliderField`
 const SAVE_SIGNAL = `${CLIENT}#ThemeSaveSignal`
+const VARIABLE_VALUE_FIELD = `${CLIENT}#ThemeVariableValueField`
+const VARIABLE_ROW_LABEL = `${CLIENT}#ThemeVariableRowLabel`
+const VARIABLES_WARNING = `${CLIENT}#ThemeVariablesWarning`
 
 /** Name of the hidden field that holds the derived color variables. */
 export const DERIVED_TOKENS_FIELD = 'derivedTokens'
@@ -82,10 +87,87 @@ function themeFields(): Field[] {
         custom: { min: 0, max: 2, step: 0.125, unit: 'rem', fallback: 0.625 },
       },
     },
+    variablesField(),
+    // Warns while a rename or a removal would break blocks or classes that use a variable.
+    { name: 'variablesWarning', type: 'ui', admin: { components: { Field: VARIABLES_WARNING } } },
     { name: DERIVED_TOKENS_FIELD, type: 'json', admin: { hidden: true } },
     // Renders nothing. After each save it tells open builder canvases to reload the theme.
     { name: 'themeSaveSignal', type: 'ui', admin: { components: { Field: SAVE_SIGNAL } } },
   ]
+}
+
+const typeOf = (siblingData: unknown): ThemeVariableType => {
+  const type = (siblingData as { type?: unknown } | undefined)?.type
+  return type === 'size' || type === 'font' ? type : 'color'
+}
+
+/**
+ * Design variables: named colors, sizes and fonts (`bg-brand`, `p-gutter`, `font-display`), with
+ * an optional dark-mode value. See `variables.ts`.
+ */
+function variablesField(): ArrayField {
+  return {
+    name: 'variables',
+    type: 'array',
+    label: 'Variables',
+    labels: { singular: 'Variable', plural: 'Variables' },
+    admin: {
+      description: 'Named colors, sizes and fonts. Blocks and classes use them by name, so one change here updates every page.',
+      initCollapsed: true,
+      components: { RowLabel: VARIABLE_ROW_LABEL },
+    },
+    fields: [
+      {
+        type: 'row',
+        fields: [
+          {
+            name: 'name',
+            type: 'text',
+            required: true,
+            admin: { width: '50%', placeholder: 'brand' },
+            validate: (value: unknown, { siblingData, data }: { siblingData?: unknown; data?: unknown }) => {
+              const problem = variableNameProblem(value, typeOf(siblingData))
+              if (problem) return problem
+              const rows = ((data as { variables?: Array<{ name?: unknown }> } | undefined)?.variables ?? []).filter((row) => typeof row?.name === 'string' && row.name.trim() === String(value).trim())
+              return rows.length > 1 ? 'Another variable has this name.' : true
+            },
+          },
+          {
+            name: 'type',
+            type: 'select',
+            required: true,
+            defaultValue: 'color',
+            options: VARIABLE_TYPES.map((t) => ({ value: t.value, label: t.label })),
+            admin: { width: '50%' },
+          },
+        ],
+      },
+      {
+        type: 'row',
+        fields: [
+          {
+            name: 'value',
+            type: 'text',
+            required: true,
+            admin: { width: '50%', components: { Field: VARIABLE_VALUE_FIELD } },
+            validate: (value: unknown, { siblingData }: { siblingData?: unknown }) => variableValueProblem(value, typeOf(siblingData)) ?? (value ? true : 'Enter a value.'),
+          },
+          {
+            name: 'darkValue',
+            type: 'text',
+            label: 'Dark mode',
+            admin: {
+              width: '50%',
+              description: 'Used inside the dark class. Empty: the same value.',
+              condition: (_data, siblingData) => typeOf(siblingData) !== 'font',
+              components: { Field: VARIABLE_VALUE_FIELD },
+            },
+            validate: (value: unknown, { siblingData }: { siblingData?: unknown }) => variableValueProblem(value, typeOf(siblingData)) ?? true,
+          },
+        ],
+      },
+    ],
+  }
 }
 
 /** Derives the color variables on the same write, so API consumers get them too. */
@@ -101,6 +183,8 @@ const deriveTokens: GlobalBeforeChangeHook = ({ data, originalDoc }) => ({
  */
 function revalidateTheme(cacheTag: string): GlobalAfterChangeHook {
   return ({ doc, req: { payload, context } }) => {
+    // The compiles read the variables again (a new name makes `bg-<name>` exist).
+    forgetThemeVariables(payload)
     if (context?.disableRevalidate) return doc
     try {
       revalidateTag(cacheTag, { expire: 0 })

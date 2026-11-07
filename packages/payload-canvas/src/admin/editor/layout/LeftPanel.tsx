@@ -12,6 +12,7 @@ import { Icon } from '../icons'
 import { Library } from '../Library'
 import { isMac } from '../menu/keys'
 import { Outline } from '../Outline'
+import { leftTabsFor, useContentMode } from '../contentMode'
 import { useRuntime } from '../runtime'
 import { useValue } from '../valueStore'
 import { LEFT_TABS, leftPanelId, selectLeftTab, type LeftTab } from './leftTabs'
@@ -26,7 +27,11 @@ export function LeftPanel() {
   const stored = useValue(runtime.leftTab)
   // Without a stored choice, an empty page starts in Blocks and a page with blocks in Layers.
   const [fallback] = useState<LeftTab>(() => (runtime.store.getState().layout.blocks.length === 0 ? 'blocks' : 'layers'))
-  const tab = stored ?? fallback
+  // Content mode adds no blocks or sections: Layers only.
+  const contentMode = useContentMode(runtime)
+  const tabs = leftTabsFor(contentMode, LEFT_TABS)
+  const wanted = stored ?? fallback
+  const tab = tabs.some(({ id }) => id === wanted) ? wanted : 'layers'
   // Panels render the first time they open, then stay mounted.
   const [opened, setOpened] = useState<ReadonlySet<LeftTab>>(() => new Set<LeftTab>(['layers', tab]))
   if (!opened.has(tab)) setOpened(new Set([...opened, tab]))
@@ -90,14 +95,14 @@ export function LeftPanel() {
 
   // Arrow keys, Home and End move between the tabs (WAI-ARIA tabs with automatic activation).
   const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
-    const index = LEFT_TABS.findIndex((t) => t.id === tab)
-    const last = LEFT_TABS.length - 1
+    const index = tabs.findIndex((t) => t.id === tab)
+    const last = tabs.length - 1
     const next =
-      e.key === 'ArrowRight' ? (index + 1) % LEFT_TABS.length : e.key === 'ArrowLeft' ? (index + last) % LEFT_TABS.length : e.key === 'Home' ? 0 : e.key === 'End' ? last : null
+      e.key === 'ArrowRight' ? (index + 1) % tabs.length : e.key === 'ArrowLeft' ? (index + last) % tabs.length : e.key === 'Home' ? 0 : e.key === 'End' ? last : null
     if (next === null) return
     e.preventDefault()
     e.stopPropagation()
-    const id = LEFT_TABS[next]?.id
+    const id = tabs[next]?.id
     if (!id) return
     selectLeftTab(runtime, id)
     document.getElementById(tabId(id))?.focus()
@@ -113,7 +118,7 @@ export function LeftPanel() {
           role="tablist"
           aria-label="Left panel"
         >
-          {LEFT_TABS.map(({ id, label, icon, digit }) => (
+          {tabs.map(({ id, label, icon, digit }) => (
             <button
               key={id}
               id={tabId(id)}
@@ -136,7 +141,7 @@ export function LeftPanel() {
           ))}
         </div>
       </div>
-      {LEFT_TABS.map(({ id }) => (
+      {tabs.map(({ id }) => (
         <div key={id} id={leftPanelId(id)} role="tabpanel" aria-labelledby={tabId(id)} className="builder-left__panel" hidden={tab !== id}>
           {opened.has(id) && (id === 'layers' ? <Outline /> : <Library kind={id} />)}
         </div>

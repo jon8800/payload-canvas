@@ -359,7 +359,9 @@
     gap: 6px;
     // Wide enough for "Saved · 12:04 PM", so the bar does not move between the normal states.
     // Error texts are longer: the box grows, then truncates (the tooltip has the full text).
-    min-width: 124px;
+    // When the bar is narrow, the wrapper shrinks below 124px and the text truncates instead of
+    // running under the buttons next to it.
+    min-width: min(124px, 100%);
     max-width: 300px;
     color: var(--be-muted);
     font-size: var(--be-text-m);

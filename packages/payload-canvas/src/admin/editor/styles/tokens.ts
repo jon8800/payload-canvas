@@ -5,6 +5,7 @@
 import { useSyncExternalStore } from 'react'
 
 import type { Breakpoint, StyleTokens, ThemeToken } from '../../../core'
+import { THEME_CHANNEL } from '../../../theme/config'
 
 type Entry = { tokens: StyleTokens | null; error: string | null; loading: boolean }
 
@@ -31,11 +32,24 @@ function load(endpoint: string) {
 
 const EMPTY_ENTRY: Entry = { tokens: null, error: null, loading: true }
 
+let themeChannel: BroadcastChannel | null = null
+
+/** A theme save (any tab) can add, rename or remove design variables: load the tokens again. */
+function listenToTheme() {
+  if (themeChannel || typeof BroadcastChannel === 'undefined') return
+  themeChannel = new BroadcastChannel(THEME_CHANNEL)
+  themeChannel.addEventListener('message', () => {
+    for (const endpoint of entries.keys()) load(endpoint)
+    notify()
+  })
+}
+
 /** Tokens from `endpoint`, or `null` while they load or after an error. */
 export function useStyleTokens(endpoint: string): Entry {
   return useSyncExternalStore(
     (listener) => {
       listeners.add(listener)
+      listenToTheme()
       if (!entries.has(endpoint)) load(endpoint)
       return () => {
         listeners.delete(listener)

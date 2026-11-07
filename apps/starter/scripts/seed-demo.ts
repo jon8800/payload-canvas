@@ -1,10 +1,10 @@
-// Seeds the demo site: theme, media, a contact form, 5 pages, 3 posts, the post template, a header and a footer.
+// Seeds the demo site: theme, editable classes, media, a contact form, 5 pages, 3 posts, the post template, a header and a footer.
 // Idempotent: it deletes the documents it owns (matched by slug, title or filename) first.
 // Run with `pnpm seed:demo`.
 import { getPayload, type Payload } from 'payload'
 import config from '@payload-config'
 import { FORCE_DELETE_CONTEXT } from 'payload-canvas'
-import { validateLayout, withoutBoundRequired, type Block, type Layout } from 'payload-canvas/core'
+import { validateLayout, withDefaultClassNames, withoutBoundRequired, type Block, type Layout } from 'payload-canvas/core'
 
 import { builderBlocks } from '@/builder'
 import { HOME_SLUG } from '@/lib/links'
@@ -27,10 +27,12 @@ import {
   url,
   work,
 } from '@/data/sections'
+import { componentsPage } from '@/data/sections/components'
 import { DEMO_IMAGES, renderDemoImage, type DemoImage } from './seed-demo-images'
+import { seedClasses } from './lib/classes'
 
 const SITE_NAME = 'Northwind Studio'
-const PAGE_SLUGS = [HOME_SLUG, 'about', 'services', 'contact', 'blog']
+const PAGE_SLUGS = [HOME_SLUG, 'about', 'services', 'contact', 'blog', 'components']
 const POST_SLUGS = ['designing-with-blocks', 'a-faster-launch', 'theme-tokens-explained']
 const PART_TITLES = ['Header', 'Footer']
 const TEMPLATE_NAME = 'Post template'
@@ -157,6 +159,7 @@ async function seed() {
 
   await clear(payload)
   await seedTheme(payload)
+  await seedClasses(payload, context)
   const media = await seedMedia(payload)
   const formId = await seedForm(payload)
 
@@ -338,6 +341,8 @@ async function seed() {
       hero.create({ title: 'Blog', text: 'Notes on design, process and building websites with blocks.' }),
       postList.create({ limit: 12 }),
     ],
+    // The plugin's opt-in built-in blocks, one section each.
+    components: withDefaultClassNames(componentsPage(media), builderBlocks),
     contact: [
       hero.create({ title: 'Contact', text: 'Tell us about your project and we will get back to you.' }),
       contact.create({
@@ -427,7 +432,7 @@ async function seed() {
   })
 
   payload.logger.info(
-    `Seeded: theme, ${DEMO_IMAGES.length} images, 1 form, ${CATEGORIES.length} categories, ${PAGE_SLUGS.length} pages, ${posts.length} posts, the post template, header and footer.`,
+    `Seeded: theme, classes, ${DEMO_IMAGES.length} images, 1 form, ${CATEGORIES.length} categories, ${PAGE_SLUGS.length} pages, ${posts.length} posts, the post template, header and footer.`,
   )
 }
 

@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { deepestBlockAt } from '../../core'
 import { unwrap, type CanvasToAdmin } from '../../protocol'
 import { ancestors } from './actions'
-import { dragModeChoice, prefersReducedMotion, useDragModeSetting } from './dnd/mode'
+import { dragModeChoice, dropOutlinesChoice, prefersReducedMotion, useDragModeSetting, useDropOutlines } from './dnd/mode'
 import { dropAt } from './dnd/smooth'
 import { BlockIcon, Icon } from './icons'
 import {
@@ -29,8 +29,9 @@ import { FollowFrame } from './live/PresenceUI'
 import { FrameResize } from './layout/FrameResize'
 import { imageEditor, updateImageEditor, uploadImage } from './media/actions'
 import { EmptyStart } from './empty/EmptyStart'
-import { EDGE_BAND, insertSpotAt, sameSpot } from './insert/spots'
+import { EDGE_BAND, INSERT_BUTTON, insertSpotAt, sameSpot } from './insert/spots'
 import { Overlay } from './Overlay'
+import { CommentLayer } from './comments/CommentLayer'
 import { useRuntime, type Runtime } from './runtime'
 import { bindShortcuts } from './shortcuts'
 import { useEditor } from './store'
@@ -148,6 +149,13 @@ export function Canvas() {
             spotTimer = window.setTimeout(() => runtime.insertSpot.set(null), SPOT_LINGER_MS)
             return
           }
+          // Over a canvas control (a carousel's arrow): it acts as on the site, so no hover and no "+".
+          if (message.control) {
+            store.hover(null)
+            runtime.regions?.hovered.set(null)
+            setSpot(null)
+            return
+          }
           const m = measurement.get()
           if (!m) return
           const { layout } = store.getState()
@@ -161,7 +169,8 @@ export function Canvas() {
             // Not on the selected block's own edges, where its frame, name tag and action bar are.
             const { selectedId } = store.getState()
             const selected = selectedId ? { id: selectedId, tolerance: SELECTED_EDGE_PX / (runtime.frame.get().zoom || 1) } : undefined
-            setSpot(inline.get() ? null : insertSpotAt(layout, runtime.config.blocks, m, message, { band, selected }))
+            const button = INSERT_BUTTON / (runtime.frame.get().zoom || 1)
+            setSpot(inline.get() ? null : insertSpotAt(layout, runtime.config.blocks, m, message, { band, selected, button }))
           }
           if (message.kind === 'click') {
             if (region && runtime.regions) runtime.regions.selected.set(region)
@@ -386,6 +395,7 @@ export function Canvas() {
               style={{ pointerEvents: locked ? 'none' : undefined }}
             />
             <Overlay />
+            <CommentLayer />
           </div>
           <FrameResize wrapRef={wrapRef} frameRef={frameRef} frameWidth={frameWidth} zoom={zoom} space={stage.width} />
           <EmptyStart />
@@ -556,9 +566,13 @@ function PlayMotionToggle({ runtime }: { runtime: Runtime }) {
   )
 }
 
-/** Drag and drop style: the drop indicator or the smooth mode. The choice stays in this browser. */
+/**
+ * Drag and drop style: the drop indicator or the smooth mode, and the drop outlines on or off.
+ * The choices stay in this browser.
+ */
 function DragModeMenu({ runtime }: { runtime: Runtime }) {
   const mode = useDragModeSetting(runtime)
+  const outlines = useDropOutlines(runtime)
   const reduced = prefersReducedMotion()
   const choose = (next: 'indicator' | 'smooth') => dragModeChoice(runtime).set(next)
   return (
@@ -574,6 +588,8 @@ function DragModeMenu({ runtime }: { runtime: Runtime }) {
       items={() => [
         { label: 'Show a drop line', icon: 'drag', checked: mode === 'indicator', run: () => choose('indicator') },
         { label: 'Move blocks out of the way', icon: 'layers', checked: mode === 'smooth', disabled: reduced, run: () => choose('smooth') },
+        'separator',
+        { label: 'Outline where blocks can drop', icon: 'grid', checked: outlines, run: () => dropOutlinesChoice(runtime).set(!outlines) },
       ]}
     >
       <Icon name="drag" size={14} />

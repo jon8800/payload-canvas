@@ -9,6 +9,7 @@
 // The root list accepts every type without a `parents` rule (a list item goes only in a list).
 
 import { getBlockDefinition, placementError, slotNames } from './blocks'
+import { reachableAt } from './layers'
 import { DEFAULT_SLOT, indexLayout, subtreeIds, type IndexedBlock } from './tree'
 import type {
   Axis,
@@ -136,7 +137,7 @@ export function deepestBlockAt(
   p: Point,
   excluded?: Set<string>,
 ): string | null {
-  return deepestEntry(indexLayout(layout), measurement, p, excluded ?? new Set())?.block.id ?? null
+  return deepestEntry(indexLayout(layout), reachableAt(measurement, p), p, excluded ?? new Set())?.block.id ?? null
 }
 
 /**
@@ -156,6 +157,8 @@ export function canvasDropTarget(
   p: Point,
   source: DragSource,
 ): DropTarget | null {
+  // Over an open popup only its blocks count (see `reachableAt`).
+  measurement = reachableAt(measurement, p)
   const { index, type, excluded, slotsOf, accepts, parentOf } = context(layout, blocks, source)
   if (type === null) return null
   const rects = new Map(measurement.blocks.map((b) => [b.id, b.rect]))
@@ -312,4 +315,25 @@ export function outlineDropTarget(
   if (offset <= 0.7) return inside() ?? beside(offset < 0.5 ? 'before' : 'after')
   const hasChildren = names.some((name) => countOf(name) > 0)
   return (hasChildren ? firstChild() : beside('after')) ?? inside()
+}
+
+/** A slot that takes the dragged block. `ownerId` null is the root list. */
+export type AcceptingSlot = { ownerId: string | null; slot: string }
+
+/**
+ * Every slot the dragged block may drop into, by the same rules as the drop targets (`allow`,
+ * `disallow`, `max`, `parents`). Slots of the dragged block and its descendants are left out.
+ * The root list comes first when it accepts the block; then the slots in layout order.
+ */
+export function acceptingSlots(layout: Layout, blocks: BlockDefinition[], source: DragSource): AcceptingSlot[] {
+  const { index, type, excluded, slotsOf, accepts } = context(layout, blocks, source)
+  if (type === null) return []
+  const result: AcceptingSlot[] = accepts(null, DEFAULT_SLOT) ? [{ ownerId: null, slot: DEFAULT_SLOT }] : []
+  for (const entry of index.values()) {
+    if (excluded.has(entry.block.id)) continue
+    for (const slot of slotsOf(entry)) {
+      if (accepts(entry.block.id, slot)) result.push({ ownerId: entry.block.id, slot })
+    }
+  }
+  return result
 }

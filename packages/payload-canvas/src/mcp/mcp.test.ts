@@ -8,6 +8,7 @@ import { createId } from '../core/ids'
 import { findBlock } from '../core/tree'
 import type { BlockDefinition, Layout, SectionDefinition } from '../core/types'
 import type { LiveDocStore } from '../live/apply'
+import { CONTENT_MODE_KEY } from '../live/contentMode'
 import { LIVE_RUNTIME_KEY, type LiveRuntime } from '../live/runtime'
 import { createSessionManager } from '../live/session'
 import type { LiveCommitEvent, MultiplayerEvent } from '../live/types'
@@ -110,6 +111,10 @@ describe('builderMcpTools', () => {
         'validateLayout:read',
         'getPreviewUrl:read',
         'generateImage:create',
+        'listClasses:read',
+        'getClass:read',
+        'upsertClass:update',
+        'deleteClass:delete',
       ],
     )
     for (const t of tools) {
@@ -122,7 +127,16 @@ describe('builderMcpTools', () => {
   it('validates arguments', () => {
     assert.ok(args('listBlocks', { collection: 'pages' }).success)
     assert.equal(args('listBlocks', { collection: 'users' }).success, false)
-    assert.equal(args('listBlocks', {}).success, false)
+    // One builder collection: `collection` may be left out, and the default fills it in.
+    const filled = args('listBlocks', {})
+    assert.ok(filled.success)
+    assert.equal(filled.data.collection, 'pages')
+    const two = builderMcpTools({ blocks, collections: { pages: {}, posts: {} } }).find((t) => t.name === 'listBlocks')!
+    assert.equal(z.object(two.parameters).safeParse({}).success, false)
+    // The class tools have one possible collection.
+    const classes = z.object(tool('listClasses').parameters).safeParse({})
+    assert.ok(classes.success)
+    assert.equal(classes.data.collection, 'builder-classes')
 
     const ok = args('applyOperations', {
       collection: 'pages',
@@ -259,6 +273,46 @@ describe('write tools', () => {
     assert.equal((body.changedIds as string[]).length, 2)
   })
 
+  it('applyOperations adds and removes classes and summarizes the changes', async () => {
+    const { req } = fakeRequest({ version: 1, blocks: [{ id: 'a', type: 'heading', props: { text: 'X' }, className: 'text-xl p-4' }, { id: 'b', type: 'heading' }] })
+    const body = json(
+      await tool('applyOperations').handler(
+        { collection: 'pages', id: 'p1', operations: [{ type: 'update', id: 'a', addClassName: 'shadow-lg p-4', removeClassName: 'text-xl', props: { level: '2' } }] },
+        req,
+        {},
+      ),
+    )
+    assert.deepEqual(body.changes, [{ op: 'update', id: 'a', type: 'heading', changed: ['className', 'props.level'], className: 'p-4 shadow-lg' }])
+    // Block "b" misses its required text, but this call did not touch it: counted, not listed.
+    assert.equal(body.warnings, undefined)
+    assert.match(String(body.otherWarnings), /^1 warning on blocks this call did not change/)
+    const layout = json(await tool('getLayout').handler({ collection: 'pages', id: 'p1' }, req, {})).layout as Layout
+    assert.equal(findBlock(layout, 'a')?.className, 'p-4 shadow-lg')
+
+    const removed = json(await tool('applyOperations').handler({ collection: 'pages', id: 'p1', operations: [{ type: 'remove', id: 'b' }, { type: 'update', id: 'a', props: { text: '' } }] }, req, {}))
+    assert.deepEqual((removed.changes as Record<string, unknown>[]).map((c) => `${String(c.op)}:${String(c.id)}:${String(c.type)}`), ['remove:b:heading', 'update:a:heading'])
+    // The touched block's own warning comes back.
+    assert.deepEqual((removed.warnings as Record<string, unknown>[]).map((w) => [w.blockId, w.code]), [['a', 'required']])
+  })
+
+  it('warns that visibility and bindings do nothing on a normal page, but not inside list items', async () => {
+    const { req } = fakeRequest({ version: 1, blocks: [{ id: 'a', type: 'heading', props: { text: 'X' } }] })
+    const visibility = { conditions: [{ field: 'price', operator: 'greater_than', value: 1 }] }
+    const body = json(await tool('applyOperations').handler({ collection: 'pages', id: 'p1', operations: [{ type: 'update', id: 'a', visibility }] }, req, {}))
+    assert.deepEqual((body.warnings as Record<string, unknown>[]).map((w) => [w.blockId, w.code, w.path]), [['a', 'no-effect', 'blocks[0].visibility']])
+    assert.match(String((body.warnings as Record<string, unknown>[])[0].message), /only applies in templates and in collection list or repeat items/)
+    const checked = json(await tool('validateLayout').handler({ collection: 'pages', id: 'p1' }, req, {}))
+    assert.equal(checked.valid, true)
+    assert.deepEqual((checked.warnings as Record<string, unknown>[]).map((w) => w.code), ['no-effect'])
+    // Inside a repeat's item slot the block has a current document: no warning.
+    const listed = {
+      version: 1,
+      blocks: [{ id: 'r', type: 'repeat', props: { path: 'faqs' }, slots: { item: [{ id: 'i', type: 'heading', props: { text: 'Q' }, visibility, bindings: { text: 'question' } }] } }],
+    }
+    const inItem = json(await tool('validateLayout').handler({ collection: 'pages', layout: listed }, req, {}))
+    assert.equal((inItem.warnings as Record<string, unknown>[]).filter((w) => w.code === 'no-effect').length, 0)
+  })
+
   it('applyOperations reports a failing operation without saving', async () => {
     const { req, calls, runtime } = fakeRequest()
     const result = await tool('applyOperations').handler({ collection: 'pages', id: 'p1', operations: [{ type: 'remove', id: 'x' }] }, req, {})
@@ -294,6 +348,36 @@ describe('write tools', () => {
 
     const unknown = await tool('insertSection').handler({ collection: 'pages', id: 'p1', sectionId: 'nope' }, req, {})
     assert.equal(unknown.isError, true)
+    assert.equal(first.needsContent, undefined)
+  })
+
+  it('insertSection lists the blocks whose image or form is still empty', async () => {
+    const withMedia: BlockDefinition[] = [
+      ...blocks,
+      { type: 'image', label: 'Image', fields: [{ name: 'image', type: 'upload', relationTo: 'media' }, { name: 'alt', type: 'text' }] },
+      { type: 'form', label: 'Form', fields: [{ name: 'form', type: 'relationship', relationTo: 'forms' }] },
+    ]
+    const section: SectionDefinition = {
+      id: 'contact',
+      label: 'Contact',
+      blocks: [
+        {
+          id: 's',
+          type: 'stack',
+          slots: { children: [{ id: 'img', type: 'image' }, { id: 'full', type: 'image', props: { image: 4 } }, { id: 'f', type: 'form' }] },
+        },
+      ],
+    }
+    const mediaTools = builderMcpTools({ blocks: withMedia, sections: [section], collections: { pages: { field: 'layout' } } })
+    const { req } = fakeRequest()
+    const body = json(await mediaTools.find((t) => t.name === 'insertSection')!.handler({ collection: 'pages', id: 'p1', sectionId: 'contact' }, req, {}))
+    const ids = body.insertedIds as string[]
+    assert.deepEqual(body.needsContent, [
+      { id: ids[1], type: 'image', prop: 'image', field: 'upload', relationTo: 'media' },
+      { id: ids[3], type: 'form', prop: 'form', field: 'relationship', relationTo: 'forms' },
+    ])
+    assert.match(String(body.needsContentHint), /uploadMedia/)
+    assert.match(String(body.needsContentHint), /findDocument/)
   })
 })
 
@@ -304,17 +388,25 @@ describe('section variants', () => {
     collections: { pages: { field: 'layout', url: (doc) => `/${String(doc.slug)}` } },
   })
   const variantTool = (name: string) => variantTools.find((t) => t.name === name) as BuilderMcpTool
-  it('listSections lists a variant after its section, and insertSection inserts it by id', async () => {
+  it('listSections lists variants under their section, and insertSection inserts one by `variant`', async () => {
     const { req } = fakeRequest({ version: 1, blocks: [] })
     const listed = json(await variantTool('listSections').handler({ collection: 'pages' }, req, {})).sections as Record<string, unknown>[]
-    assert.deepEqual(listed.map((s) => [s.id, s.label, s.variantOf, s.category]), [
-      ['hero', 'Hero', undefined, 'Heroes'],
-      ['hero/plain', 'Hero (Plain)', 'hero', 'Heroes'],
-    ])
-    const inserted = json(await variantTool('insertSection').handler({ collection: 'pages', id: 'p1', sectionId: 'hero/plain' }, req, {}))
-    assert.equal(inserted.section, 'hero/plain')
+    assert.deepEqual(listed.map((s) => [s.id, s.label, s.category]), [['hero', 'Hero', 'Heroes']])
+    assert.deepEqual(listed[0]?.variants, [{ id: 'plain', label: 'Plain', outline: 'heading "Plain hero"' }])
+    const inserted = json(await variantTool('insertSection').handler({ collection: 'pages', id: 'p1', sectionId: 'hero', variant: 'plain' }, req, {}))
+    assert.equal(inserted.section, 'hero')
+    assert.equal(inserted.variant, 'plain')
     const layout = json(await variantTool('getLayout').handler({ collection: 'pages', id: 'p1' }, req, {})).layout as Layout
     assert.equal(layout.blocks[0]?.props?.text, 'Plain hero')
+    // The root block remembers its section, so editors can switch it to another version.
+    assert.deepEqual(layout.blocks[0]?.section, { id: 'hero', variant: 'plain' })
+  })
+  it('insertSection still takes the old "<section>/<variant>" id and explains an unknown variant', async () => {
+    const { req } = fakeRequest({ version: 1, blocks: [] })
+    const inserted = json(await variantTool('insertSection').handler({ collection: 'pages', id: 'p1', sectionId: 'hero/plain' }, req, {}))
+    assert.equal(inserted.variant, 'plain')
+    const wrong = await variantTool('insertSection').handler({ collection: 'pages', id: 'p1', sectionId: 'hero', variant: 'nope' }, req, {})
+    assert.match(JSON.stringify(wrong), /no variant \\"nope\\"/)
   })
 })
 
@@ -345,13 +437,20 @@ describe('motion', () => {
     assert.equal(ops[2].motion, null)
   })
 
-  it('the descriptions mention motion and the guide lists the presets', () => {
-    const description = motionTool('applyOperations').description
-    assert.match(description, /motion\?/)
-    assert.match(description, /MOTION \(animations\)/)
-    for (const preset of ['fade-up', 'wipe-left', 'lift', 'shrink', 'parallax', 'float', 'bouncy']) assert.match(description, new RegExp(preset))
-    assert.match(motionTool('listBlocks').description, /MOTION \(animations\)/)
+  it('the descriptions mention motion and the listBlocks guide lists the presets', async () => {
+    assert.match(motionTool('applyOperations').description, /motion\?/)
+    const { req } = fakeRequest()
+    const guide = String(json(await motionTool('listBlocks').handler({ collection: 'pages' }, req, {})).guide)
+    assert.match(guide, /MOTION \(animations\)/)
+    for (const preset of ['fade-up', 'wipe-left', 'lift', 'shrink', 'parallax', 'float', 'bouncy']) assert.match(guide, new RegExp(preset))
     assert.match(motionTool('getBlockSchema').description, /motion/)
+  })
+
+  it('keeps the long guide out of the tool descriptions', () => {
+    // The guide is in the listBlocks result once, not in every description.
+    for (const t of motionTools) assert.doesNotMatch(t.description, /LAYOUT MODEL|MOTION \(animations\)/, t.name)
+    assert.match(motionTool('applyOperations').description, /addClassName/)
+    assert.match(motionTool('applyOperations').description, /patchLayout/)
   })
 
   it('applyOperations inserts and updates motion, merging per kind', async () => {
@@ -598,7 +697,7 @@ describe('template tools', () => {
           return {
             docs: [
               { id: 5, name: 'Post template', targetCollection: 'posts', isDefault: true, _status: 'published', layout: { version: 1, blocks: [{ id: 'a', type: 'stack' }] } },
-              { id: 6, name: 'VIP', targetCollection: 'posts', isDefault: false, conditions: { tier: { equals: 'vip' } } },
+              { id: 6, name: 'Featured posts', targetCollection: 'posts', isDefault: false, priority: 2, conditions: { featured: { equals: true } } },
             ],
           }
         },
@@ -615,7 +714,8 @@ describe('template tools', () => {
       blocks: 1,
       editorPath: '/admin/builder/builder-templates/5',
     })
-    assert.deepEqual(body.templates[1].conditions, { tier: { equals: 'vip' } })
+    assert.deepEqual(body.templates[1].conditions, { featured: { equals: true } })
+    assert.equal(body.templates[1].priority, 2)
   })
 })
 
@@ -662,6 +762,21 @@ describe('builderMcpTools with locales', () => {
       {},
     )
     assert.equal(result.isError, true)
+  })
+})
+
+describe('content mode (editor.canEditDesign)', () => {
+  it('applyOperations and insertSection refuse design changes from a user without design rights', async () => {
+    const { req, runtime } = fakeRequest({ version: 1, blocks: [{ id: 'a', type: 'heading', props: { text: 'X' } }] })
+    ;(req.payload.config.custom as Record<string, unknown>)[CONTENT_MODE_KEY] = { canEditDesign: () => false }
+    const restyle = await tool('applyOperations').handler({ collection: 'pages', id: 'p1', operations: [{ type: 'update', id: 'a', className: 'p-4' }] }, req, {})
+    assert.equal(restyle.isError, true)
+    assert.match(restyle.content[0].text, /only text, images and links/)
+    const section = await tool('insertSection').handler({ collection: 'pages', id: 'p1', sectionId: 'hero' }, req, {})
+    assert.equal(section.isError, true)
+    const text = await tool('applyOperations').handler({ collection: 'pages', id: 'p1', operations: [{ type: 'update', id: 'a', props: { text: 'Y' } }] }, req, {})
+    assert.notEqual(text.isError, true)
+    assert.equal(runtime.sessions.peek('pages', 'p1')?.layout.blocks.length, 1)
   })
 })
 

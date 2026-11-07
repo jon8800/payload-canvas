@@ -11,7 +11,7 @@ import { withServerBlocks } from '../canvas/serverComponents'
 import { ServerBlock } from '../canvas/ServerBlock'
 import { renderOnServer, rendersOnServer, withPageData } from './marks'
 import { fromPayloadComponent, fromPayloadComponents, PayloadSlot, type PayloadBlockProps } from './payload'
-import { renderPreviewBlock } from './RenderLayout'
+import { renderPreviewBlock } from './preview'
 import { PreviewSlotsContext } from './SlotOutlet'
 import type { BlockComponentProps } from './types'
 

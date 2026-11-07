@@ -14,7 +14,7 @@ const render = (url: string, mode: 'site' | 'canvas') =>
       className: 'w-full',
       slots: {},
       attributes: mode === 'canvas' ? { 'data-block-id': 'v' } : {},
-      slotAttributes: {},
+      partAttributes: {},
       mode,
     } satisfies BlockComponentProps),
   )

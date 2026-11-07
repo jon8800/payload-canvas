@@ -34,6 +34,7 @@ export {
   TEMPLATE_DEFAULT_FIELD,
   TEMPLATE_LAYOUT_FIELD,
   TEMPLATE_PREVIEW_FIELD,
+  TEMPLATE_PRIORITY_FIELD,
   TEMPLATE_TARGET_FIELD,
 } from './core/bindings'
 export { defaultBlocks, fromPayloadBlocks, type DefaultBlocksOptions, type FromPayloadBlocksOptions, type PayloadBlockOverride } from './blocks'
@@ -56,6 +57,7 @@ export {
 } from './migrate'
 export type { AiAdapter, AiChatRequest, AiClientConfig, AiMessage, AiOptions, AiStreamEvent } from './ai/types'
 export { defineBlock, defineSection, type SectionBlockInput, type SectionInput, sectionsWithVariants, withDefaultClassNames, withInlineBlocks } from './core/blocks'
+export { findSectionVersion, sectionVersion, sectionVersions, switchSectionVariant, type SectionVersion, type VariantSwitch } from './core/sections'
 export { EMPTY_LAYOUT } from './core/types'
 export type {
   BindingField,
@@ -65,10 +67,31 @@ export type {
   DragMode,
   EditorOptions,
   Layout,
+  PartDefinition,
   SectionDefinition,
+  SectionOrigin,
   SectionVariant,
   TemplateContext,
   TemplatesClientConfig,
 } from './core/types'
 export type { ThemeOptions } from './theme/config'
 export { DEFAULT_THEME_SLUG } from './theme/config'
+// Editable classes: the collection's options and the server actions (scripts, custom endpoints).
+export {
+  classUsage,
+  DEFAULT_CLASSES_SLUG,
+  deleteClass,
+  importSiteClasses,
+  loadClassesSheet,
+  publishClass,
+  removeUnusedClasses,
+  renameClass,
+  storeClassesSheet,
+  unusedClasses,
+  upsertClass,
+  type BuilderClass,
+  type ClassesOptions,
+  type ClassUsage,
+} from './classes'
+// Comments on the canvas: the collection's options and the comment shape.
+export { DEFAULT_COMMENTS_SLUG, type BuilderComment, type CommentsOptions } from './comments'

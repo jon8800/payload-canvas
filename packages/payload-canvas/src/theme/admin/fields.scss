@@ -247,4 +247,117 @@
       @extend %theme-quiet-button;
     }
   }
+
+  // Variables ------------------------------------------------------------------------------------
+
+  .theme-variable-size {
+    &__bar {
+      display: block;
+      max-width: 100%;
+      height: 4px;
+      margin-top: calc(var(--base) * 0.375);
+      border-radius: 2px;
+      background: var(--theme-elevation-300);
+    }
+  }
+
+  .theme-variable-label {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--base) * 0.5);
+    min-width: 0;
+
+    &__preview {
+      display: inline-grid;
+      flex-shrink: 0;
+      place-items: center;
+      width: 18px;
+      height: 18px;
+      overflow: hidden;
+      border: 1px solid var(--theme-elevation-200);
+      border-radius: 4px;
+      background: var(--theme-elevation-50);
+
+      &[data-empty] {
+        background: repeating-conic-gradient(var(--theme-elevation-100) 0 25%, var(--theme-elevation-0) 0 50%) 0 0 / 8px 8px;
+      }
+
+      &--font {
+        color: var(--theme-text);
+        font-size: 11px;
+        line-height: 1;
+      }
+
+      &--size {
+        justify-items: start;
+        padding: 0 2px;
+
+        > span {
+          display: block;
+          max-width: 100%;
+          height: 4px;
+          border-radius: 2px;
+          background: var(--theme-elevation-500);
+        }
+      }
+    }
+
+    &__name {
+      color: var(--theme-text);
+      font-family: var(--font-mono, monospace);
+      font-weight: 500;
+    }
+
+    &__meta {
+      overflow: hidden;
+      color: var(--theme-elevation-500);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  .theme-variables-warning {
+    margin: calc(var(--base) * -0.5) 0 var(--spacing-field, calc(var(--base) * 1.5));
+    padding: calc(var(--base) * 0.75) var(--base);
+    border: 1px solid var(--theme-warning-250);
+    border-radius: var(--style-radius-m, var(--border-radius-m));
+    background: var(--theme-warning-50);
+    color: var(--theme-warning-800);
+    font-size: var(--font-body-size-m, 13px);
+
+    p {
+      margin: 0;
+    }
+
+    code {
+      padding: 0 3px;
+      border-radius: 3px;
+      background: var(--theme-warning-100);
+      font-size: 0.95em;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    &__title {
+      font-weight: 600;
+    }
+
+    &__list {
+      display: flex;
+      flex-direction: column;
+      gap: calc(var(--base) * 0.5);
+      margin: calc(var(--base) * 0.5) 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    &__where,
+    &__hint {
+      color: var(--theme-warning-650);
+    }
+  }
 }

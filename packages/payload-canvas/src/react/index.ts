@@ -6,6 +6,8 @@ export type {
   BlockComponentProps,
   BlockComponents,
   FetchDocs,
+  LinkComponent,
+  LinkComponentProps,
   LinkValue,
   PageData,
   RenderLayoutProps,
@@ -23,8 +25,11 @@ export {
 export { parseVideoUrl, type VideoEmbed } from './components/videoUrl'
 export { editableImage, editableText, EDITABLE_IMAGE_ATTRIBUTE, EDITABLE_TEXT_ATTRIBUTE } from './render/editable'
 export { defaultComponents } from './components'
+export { lazyBlock } from './components/lazyBlock'
 export * from './components/builtins'
 export { BuilderStyle, RenderLayout } from './render/RenderLayout'
+export { useCanvasMode, type CanvasMode } from './render/canvasMode'
+export { CANVAS_CONTROL_ATTRIBUTE, REVEAL_EVENT, useCanvasReveal } from './render/reveal'
 export { MotionRuntime } from './motion/MotionRuntime'
 export { MotionStyle, MOTION_CSS } from './motion/style'
 export { previewMotion, startMotion, type MotionOptions } from './motion/runtime'
@@ -38,7 +43,7 @@ export {
   type PayloadBlockProps,
   type PayloadBuilderProps,
 } from './render/payload'
-export { renderOnServer, withPageData } from './render/marks'
+export { renderOnServer, withClientLinks, withLinkComponent, withPageData } from './render/marks'
 export { LAYOUT_ROOT_ATTRIBUTE, REGION_ATTRIBUTE, siteRegion, type RegionMark } from './render/regions'
 export { LayoutOutlet } from './render/LayoutOutlet'
 export type {
@@ -63,10 +68,12 @@ export {
   pageOf,
   pageParamOf,
   pageWindow,
+  queryFiltersOf,
   RANDOM_SORT,
   withDateTokens,
   withPageParams,
   type ListPages,
+  type ListQueriesOptions,
   type ListQuery,
   type LoadedList,
   type ListQueryParams,

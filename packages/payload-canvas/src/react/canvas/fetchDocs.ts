@@ -69,10 +69,19 @@ export function whereParams(value: unknown, prefix = 'where'): Array<[string, st
   return Object.entries(value).flatMap(([key, inner]) => whereParams(inner, `${prefix}[${key}]`))
 }
 
+/** The where a list query sends: the picked ids, the current document left out, and the list's own where. */
+function listWhere(query: ListQuery): unknown {
+  const parts: unknown[] = []
+  if (query.exclude !== undefined) parts.push({ id: { not_equals: query.exclude } })
+  if (query.ids) parts.push({ id: { in: query.ids } })
+  if (query.where) parts.push(query.where)
+  return parts.length === 0 ? undefined : parts.length === 1 ? parts[0] : { and: parts }
+}
+
 /**
  * Loads a collection list's documents over REST (`depth=1`, latest drafts, in `locale`), cached
- * for the life of the iframe. The page's own document is filtered out here, so one request serves
- * every page. The query's `where` goes along as Payload's bracket query. A filter that matches
+ * for the life of the iframe. The query's `where` (with the current document left out) goes along
+ * as Payload's bracket query, so pages hold exactly `limit` documents. A filter that matches
  * nothing (`none`) loads nothing.
  */
 export function fetchListItems(api: string, query: ListQuery, locale?: string | null, seed = 0): Promise<Doc[]> {
@@ -86,9 +95,9 @@ export function fetchListItems(api: string, query: ListQuery, locale?: string | 
 export function fetchListPage(api: string, query: ListQuery, locale?: string | null, seed = 0): Promise<{ docs: Doc[]; totalPages: number }> {
   if (query.none) return Promise.resolve({ docs: [], totalPages: 0 })
   const wanted = listRequest(query)
-  const limit = wanted.limit + (query.exclude === undefined ? 0 : 1)
+  const limit = wanted.limit
   const depth = String(query.depth ?? 1)
-  const where = whereParams(query.ids ? (query.where ? { and: [{ id: { in: query.ids } }, query.where] } : { id: { in: query.ids } }) : query.where)
+  const where = whereParams(listWhere(query))
   const page = wanted.page ? String(wanted.page) : ''
   const key = `${api}\u0000${locale ?? ''}\u0000${query.collection}\u0000${limit}\u0000${wanted.sort}\u0000${depth}\u0000${JSON.stringify(where)}\u0000${page}`
   let request = listCache.get(key)
@@ -108,14 +117,7 @@ export function fetchListPage(api: string, query: ListQuery, locale?: string | n
       })
     listCache.set(key, request)
   }
-  return request.then((result) => ({
-    docs: arrangeListDocs(
-      result.docs.filter((doc) => query.exclude === undefined || String(doc.id) !== String(query.exclude)),
-      query,
-      seed,
-    ),
-    totalPages: result.totalPages,
-  }))
+  return request.then((result) => ({ docs: arrangeListDocs(result.docs, query, seed), totalPages: result.totalPages }))
 }
 
 /**

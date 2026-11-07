@@ -3,185 +3,20 @@
 
 import type { Payload } from 'payload'
 import { siteCssConfigOf } from '../plugin'
-import {
-  collectClasses,
-  DEFAULT_TEMPLATES_SLUG,
-  DOCUMENT_TEMPLATE_FIELD,
-  normalizeLayout,
-  TEMPLATE_CONDITIONS_FIELD,
-  TEMPLATE_DEFAULT_FIELD,
-  TEMPLATE_LAYOUT_FIELD,
-  TEMPLATE_TARGET_FIELD,
-  templateConditions,
-  type Layout,
-} from '../core'
+import { collectClasses, type Layout } from '../core'
 import { compileClasses } from '../css'
-import { isRecord } from './render/fields'
-import { localeArgs, type RenderLocale } from './render/locale'
+import { withThemeVariables } from '../theme/server'
+import { loadClassesSheet } from './classes/ClassesStyle'
 
 export { loadLayoutData, type LoadLayoutOptions } from './render/resolve'
+export { loadTemplate, type LoadedTemplate, type LoadTemplateArgs } from './render/templates'
 export { loadedLists, type LoadedList } from './render/lists'
 export { localeArgs, localizeLayout, type RenderLocale } from './render/locale'
 export { createCanvasServer, type CanvasFrameArgs, type CanvasServerOptions, type PageDataArgs } from './render/canvasServer'
 export { siteRegion, type RegionMark } from './render/regions'
 export type { CanvasServerRequest, CanvasServerResponse } from './render/canvasServerTypes'
 export { loadTheme, ThemeStyle, type LoadedTheme, type ThemeStyleProps } from './theme/ThemeStyle'
-
-type Doc = Record<string, unknown>
-
-export type LoadedTemplate = {
-  /** The template document (depth 0). */
-  template: Doc
-  layout: Layout
-  /** The template's generated CSS, for `RenderLayout`'s `css`. */
-  css: string | null
-}
-
-export type LoadTemplateArgs = RenderLocale & {
-  /** Slug of the document's collection, e.g. "posts". */
-  collection: string
-  /** The document (any generated Payload type). Its `template` field may hold an ID or a loaded template. */
-  // oxlint-disable-next-line typescript/no-explicit-any
-  doc: Record<string, any>
-  /** Slug of the templates collection. Default "builder-templates". */
-  templatesSlug?: string
-  /** Draft mode: use the latest template drafts. Otherwise only published templates. */
-  draft?: boolean
-}
-
-/** The generated CSS stored next to a layout field (`{ hash, css }`). */
-function cssOf(template: Doc): string | null {
-  const value = template[`${TEMPLATE_LAYOUT_FIELD}Css`]
-  return isRecord(value) && typeof value.css === 'string' ? value.css : null
-}
-
-function usable(template: Doc | null | undefined, collection: string, draft: boolean): LoadedTemplate | null {
-  if (!template) return null
-  if (template[TEMPLATE_TARGET_FIELD] !== collection) return null
-  if (!draft && template._status === 'draft') return null
-  // Read with the render's `locale`, so the layout already holds that locale's values.
-  const layout = normalizeLayout(template[TEMPLATE_LAYOUT_FIELD])
-  if (layout.blocks.length === 0) return null
-  return { template, layout, css: cssOf(template) }
-}
-
-/** How many templates with conditions `loadTemplate` tries, in name order. */
-const CONDITION_CANDIDATES = 100
-
-/**
- * Whether the stored document (the latest draft in draft mode) matches a template's conditions:
- * one Payload query, so every operator and field path Payload knows works. A query Payload
- * refuses (an unknown field) counts as no match and is logged.
- */
-async function matchesConditions(
-  payload: Payload,
-  collection: string,
-  id: string | number,
-  where: Record<string, unknown>,
-  draft: boolean,
-  locale: ReturnType<typeof localeArgs>,
-): Promise<boolean> {
-  try {
-    const found = await payload.find({
-      collection: collection as never,
-      where: { and: [{ id: { equals: id } }, where as never] },
-      draft,
-      depth: 0,
-      limit: 1,
-      pagination: false,
-      select: { id: true } as never,
-      ...locale,
-    })
-    return found.docs.length > 0
-  } catch (error) {
-    payload.logger.error({ err: error, msg: '[builder] Template conditions failed. The template is skipped.' })
-    return false
-  }
-}
-
-/** How many default templates `loadTemplate` looks at (one normally; more only with old data). */
-const DEFAULT_CANDIDATES = 5
-
-/**
- * The template a document renders through: the document's own template (its `template` field),
- * else the first template (by name) whose `conditions` match the document, else the collection's
- * default template, else `null`. Templates with an empty layout are
- * skipped: an empty own template falls back to the default, and an empty default falls back to
- * the next most recently changed default (the plugin refuses to publish an empty default, so
- * this only matters for older data).
- *
- * Render it with the document as context. Load the document with the visitor's access, so the
- * template cannot show fields the visitor may not read (for example an author's email):
- *
- *   const post = await payload.find({ collection: 'posts', where, depth: 1, draft, overrideAccess: false, user })
- *   const found = await loadTemplate(payload, { collection: 'posts', doc: post, draft })
- *   const context = { collection: 'posts', doc: post }
- *   const layout = await loadLayoutData(found.layout, blocks, payload, { draft, context, resolveLink, user })
- *   <RenderLayout layout={layout} context={context} blocks={blocks} resolveLink={resolveLink} />
- */
-export async function loadTemplate(payload: Payload, args: LoadTemplateArgs): Promise<LoadedTemplate | null> {
-  const { collection, doc } = args
-  const slug = args.templatesSlug ?? DEFAULT_TEMPLATES_SLUG
-  const draft = args.draft ?? false
-  if (!(payload.collections as Record<string, unknown>)[slug]) return null
-  // Localized sites: the template's localized props in the render's locale.
-  const locale = localeArgs(args)
-
-  const own = doc[DOCUMENT_TEMPLATE_FIELD]
-  const ownId = isRecord(own) ? own.id : own
-  if (typeof ownId === 'string' || typeof ownId === 'number') {
-    try {
-      const template = (await payload.findByID({ collection: slug as never, id: ownId, depth: 0, draft, ...locale })) as Doc
-      const found = usable(template, collection, draft)
-      if (found) return found
-    } catch {
-      // A deleted template falls back to the default.
-    }
-  }
-
-  const docId = doc.id
-  if (typeof docId === 'string' || typeof docId === 'number') {
-    // Only the conditions are read here; the matching template loads in full below.
-    const candidates = await payload.find({
-      collection: slug as never,
-      where: { and: [{ [TEMPLATE_TARGET_FIELD]: { equals: collection } }, ...(draft ? [] : [{ _status: { equals: 'published' } }])] },
-      sort: 'name',
-      depth: 0,
-      limit: CONDITION_CANDIDATES,
-      draft,
-      select: { [TEMPLATE_CONDITIONS_FIELD]: true } as never,
-      ...locale,
-    })
-    for (const candidate of candidates.docs as Doc[]) {
-      const where = templateConditions(candidate)
-      if (!where || !(await matchesConditions(payload, collection, docId, where, draft, locale))) continue
-      const template = (await payload.findByID({ collection: slug as never, id: candidate.id as string | number, depth: 0, draft, ...locale })) as Doc
-      const found = usable(template, collection, draft)
-      if (found) return found
-    }
-  }
-
-  const result = await payload.find({
-    collection: slug as never,
-    where: {
-      and: [
-        { [TEMPLATE_TARGET_FIELD]: { equals: collection } },
-        { [TEMPLATE_DEFAULT_FIELD]: { equals: true } },
-        ...(draft ? [] : [{ _status: { equals: 'published' } }]),
-      ],
-    },
-    sort: '-updatedAt',
-    depth: 0,
-    limit: DEFAULT_CANDIDATES,
-    draft,
-    ...locale,
-  })
-  for (const candidate of result.docs as Doc[]) {
-    const found = usable(candidate, collection, draft)
-    if (found) return found
-  }
-  return null
-}
+export { ClassesStyle, CLASSES_PRECEDENCE, loadClassesSheet, type ClassesStyleProps } from './classes/ClassesStyle'
 
 /** One layout rendered on a page, with the CSS stored for it (used when the compile is not possible). */
 export type PageCssPart = { layout: Layout; css?: string | null } | null | undefined
@@ -207,7 +42,9 @@ export async function compilePageCss(payload: Payload, parts: readonly PageCssPa
   for (const part of present) for (const name of collectClasses(part.layout, config.blocks)) classes.add(name)
   if (classes.size === 0) return null
   try {
-    return (await compileClasses([...classes], config.css)) || null
+    // Editable classes come from their own stylesheet (`ClassesStyle`): the page leaves them out.
+    const sheet = await loadClassesSheet(payload).catch(() => null)
+    return (await compileClasses([...classes], await withThemeVariables(payload, config.css), { exclude: sheet?.names ?? [] })) || null
   } catch (error) {
     payload.logger.error({ err: error, msg: '[builder] Page CSS compile failed. Using the stored CSS of each layout.' })
     return stored()

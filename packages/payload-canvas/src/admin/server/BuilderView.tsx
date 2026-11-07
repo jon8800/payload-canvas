@@ -3,11 +3,13 @@ import { PayloadIcon } from '@payloadcms/ui/shared'
 import { notFound, redirect } from 'next/navigation'
 import type { AdminViewServerProps } from 'payload'
 
+import { aiSettingsOf } from '../../ai/settings'
 import { builderConfigOf, liveRuntimeOf, loadDocMeta, sessionTargetOf } from '../../live'
+import { canEditDesign } from '../../live/contentMode'
 import { fieldRegistryOf } from '../../live/fieldChecks'
 import type { BuilderDocMeta } from '../../live/types'
 import { siteCssConfigOf } from '../../plugin'
-import { builderViewPath } from '../../plugin/links'
+import { builderViewPath, editViewPath } from '../../plugin/links'
 import { savedSectionsConfigOf } from '../../plugin/sections'
 import { BuilderScreen } from '../screen/BuilderScreen'
 
@@ -61,7 +63,14 @@ export async function BuilderView({ initPageResult, params, searchParams }: Admi
     meta = null
   }
   if (!meta) notFound()
-  if (!canUpdate) redirect(`${admin}/collections/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`)
+  // `form`: with `editor.openInBuilder` the edit view must not send the user back here.
+  if (!canUpdate) redirect(editViewPath(routes.admin, collection, id, { form: true }))
+
+  // Content mode: users without design rights change text, images and links only.
+  const designer = await canEditDesign(req)
+
+  // The assistant's readiness now: a key pasted in the AI settings counts without a restart.
+  const ai = await (aiSettingsOf(payload)?.clientConfig(req) ?? Promise.resolve(null)).catch(() => null)
 
   // oxlint-disable-next-line react/capitalized-calls -- Payload's helper (a function) renders the app's icon component
   const icon = RenderServerComponent({
@@ -71,5 +80,14 @@ export async function BuilderView({ initPageResult, params, searchParams }: Admi
     serverProps: { i18n: req.i18n, locale: req.locale, params, payload, permissions, searchParams, user: req.user },
   })
 
-  return <BuilderScreen meta={meta} icon={icon} visibleEntities={initPageResult.visibleEntities} locale={typeof req.locale === 'string' ? req.locale : null} />
+  return (
+    <BuilderScreen
+      meta={meta}
+      icon={icon}
+      visibleEntities={initPageResult.visibleEntities}
+      locale={typeof req.locale === 'string' ? req.locale : null}
+      ai={ai}
+      canEditDesign={designer}
+    />
+  )
 }

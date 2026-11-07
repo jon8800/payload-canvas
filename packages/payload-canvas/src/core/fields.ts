@@ -86,6 +86,16 @@ export function optionValues(field: LooseField): string[] {
   return values
 }
 
+/** Options of a select or radio field as `{ label, value }`. A string option is its own label. */
+export function optionList(field: LooseField): Array<{ label: string; value: string }> {
+  const out: Array<{ label: string; value: string }> = []
+  for (const option of field.options ?? []) {
+    if (typeof option === 'string') out.push({ label: option, value: option })
+    else if (isPlainObject(option) && typeof option.value === 'string') out.push({ label: textOf(option.label) ?? option.value, value: option.value })
+  }
+  return out
+}
+
 /** Blocks of a Payload `blocks` field. Block references (plain slugs) are skipped. */
 export function fieldBlocks(field: LooseField): LooseBlock[] {
   return (field.blocks ?? []).filter(

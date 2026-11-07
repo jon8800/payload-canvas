@@ -17,7 +17,7 @@ const list = (id: string, props: Record<string, unknown>): Block => ({
   props: { collection: 'posts', limit: 2, paginate: 'pages', ...props },
   slots: { item: [{ id: `${id}_t`, type: 'text', bindings: { text: 'title' } }] },
 })
-const filter: Block = { id: 'f', type: 'filterLink', props: { param: 'available', value: 'today' } }
+const filter: Block = { id: 'f', type: 'filterLink', props: { param: 'category', value: 'news' } }
 
 function fakePayload() {
   return {
@@ -59,7 +59,7 @@ describe('pager', () => {
     const layout: Layout = { version: 1, blocks: [filter, list('a', {}), list('b', { pageParam: 'rp' })] }
     const loaded = await loadLayoutData(layout, blocks, fakePayload(), { query: { page: '2', rp: '4' } })
     assert.deepEqual(loaded.blocks[0]!.props?.[LIST_PAGE_PARAMS_PROP], ['rp'])
-    assert.equal(filterHref('/x', { page: '2', rp: '4', hair: 'red' }, { param: 'available', value: 'today', pageParams: ['rp'] }).href, '/x?hair=red&available=today')
+    assert.equal(filterHref('/x', { page: '2', rp: '4', tag: 'css' }, { param: 'category', value: 'news', pageParams: ['rp'] }).href, '/x?tag=css&category=news')
     // Without lists of their own parameter, nothing is added.
     const plain: Layout = { version: 1, blocks: [filter, list('a', {})] }
     assert.equal(withPageParams(plain, listQueries(plain)), plain)
@@ -71,6 +71,16 @@ describe('pager', () => {
     assert.match(html, /<nav aria-label="Seiten"[^>]*><a href="\?">1<\/a><span data-page-gap="" aria-hidden="true">…<\/span><a href="\?page=9">9<\/a><a href="\?page=10" aria-current="page">10<\/a><a href="\?page=11">11<\/a><span data-page-gap="" aria-hidden="true">…<\/span><a href="\?page=20">20<\/a><\/nav>/)
     const english = await loadLayoutData({ version: 1, blocks: [list('a', {})] }, blocks, fakePayload())
     assert.match(renderToStaticMarkup(createElement(RenderLayout, { layout: english, blocks })), /<nav aria-label="Pages"/)
+  })
+
+  it('the pager is not inside the items element, so a grid of items does not take it as a cell', async () => {
+    const block = { ...list('a', {}), className: 'grid md:grid-cols-3' }
+    const loaded = await loadLayoutData({ version: 1, blocks: [block] }, blocks, fakePayload())
+    const html = renderToStaticMarkup(createElement(RenderLayout, { layout: loaded, blocks }))
+    assert.match(html, /^<div><div class="grid md:grid-cols-3 builder-css">(?:(?!<nav).)*<\/div><nav /)
+    // Without page links there is one element, with the block's classes.
+    const single = await loadLayoutData({ version: 1, blocks: [{ ...block, props: { ...block.props, paginate: 'none' } }] }, blocks, fakePayload())
+    assert.match(renderToStaticMarkup(createElement(RenderLayout, { layout: single, blocks })), /^<div class="grid md:grid-cols-3 builder-css"><p/)
   })
 })
 

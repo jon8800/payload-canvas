@@ -2,14 +2,14 @@ import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { builtinBlocks, defaultBlocks, SECTION_REF_SLOT, sectionDetachOps } from '../../blocks'
+import { defaultBlocks, SECTION_REF_MISSING, SECTION_REF_SLOT, sectionDetachOps, sectionRefBlock } from '../../blocks'
 import { applyOperations, collectClasses, type Block, type Layout } from '../../core'
-import { builtinComponents } from '../components/builtins'
 import { RenderLayout } from './RenderLayout'
 import { attachSections } from './sections'
 import type { FetchDocs } from './types'
 
-const blocks = [...defaultBlocks(), ...builtinBlocks({ include: ['sectionRef'] })]
+// The plugin adds the sectionRef definition when saved sections are on.
+const blocks = [...defaultBlocks(), sectionRefBlock()]
 const saved: Record<string, unknown> = {
   id: 7,
   name: 'Call to action',
@@ -21,7 +21,7 @@ const saved: Record<string, unknown> = {
       slots: {
         children: [
           { id: 'h', type: 'heading', props: { text: 'Book now', level: '2' } },
-          // A ref inside a saved section stays empty: one level only.
+          // A ref to the section itself: it would contain itself, so it stays empty.
           { id: 'inner', type: 'sectionRef', props: { section: 7 } },
         ],
       },
@@ -45,7 +45,7 @@ describe('attachSections', () => {
   test('puts the section blocks, with prefixed ids, in the runtime slot, with one fetch', async () => {
     const calls: Calls = []
     const out = await attachSections(page(ref('r1', 7), ref('r2', '7')), blocks, fakeFetch(calls))
-    assert.deepEqual(calls, [['builder-sections', [7, '7']]])
+    assert.deepEqual(calls, [['builder-sections', [7]]])
     const first = out.blocks[1]!.slots![SECTION_REF_SLOT]!
     assert.equal(first[0]!.id, 'r1_cta')
     assert.deepEqual(first[0]!.slots!.children!.map((b) => b.id), ['r1_h', 'r1_inner'])
@@ -62,11 +62,20 @@ describe('attachSections', () => {
     assert.deepEqual(calls, [])
     const missing = await attachSections(page(ref('r', 99)), blocks, fakeFetch(calls))
     assert.equal(missing.blocks[1]!.slots, undefined)
+    assert.equal(missing.blocks[1]!.props![SECTION_REF_MISSING], true)
+  })
+
+  test("a site's own list without the definition loads from the collection it is given", async () => {
+    const calls: Calls = []
+    const out = await attachSections(page(ref('r', 7)), defaultBlocks(), fakeFetch(calls), 'builder-sections')
+    assert.equal(out.blocks[1]!.slots![SECTION_REF_SLOT]![0]!.id, 'r_cta')
+    assert.equal(calls.length, 1)
   })
 })
 
 const render = (layout: Layout, mode: 'site' | 'canvas') =>
-  renderToStaticMarkup(createElement(RenderLayout, { layout, blocks, components: builtinComponents(), mode }))
+  // The sectionRef component is a default component: no components map needed.
+  renderToStaticMarkup(createElement(RenderLayout, { layout, blocks, mode }))
 
 describe('sectionRef rendering', () => {
   test('the site renders the section blocks with no element of its own', async () => {
@@ -83,7 +92,7 @@ describe('sectionRef rendering', () => {
     assert.match(html, /<div data-block-id="r" data-block-type="sectionRef" style="display:contents"><div data-builder-repeat="" class="flex gap-4 builder-css">/)
     assert.doesNotMatch(html, /data-block-id="r_/)
     assert.doesNotMatch(html, /data-slot-owner="r"/)
-    assert.match(render(page(ref('r')), 'canvas'), /data-block-id="r"[^>]*data-builder-placeholder=""[^>]*>Saved section: pick one/)
+    assert.match(render(page(ref('r')), 'canvas'), /data-block-id="r"[^>]*data-builder-placeholder=""[^>]*>Component: pick one/)
   })
 })
 
@@ -99,5 +108,63 @@ describe('sectionDetachOps', () => {
     assert.deepEqual(result.layout.blocks.map((b) => b.id), ['top', 'c1', 'c2', 'after'])
     assert.equal(sectionDetachOps(layout, 'nope', copies), null)
     assert.equal(sectionDetachOps(layout, 'r', []), null)
+  })
+})
+
+// Components: saved sections with properties, and components inside components.
+const docs: Record<number, Record<string, unknown>> = {
+  1: {
+    id: 1,
+    blocks: [
+      {
+        id: 'card',
+        type: 'stack',
+        slots: {
+          children: [
+            { id: 'h', type: 'heading', props: { text: 'Default title' }, bindings: { text: '$component.title' } },
+            { id: 'b', type: 'button', props: { label: 'Go' }, bindings: { $visible: '$component.showButton' } },
+          ],
+        },
+      },
+    ],
+  },
+  // Holds a copy of 1, whose title is this component's own "heading" property.
+  2: {
+    id: 2,
+    blocks: [
+      { id: 'outer', type: 'sectionRef', props: { section: 1 }, bindings: { 'values.title': '$component.heading' } },
+    ],
+  },
+  // 3 holds 4 and 4 holds 3: neither may contain itself.
+  3: { id: 3, blocks: [{ id: 'x', type: 'sectionRef', props: { section: 4 } }] },
+  4: { id: 4, blocks: [{ id: 'y', type: 'sectionRef', props: { section: 3 } }] },
+}
+
+const componentFetch = (calls: Calls): FetchDocs => async (collection, ids) => {
+  calls.push([collection, ids])
+  return new Map(ids.flatMap((id) => (docs[Number(id)] ? [[id, docs[Number(id)]!] as const] : [])))
+}
+
+describe('component copies', () => {
+  test('each copy shows its own values; empty ones show the component content', async () => {
+    const layout = page(ref('a', 1), { id: 'b2', type: 'sectionRef', props: { section: 1, values: { title: 'Mine', showButton: false } } })
+    const out = await attachSections(layout, blocks, componentFetch([]))
+    assert.equal(render(out, 'site'), '<h2>Hi</h2><div><h2>Default title</h2><span>Go</span></div><div><h2>Mine</h2></div>')
+  })
+
+  test('components inside components get their values, one fetch per level', async () => {
+    const calls: Calls = []
+    const out = await attachSections(page({ id: 'p', type: 'sectionRef', props: { section: 2, values: { heading: 'Nested' } } }), blocks, componentFetch(calls))
+    assert.deepEqual(calls.map(([, ids]) => ids), [[2], [1]])
+    assert.match(render(out, 'site'), /<h2>Nested<\/h2>/)
+  })
+
+  test('a component that would contain itself renders nothing there', async () => {
+    const out = await attachSections(page(ref('c', 3)), blocks, componentFetch([]))
+    const x = out.blocks[1]!.slots![SECTION_REF_SLOT]![0]!
+    const y = x.slots![SECTION_REF_SLOT]![0]!
+    assert.equal(y.props![SECTION_REF_MISSING], true)
+    assert.equal(y.slots, undefined)
+    assert.match(render(out, 'canvas'), /Component not found/)
   })
 })

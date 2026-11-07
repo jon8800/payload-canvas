@@ -14,6 +14,7 @@ import {
 import { validateBindings, withoutBoundRequired } from '../core/bindings'
 import { richTextFieldName } from '../core/blocks'
 import { collectClasses } from '../core/classes'
+import { contentModeProblem } from '../core/contentMode'
 import { enforcePropAccess, filterUnreadableProps, hasPropAccess } from '../core/fieldAccess'
 import { hasPropHooks, runPropHooks, type FieldRunContext } from '../core/fieldHooks'
 import { sameJson, type FieldRegistry } from '../core/fieldSemantics'
@@ -21,9 +22,12 @@ import { runPropValidators } from '../core/fieldValidate'
 import { describeLayoutErrors } from '../core/issues'
 import { hasLocaleValues, knownLocale, mergeLocaleView, resolveLayoutLocale, type FallbackLocale } from '../core/locale'
 import { isPlainObject, normalizeLayout } from '../core/tree'
-import type { BindingField, BlockDefinition, Layout, LocaleSettings } from '../core/types'
+import { EMPTY_LAYOUT, type BindingField, type BlockDefinition, type Layout, type LocaleSettings } from '../core/types'
 import { isBlockingError, isLayoutWarning, validateLayout, type LayoutError } from '../core/validate'
 import { compileClasses, type CssOptions } from '../css'
+import { withoutClassNames } from '../classes/shared'
+import { classNamesFor } from '../classes/sheet'
+import { withThemeVariables } from '../theme/server'
 import {
   changedFieldsOf,
   checkStaleSave,
@@ -43,6 +47,7 @@ import {
   type LockPayload,
   type SettingsLocks,
 } from '../live/fieldsGuard'
+import { canEditDesign } from '../live/contentMode'
 import type { SessionManager } from '../live/session'
 import { defaultWriteGate, writeKey, type WriteGate } from '../live/writeGate'
 
@@ -191,6 +196,9 @@ export function hookChangesOf(context: Record<string, unknown> | undefined, coll
  * A save by the plugin itself: the session's draft, publish / unpublish / revert, or the template
  * "Default" flag. It keeps Payload's document lock and skips the stale-save check.
  */
+/** The start of the error when content mode refuses a Restore that would change the design. */
+export const RESTORE_DESIGN_MESSAGE = 'This version has a different design, so only a designer can restore it.'
+
 /** Payload's Restore of a version (its operation sets this flag): the version's values are the truth. */
 function isRestore(context: Record<string, unknown> | undefined): boolean {
   return Boolean(context?.isRestoringVersion)
@@ -234,7 +242,7 @@ function isGeneratedCss(value: unknown): value is GeneratedCss {
 }
 
 /** The hash covers the class list and the entry CSS, so a theme change also recompiles. */
-async function hashInput(classes: string[], entry: string): Promise<string> {
+async function hashInput(classes: string[], entry: string, themeCss = ''): Promise<string> {
   const hash = createHash('sha256')
   hash.update(classes.join(' '))
   hash.update('\0')
@@ -243,6 +251,8 @@ async function hashInput(classes: string[], entry: string): Promise<string> {
   } catch {
     // The compile reports a missing entry file. The hash stays usable.
   }
+  // The theme's variable names (`bg-brand` compiles only while `brand` exists). Empty: the old hash.
+  if (themeCss) hash.update(themeCss)
   return hash.digest('hex').slice(0, 16)
 }
 
@@ -415,6 +425,18 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
       const at = requestLocale(req, localization)
       if (at) layout = mergeLocaleView(savedLayout, layout, at.locale, blocks, localization)
     }
+    // Content mode (editor.canEditDesign): a user's own save (REST, GraphQL, the Edit view) and
+    // Payload's Restore of a version may change only content. The live session checks each edit
+    // when it arrives, so its saves, the guarded saves and the plugin's own saves are not checked
+    // again. A restore is compared with the session's layout when one is open (it holds edits
+    // that are not saved yet), else with the stored layout.
+    const restoring = isRestore(context)
+    const userSave = !own && !guarded && !isPluginSave(context) && context?.[OVERRIDE_ACCESS_CONTEXT] === false
+    if (userSave && req.user && !(await canEditDesign(req))) {
+      const current = (restoring && docId !== undefined ? sessions?.peek(slug, docId)?.layout : undefined) ?? savedLayout ?? EMPTY_LAYOUT
+      const problem = contentModeProblem(current, layout, blocks)
+      if (problem) throw new APIError(restoring ? `${RESTORE_DESIGN_MESSAGE} ${problem}` : problem, 403, undefined, true)
+    }
     if (registry) {
       // Field access. The live session checks every edit when it arrives (session.ts), so its
       // saves and the layouts the guard put in are not checked again. Other saves (REST, the
@@ -448,8 +470,10 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
     data[field] = layout
 
     // Block definitions add the classes their components use, so those reach the CSS too.
-    const classes = collectClasses(layout, blocks)
-    const hash = await hashInput(classes, css.entry)
+    // Editable classes come from their own stylesheet: the layout's CSS leaves them out.
+    const classes = withoutClassNames(collectClasses(layout, blocks), new Set(await classNamesFor(req.payload).catch(() => [])))
+    const siteCss = await withThemeVariables(req.payload, css)
+    const hash = await hashInput(classes, css.entry, siteCss.themeCss)
     if (isGeneratedCss(previous) && previous.hash === hash) {
       data[cssField] = previous
       return data
@@ -461,7 +485,7 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
     }
 
     try {
-      const output = await compileClasses(classes, css)
+      const output = await compileClasses(classes, siteCss)
       data[cssField] = { hash, css: output } satisfies GeneratedCss
     } catch (error) {
       req.payload.logger.error({

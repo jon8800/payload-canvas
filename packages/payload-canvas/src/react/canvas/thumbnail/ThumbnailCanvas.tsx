@@ -7,6 +7,9 @@
 import { collectClasses, type BlockDefinition, type Layout } from '../../../core'
 import type { CanvasCssInput } from '../../../css'
 import { createCanvasCompiler, type CanvasCompiler } from '../../../css/browser'
+import { compileClassSheet, type ClassSheet } from '../../../css/classes'
+import { withoutClassNames } from '../../../classes/shared'
+import { fetchCanvasClasses } from '../classes'
 import { post, unwrap, type AdminToCanvas, type CanvasInit, type CanvasToAdmin, type ThumbnailRequest } from '../../../protocol'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
@@ -103,18 +106,28 @@ export function ThumbnailCanvas({ blocks, components, plugins, resolveLink, serv
     if (!init || !definitions) return
     // An object, so the loop below sees the cleanup's change.
     const state = { cancelled: false, busy: false }
-    const compiler: Promise<CanvasCompiler> = fetch(init.cssEndpoint, { credentials: 'include' }).then(async (res) => {
+    const input: Promise<CanvasCssInput> = fetch(init.cssEndpoint, { credentials: 'include' }).then(async (res) => {
       if (!res.ok) throw new Error(`Canvas CSS: ${res.status} ${res.statusText}`)
-      return createCanvasCompiler((await res.json()) as CanvasCssInput, pluginsRef.current)
+      return (await res.json()) as CanvasCssInput
     })
+    const compiler: Promise<CanvasCompiler> = input.then((value) => createCanvasCompiler(value, pluginsRef.current))
+    // Editable classes (their latest drafts), loaded once per page: their own stylesheet first.
+    const empty: ClassSheet = { css: '', errors: {}, names: [] }
+    const classes: Promise<ClassSheet> = init.classesEndpoint
+      ? Promise.all([input, fetchCanvasClasses(init.classesEndpoint)])
+          .then(([value, list]) => (list.length > 0 ? compileClassSheet(value, list, pluginsRef.current) : empty))
+          .catch(() => empty)
+      : Promise.resolve(empty)
 
-    serverBlocks?.setScope({ document: init.document ?? null, context: null })
+    serverBlocks?.setScope({ document: init.document ?? null, context: null, mode: 'thumbnail' })
     const pageData: Promise<PageData | null> = serverBlocks ? serverBlocks.pageData() : Promise.resolve(null)
 
     const run = async (request: ThumbnailRequest) => {
       const stored: Layout = { version: 1, blocks: request.blocks }
       const layout = await resolveCanvasLayout(stored, null, init.api, definitions, linkResolver)
-      const css = (await compiler).build(collectClasses(layout, definitions))
+      const sheet = await classes
+      const css = `${sheet.css}
+${(await compiler).build(withoutClassNames(collectClasses(layout, definitions), new Set(sheet.names)))}`
       const done = new Promise<void>((resolve) => {
         rendered.current = resolve
       })

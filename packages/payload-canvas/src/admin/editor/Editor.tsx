@@ -20,6 +20,7 @@ import { Canvas } from './Canvas'
 import { DragLayer } from './DragLayer'
 import { dropAt, endSmoothDrag, isSmoothDrag, MAKE_ROOM_EASING, SETTLE_EASING, startSmoothDrag } from './dnd/smooth'
 import { Inspector } from './Inspector'
+import { CommentsOrInspector } from './comments/CommentsPanel'
 import { LeftPanel } from './layout/LeftPanel'
 import { applySizes, readSizes } from './layout/panels'
 import { Splitter } from './layout/Splitter'
@@ -33,6 +34,7 @@ import { useFollow } from './live/useFollow'
 import { useTemplateController } from './templates/useTemplate'
 import { TopBar } from './topbar/TopBar'
 import { useValueSelector } from './valueStore'
+import { useComponentRefresh } from './sections/components'
 
 const COLLISION_ID = 'builder-drop'
 /** Distance from the canvas top or bottom edge where auto-scroll starts. */
@@ -65,15 +67,17 @@ type EditorProps = {
   icon: ReactNode
   /** The locale to open a localized layout in. */
   locale?: string | null
+  /** The user may change the design. False: content mode (text, images and links only). Default true. */
+  canEditDesign?: boolean
 }
 
 /**
  * The full-screen editor. The document's live session is the source of truth for the layout: the
  * server loads the draft into it, and every edit goes through it (docs/architecture.md section 12).
  */
-export function Editor({ config, meta, icon, locale }: EditorProps) {
+export function Editor({ config, meta, icon, locale, canEditDesign }: EditorProps) {
   const { config: payloadConfig } = useConfig()
-  const [runtime] = useState(() => createRuntime(config, payloadConfig.routes.api, meta, { locale }))
+  const [runtime] = useState(() => createRuntime(config, payloadConfig.routes.api, meta, { locale, canEditDesign }))
   const docId = meta.id
   useMultiplayer(runtime, { docId })
   // Ready once the first session arrived. A reconnect keeps the editor open.
@@ -81,6 +85,7 @@ export function Editor({ config, meta, icon, locale }: EditorProps) {
   const ready = useValueSelector(runtime.live, (live) => Boolean(live?.self))
   useFollow(runtime)
   useTemplateController(runtime)
+  useComponentRefresh(runtime)
   useEffect(() => runtime.assistant?.setDocument(config.collection, docId), [runtime, config.collection, docId])
   useEffect(() => () => runtime.assistant?.stop(), [runtime])
   // The hidden thumbnail iframe goes with the editor.
@@ -222,7 +227,9 @@ export function Editor({ config, meta, icon, locale }: EditorProps) {
               <Canvas />
               <Splitter panel="right" side="after" onActive={lockPointer} />
               <aside className="builder-editor__right">
-                <Inspector />
+                <CommentsOrInspector>
+                  <Inspector />
+                </CommentsOrInspector>
               </aside>
             </div>
           ) : (

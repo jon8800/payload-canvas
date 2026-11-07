@@ -1,11 +1,13 @@
 // Replaces upload/relationship IDs in block props with documents.
 
 import type { Payload, Where } from 'payload'
-import { resolveBindings, type BindingRelations, type Block, type BlockDefinition, type Layout, type TemplateContext } from '../../core'
+import { resolveBindings, type Block, type BlockDefinition, type Layout, type TemplateContext } from '../../core'
 import { isRecord, mapFieldValues, type FieldLike, type VisitField } from './fields'
 import { arrangeListDocs, attachListItems, listQueries, listRequest, pageLinks, withPageParams, type ListPages, type ListQuery, type ListQueryParams } from './lists'
 import type { FetchDocs, ResolveLink } from './types'
 import { localeArgs, localizeLayout, type LocaleArgs, type RenderLocale } from './locale'
+import { relationsOf, withRelations } from './relations'
+import { savedSectionsSlugOf } from '../../blocks/builtins/sectionRef'
 import { attachSections } from './sections'
 
 type Id = string | number
@@ -147,8 +149,6 @@ export type LoadLayoutOptions = RenderLocale & {
   context?: TemplateContext | null
   /** The site's link resolver, for the `$url` binding path. `RenderLayout` resolves it otherwise. */
   resolveLink?: ResolveLink
-  /** Which collection each relationship field points to (`bindingRelations`), for `<path>.$url` bindings. */
-  relations?: BindingRelations | null
   /**
    * The visitor (the signed-in user, or none). Collection lists load their documents with this
    * user's access (`overrideAccess: false`), so a list never shows documents or populated fields
@@ -171,12 +171,18 @@ export type LoadLayoutOptions = RenderLocale & {
    * per call, so a cached page shuffles once per cache build.
    */
   randomSeed?: number
+  /**
+   * Also load the collection lists inside hidden blocks. Off by default: the site never renders
+   * them. The canvas server turns it on, because the editor shows hidden blocks dimmed.
+   */
+  includeHidden?: boolean
 }
 
 /**
  * Server helper: prepares a layout for `RenderLayout` with Payload's Local API.
  * 0. Puts the current blocks of each live saved section (`sectionRef`) into the layout.
- * 1. Resolves bindings and Field blocks against `options.context` (when given).
+ * 1. Resolves bindings, visibility conditions and Field blocks against `options.context` (when given).
+ *    `<path>.$url` bindings read the relationship fields' collections from the Payload config.
  * 2. Loads every collection list's documents (`depth: 1` or the list's `depth`; published only unless `draft`), with the
  *    access of `options.user` (anonymous without it).
  * 3. Replaces upload/relationship IDs in block props with documents (one batched `find` per collection).
@@ -209,16 +215,18 @@ export async function loadLayoutData(
     )
   }
   // Live saved sections first, so their blocks get the same bindings, lists and documents.
-  const withSections = await attachSections(layout, blocks, fetchDocs)
+  const withSections = await attachSections(layout, blocks, fetchDocs, savedSectionsSlugOf(payload.config) ?? undefined)
   const localized = localizeLayout(withSections, blocks, payload, options)
+  // Which collection each relationship field points to, for `<path>.$url` bindings.
+  const relations = relationsOf(payload)
   const bound = context
     ? resolveBindings(localized, context, blocks, {
         ...(options?.resolveLink ? { url: urlResolver(options.resolveLink) } : {}),
-        ...(options?.relations ? { relations: options.relations } : {}),
+        relations,
       })
     : localized
 
-  const queries = listQueries(bound, context, options?.query)
+  const queries = listQueries(bound, context, options?.query, { includeHidden: options?.includeHidden === true })
   const items = new Map<string, Array<Record<string, unknown>>>()
   const pages = new Map<string, ListPages>()
   const seed = options?.randomSeed ?? Math.floor(Math.random() * 4_294_967_296)
@@ -231,7 +239,8 @@ export async function loadLayoutData(
   )
   const withItems = withPageParams(attachListItems(bound, items, pages), queries)
 
-  return resolveLayoutData(withItems, blocks, fetchDocs)
+  // List items and repeat rows resolve their bindings in `RenderLayout`: they take the relations along.
+  return resolveLayoutData(withRelations(withItems, relations), blocks, fetchDocs)
 }
 
 /**

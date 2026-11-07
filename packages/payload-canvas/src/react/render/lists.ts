@@ -14,6 +14,7 @@ import {
   type TemplateContext,
 } from '../../core'
 import { FILTER_LINK_BLOCK } from '../../blocks/builtins/filterLink'
+import { DATE_TOKEN, pageTokenPath, queryTokenParam } from '../../core/whereValues'
 import { isRecord } from './fields'
 
 export type Doc = Record<string, unknown>
@@ -96,16 +97,25 @@ function paramValues(query: ListQueryParams, param: string): string[] {
 }
 
 /**
- * The `queryFilters` of a list for the URL query: `{ [param]: { [value]: Where } }`. Each present
- * `param=value` adds its `Where`; values of one param are OR-ed, params are AND-ed. Unknown values
- * are ignored.
+ * The `queryFilters` of a list for the URL query. Each param has one of two forms:
+ * - a field path (`{ category: "category" }`): the field equals the URL value (`?category=news`);
+ * - values to `Where` queries (`{ sort: { recent: Where, popular: Where } }`): each present
+ *   `param=value` adds its `Where`; unknown values are ignored.
+ * Values of one param are OR-ed, params are AND-ed.
  */
-function queryFiltersOf(filters: unknown, query: ListQueryParams | null | undefined): Where[] {
+export function queryFiltersOf(filters: unknown, query: ListQueryParams | null | undefined): Where[] {
   if (!query || !isRecord(filters)) return []
   const out: Where[] = []
   for (const [param, byValue] of Object.entries(filters)) {
+    const values = paramValues(query, param)
+    if (values.length === 0) continue
+    if (typeof byValue === 'string') {
+      const field = byValue.trim()
+      if (field) out.push({ [field]: values.length === 1 ? { equals: values[0] } : { in: values } })
+      continue
+    }
     if (!isRecord(byValue)) continue
-    const matched = paramValues(query, param)
+    const matched = values
       .map((value) => (Object.hasOwn(byValue, value) ? byValue[value] : undefined))
       .filter((where): where is Where => isRecord(where) && Object.keys(where).length > 0)
     if (matched.length > 0) out.push(matched.length === 1 ? matched[0]! : { or: matched })
@@ -113,7 +123,6 @@ function queryFiltersOf(filters: unknown, query: ListQueryParams | null | undefi
   return out
 }
 
-const DATE_TOKEN = /^\$now(?:([+-])(\d+)([dh]))?$/
 const UNIT_MS = { d: 86_400_000, h: 3_600_000 } as const
 
 /**
@@ -137,6 +146,83 @@ export function withDateTokens<T>(value: T, now = Date.now()): T {
   return visit(value) as T
 }
 
+/** What the `$page.` and `$query.` values of a where read. */
+type WhereTokenSources = { context?: TemplateContext | null; query?: ListQueryParams | null }
+
+/** The plain values of a page field: list items, document ids and plain values. No empty values. */
+function tokenValues(value: unknown): Array<string | number | boolean> {
+  if (Array.isArray(value)) return value.flatMap(tokenValues)
+  if (isRecord(value) && 'relationTo' in value && 'value' in value) return tokenValues(value.value)
+  if (isRecord(value)) return isId(value.id) ? [value.id] : []
+  if (typeof value === 'boolean' || isId(value)) return [value]
+  return []
+}
+
+/**
+ * One operator of a condition with its `$page.` or `$query.` value read. Several values turn
+ * `equals` into `in` and `not_equals` into `not_in`. No value: a URL value drops the condition
+ * (as URL filters do); a page field matches nothing, except `not_equals` and `not_in`, which drop.
+ */
+function readToken(operator: string, value: unknown, sources: WhereTokenSources): { operator: string; value: unknown } | 'drop' | 'none' {
+  const path = pageTokenPath(value)
+  const param = queryTokenParam(value)
+  if (path === null && param === null) return { operator, value }
+  let values: Array<string | number | boolean>
+  if (path !== null) {
+    const context = sources.context
+    values = context && path ? tokenValues(getByPath(context.page ?? context.doc, path)) : []
+    if (values.length === 0) return operator === 'not_equals' || operator === 'not_in' ? 'drop' : 'none'
+  } else {
+    values = sources.query && param ? paramValues(sources.query, param) : []
+    if (values.length === 0) return 'drop'
+  }
+  if (operator === 'in' || operator === 'not_in') return { operator, value: values }
+  if (values.length > 1 && operator === 'equals') return { operator: 'in', value: values }
+  if (values.length > 1 && operator === 'not_equals') return { operator: 'not_in', value: values }
+  return { operator, value: values[0] }
+}
+
+/**
+ * A where with its `$page.<path>` and `$query.<param>` values read (`core/whereValues.ts`).
+ * `none`: it matches nothing. `undefined`: nothing is left to filter by. In an `or`, a part with
+ * nothing left does not apply and is left out. Other values and keys stay as they are.
+ */
+export function resolveWhereTokens(where: Where, sources: WhereTokenSources): Where | 'none' | undefined {
+  const out: Record<string, unknown> = {}
+  const extra: Where[] = []
+  for (const [key, inner] of Object.entries(where)) {
+    if ((key === 'and' || key === 'or') && Array.isArray(inner)) {
+      const parts = inner.map((part: unknown) => (isRecord(part) ? resolveWhereTokens(part as Where, sources) : part))
+      if (key === 'and') {
+        if (parts.includes('none')) return 'none'
+        const kept = parts.filter((part) => part !== undefined)
+        if (kept.length > 0) out.and = kept
+        continue
+      }
+      const kept = parts.filter((part) => part !== undefined && part !== 'none')
+      if (kept.length > 0) out.or = kept
+      else if (parts.includes('none')) return 'none'
+      continue
+    }
+    if (!isRecord(inner)) {
+      out[key] = inner
+      continue
+    }
+    const condition: Record<string, unknown> = {}
+    for (const [operator, value] of Object.entries(inner)) {
+      const read = readToken(operator, value, sources)
+      if (read === 'none') return 'none'
+      if (read === 'drop') continue
+      // `equals` became `in`, and the condition has an `in` already: AND the two.
+      if (read.operator in condition) extra.push({ [key]: { [read.operator]: read.value } })
+      else condition[read.operator] = read.value
+    }
+    if (Object.keys(condition).length > 0) out[key] = condition
+  }
+  if (extra.length > 0) out.and = [...(Array.isArray(out.and) ? out.and : []), ...extra]
+  return Object.keys(out).length > 0 ? (out as Where) : undefined
+}
+
 /** How `filterField` relates the listed documents to the current document. */
 export type ListFilterBy = 'current' | 'shared' | 'linked'
 
@@ -158,13 +244,15 @@ function valuesOf(value: unknown): Id[] {
 
 /**
  * The `filterField` filter of a list on the current document's page, or `none` when it matches
- * nothing. Undefined without a filter or without a current document (then the list is unfiltered).
+ * nothing: without a current document (a normal page, or a template without a sample document on
+ * the canvas) or when the current document has no values. Undefined without a filter.
  */
 function filterOf(props: Record<string, unknown>, context: TemplateContext | null | undefined): Where | 'none' | undefined {
   const field = typeof props.filterField === 'string' ? props.filterField.trim() : ''
-  if (!field || !context) return undefined
+  if (!field) return undefined
+  if (!context) return 'none'
   const by: ListFilterBy = props.filterBy === 'shared' || props.filterBy === 'linked' ? props.filterBy : 'current'
-  if (by === 'current') return isId(context.doc.id) ? { [field]: { in: [context.doc.id] } } : undefined
+  if (by === 'current') return isId(context.doc.id) ? { [field]: { in: [context.doc.id] } } : 'none'
   const values = valuesOf(getByPath(context.doc, field))
   if (values.length === 0) return 'none'
   return by === 'shared' ? { [field]: { in: values } } : { id: { in: values } }
@@ -265,14 +353,30 @@ const MAX_LIMIT = 100
 const MAX_OFFSET = 100
 const DEFAULT_SORT = '-createdAt'
 
+export type ListQueriesOptions = {
+  /**
+   * Also query lists in hidden blocks (hidden by hand or by visibility conditions). The canvas
+   * does: it shows hidden blocks dimmed. The site does not, so hidden lists cost no query.
+   */
+  includeHidden?: boolean
+}
+
 /**
- * The query of every collection list block in the layout (also inside other lists' items).
- * `filterField` needs the current document (`context`); without one the list is unfiltered.
- * `queryFilters` need the URL query (`query`); without one they are off (the canvas).
+ * The query of every collection list block in the layout (also inside other lists' items), except
+ * in hidden blocks (see `includeHidden`). `filterField` needs the current document (`context`);
+ * without one the list shows nothing. `queryFilters` need the URL query (`query`); without one
+ * they are off (the canvas). In `where`, `$page.<path>` values read `context` and `$query.<param>`
+ * values read `query` (`resolveWhereTokens`), then date tokens become dates.
  */
-export function listQueries(layout: Layout, context?: TemplateContext | null, query?: ListQueryParams | null): ListQuery[] {
+export function listQueries(
+  layout: Layout,
+  context?: TemplateContext | null,
+  query?: ListQueryParams | null,
+  options: ListQueriesOptions = {},
+): ListQuery[] {
   const queries: ListQuery[] = []
   walkBlocks(layout, (block) => {
+    if (block.hidden && !options.includeHidden) return false
     if (block.type !== COLLECTION_LIST_BLOCK) return
     const props = block.props ?? {}
     const collection = typeof props.collection === 'string' ? props.collection.trim() : ''
@@ -299,7 +403,9 @@ export function listQueries(layout: Layout, context?: TemplateContext | null, qu
     const where = [filter, props.where, ...queryFiltersOf(props.queryFilters, query)].filter(
       (w): w is Where => isRecord(w) && Object.keys(w).length > 0,
     )
-    if (!list.none && where.length > 0) list.where = withDateTokens(where.length === 1 ? where[0]! : { and: where })
+    const resolved = !list.none && where.length > 0 ? resolveWhereTokens(where.length === 1 ? where[0]! : { and: where }, { context, query }) : undefined
+    if (resolved === 'none') list.none = true
+    else if (resolved) list.where = withDateTokens(resolved)
     queries.push(list)
   })
   return queries
@@ -331,6 +437,10 @@ export function attachListItems(layout: Layout, items: ReadonlyMap<string, Doc[]
  * Gives every filter link the page parameters of the layout's paginated lists that do not use
  * `page` (`$pageParams`), so a new filter starts those lists at page 1 too. `page` is always
  * dropped. Returns the same layout when no list has its own parameter.
+ *
+ * It names the built-in filter link on purpose: the block contract has no hook for "data a block
+ * needs from the whole layout", and one built-in user does not justify adding one. A custom block
+ * that needs the parameters can read `listQueries(layout)` itself.
  */
 export function withPageParams(layout: Layout, queries: readonly ListQuery[]): Layout {
   const params = [...new Set(queries.flatMap((query) => (query.pageParam ? [query.pageParam] : [])))]

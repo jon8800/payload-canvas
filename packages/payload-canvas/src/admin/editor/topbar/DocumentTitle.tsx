@@ -9,6 +9,7 @@ import { useOptimistic, useRef, useState, useTransition, type KeyboardEvent, typ
 import type { BuilderDocMeta, DocStatus } from '../../../live/types'
 import { Icon } from '../icons'
 import { useRuntime } from '../runtime'
+import { useOwnProperties } from '../sections/components'
 import { useCollectionLabel } from '../templates/useTemplate'
 import { useValue } from '../valueStore'
 
@@ -192,16 +193,15 @@ function SectionCategory() {
 export function SectionNote() {
   const runtime = useRuntime()
   const isSection = useValue(runtime.doc.meta).section !== null
+  // A component (a saved section with properties): its copies follow every change.
+  const component = useOwnProperties(runtime).length > 0
   if (!isSection) return null
-  const note = 'Changes here apply to new inserts only. Pages that already use this section keep their own copy.'
+  const lines = component
+    ? ['Changes here show on every copy of this component.', 'Pages with plain copies keep their own blocks.']
+    : ['Changes here apply to new inserts only.', 'Pages that already use this section keep their own copy.']
   return (
     // A button, so keyboard users reach it and its tooltip.
-    <button
-      type="button"
-      className="builder-bar__note"
-      aria-label={note}
-      data-tooltip={'Changes here apply to new inserts only.\nPages that already use this section keep their own copy.'}
-    >
+    <button type="button" className="builder-bar__note" aria-label={lines.join(' ')} data-tooltip={lines.join('\n')}>
       <Icon name="help" size={14} />
     </button>
   )

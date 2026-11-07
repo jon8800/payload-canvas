@@ -1,144 +1,236 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { CAROUSEL_CLASS_MAP as C, CAROUSEL_LABELS as L } from '../../../blocks/builtins/carousel'
-import { joinClasses, labelOf, textOr } from '../../../blocks/builtins/shared'
+import fadePlugin from 'embla-carousel-fade'
+import useEmblaCarousel, { type UseEmblaCarouselType } from 'embla-carousel-react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from 'react'
+import { CAROUSEL_CLASS_MAP as C, CAROUSEL_LABELS } from '../../../blocks/client/carousel'
+import { joinClasses, labelOf } from '../../../blocks/client/helpers'
+import { COLLECTION_LIST_BLOCK, REPEAT_BLOCK } from '../../../core/blockNames'
+import type { Block } from '../../../core/types'
+import { useCanvasMode } from '../../render/canvasMode'
+import { CANVAS_CONTROL_ATTRIBUTE, useCanvasReveal } from '../../render/reveal'
 import type { BlockComponentProps } from '../../render/types'
 import { Chevron } from './glyphs'
 
-/** The slides: the track's children, looking through `display: contents` wrappers. */
-function slidesOf(track: HTMLElement): HTMLElement[] {
-  return [...track.children].flatMap((child) => {
-    if (!(child instanceof HTMLElement)) return []
-    return getComputedStyle(child).display === 'contents' ? slidesOf(child) : [child]
-  })
-}
+type EmblaApi = NonNullable<UseEmblaCarouselType[1]>
+type EmblaOptions = NonNullable<Parameters<typeof useEmblaCarousel>[0]>
 
-const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
+/** The slides of an unwrapped list: the items inside the list's wrapper. */
+const LIST_SLIDES = ':scope > * > *'
 
-/** The slide to show for `target`: wrapped around with `loop`, else kept in range. */
-export function slideIndex(target: number, count: number, loop: boolean): number {
-  if (count <= 0) return 0
-  return loop ? (target + count) % count : Math.min(Math.max(target, 0), count - 1)
-}
-
-/** The slide whose start is nearest the scroll position. At the end of the track: the last one. */
-export function nearestSlide(offsets: number[], scrollLeft: number, maxScroll: number): number {
-  if (offsets.length === 0) return 0
-  if (scrollLeft >= maxScroll - 2) return offsets.length - 1
-  const start = offsets[0]!
-  return offsets.reduce((best, offset, i) => (Math.abs(offset - start - scrollLeft) < Math.abs(offsets[best]! - start - scrollLeft) ? i : best), 0)
-}
+/** Marks a control: in the editor's canvas a click on it acts as on the site and selects nothing. */
+const CONTROL = { [CANVAS_CONTROL_ATTRIBUTE]: '' }
 
 /**
- * Slides from the "slides" slot in a scroll-snap track (or stacked, fading), with arrows, dots,
- * loop and autoplay. A region with `aria-roledescription="carousel"`; each slide is a group
- * labelled "i of n". Arrow keys on the track move one slide. Autoplay shows a pause button, stops
- * on hover and focus, and never runs with reduced motion. On the canvas the slides always scroll
- * and never autoplay, so each one can be selected.
+ * True when the slides slot holds one collection list or repeat that renders a wrapper: the track
+ * unwraps it, so its items are the slides. A repeat with `as: 'none'` has no wrapper.
  */
-export function Carousel({ block, props, className, attributes, slotAttributes, slots, mode }: BlockComponentProps) {
-  const track = useRef<HTMLDivElement>(null)
-  const [count, setCount] = useState(0)
-  const [index, setIndex] = useState(0)
-  const [paused, setPaused] = useState(false)
-  const [stopped, setStopped] = useState(false)
-  const canvas = mode === 'canvas'
+export function unwrapsList(slides: readonly Block[]): boolean {
+  const shown = slides.filter((block) => !block.hidden)
+  if (shown.length !== 1) return false
+  const only = shown[0]!
+  return only.type === COLLECTION_LIST_BLOCK || (only.type === REPEAT_BLOCK && only.props?.as !== 'none')
+}
+
+export type CarouselLabels = Partial<typeof CAROUSEL_LABELS>
+
+const REDUCED_MOTION = '(prefers-reduced-motion: reduce)'
+const reducedMotion = () => window.matchMedia(REDUCED_MOTION).matches
+const subscribeReducedMotion = (onChange: () => void) => {
+  const query = window.matchMedia(REDUCED_MOTION)
+  query.addEventListener('change', onChange)
+  return () => query.removeEventListener('change', onChange)
+}
+const noReducedMotion = () => false
+
+/** The stop (Embla scroll snap) that shows slide `slide`: several slides can share one stop. */
+export function stopOf(stops: readonly (readonly number[])[], slide: number): number {
+  const stop = stops.findIndex((slides) => slides.includes(slide))
+  return stop >= 0 ? stop : slide
+}
+
+/** The slides' state for the controls. */
+type View = { stops: number; slides: number; index: number; canPrevious: boolean; canNext: boolean }
+
+const viewOf = (api: EmblaApi): View => ({
+  stops: api.scrollSnapList().length,
+  slides: api.slideNodes().length,
+  index: api.selectedScrollSnap(),
+  canPrevious: api.canScrollPrev(),
+  canNext: api.canScrollNext(),
+})
+
+/**
+ * Slides from the "slides" slot on Embla Carousel: they slide (swipe, drag, arrows, dots, arrow
+ * keys) or fade, with loop and autoplay. A region with `aria-roledescription="carousel"`; each
+ * slide is a group labelled "i of n". Autoplay shows a pause button, pauses on hover and focus,
+ * stops when the visitor swipes, and never runs with reduced motion.
+ *
+ * In the editor's canvas the arrows and dots work (they are canvas controls), slides do not drag
+ * (the editor drags blocks), fade shows as sliding so each slide can be selected, autoplay is
+ * off, and selecting a block in a slide brings that slide into view (`useCanvasReveal`).
+ */
+export function Carousel({ block, props, className, attributes, partAttributes, slots, mode, labels }: BlockComponentProps & { labels?: CarouselLabels }) {
+  const canvasMode = useCanvasMode()
+  const canvas = mode === 'canvas' || canvasMode !== 'site'
   const fade = props.mode === 'fade' && !canvas
   const loop = props.loop === true
+  const align = props.align === 'center' ? 'center' : 'start'
   const autoplay = typeof props.autoplay === 'number' && props.autoplay > 0 && !canvas ? props.autoplay : 0
-  const playing = autoplay > 0 && !paused && !stopped && count > 1
+  const blocks = block.slots?.slides ?? []
+  const list = unwrapsList(blocks)
 
-  // Count the slides, and again whenever they change.
-  useEffect(() => {
-    const el = track.current
-    if (!el) return
-    const measure = () => setCount(slidesOf(el).length)
-    measure()
-    const observer = new MutationObserver(measure)
-    observer.observe(el, { childList: true, subtree: true })
-    return () => observer.disconnect()
-  }, [])
+  const options = useMemo<EmblaOptions>(
+    () => ({ loop, align, watchDrag: !canvas, duration: 28, ...(list ? { slides: LIST_SLIDES } : {}) }),
+    [loop, align, canvas, list],
+  )
+  const plugins = useMemo(() => (fade ? [fadePlugin()] : []), [fade])
+  const [viewportRef, api] = useEmblaCarousel(options, plugins)
+  const root = useRef<HTMLElement>(null)
 
-  const label = (name: keyof typeof L, values?: Record<string, number>) => labelOf(props, L, name, values)
+  // Before the script runs (server HTML), count the slides from the data, so the controls render
+  // at once. A list's items are known only in the browser.
+  const initial = list ? 0 : canvas ? blocks.length : blocks.filter((child) => !child.hidden).length
+  const [view, setView] = useState<View>({ stops: initial, slides: initial, index: 0, canPrevious: loop, canNext: initial > 1 })
+  // The visitor's choice with the pause button (or a swipe, which stops). Without one, autoplay runs
+  // unless the visitor asks for less motion. `paused`: hover or focus.
+  const [choice, setChoice] = useState<'play' | 'stop' | null>(null)
+  const [paused, setPaused] = useState(false)
+  const reduced = useSyncExternalStore(subscribeReducedMotion, reducedMotion, noReducedMotion)
+
+  const L = labels ? { ...CAROUSEL_LABELS, ...labels } : CAROUSEL_LABELS
+  const label = (name: keyof typeof CAROUSEL_LABELS, values?: Record<string, number>) => labelOf(props, L, name, values)
   const slideRole = label('slideRole')
-  const slideLabel = textOr(props.slideLabel, L.slideLabel)
+  // The template, filled in per slide below.
+  const slideLabel = label('slideLabel')
 
-  // Label each slide "i of n"; in fade mode hide all but the current one.
+  // The controls follow the carousel.
   useEffect(() => {
-    const el = track.current
-    if (!el || canvas) return
-    slidesOf(el).forEach((slide, i) => {
-      slide.setAttribute('role', 'group')
-      slide.setAttribute('aria-roledescription', slideRole)
-      slide.setAttribute('aria-label', labelOf({ slideLabel }, L, 'slideLabel', { n: i + 1, count }))
-      if (!fade) return
-      slide.toggleAttribute('data-slide-off', i !== index)
-      slide.inert = i !== index
-    })
-  }, [canvas, count, fade, index, slideLabel, slideRole])
+    if (!api) return
+    const sync = () => setView(viewOf(api))
+    sync()
+    api.on('select', sync).on('reInit', sync)
+    return () => {
+      api.off('select', sync).off('reInit', sync)
+    }
+  }, [api])
 
-  // Scroll mode: the current slide follows the scroll position.
+  // Each slide is a group labelled "i of n".
   useEffect(() => {
-    const el = track.current
-    if (!el || fade) return
-    let frame = 0
-    const onScroll = () => {
-      cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(() => {
-        const offsets = slidesOf(el).map((slide) => slide.offsetLeft)
-        setIndex(nearestSlide(offsets, el.scrollLeft, el.scrollWidth - el.clientWidth))
+    if (!api) return
+    const labelSlides = () => {
+      const slides = api.slideNodes()
+      slides.forEach((slide, i) => {
+        slide.setAttribute('role', 'group')
+        slide.setAttribute('aria-roledescription', slideRole)
+        slide.setAttribute('aria-label', labelOf({}, { slideLabel }, 'slideLabel', { n: i + 1, count: slides.length }))
       })
     }
-    el.addEventListener('scroll', onScroll, { passive: true })
+    labelSlides()
+    api.on('reInit', labelSlides)
     return () => {
-      cancelAnimationFrame(frame)
-      el.removeEventListener('scroll', onScroll)
+      api.off('reInit', labelSlides)
     }
-  }, [fade])
+  }, [api, slideLabel, slideRole])
 
-  const goTo = useCallback(
-    (target: number) => {
-      const el = track.current
-      if (!el) return
-      const slides = slidesOf(el)
-      if (slides.length === 0) return
-      const next = slideIndex(target, slides.length, loop)
-      setIndex(next)
-      if (fade) return
-      el.scrollTo({ left: slides[next]!.offsetLeft - slides[0]!.offsetLeft, behavior: reducedMotion() ? 'auto' : 'smooth' })
+  // A list's items can change inside its wrapper, where Embla does not look.
+  useEffect(() => {
+    if (!api || !list) return
+    const container = api.containerNode()
+    const observer = new MutationObserver(() => {
+      const now = container.querySelectorAll(LIST_SLIDES)
+      const before = api.slideNodes()
+      if (now.length !== before.length || Array.from(now).some((slide, i) => slide !== before[i])) api.reInit()
+    })
+    observer.observe(container, { childList: true, subtree: true })
+    return () => observer.disconnect()
+  }, [api, list])
+
+  // Canvas: the slides move by transform, which the editor does not see. A `scroll` event from
+  // the viewport tells it to measure the blocks again.
+  useEffect(() => {
+    if (!api || !canvas) return
+    const moved = () => api.rootNode().dispatchEvent(new Event('scroll'))
+    api.on('scroll', moved).on('settle', moved)
+    return () => {
+      api.off('scroll', moved).off('settle', moved)
+    }
+  }, [api, canvas])
+
+  // Canvas: selecting a block in a slide (or the slide) brings the slide into view at once.
+  useCanvasReveal(root, (target) => {
+    if (!api) return
+    const slide = api.slideNodes().findIndex((node) => node.contains(target))
+    if (slide < 0) return
+    api.scrollTo(stopOf(api.internalEngine().slideRegistry, slide), true)
+  })
+
+  // Autoplay: a swipe stops it.
+  useEffect(() => {
+    if (!api || !autoplay) return
+    const stop = () => setChoice('stop')
+    api.on('pointerDown', stop)
+    return () => {
+      api.off('pointerDown', stop)
+    }
+  }, [api, autoplay])
+  const playing = autoplay > 0 && view.stops > 1 && (choice === 'play' || (choice === null && !reduced))
+  useEffect(() => {
+    if (!api || !playing || paused) return
+    // The next slide after `autoplay` ms, counted again after every move. It wraps to the first.
+    let timer = 0
+    const schedule = () => {
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => (api.canScrollNext() ? api.scrollNext() : api.scrollTo(0)), autoplay)
+    }
+    schedule()
+    api.on('select', schedule)
+    return () => {
+      window.clearTimeout(timer)
+      api.off('select', schedule)
+    }
+  }, [api, autoplay, paused, playing])
+
+  const go = useCallback(
+    (to: 'previous' | 'next' | number) => {
+      if (!api) return
+      const jump = reducedMotion()
+      if (to === 'previous') api.scrollPrev(jump)
+      else if (to === 'next') api.scrollNext(jump)
+      else api.scrollTo(to, jump)
     },
-    [fade, loop],
+    [api],
   )
 
-  // Autoplay always wraps to the first slide.
-  useEffect(() => {
-    if (!playing || reducedMotion()) return
-    const timer = window.setTimeout(() => goTo(index + 1 >= count ? 0 : index + 1), autoplay)
-    return () => window.clearTimeout(timer)
-  }, [autoplay, count, goTo, index, playing])
-
-  const onTrackKey = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.target !== event.currentTarget) return
+  // Arrow keys on the focused viewport or on a control move one stop.
+  const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return
+    if (!(event.target instanceof Element) || !event.target.closest('[data-carousel-viewport], [data-carousel-control]')) return
+    if (event.target.closest('[data-carousel-track]')) return
     event.preventDefault()
-    goTo(index + (event.key === 'ArrowRight' ? 1 : -1))
+    go(event.key === 'ArrowRight' ? 'next' : 'previous')
   }
 
-  const showArrows = props.arrows !== false && count > 1
-  const showDots = props.dots === true && count > 1
-  const trackClass = fade ? `${C.fade} ${count ? C.fadeReady : C.fadeBefore}` : C.scroll
-  // An empty arrow slot shows a chevron; on the canvas a filled one shows its blocks.
+  const showArrows = props.arrows !== false && view.stops > 1
+  const showDots = props.dots === true && view.stops > 1
+  const trackId = `carousel-${block.id}`
+  const trackClass = joinClasses(C.track, list ? C.trackList : undefined, fade ? (list ? C.fadeList : C.fade) : undefined, partAttributes.slides?.className)
+  // The parts' own classes (`block.partClassName`) join the component's classes.
+  const arrowClass = joinClasses(C.button, partAttributes.arrow?.className)
+  const dotClass = joinClasses(C.button, C.dot, partAttributes.dot?.className)
+  // An empty arrow slot shows a chevron; a filled one shows its blocks.
   const arrowContent = (slot: 'previous' | 'next') =>
     (block.slots?.[slot]?.length ?? 0) > 0 ? slots[slot] : <Chevron className={C.icon} direction={slot === 'previous' ? 'left' : 'right'} />
 
   return (
-    // A <section> with a name is a region. Its focus and pointer handlers only pause autoplay.
+    // A <section> with a name is a region. Its focus and pointer handlers only pause autoplay;
+    // its key handler serves the focused viewport and controls inside it.
     // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <section
       {...attributes}
+      ref={root}
       aria-roledescription={label('carouselRole')}
-      aria-label={textOr(props.label, 'Carousel')}
+      aria-label={label('label')}
       className={className}
       onFocus={() => setPaused(true)}
       onBlur={(event) => {
@@ -146,64 +238,75 @@ export function Carousel({ block, props, className, attributes, slotAttributes, 
       }}
       onPointerEnter={() => setPaused(true)}
       onPointerLeave={() => setPaused(false)}
+      onKeyDown={onKeyDown}
     >
-      {/* A scroll container takes the keyboard focus, so arrow keys can move it. */}
-      {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex, jsx-a11y/no-static-element-interactions */}
-      <div
-        {...slotAttributes.slides}
-        ref={track}
-        data-carousel-track=""
-        className={joinClasses(trackClass, slotAttributes.slides?.className)}
-        aria-live={playing ? 'off' : 'polite'}
-        tabIndex={fade || canvas ? undefined : 0}
-        onKeyDown={onTrackKey}
-      >
-        {slots.slides}
+      {/* The viewport takes the keyboard focus, so arrow keys can move the slides. */}
+      {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
+      <div ref={viewportRef} data-carousel-viewport="" className={C.viewport} tabIndex={canvas ? undefined : 0}>
+        <div {...partAttributes.slides} id={trackId} data-carousel-track="" className={trackClass} aria-live={playing && !paused ? 'off' : 'polite'}>
+          {slots.slides}
+        </div>
       </div>
       {showArrows || showDots || autoplay > 0 ? (
-        <div data-carousel-controls="" className={C.controls}>
+        <div data-carousel-controls="" className={joinClasses(C.controls, partAttributes.controls?.className)}>
           {showDots ? (
             <div data-carousel-dots="" className={C.dots}>
-              {Array.from({ length: count }, (_, i) => (
+              {Array.from({ length: view.stops }, (_, i) => (
                 <button
                   key={i}
+                  {...CONTROL}
                   type="button"
+                  data-carousel-control=""
                   data-carousel-dot=""
-                  className={C.button}
-                  aria-label={label('dotLabel', { n: i + 1, count })}
-                  aria-current={i === index ? 'true' : undefined}
-                  onClick={() => goTo(i)}
+                  className={dotClass}
+                  aria-controls={trackId}
+                  aria-label={label('dotLabel', { n: i + 1, count: view.stops })}
+                  aria-current={i === view.index ? 'true' : undefined}
+                  onClick={() => go(i)}
                 />
               ))}
             </div>
           ) : null}
           <div data-carousel-arrows="" className={C.arrows}>
             {autoplay > 0 ? (
-              <button type="button" data-carousel-pause="" className={C.button} onClick={() => setStopped((value) => !value)}>
-                {stopped ? label('playLabel') : label('pauseLabel')}
+              <button
+                {...CONTROL}
+                type="button"
+                data-carousel-control=""
+                data-carousel-pause=""
+                className={joinClasses(C.button, partAttributes.pause?.className)}
+                onClick={() => setChoice(playing ? 'stop' : 'play')}
+              >
+                {playing ? label('pauseLabel') : label('playLabel')}
               </button>
             ) : null}
             {showArrows ? (
               <>
                 <button
-                  {...slotAttributes.previous}
+                  {...partAttributes.previous}
+                  {...CONTROL}
                   type="button"
+                  data-carousel-control=""
                   data-carousel-arrow="previous"
-                  className={C.button}
+                  className={arrowClass}
+                  aria-controls={trackId}
                   aria-label={label('previousLabel')}
-                  disabled={!loop && index <= 0}
-                  onClick={() => goTo(index - 1)}
+                  disabled={!view.canPrevious}
+                  onClick={() => go('previous')}
                 >
                   {arrowContent('previous')}
                 </button>
                 <button
-                  {...slotAttributes.next}
+                  {...partAttributes.next}
+                  {...CONTROL}
                   type="button"
+                  data-carousel-control=""
                   data-carousel-arrow="next"
-                  className={C.button}
+                  className={arrowClass}
+                  aria-controls={trackId}
                   aria-label={label('nextLabel')}
-                  disabled={!loop && index >= count - 1}
-                  onClick={() => goTo(index + 1)}
+                  disabled={!view.canNext}
+                  onClick={() => go('next')}
                 >
                   {arrowContent('next')}
                 </button>

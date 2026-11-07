@@ -1,0 +1,104 @@
+// The sidebar from Nav.tsx. Payload's own nav styles still apply (`.nav`, `.nav__link`); these rules
+// add the icons and turn each link into a full-width row with a hover and an active background.
+@layer payload-default {
+  .admin-nav {
+    .nav__wrap {
+      gap: 2px;
+    }
+
+    .nav-group {
+      margin-top: calc(var(--base) * 0.6);
+      margin-bottom: 0;
+    }
+
+    .nav-group__toggle {
+      padding-inline: 8px;
+      margin-bottom: 4px;
+      font-size: 11.5px;
+      font-weight: 500;
+      line-height: 20px;
+      letter-spacing: 0.01em;
+      color: var(--theme-elevation-500);
+
+      svg {
+        margin-top: 0;
+      }
+    }
+
+    .nav-group__content {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+  }
+
+  .admin-nav__top {
+    width: 100%;
+  }
+
+  .admin-nav .nav__link.admin-nav__link {
+    width: 100%;
+    gap: 10px;
+    min-height: 32px;
+    padding: 6px 8px;
+    border-radius: var(--style-radius-m);
+    font-size: 13px;
+    font-weight: 450;
+    line-height: 20px;
+    color: var(--theme-elevation-800);
+    transition:
+      background-color 120ms ease-out,
+      color 120ms ease-out;
+
+    &:hover,
+    &:focus-visible {
+      background: var(--theme-elevation-50);
+      color: var(--theme-elevation-1000);
+      text-decoration: none;
+    }
+
+    &:focus-visible {
+      outline: var(--accessibility-outline);
+      outline-offset: -2px;
+    }
+
+    .nav__link-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  .admin-nav .nav__link.admin-nav__link--active {
+    background: var(--theme-elevation-100);
+    color: var(--theme-elevation-1000);
+    font-weight: 500;
+
+    &:hover {
+      background: var(--theme-elevation-100);
+    }
+
+    .admin-nav__icon {
+      color: var(--theme-elevation-1000);
+    }
+  }
+
+  .admin-nav__icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    color: var(--theme-elevation-500);
+    transition: color 120ms ease-out;
+
+    .admin-nav__link:hover & {
+      color: var(--theme-elevation-800);
+    }
+  }
+
+  // Phones: Payload makes the nav a full-screen sheet with bigger links.
+  @media (max-width: 768px) {
+    .admin-nav .nav__link.admin-nav__link {
+      min-height: 44px;
+      font-size: 16px;
+    }
+  }
+}

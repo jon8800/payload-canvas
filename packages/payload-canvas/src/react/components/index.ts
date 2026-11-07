@@ -1,4 +1,6 @@
+import { withClientLinks, withLinkComponent } from '../render/marks'
 import type { BlockComponents } from '../render/types'
+import { SectionRef } from './builtins/SectionRef'
 import { Button } from './Button'
 import { CollectionList } from './CollectionList'
 import { Container } from './Container'
@@ -8,10 +10,9 @@ import { Heading } from './Heading'
 import { Image } from './Image'
 import { Link } from './Link'
 import { List, ListItem } from './List'
-import { Menu } from './Menu'
-import { Quote } from './Quote'
+// The menu's JavaScript loads only on pages that render a menu.
+import { Menu } from './lazy'
 import { RichText } from './RichText'
-import { Spacer } from './Spacer'
 import { Text } from './Text'
 import { Video } from './Video'
 
@@ -22,17 +23,19 @@ export const defaultComponents: BlockComponents = {
   text: Text,
   richText: RichText,
   image: Image,
-  button: Button,
-  link: Link,
-  menu: Menu,
+  // They render links with RenderLayout's `linkComponent` (for example `next/link`). The menu is a
+  // client component: it gets `clientLinks` and renders `next/link` itself.
+  button: withLinkComponent(Button),
+  link: withLinkComponent(Link),
+  menu: withClientLinks(Menu),
   list: List,
   listItem: ListItem,
-  quote: Quote,
   divider: Divider,
-  spacer: Spacer,
   video: Video,
   field: Field,
   collectionList: CollectionList,
   // A repeat wraps its rows the same way.
   repeat: CollectionList,
+  // The live saved section block: the plugin adds its definition when saved sections are on.
+  sectionRef: SectionRef,
 }

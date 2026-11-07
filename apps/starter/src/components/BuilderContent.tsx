@@ -6,6 +6,7 @@
 // `md:text-xl` (page). `compilePageCss` compiles the union of the classes once.
 import type { ReactNode } from 'react'
 import { headers } from 'next/headers'
+import Link from 'next/link'
 import { getPayload, type Payload } from 'payload'
 import configPromise from '@payload-config'
 import { normalizeLayout, type Layout, type TemplateContext } from 'payload-canvas/core'
@@ -56,10 +57,18 @@ export async function visitorOf(payload: Payload, draft: boolean): Promise<unkno
   }
 }
 
-type RenderArgs = { part: LayoutPart; payload: Payload; draft: boolean; user: unknown; locale?: string }
+type RenderArgs = {
+  part: LayoutPart
+  payload: Payload
+  draft: boolean
+  user: unknown
+  locale?: string
+  /** Images of the first section that load first (`RenderLayout`'s `priorityImages`). */
+  priorityImages?: number
+}
 
 /** Loads a layout's data (documents, collection lists, bindings) and renders it, without CSS. */
-async function BuilderLayout({ part, payload, draft, user, locale }: RenderArgs) {
+async function BuilderLayout({ part, payload, draft, user, locale, priorityImages }: RenderArgs) {
   const { layout, context, pageData } = part
   // `locale`: related documents and collection lists load in the page's language too.
   const loaded = await loadLayoutData(layout, builderBlocks, payload, { draft, context, resolveLink, user, locale })
@@ -71,6 +80,9 @@ async function BuilderLayout({ part, payload, draft, user, locale }: RenderArgs)
       resolveLink={resolveLink}
       context={context}
       pageData={pageData}
+      // Client-side navigation and prefetching for the builder's buttons, links and menus.
+      linkComponent={Link}
+      priorityImages={priorityImages}
     />
   )
 }
@@ -116,7 +128,8 @@ export async function SiteFrame({ pathname, draft, main, children }: SiteFramePr
         {main ? <BuilderLayout part={main} payload={payload} draft={draft} user={user} locale={locale} /> : null}
         {children}
       </main>
-      {footerPart ? <BuilderLayout part={footerPart} payload={payload} draft={draft} user={user} locale={locale} /> : null}
+      {/* The footer is below the fold: none of its images load first. */}
+      {footerPart ? <BuilderLayout part={footerPart} payload={payload} draft={draft} user={user} locale={locale} priorityImages={0} /> : null}
     </>
   )
 }

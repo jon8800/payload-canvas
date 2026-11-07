@@ -3,8 +3,14 @@ import { defineBlock } from '../core/blocks'
 import { COLLECTION_LIST_BLOCK, FIELD_BLOCK, INDEX_PATH, ITEM_PATH, LIST_EMPTY_SLOT, LIST_ITEM_SLOT, PAGE_PATH, PARENT_PATH, REPEAT_BLOCK } from '../core/bindings'
 import { TEXT_LIST_BLOCK, TEXT_LIST_ITEM_BLOCK, TEXT_LIST_SLOT } from '../core/textList'
 import type { BlockDefinition } from '../core/types'
-import { BUILDER_CSS_CLASS } from '../css/marker'
+import { classesOf, INTERACTIVE, labelField } from './builtins/shared'
 import { linkField, when } from './link'
+import { FIELD_CLASS_MAP } from './client/field'
+import { MENU_CLASS_MAP, MENU_LABELS } from './client/menu'
+
+// The class maps and labels the components use live in leaf modules (no block definitions), so
+// client components can import them alone.
+export { FIELD_CLASS_MAP, MENU_CLASS_MAP, MENU_LABELS }
 
 export type DefaultBlocksOptions = {
   /** Upload collection for the image and video blocks. Default "media". */
@@ -19,136 +25,52 @@ export type DefaultBlocksOptions = {
    * Default: a text field. The plugin turns it into a select of its collections that have a `url`.
    */
   listCollections?: string[]
-  /**
-   * The names of the site's icons: the same list as `builtinBlocks({ icons })`. With names, the
-   * button block gets the props `icon`, `iconPosition` and `iconClassName`, and
-   * `builtinComponents({ icons })` renders them. Without names the button has no icon props.
-   */
-  icons?: readonly string[]
-}
-
-/** "arrowUpRight" -> "arrow up right". */
-export const iconLabel = (name: string) => name.replace(/([A-Z])/g, ' $1').toLowerCase()
-
-/** The button's icon props, for a site with an icon set (`defaultBlocks({ icons })`). */
-function buttonIconFields(names: readonly string[]): Field[] {
-  return [
-    {
-      name: 'icon',
-      type: 'select',
-      label: 'Icon',
-      options: names.map((value) => ({ label: iconLabel(value), value })),
-      admin: { description: "Optional. An icon of the site's icon set next to the label. Screen readers skip it." },
-    },
-    {
-      name: 'iconPosition',
-      type: 'select',
-      label: 'Icon position',
-      defaultValue: 'end',
-      options: [
-        { label: 'Before the label', value: 'start' },
-        { label: 'After the label', value: 'end' },
-      ],
-    },
-    {
-      name: 'iconClassName',
-      type: 'text',
-      label: 'Icon classes',
-      defaultValue: 'size-4 shrink-0',
-      admin: { description: 'Tailwind classes of the icon, for example "size-5".', custom: { builderClasses: true } },
-    },
-  ]
 }
 
 /** Block types a Link block may hold directly: content without its own links or controls. */
-const LINK_CONTENT = ['stack', 'grid', 'heading', 'text', 'image', 'list', 'quote', 'divider', 'spacer', 'field']
+const LINK_CONTENT = ['stack', 'grid', 'heading', 'text', 'image', 'list', 'divider', 'field']
+
+/** The HTML tags a stack can render as (the Container component accepts the same list). */
+const STACK_TAGS = ['div', 'section', 'header', 'footer', 'main', 'nav', 'article', 'aside', 'ul', 'ol', 'li', 'dl', 'dt', 'dd', 'figure', 'figcaption']
+
+const MENU_CLASSES = [...classesOf(MENU_CLASS_MAP), 'group']
+
+const FIELD_CLASSES = classesOf(FIELD_CLASS_MAP)
 
 /**
- * Interactive block types: never inside a Link block, at any depth. `form` is the starter's custom
- * form block; a type that does not exist is ignored.
+ * The `collection` field of the collection list and repeat blocks: a select of `slugs`, or a text
+ * field when there are none. The plugin's `listCollectionsOf` uses it too.
  */
-const INTERACTIVE = ['link', 'button', 'menu', 'richText', 'video', 'collectionList', 'form']
+export function listCollectionField(slugs: readonly string[] | undefined, args: { label: string; required: boolean; description?: string }): Field {
+  // A setting, not content: content mode (core/contentMode.ts) does not offer it.
+  const admin = { admin: { ...(args.description ? { description: args.description } : {}), custom: { builderContent: false } } }
+  const required = args.required ? { required: true } : {}
+  return slugs && slugs.length > 0
+    ? { name: 'collection', type: 'select', label: args.label, options: [...slugs], ...required, ...admin }
+    : { name: 'collection', type: 'text', label: args.label, ...required, ...admin }
+}
 
-/** Adds the marker class to every class string of a map (see `BUILDER_CSS_CLASS`). */
-function withMarker<T extends Record<string, string | Record<string, string>>>(map: T): T {
-  const entries = Object.entries(map).map(([key, value]) => [
-    key,
-    typeof value === 'string' ? `${value} ${BUILDER_CSS_CLASS}` : withMarker(value),
-  ])
-  return Object.fromEntries(entries) as T
+const PICKED_HELP = 'Shows only these, in this order.'
+
+/** The collection list's picked documents: a relationship to `slugs`, or ids as text when there are none. */
+export function pickedDocumentsField(slugs: readonly string[] | undefined): Field {
+  if (!slugs || slugs.length === 0) {
+    return { name: 'ids', type: 'text', label: 'Only these ids', hasMany: true, admin: { description: PICKED_HELP, custom: { builderContent: false } } }
+  }
+  return {
+    name: 'ids',
+    type: 'relationship',
+    label: 'Only these documents',
+    // The slugs come from the app, so they cannot match Payload's generated slug type.
+    relationTo: (slugs.length === 1 ? slugs[0] : [...slugs]) as never,
+    hasMany: true,
+    admin: { description: PICKED_HELP },
+  }
 }
 
 /**
- * Classes the menu component uses itself (the toggle, the panel and the links). They are listed in
- * the block's `classes`, so the generated CSS has them. Each string also holds `builder-css`:
- * the generated CSS only styles elements with that class. Keep in sync with `Menu.tsx` in
- * `payload-canvas/react`.
- */
-export const MENU_CLASS_MAP = withMarker({
-  /** The inline list: its items become children of the <nav>, so the block's className lays them out. */
-  list: { md: 'hidden md:contents', lg: 'hidden lg:contents', never: 'contents' },
-  toggleWrap: { md: 'md:hidden', lg: 'lg:hidden' },
-  link:
-    'inline-flex items-center py-2 opacity-75 transition-opacity hover:opacity-100 ' +
-    'aria-[current=page]:opacity-100 aria-[current=page]:underline decoration-1 underline-offset-8',
-  toggle:
-    'flex min-h-11 min-w-11 cursor-pointer list-none items-center justify-center gap-2 rounded-md px-2 -mr-2 ' +
-    '[&::-webkit-details-marker]:hidden',
-  iconOpen: 'size-5 group-open:hidden',
-  iconClose: 'hidden size-5 group-open:block',
-  panel:
-    'absolute inset-x-0 top-full z-50 border-y border-border bg-background px-5 pt-2 pb-6 text-foreground ' +
-    'shadow-md',
-  panelList: 'flex flex-col',
-  panelLink:
-    'flex min-h-12 items-center border-b border-border py-3 text-lg ' +
-    'aria-[current=page]:font-semibold aria-[current=page]:underline decoration-1 underline-offset-8',
-  /** A link with children (one level): a <details> dropdown next to, or in place of, the link. */
-  submenu: 'relative flex items-center gap-1',
-  submenuDetails: 'group/submenu',
-  submenuToggle:
-    'inline-flex cursor-pointer list-none items-center gap-1 py-2 opacity-75 transition-opacity hover:opacity-100 ' +
-    'aria-[current=true]:opacity-100 [&::-webkit-details-marker]:hidden',
-  submenuIcon: 'size-4 transition-transform group-open/submenu:rotate-180 motion-reduce:transition-none',
-  submenuList:
-    'absolute top-full left-0 z-50 flex min-w-48 flex-col border border-border bg-background p-2 text-foreground shadow-md',
-  submenuLink:
-    'flex min-h-10 items-center px-3 py-2 opacity-75 transition-opacity hover:opacity-100 ' +
-    'aria-[current=page]:opacity-100 aria-[current=page]:underline decoration-1 underline-offset-8',
-  /** The children of a link in the small-screen panel: a nested list. */
-  panelSubList: 'flex flex-col pl-4',
-  panelSubLink:
-    'flex min-h-11 items-center py-2 text-base ' +
-    'aria-[current=page]:font-semibold aria-[current=page]:underline decoration-1 underline-offset-8',
-  /** The optional button after the links in the panel. */
-  panelCta:
-    'mt-5 flex min-h-12 items-center justify-center rounded-full bg-primary px-6 text-base font-medium ' +
-    'text-primary-foreground transition-colors hover:bg-[color-mix(in_oklch,var(--color-primary),black_14%)]',
-} as const)
-
-/**
- * Classes the field component adds to rich text that has no `prose` class of its own (see `Field.tsx`),
- * so a post body looks right by default. Listed in the field block's `classes`.
- */
-export const FIELD_CLASS_MAP = withMarker({ richText: 'prose max-w-none' } as const)
-
-const MENU_CLASSES = [
-  ...new Set(
-    Object.values(MENU_CLASS_MAP)
-      .flatMap((value) => (typeof value === 'string' ? [value] : Object.values(value)))
-      .flatMap((value) => value.split(' '))
-      .filter((cls) => cls !== BUILDER_CSS_CLASS),
-  ),
-  'group',
-]
-
-const FIELD_CLASSES = Object.values(FIELD_CLASS_MAP)
-  .flatMap((value) => value.split(' '))
-  .filter((cls) => cls !== BUILDER_CSS_CLASS)
-
-/**
- * The built-in blocks: stack, grid, heading, text, richText, image, button, link, menu, list (with
- * its listItem blocks), quote, divider, spacer, video, and the dynamic blocks field, collectionList and repeat.
+ * The default blocks: stack, grid, heading, text, richText, image, button, link, menu, list (with
+ * its listItem blocks), divider, video, and the dynamic blocks field, collectionList and repeat.
  */
 export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[] {
   const mediaCollection = (options?.mediaCollection ?? 'media') as CollectionSlug
@@ -160,38 +82,18 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
   const stack = defineBlock({
     type: 'stack',
     label: 'Stack',
+    description: 'A box that holds blocks in a column or a row.',
     icon: 'stack',
     category: 'Layout',
     fields: [
       {
         name: 'as',
         type: 'select',
-        label: 'Kind of area',
-        options: [
-          { label: 'Plain group (div)', value: 'div' },
-          { label: 'Page section (section)', value: 'section' },
-          { label: 'Site header (header)', value: 'header' },
-          { label: 'Site footer (footer)', value: 'footer' },
-          { label: 'Main content (main)', value: 'main' },
-          { label: 'Navigation (nav)', value: 'nav' },
-          { label: 'Article or post (article)', value: 'article' },
-          { label: 'Side note (aside)', value: 'aside' },
-          { label: 'Numbered list (ol)', value: 'ol' },
-          { label: 'Bullet list (ul)', value: 'ul' },
-          { label: 'List item (li)', value: 'li' },
-          { label: 'Term list (dl)', value: 'dl' },
-          { label: 'Term (dt)', value: 'dt' },
-          { label: 'Term description (dd)', value: 'dd' },
-          { label: 'Figure (figure)', value: 'figure' },
-          { label: 'Figure caption (figcaption)', value: 'figcaption' },
-          { label: 'Paragraph (p)', value: 'p' },
-          { label: 'Inline group (span)', value: 'span' },
-        ],
+        label: 'Tag',
+        options: [...STACK_TAGS],
         defaultValue: 'div',
-        admin: {
-          description:
-            'What this area is on the page. It does not change the look. Screen readers and search engines use it. ' +
-            'Use "Page section" for each section of a page.',
+        custom: {
+          ai: { description: 'The HTML tag. It does not change the look; screen readers and search engines use it. Use "section" for each section of a page.' },
         },
       },
     ],
@@ -201,7 +103,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
       description:
         'A container that lays out its children in a column (or a row with "flex-row"). ' +
         'Use it to group blocks and build sections. Set "as" to "section", "header", "footer" and so on for semantic HTML; ' +
-        '"ol"/"ul" with "li" children for lists, "dl" with "dt"/"dd" for term lists, "figure" with "figcaption", "p" or "span" for text runs.',
+        '"ol"/"ul" with "li" children for lists, "dl" with "dt"/"dd" for term lists, "figure" with "figcaption".',
       example: {
         type: 'stack',
         props: { as: 'section' },
@@ -219,6 +121,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
   const grid = defineBlock({
     type: 'grid',
     label: 'Grid',
+    description: 'Places blocks in columns and rows.',
     icon: 'grid',
     category: 'Layout',
     fields: [],
@@ -245,6 +148,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
   const heading = defineBlock({
     type: 'heading',
     label: 'Heading',
+    description: 'A title for a page or a section.',
     icon: 'heading',
     category: 'Content',
     fields: [
@@ -253,31 +157,15 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
       {
         name: 'level',
         type: 'select',
-        label: 'Level',
-        options: [
-          { label: 'Heading 1 – page title', value: '1' },
-          { label: 'Heading 2 – section', value: '2' },
-          { label: 'Heading 3 – part of a section', value: '3' },
-          { label: 'Heading 4', value: '4' },
-          { label: 'Heading 5', value: '5' },
-          { label: 'Heading 6', value: '6' },
-        ],
+        label: 'Tag',
+        // The value is the level only ("2"); the label is the tag.
+        options: ['1', '2', '3', '4', '5', '6'].map((value) => ({ label: `h${value}`, value })),
         defaultValue: '2',
-        admin: {
-          description:
-            'Where the heading sits in the page outline. It does not set the size. Use Heading 1 once per page, ' +
-            'Heading 2 for each section, and Heading 3 inside a section.',
+        custom: {
+          ai: { description: 'The level in the page outline, not the size: "1" once per page, "2" for sections, "3" inside a section.' },
         },
       },
-      {
-        name: 'accent',
-        type: 'text',
-        label: 'Accent words',
-        localized: true,
-        admin: {
-          description: 'Words of the heading to highlight, for example "Brisbane". They render as <em>; style them with classes like [&_em]:text-primary.',
-        },
-      },
+      { name: 'accent', type: 'text', label: 'Highlighted words', localized: true },
     ],
     // `break-words`: a long word (a URL, a product code) wraps instead of widening the page.
     defaultClassName: 'text-3xl font-bold break-words',
@@ -292,6 +180,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
   const text = defineBlock({
     type: 'text',
     label: 'Text',
+    description: 'A paragraph of plain text.',
     icon: 'text',
     category: 'Content',
     fields: [{ name: 'text', type: 'textarea', label: 'Text', required: true, localized: true }],
@@ -305,23 +194,18 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
   const richText = defineBlock({
     type: 'richText',
     label: 'Rich text',
+    description: 'Text with headings, links, lists and quotes.',
     icon: 'richText',
     category: 'Content',
     fields: [
       { name: 'content', type: 'richText', label: 'Content', required: true, localized: true },
-      {
-        name: 'headingIds',
-        type: 'checkbox',
-        label: 'Heading ids',
-        admin: { description: 'Each heading gets an id from its text, so a table of contents can link to it ("#prices").' },
-      },
     ],
     defaultClassName: 'prose',
     ai: {
       description:
         'Formatted text (Lexical JSON): paragraphs, headings, bold and italic, links and lists. ' +
-        'Use it for articles and longer copy. The "prose" class styles the content. "headingIds": true gives each ' +
-        'heading an id from its text, for "#id" links.',
+        'Use it for articles and longer copy. The "prose" class styles the content. Each heading gets an id ' +
+        'from its text (e.g. "Our prices" -> "our-prices"; repeats get "-2"), for "#id" links and the tableOfContents block.',
       example: {
         type: 'richText',
         className: 'prose',
@@ -359,6 +243,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
   const image = defineBlock({
     type: 'image',
     label: 'Image',
+    description: 'A picture from the media library.',
     icon: 'image',
     category: 'Media',
     fields: [
@@ -370,20 +255,11 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         type: 'text',
         label: 'Alt text',
         localized: true,
-        admin: { description: 'Describes the image for people who cannot see it. Leave empty to use the alt text saved with the image.' },
+        admin: { placeholder: 'From the image' },
+        custom: { ai: { description: 'Empty: the alt text saved with the image.' } },
       },
-      {
-        name: 'priority',
-        type: 'checkbox',
-        label: 'Load first',
-        admin: { description: 'For the main image at the top of the page: it loads at once with high priority instead of lazily.' },
-      },
-      {
-        name: 'sizes',
-        type: 'text',
-        label: 'Sizes',
-        admin: { description: 'The width the image shows at, for the browser to pick a file, for example "(min-width: 768px) 50vw, 100vw". Empty: the full width.' },
-      },
+      { name: 'priority', type: 'checkbox', label: 'Load first', admin: { description: 'For the main image at the top.' } },
+      { name: 'sizes', type: 'text', label: 'Sizes', admin: { placeholder: '100vw', custom: { builderContent: false } } },
     ],
     ai: {
       description:
@@ -395,28 +271,22 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     },
   })
 
-  const icons = options?.icons ?? []
   const button = defineBlock({
     type: 'button',
     label: 'Button',
+    description: 'A button that links to a page or a URL.',
     icon: 'button',
     category: 'Interactive',
     fields: [
       { name: 'label', type: 'text', label: 'Label', required: true, localized: true },
       linkField({ collections: linkCollections }),
-      ...(icons.length > 0 ? buttonIconFields(icons) : []),
     ],
-    defaultClassName:
-      'inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground' +
-      (icons.length > 0 ? ' gap-2' : ''),
+    defaultClassName: 'inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground',
     ai: {
       description:
         'A call-to-action button. "link.type" is "url" (set "link.url") or "reference" (set "link.reference" to ' +
-        '{ relationTo, value }). Without a link it renders as plain text.' +
-        (icons.length > 0
-          ? ` Optional "icon" (one of: ${icons.join(', ')}) shows an icon before ("iconPosition": "start") or after ` +
-            '("end", the default) the label; "iconClassName" sizes it (default "size-4 shrink-0").'
-          : ''),
+        '{ relationTo, value }). Without a link it renders as plain text. For a button with an icon, use a link block ' +
+        'that holds a text block and an icon block.',
       example: {
         type: 'button',
         props: { label: 'Contact us', link: exampleLink },
@@ -429,6 +299,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
   const link = defineBlock({
     type: 'link',
     label: 'Link',
+    description: 'Makes all the blocks inside it one link.',
     icon: 'link',
     category: 'Interactive',
     fields: [linkField({ collections: linkCollections })],
@@ -459,6 +330,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
   const menu = defineBlock({
     type: 'menu',
     label: 'Menu',
+    description: 'Navigation links for a header or a footer.',
     icon: 'menu',
     category: 'Interactive',
     fields: [
@@ -474,11 +346,6 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
             name: 'children',
             type: 'array',
             label: 'Dropdown links',
-            admin: {
-              description:
-                'Optional. Links under this one (one level), shown in a dropdown. The link above is optional when it has ' +
-                'dropdown links: without it the label opens the dropdown.',
-            },
             fields: [
               { name: 'label', type: 'text', label: 'Label', required: true, localized: true },
               linkField({ collections: linkCollections }),
@@ -486,59 +353,30 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
           },
         ],
       },
-      {
-        name: 'label',
-        type: 'text',
-        label: 'Menu name',
-        defaultValue: 'Main',
-        localized: true,
-        admin: { description: 'Read by screen readers, for example "Main" or "Footer".' },
-      },
-      {
-        name: 'toggleLabel',
-        type: 'text',
-        label: 'Menu button text',
-        defaultValue: 'Menu',
-        localized: true,
-        admin: { description: 'The text of the button that opens the links on small screens.' },
-      },
-      {
-        name: 'submenuLabel',
-        type: 'text',
-        label: 'Dropdown button name',
-        defaultValue: '{label} menu',
-        localized: true,
-        admin: {
-          description:
-            'Read by screen readers on the small arrow button next to a link with dropdown links. {label} is the link label.',
-        },
-      },
+      labelField('label', MENU_LABELS.label, 'Menu name'),
+      labelField('toggleLabel', MENU_LABELS.toggleLabel, 'Menu button text'),
+      labelField('submenuLabel', MENU_LABELS.submenuLabel, 'Dropdown button name'),
       {
         name: 'collapse',
         type: 'select',
-        label: 'Small screens',
+        label: 'Menu button',
         options: [
-          { label: 'Menu button below tablet width', value: 'md' },
-          { label: 'Menu button below laptop width', value: 'lg' },
-          { label: 'Always show the links', value: 'never' },
+          { label: 'Below tablet width', value: 'md' },
+          { label: 'Below laptop width', value: 'lg' },
+          { label: 'Never', value: 'never' },
         ],
         defaultValue: 'md',
-        admin: { description: 'On small screens the links fold into a "Menu" button with a panel.' },
       },
-      {
-        name: 'ctaLabel',
-        type: 'text',
-        label: 'Panel button text',
-        localized: true,
-        admin: {
-          description:
-            'Optional. A button as the last row of the small-screen panel, for example the call to action the header ' +
-            'shows only on wide screens. Needs a link below. Not shown when the links are always visible.',
-        },
-      },
+      { name: 'ctaLabel', type: 'text', label: 'Panel button text', localized: true },
       linkField({ name: 'cta', label: 'Panel button link', collections: linkCollections }),
     ],
     defaultClassName: 'flex flex-row items-center gap-6 text-sm font-medium',
+    parts: {
+      link: { label: 'Links' },
+      submenu: { label: 'Dropdowns' },
+      submenuLink: { label: 'Dropdown links' },
+      panel: { label: 'Small-screen panel' },
+    },
     classes: MENU_CLASSES,
     ai: {
       description:
@@ -549,7 +387,9 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         'Optional "ctaLabel" and "cta" (a link) add a button as the last row of the small-screen panel. "toggleLabel" is the text of the menu button (default "Menu"; translate it per locale). ' +
         'An item may have "children" (one level of { label, link }): a dropdown. With its own link the item shows the link and a ' +
         'small arrow button that opens the dropdown ("submenuLabel" names that button, default "{label} menu"); without a link the ' +
-        'label itself opens it. On small screens the children show as a nested list in the panel.',
+        'label itself opens it. On small screens the children show as a nested list in the panel. ' +
+        'Style the inner elements with "partClassName": "link" (each link of the inline list), "submenu" (the dropdown box), ' +
+        '"submenuLink" (each dropdown link), "panel" (the small-screen panel). They add to the classes the menu sets itself.',
       example: {
         type: 'menu',
         props: {
@@ -560,8 +400,8 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
             {
               label: 'Services',
               children: [
-                { label: 'Dinner dates', link: { type: 'url', url: '/services/dinner' } },
-                { label: 'Travel', link: { type: 'url', url: '/services/travel' } },
+                { label: 'Web design', link: { type: 'url', url: '/services/web-design' } },
+                { label: 'Hosting', link: { type: 'url', url: '/services/hosting' } },
               ],
             },
             { label: 'Contact', link: { type: 'url', url: '/contact' } },
@@ -575,6 +415,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
   const list = defineBlock({
     type: TEXT_LIST_BLOCK,
     label: 'List',
+    description: 'A bulleted or numbered list.',
     icon: 'list',
     category: 'Content',
     fields: [{ name: 'ordered', type: 'checkbox', label: 'Numbered list' }],
@@ -602,19 +443,10 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
   const listItem = defineBlock({
     type: TEXT_LIST_ITEM_BLOCK,
     label: 'List item',
+    description: 'One item of a list.',
     icon: 'text',
     category: 'Content',
-    fields: [
-      { name: 'text', type: 'text', label: 'Text', required: true, localized: true },
-      {
-        ...itemLink,
-        admin: {
-          ...itemLink.admin,
-          description:
-            'Optional. The item text becomes a link. Leave it empty in a list inside a Link block: a link cannot hold another link.',
-        },
-      },
-    ],
+    fields: [{ name: 'text', type: 'text', label: 'Text', required: true, localized: true }, itemLink],
     parents: [TEXT_LIST_BLOCK],
     ai: {
       description:
@@ -625,29 +457,11 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     },
   })
 
-  const quote = defineBlock({
-    type: 'quote',
-    label: 'Quote',
-    icon: 'quote',
-    category: 'Content',
-    fields: [
-      { name: 'quote', type: 'textarea', label: 'Quote', required: true, localized: true },
-      { name: 'cite', type: 'text', label: 'Source', localized: true, admin: { description: 'Who said it, for example "Jane Doe, CEO".' } },
-    ],
-    defaultClassName: 'border-l-4 pl-4 italic',
-    ai: {
-      description: 'A quotation or testimonial, with an optional source.',
-      example: {
-        type: 'quote',
-        props: { quote: 'They rebuilt our site in a week.', cite: 'Jane Doe, Acme' },
-        className: 'border-l-4 pl-4 italic',
-      },
-    },
-  })
 
   const divider = defineBlock({
     type: 'divider',
     label: 'Divider',
+    description: 'A line between parts of a page.',
     icon: 'divider',
     category: 'Layout',
     fields: [],
@@ -658,22 +472,11 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     },
   })
 
-  const spacer = defineBlock({
-    type: 'spacer',
-    label: 'Spacer',
-    icon: 'spacer',
-    category: 'Layout',
-    fields: [],
-    defaultClassName: 'h-8',
-    ai: {
-      description: 'Empty vertical space. Set the height with a class such as "h-16". Prefer gap and padding classes.',
-      example: { type: 'spacer', className: 'h-16' },
-    },
-  })
 
   const video = defineBlock({
     type: 'video',
     label: 'Video',
+    description: 'A video from an upload, YouTube or Vimeo.',
     icon: 'video',
     category: 'Media',
     fields: [
@@ -683,7 +486,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         label: 'Source',
         options: [
           { label: 'Upload', value: 'upload' },
-          { label: 'URL (YouTube, Vimeo or a video file)', value: 'url' },
+          { label: 'Link', value: 'url' },
         ],
         defaultValue: 'upload',
       },
@@ -691,15 +494,16 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
       {
         name: 'url',
         type: 'text',
-        label: 'URL',
+        label: 'Video link',
         admin: {
-          description: 'A YouTube or Vimeo link, or a direct link to a video file.',
+          placeholder: 'YouTube, Vimeo or a video file',
           // Format `videoUrl` (core/formats.ts): the inspector shows the message, publishing needs a good link.
           custom: { ...when('source', 'url').custom, builderFormat: 'videoUrl' },
         },
+        custom: { ai: { description: 'A YouTube or Vimeo link, or a direct link to a video file.' } },
       },
       { name: 'poster', type: 'upload', label: 'Poster image', relationTo: mediaCollection },
-      { name: 'autoplay', type: 'checkbox', label: 'Autoplay', admin: { description: 'Browsers only autoplay muted videos.' } },
+      { name: 'autoplay', type: 'checkbox', label: 'Autoplay', admin: { description: 'Works only when muted.' } },
       { name: 'loop', type: 'checkbox', label: 'Loop' },
       { name: 'muted', type: 'checkbox', label: 'Muted' },
       { name: 'controls', type: 'checkbox', label: 'Show controls', defaultValue: true },
@@ -720,39 +524,13 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
   const field = defineBlock({
     type: FIELD_BLOCK,
     label: 'Field',
+    description: 'Shows one field of the page or of each list item.',
     icon: 'field',
     category: 'Dynamic',
     fields: [
-      {
-        name: 'path',
-        type: 'text',
-        label: 'Field',
-        required: true,
-        admin: { description: 'The name of the field to show, for example "content" or "featuredImage". For a field inside another, join the names with a dot: "author.name".' },
-      },
-      {
-        name: 'fallback',
-        type: 'text',
-        label: 'Fallback',
-        localized: true,
-        admin: { description: 'Shown when this field is empty.' },
-      },
-      {
-        name: 'format',
-        type: 'text',
-        label: 'Format',
-        admin: {
-          description:
-            'For a number, date or text: "currency:AUD" ($1,200), "number" (1,200), "date:en-AU:Australia/Brisbane" ' +
-            '(a date in that language and time zone) or "firstSentence". Empty: the value as it is.',
-        },
-      },
-      {
-        name: 'headingIds',
-        type: 'checkbox',
-        label: 'Heading ids',
-        admin: { description: 'For rich text: each heading gets an id from its text, so a table of contents can link to it ("#prices").' },
-      },
+      // The inspector shows the field picker and the format of the bindings UI (templates/Bindable).
+      { name: 'path', type: 'text', label: 'Field', required: true, admin: { custom: { builderContent: false } } },
+      { name: 'fallback', type: 'text', label: 'Text when empty', localized: true },
     ],
     classes: FIELD_CLASSES,
     ai: {
@@ -760,9 +538,9 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         'Shows one field of the current document in a template, rendered by its value: rich text as formatted ' +
         'text, an upload as an image, a date as a formatted date, a relationship as its title, text as text. ' +
         '"path" is a dot path from getBindingSources (e.g. "content", "author.name"). Only works in templates ' +
-        'and inside a collection list item. "format" formats a number, date or text with a binding formatter: ' +
-        '"currency:AUD", "number", "date:en-AU:Australia/Brisbane" or "firstSentence". "headingIds": true gives each ' +
-        'rich-text heading an id from its text (e.g. "Our prices" -> "our-prices", repeats get "-2"), for "#id" links.',
+        'and inside a collection list item. "path" takes binding formatters after a "|": "price|currency:USD", ' +
+        '"publishedAt|date:en-US", "summary|truncate:160". Rich-text headings get ids from their text (e.g. "Our prices" -> ' +
+        '"our-prices", repeats get "-2"), for "#id" links.',
       example: { type: FIELD_BLOCK, props: { path: 'content' }, className: 'prose max-w-none' },
     },
   })
@@ -771,56 +549,30 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
   const collectionList = defineBlock({
     type: COLLECTION_LIST_BLOCK,
     label: 'Collection list',
+    description: 'Shows posts, products or other documents from a collection.',
     icon: 'collectionList',
     category: 'Dynamic',
+    // `builderHeading`: the inspector shows a small heading above the field, so the long list reads in groups.
     fields: [
-      listCollections && listCollections.length > 0
-        ? { name: 'collection', type: 'select', label: 'Collection', options: listCollections, required: true }
-        : { name: 'collection', type: 'text', label: 'Collection', required: true },
-      { name: 'limit', type: 'number', label: 'Number of items', defaultValue: 3, min: 1, max: 100 },
+      listCollectionField(listCollections, { label: 'Collection', required: true }),
+      pickedDocumentsField(listCollections),
       {
-        name: 'sort',
-        type: 'text',
-        label: 'Sort',
-        defaultValue: '-createdAt',
-        admin: {
-          description:
-            'The field to sort by, for example "publishedAt". Put a "-" in front for newest or largest first: "-publishedAt". ' +
-            '"$random" shuffles the newest 100 matches once per page build.',
-        },
-      },
-      listCollections && listCollections.length > 0
-        ? {
-            name: 'ids',
-            type: 'relationship',
-            label: 'Picked documents',
-            // The slugs come from the app, so they cannot match Payload's generated slug type.
-            relationTo: (listCollections.length === 1 ? listCollections[0] : listCollections) as never,
-            hasMany: true,
-            admin: { description: 'Only these documents, in this order. Limit, sort, skip and pages then do not apply.' },
-          }
-        : {
-            name: 'ids',
-            type: 'text',
-            label: 'Picked document ids',
-            hasMany: true,
-            admin: { description: 'Only these documents, in this order. Limit, sort, skip and pages then do not apply.' },
-          },
-      {
-        name: 'excludeCurrent',
-        type: 'checkbox',
-        label: 'Leave out the current document',
-        defaultValue: true,
-        admin: { description: 'On a page made from a template, the item that the page shows is not listed again.' },
+        name: 'depth',
+        type: 'select',
+        label: 'Load related data',
+        defaultValue: '1',
+        options: [
+          { label: '1 level', value: '1' },
+          { label: '2 levels', value: '2' },
+        ],
       },
       {
         name: 'filterField',
         type: 'text',
-        label: 'Filter by field',
+        label: 'Related to this page',
         admin: {
-          description:
-            'Only documents related to the current document through this field, for example "services" or "category". ' +
-            'Works on pages made from a template. On other pages the list is not filtered.',
+          // The inspector shows one select of the fields that relate the two collections, and sets `filterBy` with it.
+          custom: { builderHeading: 'Filter', builderRelated: { collectionField: 'collection', modeField: 'filterBy' }, builderContent: false },
         },
       },
       {
@@ -829,22 +581,33 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         label: 'Relation',
         defaultValue: 'current',
         options: [
-          { label: 'The listed documents\' field holds the current document', value: 'current' },
-          { label: 'The listed documents share a value with the current document\'s field', value: 'shared' },
-          { label: 'The current document\'s field points to the listed documents', value: 'linked' },
+          { label: 'Its field links to this page', value: 'current' },
+          { label: 'Same value as this page', value: 'shared' },
+          { label: 'This page links to it', value: 'linked' },
         ],
-        admin: { description: 'How "Filter by field" relates the listed documents to the current document.' },
+        // Set by the "Related to this page" select.
+        admin: { hidden: true },
+      },
+      {
+        name: 'excludeCurrent',
+        type: 'checkbox',
+        label: 'Leave out the document this page shows',
+        defaultValue: true,
       },
       {
         name: 'where',
         type: 'json',
-        label: 'Where',
+        label: 'Conditions',
         admin: {
-          description:
-            'A Payload where query, added to the filter. Example: { "featured": { "equals": true } }. Dates may use ' +
-            '"$now", "$now-30d" or "$now+12h".',
           // The inspector edits it as condition rows over the fields of the chosen collection.
           custom: { builderWhere: { collectionField: 'collection' } },
+        },
+        custom: {
+          ai: {
+            description:
+              'A Payload where query, added to the filter. Dates may use "$now", "$now-30d" or "$now+12h". In a template, ' +
+              '"$page.<field>" uses a field of the page\'s document; "$query.<param>" uses a URL value (left out without one).',
+          },
         },
       },
       {
@@ -852,75 +615,62 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         type: 'json',
         label: 'URL filters',
         admin: {
-          description:
-            'Filters from the page URL: { "param": { "value": where } }. Example: { "available": { "today": { "availableToday": ' +
-            '{ "equals": true } } } } filters on ?available=today. Several values of one parameter are OR-ed, parameters are AND-ed.',
+          // The inspector edits it as rows (parameter, field), with JSON for the full form.
+          custom: { builderQueryFilters: { collectionField: 'collection' } },
+        },
+        custom: { ai: { description: 'Filters from the page URL: { "<param>": "<field>" }. The editor preview ignores them.' } },
+      },
+      {
+        name: 'sort',
+        type: 'text',
+        label: 'Sort',
+        defaultValue: '-createdAt',
+        admin: {
+          // The inspector shows a select of the collection's fields, a direction and "Random".
+          custom: { builderHeading: 'Sort and count', builderSort: { collectionField: 'collection' }, builderContent: false },
+        },
+        custom: {
+          ai: {
+            description:
+              'A field name; a "-" in front sorts newest or largest first ("-publishedAt"). "$random" shuffles the newest 100 matches once per page build.',
+          },
         },
       },
-      { name: 'offset', type: 'number', label: 'Skip items', min: 0, admin: { description: 'Documents to leave out at the start.' } },
+      { name: 'limit', type: 'number', label: 'Number of items', defaultValue: 3, min: 1, max: 100 },
+      { name: 'offset', type: 'number', label: 'Skip first', min: 0, admin: { placeholder: '0' } },
       {
         name: 'paginate',
         type: 'select',
-        label: 'Pages',
+        label: 'Page links',
         defaultValue: 'none',
         options: [
-          { label: 'None: only the first items', value: 'none' },
-          { label: 'Pages with ?page=N links', value: 'pages' },
+          { label: 'None', value: 'none' },
+          { label: 'Under the list', value: 'pages' },
         ],
-        admin: {
-          description:
-            'Pages: "Number of items" per page, with page links under the list. Long lists show the first, the last and the ' +
-            'pages around the current one, with "…" between. "Skip items" does not apply.',
-        },
+        admin: { custom: { builderHeading: 'Pages' } },
       },
       {
         name: 'pageParam',
         type: 'text',
-        label: 'Page parameter',
-        admin: {
-          description:
-            'The URL parameter of the page number. Empty: "page". Give each paginated list on one page its own, for example ' +
-            '"reviewsPage". Letters, digits, _ and -.',
-          ...when('paginate', 'pages'),
+        label: 'URL parameter',
+        admin: { placeholder: 'page', custom: { ...when('paginate', 'pages').custom, builderContent: false } },
+        custom: {
+          ai: {
+            description: 'Empty: "page". Give each paginated list on one page its own, for example "reviewsPage". Letters, digits, _ and -.',
+          },
         },
       },
       {
         name: 'pagerLabel',
         type: 'text',
-        label: 'Page links: label for screen readers',
-        defaultValue: 'Pages',
+        label: 'Name for screen readers',
         localized: true,
-        admin: when('paginate', 'pages'),
-      },
-      {
-        name: 'pagerClassName',
-        type: 'text',
-        label: 'Page links: classes',
-        defaultValue: 'flex flex-wrap gap-2',
-        admin: {
-          description: 'Classes of the element that holds the page links. A gap ("…") is a span with data-page-gap.',
-          custom: { builderClasses: true },
-        },
-      },
-      {
-        name: 'pageLinkClassName',
-        type: 'text',
-        label: 'Page link: classes',
-        admin: { description: 'Classes of each page link. The current page has aria-current="page", e.g. "aria-[current=page]:font-bold".', custom: { builderClasses: true } },
-      },
-      {
-        name: 'depth',
-        type: 'select',
-        label: 'Related data depth',
-        defaultValue: '1',
-        options: [
-          { label: '1: the related documents of each item', value: '1' },
-          { label: '2: also their related documents (larger)', value: '2' },
-        ],
-        admin: { description: 'How far related documents of each item load, for example 2 to reach a category\'s image.' },
+        admin: { placeholder: 'Pages', ...when('paginate', 'pages') },
       },
     ],
     slots: { [LIST_ITEM_SLOT]: { label: 'Item' }, [LIST_EMPTY_SLOT]: { label: 'When empty', styles: true } },
+    // The page links: the <nav> that holds them (a gap "…" is a span with data-page-gap) and each link.
+    parts: { pager: { label: 'Page links', defaultClassName: 'flex flex-wrap gap-2' }, pageLink: { label: 'Each page link' } },
     defaultClassName: 'grid grid-cols-1 gap-6 md:grid-cols-3',
     ai: {
       description:
@@ -928,26 +678,31 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         'item: it repeats for every document. Blocks in it bind to the ITEM\'s fields with "bindings", e.g. a ' +
         'heading with bindings { "text": "title" } and a link with bindings { "link": "$url" } (the item\'s URL). ' +
         'Only published documents show on the site. ' +
-        'To list documents related to the current document (templates only; ignored on normal pages), set ' +
+        'To list documents related to the current document (templates only; on normal pages the list is empty), set ' +
         '"filterField" (a field name) and "filterBy": "current" (default) lists documents whose filterField holds ' +
-        'the current document (e.g. on a service template, models whose "services" include this service); ' +
+        'the current document (e.g. on a category template, posts whose "categories" include this category); ' +
         '"shared" lists documents whose filterField shares a value with the current document\'s filterField ' +
-        '(e.g. similar models with a "category" in common, posts with the same "category" text); "linked" lists ' +
-        'the documents the current document\'s filterField points to (e.g. on a model template, the model\'s ' +
-        '"services"). With "shared" or "linked" and an empty field, the list is empty. "where" is a static Payload ' +
-        'where query AND-ed with the rest, e.g. { "featured": { "equals": true } }; date values may be "$now", ' +
-        '"$now-30d" or "$now+7d" (units d and h). "queryFilters" filters by the page URL: { "<param>": { "<value>": where } }, ' +
-        'e.g. { "available": { "today": { "availableToday": { "equals": true } } } } for ?available=today; values of one ' +
+        '(e.g. related posts with a "category" in common); "linked" lists ' +
+        'the documents the current document\'s filterField points to (e.g. on a post template, the post\'s ' +
+        '"authors"). With "shared" or "linked" and an empty field, the list is empty. "where" is a static Payload ' +
+        'where query AND-ed with the rest, e.g. { "featured": { "equals": true } }, with "or" for alternatives; date values may be "$now", ' +
+        '"$now-30d" or "$now+7d" (units d and h). A value "$page.<field>" is that field of the current document when the ' +
+        'list loads (e.g. { "category": { "equals": "$page.category" } } on a post template; ids for relationships; ' +
+        'without a value the list is empty, except for not_equals and not_in, which are left out). A value "$query.<param>" is ' +
+        'the URL value (several values make equals an "in"); without one the condition is left out, and the canvas has none. "queryFilters" filters by the page URL: { "<param>": "<field path>" } ' +
+        'means the field equals the URL value (e.g. { "category": "category" } for ?category=news); the full form ' +
+        '{ "<param>": { "<value>": where } } maps each value to a where (e.g. { "age": { "recent": { "publishedAt": ' +
+        '{ "greater_than": "$now-30d" } } } } for ?age=recent). Values of one ' +
         'param (repeated or comma-separated) are OR-ed, params are AND-ed; the canvas ignores them. "offset" skips ' +
         'documents. "depth" ("1" or "2") is how deep related documents load. "ids" picks documents by id and keeps the ' +
         'pick order (limit, sort, offset and pages then do not apply). "sort": "$random" shuffles the newest 100 ' +
         'matches once per page build. "paginate": "pages" shows "limit" items per page with crawlable ?page=N links ' +
-        'under the list ("pagerClassName" and "pageLinkClassName" style them; the current link has aria-current="page"; long ' +
+        'under the list (style them with "partClassName" "pager" for the <nav> and "pageLink" for each link; the current link has aria-current="page"; long ' +
         'lists show "…" gaps as <span data-page-gap>). Two paginated lists on one page need their own "pageParam" ' +
         '(default "page"), for example "reviewsPage". "pagerLabel" names the page links for screen readers (default "Pages"). ' +
         'The "empty" slot shows instead of the ' +
-        'items when no document matches (e.g. a text "Nobody is available today"); it renders in its own div, styled ' +
-        'with "slotClassName": { "empty": "col-span-full ..." }.',
+        'items when no document matches (e.g. a text "No posts yet"); it renders in its own div, styled ' +
+        'with "partClassName": { "empty": "col-span-full ..." }.',
       example: {
         type: COLLECTION_LIST_BLOCK,
         props: { collection: 'posts', limit: 3, sort: '-createdAt' },
@@ -975,50 +730,29 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
   const repeat = defineBlock({
     type: REPEAT_BLOCK,
     label: 'Repeat',
+    description: 'Repeats its blocks for each row of a list field.',
     icon: 'repeat',
     category: 'Dynamic',
     fields: [
-      {
-        name: 'path',
-        type: 'text',
-        label: 'Field',
-        required: true,
-        admin: {
-          description:
-            'The list field of the current document to repeat, for example "faqs" (an array), "galleryImages" or "services" ' +
-            '(many uploads or relationships) or "tags" (many values). Inside a collection list: a field of each item.',
-        },
-      },
-      { name: 'limit', type: 'number', label: 'Number of rows', min: 1, admin: { description: 'Empty: every row.' } },
-      { name: 'offset', type: 'number', label: 'Skip rows', min: 0, admin: { description: 'Rows to leave out at the start, for example 1 to skip the first photo.' } },
-      listCollections && listCollections.length > 0
-        ? {
-            name: 'collection',
-            type: 'select',
-            label: 'Related collection',
-            options: listCollections,
-            admin: { description: 'For a relationship field: the collection of its documents, so "$url" links to each one.' },
-          }
-        : {
-            name: 'collection',
-            type: 'text',
-            label: 'Related collection',
-            admin: { description: 'For a relationship field: the collection of its documents, so "$url" links to each one.' },
-          },
+      // The inspector shows the field picker of the bindings UI (templates/Bindable).
+      { name: 'path', type: 'text', label: 'Field', required: true, admin: { custom: { builderContent: false } } },
+      { name: 'limit', type: 'number', label: 'Number of rows', min: 1, admin: { placeholder: 'All' } },
+      { name: 'offset', type: 'number', label: 'Skip first', min: 0, admin: { placeholder: '0' } },
+      listCollectionField(listCollections, {
+        label: 'Linked collection',
+        required: false,
+        description: 'For links to each row.',
+      }),
       {
         name: 'as',
         type: 'select',
-        label: 'Wrapper',
+        label: 'Tag',
         defaultValue: 'div',
         options: [
-          { label: 'A div around the rows', value: 'div' },
-          { label: 'None: the rows sit in the parent', value: 'none' },
+          { label: 'div', value: 'div' },
+          { label: 'none', value: 'none' },
         ],
-        admin: {
-          description:
-            'None: the rows become direct children of the parent block, for example the cells of a grid or the items of a list. ' +
-            "The repeat's own classes and animations then do nothing.",
-        },
+        admin: { description: 'None: the rows go straight into the parent.' },
       },
     ],
     slots: { [LIST_ITEM_SLOT]: { label: 'Row' } },
@@ -1027,7 +761,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
       description:
         'Repeats its "item" slot once per row of a list field of the CURRENT document (templates; inside a collection ' +
         'list item, of each listed document; inside another repeat, of the row). "path" is the field: an array ' +
-        '(e.g. FAQs, rates), a hasMany upload (e.g. a gallery), a hasMany relationship, or hasMany text/select. ' +
+        '(e.g. FAQs, prices), a hasMany upload (e.g. a gallery), a hasMany relationship, or hasMany text/select. ' +
         'Blocks in "item" bind to the ROW: the field names of an array row (e.g. "question", "price"), the related ' +
         `document's fields (e.g. "name"; "$url" when "collection" names its collection), "${ITEM_PATH}" (the row value ` +
         `itself: an upload for an image, a text for a text block), "${INDEX_PATH}" (the row number from 1), ` +
@@ -1036,7 +770,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         'a div that takes the className; "none" renders the rows with no wrapper, as direct children of the parent ' +
         '(e.g. cells of a grid, items of a stack with as "ul"), and then className and motion do nothing. ' +
         'On a page without a current document ' +
-        'it shows nothing. Example 2 (photos): { "type": "repeat", "props": { "path": "galleryImages", "offset": 1 }, ' +
+        'it shows nothing. Example 2 (photos): { "type": "repeat", "props": { "path": "gallery", "offset": 1 }, ' +
         `"slots": { "item": [{ "type": "image", "bindings": { "image": "${ITEM_PATH}" } }] } }.`,
       example: {
         type: REPEAT_BLOCK,
@@ -1061,5 +795,5 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     },
   })
 
-  return [stack, grid, heading, text, richText, image, button, link, menu, list, listItem, quote, divider, spacer, video, field, collectionList, repeat]
+  return [stack, grid, heading, text, richText, image, button, link, menu, list, listItem, divider, video, field, collectionList, repeat]
 }

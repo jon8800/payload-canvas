@@ -9,6 +9,8 @@ import { checkAttrs, htmlIdClash, htmlIdsOf, patchAttrs, withoutTakenHtmlIds } f
 import { placementError, slotFullError } from './blocks'
 import { createId } from './ids'
 import { checkMotion, motionInverse, patchMotion } from './motion'
+import { checkSectionOrigin } from './sectionOrigin'
+import { checkVisibility } from './visibility'
 import { DEFAULT_SLOT, indexLayout, isPlainObject, subtreeIds, type IndexedBlock } from './tree'
 import type { ApplyResult, Block, BlockDefinition, Layout, Operation, Position } from './types'
 
@@ -176,11 +178,15 @@ function update(layout: Layout, op: Extract<Operation, { type: 'update' }>): App
     }
   }
 
-  if (op.className !== undefined) {
-    if (op.className !== null && typeof op.className !== 'string') return fail('`className` must be a string or null')
+  if (op.className !== undefined || op.addClassName !== undefined || op.removeClassName !== undefined) {
+    if (op.className !== undefined && op.className !== null && typeof op.className !== 'string') return fail('`className` must be a string or null')
+    if (op.addClassName !== undefined && typeof op.addClassName !== 'string') return fail('`addClassName` must be a string of classes separated by spaces')
+    if (op.removeClassName !== undefined && typeof op.removeClassName !== 'string') return fail('`removeClassName` must be a string of classes separated by spaces')
+    // The inverse sets the whole old list, so undo restores the exact string (order and spaces).
     inverse.className = before.className ?? null
-    if (op.className === null) delete next.className
-    else next.className = op.className
+    const className = patchClassName(op.className === undefined ? before.className : op.className, op.addClassName, op.removeClassName)
+    if (className === null) delete next.className
+    else next.className = className
   }
 
   if (op.hidden !== undefined) {
@@ -188,6 +194,13 @@ function update(layout: Layout, op: Extract<Operation, { type: 'update' }>): App
     inverse.hidden = before.hidden === true
     if (op.hidden) next.hidden = true
     else delete next.hidden
+  }
+
+  if (op.editableItems !== undefined) {
+    if (typeof op.editableItems !== 'boolean') return fail('`editableItems` must be a boolean')
+    inverse.editableItems = before.editableItems === true
+    if (op.editableItems) next.editableItems = true
+    else delete next.editableItems
   }
 
   if (op.label !== undefined) {
@@ -214,6 +227,14 @@ function update(layout: Layout, op: Extract<Operation, { type: 'update' }>): App
     else delete next.bindings
   }
 
+  if (op.visibility !== undefined) {
+    const visibility = checkVisibility(op.visibility)
+    if (typeof visibility === 'string') return fail(visibility)
+    inverse.visibility = before.visibility ? structuredClone(before.visibility) : null
+    if (visibility) next.visibility = visibility
+    else delete next.visibility
+  }
+
   if (op.motion !== undefined) {
     const motion = patchMotion(before.motion, op.motion)
     if (typeof motion === 'string') return fail(motion)
@@ -222,20 +243,20 @@ function update(layout: Layout, op: Extract<Operation, { type: 'update' }>): App
     else delete next.motion
   }
 
-  if (op.slotClassName !== undefined) {
-    if (!isPlainObject(op.slotClassName)) return fail('`slotClassName` must be an object of slot name -> classes')
-    const old = before.slotClassName ?? {}
+  if (op.partClassName !== undefined) {
+    if (!isPlainObject(op.partClassName)) return fail('`partClassName` must be an object of part name -> classes')
+    const old = before.partClassName ?? {}
     const merged: Record<string, string> = { ...old }
     const inv: Record<string, string | null> = {}
-    for (const [slot, value] of Object.entries(op.slotClassName)) {
-      if (value !== null && typeof value !== 'string') return fail(`slotClassName.${slot} must be a string or null`)
-      setOwn(inv, slot, Object.hasOwn(old, slot) ? old[slot] : null)
-      if (value?.trim()) setOwn(merged, slot, value)
-      else delete merged[slot]
+    for (const [part, value] of Object.entries(op.partClassName)) {
+      if (value !== null && typeof value !== 'string') return fail(`partClassName.${part} must be a string or null`)
+      setOwn(inv, part, Object.hasOwn(old, part) ? old[part] : null)
+      if (value?.trim()) setOwn(merged, part, value)
+      else delete merged[part]
     }
-    inverse.slotClassName = inv
-    if (Object.keys(merged).length > 0) next.slotClassName = merged
-    else delete next.slotClassName
+    inverse.partClassName = inv
+    if (Object.keys(merged).length > 0) next.partClassName = merged
+    else delete next.partClassName
   }
 
   if (op.attrs !== undefined) {
@@ -256,6 +277,21 @@ function update(layout: Layout, op: Extract<Operation, { type: 'update' }>): App
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * The class list after `update`: `base` (the new `className`, else the old one), minus the classes
+ * in `drop`, plus the classes in `add` that are not there yet (at the end). Without `add` and
+ * `drop`, `base` as it is. An empty result is null (no className).
+ */
+export function patchClassName(base: string | null | undefined, add?: string, drop?: string): string | null {
+  if (add === undefined && drop === undefined) return base ?? null
+  const removed = new Set(splitClasses(drop))
+  const tokens = splitClasses(base).filter((token) => !removed.has(token))
+  for (const token of splitClasses(add)) if (!tokens.includes(token)) tokens.push(token)
+  return tokens.length > 0 ? tokens.join(' ') : null
+}
+
+const splitClasses = (value: string | null | undefined): string[] => (value ?? '').split(/\s+/).filter(Boolean)
 
 function ok(layout: Layout, inverse: Operation[]): Ok {
   return { ok: true, layout, inverse }
@@ -352,7 +388,8 @@ function cloneWithNewIds(block: Block, id: string, used: Set<string>): Block {
   if (block.locales) clone.locales = structuredClone(block.locales)
   if (block.bindings) clone.bindings = { ...block.bindings }
   if (block.attrs) clone.attrs = { ...block.attrs }
-  if (block.slotClassName) clone.slotClassName = { ...block.slotClassName }
+  if (block.visibility) clone.visibility = structuredClone(block.visibility)
+  if (block.partClassName) clone.partClassName = { ...block.partClassName }
   if (block.slots) {
     clone.slots = Object.fromEntries(
       Object.entries(block.slots).map(([name, children]) => [
@@ -377,7 +414,7 @@ function freshId(used: Set<string>): string {
  */
 function checkBlock(value: unknown, used: Set<string>, path = 'block'): Block | string {
   if (!isPlainObject(value)) return `${path} must be an object`
-  const { id, type, props, className, slots, bindings, hidden, label, locales, motion, attrs, slotClassName } = value
+  const { id, type, props, className, slots, bindings, hidden, label, locales, motion, attrs, visibility, partClassName, section, editableItems } = value
   if (typeof id !== 'string' || id === '') return `${path}.id must be a non-empty string`
   if (used.has(id)) return `Block id "${id}" already exists`
   used.add(id)
@@ -418,6 +455,10 @@ function checkBlock(value: unknown, used: Set<string>, path = 'block'): Block | 
     if (typeof hidden !== 'boolean') return `${path}.hidden must be a boolean`
     if (hidden) block.hidden = true
   }
+  if (editableItems !== undefined) {
+    if (typeof editableItems !== 'boolean') return `${path}.editableItems must be a boolean`
+    if (editableItems) block.editableItems = true
+  }
   if (label !== undefined && label !== null) {
     if (typeof label !== 'string') return `${path}.label must be a string`
     if (label.trim()) block.label = label.trim()
@@ -437,15 +478,21 @@ function checkBlock(value: unknown, used: Set<string>, path = 'block'): Block | 
     if (typeof checked === 'string') return `${path}.${checked}`
     if (checked) block.motion = checked
   }
-  if (slotClassName !== undefined) {
-    if (!isPlainObject(slotClassName) || !Object.values(slotClassName).every((v) => typeof v === 'string')) {
-      return `${path}.slotClassName must be an object of slot name -> classes`
+  if (partClassName !== undefined) {
+    if (!isPlainObject(partClassName) || !Object.values(partClassName).every((v) => typeof v === 'string')) {
+      return `${path}.partClassName must be an object of part name -> classes`
     }
-    const kept = Object.fromEntries(Object.entries(slotClassName as Record<string, string>).filter(([, v]) => v.trim()))
-    if (Object.keys(kept).length > 0) block.slotClassName = kept
+    const kept = Object.fromEntries(Object.entries(partClassName as Record<string, string>).filter(([, v]) => v.trim()))
+    if (Object.keys(kept).length > 0) block.partClassName = kept
   }
   const checkedAttrs = checkAttrs(attrs)
   if (typeof checkedAttrs === 'string') return `${path}.${checkedAttrs}`
   if (checkedAttrs) block.attrs = checkedAttrs
+  const checkedVisibility = checkVisibility(visibility)
+  if (typeof checkedVisibility === 'string') return `${path}.${checkedVisibility}`
+  if (checkedVisibility) block.visibility = checkedVisibility
+  const origin = checkSectionOrigin(section)
+  if (typeof origin === 'string') return `${path}.${origin}`
+  if (origin) block.section = origin
   return block
 }

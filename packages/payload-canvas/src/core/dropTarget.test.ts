@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { canvasDropTarget, deepestBlockAt, outlineDropTarget } from './dropTarget'
+import { acceptingSlots, canvasDropTarget, deepestBlockAt, outlineDropTarget } from './dropTarget'
 import type { BlockDefinition, CanvasMeasurement, DragSource, Layout, OutlineRow } from './types'
 
 const blocks: BlockDefinition[] = [
@@ -185,5 +185,40 @@ describe('outlineDropTarget', () => {
 
   it('a leaf inside a rejecting slot is not a target', () => {
     assert.equal(outlineDropTarget(layout, blocks, rows, { x: 50, y: 125 }, newHeading, 12), null)
+  })
+})
+
+const key = (list: ReturnType<typeof acceptingSlots>) => list.map((s) => `${s.ownerId ?? 'root'}:${s.slot}`)
+
+describe('acceptingSlots', () => {
+  it('lists the root and every slot that takes the block', () => {
+    assert.deepEqual(key(acceptingSlots(layout, blocks, newText)), ['root:children', 's:children', 'e:children', 'r:children'])
+  })
+
+  it('leaves out slots whose allow list refuses the type', () => {
+    assert.deepEqual(key(acceptingSlots(layout, blocks, newHeading)), ['root:children', 's:children', 'e:children'])
+  })
+
+  it('leaves out the dragged block and its descendants', () => {
+    assert.deepEqual(key(acceptingSlots(layout, blocks, { kind: 'block', id: 's' })), ['root:children', 'e:children'])
+  })
+
+  it('respects parents and max', () => {
+    const defs: BlockDefinition[] = [
+      ...blocks,
+      { type: 'list', label: 'List', fields: [], slots: { items: { allow: ['item'] } } },
+      { type: 'item', label: 'Item', fields: [], parents: ['list'] },
+      { type: 'one', label: 'One', fields: [], slots: { children: { max: 1 } } },
+    ]
+    const tree: Layout = {
+      version: 1,
+      blocks: [
+        { id: 'l', type: 'list' },
+        { id: 'o', type: 'one', slots: { children: [{ id: 'x', type: 'text' }] } },
+      ],
+    }
+    assert.deepEqual(key(acceptingSlots(tree, defs, { kind: 'new', blockType: 'item' })), ['l:items'])
+    assert.deepEqual(key(acceptingSlots(tree, defs, newText)), ['root:children'])
+    assert.deepEqual(acceptingSlots(tree, defs, { kind: 'block', id: 'missing' }), [])
   })
 })

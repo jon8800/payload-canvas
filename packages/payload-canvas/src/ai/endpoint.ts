@@ -9,12 +9,15 @@ import { TEMPLATE_TARGET_FIELD } from '../core/bindings'
 import { knownLocale } from '../core/locale'
 import { indexLayout, isPlainObject, normalizeLayout } from '../core/tree'
 import type { BindingField, BlockDefinition, Layout, LocaleSettings, SectionDefinition, StyleTokens, TemplateContext } from '../core/types'
+import { canEditDesign } from '../live/contentMode'
 import { SSE_HEADERS, sseFrame } from '../live/endpoints'
 import { loadSavedSections } from '../plugin/sections'
-import { missingAdapterProblem } from './config'
+import { missingAdapterProblem, SETTINGS_KEY_HINT } from './config'
 import { createImageService, generateImageToMedia, type GenerateImageOutcome, type ImageService } from './images/service'
 import { adapterIdentity, runAgent } from './loop'
+import { classesConfigOf, loadClasses } from '../classes'
 import { breakpointsPx, contextText, systemPrompt } from './prompt'
+import { withSettingsKey, type AiSettingsRuntime } from './settings'
 import { toolDefinitions, Workspace, type MediaItem, type ToolEnv } from './tools'
 import type { AiChatRequest, AiMessage, AiOptions, AiStreamEvent, AiSystemPart } from './types'
 
@@ -31,14 +34,16 @@ export type AiEndpointOptions = {
   collections: Record<string, { field: string; localization?: LocaleSettings | null }>
   blocks: BlockDefinition[]
   sections: SectionDefinition[]
-  /** Theme tokens for the system prompt (colors, fonts, breakpoints). Null when unavailable. */
-  getTokens: () => Promise<StyleTokens | null>
+  /** Theme tokens for the system prompt (colors, fonts, breakpoints, design variables). Null when unavailable. */
+  getTokens: (req?: PayloadRequest) => Promise<StyleTokens | null>
   /** The templates collection and the bindable fields. Null when no collection uses templates. */
   templates: { slug: string; sources: Record<string, BindingField[]> } | null
   /** The saved sections collection. Each request loads the ones the user can read. Null or left out: off. */
   savedSections?: { slug: string } | null
   /** Image generation, shared with the MCP tools (one hourly limit). Default: built from `ai`. */
   images?: ImageService
+  /** The AI settings global: its chat key is read on every request and wins over the adapter's own key. Null: off. */
+  settings?: AiSettingsRuntime | null
   /** Tests: replaces the update-access check (default: Payload's docAccessOperation). */
   canUpdate?: (req: PayloadRequest, collection: string, id: string | number, field: string) => Promise<boolean>
 }
@@ -201,29 +206,24 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
   // Built once, in a fixed order: tools and system prompt are the cached prompt prefix.
   const tools = toolDefinitions({ ...env, searchMedia: async () => [] })
 
-  // The system prompt is built once (the theme is read once) and reused byte for byte.
-  let prompt: Promise<{ system: AiSystemPart[]; breakpoints: Array<{ name: string; px: number }> }> | null = null
-  const getPrompt = () => {
-    prompt ??= options
-      .getTokens()
-      .catch(() => null)
-      .then((tokens) => ({
-        system: [
-          {
-            text: systemPrompt({
-              blocks,
-              sections,
-              tokens,
-              bindings: Boolean(templates),
-              instructions: ai.instructions,
-              savedSections: savedSections !== null,
-            }),
-            cache: true,
-          },
-        ],
-        breakpoints: breakpointsPx(tokens),
-      }))
-    return prompt
+  // The system prompt is reused byte for byte while the theme's tokens stay the same (a theme save
+  // that changes the design variables builds it again).
+  type Prompt = { system: AiSystemPart[]; breakpoints: Array<{ name: string; px: number }> }
+  let prompt: { key: string; value: Prompt } | null = null
+  const getPrompt = async (req: PayloadRequest): Promise<Prompt> => {
+    const tokens = await options.getTokens(req).catch(() => null)
+    const key = tokens ? JSON.stringify(tokens.variables ?? []) : 'none'
+    if (prompt?.key === key) return prompt.value
+    const system = systemPrompt({
+      blocks,
+      sections,
+      tokens,
+      bindings: Boolean(templates),
+      instructions: ai.instructions,
+      savedSections: savedSections !== null,
+    })
+    prompt = { key, value: { system: [{ text: system, cache: true }], breakpoints: breakpointsPx(tokens) } }
+    return prompt.value
   }
 
   const chat: Endpoint = {
@@ -281,18 +281,25 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
           `This chat was started with another AI model (${foreign.provider}). The assistant now uses ${identity}. Start a new chat.`,
         )
       }
-      const { system, breakpoints } = await getPrompt()
+      const { system, breakpoints } = await getPrompt(req)
+      // The key from the AI settings, read now: a new key works without a restart.
+      const settings = options.settings ?? null
+      const settingsKey = settings && adapter.acceptsApiKey ? await settings.keyFor(req.payload, 'chat') : undefined
+      const model = withSettingsKey(adapter, settingsKey, settings ? SETTINGS_KEY_HINT : null)
 
       const layout = normalizeLayout(body.layout)
       // Localized layouts: the assistant reads and writes the editor's locale.
       const localization = target.localization ?? null
       const locale = localization ? knownLocale(localization, body.locale) : null
-      const workspace = new Workspace(layout, blocks, { localization, locale })
+      const contentOnly = !(await canEditDesign(req))
+      const workspace = new Workspace(layout, blocks, { localization, locale, contentOnly })
       const selectedId = body.selectedId && indexLayout(layout).has(body.selectedId) ? body.selectedId : null
       const titleField = config?.admin?.useAsTitle
       const title = titleField && typeof doc[titleField] === 'string' ? (doc[titleField] as string) : undefined
       // Saved sections differ per user and change often: they go in the context, not the cached prompt.
       const saved = savedSections ? await loadSavedSections(req, savedSections.slug) : []
+      // Editable classes change at any time too.
+      const classes = classesConfigOf(req.payload) ? await loadClasses(req).catch(() => []) : []
       const isTemplate = templates !== null && body.collection === templates.slug
       const templateTarget = isTemplate
         ? (typeof doc[TEMPLATE_TARGET_FIELD] === 'string' ? (doc[TEMPLATE_TARGET_FIELD] as string) : (body.context?.collection ?? null))
@@ -316,6 +323,8 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
               templateTarget,
               sample: isTemplate ? body.context : null,
               savedSections: saved,
+              classes: classes.map(({ name, label, group }) => ({ name, ...(label ? { label } : {}), ...(group ? { group } : {}) })),
+              contentOnly,
             }),
           },
         ],
@@ -343,7 +352,7 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
           heartbeat = setInterval(() => write(': ping\n\n'), HEARTBEAT_MS)
           try {
             await runAgent({
-              adapter,
+              adapter: model,
               system,
               tools,
               effort: ai.effort,

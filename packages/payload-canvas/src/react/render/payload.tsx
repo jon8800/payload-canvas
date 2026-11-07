@@ -11,13 +11,20 @@ import type { BlockComponentProps, BlockComponents, PageData, RenderMode } from 
 /** What the builder adds to a Payload-shaped component's props, under `builder`. */
 export type PayloadBuilderProps = {
   mode: RenderMode
+  /** Server renders for the editor only: `'canvas'` or `'thumbnail'` (see `BlockComponentProps`). */
+  canvasMode?: 'canvas' | 'thumbnail'
   /** The block's Tailwind classes (only for blocks with `styles: true`). */
   className?: string
   /** The editor attributes for the root element. The adapter applies them itself. */
   attributes: Record<string, string>
   /** Each slot rendered by the builder: every child carries its editor attributes. */
   slots: Record<string, ReactNode>
-  /** Spread on the element that holds a slot's children, so the canvas can drop into it. */
+  /**
+   * By slot or part name. Spread a slot's entry on the element that holds the slot's children, so
+   * the canvas can drop into it. A styled slot's or part's entry also carries its `className`.
+   */
+  partAttributes: Record<string, Record<string, string>>
+  /** @deprecated The same object as `partAttributes` (its name before 0.4). */
   slotAttributes: Record<string, Record<string, string>>
 }
 
@@ -101,13 +108,21 @@ export function fromPayloadComponent<P extends object>(
 ): ComponentType<BlockComponentProps> {
   const blocks = options.blocks ?? []
   const mapProps = options.props
-  function PayloadBlock({ block, props, className, slots, attributes, slotAttributes, mode, pageData }: BlockComponentProps): ReactNode {
+  function PayloadBlock({ block, props, className, slots, attributes, partAttributes, mode, pageData, canvasMode }: BlockComponentProps): ReactNode {
     const def = getBlockDefinition(blocks, block.type)
     const data: Record<string, unknown> = { ...withFieldDefaults(props, def?.fields ?? []) }
     for (const name of new Set([...Object.keys(def?.slots ?? {}), ...Object.keys(slots)])) {
       data[name] = (block.slots?.[name] ?? []).filter((child) => !child.hidden).map((child) => toPayloadBlock(child, blocks))
     }
-    const builder: PayloadBuilderProps = { mode, attributes, slots, slotAttributes, ...(className ? { className } : {}) }
+    const builder: PayloadBuilderProps = {
+      mode,
+      attributes,
+      slots,
+      partAttributes,
+      slotAttributes: partAttributes,
+      ...(className ? { className } : {}),
+      ...(canvasMode ? { canvasMode } : {}),
+    }
     const payloadBlock: PayloadBlockData = {
       ...data,
       id: block.id,
@@ -189,8 +204,9 @@ type PayloadSlotProps = {
  */
 export function PayloadSlot({ builder, name, as: As = 'div', className, children }: PayloadSlotProps): ReactNode {
   if (!builder) return children ?? null
+  const { className: own, ...attributes } = builder.partAttributes[name] ?? {}
   return (
-    <As className={className} {...builder.slotAttributes[name]}>
+    <As className={[className, own].filter(Boolean).join(' ') || undefined} {...attributes}>
       {builder.slots[name]}
     </As>
   )

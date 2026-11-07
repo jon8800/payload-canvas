@@ -61,7 +61,7 @@ function plainText(list: Block[], blocks: readonly BlockDefinition[]): string {
 }
 
 /**
- * The questions and answers of a layout's accordions with "FAQ for search engines" on: the summary
+ * The questions and answers of a layout's accordions with "Mark up as FAQ for search engines" on (`faqSchema`): the summary
  * text of each disclosure is the question, the content text the answer. Call it after
  * `loadLayoutData`, so bound props, Field blocks, collection lists and repeats hold the document's
  * values. `blocks` is the site's block list (it types bound values). Hidden blocks count as absent.
@@ -69,7 +69,7 @@ function plainText(list: Block[], blocks: readonly BlockDefinition[]): string {
 export function faqItems(layout: unknown, blocks: readonly BlockDefinition[] = []): FaqItem[] {
   const items: FaqItem[] = []
   for (const block of walk(normalizeLayout(layout).blocks, blocks)) {
-    if (block.type !== ACCORDION_BLOCK || block.props?.faqSchema === false) continue
+    if (block.type !== ACCORDION_BLOCK || block.props?.faqSchema !== true) continue
     for (const item of walk(block.slots?.items ?? [], blocks)) {
       if (item.type !== DISCLOSURE_BLOCK) continue
       const question = plainText(item.slots?.summary ?? [], blocks)

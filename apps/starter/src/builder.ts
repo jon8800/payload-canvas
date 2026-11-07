@@ -1,7 +1,8 @@
 // Website builder blocks: one list for payload.config.ts, the site renderer, the canvas iframe and
 // the seed. Client-safe: `payload-canvas/blocks` has no server code.
-import { defaultBlocks, defineBlock } from 'payload-canvas/blocks'
+import { builtinBlocks, defaultBlocks, defineBlock } from 'payload-canvas/blocks'
 import { formClassList } from '@/components/blocks/formClasses'
+import { ICON_NAMES } from '@/components/blocks/iconNames'
 import { legacyBuilderBlocks, legacyDemo } from '@/legacy-fixture'
 import { fieldSemanticsBlocks } from '@/legacy-fixture/fieldSemantics'
 import { accessDemo, accessDemoBlock } from '@/legacy-fixture/accessDemo'
@@ -29,6 +30,9 @@ export const formBlock = defineBlock({
 
 export const builderBlocks = [
   ...defaultBlocks({ mediaCollection: 'media', linkCollections: ['pages', 'posts'] }),
+  // `embed: {}` turns on the Embed block (custom HTML). Everyone who may edit a page may change its
+  // code. To limit that, pass `canEdit`, for example `({ req }) => req.user?.role === 'admin'`.
+  ...builtinBlocks({ icons: ICON_NAMES, embed: {} }),
   formBlock,
   // Dev fixture: existing Payload blocks used as builder blocks (NEXT_PUBLIC_BUILDER_LEGACY_DEMO=1).
   ...(legacyDemo ? legacyBuilderBlocks : []),
