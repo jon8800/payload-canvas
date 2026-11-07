@@ -71,7 +71,7 @@ import {
 import { syncSectionBlocks } from './sectionsBuilder'
 import { toJsonSafe } from './jsonSafe'
 import { collectionLabel } from './labels'
-import { prepareBlocks } from './listCollections'
+import { listableCollections, prepareBlocks } from './listCollections'
 import { addReferences, REFERENCES_CONFIG_KEY, resolveReferences, type ReferencesOptions } from './references'
 import {
   bindingSources,
@@ -156,6 +156,8 @@ export type TemplatesOptions = {
   slug?: string
   /** Hooks for the templates collection, e.g. `afterChange` to revalidate the pages that use templates. */
   hooks?: CollectionConfig['hooks']
+  /** Merged into the collection's `admin` options (e.g. `group`, `hidden`). */
+  admin?: CollectionConfig['admin']
   /** `false`: template layouts are not translated. Default: as the collections (`'props'`). */
   localization?: 'props' | false
 }
@@ -166,6 +168,12 @@ export type WebsiteBuilderOptions = {
   collections: Record<string, BuilderCollectionOptions>
   /** Default: defaultBlocks(). */
   blocks?: BlockDefinition[]
+  /**
+   * More collections the collection list block can show, after the collections with a `url`:
+   * data collections without pages of their own, such as testimonials or team members. Their
+   * items have no `$url`. Each slug must be a collection of the config.
+   */
+  listCollections?: string[]
   css: {
     /** Path to the app's Tailwind entry CSS, absolute or relative to process.cwd(). */
     entry: string
@@ -304,6 +312,15 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
     const targets = Object.entries(options.collections).filter(([, o]) => o.templates).map(([slug]) => slug)
     const templatesSlug = options.templates?.slug ?? DEFAULT_TEMPLATES_SLUG
     const withUrl = new Set(Object.entries(options.collections).filter(([, o]) => o.url).map(([slug]) => slug))
+    for (const slug of options.listCollections ?? []) {
+      if (!sourceCollections.some((c) => c.slug === slug)) {
+        throw new Error(
+          `[websiteBuilder] \`listCollections\` names "${slug}", which is not a collection. Known collections: ${sourceCollections.map((c) => c.slug).join(', ')}.`,
+        )
+      }
+    }
+    // The collections the collection list block can show: with a `url`, then `listCollections`.
+    const listable = listableCollections(options.collections, options.listCollections)
     const builderOptions: Record<string, BuilderCollectionOptions> = { ...options.collections }
     let collections = sourceCollections
     if (targets.length > 0) {
@@ -331,13 +348,14 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
             sourceCollections.filter((c) => targets.includes(c.slug)).map((c) => [c.slug, collectionLabel(c)]),
           ),
           hooks: options.templates?.hooks,
+          admin: options.templates?.admin,
         }),
       ]
       builderOptions[templatesSlug] = { field: TEMPLATE_LAYOUT_FIELD, ...(options.templates?.localization === false ? { localization: false } : {}) }
     }
 
     // Inline blocks (`inline: true`) may sit in a link: they join its `allow` list.
-    const blocks = prepareBlocks(options.blocks ?? defaultBlocks(), [...withUrl])
+    const blocks = prepareBlocks(options.blocks ?? defaultBlocks(), listable)
     // Each section variant is listed as a section of its own (`<id>/<variant id>`).
     const appSections = sectionsWithVariants(options.sections ?? [])
     // A section block without a className gets its type's default classes (JSON layouts only).
@@ -464,7 +482,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
             collection: templatesSlug,
             sources: bindingSources({
               collections: collections.filter((c) => c.slug !== templatesSlug),
-              slugs: [...new Set([...targets, ...withUrl])],
+              slugs: [...new Set([...targets, ...listable])],
               skip: Object.fromEntries(
                 Object.entries(builderOptions).map(([slug, o]) => {
                   const field = o.field ?? 'layout'

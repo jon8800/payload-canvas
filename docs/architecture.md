@@ -324,7 +324,7 @@ These fix the old problems: compiling against bare Tailwind, overriding theme va
 
 The Theme global stores design tokens: colors, fonts, radius, spacing scale. The plugin outputs them as CSS variables in Tailwind's `@theme` format, so classes like `bg-primary`, `font-heading` and `rounded-lg` follow the theme. The same output feeds the save-time compile and the editor iframe.
 
-`websiteBuilder({ theme })` adds the global. It is on by default; `theme: false` turns it off. The site renders `<ThemeStyle payload />` from `payload-canvas/react/server`. The canvas uses `<ThemeStyle payload live />`, which reloads the theme after a save. See the README section "Theme".
+`websiteBuilder({ theme })` adds the global. It is on by default; `theme: false` turns it off. The site renders `<ThemeStyle payload />` from `payload-canvas/react/server`. The canvas uses `<ThemeStyle payload live />`, which reloads the theme after a save. `ThemeStyle` reads inside its own `<Suspense>` boundary and takes the `getPayload` promise, so it works with Next's Cache Components. See the README sections "Theme" and "Cache Components".
 
 ## 10. Rendering
 
