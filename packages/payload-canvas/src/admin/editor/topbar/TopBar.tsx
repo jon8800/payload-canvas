@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNod
 
 import { Icon, type IconName } from '../icons'
 import { Presence } from '../live/PresenceUI'
+import { CommentsButton } from '../comments/CommentsPanel'
 import { useRuntime } from '../runtime'
 import { shortcutList } from '../shortcuts'
 import { useEditor } from '../store'
@@ -112,6 +113,7 @@ export function TopBar({ icon }: { icon: ReactNode }) {
         <Presence widths={widths} />
         <SaveState />
         <span className="builder-bar__divider" />
+        <CommentsButton />
         <PreviewButton />
         <PageSettings />
         <ShortcutHelp />
@@ -279,7 +281,7 @@ function ShortcutHelp() {
         <section className="builder-editor__help-panel" aria-label="Keyboard shortcuts">
           <p className="builder-editor__help-title">Keyboard shortcuts</p>
           <dl>
-            {shortcutList({ ai: Boolean(runtime.config.ai), publish: drafts }).map(({ keys, label }) => (
+            {shortcutList({ ai: Boolean(runtime.config.ai), publish: drafts, comments: Boolean(runtime.comments) }).map(({ keys, label }) => (
               <div key={label} className="builder-editor__help-row">
                 <dt>{label}</dt>
                 <dd>

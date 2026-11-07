@@ -335,6 +335,11 @@ export type BuilderClientConfig = {
    * endpoints. Null or left out when turned off. Shape: `ClassesClientConfig` in `classes/shared.ts`.
    */
   classes?: { collection: string; endpoint: string } | null
+  /**
+   * Comments on the canvas (`websiteBuilder({ comments })`): the comments collection, read and
+   * written over Payload's REST API. Null or left out when turned off.
+   */
+  comments?: { collection: string } | null
   /** Editor behaviour from `websiteBuilder({ editor })`. */
   editor: EditorClientConfig
   /**
