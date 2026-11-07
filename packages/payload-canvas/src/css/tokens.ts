@@ -114,7 +114,7 @@ export function parseThemeEntries(data: CanvasCssData): Map<string, ThemeEntry> 
 // ---------------------------------------------------------------------------------------------
 // Tokens from theme entries
 
-type GroupName = Exclude<keyof StyleTokens, 'spacing' | 'classList' | 'siteClasses'>
+type GroupName = Exclude<keyof StyleTokens, 'spacing' | 'classList' | 'siteClasses' | 'variables'>
 
 /**
  * Theme namespace and the utility that uses it, per token group. With a class list, a token is

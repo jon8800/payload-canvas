@@ -26,6 +26,7 @@ export type ClassDialog = (
   | { kind: 'new'; blockId: string; part: string | null }
   | { kind: 'rename'; id: string | number }
   | { kind: 'delete'; id: string | number }
+  | { kind: 'remove-unused'; names: string[] }
 ) & {
   /** Shown again after a refused name: the name typed and why it was refused. */
   name?: string
@@ -211,7 +212,7 @@ export function createClassesController(config: ClassesClientConfig, api: string
     },
 
     /** Creates a class (a draft). Returns it, or the reason it was refused. */
-    async create(data: { name: string; label?: string | null; styles?: string | null }): Promise<BuilderClass | string> {
+    async create(data: { name: string; label?: string | null; group?: string | null; styles?: string | null; css?: string | null }): Promise<BuilderClass | string> {
       try {
         const res = await request(`${api}/${encodeURIComponent(config.collection)}?draft=true&depth=0`, {
           method: 'POST',
@@ -282,6 +283,34 @@ export function createClassesController(config: ClassesClientConfig, api: string
         drop(id)
         void controller.loadUsage()
         return { documents: body.replaced?.documents ?? 0, blocks: body.replaced?.blocks ?? 0 }
+      } catch (error) {
+        return error instanceof Error ? error.message : String(error)
+      }
+    },
+
+    /** A copy of the class (a draft) under a free name: `card-copy`, `card-copy-2`, … */
+    async duplicate(id: string | number): Promise<BuilderClass | string> {
+      const item = controller.byId(id)
+      if (!item) return 'The class is gone.'
+      const taken = new Set(list.get().flatMap((c) => [c.name, ...(c.previousNames ?? [])]))
+      let name = `${item.name}-copy`
+      for (let n = 2; taken.has(name); n++) name = `${item.name}-copy-${n}`
+      return controller.create({ name, label: item.label ? `${item.label} copy` : null, group: item.group ?? null, styles: item.styles ?? null, css: item.css ?? null })
+    },
+
+    /** Deletes every class no page uses. The server checks again (drafts, open sessions and published pages). */
+    async removeUnused(): Promise<{ deleted: string[]; failed: number } | string> {
+      try {
+        const res = await request(`${config.endpoint}/remove-unused`, { method: 'POST', body: '{}' })
+        if (!res.ok) return await errorText(res)
+        const body = (await res.json()) as { deleted?: string[]; failed?: unknown[] }
+        const deleted = body.deleted ?? []
+        for (const name of deleted) {
+          const item = controller.byName(name)
+          if (item) drop(item.id)
+        }
+        void controller.loadUsage()
+        return { deleted, failed: body.failed?.length ?? 0 }
       } catch (error) {
         return error instanceof Error ? error.message : String(error)
       }

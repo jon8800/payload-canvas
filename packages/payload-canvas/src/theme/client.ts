@@ -4,8 +4,10 @@
 //   'payload-canvas/theme-client#ThemeFontField'   — Google Font family with previews
 //   'payload-canvas/theme-client#ThemeSliderField' — slider plus number input (number or text field)
 //   'payload-canvas/theme-client#ThemeSaveSignal'  — tells open canvases that the theme changed
+//   'payload-canvas/theme-client#ThemeVariableValueField', '#ThemeVariableRowLabel', '#ThemeVariablesWarning' — the Variables list
 // The fields work in any Payload config, not only in the theme global.
 export { ThemeColorField } from './admin/ColorField'
 export { ThemeFontField } from './admin/FontField'
 export { ThemeSliderField } from './admin/SliderField'
 export { ThemeSaveSignal } from './admin/SaveSignal'
+export { ThemeVariableRowLabel, ThemeVariableValueField, ThemeVariablesWarning } from './admin/Variables'

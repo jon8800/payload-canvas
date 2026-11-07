@@ -233,21 +233,40 @@ function cached(owner: object, key: string, build: () => Suggestion[]): Suggesti
   return list
 }
 
-/** Spacing scale keys with their pixel size: "4 · 16px". */
+/** The theme's design variables of one type, with their values, under "Variables". */
+export function variableSuggestions(tokens: StyleTokens, type: 'color' | 'size' | 'font'): Suggestion[] {
+  return (tokens.variables ?? []).filter((v) => v.type === type).map((v) => ({ value: v.name, hint: shortValue(v.value), group: 'Variables' }))
+}
+
+/** The variables first, then the other values (without the variables) under `group`. */
+function variablesFirst(variables: Suggestion[], rest: Suggestion[], group: string): Suggestion[] {
+  if (variables.length === 0) return rest
+  const names = new Set(variables.map((v) => v.value))
+  return [...variables, ...rest.filter((s) => !names.has(s.value)).map((s) => ({ ...s, group: s.group ?? group }))]
+}
+
+/** Spacing scale keys with their pixel size: "4 · 16px". The size variables come first. */
 export function spacingSuggestions(tokens: StyleTokens): Suggestion[] {
   return cached(tokens, 'spacing', () =>
-    tokens.spacing.map((key) => {
-      if (key === 'px') return { value: key, hint: '1px' }
-      const n = Number(key)
-      return { value: key, hint: Number.isFinite(n) ? `${n * 4}px` : undefined }
-    }),
+    variablesFirst(
+      variableSuggestions(tokens, 'size'),
+      tokens.spacing.map((key) => {
+        if (key === 'px') return { value: key, hint: '1px' }
+        const n = Number(key)
+        return { value: key, hint: Number.isFinite(n) ? `${n * 4}px` : undefined }
+      }),
+      'Scale',
+    ),
   )
 }
 
 export function tokenSuggestions(tokens: StyleTokens, def: StylePropertyDef): Suggestion[] {
   const list = def.tokens ? tokens[def.tokens] : undefined
   if (!list) return []
-  return cached(tokens, `token:${def.tokens}`, () => list.map((t) => ({ value: t.name, hint: shortValue(t.value) })))
+  return cached(tokens, `token:${def.tokens}`, () => {
+    const all = list.map((t) => ({ value: t.name, hint: shortValue(t.value) }))
+    return def.tokens === 'fonts' ? variablesFirst(variableSuggestions(tokens, 'font'), all, 'Theme') : all
+  })
 }
 
 const SIZE_KEYWORDS = ['auto', 'full', 'screen', 'svh', 'dvh', 'fit', 'min', 'max', 'px']
@@ -255,12 +274,20 @@ const FRACTIONS = ['1/2', '1/3', '2/3', '1/4', '3/4', '1/5', '2/5', '3/5', '4/5'
 
 /** Width and height values: keywords, fractions, then the spacing scale. Max width adds containers. */
 export function sizeSuggestions(tokens: StyleTokens, withContainers: boolean): Suggestion[] {
-  return cached(tokens, `size:${withContainers}`, () => [
-    ...SIZE_KEYWORDS.map((value) => ({ value })),
-    ...(withContainers ? tokens.containers.map((t) => ({ value: t.name, hint: shortValue(t.value) })) : []),
-    ...FRACTIONS.map((value) => ({ value })),
-    ...spacingSuggestions(tokens).filter((s) => s.value !== 'px'),
-  ])
+  return cached(tokens, `size:${withContainers}`, () => {
+    const variables = variableSuggestions(tokens, 'size')
+    const names = new Set(variables.map((v) => v.value))
+    return variablesFirst(
+      variables,
+      [
+        ...SIZE_KEYWORDS.map((value) => ({ value })),
+        ...(withContainers ? tokens.containers.map((t) => ({ value: t.name, hint: shortValue(t.value) })) : []),
+        ...FRACTIONS.map((value) => ({ value })),
+        ...spacingSuggestions(tokens).filter((s) => s.value !== 'px' && !names.has(s.value)).map(({ group: _group, ...s }) => s),
+      ],
+      'Sizes',
+    )
+  })
 }
 
 function shortValue(value: string): string {

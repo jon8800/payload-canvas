@@ -189,7 +189,10 @@ function ColorPicker({
 }) {
   const { tokens } = useStyles()
   const groups = colorGroups(tokens.colors)
-  const main = groups.theme.filter((t) => !isDeveloperColor(t.name))
+  // The theme's color variables first, by name, with their swatch.
+  const variableNames = new Set((tokens.variables ?? []).filter((v) => v.type === 'color').map((v) => v.name))
+  const variables = groups.theme.filter((t) => variableNames.has(t.name))
+  const main = groups.theme.filter((t) => !isDeveloperColor(t.name) && !variableNames.has(t.name))
   const more = groups.theme.filter((t) => isDeveloperColor(t.name))
   const swatches = useSwatchColors(tokens.colors)
   const current = splitColor(value ?? inherited ?? '')
@@ -216,6 +219,13 @@ function ColorPicker({
           </button>
         )}
       </div>
+
+      {variables.length > 0 && (
+        <section>
+          <p className="builder-styles__picker-title">Variables</p>
+          <ThemeColors tokens={variables} current={current.color} swatches={swatches} onPick={pick} />
+        </section>
+      )}
 
       {main.length > 0 && (
         <section>

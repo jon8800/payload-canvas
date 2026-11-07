@@ -26,6 +26,7 @@ import { isBlockingError, isLayoutWarning, validateLayout, type LayoutError } fr
 import { compileClasses, type CssOptions } from '../css'
 import { withoutClassNames } from '../classes/shared'
 import { classNamesFor } from '../classes/sheet'
+import { withThemeVariables } from '../theme/server'
 import {
   changedFieldsOf,
   checkStaleSave,
@@ -236,7 +237,7 @@ function isGeneratedCss(value: unknown): value is GeneratedCss {
 }
 
 /** The hash covers the class list and the entry CSS, so a theme change also recompiles. */
-async function hashInput(classes: string[], entry: string): Promise<string> {
+async function hashInput(classes: string[], entry: string, themeCss = ''): Promise<string> {
   const hash = createHash('sha256')
   hash.update(classes.join(' '))
   hash.update('\0')
@@ -245,6 +246,8 @@ async function hashInput(classes: string[], entry: string): Promise<string> {
   } catch {
     // The compile reports a missing entry file. The hash stays usable.
   }
+  // The theme's variable names (`bg-brand` compiles only while `brand` exists). Empty: the old hash.
+  if (themeCss) hash.update(themeCss)
   return hash.digest('hex').slice(0, 16)
 }
 
@@ -452,7 +455,8 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
     // Block definitions add the classes their components use, so those reach the CSS too.
     // Editable classes come from their own stylesheet: the layout's CSS leaves them out.
     const classes = withoutClassNames(collectClasses(layout, blocks), new Set(await classNamesFor(req.payload).catch(() => [])))
-    const hash = await hashInput(classes, css.entry)
+    const siteCss = await withThemeVariables(req.payload, css)
+    const hash = await hashInput(classes, css.entry, siteCss.themeCss)
     if (isGeneratedCss(previous) && previous.hash === hash) {
       data[cssField] = previous
       return data
@@ -464,7 +468,7 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
     }
 
     try {
-      const output = await compileClasses(classes, css)
+      const output = await compileClasses(classes, siteCss)
       data[cssField] = { hash, css: output } satisfies GeneratedCss
     } catch (error) {
       req.payload.logger.error({

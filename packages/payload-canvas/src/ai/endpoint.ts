@@ -33,8 +33,8 @@ export type AiEndpointOptions = {
   collections: Record<string, { field: string; localization?: LocaleSettings | null }>
   blocks: BlockDefinition[]
   sections: SectionDefinition[]
-  /** Theme tokens for the system prompt (colors, fonts, breakpoints). Null when unavailable. */
-  getTokens: () => Promise<StyleTokens | null>
+  /** Theme tokens for the system prompt (colors, fonts, breakpoints, design variables). Null when unavailable. */
+  getTokens: (req?: PayloadRequest) => Promise<StyleTokens | null>
   /** The templates collection and the bindable fields. Null when no collection uses templates. */
   templates: { slug: string; sources: Record<string, BindingField[]> } | null
   /** The saved sections collection. Each request loads the ones the user can read. Null or left out: off. */
@@ -205,29 +205,24 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
   // Built once, in a fixed order: tools and system prompt are the cached prompt prefix.
   const tools = toolDefinitions({ ...env, searchMedia: async () => [] })
 
-  // The system prompt is built once (the theme is read once) and reused byte for byte.
-  let prompt: Promise<{ system: AiSystemPart[]; breakpoints: Array<{ name: string; px: number }> }> | null = null
-  const getPrompt = () => {
-    prompt ??= options
-      .getTokens()
-      .catch(() => null)
-      .then((tokens) => ({
-        system: [
-          {
-            text: systemPrompt({
-              blocks,
-              sections,
-              tokens,
-              bindings: Boolean(templates),
-              instructions: ai.instructions,
-              savedSections: savedSections !== null,
-            }),
-            cache: true,
-          },
-        ],
-        breakpoints: breakpointsPx(tokens),
-      }))
-    return prompt
+  // The system prompt is reused byte for byte while the theme's tokens stay the same (a theme save
+  // that changes the design variables builds it again).
+  type Prompt = { system: AiSystemPart[]; breakpoints: Array<{ name: string; px: number }> }
+  let prompt: { key: string; value: Prompt } | null = null
+  const getPrompt = async (req: PayloadRequest): Promise<Prompt> => {
+    const tokens = await options.getTokens(req).catch(() => null)
+    const key = tokens ? JSON.stringify(tokens.variables ?? []) : 'none'
+    if (prompt?.key === key) return prompt.value
+    const system = systemPrompt({
+      blocks,
+      sections,
+      tokens,
+      bindings: Boolean(templates),
+      instructions: ai.instructions,
+      savedSections: savedSections !== null,
+    })
+    prompt = { key, value: { system: [{ text: system, cache: true }], breakpoints: breakpointsPx(tokens) } }
+    return prompt.value
   }
 
   const chat: Endpoint = {
@@ -285,7 +280,7 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
           `This chat was started with another AI model (${foreign.provider}). The assistant now uses ${identity}. Start a new chat.`,
         )
       }
-      const { system, breakpoints } = await getPrompt()
+      const { system, breakpoints } = await getPrompt(req)
       // The key from the AI settings, read now: a new key works without a restart.
       const settings = options.settings ?? null
       const settingsKey = settings && adapter.acceptsApiKey ? await settings.keyFor(req.payload, 'chat') : undefined

@@ -1,6 +1,7 @@
 // The stored theme as CSS variables and font links. Pure and client-safe.
 import { deriveColors, type ThemeColors } from './colors'
 import { fallbackFamilyName, fallbackFontFace, hasFallbackMetrics } from './fallbacks'
+import { variableDeclarations, variableFontFamilies, variablesDarkCss, type ThemeVariable } from './variables'
 
 /** The theme global's data, as Payload stores it. Every value is optional. */
 export type ThemeData = {
@@ -11,6 +12,8 @@ export type ThemeData = {
   borderRadius?: string | number | null
   /** The color variables derived on save (for API consumers). The CSS helpers derive them again. */
   derivedTokens?: Record<string, string> | null
+  /** Design variables: named colors, sizes and fonts (`bg-brand`, `p-gutter`, `font-display`). See `variables.ts`. */
+  variables?: ThemeVariable[] | null
 }
 
 /** Google Font family names. */
@@ -49,7 +52,8 @@ export function themeFontFamilies(theme: ThemeData | null | undefined): Record<s
     const family = cleanFamily(theme?.fonts?.[name])
     if (family) families[name] = family
   }
-  return families
+  // Font variables (`font-display`). Their names never clash with sans, heading and mono.
+  return { ...variableFontFamilies(theme?.variables), ...families }
 }
 
 /**
@@ -63,6 +67,7 @@ export function themeFontFamilies(theme: ThemeData | null | undefined): Record<s
  *   `--sidebar*` (the shadcn/ui names).
  * - `--radius` (rem), `--spacing` (Tailwind's spacing unit, from the base in px).
  * - `--font-sans`, `--font-heading`, `--font-mono`.
+ * - Design variables: `--color-<name>`, `--spacing-<name>`, `--font-<name>`.
  */
 export function themeVariables(theme: ThemeData | null | undefined): Record<string, string> {
   const vars: Record<string, string> = {}
@@ -77,14 +82,17 @@ export function themeVariables(theme: ThemeData | null | undefined): Record<stri
   for (const [name, family] of Object.entries(themeFontFamilies(theme))) {
     // A known family gets a fallback face scaled to its size (see `themeCss`), so the swap does not move text.
     const sized = hasFallbackMetrics(family) ? `'${fallbackFamilyName(family)}', ` : ''
-    vars[`--font-${name}`] = `'${family}', ${sized}${FONT_FALLBACKS[name as keyof ThemeFonts]}`
+    vars[`--font-${name}`] = `'${family}', ${sized}${FONT_FALLBACKS[name as keyof ThemeFonts] ?? 'sans-serif'}`
   }
+  // Color and size variables (`--color-brand`, `--spacing-gutter`).
+  Object.assign(vars, variableDeclarations(theme?.variables))
   return vars
 }
 
 /**
  * The theme as CSS: the fallback font faces (one `@font-face` for each chosen family that has known
- * metrics), then one rule `:root:root { --primary: …; … }`. Empty string when the theme sets nothing.
+ * metrics), then one rule `:root:root { --primary: …; … }`, then the variables' dark values
+ * (`:root:root.dark, :root:root .dark { … }`). Empty string when the theme sets nothing.
  * The doubled selector wins over the `:root` defaults in the app's CSS in any load order.
  */
 export function themeCss(theme: ThemeData | null | undefined): string {
@@ -92,7 +100,9 @@ export function themeCss(theme: ThemeData | null | undefined): string {
   if (entries.length === 0) return ''
   const faces = [...new Set(Object.values(themeFontFamilies(theme)))].flatMap((family) => fallbackFontFace(family) ?? [])
   const rule = `:root:root { ${entries.map(([k, v]) => `${k}: ${v};`).join(' ')} }`
-  return [...faces, rule].join('\n')
+  // Dark values of the variables, under the `.dark` class.
+  const dark = variablesDarkCss(theme?.variables)
+  return [...faces, rule, ...(dark ? [dark] : [])].join('\n')
 }
 
 /**
