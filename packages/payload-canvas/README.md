@@ -40,6 +40,7 @@ The starter also has a calmer Payload admin: a sidebar in groups with icons, a n
 1. [Requirements](#requirements)
 2. [Install](#install)
 3. [The builder view](#the-builder-view)
+   - [Content mode for clients](#content-mode-for-clients)
 4. [Inline editing](#inline-editing)
 5. [Plugin options](#plugin-options)
 6. [Rendering the layout on your site](#rendering-the-layout-on-your-site)
@@ -473,6 +474,42 @@ Drop outlines. While you drag, a thin dashed line marks every container on the c
 
 Access. The view sends signed-out visitors to the login page and back. Users without admin access go to Payload's "unauthorized" page. A document that does not exist, or a collection without the builder, shows "not found". A user who can read but not update the document gets the normal Edit view.
 
+### Content mode for clients
+
+Content mode lets a site owner's client change text, images and links without breaking the design. Webflow's Editor and Elementor's role manager work the same way.
+
+```ts
+websiteBuilder({
+  editor: {
+    // Users with the "editor" role get content mode. Everyone else keeps full rights.
+    canEditDesign: ({ user }) => user?.role !== 'editor',
+  },
+})
+```
+
+The default is `true` for everyone, so nothing changes until you set it. A function that throws counts as `false`. The starter adds a **Role** field (Admin or Editor) to its users and uses it here.
+
+In content mode, editors can:
+
+- change text, textarea, rich text, upload (image and video), email and link props in the inspector,
+- edit text on the canvas,
+- in a block marked **Editors can add, remove and reorder its items**: duplicate, delete and reorder its direct children (FAQ items, team cards). They cannot restyle them.
+
+They cannot add, move, duplicate or delete other blocks, and they see no Blocks or Sections tab, no **+** buttons, no drag and drop, no Styles, Motion or Advanced tab, no classes, section variants, visibility conditions, bindings or page regions. Design props (selects, checkboxes, numbers, relationships, heading levels) are hidden too. The top bar shows **Content mode**.
+
+Users with design rights get **Preview as client** in the top bar. It shows the editor as clients see it. Turn it off to edit the design again.
+
+Which props are content. The field type decides: `text`, `textarea`, `richText`, `upload`, `email` and link groups (`linkField()`) are content. A group, row or array is content when every field inside it is. Everything else is design. Override it per field with `admin.custom.builderContent`:
+
+```ts
+{ name: 'anchor', type: 'text', admin: { custom: { builderContent: false } } }, // a setting, not text
+{ name: 'badge', type: 'select', options: ['New', 'Sale'], admin: { custom: { builderContent: true } } },
+```
+
+Mark a list. Select the block that holds the items, open the **Advanced** tab and turn on **Editors can add, remove and reorder its items**. It is stored as `editableItems: true` on the block. A new item must be a copy of an item already there.
+
+The server enforces it. Every write checks the change against the layout before it: the live editor's commits, the operations endpoint, the MCP tools, the AI assistant, editable class renames, and saves through REST, GraphQL or the Edit view. A design change from a user in content mode is refused with a 403 and a message such as `In content mode you can change only text, images and links. "Hero" cannot be moved.` The editable classes collection and the theme global are design too: content mode cannot create, update or delete them. Publishing, unpublishing, reverting and Payload's version restore stay allowed.
+
 ## Inline editing
 
 Text and images edit in place on the canvas, in every block: the default blocks, your own components, and existing Payload components adopted with `fromPayloadComponents`. You do not need to change your components.
@@ -588,6 +625,7 @@ websiteBuilder({
 | `theme` | `ThemeOptions \| false` | The Theme global. On by default. `false` leaves it out. See [Theme](#theme). |
 | `editor.dragMode` | `'indicator' \| 'smooth'` | The default drag and drop style. `indicator` (the default) shows a drop line; `smooth` lifts the block and moves the other blocks out of the way. Each user can change it in the editor. See [The builder view](#the-builder-view). |
 | `editor.dropOutlines` | `boolean` | Thin outlines of every container that takes the dragged block, while you drag. Default `true`. Each user can change it in the editor. See [The builder view](#the-builder-view). |
+| `editor.canEditDesign` | `({ req, user }) => boolean \| Promise<boolean>` | Who may change the design. Users for whom it returns `false` get content mode: text, images and links only. Default: everyone. See [Content mode for clients](#content-mode-for-clients). |
 | `editor.openInBuilder` | `boolean` | Opening a saved document goes straight to the builder instead of Payload's form. Default `false`. Run `generate:importmap` after you turn it on. See [The builder view](#the-builder-view). |
 | `css.fontFamilies` | `(payload) => Record<name, family>` | Font families set at runtime some other way than the Theme global, for the Styles panel's Font list. Its names win over the theme's. |
 | `references` | `{ field?, usedIn?, protectDelete?, maxListed? } \| false` | Which media and documents each layout uses: "Used in" lists and delete protection. On by default. `false` turns it off. See [References and Used in](#references-and-used-in). |

@@ -52,6 +52,7 @@ import {
 } from '../live'
 import { captureFieldSemantics, type FieldRegistry } from '../core/fieldSemantics'
 import { FIELD_REGISTRY_KEY } from '../live/fieldChecks'
+import { CONTENT_MODE_KEY, withDesignAccess, type ContentModeConfig } from '../live/contentMode'
 import { regionEndpoints } from '../live/regions'
 import { defaultWriteGate, installLocalApiBoundary, installTransactionSignals, withGateSignals, type WriteGate } from '../live/writeGate'
 import {
@@ -620,7 +621,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
         const withClasses = classes && !storage ? classes.withPublish(built, field) : built
         return references ? addReferences(withClasses, references) : withClasses
       })
-        .concat(classes ? [classes.collection] : [])
+        .concat(classes ? [withDesignAccess(classes.collection)] : [])
         .concat(comments ? [comments.collection] : []),
       // Server-only: the MCP tools read the live runtime from here, so they share the bus and lock.
       custom: {
@@ -628,6 +629,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
         [LIVE_RUNTIME_KEY]: live,
         [FIELD_REGISTRY_KEY]: fieldRegistry,
         [BUILDER_CONFIG_KEY]: serverConfig,
+        [CONTENT_MODE_KEY]: { canEditDesign: options.editor?.canEditDesign } satisfies ContentModeConfig,
         [SITE_CSS_KEY]: { css, blocks } satisfies SiteCssConfig,
         ...(classes ? { [CLASSES_CONFIG_KEY]: classes.server } : {}),
         ...(templates ? { [TEMPLATES_CONFIG_KEY]: templates } : {}),
@@ -639,7 +641,8 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       },
       globals: [
         ...(config.globals ?? []),
-        ...(themeOptions ? [themeGlobal(themeOptions)] : []),
+        // The theme is design: content mode cannot change it (nor the classes, above).
+        ...(themeOptions ? [withDesignAccess(themeGlobal(themeOptions), ['update'])] : []),
         ...(classes ? [classes.global] : []),
         ...(options.ai && aiSettingsOptions ? [aiSettingsGlobal(options.ai, aiSettingsOptions)] : []),
       ],

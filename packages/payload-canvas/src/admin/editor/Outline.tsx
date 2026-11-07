@@ -23,6 +23,7 @@ import { missingWords, useUntranslated } from './locale/locale'
 import { BLOCK_KEYS, keyText } from './menu/keys'
 import { openBlockMenu, renameRequest } from './menu/requests'
 import { blockPreview, blockSummary, childrenOf, customLabel, typeName } from './names'
+import { useContentMode } from './contentMode'
 import { OUTLINE_INDENT, useRuntime, type DragData, type Runtime } from './runtime'
 import { RegionRows } from './regions/RegionRows'
 import { useEditor } from './store'
@@ -228,7 +229,7 @@ export function Outline() {
         if (row.childCount > 0) selectRow(runtime, rows[index + 1])
         return
       case 'F2':
-        if (!row) return
+        if (!row || runtime.contentMode.get()) return
         e.preventDefault()
         runtime.store.select(row.block.id)
         setRenaming(row.block.id)
@@ -366,7 +367,9 @@ const OutlineRow = memo(function OutlineRow({
   const typeLabel = runtime.blockLabel(block.type)
   const icon = runtime.blockIcon(block.type)
   const data: DragData = { source: { kind: 'block', id: block.id }, label: typeLabel, icon }
-  const { setNodeRef, listeners, attributes } = useDraggable({ id: `outline:${block.id}`, data, disabled: renaming })
+  // Content mode moves no blocks by dragging (items move with Move up and Move down).
+  const contentMode = useContentMode(runtime)
+  const { setNodeRef, listeners, attributes } = useDraggable({ id: `outline:${block.id}`, data, disabled: renaming || contentMode })
   const label = customLabel(block)
   const name = label ?? typeName(block, typeLabel)
   const bindingCount = Object.keys(block.bindings ?? {}).length
@@ -386,7 +389,7 @@ const OutlineRow = memo(function OutlineRow({
   // Two hover actions, so the row keeps room for its name. Rename, duplicate and delete are in
   // the menu and on their keys.
   const actions: { icon: IconName; label: string; tooltip: string; run: (button: HTMLElement) => void }[] = [
-    ...(storesBuilderData(runtime)
+    ...(storesBuilderData(runtime) && !contentMode
       ? [
           {
             icon: (block.hidden ? 'eye' : 'eyeOff') as IconName,
@@ -415,7 +418,7 @@ const OutlineRow = memo(function OutlineRow({
       data-depth={depth}
       className={className}
       onClick={() => runtime.store.select(block.id)}
-      onDoubleClick={() => onRename(block.id)}
+      onDoubleClick={() => !contentMode && onRename(block.id)}
       onContextMenu={(e) => openRowMenu(runtime, block.id, e)}
       // Not while dragging: the row actions would mount and unmount under the pointer, and every
       // DOM insert restyles the whole admin (Payload's `body:has(...)` rules).
@@ -423,6 +426,8 @@ const OutlineRow = memo(function OutlineRow({
       onPointerLeave={() => !runtime.drag.get() && runtime.store.hover(null)}
       {...listeners}
       {...attributes}
+      // dnd-kit marks a row it may not drag as disabled; the row still selects, so it is not.
+      aria-disabled={undefined}
       role="treeitem"
       aria-label={[
         blockSummary(block, typeLabel),
@@ -438,7 +443,7 @@ const OutlineRow = memo(function OutlineRow({
       aria-expanded={container && childCount > 0 ? open : undefined}
       aria-roledescription="block"
       tabIndex={selected || focusable ? 0 : -1}
-      data-tooltip={`${typeLabel}${tag}${label ? '' : ' · double-click to rename'}`}
+      data-tooltip={`${typeLabel}${tag}${label || contentMode ? '' : ' · double-click to rename'}`}
       data-tooltip-side="right"
     >
       {Array.from({ length: depth }, (_, i) => (

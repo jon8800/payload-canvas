@@ -92,7 +92,7 @@ One `json` field holds the whole layout tree:
 }
 ```
 
-A block is `{ id, type, props?, className?, slots?, bindings?, hidden?, label?, locales?, motion? }`. `motion` holds the block's animations (section 8, "Motion").
+A block is `{ id, type, props?, className?, slots?, bindings?, hidden?, label?, locales?, motion?, editableItems? }`. `motion` holds the block's animations (section 8, "Motion"). `editableItems: true` lets content mode manage the block's direct children (section 7, "Content mode").
 
 - `id` is stable. Selection, AI edits and bindings use the `id`, never an array index.
 - `props` holds the block's own field values. `slots` holds child blocks by slot name, with no depth limit. Keeping them apart makes the tree easy to walk.
@@ -286,6 +286,8 @@ What counts as one undo step (edits with the same `mergeKey` merge, an edit with
 - The Advanced tab holds the HTML attributes and "Hide at all screen sizes" (`block.hidden`). Hiding at some breakpoints is a Display class in the Styles tab (`md:hidden`).
 - The Styles tab holds the Tailwind controls (section 8).
 - The Motion tab edits `block.motion` (section 8, "Motion"): Entrance, Hover and press, Scroll and Loop sections, and a Preview button (`admin/editor/motion/`). It sends whole kinds through `update.motion`, with one merge key per slider, so a drag is one undo step.
+
+**Content mode** (`websiteBuilder({ editor: { canEditDesign } })`, `core/contentMode.ts`). Users without design rights change content only. One pure rule compares two layouts, `contentModeProblem(before, after, blocks)`, so every write path uses it: the live session's `commit` (`contentOnly`, set by the live endpoints, the MCP tools and class renames from `canEditDesign(req)` in `live/contentMode.ts`), the save hook (user saves that are not the session's own, a guarded save or a restore), and the assistant's `Workspace`. Content is decided by field type (`isContentField`: text, textarea, rich text, upload, email, link groups, and groups and arrays made only of them), with `admin.custom.builderContent` as the override. A kept block may change only content values; its place, order, classes and every other key stay. Blocks may be added, deleted or reordered only inside a block with `editableItems: true`, and an added block must have the design of an item already there (a duplicate). The editor reads `canEditDesign` once in `BuilderView` and hides what the rule refuses; "Preview as client" switches a designer's editor to the same view. The classes collection and the theme global get `withDesignAccess` on their write access.
 
 **Ideas worth borrowing from other editors (Puck, Webflow, Shopify):** permissions per block (can delete, can drag, can edit), an action bar on the selected block, a separate outline tree, viewports, and "slots" as named child lists.
 

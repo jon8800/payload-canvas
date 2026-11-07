@@ -42,7 +42,8 @@ const FIELD_CLASSES = classesOf(FIELD_CLASS_MAP)
  * field when there are none. The plugin's `listCollectionsOf` uses it too.
  */
 export function listCollectionField(slugs: readonly string[] | undefined, args: { label: string; required: boolean; description?: string }): Field {
-  const admin = args.description ? { admin: { description: args.description } } : {}
+  // A setting, not content: content mode (core/contentMode.ts) does not offer it.
+  const admin = { admin: { ...(args.description ? { description: args.description } : {}), custom: { builderContent: false } } }
   const required = args.required ? { required: true } : {}
   return slugs && slugs.length > 0
     ? { name: 'collection', type: 'select', label: args.label, options: [...slugs], ...required, ...admin }
@@ -54,7 +55,7 @@ const PICKED_HELP = 'Shows only these, in this order.'
 /** The collection list's picked documents: a relationship to `slugs`, or ids as text when there are none. */
 export function pickedDocumentsField(slugs: readonly string[] | undefined): Field {
   if (!slugs || slugs.length === 0) {
-    return { name: 'ids', type: 'text', label: 'Only these ids', hasMany: true, admin: { description: PICKED_HELP } }
+    return { name: 'ids', type: 'text', label: 'Only these ids', hasMany: true, admin: { description: PICKED_HELP, custom: { builderContent: false } } }
   }
   return {
     name: 'ids',
@@ -258,7 +259,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         custom: { ai: { description: 'Empty: the alt text saved with the image.' } },
       },
       { name: 'priority', type: 'checkbox', label: 'Load first', admin: { description: 'For the main image at the top.' } },
-      { name: 'sizes', type: 'text', label: 'Sizes', admin: { placeholder: '100vw' } },
+      { name: 'sizes', type: 'text', label: 'Sizes', admin: { placeholder: '100vw', custom: { builderContent: false } } },
     ],
     ai: {
       description:
@@ -528,7 +529,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     category: 'Dynamic',
     fields: [
       // The inspector shows the field picker and the format of the bindings UI (templates/Bindable).
-      { name: 'path', type: 'text', label: 'Field', required: true },
+      { name: 'path', type: 'text', label: 'Field', required: true, admin: { custom: { builderContent: false } } },
       { name: 'fallback', type: 'text', label: 'Text when empty', localized: true },
     ],
     classes: FIELD_CLASSES,
@@ -571,7 +572,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         label: 'Related to this page',
         admin: {
           // The inspector shows one select of the fields that relate the two collections, and sets `filterBy` with it.
-          custom: { builderHeading: 'Filter', builderRelated: { collectionField: 'collection', modeField: 'filterBy' } },
+          custom: { builderHeading: 'Filter', builderRelated: { collectionField: 'collection', modeField: 'filterBy' }, builderContent: false },
         },
       },
       {
@@ -626,7 +627,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         defaultValue: '-createdAt',
         admin: {
           // The inspector shows a select of the collection's fields, a direction and "Random".
-          custom: { builderHeading: 'Sort and count', builderSort: { collectionField: 'collection' } },
+          custom: { builderHeading: 'Sort and count', builderSort: { collectionField: 'collection' }, builderContent: false },
         },
         custom: {
           ai: {
@@ -652,7 +653,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         name: 'pageParam',
         type: 'text',
         label: 'URL parameter',
-        admin: { placeholder: 'page', ...when('paginate', 'pages') },
+        admin: { placeholder: 'page', custom: { ...when('paginate', 'pages').custom, builderContent: false } },
         custom: {
           ai: {
             description: 'Empty: "page". Give each paginated list on one page its own, for example "reviewsPage". Letters, digits, _ and -.',
@@ -734,7 +735,7 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     category: 'Dynamic',
     fields: [
       // The inspector shows the field picker of the bindings UI (templates/Bindable).
-      { name: 'path', type: 'text', label: 'Field', required: true },
+      { name: 'path', type: 'text', label: 'Field', required: true, admin: { custom: { builderContent: false } } },
       { name: 'limit', type: 'number', label: 'Number of rows', min: 1, admin: { placeholder: 'All' } },
       { name: 'offset', type: 'number', label: 'Skip first', min: 0, admin: { placeholder: '0' } },
       listCollectionField(listCollections, {

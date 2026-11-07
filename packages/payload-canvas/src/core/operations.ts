@@ -196,6 +196,13 @@ function update(layout: Layout, op: Extract<Operation, { type: 'update' }>): App
     else delete next.hidden
   }
 
+  if (op.editableItems !== undefined) {
+    if (typeof op.editableItems !== 'boolean') return fail('`editableItems` must be a boolean')
+    inverse.editableItems = before.editableItems === true
+    if (op.editableItems) next.editableItems = true
+    else delete next.editableItems
+  }
+
   if (op.label !== undefined) {
     if (op.label !== null && typeof op.label !== 'string') return fail('`label` must be a string or null')
     inverse.label = before.label ?? null
@@ -407,7 +414,7 @@ function freshId(used: Set<string>): string {
  */
 function checkBlock(value: unknown, used: Set<string>, path = 'block'): Block | string {
   if (!isPlainObject(value)) return `${path} must be an object`
-  const { id, type, props, className, slots, bindings, hidden, label, locales, motion, attrs, visibility, partClassName, section } = value
+  const { id, type, props, className, slots, bindings, hidden, label, locales, motion, attrs, visibility, partClassName, section, editableItems } = value
   if (typeof id !== 'string' || id === '') return `${path}.id must be a non-empty string`
   if (used.has(id)) return `Block id "${id}" already exists`
   used.add(id)
@@ -447,6 +454,10 @@ function checkBlock(value: unknown, used: Set<string>, path = 'block'): Block | 
   if (hidden !== undefined) {
     if (typeof hidden !== 'boolean') return `${path}.hidden must be a boolean`
     if (hidden) block.hidden = true
+  }
+  if (editableItems !== undefined) {
+    if (typeof editableItems !== 'boolean') return `${path}.editableItems must be a boolean`
+    if (editableItems) block.editableItems = true
   }
   if (label !== undefined && label !== null) {
     if (typeof label !== 'string') return `${path}.label must be a string`

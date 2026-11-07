@@ -9,6 +9,7 @@ import { TEMPLATE_TARGET_FIELD } from '../core/bindings'
 import { knownLocale } from '../core/locale'
 import { indexLayout, isPlainObject, normalizeLayout } from '../core/tree'
 import type { BindingField, BlockDefinition, Layout, LocaleSettings, SectionDefinition, StyleTokens, TemplateContext } from '../core/types'
+import { canEditDesign } from '../live/contentMode'
 import { SSE_HEADERS, sseFrame } from '../live/endpoints'
 import { loadSavedSections } from '../plugin/sections'
 import { missingAdapterProblem, SETTINGS_KEY_HINT } from './config'
@@ -290,7 +291,8 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
       // Localized layouts: the assistant reads and writes the editor's locale.
       const localization = target.localization ?? null
       const locale = localization ? knownLocale(localization, body.locale) : null
-      const workspace = new Workspace(layout, blocks, { localization, locale })
+      const contentOnly = !(await canEditDesign(req))
+      const workspace = new Workspace(layout, blocks, { localization, locale, contentOnly })
       const selectedId = body.selectedId && indexLayout(layout).has(body.selectedId) ? body.selectedId : null
       const titleField = config?.admin?.useAsTitle
       const title = titleField && typeof doc[titleField] === 'string' ? (doc[titleField] as string) : undefined
@@ -322,6 +324,7 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
               sample: isTemplate ? body.context : null,
               savedSections: saved,
               classes: classes.map(({ name, label, group }) => ({ name, ...(label ? { label } : {}), ...(group ? { group } : {}) })),
+              contentOnly,
             }),
           },
         ],

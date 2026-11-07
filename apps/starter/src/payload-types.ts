@@ -226,6 +226,10 @@ export interface PayloadMcpApiKeyAuthOperations {
 export interface User {
   id: number;
   name?: string | null;
+  /**
+   * Editors change text, images and links. Admins also change the design.
+   */
+  role: 'admin' | 'editor';
   updatedAt: string;
   createdAt: string;
   email: string;
@@ -1782,6 +1786,7 @@ export interface PayloadQueryPreset {
  */
 export interface UsersSelect<T extends boolean = true> {
   name?: T;
+  role?: T;
   updatedAt?: T;
   createdAt?: T;
   email?: T;

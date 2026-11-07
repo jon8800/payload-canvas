@@ -4,6 +4,7 @@
 // own validation.
 
 import { isRichText, richTextToPlain, withoutBoundRequired } from '../core/bindings'
+import { contentModeProblem } from '../core/contentMode'
 import { createId } from '../core/ids'
 import { MOTION_KINDS, MOTION_SPECS, type MotionKind } from '../core/motion'
 import { blockJsonSchema } from '../core/schema'
@@ -84,10 +85,17 @@ export class Workspace {
   readonly #localization: LocaleSettings | null
   /** The locale the assistant reads and writes. Null without localization. */
   readonly locale: string | null
+  /** The user has no design rights: only content changes apply (core/contentMode.ts). */
+  readonly contentOnly: boolean
 
-  constructor(layout: Layout, blocks: BlockDefinition[], options: { localization?: LocaleSettings | null; locale?: string | null } = {}) {
+  constructor(
+    layout: Layout,
+    blocks: BlockDefinition[],
+    options: { localization?: LocaleSettings | null; locale?: string | null; contentOnly?: boolean } = {},
+  ) {
     this.layout = layout
     this.#blocks = blocks
+    this.contentOnly = options.contentOnly === true
     this.#localization = options.localization ?? null
     this.locale = this.#localization ? (options.locale ?? this.#localization.defaultLocale) : null
     this.#baseline = new Set(this.#errors(layout).blocking.map(errorKey))
@@ -123,6 +131,9 @@ export class Workspace {
     const prepared = stampLocale(prepareOps(ops, this.layout) as Operation[], this.locale, this.#localization, { inserts: !options.copies })
     const resolved = resolveOperations(this.layout, prepared, this.#blocks, this.#localization)
     if (!resolved.ok) return { ok: false, error: resolved.error }
+    // Content mode: the user's own rights. The live session checks the same rule again.
+    const design = this.contentOnly ? contentModeProblem(this.layout, resolved.layout, this.#blocks) : null
+    if (design) return { ok: false, error: design }
     const { blocking, warnings } = this.#errors(resolved.layout)
     const added = blocking.filter((e) => !this.#baseline.has(errorKey(e)))
     if (added.length > 0) {
@@ -230,6 +241,7 @@ const BLOCK_SCHEMA = {
     slots: { type: 'object', description: 'Slot name -> array of child blocks.' },
     bindings: { type: 'object' },
     hidden: { type: 'boolean' },
+    editableItems: { type: 'boolean', description: 'Content mode: editors without design rights may duplicate, delete and reorder the direct children.' },
     label: { type: 'string', description: 'Name for editors (outline). Never rendered.' },
     motion: { type: 'object', description: MOTION_TEXT },
     attrs: { type: 'object', description: ATTRS_TEXT },
@@ -267,6 +279,7 @@ const FLAT_OPERATIONS_SCHEMA: Record<string, unknown> = {
           addClassName: { type: 'string', description: 'update: classes to add, space-separated. Other classes stay.' },
           removeClassName: { type: 'string', description: 'update: classes to remove, space-separated (exact match). Other classes stay.' },
           hidden: { type: 'boolean' },
+          editableItems: { type: 'boolean', description: 'Content mode: editors without design rights may duplicate, delete and reorder the direct children.' },
           bindings: { type: 'object' },
           label: { type: ['string', 'null'], description: 'update: name for editors (outline). null removes it.' },
           motion: {
@@ -415,6 +428,7 @@ export function toolDefinitions(env: ToolEnv): AiToolDefinition[] {
                     addClassName: { type: 'string', description: 'Classes to add, space-separated. Other classes stay.' },
                     removeClassName: { type: 'string', description: 'Classes to remove, space-separated (exact match). Other classes stay.' },
                     hidden: { type: 'boolean' },
+                    editableItems: { type: 'boolean' },
                     bindings: { type: 'object', description: 'Prop path -> document field path; null removes.' },
                     label: { type: ['string', 'null'], description: 'Name for editors. null removes it.' },
                     motion: {

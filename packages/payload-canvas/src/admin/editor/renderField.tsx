@@ -37,6 +37,7 @@ import { LocaleFieldFrame, LocaleFieldsProvider, useInspectorProps, useLocalePla
 import { GenerateImage } from './generate/GenerateImage'
 import { focusedField, propPathOf } from './live/field'
 import { PeerFieldNote } from './live/PresenceUI'
+import { contentModeFields, useContentMode } from './contentMode'
 import { useRuntime } from './runtime'
 import { BindingScopeProvider, FieldSlot } from './templates/Bindable'
 import { VisibilityField } from './templates/Visibility'
@@ -539,8 +540,13 @@ export function BlockContentFields({ block }: { readonly block: Block }) {
   const field = focusedField(runtime)
   useEffect(() => () => field.set(null), [field])
   const def = getBlockDefinition(runtime.config.blocks, block.type)
+  // Content mode: only text, images and links, without bindings or visibility.
+  const contentMode = useContentMode(runtime)
   if (!def) return <p className="builder-editor__hint">Unknown block type “{block.type}”.</p>
-  if (def.fields.length === 0) return <p className="builder-editor__hint">This block has no content fields.</p>
+  const fields: Field[] = contentMode ? (contentModeFields(def, block) as unknown as Field[]) : def.fields
+  if (fields.length === 0) {
+    return <p className="builder-editor__hint">{contentMode ? 'Nothing to edit in this block. Pick a text, image or link inside it.' : 'This block has no content fields.'}</p>
+  }
 
   const handleChange = (next: Record<string, unknown> | undefined) => {
     const after = next ?? {}
@@ -582,20 +588,29 @@ export function BlockContentFields({ block }: { readonly block: Block }) {
     else runtime.store.redo()
   }
 
+  const fieldList = (
+    <FieldProblemsProvider block={block}>
+      <LocaleFieldsProvider block={block}>
+        <FieldAccessProvider block={block} prefix={`builder.${block.id}.`}>
+          {/* `scope`: conditions of the shown fields still read every field of the block. */}
+          <RenderBlockFields fields={fields} scope={def.fields} data={props} path={`builder.${block.id}`} onChange={handleChange} />
+          <HiddenFieldsNote block={block} />
+        </FieldAccessProvider>
+      </LocaleFieldsProvider>
+    </FieldProblemsProvider>
+  )
+
   return (
     // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- delegates the undo keys of the inputs inside
     <div className="builder-editor__fields" onFocus={onFocus} onBlur={onBlur} onKeyDown={onUndoKeys}>
-      <BindingScopeProvider block={block} prefix={`builder.${block.id}.`}>
-        <FieldProblemsProvider block={block}>
-          <LocaleFieldsProvider block={block}>
-            <FieldAccessProvider block={block} prefix={`builder.${block.id}.`}>
-              <RenderBlockFields fields={def.fields} data={props} path={`builder.${block.id}`} onChange={handleChange} />
-              <HiddenFieldsNote block={block} />
-            </FieldAccessProvider>
-          </LocaleFieldsProvider>
-        </FieldProblemsProvider>
-        <VisibilityField block={block} />
-      </BindingScopeProvider>
+      {contentMode ? (
+        fieldList
+      ) : (
+        <BindingScopeProvider block={block} prefix={`builder.${block.id}.`}>
+          {fieldList}
+          <VisibilityField block={block} />
+        </BindingScopeProvider>
+      )}
     </div>
   )
 }

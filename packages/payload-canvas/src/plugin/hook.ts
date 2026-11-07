@@ -14,6 +14,7 @@ import {
 import { validateBindings, withoutBoundRequired } from '../core/bindings'
 import { richTextFieldName } from '../core/blocks'
 import { collectClasses } from '../core/classes'
+import { contentModeProblem } from '../core/contentMode'
 import { enforcePropAccess, filterUnreadableProps, hasPropAccess } from '../core/fieldAccess'
 import { hasPropHooks, runPropHooks, type FieldRunContext } from '../core/fieldHooks'
 import { sameJson, type FieldRegistry } from '../core/fieldSemantics'
@@ -21,7 +22,7 @@ import { runPropValidators } from '../core/fieldValidate'
 import { describeLayoutErrors } from '../core/issues'
 import { hasLocaleValues, knownLocale, mergeLocaleView, resolveLayoutLocale, type FallbackLocale } from '../core/locale'
 import { isPlainObject, normalizeLayout } from '../core/tree'
-import type { BindingField, BlockDefinition, Layout, LocaleSettings } from '../core/types'
+import { EMPTY_LAYOUT, type BindingField, type BlockDefinition, type Layout, type LocaleSettings } from '../core/types'
 import { isBlockingError, isLayoutWarning, validateLayout, type LayoutError } from '../core/validate'
 import { compileClasses, type CssOptions } from '../css'
 import { withoutClassNames } from '../classes/shared'
@@ -46,6 +47,7 @@ import {
   type LockPayload,
   type SettingsLocks,
 } from '../live/fieldsGuard'
+import { canEditDesign } from '../live/contentMode'
 import type { SessionManager } from '../live/session'
 import { defaultWriteGate, writeKey, type WriteGate } from '../live/writeGate'
 
@@ -419,6 +421,14 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
     if (localization && !own && !guarded && !context?.[STORED_LAYOUT_CONTEXT] && !hasLocaleValues(layout)) {
       const at = requestLocale(req, localization)
       if (at) layout = mergeLocaleView(savedLayout, layout, at.locale, blocks, localization)
+    }
+    // Content mode (editor.canEditDesign): a user's own save (REST, GraphQL, the Edit view) may
+    // change only content. The live session checks each edit when it arrives, so its saves, the
+    // guarded saves, the plugin's own saves and Payload's Restore are not checked again.
+    const userSave = !own && !guarded && !isPluginSave(context) && !isRestore(context) && context?.[OVERRIDE_ACCESS_CONTEXT] === false
+    if (userSave && req.user && !(await canEditDesign(req))) {
+      const problem = contentModeProblem(savedLayout ?? EMPTY_LAYOUT, layout, blocks)
+      if (problem) throw new APIError(problem, 403, undefined, true)
     }
     if (registry) {
       // Field access. The live session checks every edit when it arrives (session.ts), so its
