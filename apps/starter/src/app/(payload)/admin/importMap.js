@@ -67,6 +67,9 @@ import { QueryPresetsGroupByField as QueryPresetsGroupByField_2b8867833a34864a02
 import { ThemeColorField as ThemeColorField_d408ea8a7b9c9e7b6f237d6bc68a93d5 } from 'payload-canvas/theme-client'
 import { ThemeFontField as ThemeFontField_d408ea8a7b9c9e7b6f237d6bc68a93d5 } from 'payload-canvas/theme-client'
 import { ThemeSliderField as ThemeSliderField_d408ea8a7b9c9e7b6f237d6bc68a93d5 } from 'payload-canvas/theme-client'
+import { ThemeVariableValueField as ThemeVariableValueField_d408ea8a7b9c9e7b6f237d6bc68a93d5 } from 'payload-canvas/theme-client'
+import { ThemeVariableRowLabel as ThemeVariableRowLabel_d408ea8a7b9c9e7b6f237d6bc68a93d5 } from 'payload-canvas/theme-client'
+import { ThemeVariablesWarning as ThemeVariablesWarning_d408ea8a7b9c9e7b6f237d6bc68a93d5 } from 'payload-canvas/theme-client'
 import { ThemeSaveSignal as ThemeSaveSignal_d408ea8a7b9c9e7b6f237d6bc68a93d5 } from 'payload-canvas/theme-client'
 import { AiKeyField as AiKeyField_1611a9327f20600aee6a9d537ba4315b } from 'payload-canvas/client'
 import { AgentConnectPill as AgentConnectPill_60f30f580e97936338e112b8b2cc7161 } from 'payload-mcp-toolkit/client'
@@ -146,6 +149,9 @@ export const importMap = {
   "payload-canvas/theme-client#ThemeColorField": ThemeColorField_d408ea8a7b9c9e7b6f237d6bc68a93d5,
   "payload-canvas/theme-client#ThemeFontField": ThemeFontField_d408ea8a7b9c9e7b6f237d6bc68a93d5,
   "payload-canvas/theme-client#ThemeSliderField": ThemeSliderField_d408ea8a7b9c9e7b6f237d6bc68a93d5,
+  "payload-canvas/theme-client#ThemeVariableValueField": ThemeVariableValueField_d408ea8a7b9c9e7b6f237d6bc68a93d5,
+  "payload-canvas/theme-client#ThemeVariableRowLabel": ThemeVariableRowLabel_d408ea8a7b9c9e7b6f237d6bc68a93d5,
+  "payload-canvas/theme-client#ThemeVariablesWarning": ThemeVariablesWarning_d408ea8a7b9c9e7b6f237d6bc68a93d5,
   "payload-canvas/theme-client#ThemeSaveSignal": ThemeSaveSignal_d408ea8a7b9c9e7b6f237d6bc68a93d5,
   "payload-canvas/client#AiKeyField": AiKeyField_1611a9327f20600aee6a9d537ba4315b,
   "payload-mcp-toolkit/client#AgentConnectPill": AgentConnectPill_60f30f580e97936338e112b8b2cc7161,

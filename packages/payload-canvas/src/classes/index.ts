@@ -17,7 +17,7 @@ export { classesConfigOf, type ClassesOptions, type ClassesServerConfig } from '
 export { classesCollection, SKIP_CLASSES_SHEET_CONTEXT } from './collection'
 export { classesEndpoints } from './endpoints'
 export { classNamesFor, classesSheetGlobal, compilePublishedSheet, loadClassesSheet, storeClassesSheet, type StoredClassSheet } from './sheet'
-export { classUsage, countClassUses, replaceClassInLayouts, replaceClassOps, type ReplaceResult } from './usage'
+export { classUsage, countClassUses, replaceClassInLayouts, replaceClassOps, usedClassNames, type ReplaceResult } from './usage'
 export {
   deleteClass,
   errorMessage,
@@ -26,6 +26,8 @@ export {
   loadClasses,
   publishClass,
   publishClassesWithPage,
+  removeUnusedClasses,
+  unusedClasses,
   renameClass,
   upsertClass,
   type ActionResult,

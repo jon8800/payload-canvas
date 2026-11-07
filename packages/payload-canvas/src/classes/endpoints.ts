@@ -5,7 +5,7 @@
 
 import type { Endpoint, PayloadRequest } from 'payload'
 
-import { deleteClass, importSiteClasses, loadClasses, namesOf, renameClass, type ActionResult } from './actions'
+import { deleteClass, importSiteClasses, loadClasses, namesOf, removeUnusedClasses, renameClass, type ActionResult } from './actions'
 import { loadClassesSheet } from './sheet'
 import { CLASSES_PATH, CLASSES_SHEET_PATH } from './shared'
 import { classUsage } from './usage'
@@ -74,6 +74,15 @@ export function classesEndpoints(): Endpoint[] {
         const id = idOf(data.id)
         if (id === null) return json({ ok: false, error: 'Send { id }.' }, 400)
         return reply(await deleteClass(req, id, { removeFromBlocks: data.removeFromBlocks === true }))
+      },
+    },
+    {
+      // Deletes every class no layout uses (drafts, open sessions and published pages).
+      path: `${CLASSES_PATH}/remove-unused`,
+      method: 'post',
+      handler: async (req) => {
+        if (!req.user) return unauthorized()
+        return reply(await removeUnusedClasses(req))
       },
     },
     {

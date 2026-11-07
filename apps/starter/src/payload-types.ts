@@ -2503,6 +2503,21 @@ export interface ThemeSetting {
    * Base corner radius in rem (--radius). Empty: the default from your CSS.
    */
   borderRadius?: string | null;
+  /**
+   * Named colors, sizes and fonts. Blocks and classes use them by name, so one change here updates every page.
+   */
+  variables?:
+    | {
+        name: string;
+        type: 'color' | 'size' | 'font';
+        value: string;
+        /**
+         * Used inside the dark class. Empty: the same value.
+         */
+        darkValue?: string | null;
+        id?: string | null;
+      }[]
+    | null;
   derivedTokens?:
     | {
         [k: string]: unknown;
@@ -2611,6 +2626,15 @@ export interface ThemeSettingsSelect<T extends boolean = true> {
         baseMultiplier?: T;
       };
   borderRadius?: T;
+  variables?:
+    | T
+    | {
+        name?: T;
+        type?: T;
+        value?: T;
+        darkValue?: T;
+        id?: T;
+      };
   derivedTokens?: T;
   updatedAt?: T;
   createdAt?: T;

@@ -10,7 +10,7 @@ export const DEFAULT_CLASSES_SLUG = 'builder-classes'
 /** Default slug of the hidden global that stores the compiled stylesheet of the published classes. */
 export const DEFAULT_CLASSES_SHEET_SLUG = 'builder-classes-sheet'
 
-/** Path below the API route: `GET` lists the classes (latest drafts). Sub-paths: `/usage`, `/import`, `/rename`, `/delete`. */
+/** Path below the API route: `GET` lists the classes (latest drafts). Sub-paths: `/usage`, `/import`, `/rename`, `/delete`, `/remove-unused`. */
 export const CLASSES_PATH = '/builder/classes'
 
 /** Path below the API route of the compiled stylesheet: `GET {api}/builder/classes-sheet/<hash>.css`. */

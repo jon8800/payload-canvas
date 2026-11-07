@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { bareClass, classTokens, mergeSiteClasses, type BuilderClass } from '../../../classes/shared'
 import { STYLE_PROPERTIES } from '../../../core'
 import type { Block, StyleTokens } from '../../../core/types'
+import { ClassManager } from '../classes/ClassManager'
 import { useRuntime } from '../runtime'
 import { useEditor } from '../store'
 import { createValueStore, useValue } from '../valueStore'
@@ -128,6 +129,7 @@ export function StylesPanel({ block, part = null }: { block: Block; part?: strin
         {editing && <ClassCss item={editing} />}
       </div>
       {classes && <ClassDialog />}
+      {classes && <ClassManager />}
     </StylesContext>
   )
 }
