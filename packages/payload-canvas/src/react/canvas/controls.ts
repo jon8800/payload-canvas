@@ -10,6 +10,29 @@ export function controlAt(target: EventTarget | null): Element | null {
   return target instanceof Element ? target.closest(CONTROL_SELECTOR) : null
 }
 
+/** Elements that show over the page in the browser's top layer: an open popover or modal dialog. */
+export const TOP_LAYER_SELECTOR = ':popover-open, :modal'
+
+/** True when the element is in the top layer. False in browsers that do not know the selectors. */
+export function inTopLayer(el: Element): boolean {
+  try {
+    return el.matches(TOP_LAYER_SELECTOR)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * True when the point is on the backdrop of an open popup on the canvas: the event's target is
+ * the top-layer element, but the point lies outside its box. A click there closes the popup, as
+ * on the site, and selects nothing. The hover outline and the "+" do not show there.
+ */
+export function onBackdrop(target: EventTarget | null, x: number, y: number): boolean {
+  if (!(target instanceof Element) || !inTopLayer(target)) return false
+  const box = target.getBoundingClientRect()
+  return x < box.left || x > box.right || y < box.top || y > box.bottom
+}
+
 /** The `<details>` whose `<summary>` holds `target`, or null. */
 export function summaryOwner(target: EventTarget | null): HTMLDetailsElement | null {
   const summary = target instanceof Element ? target.closest('summary') : null

@@ -3,6 +3,7 @@
 // measurement. Slot rules count: a spot is offered only where at least one block type fits.
 
 import { deepestBlockAt } from '../../../core/dropTarget'
+import { reachableAt } from '../../../core/layers'
 import { getBlockDefinition, placementError, slotNames } from '../../../core/blocks'
 import { DEFAULT_SLOT, indexLayout, type IndexedBlock } from '../../../core/tree'
 import type { Axis, BlockDefinition, CanvasMeasurement, Layout, Point, Position, Rect } from '../../../core/types'
@@ -136,6 +137,8 @@ export function insertSpotAt(
   p: Point,
   options: InsertSpotOptions = {},
 ): InsertSpot | null {
+  // Over an open popup only its blocks count (see `reachableAt`).
+  measurement = reachableAt(measurement, p)
   const band = options.band ?? EDGE_BAND
   const selected = options.selected
   const button = options.button ?? INSERT_BUTTON

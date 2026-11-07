@@ -9,6 +9,7 @@ import { defaultBlocks } from '../defaults'
 import { builtinBlocks, BUILTIN_TYPES } from '.'
 
 const ICONS = ['arrowRight', 'check'] as const
+const canEdit = () => false
 
 type LooseField = { name?: string; type: string; options?: Array<{ value: string; label: string }>; defaultValue?: unknown }
 const fieldsOf = (blocks: BlockDefinition[], type: string) => (blocks.find((b) => b.type === type)?.fields ?? []) as LooseField[]
@@ -16,10 +17,39 @@ const fieldsOf = (blocks: BlockDefinition[], type: string) => (blocks.find((b) =
 describe('builtinBlocks', () => {
   it('adds every built-in by default, and the icon block only with icon names', () => {
     // `tabs` brings its child type `tab`.
-    const expected = BUILTIN_TYPES.flatMap((type) => (type === 'tabs' ? ['tabs', 'tab'] : [type]))
+    const expected = BUILTIN_TYPES.filter((type) => type !== 'embed').flatMap((type) => (type === 'tabs' ? ['tabs', 'tab'] : [type]))
     assert.deepEqual(builtinBlocks({ icons: ICONS }).map((b) => b.type), expected)
     assert.ok(!builtinBlocks().some((b) => b.type === 'icon'))
     assert.deepEqual(builtinBlocks({ include: ['tabs'] }).map((b) => b.type), ['tabs', 'tab'])
+  })
+
+  it('adds the embed block only when asked: its code runs on the site', () => {
+    assert.ok(!builtinBlocks({ icons: ICONS }).some((b) => b.type === 'embed'))
+    assert.ok(builtinBlocks({ embed: {} }).some((b) => b.type === 'embed'))
+    assert.deepEqual(builtinBlocks({ include: ['embed'] }).map((b) => b.type), ['embed'])
+  })
+
+  it('embed: an HTML code field with a length limit, and who may change the code', () => {
+    const plain = builtinBlocks({ include: ['embed'] })[0]!
+    const code = plain.fields.find((f) => 'name' in f && f.name === 'code') as LooseField & { maxLength?: number; admin?: { language?: string }; access?: unknown }
+    assert.equal(code.type, 'code')
+    assert.equal(code.admin?.language, 'html')
+    assert.equal(code.maxLength, 50_000)
+    assert.equal(code.access, undefined)
+    assert.deepEqual(fieldsOf([plain], 'embed').find((f) => f.name === 'mode')?.options?.map((o) => o.value), ['inline', 'isolated'])
+    assert.ok(plain.description && plain.description.length < 120)
+    assert.ok(plain.ai?.description && plain.ai.example)
+    const limited = builtinBlocks({ embed: { canEdit, maxLength: 100 } }).find((b) => b.type === 'embed')!
+    for (const name of ['code', 'mode']) {
+      const field = limited.fields.find((f) => 'name' in f && f.name === name) as { access?: { create?: unknown; update?: unknown } }
+      assert.equal(field.access?.update, canEdit, name)
+      assert.equal(field.access?.create, canEdit, name)
+    }
+    assert.equal((limited.fields.find((f) => 'name' in f && f.name === 'code') as { maxLength?: number }).maxLength, 100)
+    // Too long blocks Publish only, like other limits.
+    const layout: Layout = { version: 1, blocks: [{ id: 'e', type: 'embed', props: { code: 'x'.repeat(101) } }] }
+    const errors = validateLayout(layout, [limited])
+    assert.ok(errors.some((e) => /at most 100 characters/.test(e.message)))
   })
 
   it('has no image viewer or media backdrop any more', () => {
@@ -44,8 +74,8 @@ describe('builtinBlocks', () => {
   })
 
   it('every block has its own editor icon, a category and a description', () => {
-    const glyphs = new Set(['icon', 'disclosure', 'accordion', 'popup', 'tabs', 'tab', 'carousel', 'marquee', 'tableOfContents', 'filter', 'adjacentLinks'])
-    for (const def of builtinBlocks({ icons: ICONS })) {
+    const glyphs = new Set(['icon', 'disclosure', 'accordion', 'popup', 'tabs', 'tab', 'carousel', 'marquee', 'tableOfContents', 'filter', 'adjacentLinks', 'embed'])
+    for (const def of builtinBlocks({ icons: ICONS, embed: {} })) {
       assert.ok(def.icon && glyphs.has(def.icon), `${def.type} icon "${def.icon}"`)
       assert.ok(['Content', 'Media', 'Interactive', 'Dynamic'].includes(def.category ?? ''), `${def.type} category`)
     }

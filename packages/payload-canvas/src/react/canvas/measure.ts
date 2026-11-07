@@ -1,8 +1,10 @@
-import type { Axis, CanvasMeasurement, Rect, RegionRect, SlotRect } from '../../core'
+import type { Axis, CanvasMeasurement, LayerRect, Rect, RegionRect, SlotRect } from '../../core'
 
 import { LAYOUT_ROOT_ATTRIBUTE, REGION_ATTRIBUTE } from '../render/regions'
+import { inTopLayer, TOP_LAYER_SELECTOR } from './controls'
 
 const sameRect = (a: Rect, b: Rect) => a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
+const sameLayer = (a: { layer?: number }, b: { layer?: number }) => a.layer === b.layer
 
 /** True when two measurements are equal. Stops at the first difference (scrolling changes `scroll` first). */
 export function sameMeasurement(a: CanvasMeasurement | null, b: CanvasMeasurement): boolean {
@@ -11,12 +13,12 @@ export function sameMeasurement(a: CanvasMeasurement | null, b: CanvasMeasuremen
   if (a.viewport.width !== b.viewport.width || a.viewport.height !== b.viewport.height || a.rootAxis !== b.rootAxis) return false
   if (a.blocks.length !== b.blocks.length || a.slots.length !== b.slots.length) return false
   for (let i = 0; i < a.blocks.length; i++) {
-    if (a.blocks[i].id !== b.blocks[i].id || !sameRect(a.blocks[i].rect, b.blocks[i].rect)) return false
+    if (a.blocks[i].id !== b.blocks[i].id || !sameRect(a.blocks[i].rect, b.blocks[i].rect) || !sameLayer(a.blocks[i], b.blocks[i])) return false
   }
   for (let i = 0; i < a.slots.length; i++) {
     const x = a.slots[i]
     const y = b.slots[i]
-    if (x.ownerId !== y.ownerId || x.slot !== y.slot || x.axis !== y.axis || x.empty !== y.empty || !sameRect(x.rect, y.rect)) return false
+    if (x.ownerId !== y.ownerId || x.slot !== y.slot || x.axis !== y.axis || x.empty !== y.empty || !sameRect(x.rect, y.rect) || !sameLayer(x, y)) return false
   }
   if (Boolean(a.root) !== Boolean(b.root) || (a.root && b.root && !sameRect(a.root, b.root))) return false
   const ra = a.regions ?? []
@@ -24,6 +26,12 @@ export function sameMeasurement(a: CanvasMeasurement | null, b: CanvasMeasuremen
   if (ra.length !== rb.length) return false
   for (let i = 0; i < ra.length; i++) {
     if (ra[i].name !== rb[i].name || !sameRect(ra[i].rect, rb[i].rect)) return false
+  }
+  const la = a.layers ?? []
+  const lb = b.layers ?? []
+  if (la.length !== lb.length) return false
+  for (let i = 0; i < la.length; i++) {
+    if (la[i].ownerId !== lb[i].ownerId || !sameRect(la[i].rect, lb[i].rect)) return false
   }
   return true
 }
@@ -78,13 +86,33 @@ const intersect = (a: ClipArea, b: ClipArea): ClipArea => ({
 
 /** A fixed element and an open modal or popover (the top layer) escape the clipping of their ancestors. */
 function escapesClip(el: Element, style: CSSStyleDeclaration): boolean {
-  if (style.position === 'fixed') return true
-  try {
-    return el.matches(':modal, :popover-open')
-  } catch {
-    return false
-  }
+  return style.position === 'fixed' || inTopLayer(el)
 }
+
+/**
+ * The open popups on the canvas (top-layer elements), outermost first, and a function that gives
+ * the index of the innermost one around an element (-1 on the page).
+ */
+function findLayers(root: HTMLElement): { layers: LayerRect[]; layerOf: (el: Element) => number } {
+  let elements: Element[] = []
+  try {
+    elements = Array.from(root.querySelectorAll(TOP_LAYER_SELECTOR))
+  } catch {
+    // A browser without the selectors has no layers.
+  }
+  const layers = elements.map((el) => ({
+    ownerId: el.closest<HTMLElement>('[data-block-id]')?.dataset.blockId ?? null,
+    rect: toRect(el.getBoundingClientRect()),
+  }))
+  const layerOf = (el: Element) => {
+    for (let i = elements.length - 1; i >= 0; i--) if (elements[i]!.contains(el)) return i
+    return -1
+  }
+  return { layers, layerOf }
+}
+
+/** `{ layer }` for an element in a layer, else nothing: a measurement without popups stays as it was. */
+const layerField = (index: number) => (index < 0 ? {} : { layer: index })
 
 /**
  * The area each element's children show in: its ancestors' boxes that clip their overflow
@@ -139,10 +167,13 @@ export function axisOf(el: Element): Axis {
  */
 export function measure(root: HTMLElement): CanvasMeasurement {
   const visibleBox = createClipper(root)
-  const blocks = Array.from(root.querySelectorAll<HTMLElement>('[data-block-id]'), (el) => ({
-    id: el.dataset.blockId ?? '',
-    rect: visibleBox(el),
-  }))
+  const { layers, layerOf } = findLayers(root)
+  // An open popup's block takes its box, so its outline, name and action bar frame the box.
+  const layerBox = new Map(layers.flatMap((layer) => (layer.ownerId ? [[layer.ownerId, layer.rect] as const] : [])))
+  const blocks = Array.from(root.querySelectorAll<HTMLElement>('[data-block-id]'), (el) => {
+    const id = el.dataset.blockId ?? ''
+    return { id, rect: layerBox.get(id) ?? visibleBox(el), ...layerField(layerOf(el)) }
+  })
 
   const slots = new Map<string, SlotRect>()
   for (const el of root.querySelectorAll<HTMLElement>('[data-slot-owner]')) {
@@ -153,7 +184,7 @@ export function measure(root: HTMLElement): CanvasMeasurement {
     if (slots.get(key)?.empty && !empty) continue
     // An empty placeholder takes the container's axis, so the drop indicator matches the layout.
     const axis = empty && el.parentElement ? axisOf(el.parentElement) : axisOf(el)
-    slots.set(key, { ownerId, slot, rect: visibleBox(el), axis, empty })
+    slots.set(key, { ownerId, slot, rect: visibleBox(el), axis, empty, ...layerField(layerOf(el)) })
   }
 
   // In a page frame the layout fills its outlet, not the whole canvas: the root list's axis and
@@ -174,6 +205,7 @@ export function measure(root: HTMLElement): CanvasMeasurement {
     slots: [...slots.values()],
     rootAxis: axisOf(outlet ?? root),
     ...(outlet ? { root: toRect(outlet.getBoundingClientRect()), regions } : {}),
+    ...(layers.length > 0 ? { layers } : {}),
     viewport: { width: window.innerWidth, height: window.innerHeight },
     scroll: { x: window.scrollX, y: window.scrollY },
     documentHeight: document.documentElement.scrollHeight,
