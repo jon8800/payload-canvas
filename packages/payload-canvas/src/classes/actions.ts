@@ -21,7 +21,7 @@ import {
   type BuilderClass,
   type ClassUsage,
 } from './shared'
-import { classUsage, replaceClassInLayouts, type ReplaceResult } from './usage'
+import { classUsage, replaceClassInLayouts, usedClassNames, type ReplaceResult } from './usage'
 
 export type ActionResult<T> = ({ ok: true } & T) | { ok: false; status: number; error: string; usage?: ClassUsage }
 
@@ -280,4 +280,37 @@ export function publishClassesWithPage(field: string): CollectionAfterChangeHook
 /** Every name the classes answer to (names and former names), for usage counts. */
 export function namesOf(classes: readonly BuilderClass[]): string[] {
   return [...new Set(classes.flatMap((c) => [c.name, ...(c.previousNames ?? [])]))]
+}
+
+/**
+ * The classes no block uses: not in any layout's latest draft or open live session, and not in any
+ * published layout (every document, not only those the user may read), by name or former name.
+ */
+export async function unusedClasses(req: PayloadRequest): Promise<BuilderClass[]> {
+  const classes = await loadClasses(req)
+  const used = await usedClassNames(req, namesOf(classes))
+  return classes.filter((c) => [c.name, ...(c.previousNames ?? [])].every((name) => !used.has(name)))
+}
+
+/**
+ * Deletes every class no block uses (see `unusedClasses`), as the request's user. Classes the user
+ * may not delete are reported in `failed`.
+ */
+export async function removeUnusedClasses(req: PayloadRequest): Promise<ActionResult<{ deleted: string[]; failed: Array<{ name: string; error: string }> }>> {
+  try {
+    const config = requireConfig(req)
+    const deleted: string[] = []
+    const failed: Array<{ name: string; error: string }> = []
+    for (const item of await unusedClasses(req)) {
+      try {
+        await req.payload.delete({ collection: config.slug as never, id: item.id, ...asUser(req) })
+        deleted.push(item.name)
+      } catch (error) {
+        failed.push({ name: item.name, error: errorMessage(error) })
+      }
+    }
+    return { ok: true, deleted, failed }
+  } catch (error) {
+    return fail(error)
+  }
 }

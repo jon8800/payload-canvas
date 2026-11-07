@@ -16,6 +16,7 @@ import {
 } from '../../core'
 import type { CanvasCssInput, TailwindPlugins } from '../../css'
 import { createCanvasCompiler, type CanvasCompiler } from '../../css/browser'
+import { THEME_CHANNEL } from '../../theme/config'
 import { classNamesOf, withoutClassNames } from '../../classes/shared'
 import { useCanvasClasses, useClassSheet } from './classes'
 import {
@@ -860,11 +861,19 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
   // The CSS endpoint comes from the admin, or from `?cssEndpoint=` when the page is opened alone.
   const cssEndpoint = init?.cssEndpoint ?? null
   const [cssInput, setCssInput] = useState<CanvasCssInput | null>(null)
+  // A theme save can add or rename design variables (`bg-brand`): load the CSS input again.
+  const [themeSaves, setThemeSaves] = useState(0)
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return
+    const channel = new BroadcastChannel(THEME_CHANNEL)
+    channel.addEventListener('message', () => setThemeSaves((n) => n + 1))
+    return () => channel.close()
+  }, [])
   useEffect(() => {
     const endpoint = cssEndpoint ?? new URLSearchParams(window.location.search).get('cssEndpoint')
     if (!endpoint) return
     let cancelled = false
-    fetch(endpoint, { credentials: 'include' })
+    fetch(endpoint, { credentials: 'include', cache: 'no-store' })
       .then(async (res) => {
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
         const input = (await res.json()) as CanvasCssInput
@@ -878,7 +887,7 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     return () => {
       cancelled = true
     }
-  }, [cssEndpoint])
+  }, [cssEndpoint, themeSaves])
 
   // Editable classes: their own stylesheet, compiled from the latest drafts. The layout's CSS
   // leaves their names out, as the site's page CSS does.

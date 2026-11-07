@@ -4,9 +4,11 @@
 // while the controls edit an editable class, a short banner with how far a change reaches and
 // Publish, Rename and Delete. `ClassChips` (RawClasses.tsx) draws the field.
 
+import { useModal } from '@payloadcms/ui'
 import { useEffect, useState } from 'react'
 
 import { plural, usageText, type BuilderClass } from '../../../classes/shared'
+import { CLASS_MANAGER_SLUG } from '../classes/ClassManager'
 import { Icon } from '../icons'
 import { MenuButton, type MenuEntry } from '../menu/Menu'
 import { useRuntime } from '../runtime'
@@ -24,6 +26,7 @@ export function ClassBar({ className, own }: { className: string; own: BuilderCl
   const classes = runtime.classes
   const { blockId, part, editingClass: editing, tokens } = useStyles()
   const [asText, setAsText] = useState(false)
+  const { openModal } = useModal()
   const owner = part ? 'this part' : 'this block'
   const label = part ? 'Classes of this part' : 'Classes of this block'
   const write = (next: string, mergeKey?: string) => writeClassName(runtime, { blockId, part }, next, mergeKey)
@@ -39,6 +42,7 @@ export function ClassBar({ className, own }: { className: string; own: BuilderCl
             ownFocus: true,
             run: () => classes.dialog.set({ kind: 'new', blockId, part }),
           },
+          { label: 'Manage classes…', icon: 'list', ownFocus: true, run: () => openModal(CLASS_MANAGER_SLUG) },
           {
             label: codeOnly > 0 ? `Import ${plural(codeOnly, 'class', 'classes')} from the site’s CSS` : 'Import from the site’s CSS',
             icon: 'paste',
@@ -61,7 +65,7 @@ export function ClassBar({ className, own }: { className: string; own: BuilderCl
         <span className="builder-styles__raw-label" aria-hidden="true">
           Classes
         </span>
-        <MenuButton className="builder-classes__menu" triggerLabel="Class actions" tooltip="New class, import, edit as text" label="Classes" items={menu}>
+        <MenuButton className="builder-classes__menu" triggerLabel="Class actions" tooltip="New class, manage classes, import, edit as text" label="Classes" items={menu}>
           <Icon name="more" size={14} />
         </MenuButton>
       </div>

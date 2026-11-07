@@ -32,6 +32,11 @@ export type CssOptions = {
   /** Absolute path to the app's Tailwind entry CSS (the file with @import "tailwindcss" and @theme). */
   entry: string
   plugins?: TailwindPlugins
+  /**
+   * CSS added after the entry: the theme's design variables (`@theme inline reference { … }`, see
+   * `theme/variables.ts`). Set by the plugin per compile (`withThemeVariables`), not in the config.
+   */
+  themeCss?: string
 }
 
 /**
@@ -192,8 +197,11 @@ async function recordInput(entryFile: string, entryCss: string, plugins?: Tailwi
   return data
 }
 
+/** The entry's CSS with the theme's variables after it. */
+const entryCssOf = async (options: CssOptions) => (await readCached(options.entry)) + (options.themeCss ?? '')
+
 async function getInput(options: CssOptions): Promise<CanvasCssData> {
-  const entryCss = await readCached(options.entry)
+  const entryCss = await entryCssOf(options)
   const key = hash(options.entry, entryCss)
   const cached = inputCache.get(key)
   if (cached) return cached
@@ -279,7 +287,7 @@ const tokensCache = new Lru<Promise<StyleTokens>>(8)
  * (see tokens.ts). Cached per entry path, entry content and plugin ids.
  */
 export async function getStyleTokens(options: CssOptions): Promise<StyleTokens> {
-  const entryCss = await readCached(options.entry)
+  const entryCss = await entryCssOf(options)
   const pluginIds = Object.keys(options.plugins ?? {}).toSorted().join(',')
   const key = hash('tokens', options.entry, entryCss, pluginIds)
   const cached = tokensCache.get(key)

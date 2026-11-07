@@ -48,6 +48,8 @@ import { builderViewPath, documentPath, draftPreviewPath } from '../plugin/links
 import { siteCssConfigOf } from '../plugin'
 import { prepareBlocks } from '../plugin/listCollections'
 import { getStyleTokens } from '../css'
+import { themeVariablesOf, withThemeVariables } from '../theme/server'
+import { describeVariables, variableTokens, VARIABLES_NOTE } from '../theme/variables'
 import { DEFAULT_SAVED_SECTIONS_SLUG, loadSavedSections, savedSectionsConfigOf } from '../plugin/sections'
 import { templatesConfigOf } from '../plugin/templates'
 import { generateImageToMedia, imageServiceOf } from '../ai/images/service'
@@ -306,7 +308,7 @@ async function loadDraft(req: PayloadRequest, collection: string, id: string): P
 async function siteClassesOf(req: PayloadRequest | undefined): Promise<Record<string, unknown>> {
   const site = req?.payload?.config ? siteCssConfigOf(req.payload) : null
   if (!site) return {}
-  const code = await getStyleTokens(site.css)
+  const code = await getStyleTokens(await withThemeVariables(req!.payload, site.css))
     .then((tokens) => tokens.siteClasses ?? [])
     .catch(() => [])
   // The editable classes (the classes collection) first; code classes they replace are left out.
@@ -319,6 +321,13 @@ async function siteClassesOf(req: PayloadRequest | undefined): Promise<Record<st
       "The site's own classes (its look: type styles, buttons, cards, surfaces). Prefer them in className over rebuilding the same look from utilities." +
       (editable.length > 0 ? ' listClasses shows their styles; upsertClass changes a class for every block that uses it.' : ''),
   }
+}
+
+/** The theme's design variables for `listBlocks`, or nothing without them. */
+async function variablesOf(req: PayloadRequest | undefined): Promise<Record<string, unknown>> {
+  if (!req?.payload?.config) return {}
+  const list = variableTokens(await themeVariablesOf(req.payload))
+  return list.length > 0 ? { variables: describeVariables(list), variablesNote: VARIABLES_NOTE } : {}
 }
 
 export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool[] {
@@ -499,7 +508,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     name: 'listBlocks',
     routing: { kind: 'collection', action: 'read' },
     description: [
-      'Lists every block type you can use in page layouts: label, description, props, slots (which child types they accept), parts and an example, plus the site\'s own classes. Call it once before you build or edit a layout: its `guide` is the layout format (block keys, ids, positions, classes, motion presets, HTML attrs, canonical form) and `bindings` the binding and VISIBILITY format.',
+      'Lists every block type you can use in page layouts: label, description, props, slots (which child types they accept), parts and an example, plus the site\'s own classes and design variables (named colors, sizes and fonts). Call it once before you build or edit a layout: its `guide` is the layout format (block keys, ids, positions, classes, motion presets, HTML attrs, canonical form) and `bindings` the binding and VISIBILITY format.',
       'For whole page parts (hero, features, pricing, call to action, footer), PREFER ready-made sections: listSections, then insertSection. Use single blocks for small additions and edits.',
       `Dynamic blocks: "${FIELD_BLOCK}" shows one field of the current document (templates), "${COLLECTION_LIST_BLOCK}" lists documents of a collection and repeats its "item" slot per document, "${REPEAT_BLOCK}" repeats its "item" slot per row of an array or hasMany field of the current document.`,
     ].join('\n\n'),
@@ -509,6 +518,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
         guide: LAYOUT_GUIDE,
         blocks: blocks.map(describeBlock),
         ...(await siteClassesOf(req)),
+        ...(await variablesOf(req)),
         sections: sections.length,
         bindings: BINDINGS_GUIDE,
         ...(templatesSlug ? { templates: { collection: templatesSlug, targets: templateTargets } } : {}),

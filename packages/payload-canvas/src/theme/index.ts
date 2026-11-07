@@ -30,3 +30,16 @@ export {
   type ThemeOptions,
   type ThemeServerConfig,
 } from './config'
+export {
+  cleanVariables,
+  textUsesVariable,
+  variableNameProblem,
+  variableProperty,
+  variablesThemeCss,
+  variableTokens,
+  variableValueProblem,
+  VARIABLE_TYPES,
+  type ThemeVariable,
+  type ThemeVariableType,
+  type VariableToken,
+} from './variables'

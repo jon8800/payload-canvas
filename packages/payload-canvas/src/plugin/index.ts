@@ -36,6 +36,8 @@ import { applyFontFamilies, getCanvasCssInput, getStyleTokens, type CssOptions, 
 import { DEFAULT_THEME_SLUG, THEME_CONFIG_KEY, THEME_PATH, type ThemeOptions, type ThemeServerConfig } from '../theme/config'
 import { themeFontFamilies, themeOutput, type ThemeData } from '../theme/css'
 import { themeGlobal } from '../theme/global'
+import { themeStyleTokens, withThemeVariables } from '../theme/server'
+import { variableUsageEndpoint } from '../theme/usage'
 import {
   BUILDER_CONFIG_KEY,
   defaultLiveRuntime,
@@ -670,7 +672,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
               blocks,
               sections,
               savedSections,
-              getTokens: () => getStyleTokens(css),
+              getTokens: (req) => (req ? themeStyleTokens(req.payload, css) : getStyleTokens(css)),
               templates: templates ? { slug: templatesSlug, sources: templates.sources } : null,
             })
           : []),
@@ -679,8 +681,9 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           method: 'get',
           handler: async (req) => {
             if (!req.user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-            const input = await getCanvasCssInput(css)
-            return Response.json(input, { headers: { 'Cache-Control': 'private, max-age=60' } })
+            // With the theme's variables, so `bg-brand` works on the canvas. Not cached: a theme save changes it.
+            const input = await getCanvasCssInput(await withThemeVariables(req.payload, css))
+            return Response.json(input, { headers: { 'Cache-Control': 'private, no-cache' } })
           },
         },
         {
@@ -688,7 +691,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           method: 'get',
           handler: async (req) => {
             if (!req.user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-            const tokens = await getStyleTokens(css)
+            const tokens = await themeStyleTokens(req.payload, css)
             const custom = await Promise.resolve(options.css.fontFamilies?.(req.payload)).catch(() => undefined)
             const families = { ...(await themeFamilies(req.payload)), ...custom }
             const fonts = applyFontFamilies(tokens.fonts, families)
@@ -698,6 +701,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
         },
         ...(theme
           ? [
+              variableUsageEndpoint(),
               {
                 // The theme as CSS and a Google Fonts URL, for ThemeLive in the canvas. Read access applies.
                 path: THEME_PATH,

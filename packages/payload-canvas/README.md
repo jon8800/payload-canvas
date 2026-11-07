@@ -1722,6 +1722,16 @@ The collection has drafts and versions, so every class has a history, and Payloa
 - **Rename and delete** are in the banner's **…** menu. Both dialogs say where the class is used first. **Rename** changes the class and every block that uses it, in each page's draft, through the live sessions (open editors see it at once). The old published name stays in `previousNames`, so published pages keep their look. **Delete** removes the class from every block's draft, then deletes it. Published pages lose its styles at once.
 - In the Payload admin, deleting a class that blocks still use is refused with the list of pages (409). Use the Styles panel's **Delete**, which removes it from the blocks first.
 
+### Manage classes
+
+**Manage classes…** in the Classes field's "⋯" menu opens every shared class in one list, as Webflow's style manager.
+
+- **Search** by name, label or group.
+- **Usage.** Each row shows how many blocks and pages use the class, or "Unused". A click on a used row lists the documents: pages, posts, templates, template parts, saved sections, every collection with a layout. Each link opens that document in the builder in a new tab. The counts include unsaved edits of open builder sessions.
+- **Rename**, **Duplicate** and **Delete** sit on each row. Rename and Delete use the same dialogs as the Styles panel: they change every layout's draft through its live session, so an open editor keeps its unsaved edits and sees the change at once. **Duplicate** makes a draft copy named `<name>-copy`.
+- **Remove unused classes** deletes every class that no layout uses. The server checks again before it deletes: the latest drafts, open builder sessions and published pages of every document, under the class's name and its former names. A class that only a published page still uses stays.
+- Endpoint: `POST /api/builder/classes/remove-unused` returns `{ deleted, failed }`. Server helpers: `unusedClasses(req)` and `removeUnusedClasses(req)` from `payload-canvas`.
+
 ### Import from the site's CSS
 
 **Import from the site's CSS** (the Classes field's "⋯" menu, or `POST /api/builder/classes/import`) makes a published class from each static `@utility` rule of your CSS entry and the files it imports (not packages). The `/* @canvas Group: Label */` comment gives the label and the group. `@apply` lists become `styles`; declarations and nested rules become `css`. Names that are classes already are skipped.
@@ -1948,6 +1958,25 @@ Other frontends: `loadTheme(payload)` from `payload-canvas/react/server` returns
 **Caching.** `ThemeStyle` reads the global once per request, never from Next's data cache. After each save the plugin calls `revalidateTag(<cacheTag>, { expire: 0 })` and `revalidatePath('/', 'layout')`, so statically rendered pages render again with the new theme. Tag your own cached theme reads with the cache tag. Saves with `context: { disableRevalidate: true }` (seed scripts) skip this.
 
 **Styles panel.** The color swatches read the canvas, so they show the theme's colors. The Font list shows the theme's families ("Inter", not `var(--font-sans)`).
+
+### Design variables
+
+Named colors, sizes and fonts that blocks and classes use by name, as Webflow's variables. Change a variable once in **Theme > Variables**, and every page that uses it changes.
+
+| Type | Value | Classes | CSS variable |
+|---|---|---|---|
+| Color | a hex color or any CSS color | `bg-brand`, `text-brand/80`, `border-brand`, `from-brand` … | `--color-brand` |
+| Size | a CSS length: `24px`, `1.5rem`, `clamp(1rem, 4vw, 3rem)` | `p-gutter`, `mt-gutter`, `gap-gutter`, `w-gutter`, `-mx-gutter` … | `--spacing-gutter` |
+| Font | a Google Fonts family (the site loads it) | `font-display` | `--font-display` |
+
+- **Names**: lower-case letters, digits and single dashes, unique across all types. Names the theme already uses (`primary`, `background`, `sans`, `full`, palette shades like `red-500`) are refused.
+- **Dark mode.** Colors and sizes can have a **Dark mode** value. The theme had no dark mode before, so the variables follow the `.dark` class (Tailwind's class strategy): the dark value applies on an element with `dark` and everything inside it. `ThemeStyle` writes `:root:root.dark, :root:root .dark { --color-brand: … }`. With the `@custom-variant dark (&:is(.dark *))` of the starter, `dark:` classes and the variables switch together.
+- **How it works.** `ThemeStyle` writes the values as CSS variables. Both Tailwind compiles (the save hook and the canvas) add a `@theme inline reference { --color-brand: var(--color-brand); … }` block after your CSS entry, so the classes exist and read the variable. The compiled CSS holds no values: a new value changes every page at once, without a new compile. Adding, renaming or deleting a variable changes which classes exist; the next save or render compiles again (the stored page CSS and the classes stylesheet carry a hash of the names).
+- **Classes.** Variables work in editable classes too: `bg-brand p-gutter` in a class's styles, `var(--color-brand)` in its custom CSS.
+- **Styles panel.** The color picker lists the color variables first, under **Variables**, with a swatch. The spacing, size and font suggestions list their variables first. After a theme save, open editors and canvases load the variables again.
+- **Renaming or deleting a variable in use** shows a warning in the theme form before you save: which blocks and classes still use the old name, with links to the pages. The old classes stop working after the save.
+- **AI and MCP.** The assistant's system prompt and the MCP `listBlocks` tool list the variables with their values and example classes. `GET /api/builder/style-tokens` returns them as `variables`. `GET /api/builder/theme/variables/usage` returns where each variable is used.
+- Helpers in `payload-canvas/theme`: `variableTokens`, `variablesThemeCss`, `variableNameProblem`, `variableValueProblem`, `textUsesVariable`.
 
 **Options:**
 
