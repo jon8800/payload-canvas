@@ -158,6 +158,13 @@ export interface Config {
   };
   locale: null;
   widgets: {
+    'quick-actions': QuickActionsWidget;
+    'recent-edits': RecentEditsWidget;
+    drafts: DraftsWidget;
+    'form-messages': FormMessagesWidget;
+    'site-checks': SiteChecksWidget;
+    scheduled: ScheduledWidget;
+    analytics: AnalyticsWidget;
     collections: CollectionsWidget;
   };
   user: User | PayloadMcpApiKey;
@@ -2641,6 +2648,76 @@ export interface BuilderAiSettingsSelect<T extends boolean = true> {
   updatedAt?: T;
   createdAt?: T;
   globalType?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "quick-actions_widget".
+ */
+export interface QuickActionsWidget {
+  data?: {
+    [k: string]: unknown;
+  };
+  width: 'medium' | 'large' | 'x-large' | 'full';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "recent-edits_widget".
+ */
+export interface RecentEditsWidget {
+  data?: {
+    limit?: number | null;
+  };
+  width: 'small' | 'medium' | 'large' | 'x-large' | 'full';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "drafts_widget".
+ */
+export interface DraftsWidget {
+  data?: {
+    limit?: number | null;
+  };
+  width: 'small' | 'medium' | 'large' | 'x-large' | 'full';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "form-messages_widget".
+ */
+export interface FormMessagesWidget {
+  data?: {
+    limit?: number | null;
+  };
+  width: 'small' | 'medium' | 'large' | 'x-large' | 'full';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "site-checks_widget".
+ */
+export interface SiteChecksWidget {
+  data?: {
+    [k: string]: unknown;
+  };
+  width: 'small' | 'medium' | 'large' | 'x-large' | 'full';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "scheduled_widget".
+ */
+export interface ScheduledWidget {
+  data?: {
+    [k: string]: unknown;
+  };
+  width: 'small' | 'medium' | 'large' | 'x-large' | 'full';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "analytics_widget".
+ */
+export interface AnalyticsWidget {
+  data?: {
+    [k: string]: unknown;
+  };
+  width: 'small' | 'medium' | 'large' | 'x-large' | 'full';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
