@@ -209,6 +209,8 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
   let tagCounter = 0
   const nextTag = () => `t${++tagCounter}`
   let fieldWriter: FieldWriter | null = null
+  /** Refuses an own edit by its result (content mode). Null: every edit may apply. */
+  let editGuard: ((before: Layout, after: Layout) => string | null) | null = null
   let historyBusy = false
   let historyGeneration = 0
   let editGeneration = 0
@@ -378,6 +380,15 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
           return false
         }
       }
+      if (editGuard) {
+        // Content mode: a design change is refused here, before the server would refuse it.
+        const next = applyOperations(state.layout, list)
+        const problem = next.ok ? editGuard(state.layout, next.layout) : null
+        if (problem) {
+          set({ lastError: problem })
+          return false
+        }
+      }
       const tag = nextTag()
       const result = sync.local(list, tag)
       if (!result.ok) {
@@ -528,6 +539,10 @@ export function createEditorStore(initial: Layout, options: EditorStoreOptions =
     /** Saves the field changes of undo and redo. Without one, field steps cannot be undone. */
     setFieldWriter(writer: FieldWriter | null) {
       fieldWriter = writer
+    },
+    /** Sets the check that refuses own edits by their result (content mode), or null for none. */
+    setEditGuard(guard: ((before: Layout, after: Layout) => string | null) | null) {
+      editGuard = guard
     },
 
     /**

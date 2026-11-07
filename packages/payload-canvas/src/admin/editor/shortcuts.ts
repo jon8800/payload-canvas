@@ -5,6 +5,8 @@
 
 import { keyAction, type KeyAction } from '../../protocol'
 import { findLocation } from '../../core'
+import { CONTENT_MODE_MESSAGE } from '../../core/contentMode'
+import { contentModeAllows } from './contentMode'
 import {
   copySelection,
   copyStyles,
@@ -182,7 +184,12 @@ export function bindShortcuts(runtime: Runtime, doc: Document, { forwarded }: { 
   let menuKeyAt = 0
 
   const run = (action: EditorAction) => {
-    const { selectedId } = runtime.store.getState()
+    const { selectedId, layout } = runtime.store.getState()
+    // Content mode: only content changes, plus the items of a block that lets editors manage them.
+    if (runtime.contentMode.get() && !contentModeAllows(action, layout, selectedId)) {
+      if (selectedId && !isPanelAction(action)) runtime.notify(CONTENT_MODE_MESSAGE)
+      return
+    }
     switch (action) {
       case 'copy':
         // Local storage and the async clipboard API now; the native `copy` event below fills the
@@ -319,7 +326,7 @@ export function bindShortcuts(runtime: Runtime, doc: Document, { forwarded }: { 
     const text = e.clipboardData?.getData('text/plain')
     // An empty clipboard (or no access to it): use the copy in local storage.
     const blocks = parseClipboard(text || storedClipboard())
-    if (!blocks) return
+    if (!blocks || runtime.contentMode.get()) return
     e.preventDefault()
     pasteBlocks(runtime, blocks)
   }

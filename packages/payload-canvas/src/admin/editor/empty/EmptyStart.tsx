@@ -16,6 +16,7 @@ import { sectionVersion } from '../../../core/sections'
 import type { SectionDefinition } from '../../../core/types'
 import { builderViewPath } from '../../../plugin/links'
 import { insertBlocks, sectionPosition } from '../actions'
+import { useContentMode } from '../contentMode'
 import { Icon } from '../icons'
 import { selectLeftTab } from '../layout/leftTabs'
 import { SectionThumb } from '../Library'
@@ -85,12 +86,21 @@ export function EmptyStart() {
   // "Add blocks here anyway" on a document with a template.
   const [ignoreTemplate, setIgnoreTemplate] = useState(false)
   const titleId = useId()
+  // Content mode adds no blocks: the page waits for a designer.
+  const contentMode = useContentMode(runtime)
   if (!empty || dragging) return null
   return (
     <div className="builder-empty-start">
       <section className="builder-empty-start__card" aria-labelledby={titleId}>
-        {template && !ignoreTemplate ? (
-          <TemplateNotice template={template} titleId={titleId} onIgnore={() => setIgnoreTemplate(true)} />
+        {template && (!ignoreTemplate || contentMode) ? (
+          <TemplateNotice template={template} titleId={titleId} onIgnore={contentMode ? null : () => setIgnoreTemplate(true)} />
+        ) : contentMode ? (
+          <>
+            <h2 id={titleId} className="builder-empty-start__title">
+              This page is empty
+            </h2>
+            <p className="builder-empty-start__text">A designer sets up the page. Then you can edit its text, images and links here.</p>
+          </>
         ) : (
           <StartOptions titleId={titleId} />
         )}
@@ -99,7 +109,7 @@ export function EmptyStart() {
   )
 }
 
-function TemplateNotice({ template, titleId, onIgnore }: { template: AppliedTemplate; titleId: string; onIgnore: () => void }) {
+function TemplateNotice({ template, titleId, onIgnore }: { template: AppliedTemplate; titleId: string; onIgnore: (() => void) | null }) {
   const runtime = useRuntime()
   const {
     config: { routes, collections },
@@ -124,9 +134,11 @@ function TemplateNotice({ template, titleId, onIgnore }: { template: AppliedTemp
             Open the template
           </Button>
         )}
-        <Button buttonStyle="secondary" size="small" margin={false} onClick={onIgnore}>
-          Add blocks here anyway
-        </Button>
+        {onIgnore && (
+          <Button buttonStyle="secondary" size="small" margin={false} onClick={onIgnore}>
+            Add blocks here anyway
+          </Button>
+        )}
       </div>
     </>
   )

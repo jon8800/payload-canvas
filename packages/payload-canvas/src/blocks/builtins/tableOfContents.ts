@@ -21,7 +21,7 @@ export function tableOfContentsBlock(): BlockDefinition {
         name: 'content',
         type: 'richText',
         label: 'Text with headings',
-        admin: { description: 'Bind it to the page’s text field.' },
+        admin: { description: 'Bind it to the page’s text field.', custom: { builderContent: false } },
       },
       { name: 'minHeadings', type: 'number', label: 'Hide below this many headings', defaultValue: 3, min: 1 },
       labelField('label', TABLE_OF_CONTENTS_LABELS.label, 'Name for screen readers'),

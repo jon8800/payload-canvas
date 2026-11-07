@@ -6,6 +6,7 @@ import { useDeferredValue, useEffect, useState, type ChangeEvent } from 'react'
 import { blockParts, findBlock, getBlockDefinition, htmlIdProblem, htmlIdsOf } from '../../core'
 import type { Block, BlockDefinition, Operation } from '../../core/types'
 import { BlockIcon, Icon, type IconName } from './icons'
+import { useContentMode } from './contentMode'
 import { blockMenuEntries } from './menu/blockMenu'
 import { MenuButton } from './menu/Menu'
 import { renameRequest } from './menu/requests'
@@ -100,17 +101,22 @@ const TIP_LABELS: Record<string, string> = {
   'Show this list': 'All shortcuts',
 }
 
+/** The tips content mode keeps: the others add, copy or paste blocks. */
+const CONTENT_TIPS = new Set(['Publish changes', 'Open or close the AI assistant', 'Undo', 'Show this list'])
+
 function EmptyState() {
   const runtime = useRuntime()
   const drafts = useValueSelector(runtime.doc.meta, (meta) => meta.drafts)
-  const tips = shortcutList({ ai: Boolean(runtime.assistant), publish: drafts }).filter((s) => s.label in TIP_LABELS)
+  const contentMode = useContentMode(runtime)
+  const tips = shortcutList({ ai: Boolean(runtime.assistant), publish: drafts }).filter((s) => s.label in TIP_LABELS && (!contentMode || s.label in CONTENT_TIPS))
   return (
     <div className="builder-editor__empty builder-editor__empty--inspector">
       <Icon name="cursor" size={20} />
       <p>No block selected</p>
       <p className="builder-editor__hint">
-        Click a block on the canvas or in Layers to edit its content and styles. Drag blocks from the Blocks tab to build the
-        page.
+        {contentMode
+          ? 'Click a text, image or link on the canvas or in Layers to edit it.'
+          : 'Click a block on the canvas or in Layers to edit its content and styles. Drag blocks from the Blocks tab to build the page.'}
       </p>
       <dl className="builder-editor__tips">
         {tips.map(({ keys, label }) => (
@@ -180,7 +186,9 @@ function BlockPane() {
   const [addedId, setAddedId] = useState<string | null>(null)
   if (block && focusRequest === block.id && addedId !== block.id) setAddedId(block.id)
   const def = block ? getBlockDefinition(runtime.config.blocks, block.type) : undefined
-  const tab = storesBuilderData(runtime) ? tabFor(chosen, def, block !== null && block.id === addedId) : 'content'
+  // Content mode edits content only: no Styles, Motion or Advanced tab.
+  const contentMode = useContentMode(runtime)
+  const tab = storesBuilderData(runtime) && !contentMode ? tabFor(chosen, def, block !== null && block.id === addedId) : 'content'
   const setTab = (next: BlockTab) => {
     setAddedId(null)
     setChosen(next)
@@ -211,21 +219,23 @@ function BlockPane() {
       <BlockProblems blockId={block.id} />
       <EditingBanner blockId={block.id} />
       <LocaleNote blockId={block.id} tab={tab} />
-      <Tabs
-        value={tab}
-        onChange={setTab}
-        options={
-          storesBuilderData(runtime)
-            ? [
-                { id: 'content', label: 'Content' },
-                { id: 'styles', label: 'Styles' },
-                { id: 'motion', label: 'Motion' },
-                { id: 'advanced', label: 'Advanced' },
-              ]
-            : // A Payload blocks field holds the blocks' own fields only.
-              [{ id: 'content', label: 'Content' }]
-        }
-      />
+      {!contentMode && (
+        <Tabs
+          value={tab}
+          onChange={setTab}
+          options={
+            storesBuilderData(runtime)
+              ? [
+                  { id: 'content', label: 'Content' },
+                  { id: 'styles', label: 'Styles' },
+                  { id: 'motion', label: 'Motion' },
+                  { id: 'advanced', label: 'Advanced' },
+                ]
+              : // A Payload blocks field holds the blocks' own fields only.
+                [{ id: 'content', label: 'Content' }]
+          }
+        />
+      )}
       {tab === 'content' && <BlockContentFields block={block} />}
       {tab === 'content' && block.type === SECTION_REF_BLOCK && <ComponentValuesPanel block={block} />}
       {tab === 'styles' && storesBuilderData(runtime) && <StyleFields block={block} />}
@@ -260,7 +270,9 @@ function BlockHeader({ block }: { block: Block }) {
   const [renamingHere, setRenaming] = useState(false)
   // "Rename" in a block menu (or F2 outside the outline) renames here.
   const requested = useValueSelector(renameRequest(runtime), (r) => r?.where === 'inspector' && r.id === block.id)
-  const renaming = renamingHere || requested
+  // Content mode does not rename blocks.
+  const contentMode = useContentMode(runtime)
+  const renaming = !contentMode && (renamingHere || requested)
   const endRename = () => {
     setRenaming(false)
     if (requested) renameRequest(runtime).set(null)
@@ -281,6 +293,8 @@ function BlockHeader({ block }: { block: Block }) {
       <span className="builder-editor__block-name">
         {renaming ? (
           <RenameInput block={block} placeholder={kind} onDone={endRename} />
+        ) : contentMode ? (
+          <span className="builder-editor__block-title">{name}</span>
         ) : (
           <button
             type="button"
@@ -365,6 +379,7 @@ function StyleFields({ block }: { block: Block }) {
  */
 function AdvancedFields({ block }: { block: Block }) {
   const runtime = useRuntime()
+  const def = getBlockDefinition(runtime.config.blocks, block.type)
   const layout = useEditor(runtime.store, (s) => s.layout)
   const stored = block.attrs?.id ?? ''
   // `source` is the stored id the draft belongs to: another stored id (undo, AI edit) replaces the draft.
@@ -421,6 +436,18 @@ function AdvancedFields({ block }: { block: Block }) {
           Display to Hidden. That hides it at this size and wider.
         </p>
       </div>
+      {def?.slots && Object.keys(def.slots).length > 0 && (
+        <div>
+          <CheckboxInput
+            id={`builder-${block.id}-editable-items`}
+            name={`builder.${block.id}.editableItems`}
+            label="Editors can add, remove and reorder its items"
+            checked={block.editableItems === true}
+            onToggle={(e: ChangeEvent<HTMLInputElement>) => runtime.store.apply({ type: 'update', id: block.id, editableItems: e.target.checked })}
+          />
+          <p className="field-description">For lists like FAQs or team cards. Editors can copy, delete and reorder the items, but not restyle them.</p>
+        </div>
+      )}
       <CheckboxInput
         id={`builder-${block.id}-aria-hidden`}
         name={`builder.${block.id}.attrs.ariaHidden`}

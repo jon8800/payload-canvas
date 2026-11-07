@@ -18,6 +18,7 @@ import { DRAFT_NOT_READABLE_MESSAGE, liveReadProblem, withLiveReadCheck } from '
 import { blocksAccessProblem, codecOf, statesThrough, UNREADABLE_BLOCKS_MESSAGE, withBlocksReadCheck } from './storage'
 import type { BlockDefinition, Layout, LocaleSettings, Operation } from '../core/types'
 import { actorFromUser, type LiveDocStore } from './apply'
+import { canEditDesign } from './contentMode'
 import { blockFromBody, propAccessCheck, validateBlockProps } from './fieldChecks'
 import type { LiveRuntime } from './runtime'
 import { collaboratorName, type CommitResult, type SessionSend, type SessionTarget } from './session'
@@ -231,6 +232,7 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
     const denied = await blocksAccessProblem(req, target, { write: true, layouts: [live()?.layout] })
     if (denied) return { ok: false, status: 403, error: denied, seq: 0 }
     const localization = collections[target.collection]?.localization ?? null
+    const contentOnly = !(await canEditDesign(req))
     return runtime.sessions.commit({
       target,
       store: req.payload as unknown as LiveDocStore,
@@ -250,6 +252,7 @@ export function liveEndpoints(options: LiveEndpointOptions): Endpoint[] {
           propAccessCheck(req, { blocks, registry, collection: target.collection, id: target.id, field: target.field, localization }),
         ),
       ),
+      contentOnly,
       ...input,
     })
   }

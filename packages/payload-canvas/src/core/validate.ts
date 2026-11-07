@@ -69,7 +69,7 @@ export function isBlockingError(error: Pick<LayoutError, 'code'>, publishing: bo
   return publishing || !PUBLISH_ONLY_CODES.has(error.code)
 }
 
-const BLOCK_KEYS = new Set(['id', 'type', 'props', 'className', 'slots', 'bindings', 'hidden', 'label', 'locales', 'motion', 'attrs', 'visibility', 'partClassName', 'section'])
+const BLOCK_KEYS = new Set(['id', 'type', 'props', 'className', 'slots', 'bindings', 'hidden', 'label', 'locales', 'motion', 'attrs', 'visibility', 'partClassName', 'section', 'editableItems'])
 
 /** Checks structure, unique ids, known block types, slot rules and prop types. */
 export function validateLayout(layout: unknown, blocks: BlockDefinition[], options: ValidateOptions = {}): LayoutError[] {
@@ -175,6 +175,9 @@ function checkBlock(
   }
   if (value.hidden !== undefined && typeof value.hidden !== 'boolean') {
     report(`${path}.hidden`, 'hidden must be a boolean')
+  }
+  if (value.editableItems !== undefined && typeof value.editableItems !== 'boolean') {
+    report(`${path}.editableItems`, 'editableItems must be a boolean')
   }
   if (value.label !== undefined && typeof value.label !== 'string') {
     report(`${path}.label`, 'label must be a string')

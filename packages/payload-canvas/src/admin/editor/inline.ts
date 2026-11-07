@@ -150,8 +150,12 @@ export function startInlineEditing(runtime: Runtime, id: string, offset?: number
   runtime.postToCanvas({ type: 'inlineStart', id, ...(offset === undefined ? {} : { offset }) })
 }
 
+/** True in content mode. Test runtimes may leave the store out: then false. */
+const inContentMode = (runtime: Pick<Runtime, 'contentMode'>) => (runtime.contentMode as Runtime['contentMode'] | undefined)?.get() === true
+
 /** Starts inline editing of a region's first text field (Enter on a selected region). */
 export function startRegionEditing(runtime: Runtime, region: string) {
+  if (inContentMode(runtime)) return
   runtime.iframeRef.current?.focus()
   runtime.postToCanvas({ type: 'inlineStart', id: '', region })
 }
@@ -162,6 +166,11 @@ export function endRegionInline(runtime: Runtime, message: { session: string }) 
   const draft = drafts.get(message.session)
   drafts.delete(message.session)
   if (!draft?.changed || !runtime.regions) return
+  // Content mode does not edit the page's fixed regions (the frame shows the saved value again).
+  if (inContentMode(runtime)) {
+    runtime.postToCanvas({ type: 'frameRefresh' })
+    return
+  }
   void runtime.regions.write([{ path: draft.path, value: draft.value, base: draft.base }], { locale: draft.locale })
 }
 

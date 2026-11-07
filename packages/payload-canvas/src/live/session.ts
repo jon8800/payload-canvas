@@ -11,6 +11,7 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks'
 
+import { contentModeProblem } from '../core/contentMode'
 import { sameJson } from '../core/fieldSemantics'
 import { indexLayout, normalizeLayout } from '../core/tree'
 import type { BlockDefinition, Layout, LocaleSettings, Operation } from '../core/types'
@@ -130,6 +131,11 @@ export type CommitArgs = {
   access?: (args: { before: Layout; after: Layout; ops: readonly Operation[]; doc: Record<string, unknown> }) => Promise<string | null>
   /** The document's locales: `update` operations with a `locale` write that locale's values. */
   localization?: LocaleSettings | null
+  /**
+   * The user has no design rights (`editor.canEditDesign`): only content changes are allowed
+   * (core/contentMode.ts). Anything else refuses the whole batch (403).
+   */
+  contentOnly?: boolean
 }
 
 export type CommitResult =
@@ -1288,6 +1294,13 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
           if (!resolved.ok) {
             maybeEvict(session)
             return reject(409, resolved.error)
+          }
+        }
+        if (args.contentOnly) {
+          const problem = contentModeProblem(session.layout, resolved.layout, blocks)
+          if (problem) {
+            maybeEvict(session)
+            return reject(403, problem)
           }
         }
         if (args.access) {

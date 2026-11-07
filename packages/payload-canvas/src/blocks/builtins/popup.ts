@@ -44,7 +44,7 @@ export function popupBlock(): BlockDefinition {
         name: 'anchor',
         type: 'text',
         label: 'Open from links to #',
-        admin: { placeholder: 'newsletter' },
+        admin: { placeholder: 'newsletter', custom: { builderContent: false } },
         custom: {
           ai: {
             description: 'Links to "#" plus this name open the popup too.',
