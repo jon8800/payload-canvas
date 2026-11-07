@@ -3,6 +3,7 @@ import { describe, it } from 'node:test'
 import type { PayloadRequest } from 'payload'
 import { z } from 'zod'
 
+import { defaultBlocks } from '../blocks'
 import { createId } from '../core/ids'
 import { findBlock } from '../core/tree'
 import type { BlockDefinition, Layout, SectionDefinition } from '../core/types'
@@ -776,5 +777,21 @@ describe('content mode (editor.canEditDesign)', () => {
     const text = await tool('applyOperations').handler({ collection: 'pages', id: 'p1', operations: [{ type: 'update', id: 'a', props: { text: 'Y' } }] }, req, {})
     assert.notEqual(text.isError, true)
     assert.equal(runtime.sessions.peek('pages', 'p1')?.layout.blocks.length, 1)
+  })
+})
+
+describe('listCollections', () => {
+  it('adds data collections to the collection list, as in the plugin', async () => {
+    const listTools = builderMcpTools({
+      blocks: defaultBlocks(),
+      collections: { pages: { field: 'layout', url: (doc) => `/${String(doc.slug)}` } },
+      listCollections: ['testimonials', 'team'],
+    })
+    const { req } = fakeRequest()
+    const listBlocks = listTools.find((t) => t.name === 'listBlocks')!
+    const body = json(await listBlocks.handler({ collection: 'pages' }, req, {}))
+    const list = (body.blocks as Record<string, unknown>[]).find((b) => b.type === 'collectionList')!
+    const field = (list.props as Record<string, unknown>[]).find((p) => p.name === 'collection')!
+    assert.deepEqual(field.options, ['pages', 'testimonials', 'team'])
   })
 })

@@ -100,6 +100,20 @@ const PATHS = {
   ),
   // Angle brackets around a slash: custom code.
   embed: <path d="M5 4.5 1.75 8 5 11.5M11 4.5 14.25 8 11 11.5M9.25 3l-2.5 10" />,
+  // A photo with corner marks: it opens full screen.
+  lightbox: (
+    <>
+      <rect x="4" y="4" width="8" height="8" rx="1" />
+      <path d="M1.75 4.5v-2.75H4.5M11.5 1.75h2.75V4.5M14.25 11.5v2.75H11.5M4.5 14.25H1.75V11.5" />
+    </>
+  ),
+  // A photo behind lines of text.
+  mediaBackdrop: (
+    <>
+      <rect x="1.75" y="2.5" width="12.5" height="11" rx="1.5" opacity={0.45} />
+      <path d="M4.5 7h7M4.5 9.5h4.5" />
+    </>
+  ),
   // A panel with a close mark, over the page.
   popup: (
     <>

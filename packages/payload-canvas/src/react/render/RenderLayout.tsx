@@ -21,6 +21,7 @@ import {
   type Layout,
   type TemplateContext,
 } from '../../core'
+import { classFields } from '../../core/classes'
 import { ACCORDION_BLOCK, defaultBlocks, faqItems, faqJsonLd, isLinkField, SECTION_REF_SLOT, withBuilderCssClass } from '../../blocks'
 import { defaultComponents } from '../components'
 import { fieldFor } from '../components/Field'
@@ -175,7 +176,17 @@ function componentPropsOf(block: Block, ctx: Context): Record<string, unknown> {
   }
   const definition = ctx.definitions.get(block.type)
   const fields = definition?.fields as FieldLike[] | undefined
-  return fields ? mapFieldValues(props, fields, ctx.resolveLinks) : props
+  const mapped = fields ? mapFieldValues(props, fields, ctx.resolveLinks) : props
+  // Class props get the marker class, so the generated CSS reaches them. A missing one gets its default.
+  const own = classFields(definition)
+  if (own.length === 0) return mapped
+  const marked = { ...mapped }
+  for (const field of own) {
+    const fallback = (field as { defaultValue?: unknown }).defaultValue
+    const value = field.name in marked ? marked[field.name] : fallback
+    if (typeof value === 'string') marked[field.name] = withBuilderCssClass(value)
+  }
+  return marked
 }
 
 /**

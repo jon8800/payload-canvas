@@ -343,7 +343,7 @@ The Theme global stores design tokens: colors, fonts, radius, spacing scale. The
 
 **Design variables** (`theme/variables.ts`): the theme's `variables` list (name, type color / size / font, value, dark value). `ThemeStyle` writes `--color-<name>`, `--spacing-<name>`, `--font-<name>` (dark values under `.dark`). Every compile gets `@theme inline reference { --color-<name>: var(--color-<name>); … }` after the entry (`CssOptions.themeCss`, from `withThemeVariables(payload, css)` in `theme/server.ts`, cached per Payload instance and cleared by the theme's `afterChange`), so the classes exist and the compiled CSS holds no values. Rejected: writing the values into `@theme`: every value change would recompile every page and the canvas input. Usage (`theme/usage.ts`) scans the layouts as the classes do, plus the classes' styles and CSS.
 
-`websiteBuilder({ theme })` adds the global. It is on by default; `theme: false` turns it off. The site renders `<ThemeStyle payload />` from `payload-canvas/react/server`. The canvas uses `<ThemeStyle payload live />`, which reloads the theme after a save. See the README section "Theme".
+`websiteBuilder({ theme })` adds the global. It is on by default; `theme: false` turns it off. The site renders `<ThemeStyle payload />` from `payload-canvas/react/server`. The canvas uses `<ThemeStyle payload live />`, which reloads the theme after a save. `ThemeStyle` reads inside its own `<Suspense>` boundary and takes the `getPayload` promise, so it works with Next's Cache Components. See the README sections "Theme" and "Cache Components".
 
 ## 10. Rendering
 

@@ -6,10 +6,11 @@ import { withInlineBlocks } from '../core/blocks'
 import type { BlockDefinition } from '../core/types'
 
 /**
- * The collection list block shows only collections with a `url`: its `collection` text field
- * (and the repeat's optional one, for `$url`) becomes a select of them, and its picked `ids` a
- * relationship to them, so the editor offers a list and validation rejects other values. The same
- * fields as `defaultBlocks({ listCollections })`. Returns the same list when there is nothing to change.
+ * The collection list block shows only the given collections (see `listableCollections`): its
+ * `collection` text field (and the repeat's optional one, for `$url`) becomes a select of them,
+ * and its picked `ids` a relationship to them, so the editor offers a list and validation rejects
+ * other values. The same fields as `defaultBlocks({ listCollections })`. Returns the same list
+ * when there is nothing to change.
  */
 export function listCollectionsOf(blocks: BlockDefinition[], slugs: string[]): BlockDefinition[] {
   if (slugs.length === 0) return blocks
@@ -28,6 +29,18 @@ export function listCollectionsOf(blocks: BlockDefinition[], slugs: string[]): B
     })
     return { ...block, fields }
   })
+}
+
+/**
+ * The collections the collection list block can show: the collections with a `url`, then the
+ * `listCollections` option (data collections without pages), each once.
+ */
+export function listableCollections(
+  collections: Record<string, { url?: unknown }>,
+  extra: readonly string[] = [],
+): string[] {
+  const routed = Object.entries(collections).filter(([, o]) => o.url).map(([slug]) => slug)
+  return [...new Set([...routed, ...extra])]
 }
 
 /**
