@@ -6,13 +6,13 @@ Read `AGENTS.md` and `docs/architecture.md` first. The gap numbers (8.x) match p
 
 ## How to work through this list
 
-- Work on branch `feat/escort-starter-needs` or a branch from it. Do not push. Do not publish to npm: Eugene approves each release.
+- Work on a branch from `main`. Do not push. Do not publish to npm: Eugene approves each release. (0.4.0 was approved and released on 2026-11-07.)
 - For each item, add tests, update `packages/payload-canvas/README.md` and add a `CHANGELOG.md` line under `[Unreleased]`.
 - The escort-starter uses the plugin as a vendored tarball (`vendor/payload-canvas-0.3.0.tgz`). To test there, run `pnpm pack` in `packages/payload-canvas`, copy the `.tgz` into the starter's `vendor/`, and update the starter's `package.json`.
 - Each item names the starter workaround that it replaces. Remove the workaround in the starter in the same round, and run its checks: `pnpm canvas:index`, `pnpm typecheck`, `pnpm lint`, `pnpm test`.
 - Keep blocks unstyled. They take every look from `className`, like the existing blocks. Client components only where the block needs browser state.
 
-## Done (see `[Unreleased]` in `CHANGELOG.md`)
+## Done (released in 0.4.0, see `[0.4.0]` in `CHANGELOG.md`)
 
 | # | Item | API |
 | --- | --- | --- |
@@ -38,7 +38,7 @@ Read `AGENTS.md` and `docs/architecture.md` first. The gap numbers (8.x) match p
 | 26 | Where builder | condition rows for `collectionList.where`, **Edit as JSON**; `admin.custom.builderWhere` on any JSON field. `queryFilters` stays JSON |
 | 27 | Server block cache | the canvas cache existed (per scope and block JSON, 200 entries); its key now ignores `motion`, and `refresh()` runs after document saves. Limit: data changed outside the editor shows after a reload |
 | 28 | Template conditions | `conditions` (a where query) on templates: the document's own template, then the first matching template by name, then the default |
-| 29 | `create-payload-canvas` version | installs `payload-canvas` `^0.3.0` |
+| 29 | `create-payload-canvas` version | installs `payload-canvas` `^0.4.0` |
 
 Delete `anchor` from the starter now that item 2 is done; it is not in the plugin. These stay in the starter, because they hold site rules: `contactLink`, `form`, `breadcrumbs`, `jsonLd`, `documentLayout`, `glossaryTerm`, `letterFilter` and `rating`.
 
@@ -56,12 +56,25 @@ Still open:
 
 - `mediaUrl` covers the media backdrop only. The default `image` block still renders stored URLs (the starter overrides `image`).
 - Without `path`, the pager's page 1 is still `?`. The canvas never passes a path.
-- Template `conditions` is always on, so every site needs a migration (`builder_templates.conditions`) when it moves to 0.4.
 - A focal point set to exactly 50/50 loses to a position class: the plugin cannot tell it from Payload's default.
+
+Moved to the 0.4.0 upgrade notes in `CHANGELOG.md`: template `conditions` is always on, so every site with templates needs a migration (`builder_templates.conditions`) when it moves to 0.4.
+
+## Found in the Bear Marketing website
+
+The Bear Marketing website (`C:/Projects/bear/bear/bear-website/bear-website`) integrated 0.4.0-dev.3. Fixed in 0.4.0:
+
+| Gap | API |
+| --- | --- |
+| The collection list offered only collections with a `url`; the site called `prepareBlocks(blocks, [...routed, 'testimonials', 'team'])` itself | `websiteBuilder({ listCollections: ['testimonials', 'team'] })`, and the same `listCollections` on `builderMcpTools` |
+| The templates collection had no `admin` option | `templates: { admin: { group: '…' } }` (saved sections and the theme already had one) |
+| `ThemeStyle` failed a route with `cacheComponents: true` | `ThemeStyle` reads inside its own `<Suspense>`; `payload={getPayload({ config })}` takes the promise; README "Cache Components" |
+
+The site can now pass `listCollections` to `websiteBuilder` instead of preparing the list itself (a seed's `prepareBlocks(blocks, listCollections)` stays). It can drop its `<Suspense>` around the canvas theme, and keeps its `'use cache'` `SiteTheme` wrapper, which puts the theme in the static shell.
 
 ## Open
 
-More work from the same night is in `[Unreleased]` too: button icons, control labels, lightbox swipe, and pager gaps with a `pageParam` per list.
+More work from the same night is in `[0.4.0]` too: button icons, control labels, lightbox swipe, and pager gaps with a `pageParam` per list.
 
 | # | Gap | Change |
 | --- | --- | --- |
