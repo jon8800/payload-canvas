@@ -1,0 +1,302 @@
+// Dashboard widgets. Payload variables only, inside Payload's layer, so both themes work.
+@layer payload-default {
+  .dash-card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    padding: 16px 16px 12px;
+    border: 1px solid var(--theme-border-color);
+    border-radius: var(--style-radius-l);
+    background: var(--theme-elevation-0);
+  }
+
+  .dash-card__header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+    // Room for Payload's edit buttons, which sit in the top right corner in edit mode.
+    .widget-wrapper--editing & {
+      padding-right: 72px;
+    }
+  }
+
+  .dash-card__title {
+    margin: 0;
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+  }
+
+  .dash-card__action {
+    font-size: 12px;
+    color: var(--theme-elevation-500);
+    text-decoration: none;
+    white-space: nowrap;
+
+    &:hover,
+    &:focus-visible {
+      color: var(--theme-elevation-1000);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+  }
+
+  .dash-card__body {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .dash-empty {
+    margin: 0;
+    padding: 20px 0 16px;
+    color: var(--theme-elevation-500);
+    font-size: 13px;
+  }
+
+  // Quick actions: a row of buttons that wraps.
+  .dash-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+    gap: 8px;
+    padding-bottom: 4px;
+  }
+
+  .dash-action {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 10px 12px;
+    border: 1px solid var(--theme-border-color);
+    border-radius: var(--style-radius-m);
+    color: var(--theme-elevation-800);
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    transition:
+      background-color 120ms ease-out,
+      border-color 120ms ease-out;
+
+    svg {
+      flex-shrink: 0;
+      color: var(--theme-elevation-500);
+    }
+
+    &:hover,
+    &:focus-visible {
+      background: var(--theme-elevation-50);
+      border-color: var(--theme-elevation-200);
+      color: var(--theme-elevation-1000);
+
+      svg {
+        color: var(--theme-elevation-800);
+      }
+    }
+
+    &:focus-visible {
+      outline: var(--accessibility-outline);
+      outline-offset: 2px;
+    }
+  }
+
+  // Lists of documents and messages.
+  .dash-list {
+    margin: 0 -8px;
+    padding: 0;
+    list-style: none;
+  }
+
+  .dash-list__row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 7px 8px;
+    border-radius: var(--style-radius-m);
+    color: inherit;
+    text-decoration: none;
+    transition: background-color 100ms ease-out;
+
+    &:hover,
+    &:focus-visible {
+      background: var(--theme-elevation-50);
+    }
+
+    &:focus-visible {
+      outline: var(--accessibility-outline);
+      outline-offset: -2px;
+    }
+  }
+
+  .dash-list__icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    color: var(--theme-elevation-500);
+  }
+
+  .dash-list__text {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    flex-direction: column;
+  }
+
+  .dash-list__title,
+  .dash-list__meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .dash-list__title {
+    font-size: 13px;
+    line-height: 20px;
+    font-weight: 500;
+    color: var(--theme-elevation-1000);
+  }
+
+  .dash-list__meta {
+    font-size: 12px;
+    line-height: 18px;
+    color: var(--theme-elevation-500);
+  }
+
+  .dash-badge {
+    flex-shrink: 0;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    line-height: 18px;
+    font-weight: 500;
+  }
+
+  // Payload flips these scales in dark mode, so the same steps work in both themes.
+  .dash-badge--draft {
+    background: var(--theme-warning-100);
+    color: var(--theme-warning-750);
+  }
+
+  .dash-badge--scheduled {
+    background: var(--theme-success-100);
+    color: var(--theme-success-750);
+  }
+
+  .dash-badge--neutral {
+    background: var(--theme-elevation-100);
+    color: var(--theme-elevation-800);
+  }
+
+  // Site checks.
+  .dash-checks__ok {
+    margin: 0 0 6px;
+    font-size: 13px;
+    color: var(--theme-elevation-800);
+  }
+
+  .dash-checks {
+    margin: 0 -8px;
+    padding: 0;
+    list-style: none;
+  }
+
+  .dash-checks__row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 8px;
+    border-radius: var(--style-radius-m);
+    color: var(--theme-elevation-1000);
+    font-size: 13px;
+    line-height: 20px;
+    text-decoration: none;
+    transition: background-color 100ms ease-out;
+
+    &:is(a):hover,
+    &:is(a):focus-visible {
+      background: var(--theme-elevation-50);
+    }
+
+    &:focus-visible {
+      outline: var(--accessibility-outline);
+      outline-offset: -2px;
+    }
+  }
+
+  .dash-checks__icon {
+    flex-shrink: 0;
+    color: var(--theme-warning-500);
+
+    .dash-checks__row--ok & {
+      color: var(--theme-success-500);
+    }
+  }
+
+  .dash-checks__label {
+    flex: 1;
+    min-width: 0;
+
+    .dash-checks__row--ok & {
+      color: var(--theme-elevation-500);
+    }
+  }
+
+  .dash-checks__count {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+
+    .dash-checks__row--ok & {
+      font-weight: 400;
+      color: var(--theme-elevation-500);
+    }
+  }
+
+  // Analytics.
+  .dash-stats {
+    display: flex;
+    gap: 32px;
+    margin: 4px 0 12px;
+
+    dt {
+      font-size: 12px;
+      color: var(--theme-elevation-500);
+    }
+
+    dd {
+      margin: 0;
+      font-size: 26px;
+      line-height: 32px;
+      font-weight: 600;
+      letter-spacing: -0.015em;
+      font-variant-numeric: tabular-nums;
+    }
+  }
+
+  .dash-top {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+
+    li {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 5px 0;
+      border-top: 1px solid var(--theme-border-color);
+      font-size: 13px;
+    }
+  }
+
+  .dash-top__path {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .dash-top__count {
+    color: var(--theme-elevation-500);
+    font-variant-numeric: tabular-nums;
+  }
+}

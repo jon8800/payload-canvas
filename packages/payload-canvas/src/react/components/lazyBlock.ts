@@ -9,7 +9,7 @@ import type { BlockComponentProps } from '../render/types'
  * ```tsx
  * 'use client'
  * import dynamic from 'next/dynamic'
- * export const FormBlock = lazyBlock(dynamic(() => import('./Form').then((m) => m.FormBlock)))
+ * export const FormBlock = lazyBlock(dynamic(() => import('@/components/blocks/Form').then((m) => m.FormBlock)))
  * ```
  *
  * On the site the block renders in the server's HTML and hydrates once its code loads. On the

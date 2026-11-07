@@ -4,8 +4,9 @@ import * as p from '@clack/prompts'
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { BUILDER_PACKAGE } from './config.js'
+import { BUILDER_PACKAGE, FEATURES } from './config.js'
 import { buildDatabaseUrl, checkDatabase, createDatabase, type DbState } from './database.js'
+import { applyFeatures } from './features.js'
 import { resolveOptions, type Options } from './options.js'
 import {
   builderPackageIsPublished,
@@ -65,10 +66,12 @@ async function main() {
     }
   }
 
-  // 1. Copy the starter. 2. Point payload-canvas at a local tarball or at npm. Write .env.
+  // 1. Copy the starter and remove the features the user left out. 2. Point payload-canvas at a
+  // local tarball or at npm. Write .env.
   // If this part fails, delete the half-made folder so the command can run again.
   const spinner = p.spinner()
   let tarball: string | null = null
+  let removed: string[] | null = null
   try {
     fs.mkdirSync(targetDir, { recursive: true })
     if (localRepo) {
@@ -83,7 +86,9 @@ async function main() {
         fs.rmSync(downloaded, { recursive: true, force: true })
       }
     }
+    removed = applyFeatures(targetDir, options.features)
     spinner.stop('Starter files ready.')
+    if (!removed) p.log.warn('This starter version has no feature list, so all features are kept.')
 
     spinner.start(packagesRoot ? `Packing ${BUILDER_PACKAGE.name}...` : 'Writing package.json and .env...')
     tarball = packagesRoot ? packBuilderPackage(packagesRoot, targetDir) : null
@@ -142,6 +147,7 @@ async function main() {
     `Project:   ${targetDir}`,
     options.skipDb ? 'Database:  not set up (--skip-db)' : `Database:  ${db.name} on ${db.host}:${db.port}`,
     `Demo data: ${seeded ? 'seeded' : 'not seeded'}`,
+    `Features:  ${FEATURES.filter((feature) => !removed?.includes(feature.id)).map((feature) => feature.label).join(', ') || 'none'}`,
     '',
     'Next steps:',
     ...[

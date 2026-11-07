@@ -69,10 +69,18 @@ import { ThemeFontField as ThemeFontField_d408ea8a7b9c9e7b6f237d6bc68a93d5 } fro
 import { ThemeSliderField as ThemeSliderField_d408ea8a7b9c9e7b6f237d6bc68a93d5 } from 'payload-canvas/theme-client'
 import { ThemeSaveSignal as ThemeSaveSignal_d408ea8a7b9c9e7b6f237d6bc68a93d5 } from 'payload-canvas/theme-client'
 import { AiKeyField as AiKeyField_1611a9327f20600aee6a9d537ba4315b } from 'payload-canvas/client'
+import { Nav as Nav_3cd2cf7bec23406b09c4440fd44d1976 } from '../../../admin/nav/Nav'
 import { AgentConnectPill as AgentConnectPill_60f30f580e97936338e112b8b2cc7161 } from 'payload-mcp-toolkit/client'
 import { ImportExportProvider as ImportExportProvider_cdf7e044479f899a31f804427d568b36 } from '@payloadcms/plugin-import-export/rsc'
 import { OAuthView as OAuthView_60f30f580e97936338e112b8b2cc7161 } from 'payload-mcp-toolkit/client'
 import { BuilderView as BuilderView_57c6923ff8049349bee2a220c5ac4c2a } from 'payload-canvas/rsc'
+import { QuickActions as QuickActions_55ca8aa1511a4cfef083b0f50992f37c } from '../../../admin/dashboard/widgets/QuickActions'
+import { RecentEdits as RecentEdits_29cad0a6550e1734454f58875c7207bd } from '../../../admin/dashboard/widgets/RecentEdits'
+import { Drafts as Drafts_29cad0a6550e1734454f58875c7207bd } from '../../../admin/dashboard/widgets/RecentEdits'
+import { FormMessages as FormMessages_a2e72e0cb2f3cc3c6dd631c2dafbdde7 } from '../../../admin/dashboard/widgets/FormMessages'
+import { SiteChecks as SiteChecks_1e7c5e3ba038e1b84cc38433d632fbc5 } from '../../../admin/dashboard/widgets/SiteChecks'
+import { Scheduled as Scheduled_fa8fba270e908023554cdf9339b7aa6d } from '../../../admin/dashboard/widgets/Scheduled'
+import { Analytics as Analytics_84f7c76db2483f5089a4484a901f3edf } from '../../../admin/dashboard/widgets/Analytics'
 import { CollectionCards as CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1 } from '@payloadcms/next/rsc'
 
 /** @type import('payload').ImportMap */
@@ -148,9 +156,17 @@ export const importMap = {
   "payload-canvas/theme-client#ThemeSliderField": ThemeSliderField_d408ea8a7b9c9e7b6f237d6bc68a93d5,
   "payload-canvas/theme-client#ThemeSaveSignal": ThemeSaveSignal_d408ea8a7b9c9e7b6f237d6bc68a93d5,
   "payload-canvas/client#AiKeyField": AiKeyField_1611a9327f20600aee6a9d537ba4315b,
+  "/admin/nav/Nav#Nav": Nav_3cd2cf7bec23406b09c4440fd44d1976,
   "payload-mcp-toolkit/client#AgentConnectPill": AgentConnectPill_60f30f580e97936338e112b8b2cc7161,
   "@payloadcms/plugin-import-export/rsc#ImportExportProvider": ImportExportProvider_cdf7e044479f899a31f804427d568b36,
   "payload-mcp-toolkit/client#OAuthView": OAuthView_60f30f580e97936338e112b8b2cc7161,
   "payload-canvas/rsc#BuilderView": BuilderView_57c6923ff8049349bee2a220c5ac4c2a,
+  "/admin/dashboard/widgets/QuickActions#QuickActions": QuickActions_55ca8aa1511a4cfef083b0f50992f37c,
+  "/admin/dashboard/widgets/RecentEdits#RecentEdits": RecentEdits_29cad0a6550e1734454f58875c7207bd,
+  "/admin/dashboard/widgets/RecentEdits#Drafts": Drafts_29cad0a6550e1734454f58875c7207bd,
+  "/admin/dashboard/widgets/FormMessages#FormMessages": FormMessages_a2e72e0cb2f3cc3c6dd631c2dafbdde7,
+  "/admin/dashboard/widgets/SiteChecks#SiteChecks": SiteChecks_1e7c5e3ba038e1b84cc38433d632fbc5,
+  "/admin/dashboard/widgets/Scheduled#Scheduled": Scheduled_fa8fba270e908023554cdf9339b7aa6d,
+  "/admin/dashboard/widgets/Analytics#Analytics": Analytics_84f7c76db2483f5089a4484a901f3edf,
   "@payloadcms/next/rsc#CollectionCards": CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1
 }

@@ -11,10 +11,12 @@ import { importExportPlugin } from '@payloadcms/plugin-import-export'
 import { mcpToolkitPlugin } from 'payload-mcp-toolkit'
 import { searchPlugin } from '@payloadcms/plugin-search'
 import { websiteBuilder, type WebsiteBuilderOptions } from 'payload-canvas'
+// @feature:ai
 import { fakeAdapter } from 'payload-canvas/ai/fake'
 import { openRouterAdapter } from 'payload-canvas/ai/openrouter'
 import { fakeImageAdapter } from 'payload-canvas/ai/images/fake'
 import { openRouterImageAdapter } from 'payload-canvas/ai/images/openrouter'
+// @end:ai
 import { builderMcpTools } from 'payload-canvas/mcp'
 import typography from '@tailwindcss/typography'
 import { createTransport } from 'nodemailer'
@@ -39,6 +41,9 @@ import { LEGACY_COLLECTION, legacyDemo, SHARED_BLOCKS_COLLECTION } from '@/legac
 import { legacyBlockConfigs } from '@/legacy-fixture/configs'
 import { i18nDemo } from '@/lib/locales'
 import { demoLocalization, withoutFieldLocalization } from '@/lib/localizationDemo'
+// @feature:dashboard
+import { dashboard } from '@/admin/dashboard'
+// @end:dashboard
 
 /** Collections with the page builder. Shared by the builder plugin and its MCP tools. */
 const builderCollections: WebsiteBuilderOptions['collections'] = {
@@ -122,6 +127,16 @@ export default buildConfig({
     },
     user: Users.slug,
     autoLogin: devAutoLogin,
+    // @feature:nav
+    // The sidebar: grouped collections and globals with icons (src/admin/nav).
+    components: {
+      Nav: '/admin/nav/Nav#Nav',
+    },
+    // @end:nav
+    // @feature:dashboard
+    // Dashboard widgets (src/admin/dashboard). Each user can rearrange them with "Edit dashboard".
+    dashboard,
+    // @end:dashboard
     livePreview: {
       breakpoints: [
         { label: 'Mobile', name: 'mobile', width: 375, height: 667 },
@@ -283,6 +298,7 @@ export default buildConfig({
       templates: { hooks: { afterChange: [revalidateTemplate] } },
       // Opening a saved page or post goes straight to the visual builder. "All fields" in the builder's menu opens the form.
       editor: { openInBuilder: true },
+      // @feature:ai
       // AI assistant in the editor. BUILDER_AI_FAKE=1 (dev only) plays a scripted model. Else OpenRouter:
       // the key comes from OPENROUTER_API_KEY, or an admin pastes one in the "AI settings" global
       // (that key wins). Without either, the panel shows the setup card with a link to the settings.
@@ -309,6 +325,7 @@ export default buildConfig({
                 siteUrl: process.env.NEXT_PUBLIC_SERVER_URL,
               }),
       },
+      // @end:ai
       css: {
         entry: 'src/app/(frontend)/globals.css',
         plugins: { '@tailwindcss/typography': typography },

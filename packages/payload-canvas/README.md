@@ -33,6 +33,8 @@ One package holds everything: the Payload plugin and admin editor (`payload-canv
 npx create-payload-canvas my-website
 ```
 
+The starter also has a calmer Payload admin: a sidebar in groups with icons, a neutral look in light and dark mode, and a dashboard with quick actions, recent edits, drafts, form messages, site checks, scheduled publishes and optional Plausible or Umami numbers. Each part is plain code in `src/admin/` of the starter. The CLI asks which parts to keep (see [Features](../create-payload-canvas/README.md#features)).
+
 ## Contents
 
 1. [Requirements](#requirements)
