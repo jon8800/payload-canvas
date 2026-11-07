@@ -14,7 +14,7 @@ pnpm create payload-canvas my-website
 npx create-payload-canvas my-website
 ```
 
-The CLI asks for the project name, your Postgres details, and whether to seed demo content. It asks nothing when you pass `--yes`, or when the input is not a terminal (CI, agents). Every question has a flag.
+The CLI asks for the project name, your Postgres details, which starter features to keep, and whether to seed demo content. It asks nothing when you pass `--yes`, or when the input is not a terminal (CI, agents). Every question has a flag.
 
 ## What it does
 
@@ -22,15 +22,30 @@ The CLI asks for the project name, your Postgres details, and whether to seed de
 2. Copies the starter app (`apps/starter`) and the AI guides it links to (`docs/ai`).
    - Inside a checkout of the repo, it copies from the checkout.
    - Anywhere else, it downloads the repo from GitHub (`jon8800/payload-canvas`).
-3. Leaves out repo-only files: `node_modules`, `.next`, `.turbo`, `.env`, `next-env.d.ts`, Docker files (they expect the monorepo), `scripts/setup.ts`, `scripts/lib`, `scripts/_*`, `docs/qa`, screenshots, and uploaded files in `public/media`.
-4. Sets the package name, removes the repo-only scripts and the dev dependencies they needed, and points `payload-canvas` at a source (see below).
-5. Writes `.env` from `.env.example` with your `DATABASE_URL` and a new random `PAYLOAD_SECRET`.
-6. Creates the database.
-7. Installs dependencies with pnpm (npm if pnpm is missing).
-8. Runs `seed:demo` if you chose to seed. On a fresh database the seed creates the tables.
-9. Prints a summary with the exact next commands.
+3. Leaves out repo-only files: `node_modules`, `.next`, `.turbo`, `.env`, `next-env.d.ts`, Docker files (they expect the monorepo), `scripts/setup.ts` and its helpers `scripts/lib/create-database.ts` and `scripts/lib/generate-env.ts`, `scripts/_*`, `docs/qa`, screenshots, and uploaded files in `public/media`.
+4. Removes the starter features you left out (see [Features](#features)).
+5. Sets the package name, removes the repo-only scripts and the dev dependencies they needed, and points `payload-canvas` at a source (see below).
+6. Writes `.env` from `.env.example` with your `DATABASE_URL` and a new random `PAYLOAD_SECRET`.
+7. Creates the database.
+8. Installs dependencies with pnpm (npm if pnpm is missing).
+9. Runs `seed:demo` if you chose to seed. On a fresh database the seed creates the tables. Without the demo seed, it runs `seed:classes`, which adds the editable classes that the ready-made sections use.
+10. Prints a summary with the exact next commands.
 
 It never runs `payload migrate`. Local development uses `push: true`, so the schema syncs when you run `pnpm dev`.
+
+## Features
+
+The starter has a few parts you can leave out. All of them are kept by default. Without `--yes`, the CLI shows a list with all of them checked. Uncheck the ones you do not want. A `--no-<feature>` flag leaves a feature out without asking.
+
+| Feature | Flag | What you lose |
+|---|---|---|
+| Admin look | `--no-look` | Neutral colors and finer details in the admin (`src/admin/look`). |
+| Sidebar navigation | `--no-nav` | The grouped sidebar with icons (`src/admin/nav`). The admin uses Payload's default sidebar. |
+| Dashboard widgets | `--no-dashboard` | Quick actions, recent edits, drafts, form messages, site checks, scheduled publishes and analytics (`src/admin/dashboard`). The admin shows Payload's collection cards. |
+| Demo content | `--no-demo` | The demo pages, posts and images seed (`scripts/seed-demo.ts` and the `seed:demo` script). This also turns off seeding. |
+| AI assistant | `--no-ai` | The chat panel in the page builder, and its settings in `.env`. |
+
+The CLI deletes the feature's files and removes its lines from `src/payload.config.ts`, `src/app/(payload)/custom.scss`, `.env.example` and the admin import map. The project type-checks with any mix of features.
 
 ## Flags
 
@@ -48,6 +63,7 @@ It never runs `payload migrate`. Local development uses `push: true`, so the sch
 | `--skip-db` | Do not connect to Postgres. Writes `.env` only. This also skips seeding. |
 | `--seed` / `--no-seed` | Seed demo content, or not. |
 | `--no-install` | Do not install. This also skips seeding. |
+| `--no-look`, `--no-nav`, `--no-dashboard`, `--no-demo`, `--no-ai` | Leave out a starter feature. See [Features](#features). `--no-demo` also turns off seeding. |
 | `--github` | Download the starter from GitHub, even when the CLI runs inside a checkout. |
 | `--ref <name>` | Branch or tag to download. Default `main`. |
 | `--packages <path>` | Path to a checkout of the repo. The CLI packs the `payload-canvas` package from there. |
@@ -73,6 +89,9 @@ npx create-payload-canvas my-website --yes --db-url postgresql://postgres:postgr
 
 # Only the files, no install, no database
 npx create-payload-canvas my-website --yes --no-install --skip-db
+
+# Without the AI assistant and the demo content
+npx create-payload-canvas my-website --yes --no-ai --no-demo
 
 # From GitHub, with the package from a local checkout (before it is published)
 npx create-payload-canvas my-website --yes --github --packages C:\code\payload-canvas
@@ -111,5 +130,7 @@ If the copy or pack step fails, the CLI deletes the half-made folder. If the ins
 ## Maintainers
 
 - The GitHub owner is `GITHUB_OWNER` in `src/config.ts`. The list of files the CLI leaves out is `SKIP_NAMES` and `SKIP_PATHS` in the same file.
+- The starter's `starter-features.json` lists each feature's files and scripts. In code, a line with `@feature:<id>` starts a part that belongs to a feature, and a line with `@end:<id>` ends it. The prompt and the flags come from `FEATURES` in `src/config.ts`. Add a new feature in both places.
+- `pnpm check:features` copies the starter for every mix of features, applies it, and runs the starter's TypeScript check. Run it after you change a feature. `pnpm test` runs the unit tests.
 - After copying, the CLI checks the new project for leftovers (`workspace:` links, paths into `packages/`, `baseUrl`, Docker files) and prints a warning for each one it finds.
 - Build with `pnpm build`. Run from the repo with `node dist/index.js`. `pnpm pack` builds first (`prepack`).
