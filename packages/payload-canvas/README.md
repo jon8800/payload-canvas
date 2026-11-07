@@ -1569,7 +1569,7 @@ The library shows each section as a real picture: the hidden canvas page (`?mode
 
 Editors save their own sections: select a block (a whole section, or any block with its children), open **…** on the canvas or in the inspector, and choose **Save as section…**. Give it a name and, if you like, a category. It appears in **Add › Sections** under **Saved**, for everyone who edits pages. Insert it like any section; every insert gets new block ids. The card's **…** menu edits, renames or deletes it. A deleted section stays on the pages that use it.
 
-**Edit section** (in the card's **…** menu) opens the section in the full-screen builder, like a page, at `/admin/builder/builder-sections/<id>`. The top bar shows "Section: <name>" and its category; click either to change it. **Back** returns to the page you came from. Sections have no drafts: each change saves to the section at once, and the library pictures follow on their own. Pages that already inserted the section keep their own copy. A change applies only to later inserts; the top bar says so ("Pages keep their copy"). The section's **Builder** tab in the admin opens the same view.
+**Edit section** (in the card's **…** menu) opens the section in the full-screen builder, like a page, at `/admin/builder/builder-sections/<id>`. The top bar shows "Section: <name>" and its category; click either to change it. **Back** returns to the page you came from. Sections have no drafts: each change saves to the section at once, and the library pictures follow on their own. Pages that already inserted the section as plain blocks keep their own copy: a change applies only to later inserts. Copies of a component (see [Components](#components-sections-with-properties)) follow every change. The section's **Builder** tab in the admin opens the same view.
 
 The collection stores the blocks in its `blocks` field. The builder edits a virtual `layout` field (no database column) that reads from `blocks`, and a save hook writes the layout back to `blocks`. While the section is open in the builder, the live session owns its blocks: a REST save of `blocks` gets the session's blocks, as on pages. Otherwise a REST or MCP save of `blocks` works as before.
 
@@ -1583,10 +1583,29 @@ An inserted section is a copy: later edits of the saved section do not reach the
 
 - The plugin adds the block when saved sections are on (the default), pointed at their collection (`savedSections.slug`). Your own block list does not need it, and `defaultComponents` has its component. `loadLayoutData` reads the collection from the Payload config.
 - Prop: `section`, a relationship to the saved sections collection. It has no classes and no slots. On the site it renders the section's blocks with no element of its own.
-- `loadLayoutData` loads the sections first, so their lists, images, bindings and translations load like the page's own. The canvas does the same. Copies of the section's blocks get ids prefixed with the ref's id (`<ref id>_<block id>`). One level only: a `sectionRef` inside a saved section renders nothing, so a section never includes itself.
+- `loadLayoutData` loads the sections first, so their lists, images, bindings and translations load like the page's own. The canvas does the same. Copies of the section's blocks get ids prefixed with the ref's id (`<ref id>_<block id>`). A `sectionRef` inside a saved section loads too, up to 5 levels. A section never includes itself: saving one that would is refused, and such a ref renders nothing.
 - CSS: the save hook compiles only the page's own classes. Output the page CSS with `compilePageCss(payload, [{ layout: loaded }])` (from `payload-canvas/react/server`), with the layout `loadLayoutData` returned, so the section's classes are in it.
-- On the canvas the section's blocks show but cannot be edited there: a click selects the `sectionRef`. **Detach section** in its **…** menu replaces it with a copy of the blocks (new ids), as one undo step.
+- On the canvas the section's blocks show but cannot be edited there: a click selects the `sectionRef`. **Detach section** in its **…** menu replaces it with a copy of the blocks (new ids), as one undo step. A component's copy keeps its own values in the blocks.
+- A deleted section shows "Component not found" on the canvas and nothing on the site.
 - References: the saved section lists the pages that show it (**Used in**), and it cannot be deleted while a page uses it, as with media. With saved sections on, the references field also points at the saved sections collection: run `pnpm payload migrate:create` for production.
+
+#### Components (sections with properties)
+
+A component is a saved section with **properties**: the parts each copy may change, like a title, a text, an image, a link or whether a button shows. The design stays in one place: change the component, and every copy follows. This works like Webflow's components.
+
+**Make one.** Save a section, then open it with **Edit section**. Select a block and open its **Content** tab. Next to a text, rich text, image or link field, click the ◆ button (**Make it a property**) and give the property a name. The field now shows a **Property** chip; its own value is the default every copy starts with. The **Visible** row under the fields makes a property that shows or hides the block. Use the same name on two fields to fill both with one value. The **×** on the chip makes it a normal field again. A banner on top of the inspector says how many places use the component.
+
+**Use one.** Components are in **Add › Sections** under **Saved**, with a ◆ mark and "Component". A click or a drag adds a copy that stays in sync (a `sectionRef` block). Select it to see the component's properties as normal fields; an empty field shows the component's own content. **Edit component** opens the component; **Back** returns to the page. The card's **…** menu adds the component as plain blocks instead. A saved section without properties still goes in as plain blocks; its **…** menu adds a copy that stays in sync.
+
+**Detach.** **Detach section** in the copy's **…** menu turns it into plain blocks with the copy's values in them.
+
+How it is stored:
+
+- A property is a binding inside the saved section that reads `$component.<name>`, for example `bindings: { text: '$component.title' }` on a heading. The bindings are the only record of the properties: no extra field, no migration. The type comes from the bound field (`text`, `richText`, `image` for an upload, `link` for a link group), the default is the prop's own value. A visible property uses the binding key `$visible`: `bindings: { $visible: '$component.showButton' }`.
+- A copy stores its values in `props.values` of the `sectionRef` block, by property name. Images are stored as `{ relationTo, value }`, so the page's references and **Used in** count them.
+- `attachSections` (used by `loadLayoutData` and the canvas) puts the values into the section's blocks before the rest of the data loading, so it works on the site, on the canvas and in server-rendered blocks. A template string may mix both: `{{$component.title}} for {{title}}`.
+- `core`: `componentProperties(blocks, definitions)`, `applyComponentValues(blocks, values, definitions)`, `checkComponentValues(properties, values)`.
+- MCP and the assistant: `listSections` shows `component: true` and the `properties` (name, type, default). `insertSection` takes `values` and inserts a copy that stays in sync; `linked: false` inserts plain blocks with the values in them.
 
 ## Styling
 

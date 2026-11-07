@@ -27,6 +27,8 @@ import { Select } from './ui/Select'
 import { usePayloadControlNames } from './ui/payloadA11y'
 import { useOptionalValue, useValue, useValueSelector } from './valueStore'
 import { RegionPane } from './regions/RegionPane'
+import { SECTION_REF_BLOCK } from '../../blocks/builtins/sectionRef'
+import { ComponentBanner, ComponentValuesPanel } from './sections/ComponentFields'
 
 type TabsProps<T extends string> = {
   value: T
@@ -81,6 +83,7 @@ export function Inspector() {
         </div>
       )}
       <div className="builder-editor__inspector-body" hidden={tab !== 'block'}>
+        <ComponentBanner />
         <BlockPane />
       </div>
       {runtime.assistant && <AssistantPanel hidden={tab !== 'assistant'} />}
@@ -224,6 +227,7 @@ function BlockPane() {
         }
       />
       {tab === 'content' && <BlockContentFields block={block} />}
+      {tab === 'content' && block.type === SECTION_REF_BLOCK && <ComponentValuesPanel block={block} />}
       {tab === 'styles' && storesBuilderData(runtime) && <StyleFields block={block} />}
       {tab === 'motion' && storesBuilderData(runtime) && <MotionPanel blockId={block.id} blockType={block.type} motion={block.motion} />}
       {tab === 'advanced' && storesBuilderData(runtime) && <AdvancedFields block={block} />}

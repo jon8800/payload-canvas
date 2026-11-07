@@ -16,7 +16,7 @@ import { IMAGE_ASPECT_RATIOS } from './images/shared'
 import { IMAGES_NOT_CONFIGURED, type GenerateImageOutcome } from './images/service'
 import { validateLayout, type LayoutError } from '../core/validate'
 import { resolveOperations, splitLayoutErrors } from '../live/apply'
-import { isRootParentId, missingContent, sectionInsertOps, variantsListing } from '../mcp/shared'
+import { componentListing, isRootParentId, missingContent, sectionInsertOps, sectionToInsert, variantsListing } from '../mcp/shared'
 import { findSectionVersion } from '../core/sections'
 
 /** One image (or file) of the media library, as the assistant sees it. */
@@ -344,6 +344,28 @@ export function toolDefinitions(env: ToolEnv): AiToolDefinition[] {
             parentId: { type: ['string', 'null'], description: 'Parent block id, or null for the page root.' },
             slot: { type: ['string', 'null'], description: 'Slot of the parent, or null for "children".' },
             index: { type: ['integer', 'null'], description: 'Final index in the target list, or null to append.' },
+            ...(saved
+              ? {
+                  values: {
+                    type: ['array', 'null'],
+                    description:
+                      'Components only (component: true in listSections): values for this copy. Text and rich text as text, an image as its upload id, a link as a URL, visible as true or false. Left out: the default.',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        name: { type: 'string', description: 'Property name from listSections.' },
+                        value: { type: ['string', 'number', 'boolean', 'null'] },
+                      },
+                      required: ['name', 'value'],
+                      additionalProperties: false,
+                    },
+                  },
+                  linked: {
+                    type: ['boolean', 'null'],
+                    description: 'Saved sections only. true: a copy that stays in sync (default for components). false: plain blocks. null: the default.',
+                  },
+                }
+              : {}),
           },
           required: ['sectionId'],
           additionalProperties: false,
@@ -724,6 +746,7 @@ export async function runTool(name: string, rawInput: unknown, workspace: Worksp
           ...(s.category ? { category: s.category } : {}),
           ...(input.full === true ? { blocks: s.blocks } : {}),
           ...variantsListing(s, input.full === true),
+          ...componentListing(s, env.blocks),
         })),
         `Looked at ${list.length} section${list.length === 1 ? '' : 's'}`,
       )
@@ -731,12 +754,19 @@ export async function runTool(name: string, rawInput: unknown, workspace: Worksp
 
     case 'insertSection': {
       const variant = typeof input.variant === 'string' ? input.variant : undefined
-      const section = typeof input.sectionId === 'string' ? findSectionVersion(env.sections, input.sectionId, variant) : undefined
-      if (typeof section === 'string') return fail(section, 'Section not inserted')
-      if (!section) {
+      const found = typeof input.sectionId === 'string' ? findSectionVersion(env.sections, input.sectionId, variant) : undefined
+      if (typeof found === 'string') return fail(found, 'Section not inserted')
+      if (!found) {
         const known = env.sections.map((s) => (s.savedId !== undefined ? `${s.id} (${s.label})` : s.id))
         return fail(`Unknown section "${String(input.sectionId)}"`, 'Section not inserted', { known })
       }
+      const values = Array.isArray(input.values)
+        ? Object.fromEntries(
+            input.values.flatMap((entry) => (isPlainObject(entry) && typeof entry.name === 'string' ? [[entry.name, entry.value]] : [])),
+          )
+        : undefined
+      const section = sectionToInsert(found, env.blocks, { values, linked: typeof input.linked === 'boolean' ? input.linked : null })
+      if (typeof section === 'string') return fail(section, 'Section not inserted')
       const parentId = optionalString(input, 'parentId')
       const slot = optionalString(input, 'slot')
       if (parentId instanceof Error || slot instanceof Error) return fail('parentId and slot must be strings', 'Section not inserted')

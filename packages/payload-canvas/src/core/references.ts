@@ -54,6 +54,28 @@ function visitLexical(node: unknown, add: Add): void {
   if (Array.isArray(node.children)) for (const child of node.children) visitLexical(child, add)
 }
 
+/**
+ * JSON props (a component copy's values): `{ relationTo, value }` pairs (images, a link's
+ * document) and rich text, at any depth up to 8.
+ */
+function visitJson(value: unknown, add: Add, depth: number): void {
+  if (depth > 8) return
+  if (Array.isArray(value)) {
+    for (const item of value) visitJson(item, add, depth + 1)
+    return
+  }
+  if (!isPlainObject(value)) return
+  if (typeof value.relationTo === 'string' && 'value' in value) {
+    add(value.relationTo, value.value)
+    return
+  }
+  if (isPlainObject(value.root)) {
+    visitLexical(value.root, add)
+    return
+  }
+  for (const child of Object.values(value)) visitJson(child, add, depth + 1)
+}
+
 /** The link type the renderer uses: a group without `type` is a URL link unless only a document is set. */
 function linkType(value: Record<string, unknown>): string {
   if (value.type === 'url' || value.type === 'reference') return value.type
@@ -84,6 +106,9 @@ function visitFields(fields: readonly unknown[] | undefined, props: Record<strin
       }
       case 'array':
         if (Array.isArray(value)) for (const row of value) if (isPlainObject(row)) visitFields(field.fields, row, add)
+        break
+      case 'json':
+        visitJson(value, add, 0)
         break
       case 'blocks': {
         if (!Array.isArray(value)) break

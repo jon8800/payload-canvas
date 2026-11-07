@@ -71,6 +71,7 @@ import {
   type SavedSectionsServerConfig,
 } from './sections'
 import { syncSectionBlocks } from './sectionsBuilder'
+import { withSectionUsedIn } from './sectionsUsedIn'
 import { toJsonSafe } from './jsonSafe'
 import { collectionLabel } from './labels'
 import { prepareBlocks } from './listCollections'
@@ -416,7 +417,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       }
       collections = [
         ...collections,
-        savedSectionsCollection({ slug: savedSections.slug, blocks, options: options.savedSections || undefined }),
+        withSectionUsedIn(savedSectionsCollection({ slug: savedSections.slug, blocks, options: options.savedSections || undefined })),
       ]
       // The full-screen builder edits saved sections like pages (no drafts: changes save at once).
       builderOptions[savedSections.slug] = { field: SECTION_LAYOUT_FIELD }

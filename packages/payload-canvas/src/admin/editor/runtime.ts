@@ -208,6 +208,7 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
     ...(config.regions?.length ? { regions: config.regions } : {}),
     ...(config.relations && Object.keys(config.relations).length > 0 ? { relations: config.relations } : {}),
     ...(config.classes ? { classesEndpoint: config.classes.endpoint } : {}),
+    ...(config.savedSections ? { savedSections: config.savedSections.collection } : {}),
   }
   const runtime: Runtime = {
     config,

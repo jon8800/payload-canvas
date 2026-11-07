@@ -8,6 +8,7 @@ Everything since 0.2.0. The 0.2.1, 0.2.2 and 0.3.0 version numbers were set in g
 
 ### Added
 
+- **Components with properties**, like Webflow's components. In a saved section, the ◆ button next to a text, rich text, image or link field makes it a property; the **Visible** row makes one that shows or hides a block. Components show in the library under **Saved** with a ◆ mark and go in as copies that stay in sync (`sectionRef`). Each copy sets its own values in the inspector; empty ones show the component's content. **Edit component** opens the component, and the inspector says how many places use it. **Detach section** keeps the copy's values. Properties are `$component.<name>` bindings in the section, so no schema change; copies store `props.values`. Components inside components work up to 5 levels; a component that would contain itself is refused. MCP and the assistant: `listSections` lists properties, `insertSection` takes `values` and `linked`. Core: `componentProperties`, `applyComponentValues`, `checkComponentValues`. `GET {api}/builder-sections/:id/used-in` counts the places that use a saved section.
 - **Editable classes**, like Webflow's class system. Editable classes are stored in the `builder-classes` collection (drafts, versions, autosave; `classes: false` turns it off). Pick a class chip in the Styles panel and every control edits the class instead of the block, so one change restyles every block that uses it; a banner shows how many blocks and pages that is. Each class has Tailwind `styles` (with breakpoints and states) and optional custom CSS. Import the site's code `@utility` classes in one click, or make a class from a block's current styles. Rename and delete update or protect every layout that uses the class. Published classes compile into one hashed stylesheet served with immutable caching (`<ClassesStyle>` from `payload-canvas/react/server`). MCP tools `listClasses`, `getClass`, `upsertClass` and `deleteClass`.
 - **Built-in blocks**, opt-in: `builtinBlocks({ include, icons })` in `payload-canvas/blocks` and `builtinComponents({ icons, labels })` in `payload-canvas/react`. Each has its own icon, category and AI description. The interactive ones load their JavaScript only on pages that render them.
   - **Icon** (`icon`): one icon of the site's icon set, by name. Decorative unless it has a label. It may go inside a link.
@@ -71,6 +72,7 @@ Everything since 0.2.0. The 0.2.1, 0.2.2 and 0.3.0 version numbers were set in g
 
 ### Fixed
 
+- The canvas now shows live saved sections (`sectionRef`) when the app's own block list has no `sectionRef` definition: the editor tells the canvas the saved sections collection.
 - The Sections tab gives each thumbnail a fixed 2:1 box, so the cards no longer jump while pictures load, and variant cards keep their height.
 - A carousel with one hand-made slide no longer splits it into several slides.
 - A collection list's pager no longer becomes a grid cell.
