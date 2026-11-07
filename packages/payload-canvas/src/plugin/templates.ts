@@ -268,8 +268,10 @@ export function templatesCollection(args: {
   /** Labels of the target collections, for the "Collection" select. Default: the slugs. */
   targetLabels?: Record<string, string>
   hooks?: CollectionConfig['hooks']
+  /** Merged into the collection's `admin` options (e.g. `group`, `hidden`). */
+  admin?: CollectionConfig['admin']
 }): CollectionConfig {
-  const { slug, targets, hooks, targetLabels } = args
+  const { slug, targets, hooks, targetLabels, admin } = args
   return {
     slug,
     labels: { singular: 'Template', plural: 'Templates' },
@@ -277,6 +279,7 @@ export function templatesCollection(args: {
       useAsTitle: 'name',
       defaultColumns: ['name', TEMPLATE_TARGET_FIELD, TEMPLATE_DEFAULT_FIELD, '_status', 'updatedAt'],
       description: 'Layouts for collection documents. Each document renders through its own template, the first template whose conditions match it, or the default one.',
+      ...admin,
     },
     versions: { maxPerDoc: 20, drafts: { autosave: { interval: 300 } } },
     hooks: {

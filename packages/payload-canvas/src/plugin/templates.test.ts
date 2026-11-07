@@ -129,6 +129,66 @@ describe('websiteBuilder with templates', () => {
   })
 })
 
+/** The builder config of the pages layout field. */
+const builderOf = (config: Config) => {
+  const f = config.collections!.find((c) => c.slug === 'pages')!.fields.find((x) => 'name' in x && x.name === 'layout') as {
+    admin: { custom: { builder: BuilderClientConfig } }
+  }
+  return f.admin.custom.builder
+}
+/** A field of the collection list block in that config. */
+const listField = (config: Config, name: string) =>
+  builderOf(config).blocks.find((b) => b.type === 'collectionList')!.fields.find((f) => 'name' in f && f.name === name) as {
+    options?: string[]
+    relationTo?: string | string[]
+  }
+
+describe('websiteBuilder listCollections', () => {
+  const testimonials: CollectionConfig = { slug: 'testimonials', fields: [{ name: 'quote', type: 'text' }] }
+  const base: Config = { collections: [media, users, categories, posts, pages, testimonials] } as Config
+  const run = (extra: Partial<Parameters<typeof websiteBuilder>[0]> = {}) =>
+    websiteBuilder({
+      collections: {
+        posts: { templates: true, url: (doc) => `/blog/${String(doc.slug)}` },
+        pages: {},
+      },
+      css: { entry: 'globals.css' },
+      ...extra,
+    })(base) as Config
+
+  it('adds data collections after the collections with a url', () => {
+    const config = run({ listCollections: ['testimonials', 'posts'] })
+    assert.deepEqual(listField(config, 'collection').options, ['posts', 'testimonials'])
+    assert.deepEqual(listField(config, 'ids').relationTo, ['posts', 'testimonials'])
+  })
+  it('gives the added collections binding fields, without $url', () => {
+    const sources = builderOf(run({ listCollections: ['testimonials'] })).templates!.sources
+    assert.ok(sources.testimonials?.some((f) => f.path === 'quote'))
+    assert.ok(!sources.testimonials?.some((f) => f.path === '$url'))
+  })
+  it('keeps the collections with a url when it is left out', () => {
+    assert.deepEqual(listField(run(), 'collection').options, ['posts'])
+  })
+  it('refuses a slug that is not a collection', () => {
+    assert.throws(() => run({ listCollections: ['team'] }), /`listCollections` names "team"/)
+  })
+})
+
+describe('templates admin option', () => {
+  const base: Config = { collections: [media, users, categories, posts, pages] } as Config
+  it('is merged into the templates collection admin', () => {
+    const config = websiteBuilder({
+      collections: { posts: { templates: true } },
+      css: { entry: 'globals.css' },
+      templates: { admin: { group: 'Design', hidden: true } },
+    })(base) as Config
+    const admin = config.collections!.find((c) => c.slug === 'builder-templates')!.admin!
+    assert.equal(admin.group, 'Design')
+    assert.equal(admin.hidden, true)
+    assert.equal(admin.useAsTitle, 'name')
+  })
+})
+
 describe('template conditions field', () => {
   it('is a JSON field on the templates collection', () => {
     const field = templatesCollection({ slug: 'builder-templates', targets: ['posts'] }).fields.find((f) => 'name' in f && f.name === 'conditions')

@@ -42,6 +42,7 @@ npx create-payload-canvas my-website
 5. [Plugin options](#plugin-options)
 6. [Rendering the layout on your site](#rendering-the-layout-on-your-site)
    - [Custom components](#custom-components)
+   - [Cache Components](#cache-components)
 7. [Server components in the canvas](#server-components-in-the-canvas)
    - [Whole-page editing: regions outside the layout](#whole-page-editing-regions-outside-the-layout)
 8. [Custom blocks](#custom-blocks)
@@ -239,8 +240,7 @@ import type { ReactNode } from 'react'
 // Your site's CSS: it holds every class Tailwind found in your files.
 import '../(frontend)/globals.css'
 
-export default async function CanvasLayout({ children }: { children: ReactNode }) {
-  const payload = await getPayload({ config })
+export default function CanvasLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       {/* The same body classes as your site layout. */}
@@ -248,7 +248,7 @@ export default async function CanvasLayout({ children }: { children: ReactNode }
         {/* The Theme global's variables and fonts (React moves them into the head). `live` reloads
             them after a theme save. Not in a <head> element: `live` adds a client component, and
             Next's metadata then fails to hydrate on some loads. */}
-        <ThemeStyle payload={payload} live />
+        <ThemeStyle payload={getPayload({ config })} live />
         {children}
       </body>
     </html>
@@ -326,12 +326,12 @@ import type { ReactNode } from 'react'
 
 import './globals.css'
 
-export default async function RootLayout({ children }: { children: ReactNode }) {
-  const payload = await getPayload({ config })
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
-        <ThemeStyle payload={payload} />
+        {/* The promise, not the instance: the read stays inside ThemeStyle's <Suspense> (Cache Components). */}
+        <ThemeStyle payload={getPayload({ config })} />
       </head>
       <body className="font-sans antialiased">{children}</body>
     </html>
@@ -537,6 +537,7 @@ websiteBuilder({
     posts: { templates: true, url: (doc) => `/blog/${doc.slug}` },
   },
   blocks,                      // default: defaultBlocks()
+  listCollections: ['testimonials', 'team'], // more collections for the collection list block
   sections,                    // ready-made sections for the library and AI tools
   savedSections: { slug: 'builder-sections' }, // sections people save; `false` turns it off
   css: {
@@ -544,7 +545,7 @@ websiteBuilder({
     plugins: { '@tailwindcss/typography': typography },
   },
   canvasPath: '/builder-canvas',
-  templates: { slug: 'builder-templates' },
+  templates: { slug: 'builder-templates', admin: { group: 'Design' } },
   live: { heartbeatMs: 15000 },
   ai: { adapter: openRouterAdapter({ apiKey: process.env.OPENROUTER_API_KEY }) }, // the AI assistant
   theme: { admin: { group: 'Settings' } }, // the Theme global; `false` leaves it out
@@ -563,6 +564,7 @@ websiteBuilder({
 | `collections[slug].regions` | `{ name, label?, fields }[]` | Fixed parts of the page that show ordinary document fields outside the layout (a header made of the title and an image). The builder shows and edits the whole page. Left out: the layout alone. See [Whole-page editing](#whole-page-editing-regions-outside-the-layout). |
 | `collections[slug].localization` | `'props' \| false` | With Payload `localization` on: `'props'` (the default) translates localized props in one shared layout; `false` keeps one set of values. See [Localization](#localization). |
 | `blocks` | `BlockDefinition[]` | The blocks editors can use. Default `defaultBlocks()`. |
+| `listCollections` | `string[]` | More collections the collection list block can show, after the collections with a `url`. Use it for data collections without pages of their own, such as testimonials or team members. Their items have no `$url`. Each slug must be a collection of the config. Pass the same list to `builderMcpTools`. |
 | `sections` | `SectionDefinition[]` | Ready-made sections. See [Sections](#sections). |
 | `savedSections` | `{ slug?, access?, admin?, hooks? } \| false` | The collection for sections people save in the editor. Default slug `builder-sections`; default access: every signed-in user. `false` turns it off. See [Saved sections](#saved-sections). |
 | `css.entry` | `string` | Your Tailwind entry CSS, absolute or relative to `process.cwd()`. Required. |
@@ -570,6 +572,7 @@ websiteBuilder({
 | `canvasPath` | `string` | The canvas route. Default `/builder-canvas`. |
 | `templates.slug` | `string` | Slug of the templates collection. Default `builder-templates`. |
 | `templates.hooks` | `CollectionConfig['hooks']` | Hooks for the templates collection, for example to revalidate pages. |
+| `templates.admin` | `CollectionConfig['admin']` | Merged into the templates collection's `admin` options, for example `group` or `hidden`. |
 | `live.heartbeatMs` | `number` | Interval of the keep-alive message on the live event stream. Default 10 s. |
 | `multiplayer` | `boolean` | Deprecated, no effect. Several people can always edit a layout at once, and Payload's document lock stays on for the other fields. See [Multiplayer editing](#multiplayer-editing). |
 | `ai` | `AiOptions` | Turns on the AI assistant in the editor. See [AI assistant](#ai-assistant). |
@@ -696,6 +699,33 @@ export const components: BlockComponents = { pricingTable: PricingTable }
 ```
 
 `BuilderCanvas` takes the same `blocks`, `components` and `resolveLink` as `RenderLayout`. It also takes `plugins` (your Tailwind plugins map, see [Styling](#styling)) and `server` (a server action made with `createCanvasServer`, see [Server components in the canvas](#server-components-in-the-canvas)).
+
+### Cache Components
+
+With Next's Cache Components (`cacheComponents: true` in `next.config`), a route fails to build when a component reads data outside `<Suspense>` and outside `'use cache'`. The plugin's server parts work with it:
+
+- **`ThemeStyle`** reads the Theme global inside its own `<Suspense>` boundary (fallback: nothing). It works as it is, in the `<head>` too, and the theme streams in with the dynamic part of the page. Pass `payload={getPayload({ config })}` (the promise), not an instance you awaited in the layout: a layout that awaits `getPayload` connects to the database outside any boundary, and the route fails. To put it in the static shell, render it inside your own cached component. The plugin clears the theme's cache tag (`theme.cacheTag`, default the slug `theme-settings`) after each theme save:
+
+  ```tsx
+  // src/components/SiteTheme.tsx
+  import config from '@payload-config'
+  import { cacheTag } from 'next/cache'
+  import { getPayload } from 'payload'
+  import { DEFAULT_THEME_SLUG } from 'payload-canvas'
+  import { ThemeStyle } from 'payload-canvas/react/server'
+
+  export async function SiteTheme() {
+    'use cache'
+    cacheTag(DEFAULT_THEME_SLUG)
+    const payload = await getPayload({ config })
+    return <ThemeStyle payload={payload} />
+  }
+  ```
+
+  Put `<SiteTheme />` in the root layout's `<head>`. In the canvas layout, keep `<ThemeStyle payload={getPayload({ config })} live />` uncached, so the editor sees each save at once.
+- **`loadLayoutData`, `loadTemplate` and `compilePageCss`** are functions that read Payload. Call them inside your own `'use cache'` function (with `cacheTag` and a revalidate hook on the collection) or in a component under `<Suspense>`. Draft mode and `searchParams` (collection list filters and pages) are request data: read them under `<Suspense>`, not in a cached function.
+- **The canvas route** only renders `BuilderCanvas` (a client component). Its server action runs per request, so it needs nothing.
+- **The admin.** Payload's admin layout reads the session on every request. Add `export const instant = false` to `src/app/(payload)/layout.tsx`, so the admin stays a request-time route.
 
 ## Server components in the canvas
 
@@ -941,7 +971,7 @@ export const blocks = [...defaultBlocks({ linkCollections: ['pages'] }), pricing
 ```
 
 - `slots` declares where child blocks go. `allow` lists the accepted block types, or `['*']`. `max` caps the number of direct children: a full slot refuses insert, move, paste and duplicate (also from MCP and the assistant), and the canvas offers no drop target or "+" there. `min` is the fewest children: fewer block **Publish** but not draft saves.
-- `inline: true` says the block renders no link, button or other control of its own (an icon, a badge, a rating). Such a block may go directly inside a `link` block, whose content slot sets `allowInline: true`. A slot of your own can set `allowInline: true` too. `websiteBuilder` and `builderMcpTools` add the inline types to those slots' `allow` lists (`withInlineBlocks`); a slot's `disallow` still wins. Blocks without `inline` stay out of links. Your own block list does not get this change. When a seed or a test calls `validateLayout` with it, run `prepareBlocks(blocks, listCollections)` from `payload-canvas/blocks` first: it applies `withInlineBlocks` and turns the collection list's `collection` and `ids` into a select and a relationship of `listCollections` (the collections with a `url`), as `websiteBuilder` does.
+- `inline: true` says the block renders no link, button or other control of its own (an icon, a badge, a rating). Such a block may go directly inside a `link` block, whose content slot sets `allowInline: true`. A slot of your own can set `allowInline: true` too. `websiteBuilder` and `builderMcpTools` add the inline types to those slots' `allow` lists (`withInlineBlocks`); a slot's `disallow` still wins. Blocks without `inline` stay out of links. Your own block list does not get this change. When a seed or a test calls `validateLayout` with it, run `prepareBlocks(blocks, listCollections)` from `payload-canvas/blocks` first: it applies `withInlineBlocks` and turns the collection list's `collection` and `ids` into a select and a relationship of `listCollections` (the collections with a `url`, then the plugin's `listCollections` option), as `websiteBuilder` does.
 - `parents` limits where a block may go: only directly inside the listed block types (never in the root list). The `listItem` block uses `parents: ['list']`. A new block whose slot accepts exactly one such type starts with one child of it, so a new list starts with one item.
 - `classes`: classes your component uses itself that your site's CSS does not have. Components in your app need no list: Tailwind finds their classes in your files, and the site's CSS has them on the site and on the canvas. List classes only for a component in a package that your CSS entry does not scan (no `@source` for it). The generated CSS styles only elements with the class `builder-css` (`BUILDER_CSS_CLASS` from `payload-canvas/blocks`), so add that class to each element that uses the listed classes. The built-in Menu block does this for its toggle, panel and links.
 - Block fields keep Payload's `validate`, `hooks` and `access`. See [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields).
@@ -1644,12 +1674,12 @@ import { getPayload } from 'payload'
 import type { ReactNode } from 'react'
 import './globals.css'
 
-export default async function RootLayout({ children }: { children: ReactNode }) {
-  const payload = await getPayload({ config })
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
-        <ThemeStyle payload={payload} />
+        {/* The promise, not the instance: the read stays inside ThemeStyle's <Suspense> (Cache Components). */}
+        <ThemeStyle payload={getPayload({ config })} />
       </head>
       <body>{children}</body>
     </html>
@@ -1663,13 +1693,13 @@ For about 90 popular families (Inter, Roboto, Newsreader, Hanken Grotesk and oth
 
 | Prop | Default | What it does |
 |---|---|---|
-| `payload` | required | The Payload instance. |
+| `payload` | required | The Payload instance, or the promise from `getPayload({ config })`. Pass the promise under Cache Components: the connection is then made inside `ThemeStyle`'s `<Suspense>` boundary. |
 | `fonts` | `true` | `false` leaves the Google Fonts links out (for self-hosted fonts). |
 | `live` | `false` | Reloads the theme in the browser when the global is saved in another tab, or when the page becomes visible again. Use it in the canvas layout. |
 
 Other frontends: `loadTheme(payload)` from `payload-canvas/react/server` returns `{ data, css, fontsHref }`. `themeOutput(doc)` from `payload-canvas/theme` turns any theme document into the same output. `GET /api/builder/theme` returns it over HTTP.
 
-**Caching.** `ThemeStyle` reads the global once per request, never from Next's data cache. After each save the plugin calls `revalidateTag(<cacheTag>, { expire: 0 })` and `revalidatePath('/', 'layout')`, so statically rendered pages render again with the new theme. Tag your own cached theme reads with the cache tag. Saves with `context: { disableRevalidate: true }` (seed scripts) skip this.
+**Caching.** `ThemeStyle` reads the global once per request, never from Next's data cache. The read sits in its own `<Suspense>` boundary, so it works with Next's Cache Components; see [Cache Components](#cache-components) to keep the theme in the static shell. After each save the plugin calls `revalidateTag(<cacheTag>, { expire: 0 })` and `revalidatePath('/', 'layout')`, so statically rendered pages render again with the new theme. Tag your own cached theme reads with the cache tag. Saves with `context: { disableRevalidate: true }` (seed scripts) skip this.
 
 **Styles panel.** The color swatches read the canvas, so they show the theme's colors. The Font list shows the theme's families ("Inter", not `var(--font-sans)`).
 
@@ -1747,7 +1777,7 @@ Only published templates count (all templates in draft mode). Templates with an 
 
 - A **binding** connects a block prop to a document field: `bindings: { "text": "title", "image": "author.avatar" }`. Paths are dot paths from the document root. At render time the prop takes the document's value. A missing value falls back to the prop's own value. In the editor, the binding picker lists only compatible fields of the target collection, including one relationship hop.
 - The **Field** block (`field`) shows one field of the document by path, rendered by its type: rich text, an upload as an image, a date, a relationship's title, or text. Use it for the post body.
-- The **Collection list** block (`collectionList`) lists the latest documents of a collection (`collection`, `limit`, `sort`, `excludeCurrent`, `offset`, `depth`, and the filters `filterField`, `filterBy`, `where` and `queryFilters` below). Its `item` slot is the design of one item and repeats for every document. Its `empty` slot shows instead when no document matches, for example a text "Nobody is available today". Blocks in the item bind to the item's fields, for example a heading with `bindings: { "text": "title" }` and a link with `bindings: { "link": "$url" }` (the item's URL from the collection's `url` option). The site shows published documents only. It works on normal pages too, not only in templates.
+- The **Collection list** block (`collectionList`) lists the latest documents of a collection (`collection`, `limit`, `sort`, `excludeCurrent`, `offset`, `depth`, and the filters `filterField`, `filterBy`, `where` and `queryFilters` below). Its `item` slot is the design of one item and repeats for every document. Its `empty` slot shows instead when no document matches, for example a text "Nobody is available today". Blocks in the item bind to the item's fields, for example a heading with `bindings: { "text": "title" }` and a link with `bindings: { "link": "$url" }` (the item's URL from the collection's `url` option). The block offers the collections with a `url`; add data collections without pages (testimonials, team members) with the plugin's `listCollections` option. The site shows published documents only. It works on normal pages too, not only in templates.
   - `offset` skips documents after the sort (at most 100).
   - `depth` is `"1"` (default) or `"2"`: how deep the related documents of each item load. Use `"2"` to reach, for example, `categories.image`.
 - The **Repeat** block (`repeat`) repeats its `item` slot per row of an array or hasMany field. See "Repeat the rows of a field" below.
@@ -1851,7 +1881,7 @@ Lists load with the visitor's access (`overrideAccess: false`). The site (`loadL
 
 | Prop | What it does |
 | --- | --- |
-| `ids` | Picked documents, in the order you pick them. A relationship (hasMany) to the collections with a `url` when the plugin knows them, else a list of ids. The list shows only these, up to 100. `limit`, `sort`, `offset` and `paginate` do not apply; the other filters still do. A pick from another collection than `collection` is left out. |
+| `ids` | Picked documents, in the order you pick them. A relationship (hasMany) to the collections the list can show (with a `url`, and `listCollections`) when the plugin knows them, else a list of ids. The list shows only these, up to 100. `limit`, `sort`, `offset` and `paginate` do not apply; the other filters still do. A pick from another collection than `collection` is left out. |
 | `sort: "$random"` | Shuffles the newest 100 matching documents, then applies `offset` and `limit`. `loadLayoutData` picks a new seed per call, so a cached page shuffles once per cache build. Pass `randomSeed` to fix the order. The canvas keeps one order while you edit. Two random lists on a page get different orders. |
 | `paginate: "pages"` | Shows `limit` documents per page and page links under the items: `?page=2`, `?page=3` (`PAGE_PARAM`). The links keep the rest of the URL query (filters, other lists' pages), and page 1 has no page param. Seven pages or fewer: a link to each. More: the first, the last and the pages next to the current one, with a gap between (`1 … 4 5 6 … 20`; `pageWindow`). Pass the query to `loadLayoutData` (`query`), as for `queryFilters`, and the page's path (`path: '/guides'`): the links then start with the path, and page 1 is the bare path (`/guides`). Without `path` the links are relative, and page 1 with no other query values is `?`. `offset` does not apply. |
 | `pageParam` | The URL parameter of the page number. Empty: `page`. Give each paginated list on one page its own (`reviewsPage`), so they page apart. Letters, digits, `_` and `-`; any other value counts as `page`. |
@@ -2282,7 +2312,7 @@ plugins: [
 - `generateImage` makes an image with the site's image adapter (`ai.images` in `websiteBuilder`) and saves it in the media collection. Clients that cannot make images (Claude Code with a Claude plan) use the site's adapter this way. The key needs `create` on the media collection.
 - Every tool checks the key's access to the collection. Handlers run as the key's user with `overrideAccess: false`.
 - Writes are commits to the document's live session, like an editor's own changes. Open editors show them at once, and the agent appears in the collaborator list while it works. The draft is saved about a second later. `getLayout` returns the session's layout, unsaved changes included.
-- `builderMcpTools` options: `blocks`, `sections`, `collections` (the same map as the plugin), `siteUrl` (default: Payload `serverURL`, then `NEXT_PUBLIC_SERVER_URL`), `apiKeyCollection`, `mediaCollection` (default `media`, the same as `ai.mediaCollection`).
+- `builderMcpTools` options: `blocks`, `sections`, `collections` (the same map as the plugin), `listCollections` (the same list as the plugin), `siteUrl` (default: Payload `serverURL`, then `NEXT_PUBLIC_SERVER_URL`), `apiKeyCollection`, `mediaCollection` (default `media`, the same as `ai.mediaCollection`).
 
 ## Multiplayer editing
 

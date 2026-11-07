@@ -43,7 +43,7 @@ import type { LiveActor } from '../live/types'
 import { storedLayout } from '../plugin/hook'
 import { builderViewPath, documentPath, draftPreviewPath } from '../plugin/links'
 import { siteCssConfigOf } from '../plugin'
-import { prepareBlocks } from '../plugin/listCollections'
+import { listableCollections, prepareBlocks } from '../plugin/listCollections'
 import { getStyleTokens } from '../css'
 import { findSection, loadSavedSections, savedSectionsConfigOf } from '../plugin/sections'
 import { templatesConfigOf } from '../plugin/templates'
@@ -79,6 +79,8 @@ export type BuilderMcpToolsOptions = {
   sections?: SectionDefinition[]
   /** The same collections map as `websiteBuilder({ collections })`. */
   collections: Record<string, BuilderMcpCollection>
+  /** The same `listCollections` as `websiteBuilder`: more collections the collection list block can show. */
+  listCollections?: string[]
   /** Absolute site URL for `getPreviewUrl`. Default: Payload `serverURL`, then NEXT_PUBLIC_SERVER_URL, then the request origin. */
   siteUrl?: string
   /** Slug of payload-mcp-toolkit's API-keys collection, used to show the key name in the editor. */
@@ -275,8 +277,8 @@ async function siteClassesOf(req: PayloadRequest | undefined): Promise<Record<st
 export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool[] {
   const templateTargets = Object.entries(options.collections).filter(([, c]) => c.templates).map(([slug]) => slug)
   const templatesSlug = templateTargets.length > 0 ? (options.templates?.slug ?? DEFAULT_TEMPLATES_SLUG) : null
-  const listable = Object.entries(options.collections).filter(([, c]) => c.url).map(([slug]) => slug)
-  // The same block list the plugin validates against (collection list: only collections with a url).
+  const listable = listableCollections(options.collections, options.listCollections)
+  // The same block list the plugin validates against (collection list: the collections with a url and `listCollections`).
   const blocks = prepareBlocks(options.blocks, listable)
   // A section block without a className gets its type's default classes, as in the plugin.
   // Each variant is a section of its own (`<id>/<variant id>`).
