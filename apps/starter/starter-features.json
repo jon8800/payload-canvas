@@ -1,0 +1,9 @@
+{
+  "features": [
+    { "id": "look", "paths": ["src/admin/look"] },
+    { "id": "nav", "paths": ["src/admin/nav"] },
+    { "id": "dashboard", "paths": ["src/admin/dashboard"] },
+    { "id": "demo", "paths": ["scripts/seed-demo.ts", "scripts/seed-demo-images.ts"], "scripts": ["seed:demo"] },
+    { "id": "ai", "paths": [] }
+  ]
+}

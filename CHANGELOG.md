@@ -46,6 +46,11 @@ Everything since 0.2.0. The 0.2.1, 0.2.2 and 0.3.0 version numbers were set in g
 - **FAQ markup without code:** `RenderLayout` outputs one FAQPage `<script type="application/ld+json">` on the site when an accordion has `faqSchema` on (not on the canvas). `faqJsonLd={false}` turns it off. A site that already outputs `faqJsonLd(faqItems(...))` itself should remove that call or pass `faqJsonLd={false}`.
 - **MCP results say more:** `applyOperations` returns `changes` (id, type, changed keys, and the new class list after class changes) and only the warnings of the blocks it touched, plus a count of the others. `insertSection` returns `needsContent`: blocks whose image, form or other upload or relationship is still empty, with a hint that points to `generateImage`, `uploadMedia` and `findDocument`. `upsertClass` without `publish` and `deleteClass` list the published pages that still show the old version (`publishedPagesWithOldVersion`).
 - **"no-effect" warnings:** `visibility` and `bindings` on a normal page (outside templates and list or repeat items) do nothing. `applyOperations`, `insertSection` and `validateLayout` now warn about them instead of staying silent. New `LayoutErrorCode` `no-effect`, never blocking.
+- **Starter admin** (`apps/starter/src/admin/`), plain code in the starter, not in the plugin:
+  - **Sidebar:** a Dashboard link, then the collections and globals in groups (Site, Content, Design, Settings) with an icon each. Groups and icons are in `src/admin/nav/config.ts`. Collapse, the mobile menu, logout and the plugins' nav slots work as in Payload's sidebar.
+  - **Admin look:** a neutral gray palette in light and dark mode, rounder corners, list views with hairline rows, quieter inputs and labels. It only sets Payload's CSS variables and a few rules in Payload's CSS layer, so the builder editor follows along.
+  - **Dashboard widgets** on Payload's modular dashboard: Quick actions (edit the home page in the builder, new page, new post, upload media, view site), Recent edits, Waiting to publish, Form messages, Site checks (pages and posts without an SEO title or description, images without alt text; each count opens the filtered list), Scheduled (publish and unpublish jobs) and Analytics (Plausible or Umami, on the dashboard only when its variables are set in `.env`). Each user can still move, resize, add and remove widgets with **Edit dashboard**.
+- **`create-payload-canvas` feature choices:** the CLI asks which starter features to keep (admin look, sidebar, dashboard widgets, demo content, AI assistant), or takes `--no-look`, `--no-nav`, `--no-dashboard`, `--no-demo` and `--no-ai`. It deletes the left-out files and removes their marked lines (`@feature:<id>` … `@end:<id>`) from the config, the admin CSS, `.env.example` and the import map. `--yes` keeps everything. `pnpm check:features` type-checks the starter with every mix of features.
 
 ### Changed
 
@@ -72,6 +77,9 @@ Everything since 0.2.0. The 0.2.1, 0.2.2 and 0.3.0 version numbers were set in g
 
 ### Fixed
 
+- New projects from `create-payload-canvas` now get `scripts/lib/classes.ts`, so `seed:demo` and `seed:classes` work there. The CLI left out all of `scripts/lib` before.
+- `pnpm build` of `payload-canvas` no longer stops at a code example in a comment (`lazyBlock`) that looked like a relative import.
+- In a narrow builder top bar, the save state text truncates instead of running under the buttons next to it.
 - The Sections tab gives each thumbnail a fixed 2:1 box, so the cards no longer jump while pictures load, and variant cards keep their height.
 - A carousel with one hand-made slide no longer splits it into several slides.
 - A collection list's pager no longer becomes a grid cell.

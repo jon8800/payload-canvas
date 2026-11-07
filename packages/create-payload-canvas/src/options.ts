@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { parseArgs } from 'node:util'
 
-import { DEFAULT_REF } from './config.js'
+import { DEFAULT_REF, FEATURES, type FeatureId } from './config.js'
 import { databaseNameFor, parseDatabaseUrl, type DbConfig } from './database.js'
 
 export type Options = {
@@ -22,6 +22,8 @@ export type Options = {
   ref: string
   /** Path to a Payload Canvas checkout. The payload-canvas package is packed from there. */
   packages: string | null
+  /** The starter features to keep. */
+  features: FeatureId[]
 }
 
 export const HELP = `Usage: create-payload-canvas [project-dir] [flags]
@@ -33,6 +35,13 @@ Project:
   -y, --yes                 Use defaults and ask nothing
       --no-install          Do not install dependencies (this also skips seeding)
       --seed / --no-seed    Seed demo content (default: yes with --yes, else ask)
+
+Features (all kept by default; without --yes the CLI asks about the ones you did not pass):
+      --no-look             Leave out the admin look (neutral colors, finer details)
+      --no-nav              Leave out the grouped sidebar navigation
+      --no-dashboard        Leave out the dashboard widgets
+      --no-demo             Leave out the demo content seed (this also turns off seeding)
+      --no-ai               Leave out the AI assistant in the page builder
 
 Database (default user and password: postgres):
       --db-url <url>        postgresql://user:pass@host:5432/name (replaces the flags below)
@@ -53,6 +62,12 @@ Source:
   -h, --help                Show this help
 `
 
+// One `--no-<id>` flag per starter feature.
+const featureFlags = Object.fromEntries(FEATURES.map((feature) => [`no-${feature.id}`, { type: 'boolean' }])) as Record<
+  `no-${FeatureId}`,
+  { type: 'boolean' }
+>
+
 function parseFlags() {
   return parseArgs({
     allowPositionals: true,
@@ -69,6 +84,7 @@ function parseFlags() {
       seed: { type: 'boolean' },
       'no-seed': { type: 'boolean' },
       'no-install': { type: 'boolean' },
+      ...featureFlags,
       github: { type: 'boolean' },
       ref: { type: 'string' },
       packages: { type: 'string' },
@@ -168,9 +184,25 @@ export async function resolveOptions(): Promise<Options | null> {
   // Source.
   const packages = values.packages ? path.resolve(process.cwd(), values.packages) : null
 
+  // Features. A --no-<id> flag turns one off without asking. Ask about the rest.
+  const turnedOff = new Set<FeatureId>(FEATURES.filter((feature) => values[`no-${feature.id}`] === true).map((feature) => feature.id))
+  const open = FEATURES.filter((feature) => !turnedOff.has(feature.id))
+  let features: FeatureId[] = open.map((feature) => feature.id)
+  if (!yes && open.length > 0) {
+    const answer = await p.multiselect<FeatureId>({
+      message: 'Which starter features do you want? (space toggles, enter confirms)',
+      options: open.map((feature) => ({ value: feature.id, label: feature.label, hint: feature.hint })),
+      initialValues: features,
+      required: false,
+    })
+    if (p.isCancel(answer)) cancelled()
+    features = answer
+  }
+  const demo = features.includes('demo')
+
   // Install and seed.
   const install = values['no-install'] !== true
-  const canSeed = install && !skipDb
+  const canSeed = install && !skipDb && demo
   let seed: boolean
   if (values['no-seed']) {
     seed = false
@@ -186,7 +218,9 @@ export async function resolveOptions(): Promise<Options | null> {
     seed = answer
   }
   if (seed && !canSeed) {
-    p.log.warn(`Seeding needs installed dependencies and a database, so ${skipDb ? '--skip-db' : '--no-install'} turns it off.`)
+    const reason = !demo ? 'the demo content feature' : 'installed dependencies and a database'
+    const cause = !demo ? 'leaving it out' : skipDb ? '--skip-db' : '--no-install'
+    p.log.warn(`Seeding needs ${reason}, so ${cause} turns it off.`)
     seed = false
   }
 
@@ -201,5 +235,6 @@ export async function resolveOptions(): Promise<Options | null> {
     github: values.github === true,
     ref: values.ref ?? DEFAULT_REF,
     packages,
+    features,
   }
 }
