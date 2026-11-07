@@ -91,3 +91,5 @@ export {
   type ClassesOptions,
   type ClassUsage,
 } from './classes'
+// Comments on the canvas: the collection's options and the comment shape.
+export { DEFAULT_COMMENTS_SLUG, type BuilderComment, type CommentsOptions } from './comments'

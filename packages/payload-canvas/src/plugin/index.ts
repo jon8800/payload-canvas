@@ -86,6 +86,7 @@ import {
 } from './templates'
 import { templateEndpoint } from './templateEndpoint'
 import { CLASSES_CONFIG_KEY, resolveClasses, type ClassesOptions } from '../classes'
+import { resolveComments, type CommentsOptions } from '../comments'
 
 export type { GeneratedCss } from './hook'
 export type { SavedSectionsOptions } from './sections'
@@ -236,6 +237,12 @@ export type WebsiteBuilderOptions = {
    * `ClassesStyle` from `payload-canvas/react/server`. See the README's "Editable classes" section.
    */
   classes?: ClassesOptions | boolean
+  /**
+   * Comments on the canvas: people who may change a page leave comments on its blocks, reply and
+   * resolve them in the builder, live for everyone. Stored in a `builder-comments` collection, never
+   * in the layout. On by default; `false` turns it off. See the README's "Comments" section.
+   */
+  comments?: CommentsOptions | boolean
 }
 
 const LAYOUT_FIELD_COMPONENT = 'payload-canvas/client#LayoutField'
@@ -464,6 +471,8 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
     }
     // Editable classes: a collection, a hidden global with the compiled stylesheet, endpoints.
     const classes = resolveClasses(options.classes, { apiRoute, css, blocks, collections, globals: config.globals ?? [] })
+    // Comments on the canvas: a collection the editor reads and writes over REST.
+    const comments = resolveComments(options.comments, { collections, userSlug: config.admin?.user ?? 'users' })
     const liveCollections: Record<string, BuilderCollectionServer> = Object.fromEntries(
       Object.entries(builderOptions).map(([slug, o]) => [
         slug,
@@ -574,6 +583,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           themeEndpoint: theme ? theme.endpoint : null,
           // A Payload blocks field stores no classes.
           classes: classes && !storage ? classes.client : null,
+          comments: comments ? comments.client : null,
           editor: {
             dragMode: options.editor?.dragMode ?? 'indicator',
             dropOutlines: options.editor?.dropOutlines ?? true,
@@ -606,7 +616,9 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
         // Publishing a page publishes the classes it uses that have unpublished changes.
         const withClasses = classes && !storage ? classes.withPublish(built, field) : built
         return references ? addReferences(withClasses, references) : withClasses
-      }).concat(classes ? [classes.collection] : []),
+      })
+        .concat(classes ? [classes.collection] : [])
+        .concat(comments ? [comments.collection] : []),
       // Server-only: the MCP tools read the live runtime from here, so they share the bus and lock.
       custom: {
         ...config.custom,

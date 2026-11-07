@@ -20,6 +20,7 @@ import { Canvas } from './Canvas'
 import { DragLayer } from './DragLayer'
 import { dropAt, endSmoothDrag, isSmoothDrag, MAKE_ROOM_EASING, SETTLE_EASING, startSmoothDrag } from './dnd/smooth'
 import { Inspector } from './Inspector'
+import { CommentsOrInspector } from './comments/CommentsPanel'
 import { LeftPanel } from './layout/LeftPanel'
 import { applySizes, readSizes } from './layout/panels'
 import { Splitter } from './layout/Splitter'
@@ -222,7 +223,9 @@ export function Editor({ config, meta, icon, locale }: EditorProps) {
               <Canvas />
               <Splitter panel="right" side="after" onActive={lockPointer} />
               <aside className="builder-editor__right">
-                <Inspector />
+                <CommentsOrInspector>
+                  <Inspector />
+                </CommentsOrInspector>
               </aside>
             </div>
           ) : (
