@@ -154,6 +154,10 @@ function blockSchema(def: BlockDefinition, all: BlockDefinition[]): Schema {
     additionalProperties: { type: 'string' },
   }
   properties.hidden = { type: 'boolean', description: 'Hidden blocks stay in the data but do not render.' }
+  properties.editableItems = {
+    type: 'boolean',
+    description: 'Content mode: true lets editors without design rights duplicate, delete and reorder the direct children. Stored only when true.',
+  }
   properties.visibility = visibilityJsonSchema()
   properties.motion = { $ref: `#/$defs/${encodeURIComponent(MOTION_DEF)}` }
   properties.attrs = {

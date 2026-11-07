@@ -176,6 +176,8 @@ export type ContextInput = {
   classes?: Array<{ name: string; label?: string; group?: string }>
   /** Localized layouts: the locale the user edits, and how many props still show the fallback language. */
   locale?: { settings: LocaleSettings; locale: string; untranslated: number } | null
+  /** Content mode: the user may change only content (core/contentMode.ts). */
+  contentOnly?: boolean
 }
 
 const MAX_STRING = 160
@@ -283,6 +285,11 @@ export function contextText(input: ContextInput): string {
     )
   }
   if (input.locale) lines.push(...localeLines(input.locale))
+  if (input.contentOnly) {
+    lines.push(
+      'CONTENT MODE: this user may change only text, images and links (text, textarea, rich text, upload and link props). Do not add, move, delete or restyle blocks, and do not change classes, motion, visibility, bindings or other settings: such operations are refused. Inside a block with "editableItems": true you may duplicate, delete and reorder its direct children. If the user asks for a design change, say that a designer has to make it.',
+    )
+  }
   lines.push(`Current layout (${input.layout.blocks.length} top-level blocks):`, JSON.stringify(input.layout), '</editor_context>')
   return lines.join('\n')
 }

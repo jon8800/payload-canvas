@@ -16,6 +16,7 @@ import { createPortal } from 'react-dom'
 import { currentPosition, insertBlocks, insertNewBlockAt } from '../actions'
 import { BlockIcon, Icon } from '../icons'
 import { inlineEditing } from '../inline'
+import { useContentMode } from '../contentMode'
 import { useRuntime } from '../runtime'
 import { Popover, usePopover } from '../styles/popover'
 import { useValue, useValueSelector } from '../valueStore'
@@ -38,7 +39,9 @@ export const InsertHandle = memo(function InsertHandle() {
   // The spot the open picker inserts at.
   const [target, setTarget] = useState<InsertSpot | null>(null)
   const shown = picker.open && target ? target : (held ?? spot)
-  const visible = Boolean(shown) && (picker.open || (!dragging && !locked && !editing))
+  // Content mode adds no blocks.
+  const contentMode = useContentMode(runtime)
+  const visible = Boolean(shown) && !contentMode && (picker.open || (!dragging && !locked && !editing))
   const active = picker.open || held !== null
   // The editor root, outside the zoomed frame and the overlay.
   const host = useSyncExternalStore(noSubscription, editorRoot, noRoot)

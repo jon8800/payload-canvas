@@ -36,6 +36,7 @@ import type { BlockDefinition, Layout, LocaleSettings, Operation, SectionDefinit
 import { runPropValidators } from '../core/fieldValidate'
 import { validateLayout } from '../core/validate'
 import { actorFromUser, splitLayoutErrors, userLabel, type LiveDocStore } from '../live/apply'
+import { canEditDesign } from '../live/contentMode'
 import { fieldRegistryOf, propAccessCheck } from '../live/fieldChecks'
 import { builderConfigOf } from '../live/document'
 import { DRAFT_NOT_READABLE_MESSAGE, liveReadProblem, withLiveReadCheck } from '../live/draftAccess'
@@ -171,6 +172,7 @@ const blockSchema = z
     bindings: z.record(z.string(), z.string()).optional().describe('Prop path -> document field path (templates and list items).'),
     slots: z.record(z.string(), z.array(z.record(z.string(), z.unknown()))).optional().describe('Child blocks by slot name. Children have the same shape.'),
     hidden: z.boolean().optional(),
+    editableItems: z.boolean().optional().describe('Content mode: true lets editors without design rights duplicate, delete and reorder the direct children of this block (FAQ items, cards). Set it on the list, not the items.'),
     label: z.string().optional().describe('Name for editors, shown in the outline (e.g. "Hero"). Never rendered. Give each top-level section one.'),
     motion: motionArg.optional().describe(MOTION_HINT),
     attrs: attrsArg.optional(),
@@ -204,6 +206,7 @@ const operationSchema = z.discriminatedUnion('type', [
       addClassName: z.string().optional().describe('Classes to add, space-separated, e.g. "shadow-lg md:p-8". Other classes stay. Runs after className and removeClassName.'),
       removeClassName: z.string().optional().describe('Classes to remove, space-separated, exact match ("p-4" leaves "md:p-4"). Other classes stay.'),
       hidden: z.boolean().optional(),
+      editableItems: z.boolean().optional().describe('Content mode: true lets editors without design rights duplicate, delete and reorder the direct children of this block (FAQ items, cards). Set it on the list, not the items.'),
       label: z.string().nullable().optional().describe('Name for editors (outline). null or "" removes it.'),
       bindings: z
         .record(z.string(), z.string().nullable())
@@ -422,6 +425,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       ops,
       blocks,
       localization: localizationOf(req, collection),
+      contentOnly: !(await canEditDesign(req)),
       // As for people's edits, inside the commit: the user may still read the draft; field access
       // of block props; a Payload blocks field: and no value the user may not read, in any state.
       access: withLiveReadCheck(

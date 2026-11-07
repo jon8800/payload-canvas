@@ -39,6 +39,7 @@ import { LEGACY_COLLECTION, legacyDemo, SHARED_BLOCKS_COLLECTION } from '@/legac
 import { legacyBlockConfigs } from '@/legacy-fixture/configs'
 import { i18nDemo } from '@/lib/locales'
 import { demoLocalization, withoutFieldLocalization } from '@/lib/localizationDemo'
+import { isDesigner } from '@/access/roles'
 
 /** Collections with the page builder. Shared by the builder plugin and its MCP tools. */
 const builderCollections: WebsiteBuilderOptions['collections'] = {
@@ -282,7 +283,8 @@ export default buildConfig({
       sections: sectionLibrary,
       templates: { hooks: { afterChange: [revalidateTemplate] } },
       // Opening a saved page or post goes straight to the visual builder. "All fields" in the builder's menu opens the form.
-      editor: { openInBuilder: true },
+      // Users with the Editor role get content mode: they change text, images and links, not the design.
+      editor: { openInBuilder: true, canEditDesign: ({ user }) => isDesigner(user) },
       // AI assistant in the editor. BUILDER_AI_FAKE=1 (dev only) plays a scripted model. Else OpenRouter:
       // the key comes from OPENROUTER_API_KEY, or an admin pastes one in the "AI settings" global
       // (that key wins). Without either, the panel shows the setup card with a link to the settings.

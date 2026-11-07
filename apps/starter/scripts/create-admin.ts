@@ -39,6 +39,7 @@ async function main() {
     data: {
       email,
       password,
+      role: 'admin',
     },
   })
 

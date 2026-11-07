@@ -65,15 +65,17 @@ type EditorProps = {
   icon: ReactNode
   /** The locale to open a localized layout in. */
   locale?: string | null
+  /** The user may change the design. False: content mode (text, images and links only). Default true. */
+  canEditDesign?: boolean
 }
 
 /**
  * The full-screen editor. The document's live session is the source of truth for the layout: the
  * server loads the draft into it, and every edit goes through it (docs/architecture.md section 12).
  */
-export function Editor({ config, meta, icon, locale }: EditorProps) {
+export function Editor({ config, meta, icon, locale, canEditDesign }: EditorProps) {
   const { config: payloadConfig } = useConfig()
-  const [runtime] = useState(() => createRuntime(config, payloadConfig.routes.api, meta, { locale }))
+  const [runtime] = useState(() => createRuntime(config, payloadConfig.routes.api, meta, { locale, canEditDesign }))
   const docId = meta.id
   useMultiplayer(runtime, { docId })
   // Ready once the first session arrived. A reconnect keeps the editor open.

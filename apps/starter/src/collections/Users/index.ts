@@ -1,6 +1,7 @@
 import type { CollectionConfig } from 'payload'
 
 import { authenticated } from '../../access/authenticated'
+import { ROLES, rolesAccess } from '../../access/roles'
 
 const isAdmin = ({ req: { user } }: { req: { user: unknown } }) => Boolean(user)
 
@@ -14,7 +15,7 @@ export const Users: CollectionConfig = {
     update: authenticated,
   },
   admin: {
-    defaultColumns: ['name', 'email'],
+    defaultColumns: ['name', 'email', 'role'],
     useAsTitle: 'name',
   },
   auth: true,
@@ -22,6 +23,17 @@ export const Users: CollectionConfig = {
     {
       name: 'name',
       type: 'text',
+    },
+    {
+      // Editors use the page builder in content mode (websiteBuilder `editor.canEditDesign`).
+      name: 'role',
+      type: 'select',
+      options: [...ROLES],
+      defaultValue: 'admin',
+      required: true,
+      saveToJWT: true,
+      access: { create: rolesAccess, update: rolesAccess },
+      admin: { description: 'Editors change text, images and links. Admins also change the design.' },
     },
   ],
   timestamps: true,

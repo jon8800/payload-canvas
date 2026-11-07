@@ -25,6 +25,7 @@ import type {
 } from '../../core/types'
 import type { BuilderDocMeta } from '../../live/types'
 import { post, rectContains, type AdminToCanvas, type CanvasInit, type KeyAction } from '../../protocol'
+import { contentModeProblem } from '../../core/contentMode'
 import { removeBlock } from './actions'
 import { storageProblemOf } from './storage'
 import { createAssistant, type AssistantController } from './assistant/controller'
@@ -72,6 +73,13 @@ export type InspectorTab = 'block' | 'assistant'
 
 export type Runtime = {
   config: BuilderClientConfig
+  /** The user may change the design (`editor.canEditDesign` on the server). False: always content mode. */
+  canEditDesign: boolean
+  /**
+   * Content mode (core/contentMode.ts): only text, images and links change. True for users without
+   * design rights, and while a designer uses "Preview as client".
+   */
+  contentMode: ValueStore<boolean>
   /** Sent to the iframe on every `ready`. */
   canvasInit: CanvasInit
   store: EditorStore
@@ -165,7 +173,13 @@ function loadCollapsed(): ReadonlySet<string> {
  * `api` is Payload's REST route (`config.routes.api`), used by the iframe to load documents.
  * `document` is the open document as the server loaded it.
  */
-export function createRuntime(config: BuilderClientConfig, api: string, document: BuilderDocMeta, options: { locale?: string | null } = {}): Runtime {
+export function createRuntime(
+  config: BuilderClientConfig,
+  api: string,
+  document: BuilderDocMeta,
+  options: { locale?: string | null; canEditDesign?: boolean } = {},
+): Runtime {
+  const canEditDesign = options.canEditDesign !== false
   const storageProblem = storageProblemOf(config)
   const store = createEditorStore(EMPTY_LAYOUT, {
     ...(storageProblem ? { storageProblem } : {}),
@@ -211,6 +225,8 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
   }
   const runtime: Runtime = {
     config,
+    canEditDesign,
+    contentMode: createValueStore(!canEditDesign),
     canvasInit,
     store,
     measurement: createValueStore<CanvasMeasurement | null>(null),
@@ -321,6 +337,14 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
     },
   }
   store.onWarning((text) => runtime.warn(text))
+  // Content mode refuses design edits in the editor already, with the server's own rule.
+  const guardContent = () => {
+    const on = runtime.contentMode.get()
+    store.setEditGuard(on ? (before, after) => contentModeProblem(before, after, config.blocks) : null)
+    if (on) runtime.insertSpot.set(null)
+  }
+  guardContent()
+  runtime.contentMode.subscribe(guardContent)
   // The first edit of blocks, classes or shared props in another locale says that it changes every language.
   let sharedNoted = false
   store.onSharedEdit(() => {
@@ -345,6 +369,15 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
     })
     runtime.regions = regions
     store.setFieldWriter((changes, locale) => regions.writeEdits(changes, locale))
+    // Content mode does not edit the page's fixed regions.
+    const leaveRegions = () => {
+      if (!runtime.contentMode.get()) return
+      if (regions.selected.get()) regions.selected.set(null)
+      if (regions.hovered.get()) regions.hovered.set(null)
+    }
+    regions.selected.subscribe(leaveRegions)
+    regions.hovered.subscribe(leaveRegions)
+    runtime.contentMode.subscribe(leaveRegions)
     // A selected block and a selected region exclude each other.
     store.subscribe(() => {
       if (store.getState().selectedId && regions.selected.get()) regions.selected.set(null)

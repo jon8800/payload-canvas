@@ -2,7 +2,7 @@
 // This file is the contract between the core, the editor, the renderer and the plugin.
 // It is pure TypeScript: no React, no Payload runtime imports.
 
-import type { Field } from 'payload'
+import type { Field, PayloadRequest } from 'payload'
 import type { AiClientConfig } from '../ai/types'
 import type { BlockMotion, MotionPatch } from './motion'
 import type { BlockVisibility } from './visibility'
@@ -71,6 +71,12 @@ export type Block = {
    * Never rendered. Stored only when set.
    */
   section?: SectionOrigin
+  /**
+   * Content mode (`core/contentMode.ts`): editors without design rights may duplicate, delete and
+   * reorder this block's direct children (FAQ items, team cards), but not restyle them. Stored
+   * only when true.
+   */
+  editableItems?: boolean
 }
 
 /** Where a section's root block came from: the section id and, for a variant, the variant id. */
@@ -433,6 +439,12 @@ export type EditorOptions = {
    * builder's "All fields" menu item still opens the form. Default false.
    */
   openInBuilder?: boolean
+  /**
+   * Who may change the design. Users for whom it returns false get content mode: they change
+   * text, images and links only (see the README's "Content mode"). The server enforces it on every
+   * write. Default: everyone.
+   */
+  canEditDesign?: (args: { req: PayloadRequest; user: PayloadRequest['user'] }) => boolean | Promise<boolean>
 }
 
 export type EditorClientConfig = { dragMode: DragMode; dropOutlines: boolean; openInBuilder: boolean }
@@ -544,6 +556,8 @@ export type Operation =
       /** Classes to remove (space-separated, exact match, variant prefix included). Runs after `className`. */
       removeClassName?: string
       hidden?: boolean
+      /** Content mode: editors may duplicate, delete and reorder the block's children. */
+      editableItems?: boolean
       /** Shallow merge into `bindings`. A `null` value removes that binding. */
       bindings?: Record<string, string | null>
       /** The editor's name for the block. `null` or "" removes it. */

@@ -21,6 +21,7 @@ import { useValue } from '../valueStore'
 import { LocaleSwitcher } from '../locale/LocaleSwitcher'
 import { DocumentTitle, documentTitle, SectionNote, StatusChip } from './DocumentTitle'
 import { PageSettings, PreviewButton, PublishButton, SaveState } from './DocumentActions'
+import { ContentModeLabel, PreviewAsClientToggle } from './ContentModeToggle'
 import { ScreenDrawer } from './screens/ScreenDrawer'
 import { useDismiss } from './useDismiss'
 import { editViewPath, listViewPath } from '../../../plugin/links'
@@ -96,6 +97,7 @@ export function TopBar({ icon }: { icon: ReactNode }) {
         </Link>
         <DocumentTitle />
         <StatusChip />
+        <ContentModeLabel />
         <SectionNote />
       </div>
 
@@ -112,6 +114,7 @@ export function TopBar({ icon }: { icon: ReactNode }) {
         <Presence widths={widths} />
         <SaveState />
         <span className="builder-bar__divider" />
+        <PreviewAsClientToggle />
         <PreviewButton />
         <PageSettings />
         <ShortcutHelp />

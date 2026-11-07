@@ -16,8 +16,8 @@ export function filterLinkBlock(): BlockDefinition {
     icon: 'filter',
     category: 'Dynamic',
     fields: [
-      { name: 'param', type: 'text', label: 'URL parameter', admin: { placeholder: 'Empty: clear all filters' } },
-      { name: 'value', type: 'text', label: 'Value', admin: { placeholder: 'Empty: clear this filter' } },
+      { name: 'param', type: 'text', label: 'URL parameter', admin: { placeholder: 'Empty: clear all filters', custom: { builderContent: false } } },
+      { name: 'value', type: 'text', label: 'Value', admin: { placeholder: 'Empty: clear this filter', custom: { builderContent: false } } },
       { name: 'multiple', type: 'checkbox', label: 'Add to the other values' },
     ],
     slots: { children: { label: 'Content', disallow: INTERACTIVE } },

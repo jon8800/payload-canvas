@@ -5,6 +5,7 @@ import type { AdminViewServerProps } from 'payload'
 
 import { aiSettingsOf } from '../../ai/settings'
 import { builderConfigOf, liveRuntimeOf, loadDocMeta, sessionTargetOf } from '../../live'
+import { canEditDesign } from '../../live/contentMode'
 import { fieldRegistryOf } from '../../live/fieldChecks'
 import type { BuilderDocMeta } from '../../live/types'
 import { siteCssConfigOf } from '../../plugin'
@@ -65,6 +66,9 @@ export async function BuilderView({ initPageResult, params, searchParams }: Admi
   // `form`: with `editor.openInBuilder` the edit view must not send the user back here.
   if (!canUpdate) redirect(editViewPath(routes.admin, collection, id, { form: true }))
 
+  // Content mode: users without design rights change text, images and links only.
+  const designer = await canEditDesign(req)
+
   // The assistant's readiness now: a key pasted in the AI settings counts without a restart.
   const ai = await (aiSettingsOf(payload)?.clientConfig(req) ?? Promise.resolve(null)).catch(() => null)
 
@@ -83,6 +87,7 @@ export async function BuilderView({ initPageResult, params, searchParams }: Admi
       visibleEntities={initPageResult.visibleEntities}
       locale={typeof req.locale === 'string' ? req.locale : null}
       ai={ai}
+      canEditDesign={designer}
     />
   )
 }
