@@ -4,8 +4,19 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-07
+
+### Upgrade notes
+
+- 0.3.0 reached npm only as `0.3.0-next.1`. 0.4.0 holds the changes of 0.3.0 too, so read both sections when you move from 0.2.x.
+- **Template `conditions` needs a migration.** The templates collection always has the new `conditions` JSON field, so the database needs a `builder_templates.conditions` column (on Postgres) on every site with templates. Dev databases with `push: true` get it on `pnpm dev`. For production, run `pnpm payload migrate:create` after the upgrade and deploy the migration. Without it, reads of the templates collection fail.
+- Cache Components: `ThemeStyle` now renders its read inside its own `<Suspense>` boundary. Sites that wrapped it in `<Suspense>` or a `'use cache'` component can keep the wrapper. See the README's "Cache Components".
+
 ### Added
 
+- `listCollections` on `websiteBuilder` and `builderMcpTools`: more collections the collection list block can show, after the collections with a `url`. Use it for data collections without pages (testimonials, team members); their items have no `$url`. The block's `collection` select and `ids` relationship, the binding field lists and the MCP tools include them. `websiteBuilder` throws on a slug that is not a collection. Sites no longer need to call `prepareBlocks(blocks, [...routed, 'testimonials'])` before `websiteBuilder` for this.
+- `templates.admin`: merged into the templates collection's `admin` options (for example `group` or `hidden`), as `savedSections.admin` and `theme.admin` already were. The plugin adds no other collection or global without it.
+- Cache Components: `ThemeStyle` reads the Theme global inside its own `<Suspense>` boundary (fallback: nothing), so a route with `cacheComponents: true` no longer fails on it, also in the `<head>`. Its `payload` prop also takes the promise from `getPayload({ config })`, so the connection is made inside the boundary. A site's own `'use cache'` wrapper (with `cacheTag` of the theme's cache tag) keeps the theme in the static shell. New README section: "Cache Components".
 - Lightbox: the dialog and its backdrop fade in and out (Escape too), the photo grows in on open and slides on each step, with fades only under reduced motion. A photo that is still loading after 150 ms shows a ring (`data-lightbox-loading`). A visible photo number (`count`, default on, `data-lightbox-count`). A set holds each `src` once; `data-lightbox-skip` (`LIGHTBOX_SKIP_ATTRIBUTE`) leaves an image out of the set, and a click on it opens the set at the photo with its `src`. On close the page image of the last photo gets a bubbling `lightbox-close` event (`LIGHTBOX_CLOSE_EVENT`). `photoSet` and `openIndex` are the set rules as pure functions.
 - Filter links drop the list's page number (`?page=N`), so a new filter starts at page 1. `PAGE_PARAM` moved to `payload-canvas/core`; `payload-canvas/react` still exports it.
 - Opt-in built-in blocks: `builtinBlocks({ include, icons })` in `payload-canvas/blocks` and `builtinComponents({ icons })` in `payload-canvas/react`. Leave a type out of `include` to replace it with your own block. See the README's "Built-in blocks".
@@ -44,7 +55,8 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ### Changed
 
-- New projects created by `create-payload-canvas` install `payload-canvas` 0.3.x (`^0.3.0`).
+- New projects created by `create-payload-canvas` install `payload-canvas` 0.4.x (`^0.4.0`).
+- `ThemeStyle` is no longer an async component: it returns a `<Suspense>` boundary around the read. The rendered tags are the same.
 
 ### Fixed
 
