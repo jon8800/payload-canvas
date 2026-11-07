@@ -3,6 +3,7 @@
 import { FIELD_CLASS_MAP } from '../../blocks'
 import {
   FIELD_VALUE_PROP,
+  formatBindingValue,
   formatDate,
   isIsoDate,
   isMissing,
@@ -46,8 +47,27 @@ function createField(resolveLink: ResolveLink): ComponentType<BlockComponentProp
         </div>
       )
     }
+    // `format`: a binding formatter such as "currency:AUD" or "date:en-AU". Rich text and uploads keep their own rendering.
+    const format = asText(props.format)
+    if (format && !isRichText(value) && !isUploadDoc(value)) {
+      const formatted = formatBindingValue(value, format)
+      if (formatted !== undefined) {
+        if (isIsoDate(value)) {
+          return (
+            <time {...attributes} className={className} dateTime={value}>
+              {formatted}
+            </time>
+          )
+        }
+        return <div {...attributes} className={className}>{lines(formatted)}</div>
+      }
+    }
     if (isRichText(value)) {
-      return <div {...attributes} className={richTextClass(className)}>{renderRichText(value, resolveLink)}</div>
+      return (
+        <div {...attributes} className={richTextClass(className)}>
+          {renderRichText(value, resolveLink, { headingIds: props.headingIds === true })}
+        </div>
+      )
     }
     if (isUploadDoc(value)) {
       if (!isImage(value)) {

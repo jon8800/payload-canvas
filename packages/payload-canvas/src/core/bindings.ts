@@ -25,8 +25,23 @@ export const TEMPLATE_DEFAULT_FIELD = 'isDefault'
 export const TEMPLATE_PREVIEW_FIELD = 'previewDocument'
 /** Templates collection: the layout field. */
 export const TEMPLATE_LAYOUT_FIELD = 'layout'
+/**
+ * Templates collection: an optional Payload `where` query against the document. A document
+ * without a template of its own uses the first published template (by name) whose conditions
+ * match it, before the default template.
+ */
+export const TEMPLATE_CONDITIONS_FIELD = 'conditions'
 /** Template-enabled collections: the relationship to the document's own template. */
 export const DOCUMENT_TEMPLATE_FIELD = 'template'
+
+/**
+ * A template's conditions as a `where` query, or `null` when it has none: only a plain object
+ * with at least one key counts (an empty object would match every document).
+ */
+export function templateConditions(template: Record<string, unknown> | null | undefined): Record<string, unknown> | null {
+  const value = template?.[TEMPLATE_CONDITIONS_FIELD]
+  return isPlainObject(value) && Object.keys(value).length > 0 ? value : null
+}
 
 /** Virtual binding path: the frontend URL of the context document (from the link resolver). */
 export const URL_PATH = '$url'
@@ -44,6 +59,33 @@ export const LIST_ITEM_SLOT = 'item'
 export const LIST_ITEMS_PROP = '$items'
 /** Runtime-only prop of the Field block: the resolved value. It is never stored. */
 export const FIELD_VALUE_PROP = 'value'
+/**
+ * The repeat block: renders its `item` slot once per row of an array or hasMany field of the
+ * current document (`props.path`). The rows are its runtime-only `$items` prop.
+ */
+export const REPEAT_BLOCK = 'repeat'
+/** Collection list slot shown when the list has no documents. */
+export const LIST_EMPTY_SLOT = 'empty'
+/** The URL query parameter of a paginated list's page (`?page=3`). Filter links drop it. */
+export const PAGE_PARAM = 'page'
+/** Virtual binding path inside a repeat item: the row value itself (a document, an upload, a text). */
+export const ITEM_PATH = '$item'
+/** Virtual binding path inside a collection list or repeat item: the item number, from 1. */
+export const INDEX_PATH = '$index'
+/** Virtual path prefix inside a collection list or repeat item: the enclosing document (`$parent.name`). */
+export const PARENT_PATH = '$parent'
+/** Virtual path prefix: the page's own document (`$page.title`), also inside list and repeat items. */
+export const PAGE_PATH = '$page'
+/**
+ * Binding key that shows or hides the block: `"field"` shows it when the field is filled,
+ * `"!field"` when it is empty, `"field=value"` when it equals the value, `"field!=value"` when not.
+ */
+export const VISIBLE_BINDING = '$visible'
+
+/** True for the slot that repeats per item: the `item` slot of a collection list or a repeat. */
+export function isRepeatSlot(type: string, slot: string): boolean {
+  return slot === LIST_ITEM_SLOT && (type === COLLECTION_LIST_BLOCK || type === REPEAT_BLOCK)
+}
 
 // ---------------------------------------------------------------------------
 // Reading values
@@ -82,6 +124,56 @@ export function getByPath(doc: unknown, path: string): unknown {
     if (current === undefined) return undefined
   }
   return current
+}
+
+const wholeNumber = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : undefined
+
+/**
+ * The rows of a repeat: the value at `props.path` in the context (an array field's rows, a hasMany
+ * field's documents, IDs or values; one value counts as one row), after `offset` and `limit`.
+ * The path may start with `$parent.` or `$page.`.
+ */
+export function repeatRows(context: TemplateContext, props: BlockProps | undefined): unknown[] {
+  const path = typeof props?.path === 'string' ? props.path.trim() : ''
+  if (!path) return []
+  const value = pathValue(context, path)
+  const rows = (Array.isArray(value) ? value : [value]).filter((row) => row !== undefined && row !== null)
+  const offset = wholeNumber(props?.offset) ?? 0
+  const limit = wholeNumber(props?.limit)
+  return rows.slice(offset, limit === undefined ? undefined : offset + limit)
+}
+
+/**
+ * The context one repeat row binds to: the row's own fields (an array row, or the related document
+ * of a relationship or upload), `$item` (the row value), `$index` (from 1), `$parent` (the
+ * enclosing document) and `$page`. `collection` is the related collection for `$url`; a
+ * `{ relationTo, value }` row names its own.
+ */
+export function repeatRowContext(row: unknown, index: number, around: TemplateContext | null, collection = ''): TemplateContext {
+  const pair = isRelationPair(row)
+  const value = pair ? row.value : row
+  return {
+    ...itemContext(around, index),
+    collection: pair ? row.relationTo : collection,
+    doc: isPlainObject(value) ? value : {},
+    item: value,
+  }
+}
+
+/** The context of one collection list item (a listed document). */
+export function listItemContext(doc: Doc, index: number, around: TemplateContext | null, collection: string): TemplateContext {
+  return { ...itemContext(around, index), collection, doc }
+}
+
+/** `$index`, `$parent` and `$page` of an item inside `around`. */
+function itemContext(around: TemplateContext | null, index: number): Omit<TemplateContext, 'collection' | 'doc'> {
+  const out: Omit<TemplateContext, 'collection' | 'doc'> = { index: index + 1 }
+  if (around) {
+    out.parent = around.doc
+    out.page = around.page ?? around.doc
+  }
+  return out
 }
 
 /** True for values that count as "no value": the literal prop stays. */
@@ -275,18 +367,318 @@ export type BindingOptions = {
    * resolver here. Without it, `$url` bindings stay unresolved.
    */
   url?: (context: TemplateContext) => string | null | undefined
+  /**
+   * Which collection each relationship and upload field points to (`bindingRelations`), so
+   * `<path>.$url` (e.g. `categories.0.$url`) knows the related document's collection. A
+   * `{ relationTo, value }` value names its own collection without it.
+   */
+  relations?: BindingRelations
 }
 
-/** The context document's value at a binding path (`$url` included). */
-export function bindingValue(context: TemplateContext, path: string, options?: BindingOptions): unknown {
+/** Collection slug -> field path (no row numbers, e.g. "gallery.photo") -> the related collection. */
+export type BindingRelations = Record<string, Record<string, string>>
+
+/**
+ * The related collection of every relationship and upload field with one `relationTo`, at any
+ * depth of groups, named tabs and arrays (blocks fields are left out). Plain JSON: pass it to
+ * `RenderLayout` and `loadLayoutData` as `relations`. The plugin sends it to the canvas itself.
+ */
+export function bindingRelations(collections: ReadonlyArray<{ slug: string; fields: readonly unknown[] }>): BindingRelations {
+  const out: BindingRelations = {}
+  for (const collection of collections) {
+    const into: Record<string, string> = {}
+    walkRelations(collection.fields, '', into)
+    if (Object.keys(into).length > 0) out[collection.slug] = into
+  }
+  return out
+}
+
+function walkRelations(fields: readonly unknown[], prefix: string, into: Record<string, string>): void {
+  for (const field of dataFields(fields)) {
+    const path = prefix ? `${prefix}.${field.name}` : field.name
+    if ((field.type === 'relationship' || field.type === 'upload') && typeof field.relationTo === 'string') into[path] = field.relationTo
+    else if (field.type === 'group' || field.type === 'array') walkRelations(field.fields ?? [], path, into)
+  }
+}
+
+/** `<path>.$url`: the URL of the related document at `path`. */
+const RELATED_URL_SUFFIX = `.${URL_PATH}`
+
+/**
+ * The collection of the document at `path` of the context document, by `relations`: each
+ * relationship on the way moves to its collection. Row numbers are skipped. Undefined when the
+ * path does not end on a relationship.
+ */
+function relationOf(collection: string, path: string, relations: BindingRelations | undefined): string | undefined {
+  let current = collection
+  let local = ''
+  for (const part of path.split('.')) {
+    if (/^\d+$/.test(part)) continue
+    local = local ? `${local}.${part}` : part
+    const next = relations?.[current]?.[local]
+    if (next) {
+      current = next
+      local = ''
+    }
+  }
+  return local === '' && path !== '' ? current : undefined
+}
+
+/**
+ * The value at one plain path: a field of the context document, or a virtual path: `$url`,
+ * `$item` (and `$item.url`), `$index`, `$parent.<path>`, `$page.<path>`.
+ */
+function pathValue(context: TemplateContext, path: string, options?: BindingOptions): unknown {
   if (path === URL_PATH) return options?.url?.(context) ?? undefined
-  return getByPath(context.doc, path)
+  if (path.endsWith(RELATED_URL_SUFFIX)) {
+    const target = path.slice(0, -RELATED_URL_SUFFIX.length)
+    const value = pathValue(context, target, options)
+    const pair = isRelationPair(value)
+    const doc = pair ? value.value : value
+    // Only a loaded document has the fields a URL needs (an id alone does not).
+    const head = target.split('.')[0]
+    const own = head === PARENT_PATH || head === PAGE_PATH || head === ITEM_PATH ? undefined : relationOf(context.collection, target, options?.relations)
+    const collection = pair ? value.relationTo : own
+    if (!collection || !isPlainObject(doc)) return undefined
+    return options?.url?.({ collection, doc }) ?? undefined
+  }
+  const dot = path.indexOf('.')
+  const head = dot < 0 ? path : path.slice(0, dot)
+  const rest = dot < 0 ? '' : path.slice(dot + 1)
+  let root: unknown
+  switch (head) {
+    case ITEM_PATH:
+      root = context.item
+      break
+    case INDEX_PATH:
+      return rest ? undefined : context.index
+    case PARENT_PATH:
+      root = context.parent
+      break
+    case PAGE_PATH:
+      root = context.page ?? context.doc
+      break
+    default:
+      return getByPath(context.doc, path)
+  }
+  return rest ? getByPath(root, rest) : root
+}
+
+const currencyFormats = new Map<string, Intl.NumberFormat>()
+
+/** First sentence of plain text: up to the first ".", "!" or "?" followed by a space or the end. */
+function firstSentence(text: string): string {
+  const match = /^.*?[.!?](?=\s|$)/s.exec(text.trim())
+  return (match ? match[0] : text).trim()
+}
+
+/**
+ * Formatters for binding expressions (`price|currency:AUD`). Each takes a value that is not
+ * missing and returns text, or undefined when it cannot format the value.
+ */
+export const BINDING_FORMATTERS: Record<string, (value: unknown, args: string[]) => string | undefined> = {
+  /** `date[:locale[:timeZone]]`, e.g. `date:en-AU:Australia/Brisbane`. Default `en`, UTC. */
+  date(value, [locale, timeZone]) {
+    const date = value instanceof Date ? value : typeof value === 'string' || typeof value === 'number' ? new Date(value) : null
+    if (!date || Number.isNaN(date.getTime())) return undefined
+    try {
+      return new Intl.DateTimeFormat(locale || 'en', { dateStyle: 'medium', timeZone: timeZone || 'UTC' }).format(date)
+    } catch {
+      return formatDate(date)
+    }
+  },
+  /** `currency[:code[:locale]]`, e.g. `currency:AUD` gives "$1,200". Whole amounts have no cents. */
+  currency(value, [code = 'USD', locale = 'en']) {
+    const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN
+    if (!Number.isFinite(n)) return undefined
+    const whole = Number.isInteger(n)
+    const key = `${code}\u0000${locale}\u0000${whole}`
+    try {
+      let format = currencyFormats.get(key)
+      if (!format) {
+        format = new Intl.NumberFormat(locale, {
+          style: 'currency',
+          currency: code.toUpperCase(),
+          currencyDisplay: 'narrowSymbol',
+          ...(whole ? { minimumFractionDigits: 0, maximumFractionDigits: 0 } : {}),
+        })
+        currencyFormats.set(key, format)
+      }
+      return format.format(n)
+    } catch {
+      return undefined
+    }
+  },
+  /** `number[:locale]`: digit grouping, e.g. "1,200". */
+  number(value, [locale = 'en']) {
+    const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN
+    if (!Number.isFinite(n)) return undefined
+    try {
+      return new Intl.NumberFormat(locale).format(n)
+    } catch {
+      return String(n)
+    }
+  },
+  /** `firstSentence`: the first sentence of the plain text (rich text too). */
+  firstSentence(value) {
+    const text = toPlainText(value)
+    return text ? firstSentence(text) : undefined
+  },
+}
+
+/**
+ * A value through one formatter, written as in a binding: "currency:AUD", "date:en-AU:Australia/Brisbane",
+ * "number" or "firstSentence". Undefined for an unknown formatter, a missing value or a value the
+ * formatter cannot read. The field block's `format` prop uses it.
+ */
+export function formatBindingValue(value: unknown, format: string): string | undefined {
+  const formatter = formatterOf(format.trim())
+  if (!formatter || isMissing(value)) return undefined
+  return BINDING_FORMATTERS[formatter.name]!(value, formatter.args)
+}
+
+/** One `|` part of an expression: a formatter (by name, after the first part) or a path. */
+function formatterOf(part: string): { name: string; args: string[] } | null {
+  const [name = '', ...args] = part.split(':')
+  return Object.hasOwn(BINDING_FORMATTERS, name) ? { name, args } : null
+}
+
+/**
+ * One expression: paths separated by `|` (the first that is not missing wins), then formatters
+ * (`a|b|date:en-AU`). The first part is always a path.
+ */
+function expressionValue(context: TemplateContext, expression: string, options?: BindingOptions): unknown {
+  const parts = expression.split('|').map((part) => part.trim())
+  let value: unknown
+  let i = 0
+  for (; i < parts.length; i++) {
+    if (i > 0 && formatterOf(parts[i]!)) break
+    if (isMissing(value)) value = pathValue(context, parts[i]!, options)
+  }
+  for (; i < parts.length; i++) {
+    const formatter = formatterOf(parts[i]!)
+    if (!formatter) continue
+    if (isMissing(value)) return undefined
+    value = BINDING_FORMATTERS[formatter.name]!(value, formatter.args)
+  }
+  return value
+}
+
+const TEMPLATE = /\{\{([^{}]+)\}\}/g
+
+/** True when a binding is more than one plain path: a template string, a fallback chain or a formatter. */
+export function isBindingExpression(binding: string): boolean {
+  return binding.includes('{{') || binding.includes('|')
+}
+
+/**
+ * The value of a binding:
+ * - a path: `title`, `author.name`, or a virtual path (`$url`, `$item`, `$index`, `$parent.name`, `$page.title`);
+ * - a fallback chain: `heading|name` (the first value that is not missing);
+ * - formatters after the paths: `publishedAt|date:en-AU:Australia/Brisbane`, `price|currency:AUD`, `bio|firstSentence`;
+ * - a template string: `Enquire about {{name}}`. Each `{{expression}}` becomes text; a missing one
+ *   becomes empty. When every one is missing, the value is missing (the literal prop stays).
+ */
+export function bindingValue(context: TemplateContext, binding: string, options?: BindingOptions): unknown {
+  if (!binding.includes('{{')) return expressionValue(context, binding, options)
+  let found = false
+  const text = binding.replace(TEMPLATE, (_, expression: string) => {
+    const part = toPlainText(expressionValue(context, expression, options))
+    if (part === undefined) return ''
+    found = true
+    return part
+  })
+  return found ? text : undefined
+}
+
+/** The plain field paths a binding reads (no formatters, no virtual `$url`, `$item`, `$index`). */
+export function bindingPaths(key: string, binding: string): string[] {
+  const expressions = binding.includes('{{')
+    ? [...binding.matchAll(TEMPLATE)].map((m) => m[1]!)
+    : [key === VISIBLE_BINDING ? conditionOf(binding).path : binding]
+  return expressions.flatMap((expression) =>
+    expression
+      .split('|')
+      .map((part) => part.trim())
+      .filter((part, i) => part && (i === 0 || !formatterOf(part)))
+      .map((path) => (path.endsWith(RELATED_URL_SUFFIX) ? path.slice(0, -RELATED_URL_SUFFIX.length) : path))
+      .filter((path) => path !== URL_PATH && path.split('.')[0] !== ITEM_PATH && path !== INDEX_PATH),
+  )
+}
+
+type Comparison = '=' | '!=' | '>' | '>=' | '<' | '<='
+/** `count`: the condition tests the number of items (`path#`), not the value. */
+type Condition = { path: string; test: 'filled' | 'empty' | Comparison; value: string; count: boolean }
+
+/** The first operator wins, so a value may hold "=" or ">" (`title=a=b`). Two-character operators first. */
+const COMPARISON = /^(.+?)\s*(>=|<=|!=|>|<|=)\s*(.*)$/s
+
+/** `path#`: the condition counts the items. */
+const counts = (path: string) => path.endsWith('#')
+const bare = (path: string) => (counts(path) ? path.slice(0, -1).trim() : path)
+
+/**
+ * `field`, `!field`, `field=value`, `field!=value`, and for numbers `field>3`, `field>=3`,
+ * `field<3`, `field<=3`. `field#` is the number of items of a list (0 when empty, 1 for any other
+ * filled value), e.g. `galleryImages#>=3`.
+ */
+function conditionOf(condition: string): Condition {
+  const text = condition.trim()
+  const match = COMPARISON.exec(text)
+  if (match && match[1].trim() !== '!') {
+    const path = match[1].trim()
+    return { path: bare(path), test: match[2] as Comparison, value: match[3].trim(), count: counts(path) }
+  }
+  if (text.startsWith('!')) return { path: bare(text.slice(1).trim()), test: 'empty', value: '', count: counts(text) }
+  return { path: bare(text), test: 'filled', value: '', count: counts(text) }
+}
+
+/** The number of items: a list's length, 0 for an empty value, 1 for any other value. */
+function itemCount(value: unknown): number {
+  if (Array.isArray(value)) return value.length
+  return isMissing(value) || value === false ? 0 : 1
+}
+
+/** A number from a number or a numeric text; null otherwise. */
+function numberOf(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value !== 'string' || value.trim() === '') return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+/** True when a value matches `expected`: itself, a document's id, or any item of a list. */
+function matches(value: unknown, expected: string): boolean {
+  if (Array.isArray(value)) return value.some((item) => matches(item, expected))
+  if (isRelationPair(value)) return matches(value.value, expected)
+  if (isPlainObject(value)) return value.id !== undefined && String(value.id) === expected
+  return value !== undefined && value !== null && String(value) === expected
+}
+
+/** True when the `$visible` condition holds for the context. `false` counts as empty. */
+export function isVisible(context: TemplateContext, condition: string, options?: BindingOptions): boolean {
+  const { path, test, value: expected, count } = conditionOf(condition)
+  const raw = expressionValue(context, path, options)
+  const value = count ? itemCount(raw) : raw
+  const filled = count ? value !== 0 : !isMissing(value) && value !== false
+  if (test === 'filled') return filled
+  if (test === 'empty') return !filled
+  if (test === '=' || test === '!=') return matches(value, expected) === (test === '=')
+  // Greater and less compare numbers only: a value that is not a number never passes.
+  const actual = numberOf(value)
+  const limit = numberOf(expected)
+  if (actual === null || limit === null) return false
+  if (test === '>') return actual > limit
+  if (test === '>=') return actual >= limit
+  if (test === '<') return actual < limit
+  return actual <= limit
 }
 
 /**
  * Resolves one block's bindings (not its children). Bound props with a value take it; applied
- * bindings are removed from the result, unresolved ones stay. A Field block gets
- * `props.value`. Returns the same block when nothing changes.
+ * bindings are removed from the result, unresolved ones stay. A `$visible` binding that does not
+ * hold makes the block `hidden`. A Field block gets `props.value`, a repeat its rows (`$items`).
+ * Returns the same block when nothing changes.
  */
 export function resolveBlockBindings(
   block: Block,
@@ -298,7 +690,13 @@ export function resolveBlockBindings(
   let changed = false
   const left: Record<string, string> = {}
 
+  let hidden = false
   for (const [propPath, fieldPath] of Object.entries(block.bindings ?? {})) {
+    if (propPath === VISIBLE_BINDING) {
+      hidden = !isVisible(context, fieldPath, options)
+      changed = true
+      continue
+    }
     const field = definition ? propField(definition.fields as unknown[], propPath) : undefined
     const value = coerceValue(bindingValue(context, fieldPath, options), field)
     if (value === undefined) {
@@ -323,17 +721,24 @@ export function resolveBlockBindings(
     }
   }
 
+  if (block.type === REPEAT_BLOCK) {
+    props = { ...props, [LIST_ITEMS_PROP]: repeatRows(context, props) }
+    changed = true
+  }
+
   if (!changed) return block
   const next: Block = { ...block, props }
+  if (hidden) next.hidden = true
   if (Object.keys(left).length > 0) next.bindings = left
   else delete next.bindings
   return next
 }
 
 /**
- * Resolves every block's bindings against the context document. The `item` slot of a collection
- * list is left alone: its blocks bind to each listed document at render time. Applied bindings are
- * removed, so resolving twice is safe. Never mutates.
+ * Resolves every block's bindings against the context document. Repeats get their rows
+ * (`$items`). The `item` slot of a collection list or a repeat is left alone: its blocks bind to
+ * each listed document or row at render time. Applied bindings are removed, so resolving twice
+ * is safe. Never mutates.
  */
 export function resolveBindings(
   layout: Layout,
@@ -349,7 +754,7 @@ export function resolveBindings(
       const slots = Object.fromEntries(
         Object.entries(next.slots).map(([name, children]) => [
           name,
-          next.type === COLLECTION_LIST_BLOCK && name === LIST_ITEM_SLOT ? children : visit(children),
+          isRepeatSlot(next.type, name) ? children : visit(children),
         ]),
       )
       return { ...next, slots }
@@ -428,11 +833,107 @@ export function bindingProblem(fields: readonly unknown[], propPath: string, sou
   return null
 }
 
+/** `fields` with the `prefix.` taken off every path (children included). */
+function relativeTo(fields: readonly BindingField[], prefix: string): BindingField[] {
+  return fields.map((field) => {
+    const out: BindingField = { ...field, path: field.path.startsWith(`${prefix}.`) ? field.path.slice(prefix.length + 1) : field.path }
+    if (field.children) out.children = relativeTo(field.children, prefix)
+    return out
+  })
+}
+
+/** `fields` under a virtual root (`$parent`, `$page`) as one group, without other virtual paths. Null when empty. */
+function underRoot(root: string, label: string, fields: readonly BindingField[] | undefined): BindingField | null {
+  const own = (fields ?? []).filter((field) => !field.path.startsWith('$'))
+  if (own.length === 0) return null
+  const prefix = (list: readonly BindingField[]): BindingField[] =>
+    list.map((field) => {
+      const out: BindingField = { ...field, path: `${root}.${field.path}` }
+      if (field.children) out.children = prefix(field.children)
+      return out
+    })
+  return { path: root, label, type: 'group', children: prefix(own) }
+}
+
+/**
+ * The bindable fields inside a list block's `item` slot. A collection list: its collection's
+ * sources. A repeat: `$item`, `$index`, the row's fields (the related collection's sources for a
+ * relationship or upload to one collection, with `$url` only when the repeat's `collection` names
+ * it; else the field's children, an array row) and `$parent` (the fields around it). Both get
+ * `$page` (the page document's `page` fields) when given. `fields` are the sources around the
+ * block. Undefined when unknown.
+ */
+export function itemSources(
+  block: Block,
+  fields: readonly BindingField[] | undefined,
+  sources: Record<string, readonly BindingField[]>,
+  page?: readonly BindingField[],
+): BindingField[] | undefined {
+  const pageGroup = underRoot(PAGE_PATH, 'Page', page)
+  if (block.type === COLLECTION_LIST_BLOCK) {
+    const collection = block.props?.collection
+    const listed = typeof collection === 'string' && collection ? sources[collection] : undefined
+    return listed ? [...listed, ...(pageGroup ? [pageGroup] : [])] : undefined
+  }
+  const path = typeof block.props?.path === 'string' ? block.props.path.trim() : ''
+  const field = path && fields ? findBindingField(fields, path) : undefined
+  if (!field) return undefined
+  const relationTo = typeof field.relationTo === 'string' ? field.relationTo : undefined
+  const related = relationTo
+    ? sources[relationTo]?.filter((f) => f.path !== URL_PATH || block.props?.collection === relationTo)
+    : undefined
+  const { hasMany: _hasMany, children: _children, ...row } = field
+  const parentGroup = underRoot(PARENT_PATH, 'Enclosing document', fields)
+  return [
+    { ...row, path: ITEM_PATH, label: 'This row' },
+    { path: INDEX_PATH, label: 'Row number', type: 'number' },
+    ...(related ?? relativeTo(field.children ?? [], field.path)),
+    ...(parentGroup ? [parentGroup] : []),
+    ...(pageGroup ? [pageGroup] : []),
+  ]
+}
+
+/** The collection lists and repeats whose `item` slot holds the block, outermost first. */
+export function repeatAncestors(layout: Layout, id: string): Block[] {
+  const path: Array<{ block: Block; slot: string }> = []
+  const visit = (blocks: Block[]): boolean => {
+    for (const block of blocks) {
+      if (block.id === id) return true
+      for (const [slot, children] of Object.entries(block.slots ?? {})) {
+        path.push({ block, slot })
+        if (visit(children)) return true
+        path.pop()
+      }
+    }
+    return false
+  }
+  if (!visit(layout.blocks)) return []
+  return path.filter(({ block, slot }) => isRepeatSlot(block.type, slot)).map(({ block }) => block)
+}
+
+/**
+ * The bindable fields a block reads: the template collection's sources, narrowed by every
+ * collection list and repeat around it. Undefined when unknown (no collection, or a repeat path
+ * missing from the sources).
+ */
+export function scopeSources(
+  layout: Layout,
+  id: string,
+  sources: Record<string, readonly BindingField[]>,
+  collection: string | null,
+): BindingField[] | undefined {
+  const page = collection ? sources[collection] : undefined
+  let fields: BindingField[] | undefined = page?.slice()
+  for (const repeat of repeatAncestors(layout, id)) fields = itemSources(repeat, fields, sources, page)
+  return fields
+}
+
 /**
  * Checks every binding against the bindable fields of the document it reads: the template's
- * target collection, or inside a collection list's `item` slot, the listed collection. Problems
- * have the code `binding` (they block publishing only). Paths missing from `sources` are left
- * alone: the renderer keeps the literal value.
+ * target collection, inside a collection list's `item` slot the listed collection, and inside a
+ * repeat's `item` slot the row (`itemSources`). Problems have the code `binding` (they block
+ * publishing only). Paths missing from `sources` are left alone: the renderer keeps the literal
+ * value. `$item`, `$index`, `$visible` and expressions are always allowed.
  */
 export function validateBindings(
   layout: Layout,
@@ -442,14 +943,17 @@ export function validateBindings(
 ): LayoutError[] {
   const definitions = new Map(blocks.map((d) => [d.type, d]))
   const errors: LayoutError[] = []
-  const visit = (list: Block[], path: string, scope: string | null) => {
+  const visit = (list: Block[], path: string, fields: readonly BindingField[] | undefined) => {
     list.forEach((block, i) => {
       const at = `${path}[${i}]`
       const definition = definitions.get(block.type)
-      const fields = scope ? sources[scope] : undefined
       if (definition && fields) {
         for (const [propPath, fieldPath] of Object.entries(block.bindings ?? {})) {
-          const source = fieldPath === URL_PATH ? { path: URL_PATH, label: 'Page URL', type: 'text' } : findBindingField(fields, fieldPath)
+          // Expressions (templates, fallbacks, formatters), `$visible` and the row's own value are not checked.
+          if (propPath === VISIBLE_BINDING || isBindingExpression(fieldPath)) continue
+          if (fieldPath.split('.')[0] === ITEM_PATH || fieldPath === INDEX_PATH) continue
+          const source =
+            fieldPath === URL_PATH || fieldPath.endsWith(RELATED_URL_SUFFIX) ? { path: URL_PATH, label: 'Page URL', type: 'text' } : findBindingField(fields, fieldPath)
           if (!source) continue
           const problem = bindingProblem(definition.fields as unknown[], propPath, source)
           if (problem) {
@@ -458,12 +962,11 @@ export function validateBindings(
         }
       }
       for (const [name, children] of Object.entries(block.slots ?? {})) {
-        const listed = block.type === COLLECTION_LIST_BLOCK && name === LIST_ITEM_SLOT
-        const next = listed ? (typeof block.props?.collection === 'string' ? block.props.collection : null) : scope
-        visit(children, `${at}.slots.${name}`, next)
+        visit(children, `${at}.slots.${name}`, isRepeatSlot(block.type, name) ? itemSources(block, fields, sources, page) : fields)
       }
     })
   }
-  visit(layout.blocks, 'blocks', collection)
+  const page = collection ? sources[collection] : undefined
+  visit(layout.blocks, 'blocks', page)
   return errors
 }

@@ -17,9 +17,29 @@ type Props = {
 
 /**
  * Fields that share the parent's data, under a small heading: a collapsible, or one of several
- * unnamed tabs. Looks like a group, but stores nothing of its own.
+ * unnamed tabs. Looks like a group, but stores nothing of its own. `collapsed`: a collapsible with
+ * `admin.initCollapsed` starts folded, and its heading opens it.
  */
-export function FieldSection({ label, children }: { readonly label: string; readonly children: ReactNode }) {
+export function FieldSection({
+  label,
+  description,
+  collapsed,
+  children,
+}: {
+  readonly label: string
+  readonly description?: string
+  readonly collapsed?: boolean
+  readonly children: ReactNode
+}) {
+  if (collapsed !== undefined) {
+    return (
+      <details className="builder-field-group builder-field-group--fold" open={!collapsed}>
+        <summary className="builder-field-group__label">{label}</summary>
+        {description && <p className="builder-field-group__description">{description}</p>}
+        <div className="builder-field-group__fields">{children}</div>
+      </details>
+    )
+  }
   return (
     <fieldset className="builder-field-group">
       <legend className="builder-field-group__label">{label}</legend>

@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { Payload } from 'payload'
 import { defaultBlocks } from '../../blocks'
 import type { Layout, TemplateContext } from '../../core'
-import { attachListItems, listItemsOf, listQueries, loadLayoutData, RenderLayout, type ResolveLink } from '../index'
+import { attachListItems, listItemsOf, listQueries, loadLayoutData, RenderLayout, withDateTokens, type ResolveLink } from '../index'
 import { loadTemplate } from '../server'
 
 const blocks = defaultBlocks({ linkCollections: ['posts'] })
@@ -121,6 +121,22 @@ describe('canvas mode', () => {
   })
 })
 
+const list = (props: Record<string, unknown>): Layout => ({ version: 1, blocks: [{ id: 'l', type: 'collectionList', props: { collection: 'models', ...props } }] })
+const service: TemplateContext = { collection: 'services', doc: { id: 5, title: 'Dinner' } }
+const model: TemplateContext = {
+  collection: 'models',
+  doc: {
+    id: 8,
+    services: [{ id: 5, title: 'Dinner' }, 6, { relationTo: 'services', value: { id: 7 } }, { relationTo: 'services', value: 6 }],
+    category: 'tall',
+    none: [],
+  },
+}
+const whereOf = (props: Record<string, unknown>, context?: TemplateContext, url?: Parameters<typeof listQueries>[2]) => {
+  const [query] = listQueries(list(props), context, url)
+  return { where: query.where, none: query.none }
+}
+
 describe('listQueries', () => {
   it('reads limit and sort and leaves out the current document', () => {
     const layout: Layout = { version: 1, blocks: [{ id: 'l', type: 'collectionList', props: { collection: 'posts', limit: 500, sort: '-publishedAt' } }] }
@@ -128,6 +144,68 @@ describe('listQueries', () => {
     assert.deepEqual(listQueries(layout), [{ blockId: 'l', collection: 'posts', limit: 100, sort: '-publishedAt' }])
     const keep: Layout = { version: 1, blocks: [{ id: 'l', type: 'collectionList', props: { collection: 'posts', excludeCurrent: false } }] }
     assert.deepEqual(listQueries(keep, post), [{ blockId: 'l', collection: 'posts', limit: 3, sort: '-createdAt' }])
+  })
+
+  it("filters by the current document: the listed documents' field holds it", () => {
+    assert.deepEqual(whereOf({ filterField: 'services' }, service), { where: { services: { in: [5] } }, none: undefined })
+    assert.deepEqual(whereOf({ filterField: ' services ', filterBy: 'current' }, service).where, { services: { in: [5] } })
+  })
+  it('filters by shared values: ids of populated docs, pairs and primitives, without repeats', () => {
+    assert.deepEqual(whereOf({ filterField: 'services', filterBy: 'shared' }, model).where, { services: { in: [5, 6, 7] } })
+    assert.deepEqual(whereOf({ filterField: 'category', filterBy: 'shared' }, model).where, { category: { in: ['tall'] } })
+  })
+  it("filters by linked documents: the current document's field points to them", () => {
+    assert.deepEqual(whereOf({ filterField: 'services', filterBy: 'linked' }, model).where, { id: { in: [5, 6, 7] } })
+    const withCategory: TemplateContext = { collection: 'x', doc: { id: 1, category: { id: 'c1' } } }
+    assert.deepEqual(whereOf({ filterField: 'category', filterBy: 'linked' }, withCategory).where, { id: { in: ['c1'] } })
+  })
+  it('lists no documents when shared or linked has no values', () => {
+    assert.deepEqual(whereOf({ filterField: 'none', filterBy: 'shared' }, model), { where: undefined, none: true })
+    assert.deepEqual(whereOf({ filterField: 'missing', filterBy: 'linked', where: { a: { equals: 1 } } }, model), { where: undefined, none: true })
+  })
+  it('ignores filterField without a current document', () => {
+    assert.deepEqual(whereOf({ filterField: 'services' }), { where: undefined, none: undefined })
+    assert.deepEqual(whereOf({ filterField: 'services', filterBy: 'linked' }), { where: undefined, none: undefined })
+  })
+  it('adds URL query filters: values of one param OR-ed, params AND-ed, unknown values ignored', () => {
+    const queryFilters = {
+      available: { today: { availableToday: { equals: true } } },
+      district: { north: { district: { equals: 'north' } }, south: { district: { equals: 'south' } } },
+    }
+    const where = (query: Record<string, string | string[]> | URLSearchParams | undefined) => whereOf({ queryFilters }, undefined, query).where
+    assert.deepEqual(where({ available: 'today' }), { availableToday: { equals: true } })
+    assert.deepEqual(where(new URLSearchParams('district=north&district=south')), {
+      or: [{ district: { equals: 'north' } }, { district: { equals: 'south' } }],
+    })
+    assert.deepEqual(where({ district: 'north,south', available: 'today' }), {
+      and: [{ availableToday: { equals: true } }, { or: [{ district: { equals: 'north' } }, { district: { equals: 'south' } }] }],
+    })
+    assert.equal(where({ district: 'east' }), undefined)
+    // No query (the canvas): the filters are off.
+    assert.equal(where(undefined), undefined)
+  })
+  it('turns $now date tokens into ISO dates, rounded to the minute', () => {
+    const now = Date.parse('2026-10-21T10:15:42.000Z')
+    assert.deepEqual(withDateTokens({ createdAt: { greater_than: '$now-30d' }, b: ['$now', '$now+12h', 'now'] }, now), {
+      createdAt: { greater_than: '2026-09-21T10:15:00.000Z' },
+      b: ['2026-10-21T10:15:00.000Z', '2026-10-21T22:15:00.000Z', 'now'],
+    })
+    const where = whereOf({ where: { createdAt: { greater_than: '$now-30d' } } }).where as { createdAt: { greater_than: string } }
+    assert.match(where.createdAt.greater_than, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00\.000Z$/)
+  })
+  it('reads offset and depth', () => {
+    const [query] = listQueries(list({ offset: 2, depth: '2' }))
+    assert.equal(query.offset, 2)
+    assert.equal(query.depth, 2)
+    const [plain] = listQueries(list({ offset: 0, depth: '1' }))
+    assert.equal(plain.offset, undefined)
+    assert.equal(plain.depth, undefined)
+  })
+  it('ANDs a static where with the filter; only a plain object counts', () => {
+    const featured = { featured: { equals: true } }
+    assert.deepEqual(whereOf({ where: featured }).where, featured)
+    assert.deepEqual(whereOf({ where: featured, filterField: 'services' }, service).where, { and: [{ services: { in: [5] } }, featured] })
+    for (const bad of ['{"a":1}', [featured], 3, null, {}]) assert.equal(whereOf({ where: bad }).where, undefined)
   })
 })
 
@@ -146,10 +224,10 @@ function matches(doc: Record<string, unknown>, where: Record<string, unknown>): 
   )
 }
 
-function fakePayload(templates: Array<Record<string, unknown>>, calls: Call[] = []) {
+function fakePayload(templates: Array<Record<string, unknown>>, calls: Call[] = [], posts?: Array<Record<string, unknown>>) {
   const data: Record<string, Array<Record<string, unknown>>> = {
     'builder-templates': templates,
-    posts: [{ id: 1, title: 'First', _status: 'published' }, ...items.map((i) => ({ ...i, _status: 'published' })), { id: 4, title: 'Draft', _status: 'draft' }],
+    posts: posts ?? [{ id: 1, title: 'First', _status: 'published' }, ...items.map((i) => ({ ...i, _status: 'published' })), { id: 4, title: 'Draft', _status: 'draft' }],
     media: [image],
   }
   return {
@@ -167,6 +245,8 @@ function fakePayload(templates: Array<Record<string, unknown>>, calls: Call[] = 
     },
     async find(args: Call) {
       calls.push({ op: 'find', ...args })
+      // Payload refuses a query on an unknown field.
+      if (JSON.stringify(args.where ?? {}).includes('"nope"')) throw new Error('The following path cannot be queried: nope')
       const docs = data[args.collection as string].filter((d) => matches(d, (args.where as Record<string, unknown>) ?? {}))
       return { docs: docs.slice(0, (args.limit as number) || docs.length) }
     },
@@ -215,6 +295,50 @@ describe('loadTemplate', () => {
     const both = fakePayload([tpl(5, { isDefault: true, layout: { version: 1, blocks: [] } }), tpl(6, { isDefault: true })])
     assert.equal((await loadTemplate(both, { collection: 'posts', doc: {} }))?.template.id, 6)
   })
+  describe('conditions', () => {
+    const vip = tpl(10, { name: 'A VIP', conditions: { tier: { equals: 'vip' } } })
+    const later = tpl(11, { name: 'B VIP too', conditions: { tier: { equals: 'vip' } } })
+    const touring = tpl(12, { name: 'C Touring', conditions: { touring: { equals: true } } })
+    const posts = [
+      { id: 1, tier: 'vip', touring: false },
+      { id: 2, tier: 'basic', touring: true },
+      { id: 3, tier: 'basic', touring: false },
+    ]
+    const models = fakePayload([own, vip, later, touring, fallback], [], posts)
+    it('uses the first template whose conditions match, before the default', async () => {
+      assert.equal((await loadTemplate(models, { collection: 'posts', doc: { id: 1 } }))?.template.id, 10)
+      assert.equal((await loadTemplate(models, { collection: 'posts', doc: { id: 2 } }))?.template.id, 12)
+      assert.equal((await loadTemplate(models, { collection: 'posts', doc: { id: 3 } }))?.template.id, 2)
+    })
+    it('keeps the own template of the document first', async () => {
+      assert.equal((await loadTemplate(models, { collection: 'posts', doc: { id: 1, template: 1 } }))?.template.id, 1)
+    })
+    it('queries the document with the conditions, in name order', async () => {
+      const calls: Call[] = []
+      await loadTemplate(fakePayload([vip, fallback], calls, posts), { collection: 'posts', doc: { id: 1 } })
+      const listCall = calls.find((c) => c.collection === 'builder-templates' && c.op === 'find')!
+      assert.equal(listCall.sort, 'name')
+      const match = calls.find((c) => c.collection === 'posts')!
+      assert.deepEqual(match.where, { and: [{ id: { equals: 1 } }, { tier: { equals: 'vip' } }] })
+    })
+    it('skips empty conditions, unpublished or empty templates, a failing query and documents without an id', async () => {
+      const skipped = fakePayload(
+        [
+          tpl(20, { conditions: {} }),
+          tpl(21, { conditions: { tier: { equals: 'vip' } }, _status: 'draft' }),
+          tpl(22, { conditions: { tier: { equals: 'vip' } }, layout: { version: 1, blocks: [] } }),
+          tpl(23, { conditions: { nope: { equals: 1 } } }),
+          fallback,
+        ],
+        [],
+        posts,
+      )
+      assert.equal((await loadTemplate(skipped, { collection: 'posts', doc: { id: 1 } }))?.template.id, 2)
+      assert.equal((await loadTemplate(models, { collection: 'posts', doc: { tier: 'vip' } }))?.template.id, 2)
+      // Draft mode: the latest draft of a template counts.
+      assert.equal((await loadTemplate(skipped, { collection: 'posts', doc: { id: 1 }, draft: true }))?.template.id, 21)
+    })
+  })
   it('returns null when the app has no templates collection', async () => {
     const none = { collections: {} } as unknown as Payload
     assert.equal(await loadTemplate(none, { collection: 'posts', doc: {} }), null)
@@ -254,6 +378,42 @@ describe('loadLayoutData', () => {
     const user = { id: 9 }
     await loadLayoutData({ version: 1, blocks: [{ id: 'l', type: 'collectionList', props: { collection: 'posts' } }] }, blocks, fakePayload([], calls), { user })
     assert.equal(calls.find((c) => c.collection === 'posts')?.user, user)
+  })
+  it('adds the list filter to the query, and skips the query when it matches nothing', async () => {
+    const calls: Call[] = []
+    const payload = fakePayload([], calls)
+    const context: TemplateContext = { collection: 'pages', doc: { id: 9, related: [] } }
+    const layout: Layout = {
+      version: 1,
+      blocks: [
+        { id: 'a', type: 'collectionList', props: { collection: 'posts', filterField: 'pages', where: { featured: { equals: true } } } },
+        { id: 'b', type: 'collectionList', props: { collection: 'posts', filterField: 'related', filterBy: 'linked' } },
+      ],
+    }
+    const loaded = await loadLayoutData(layout, blocks, payload, { context })
+    const listCalls = calls.filter((c) => c.collection === 'posts')
+    assert.equal(listCalls.length, 1)
+    assert.deepEqual(listCalls[0].where, {
+      and: [{ and: [{ pages: { in: [9] } }, { featured: { equals: true } }] }, { _status: { equals: 'published' } }],
+    })
+    assert.equal(listCalls[0].overrideAccess, false)
+    assert.deepEqual(loaded.blocks[1].props?.$items, [])
+  })
+  it('applies queryFilters from the query option, offset and depth', async () => {
+    const calls: Call[] = []
+    const layout: Layout = {
+      version: 1,
+      blocks: [{ id: 'l', type: 'collectionList', props: { collection: 'posts', limit: 2, offset: 1, depth: '2', queryFilters: { tag: { a: { tag: { equals: 'a' } } } } } }],
+    }
+    const loaded = await loadLayoutData(layout, blocks, fakePayload([], calls), { query: { tag: 'a' } })
+    const call = calls.find((c) => c.collection === 'posts')!
+    assert.deepEqual(call.where, { and: [{ tag: { equals: 'a' } }, { _status: { equals: 'published' } }] })
+    assert.equal(call.limit, 3)
+    assert.equal(call.depth, 2)
+    // The fake has no `tag` field, so nothing matches; without the filter the first document is skipped.
+    assert.deepEqual(listItemsOf(loaded.blocks[0].props), [])
+    const unfiltered = await loadLayoutData(layout, blocks, fakePayload([]), {})
+    assert.deepEqual(listItemsOf(unfiltered.blocks[0].props).map((d) => d.id), [2, 3])
   })
   it('lists drafts in draft mode', async () => {
     const loaded = await loadLayoutData(

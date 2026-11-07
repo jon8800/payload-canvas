@@ -25,6 +25,7 @@ describe('withPreset', () => {
   it('keeps only the number the new hover, scroll or loop preset uses', () => {
     assert.deepEqual(withPreset('hover', { preset: 'lift', distance: 8 }, 'grow'), { preset: 'grow' })
     assert.deepEqual(withPreset('scroll', { preset: 'parallax', distance: 100 }, 'fade'), { preset: 'fade' })
+    assert.deepEqual(withPreset('scroll', { preset: 'zoom', scale: 0.8 }, 'recede'), { preset: 'recede', scale: 0.8 })
     assert.deepEqual(withPreset('loop', { preset: 'float', duration: 2000, distance: 12 }, 'pulse'), { preset: 'pulse', duration: 2000 })
   })
 })

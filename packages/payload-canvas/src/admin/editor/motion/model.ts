@@ -27,7 +27,7 @@ export function usesDistance(preset: string): boolean {
 /** The number a preset of each kind uses, besides `duration` (the other numbers do not apply). */
 const PRESET_KEYS: Record<'hover' | 'scroll' | 'loop', Record<string, readonly string[]>> = {
   hover: { lift: ['distance'], grow: ['scale'], tilt: ['angle'] },
-  scroll: { parallax: ['distance'], fade: [], zoom: ['scale'] },
+  scroll: { parallax: ['distance'], fade: [], zoom: ['scale'], recede: ['scale'] },
   loop: { float: ['duration', 'distance'], pulse: ['duration', 'scale'] },
 }
 
@@ -86,7 +86,7 @@ export const hoverValue = (hover: HoverMotion) =>
 export const pressScale = (scale: number | undefined) => scale ?? PRESS_DEFAULTS.scale
 
 export const scrollValue = (scroll: ScrollMotion) =>
-  scroll.preset === 'zoom' ? (scroll.scale ?? SCROLL_DEFAULTS.scale) : (scroll.distance ?? SCROLL_DEFAULTS.distance)
+  scroll.preset === 'zoom' || scroll.preset === 'recede' ? (scroll.scale ?? SCROLL_DEFAULTS.scale) : (scroll.distance ?? SCROLL_DEFAULTS.distance)
 
 export function loopValues(loop: LoopMotion) {
   const defaults = LOOP_DEFAULTS[loop.preset]

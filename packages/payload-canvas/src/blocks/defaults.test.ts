@@ -26,6 +26,7 @@ const TYPES = [
   'video',
   'field',
   'collectionList',
+  'repeat',
 ]
 
 type LooseField = { name?: string; type: string; relationTo?: unknown; fields?: LooseField[]; options?: unknown[]; admin?: { custom?: Record<string, unknown> } }
@@ -136,6 +137,7 @@ describe('defaultBlocks', () => {
       video: ['video', 'Media'],
       field: ['field', 'Dynamic'],
       collectionList: ['collectionList', 'Dynamic'],
+      repeat: ['repeat', 'Dynamic'],
     })
   })
 

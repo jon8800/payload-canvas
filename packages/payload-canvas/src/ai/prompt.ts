@@ -63,6 +63,11 @@ function stylingGuide(tokens: StyleTokens | null): string {
   if (tokens.radius.length > 0) lines.push(`- Radius (rounded-<name>): ${names(tokens.radius)}.`)
   if (tokens.shadows.length > 0) lines.push(`- Shadows (shadow-<name>): ${names(tokens.shadows)}.`)
   if (tokens.containers.length > 0) lines.push(`- Container widths (max-w-<name>): ${names(tokens.containers)}.`)
+  const site = tokens.siteClasses ?? []
+  if (site.length > 0) {
+    const list = site.slice(0, 80).map((c) => (c.label ? `${c.name} (${c.group ? `${c.group}: ` : ''}${c.label})` : c.name))
+    lines.push(`- The site's own classes (its look; prefer them over rebuilding the same look from utilities): ${list.join(', ')}.`)
+  }
   return lines.join('\n')
 }
 
@@ -75,6 +80,7 @@ const ANIMATIONS_GUIDE = [
   '- Grids and lists of cards: "enter" with stagger 60-120 on the grid or list block. The card blocks then play in turn, so give the cards no motion of their own.',
   '- Cards that link, and buttons: hover { preset: "lift" } and press { preset: "shrink" }.',
   '- scroll "parallax" only on decorative images. "loop" (float, pulse) rarely, on one small decorative block.',
+  '- Stacked cards: give each card the classes "sticky top-24 origin-top" and scroll { preset: "recede" }, except the last card.',
   '- In "update", `motion` merges per kind: a kind you send replaces that kind, null removes a kind, kinds you leave out stay. motion: null removes all animations. To remove an animation the user dislikes, send null for its kind.',
 ].join('\n')
 
@@ -88,12 +94,12 @@ function sectionCatalog(sections: SectionDefinition[], saved: boolean): string {
       : 'SECTION CATALOG\nThis site has no ready-made sections. Build from blocks.'
   }
   const entries = sections.map((s) => {
-    const head = `## ${s.id}: ${s.label}${s.category ? ` (${s.category})` : ''}`
+    const head = `## ${s.id}: ${s.label}${s.category ? ` (${s.category})` : ''}${s.variantOf ? ` [variant of ${s.variantOf}]` : ''}`
     const description = s.description ? `\n${s.description}` : ''
     return `${head}${description}\n${outline(s.blocks).join('\n')}`
   })
   return [
-    'SECTION CATALOG. Ready-made, designed sections. Insert one with insertSection { sectionId }. The outline shows its blocks (type and start of the text). listSections { full: true } returns the full JSON.' +
+    'SECTION CATALOG. Ready-made, designed sections. Insert one with insertSection { sectionId }. The outline shows its blocks (type and start of the text). A variant ("hero/split") is another version of the section before it: pick the one that fits. listSections { full: true } returns the full JSON.' +
       (saved ? `\n${SAVED_SECTIONS_NOTE}` : ''),
     ...entries,
   ].join('\n\n')

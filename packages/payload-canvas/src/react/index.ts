@@ -23,6 +23,7 @@ export {
 export { parseVideoUrl, type VideoEmbed } from './components/videoUrl'
 export { editableImage, editableText, EDITABLE_IMAGE_ATTRIBUTE, EDITABLE_TEXT_ATTRIBUTE } from './render/editable'
 export { defaultComponents } from './components'
+export * from './components/builtins'
 export { BuilderStyle, RenderLayout } from './render/RenderLayout'
 export { MotionRuntime } from './motion/MotionRuntime'
 export { MotionStyle, MOTION_CSS } from './motion/style'
@@ -49,7 +50,27 @@ export type {
   CanvasServerResult,
 } from './render/canvasServerTypes'
 export { loadLayoutData, resolveLayoutData, urlResolver, type LoadLayoutOptions } from './render/resolve'
-export { attachListItems, listItemsOf, listQueries, type ListQuery } from './render/lists'
+export { attachSections } from './render/sections'
+export {
+  attachListItems,
+  LIST_PAGE_PARAMS_PROP,
+  LIST_PAGES_PROP,
+  listItemsOf,
+  listQueries,
+  loadedLists,
+  PAGE_PARAM,
+  pageLinks,
+  pageOf,
+  pageParamOf,
+  pageWindow,
+  RANDOM_SORT,
+  withDateTokens,
+  withPageParams,
+  type ListPages,
+  type ListQuery,
+  type LoadedList,
+  type ListQueryParams,
+} from './render/lists'
 export { fieldFor } from './components/Field'
 export { renderRichText } from './components/RichText'
 export { applyThemeOutput, ThemeLive } from './theme/ThemeLive'

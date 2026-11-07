@@ -2,11 +2,13 @@
 // Owner: core agent. Signatures here are the contract other parts build against.
 
 export * from './types'
+export { checkAttrs, htmlAttributes, htmlIdClash, htmlIdProblem, htmlIdsOf, patchAttrs, withoutTakenHtmlIds } from './attrs'
 export { createId } from './ids'
 export { findBlock, findLocation, walkBlocks, isSelfOrDescendant, normalizeLayout, type BlockLocation } from './tree'
 export { applyOperation, applyOperations, type ApplyOptions } from './operations'
 export { deepestBlockAt, canvasDropTarget, outlineDropTarget } from './dropTarget'
-export { collectClasses } from './classes'
+export { classFields, collectClasses } from './classes'
+export { headingId, richTextHeadings, type RichTextHeading } from './headings'
 export { blockJsonSchema, layoutJsonSchema } from './schema'
 export { validateLayout, isBlockingError, isLayoutWarning, PUBLISH_ONLY_CODES, type LayoutError, type LayoutErrorCode, type ValidateOptions } from './validate'
 export {
@@ -36,7 +38,7 @@ export * from './styles'
 export * from './motion'
 export * from './bindings'
 export { TEXT_LIST_BLOCK, TEXT_LIST_ITEM_BLOCK, TEXT_LIST_SLOT, joinListItem, splitListItem, type ListItemEdit } from './textList'
-export { blockName, defineBlock, fitsParent, getBlockDefinition, placementError, slotAccepts, slotAcceptsAt, slotNames, starterSlots } from './blocks'
+export { blockName, defineBlock, defineSection, type SectionBlockInput, type SectionInput, fitsParent, getBlockDefinition, placementError, sectionsWithDefaultClassNames, sectionsWithVariants, slotAccepts, slotAcceptsAt, slotNames, starterSlots, withDefaultClassNames, withInlineBlocks } from './blocks'
 export { FORMATS, formatProblem, isPlayableVideoUrl, parseVideoUrl, videoUrlProblem, type FormatCheck, type VideoEmbed, type VideoOptions } from './formats'
 export { describeLayoutErrors, summarizeProblems, type LayoutIssue } from './issues'
 export { conditionFromFunction, conditionMet, readCondition, type BuilderCondition } from './conditions'

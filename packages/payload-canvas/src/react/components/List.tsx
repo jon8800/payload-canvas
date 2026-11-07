@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { TEXT_LIST_SLOT } from '../../core'
 import type { BlockComponentProps } from '../render/types'
 import { editableText } from '../render/editable'
+import { linkAttributes } from '../render/link'
 import { asText, PlaceholderText } from './placeholder'
 
 type Item = { id?: unknown; text?: unknown }
@@ -56,10 +57,21 @@ export function List({ block, props, className, attributes, slots, slotAttribute
 /**
  * One `<li>` of a list. Its text is edited in place on the canvas; Enter adds the next item and
  * Backspace at the start joins it to the item before. An empty item renders nothing on the site.
+ * With a `link` that resolves to an href, the text sits in an `<a>` inside the `<li>`.
  */
 export function ListItem({ props, className, attributes, mode }: BlockComponentProps) {
   const text = asText(props.text)
   if (text === '' && mode !== 'canvas') return null
+  const link = linkAttributes(props.link)
+  if (link) {
+    return (
+      <li {...attributes} className={className}>
+        <a {...link} {...editableText(mode, 'text')}>
+          {text === '' ? <PlaceholderText>List item</PlaceholderText> : text}
+        </a>
+      </li>
+    )
+  }
   return (
     <li {...attributes} className={className} {...editableText(mode, 'text')}>
       {text === '' ? <PlaceholderText>List item</PlaceholderText> : text}

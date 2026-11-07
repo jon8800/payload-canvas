@@ -2,17 +2,24 @@ import { Fragment, memo, type ReactNode } from 'react'
 import {
   blocksHaveMotion,
   COLLECTION_LIST_BLOCK,
+  htmlAttributes,
+  isRepeatSlot,
+  LIST_EMPTY_SLOT,
+  listItemContext,
   motionAttributes,
   staggersChildren,
   LIST_ITEM_SLOT,
   LIST_ITEMS_PROP,
+  repeatRowContext,
   resolveBlockBindings,
   type Block,
   type BlockDefinition,
   type BindingOptions,
+  type BindingRelations,
   type TemplateContext,
 } from '../../core'
-import { defaultBlocks, isLinkField, withBuilderCssClass } from '../../blocks'
+import { defaultBlocks, isLinkField, SECTION_REF_SLOT, withBuilderCssClass } from '../../blocks'
+import { classFields } from '../../core/classes'
 import { defaultComponents } from '../components'
 import { fieldFor } from '../components/Field'
 import { richTextFor } from '../components/RichText'
@@ -32,13 +39,18 @@ type Context = {
   definitions: Map<string, BlockDefinition>
   resolveLinks: VisitField
   binding: BindingOptions
-  /** The document bindings and Field blocks read. Inside a collection list: the item. */
+  /** The document bindings and Field blocks read. Inside a collection list: the item; inside a field list: the row. */
   context: TemplateContext | null
   /**
-   * Canvas only: a repeated collection list item after the first. Its blocks get
+   * Canvas only: a repeated collection list item or field list row after the first. Its blocks get
    * `data-builder-repeat` instead of editor attributes, so selection maps to the first item.
    */
   repeat: boolean
+  /**
+   * A collection list item or repeat row after the first, on the site and the canvas. Its blocks
+   * leave out their HTML `id`, so an id stays unique on the page.
+   */
+  copy: boolean
   /** Given to components that read the page data (see `withPageData`). */
   pageData: PageData | null
 }
@@ -94,27 +106,41 @@ function renderSlot(block: Block, slot: string, ctx: Context): ReactNode {
   )
 }
 
+/** The contexts a list block's `item` slot renders with: one per listed document or repeat row. */
+function repeatContexts(block: Block, around: TemplateContext | null): TemplateContext[] {
+  const collection = typeof block.props?.collection === 'string' ? block.props.collection : ''
+  if (block.type === COLLECTION_LIST_BLOCK) return listItemsOf(block.props).map((doc, i) => listItemContext(doc, i, around, collection))
+  const rows = block.props?.[LIST_ITEMS_PROP]
+  return Array.isArray(rows) ? rows.map((row, i) => repeatRowContext(row, i, around, collection)) : []
+}
+
+/** True when a collection list shows its `empty` slot: it has no documents. */
+const showsEmpty = (block: Block) => block.type === COLLECTION_LIST_BLOCK && listItemsOf(block.props).length === 0
+
 /**
- * The `item` slot of a collection list, once per loaded document. Each repetition binds to its
- * own document. With no documents, the editor still shows the item design once.
+ * The `item` slot of a collection list (once per loaded document) or a repeat (once per row).
+ * Each repetition binds to its own document or row. On the canvas only the first one is
+ * editable; the others are repeats. With nothing to repeat, the editor still shows the item
+ * design once, and the site shows nothing.
  */
 function renderListItems(block: Block, ctx: Context): ReactNode {
-  const items = listItemsOf(block.props)
-  const collection = typeof block.props?.collection === 'string' ? block.props.collection : ''
+  const contexts = repeatContexts(block, ctx.context)
   const children = block.slots?.[LIST_ITEM_SLOT] ?? []
-  if (items.length === 0) {
+  if (contexts.length === 0) {
     if (ctx.mode !== 'canvas') return null
-    return renderSlot(block, LIST_ITEM_SLOT, { ...ctx, context: { collection, doc: {} } })
+    const collection = block.type === COLLECTION_LIST_BLOCK && typeof block.props?.collection === 'string' ? block.props.collection : ''
+    return renderSlot(block, LIST_ITEM_SLOT, { ...ctx, context: listItemContext({}, 0, ctx.context, collection) })
   }
   if (children.length === 0) return renderSlot(block, LIST_ITEM_SLOT, ctx)
-  return items.map((doc, i) => (
-    <Fragment key={typeof doc.id === 'string' || typeof doc.id === 'number' ? doc.id : i}>
+  return contexts.map((context, i) => (
+    <Fragment key={typeof context.doc.id === 'string' || typeof context.doc.id === 'number' ? context.doc.id : i}>
       {renderBlocks(
         children,
         {
           ...ctx,
-          context: { collection, doc },
+          context,
           repeat: ctx.repeat || (ctx.mode === 'canvas' && i > 0),
+          copy: ctx.copy || i > 0,
         },
         staggersChildren(block.motion),
       )}
@@ -130,8 +156,19 @@ function componentPropsOf(block: Block, ctx: Context): Record<string, unknown> {
     const { [LIST_ITEMS_PROP]: _items, ...rest } = props
     props = rest
   }
-  const fields = ctx.definitions.get(block.type)?.fields as FieldLike[] | undefined
-  return fields ? mapFieldValues(props, fields, ctx.resolveLinks) : props
+  const definition = ctx.definitions.get(block.type)
+  const fields = definition?.fields as FieldLike[] | undefined
+  const mapped = fields ? mapFieldValues(props, fields, ctx.resolveLinks) : props
+  // Class props get the marker class, so the generated CSS reaches them. A missing one gets its default.
+  const own = classFields(definition)
+  if (own.length === 0) return mapped
+  const marked = { ...mapped }
+  for (const field of own) {
+    const fallback = (field as { defaultValue?: unknown }).defaultValue
+    const value = field.name in marked ? marked[field.name] : fallback
+    if (typeof value === 'string') marked[field.name] = withBuilderCssClass(value)
+  }
+  return marked
 }
 
 /**
@@ -147,6 +184,8 @@ function renderBlock(stored: Block, ctx: Context, preview = false, item = false)
   const block = ctx.context
     ? resolveBlockBindings(stored, ctx.context, ctx.definitions.get(stored.type), ctx.binding)
     : stored
+  // A `$visible` binding that does not hold hides the block (the canvas shows it dimmed).
+  if (block.hidden && !editor) return null
 
   const attributes: Record<string, string> = preview
     ? {}
@@ -156,6 +195,12 @@ function renderBlock(stored: Block, ctx: Context, preview = false, item = false)
       ? { 'data-builder-repeat': '' }
       : {}
   if (editor && !preview && block.hidden) attributes['data-builder-hidden'] = 'true'
+  // The block's own HTML attributes (id, aria-label, aria-hidden). Copies of a list row leave out the id.
+  if (stored.attrs) {
+    const own = htmlAttributes(stored.attrs)
+    if (ctx.copy) delete own.id
+    Object.assign(attributes, own)
+  }
   // Animations: settings for the motion runtime (the canvas plays them only on request).
   if (!preview && (stored.motion || item)) Object.assign(attributes, motionAttributes(stored.motion, item))
 
@@ -174,11 +219,23 @@ function renderBlock(stored: Block, ctx: Context, preview = false, item = false)
 
   const slots: Record<string, ReactNode> = {}
   const slotAttributes: Record<string, Record<string, string>> = {}
-  const isList = block.type === COLLECTION_LIST_BLOCK
+  const isList = isRepeatSlot(block.type, LIST_ITEM_SLOT)
   for (const slot of slotNamesOf(block, ctx)) {
+    if (slot === SECTION_REF_SLOT) {
+      // A live saved section: its blocks render as repeats on the canvas (the ref is what the
+      // editor selects), and its runtime slot is never a drop target.
+      slots[slot] = renderBlocks(block.slots?.[slot] ?? [], { ...ctx, repeat: ctx.repeat || canvas })
+      slotAttributes[slot] = {}
+      continue
+    }
     if (preview) slots[slot] = <SlotOutlet name={slot} />
-    else slots[slot] = isList && slot === LIST_ITEM_SLOT ? renderListItems(block, ctx) : renderSlot(block, slot, ctx)
+    else if (isRepeatSlot(block.type, slot)) slots[slot] = renderListItems(block, ctx)
+    else if (block.type === COLLECTION_LIST_BLOCK && slot === LIST_EMPTY_SLOT) slots[slot] = showsEmpty(block) ? renderSlot(block, slot, ctx) : null
+    else slots[slot] = renderSlot(block, slot, ctx)
     slotAttributes[slot] = editor ? { 'data-slot-owner': block.id, 'data-slot': slot } : {}
+    // A slot with its own element takes its own classes (`styles: true` on the slot).
+    const slotClass = ctx.definitions.get(block.type)?.slots?.[slot]?.styles ? withBuilderCssClass(stored.slotClassName?.[slot]) : undefined
+    if (slotClass) slotAttributes[slot].className = slotClass
   }
   if (isList && !(LIST_ITEM_SLOT in slots)) {
     slots[LIST_ITEM_SLOT] = renderListItems(block, ctx)
@@ -207,6 +264,7 @@ function createContext(
   resolveLink: ResolveLink,
   context: TemplateContext | null,
   pageData: PageData | null,
+  relations: BindingRelations | null = null,
 ): Context {
   return {
     mode,
@@ -214,9 +272,10 @@ function createContext(
     components: { ...defaultComponents, richText: richTextFor(resolveLink), field: fieldFor(resolveLink), ...components },
     definitions: new Map((blocks ?? DEFAULT_DEFINITIONS).map((definition) => [definition.type, definition])),
     resolveLinks: linkVisitor(resolveLink),
-    binding: { url: urlResolver(resolveLink) },
+    binding: { url: urlResolver(resolveLink), ...(relations ? { relations } : {}) },
     context,
     repeat: false,
+    copy: false,
     pageData,
   }
 }
@@ -235,11 +294,12 @@ function contextFor(
   resolveLink: ResolveLink,
   context: TemplateContext | null,
   pageData: PageData | null,
+  relations: BindingRelations | null,
 ): Context {
-  if (mode !== 'canvas') return createContext(mode, components, blocks, resolveLink, context, pageData)
-  const inputs = [components, blocks, resolveLink, context, pageData]
+  if (mode !== 'canvas') return createContext(mode, components, blocks, resolveLink, context, pageData, relations)
+  const inputs = [components, blocks, resolveLink, context, pageData, relations]
   if (canvasContext && canvasContext.inputs.every((input, i) => input === inputs[i])) return canvasContext.ctx
-  canvasContext = { inputs, ctx: createContext(mode, components, blocks, resolveLink, context, pageData) }
+  canvasContext = { inputs, ctx: createContext(mode, components, blocks, resolveLink, context, pageData, relations) }
   return canvasContext.ctx
 }
 
@@ -262,8 +322,9 @@ export function RenderLayout({
   resolveLink = defaultResolveLink,
   context,
   pageData,
+  relations,
 }: RenderLayoutProps): ReactNode {
-  const ctx = contextFor(mode, components, blocks, resolveLink, context ?? null, pageData ?? null)
+  const ctx = contextFor(mode, components, blocks, resolveLink, context ?? null, pageData ?? null, relations ?? null)
   const motion = mode === 'site' && blocksHaveMotion(layout.blocks)
   return (
     <>

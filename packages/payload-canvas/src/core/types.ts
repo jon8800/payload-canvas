@@ -44,7 +44,31 @@ export type Block = {
    * Stored only when it holds a kind.
    */
   motion?: BlockMotion
+  /**
+   * HTML attributes of the block's root element (`core/attrs.ts`). Payload reserves `id` inside
+   * blocks, so they live here. Stored only when one is set.
+   */
+  attrs?: BlockAttrs
+  /**
+   * Tailwind classes of a slot's own element, by slot name, for slots whose definition sets
+   * `styles: true` (e.g. the `empty` slot of a collection list). Compiled like `className`.
+   * Stored only when one is set.
+   */
+  slotClassName?: Record<string, string>
 }
+
+/** A block's own HTML attributes. Empty values are left out. */
+export type BlockAttrs = {
+  /** The element's `id`, for `#anchor` links. Unique in the layout. Letters, digits, "-" and "_", starting with a letter. */
+  id?: string
+  /** `aria-label`: the element's name for screen readers. */
+  ariaLabel?: string
+  /** `aria-hidden="true"`: screen readers skip the element (decorative shapes, repeated links). */
+  ariaHidden?: boolean
+}
+
+/** An update of `attrs`: a key replaces that key, `null` removes it, keys left out stay. */
+export type BlockAttrsPatch = { [K in keyof BlockAttrs]?: BlockAttrs[K] | null }
 
 export type Layout = {
   version: 1
@@ -74,6 +98,17 @@ export type SlotDefinition = {
   max?: number
   /** Fewest direct children the slot needs (Payload's `minRows`). Fewer blocks only publishing. */
   min?: number
+  /**
+   * With `allow`: the slot also accepts every block type whose definition sets `inline: true`
+   * (`withInlineBlocks` adds them to `allow`). The link block's content slot sets it.
+   */
+  allowInline?: boolean
+  /**
+   * The slot renders in an element of its own that takes classes (`block.slotClassName[slot]`).
+   * The Styles panel then offers the slot as a style target. The component spreads
+   * `slotAttributes[slot]` (which carries the `className`) on that element. Default false.
+   */
+  styles?: boolean
 }
 
 export type BlockDefinition = {
@@ -89,6 +124,11 @@ export type BlockDefinition = {
   parents?: string[]
   /** Adds `className` and the style controls. Default true. */
   styles?: boolean
+  /**
+   * The block renders no link, button or other control of its own, so it may sit inside a link
+   * (an icon, a badge, a rating). Slots with `allowInline` accept it. Default false.
+   */
+  inline?: boolean
   /** Classes a newly inserted block starts with (e.g. "flex flex-col gap-4" for a stack). */
   defaultClassName?: string
   /**
@@ -128,6 +168,23 @@ export type SectionDefinition = {
    * the saved sections collection. The section's own `id` is then `saved:<savedId>`.
    */
   savedId?: string | number
+  /**
+   * Other versions of the section in the same file (a split hero next to a centred one). The
+   * plugin and `builderMcpTools` list each variant as a section of its own after this one
+   * (`sectionsWithVariants`): id `<id>/<variant id>`, label `<label> (<variant label>)`.
+   */
+  variants?: SectionVariant[]
+  /** Set on a variant after `sectionsWithVariants`: the id of the section it belongs to. */
+  variantOf?: string
+}
+
+/** One version of a section (`SectionDefinition.variants`). It shares the section's category. */
+export type SectionVariant = {
+  /** Unique in the section, e.g. "split". The variant's section id is `<section id>/<id>`. */
+  id: string
+  label: string
+  description?: string
+  blocks: Block[]
 }
 
 /** The saved sections collection, for the editor. Null when `websiteBuilder({ savedSections: false })`. */
@@ -171,6 +228,16 @@ export type TemplateContext = {
   // not assignable to Record<string, unknown>.
   // oxlint-disable-next-line typescript/no-explicit-any
   doc: Record<string, any>
+  /** Inside a repeat item: the row value itself (`$item`). */
+  item?: unknown
+  /** Inside a collection list or repeat item: the item's number, from 1 (`$index`). */
+  index?: number
+  /** Inside a collection list or repeat item: the enclosing document (`$parent.`). */
+  // oxlint-disable-next-line typescript/no-explicit-any
+  parent?: Record<string, any>
+  /** Inside a collection list or repeat item: the page's own document (`$page.`). Else `doc` is the page. */
+  // oxlint-disable-next-line typescript/no-explicit-any
+  page?: Record<string, any>
 }
 
 // ---------------------------------------------------------------------------
@@ -236,6 +303,11 @@ export type BuilderClientConfig = {
   storage?: 'payload-blocks'
   /** With `storage: 'payload-blocks'`: the block types the field allows at its top level. */
   payloadRootTypes?: string[]
+  /**
+   * Collection -> relationship field path -> related collection (`bindingRelations`), so the
+   * canvas resolves `<path>.$url` bindings as the site does.
+   */
+  relations?: Record<string, Record<string, string>>
 }
 
 /** One document field a region shows. */
@@ -334,6 +406,21 @@ export type StyleTokens = {
   containers: ThemeToken[]
   /** Every utility class name the design system knows (for autocomplete), without variants. */
   classList: string[]
+  /**
+   * The site's own static `@utility` classes (`type-h2`, `btn-primary`, `glass`), in CSS order, from
+   * the CSS entry and the files it imports (not from packages). The Styles panel lists them as
+   * presets. Left out by servers before this field existed.
+   */
+  siteClasses?: SiteClass[]
+}
+
+/** One `@utility` class of the site. A `/* @canvas Group: Label *\/` comment right above the rule sets `label` and `group`. */
+export type SiteClass = {
+  name: string
+  label?: string
+  group?: string
+  /** The rule's declarations, shortened, for a preview in the editor. */
+  css: string
 }
 
 // ---------------------------------------------------------------------------
@@ -392,6 +479,10 @@ export type Operation =
        * kinds left out stay. `motion: null` removes all motion.
        */
       motion?: MotionPatch | null
+      /** HTML attributes. Each key given replaces that key, `null` removes it. `attrs: null` removes all. */
+      attrs?: BlockAttrsPatch | null
+      /** Classes per slot. Each slot given replaces that slot's classes, `null` or "" removes them. */
+      slotClassName?: Record<string, string | null>
     }
 
 /** `inverse` undoes this operation when applied in order to the resulting layout. */

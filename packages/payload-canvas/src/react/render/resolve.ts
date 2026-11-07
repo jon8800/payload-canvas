@@ -1,11 +1,12 @@
 // Replaces upload/relationship IDs in block props with documents.
 
 import type { Payload, Where } from 'payload'
-import { resolveBindings, type Block, type BlockDefinition, type Layout, type TemplateContext } from '../../core'
+import { resolveBindings, type BindingRelations, type Block, type BlockDefinition, type Layout, type TemplateContext } from '../../core'
 import { isRecord, mapFieldValues, type FieldLike, type VisitField } from './fields'
-import { attachListItems, listQueries, type ListQuery } from './lists'
+import { arrangeListDocs, attachListItems, listQueries, listRequest, pageLinks, withPageParams, type ListPages, type ListQuery, type ListQueryParams } from './lists'
 import type { FetchDocs, ResolveLink } from './types'
 import { localeArgs, localizeLayout, type LocaleArgs, type RenderLocale } from './locale'
+import { attachSections } from './sections'
 
 type Id = string | number
 type Resolve = (collection: string, id: Id) => unknown
@@ -146,18 +147,37 @@ export type LoadLayoutOptions = RenderLocale & {
   context?: TemplateContext | null
   /** The site's link resolver, for the `$url` binding path. `RenderLayout` resolves it otherwise. */
   resolveLink?: ResolveLink
+  /** Which collection each relationship field points to (`bindingRelations`), for `<path>.$url` bindings. */
+  relations?: BindingRelations | null
   /**
    * The visitor (the signed-in user, or none). Collection lists load their documents with this
    * user's access (`overrideAccess: false`), so a list never shows documents or populated fields
    * the visitor may not read, such as a user's email. Pass the user in draft mode.
    */
   user?: unknown
+  /**
+   * The request's URL query (`URLSearchParams`, or a Next.js page's awaited `searchParams`).
+   * Collection lists apply their `queryFilters` with it. Without it the filters are off. A route
+   * that filters lists by the URL should send `noindex, follow` for filtered URLs.
+   */
+  query?: ListQueryParams | null
+  /**
+   * The page's path (`/guides`). The page links of paginated lists start with it, so the link to
+   * page 1 is the bare path. Without it they are relative (`?page=2`, and `?` for page 1).
+   */
+  path?: string
+  /**
+   * The seed of `sort: "$random"` lists: the same seed gives the same order. Default: a new seed
+   * per call, so a cached page shuffles once per cache build.
+   */
+  randomSeed?: number
 }
 
 /**
  * Server helper: prepares a layout for `RenderLayout` with Payload's Local API.
+ * 0. Puts the current blocks of each live saved section (`sectionRef`) into the layout.
  * 1. Resolves bindings and Field blocks against `options.context` (when given).
- * 2. Loads every collection list's documents (`depth: 1`; published only unless `draft`), with the
+ * 2. Loads every collection list's documents (`depth: 1` or the list's `depth`; published only unless `draft`), with the
  *    access of `options.user` (anonymous without it).
  * 3. Replaces upload/relationship IDs in block props with documents (one batched `find` per collection).
  */
@@ -171,21 +191,7 @@ export async function loadLayoutData(
   const context = options?.context ?? null
   // Localized sites: the layout and its documents in the render's locale (render/locale.ts).
   const locale = localeArgs(options)
-  const localized = localizeLayout(layout, blocks, payload, options)
-  const bound = context
-    ? resolveBindings(localized, context, blocks, options?.resolveLink ? { url: urlResolver(options.resolveLink) } : undefined)
-    : localized
-
-  const queries = listQueries(bound, context)
-  const items = new Map<string, Array<Record<string, unknown>>>()
-  await Promise.all(
-    queries.map(async (query) => {
-      items.set(query.blockId, await findListItems(payload, query, draft, options?.user ?? null, locale))
-    }),
-  )
-  const withItems = attachListItems(bound, items)
-
-  return resolveLayoutData(withItems, blocks, async (collection, ids) => {
+  const fetchDocs: FetchDocs = async (collection, ids) => {
     const result = await payload.find({
       // The collection slug is dynamic, so it cannot match the generated slug union.
       collection: collection as never,
@@ -201,38 +207,70 @@ export async function loadLayoutData(
     return new Map(
       (result.docs as Array<Record<string, unknown>>).map((doc) => [doc.id as Id, doc]),
     )
-  })
+  }
+  // Live saved sections first, so their blocks get the same bindings, lists and documents.
+  const withSections = await attachSections(layout, blocks, fetchDocs)
+  const localized = localizeLayout(withSections, blocks, payload, options)
+  const bound = context
+    ? resolveBindings(localized, context, blocks, {
+        ...(options?.resolveLink ? { url: urlResolver(options.resolveLink) } : {}),
+        ...(options?.relations ? { relations: options.relations } : {}),
+      })
+    : localized
+
+  const queries = listQueries(bound, context, options?.query)
+  const items = new Map<string, Array<Record<string, unknown>>>()
+  const pages = new Map<string, ListPages>()
+  const seed = options?.randomSeed ?? Math.floor(Math.random() * 4_294_967_296)
+  await Promise.all(
+    queries.map(async (query) => {
+      const result = await findListItems(payload, query, draft, options?.user ?? null, locale)
+      items.set(query.blockId, arrangeListDocs(result.docs, query, seed))
+      if (query.page) pages.set(query.blockId, pageLinks(options?.query, query.page, result.totalPages, query.pageParam, options?.path))
+    }),
+  )
+  const withItems = withPageParams(attachListItems(bound, items, pages), queries)
+
+  return resolveLayoutData(withItems, blocks, fetchDocs)
 }
 
-/** One collection list's documents. An unknown collection or a failed query gives an empty list. */
+/**
+ * One collection list's documents. An unknown collection, a filter that matches nothing (`none`) or
+ * a failed query gives an empty list.
+ */
 async function findListItems(
   payload: Payload,
   query: ListQuery,
   draft: boolean,
   user: unknown,
   locale: LocaleArgs,
-): Promise<Array<Record<string, unknown>>> {
+): Promise<{ docs: Array<Record<string, unknown>>; totalPages: number }> {
   const config = (payload.collections as Record<string, { config: { versions?: { drafts?: unknown } } } | undefined>)[query.collection]?.config
-  if (!config) return []
+  if (!config || query.none) return { docs: [], totalPages: 0 }
   const where: Where[] = []
   if (query.exclude !== undefined) where.push({ id: { not_equals: query.exclude } })
+  if (query.ids) where.push({ id: { in: query.ids } })
+  if (query.where) where.push(query.where)
+  const request = listRequest(query)
   if (!draft && config.versions?.drafts) where.push({ _status: { equals: 'published' } })
   try {
     const result = await payload.find({
       collection: query.collection as never,
       where: where.length > 0 ? { and: where } : {},
-      sort: query.sort,
-      limit: query.limit,
-      depth: 1,
+      sort: request.sort,
+      // Payload has no offset: load the skipped documents too (`arrangeListDocs` drops them).
+      limit: request.limit,
+      ...(request.page ? { page: request.page } : {}),
+      depth: query.depth ?? 1,
       draft,
       // The visitor's access: unreadable documents and relationships stay out (or stay IDs).
       overrideAccess: false,
       user: user as never,
       ...locale,
     })
-    return result.docs as Array<Record<string, unknown>>
+    return { docs: result.docs as Array<Record<string, unknown>>, totalPages: result.totalPages ?? 1 }
   } catch (error) {
     payload.logger.error({ err: error, msg: `[builder] Collection list "${query.collection}" failed to load.` })
-    return []
+    return { docs: [], totalPages: 0 }
   }
 }

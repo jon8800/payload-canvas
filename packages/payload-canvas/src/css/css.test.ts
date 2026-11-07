@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { describe, test } from 'node:test'
@@ -8,7 +8,8 @@ import { fileURLToPath } from 'node:url'
 import { createCanvasCompiler } from './browser'
 import { clearCssCache, compileClasses, getCanvasCssInput, getStyleTokens, tracingIncludes } from './index'
 import { type CanvasCssData, countUtilityLayers, extractUtilities, splitTopLevel } from './shared'
-import { parseThemeEntries, tokensFromTheme } from './tokens'
+import { STARTER_GLOBALS_CSS } from './siteClasses.test-data'
+import { parseSiteClasses, parseThemeEntries, tokensFromTheme } from './tokens'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const starter = path.resolve(here, '../../../../apps/starter')
@@ -16,6 +17,9 @@ const entry = path.join(starter, 'src/app/(frontend)/globals.css')
 const typography: unknown = createRequire(path.join(starter, 'package.json'))('@tailwindcss/typography')
 const plugins = { '@tailwindcss/typography': typography }
 const options = { entry, plugins }
+
+/** Recorded CSS data with only an entry. */
+const cssData = (css: string): CanvasCssData => ({ version: 1, entry: css, stylesheets: {}, plugins: [] })
 
 const MAIN = ['bg-primary', 'p-8', 'md:p-12', 'hover:bg-secondary', 'p-[37px]', 'prose']
 
@@ -209,8 +213,52 @@ describe('getStyleTokens', () => {
     const tokens = await getStyleTokens(options)
     const input = (await getCanvasCssInput(options)) as unknown as CanvasCssData
     const fallback = tokensFromTheme(parseThemeEntries(input), null)
-    assert.deepEqual({ ...fallback, classList: undefined }, { ...tokens, classList: undefined })
+    assert.deepEqual({ ...fallback, classList: undefined, siteClasses: undefined }, { ...tokens, classList: undefined, siteClasses: undefined })
     assert.deepEqual(fallback.classList, [])
+  })
+
+  test("lists the entry's own static @utility classes with their @canvas labels", async () => {
+    // Written at test time (not in src, so the build never ships it), inside the package so
+    // `@import "tailwindcss"` resolves.
+    const dir = path.join(here, '../../node_modules/.cache/payload-canvas-test')
+    await mkdir(dir, { recursive: true })
+    const css = [
+      '@import "tailwindcss";',
+      '/* @canvas Surfaces: Glass panel */',
+      '@utility glass {\n  backdrop-filter: blur(8px);\n}',
+      '/* A comment that is not a preset label. */',
+      '@utility btn-primary {\n  background: black;\n  color: white;\n}',
+      '@utility tab-* {\n  tab-size: --value(integer);\n}',
+    ].join('\n')
+    await writeFile(path.join(dir, 'utilities.css'), css)
+    const fixture = { entry: path.join(dir, 'utilities.css') }
+    const tokens = await getStyleTokens(fixture)
+    // The class list has them too, but mixed into every Tailwind class.
+    assert.ok(tokens.classList.includes('glass') && tokens.classList.includes('btn-primary'))
+    assert.deepEqual(tokens.siteClasses, [
+      { name: 'glass', label: 'Glass panel', group: 'Surfaces', css: 'backdrop-filter: blur(8px);' },
+      { name: 'btn-primary', css: 'background: black; color: white;' },
+    ])
+    assert.deepEqual((await getStyleTokens(options)).siteClasses, [])
+  })
+
+  test('only the comment right above a rule labels it: an earlier comment never merges in', () => {
+    const css = ['/* A note. */', '/* @canvas Effects: Glass */', '@utility glass {\n  /* inside */\n  color: red;\n}', '/* @canvas Effects: Grain */', '/* Not a label. */', '@utility grain {}'].join('\n')
+    assert.deepEqual(parseSiteClasses(cssData(css)), [
+      { name: 'glass', label: 'Glass', group: 'Effects', css: 'color: red;' },
+      { name: 'grain', css: '' },
+    ])
+    // The escort-starter's globals.css: 41 static utilities, 32 labelled. Before the fix, the 10 that
+    // follow another comment (glass, rule-brand, type-hero, …) had no label.
+    const classes = parseSiteClasses(cssData(STARTER_GLOBALS_CSS))
+    assert.equal(classes.length, 41)
+    assert.equal(classes.filter((site) => site.label).length, 32)
+    const byName = new Map(classes.map((site) => [site.name, site]))
+    for (const name of ['glass', 'glass-bar', 'glass-lens', 'glass-plate', 'rule-brand', 'ambient-light', 'film-grain', 'type-hero', 'surface-dark', 'text-accent-gradient']) {
+      assert.ok(byName.get(name)?.label && byName.get(name)?.group, `${name} has a label and a group`)
+    }
+    assert.deepEqual({ ...byName.get('glass'), css: undefined }, { name: 'glass', label: 'Glass', group: 'Effects', css: undefined })
+    assert.equal(byName.get('liquid-fill')?.label, undefined)
   })
 
   test('caches per entry content: a cache hit returns the same object', async () => {

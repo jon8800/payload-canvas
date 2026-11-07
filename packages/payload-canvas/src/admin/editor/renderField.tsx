@@ -22,6 +22,7 @@ import { isStructuralChange } from './fields/arrayState'
 import { CheckedTextField, NumberField } from './fields/CheckedInputs'
 import { FieldSection, GroupField } from './fields/GroupField'
 import { JsonField } from './fields/JsonField'
+import { WhereField } from './fields/WhereField'
 import { ManyValuesField } from './fields/ManyValuesField'
 import { PointField } from './fields/PointField'
 import { RichTextField } from './fields/RichTextField'
@@ -43,6 +44,8 @@ type Props = {
   readonly path: string
   readonly value: unknown
   readonly onChange: (value: unknown) => void
+  /** The other values of the same object (block props, group or row), for fields that read a sibling. */
+  readonly siblings?: Record<string, unknown>
 }
 
 function text(value: unknown): string | undefined {
@@ -91,7 +94,7 @@ function Unsupported({ label, reason }: { label: string; reason: string }) {
  * `{ relationTo, value }`: we store IDs, or `{ relationTo, value: id }` for polymorphic fields.
  * SelectInput returns the option object. DatePicker returns a Date, stored as an ISO string.
  */
-export function RenderBlockField({ field, onChange, path, value }: Props) {
+export function RenderBlockField({ field, onChange, path, value, siblings }: Props) {
   const { config } = useConfig()
   // In another locale, an untranslated text shows the fallback language's text as its placeholder.
   const placeholder = useLocalePlaceholder(path)
@@ -266,8 +269,25 @@ export function RenderBlockField({ field, onChange, path, value }: Props) {
       )
     }
 
-    case 'json':
+    case 'json': {
+      // `admin.custom.builderWhere`: a Payload where query, edited as condition rows.
+      const where = field.admin?.custom?.builderWhere as { collectionField?: string } | undefined
+      if (where) {
+        const collection = where.collectionField ? siblings?.[where.collectionField] : undefined
+        return (
+          <WhereField
+            collection={typeof collection === 'string' ? collection : undefined}
+            description={description}
+            label={label}
+            onChange={onChange}
+            path={path}
+            required={required}
+            value={value}
+          />
+        )
+      }
       return <JsonField description={description} label={label} onChange={onChange} path={path} required={required} value={value} />
+    }
 
     case 'point':
       return <PointField description={description} label={label} onChange={onChange} path={path} required={required} value={value} />
@@ -354,7 +374,16 @@ export function RenderBlockFields({ fields, data, path, onChange, scope = fields
     if (field.type === 'collapsible') {
       const shared = <RenderBlockFields fields={field.fields} data={record} path={path} onChange={onChange} scope={scope} />
       const title = text(field.label)
-      out.push(title ? <FieldSection key={`layout-${index}`} label={title}>{shared}</FieldSection> : <Fragment key={`layout-${index}`}>{shared}</Fragment>)
+      const folded = field.admin?.initCollapsed === true
+      out.push(
+        title ? (
+          <FieldSection key={`layout-${index}`} label={title} description={folded ? text(field.admin?.description) : undefined} collapsed={folded ? true : undefined}>
+            {shared}
+          </FieldSection>
+        ) : (
+          <Fragment key={`layout-${index}`}>{shared}</Fragment>
+        ),
+      )
       return
     }
     if (field.type === 'row' || (field.type === 'group' && !('name' in field && field.name))) {
@@ -403,7 +432,7 @@ export function RenderBlockFields({ fields, data, path, onChange, scope = fields
           <LocaleFieldFrame path={fieldPath} name={name}>
             {/* The slot adds binding controls (templates, collection lists) around the normal input. */}
             <FieldSlot field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} label={fieldLabel(field)}>
-              <RenderBlockField field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} />
+              <RenderBlockField field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} siblings={record} />
             </FieldSlot>
           </LocaleFieldFrame>
         </FieldAccessFrame>

@@ -33,4 +33,6 @@ export const defaultComponents: BlockComponents = {
   video: Video,
   field: Field,
   collectionList: CollectionList,
+  // A repeat wraps its rows the same way.
+  repeat: CollectionList,
 }
