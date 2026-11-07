@@ -93,7 +93,12 @@ function ModeLayer({ comments }: { comments: CommentsController }) {
         aria-label="Click a block to comment"
         onPointerMove={onMove}
         onPointerLeave={() => setHoveredId(null)}
-        onPointerDown={(e) => e.button === 0 && onClick(e)}
+        onPointerDown={(e) => {
+          if (e.button !== 0) return
+          // The composer focuses its text box as it opens; the default mousedown would take focus back.
+          e.preventDefault()
+          onClick(e)
+        }}
         onWheel={(e) => runtime.postToCanvas({ type: 'scrollBy', dx: e.deltaX, dy: e.deltaY })}
       />
       {hovered && (
