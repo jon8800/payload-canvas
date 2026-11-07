@@ -1,7 +1,7 @@
 // Server-only: the theme global as CSS variables and Google Fonts links, for the `<head>`.
 import { themeConfigOf, themeOutput, type ThemeData, type ThemeOutput } from '../../theme'
 import type { Payload } from 'payload'
-import { cache } from 'react'
+import { cache, Suspense } from 'react'
 
 import { THEME_PRECEDENCE, themeStyleHref } from './constants'
 import { ThemeLive } from './ThemeLiveLoader'
@@ -25,7 +25,11 @@ export const loadTheme = cache(async (payload: Payload): Promise<LoadedTheme | n
 })
 
 export type ThemeStyleProps = {
-  payload: Payload
+  /**
+   * The Payload instance, or the promise from `getPayload({ config })`. Pass the promise under
+   * Cache Components: then the connection is made inside the component's `<Suspense>` boundary.
+   */
+  payload: Payload | Promise<Payload>
   /** Load the theme's Google Fonts (`<link>` tags). Default `true`. `false` when you host fonts yourself. */
   fonts?: boolean
   /**
@@ -39,8 +43,23 @@ export type ThemeStyleProps = {
  * The theme for the `<head>`: a `<style>` tag with the theme variables and the Google Fonts links.
  * Put it in the site's root layout and in the canvas layout (with `live`). Renders nothing with
  * `theme: false`.
+ *
+ * The database read sits in its own `<Suspense>` boundary (fallback: nothing), so a route with
+ * Next's Cache Components (`cacheComponents: true`) does not fail on it. To keep the theme in the
+ * static shell, render it inside your own `'use cache'` component (see the README's "Cache
+ * Components").
  */
-export async function ThemeStyle({ payload, fonts = true, live = false }: ThemeStyleProps) {
+export function ThemeStyle(props: ThemeStyleProps) {
+  return (
+    <Suspense fallback={null}>
+      <ThemeTags {...props} />
+    </Suspense>
+  )
+}
+
+/** The tags of `ThemeStyle`, after the read. */
+export async function ThemeTags({ payload: payloadOrPromise, fonts = true, live = false }: ThemeStyleProps) {
+  const payload = await payloadOrPromise
   const theme = await loadTheme(payload)
   const config = themeConfigOf(payload)
   if (!theme || !config) return null

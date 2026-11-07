@@ -45,6 +45,7 @@ The starter also has a calmer Payload admin: a sidebar in groups with icons, a n
 5. [Plugin options](#plugin-options)
 6. [Rendering the layout on your site](#rendering-the-layout-on-your-site)
    - [Custom components](#custom-components)
+   - [Cache Components](#cache-components)
 7. [Server components in the canvas](#server-components-in-the-canvas)
    - [Whole-page editing: regions outside the layout](#whole-page-editing-regions-outside-the-layout)
 8. [Custom blocks](#custom-blocks)
@@ -245,8 +246,7 @@ import type { ReactNode } from 'react'
 // Your site's CSS: it holds every class Tailwind found in your files.
 import '../(frontend)/globals.css'
 
-export default async function CanvasLayout({ children }: { children: ReactNode }) {
-  const payload = await getPayload({ config })
+export default function CanvasLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       {/* The same body classes as your site layout. */}
@@ -254,7 +254,7 @@ export default async function CanvasLayout({ children }: { children: ReactNode }
         {/* The Theme global's variables and fonts (React moves them into the head). `live` reloads
             them after a theme save. Not in a <head> element: `live` adds a client component, and
             Next's metadata then fails to hydrate on some loads. */}
-        <ThemeStyle payload={payload} live />
+        <ThemeStyle payload={getPayload({ config })} live />
         {children}
       </body>
     </html>
@@ -332,12 +332,12 @@ import type { ReactNode } from 'react'
 
 import './globals.css'
 
-export default async function RootLayout({ children }: { children: ReactNode }) {
-  const payload = await getPayload({ config })
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
-        <ThemeStyle payload={payload} />
+        {/* The promise, not the instance: the read stays inside ThemeStyle's <Suspense> (Cache Components). */}
+        <ThemeStyle payload={getPayload({ config })} />
       </head>
       <body className="font-sans antialiased">{children}</body>
     </html>
@@ -586,6 +586,7 @@ websiteBuilder({
     posts: { templates: true, url: (doc) => `/blog/${doc.slug}` },
   },
   blocks,                      // default: defaultBlocks()
+  listCollections: ['testimonials', 'team'], // more collections for the collection list block
   sections,                    // ready-made sections for the library and AI tools
   savedSections: { slug: 'builder-sections' }, // sections people save; `false` turns it off
   css: {
@@ -593,7 +594,7 @@ websiteBuilder({
     plugins: { '@tailwindcss/typography': typography },
   },
   canvasPath: '/builder-canvas',
-  templates: { slug: 'builder-templates' },
+  templates: { slug: 'builder-templates', admin: { group: 'Design' } },
   live: { heartbeatMs: 15000 },
   ai: { adapter: openRouterAdapter({ apiKey: process.env.OPENROUTER_API_KEY }) }, // the AI assistant
   theme: { admin: { group: 'Settings' } }, // the Theme global; `false` leaves it out
@@ -612,6 +613,7 @@ websiteBuilder({
 | `collections[slug].regions` | `{ name, label?, fields }[]` | Fixed parts of the page that show ordinary document fields outside the layout (a header made of the title and an image). The builder shows and edits the whole page. Left out: the layout alone. See [Whole-page editing](#whole-page-editing-regions-outside-the-layout). |
 | `collections[slug].localization` | `'props' \| false` | With Payload `localization` on: `'props'` (the default) translates localized props in one shared layout; `false` keeps one set of values. See [Localization](#localization). |
 | `blocks` | `BlockDefinition[]` | The blocks editors can use. Default `defaultBlocks()`. |
+| `listCollections` | `string[]` | More collections the collection list block can show, after the collections with a `url`. Use it for data collections without pages of their own, such as testimonials or team members. Their items have no `$url`. Each slug must be a collection of the config. Pass the same list to `builderMcpTools`. |
 | `sections` | `SectionDefinition[]` | Ready-made sections. See [Sections](#sections). |
 | `savedSections` | `{ slug?, access?, admin?, hooks? } \| false` | The collection for sections people save in the editor. Default slug `builder-sections`; default access: every signed-in user. `false` turns it off. See [Saved sections](#saved-sections). |
 | `css.entry` | `string` | Your Tailwind entry CSS, absolute or relative to `process.cwd()`. Required. |
@@ -619,6 +621,7 @@ websiteBuilder({
 | `canvasPath` | `string` | The canvas route. Default `/builder-canvas`. |
 | `templates.slug` | `string` | Slug of the templates collection. Default `builder-templates`. |
 | `templates.hooks` | `CollectionConfig['hooks']` | Hooks for the templates collection, for example to revalidate pages. |
+| `templates.admin` | `CollectionConfig['admin']` | Merged into the templates collection's `admin` options, for example `group` or `hidden`. |
 | `live.heartbeatMs` | `number` | Interval of the keep-alive message on the live event stream. Default 10 s. |
 | `multiplayer` | `boolean` | Deprecated, no effect. Several people can always edit a layout at once, and Payload's document lock stays on for the other fields. See [Multiplayer editing](#multiplayer-editing). |
 | `ai` | `AiOptions` | Turns on the AI assistant in the editor. See [AI assistant](#ai-assistant). |
@@ -769,6 +772,33 @@ export const components: BlockComponents = { pricingTable: PricingTable }
 ```
 
 `BuilderCanvas` takes the same `blocks`, `components` and `resolveLink` as `RenderLayout`. It also takes `plugins` (your Tailwind plugins map, see [Styling](#styling)) and `server` (a server action made with `createCanvasServer`, see [Server components in the canvas](#server-components-in-the-canvas)).
+
+### Cache Components
+
+With Next's Cache Components (`cacheComponents: true` in `next.config`), a route fails to build when a component reads data outside `<Suspense>` and outside `'use cache'`. The plugin's server parts work with it:
+
+- **`ThemeStyle`** reads the Theme global inside its own `<Suspense>` boundary (fallback: nothing). It works as it is, in the `<head>` too, and the theme streams in with the dynamic part of the page. Pass `payload={getPayload({ config })}` (the promise), not an instance you awaited in the layout: a layout that awaits `getPayload` connects to the database outside any boundary, and the route fails. To put it in the static shell, render it inside your own cached component. The plugin clears the theme's cache tag (`theme.cacheTag`, default the slug `theme-settings`) after each theme save:
+
+  ```tsx
+  // src/components/SiteTheme.tsx
+  import config from '@payload-config'
+  import { cacheTag } from 'next/cache'
+  import { getPayload } from 'payload'
+  import { DEFAULT_THEME_SLUG } from 'payload-canvas'
+  import { ThemeStyle } from 'payload-canvas/react/server'
+
+  export async function SiteTheme() {
+    'use cache'
+    cacheTag(DEFAULT_THEME_SLUG)
+    const payload = await getPayload({ config })
+    return <ThemeStyle payload={payload} />
+  }
+  ```
+
+  Put `<SiteTheme />` in the root layout's `<head>`. In the canvas layout, keep `<ThemeStyle payload={getPayload({ config })} live />` uncached, so the editor sees each save at once.
+- **`loadLayoutData`, `loadTemplate` and `compilePageCss`** are functions that read Payload. Call them inside your own `'use cache'` function (with `cacheTag` and a revalidate hook on the collection) or in a component under `<Suspense>`. Draft mode and `searchParams` (collection list filters and pages) are request data: read them under `<Suspense>`, not in a cached function.
+- **The canvas route** only renders `BuilderCanvas` (a client component). Its server action runs per request, so it needs nothing.
+- **The admin.** Payload's admin layout reads the session on every request. Add `export const instant = false` to `src/app/(payload)/layout.tsx`, so the admin stays a request-time route.
 
 ## Server components in the canvas
 
@@ -1228,6 +1258,8 @@ export const icons = { arrowRight: ArrowRight, check: Check, close: Close } sati
 
 **A button with an icon.** Put a `text` block and an `icon` block in a `link` block. An icon is an inline block, so it may go straight into a link. Give the link the button's classes (`inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2`). The `button` block has no icon props.
 
+**Icons on buttons.** Give `defaultBlocks()` the same names, and the `button` block gets three props: `icon` (optional, one of the names), `iconPosition` (`start` or `end`, default `end`) and `iconClassName` (the icon's classes, default `size-4 shrink-0`). `builtinComponents({ icons })` includes a `button` component that draws the icon; `buttonComponent(icons)` is that component alone. The icon is decoration (`aria-hidden="true"`): the label names the button. With an icon, the label sits in its own `<span>`. A button without an icon renders as before. Without icon names the button has no icon props, and the default `Button` component ignores them.
+
 #### Disclosure and accordion
 
 `disclosure` is one show/hide item: a native `<details>` with a `summary` slot (always visible) and a `content` slot. It opens with the mouse and the keyboard without script, and the closed content stays in the HTML for search engines. `accordion` is a list of disclosures in its `items` slot (also a `repeat` or `collectionList` of disclosures). Include both: `include: ['disclosure', 'accordion']`.
@@ -1287,6 +1319,33 @@ builtinBlocks({ embed: { canEdit: ({ req }) => req.user?.role === 'admin' } })
 - Access: `embed.canEdit` is a Payload field access function on `code` and `mode` (as `access.create` and `access.update`). Default: everyone who may edit the document may change them. Users without it see the code read-only. MCP agents and the AI assistant act as their user, so the same rule applies to them. See [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields).
 - `embed.maxLength`: the longest code, in characters. Default 50,000 (`EMBED_MAX_LENGTH`). Longer code blocks **Publish**.
 
+#### Lightbox
+
+`lightbox` is a container whose images open full screen. Lay out the images with its `className` (a grid by default), or put a `repeat` of images in it (path `galleryImages`, the image bound to `$item`).
+
+- A click on an image, or Enter or Space on a focused image, opens it in a native modal `<dialog>`. The dialog keeps the focus inside, makes the page inert, closes on Escape and gives the focus back. Arrow keys and the arrow buttons step through the images. On touch screens a sideways swipe steps too: left for the next photo, right for the previous one (pointer events, at least 50 px and more sideways than down; a mouse drag does not swipe). A click beside the photo closes it.
+- The images get `tabindex="0"`, `role="button"` and `aria-haspopup="dialog"`. Images inside a link or a button keep that element as the control.
+- Props: `label` (the dialog's name for screen readers, default "Photos"), `group` (lightboxes with the same group on a page open as one set) `captions` (shows the alt text under the photo; screen readers always hear "2 of 6") and `count` (default on: shows "2 of 6" at the top left when the set has more than one photo).
+- A set holds each photo once: two images with the same `src` attribute are one photo. An image with `data-lightbox-skip` (on the image or an element round it; `LIGHTBOX_SKIP_ATTRIBUTE`) is not in the set, but a click on it opens the set at the photo with the same `src`. Example: an image switcher puts its thumbnails and its large photo in one lightbox and skips the large photo, so the lightbox opens on the photo shown large and steps through the thumbnails.
+- When it closes, the lightbox sends a bubbling `lightbox-close` event (`LIGHTBOX_CLOSE_EVENT`) to the page image of the photo it showed last; `detail.index` is the photo's place in the set.
+- Motion: the dialog and its backdrop fade in (320 ms, ease-out) while the photo grows from 96%; a step slides the old photo out and the new one in (260 ms); closing fades out (200 ms), also on Escape. Under reduced motion only the fades stay. A photo that has not loaded after 150 ms shows a spinning ring.
+- The large photo is the image the page already loaded, with its `srcset` and `sizes="100vw"`, so the browser picks a larger file when it has one.
+- Style the dialog from the block's `className`: `[&_dialog]:` for its text colour and backdrop (`[&_dialog]:backdrop:bg-black/85`), `[&_[data-lightbox-button]]:` for the close, previous and next buttons (`data-lightbox-button` is `close`, `previous` or `next`) `[&_[data-lightbox-photo]]:` for the large photo (during a step the leaving photo has `data-lightbox-photo="leaving"`), `[&_[data-lightbox-count]]:` for the photo number and `[&_[data-lightbox-loading]]:` for the loading ring (its colour is the text colour). The component sets only position and size.
+- The canvas never opens it, so a click selects an image there.
+- Control labels, under **Labels** in the Content tab (localized, English defaults): `closeLabel` ("Close"), `previousLabel` ("Previous photo"), `nextLabel` ("Next photo") and `countLabel` ("{n} of {count}", the photo number). An empty label uses the default.
+
+#### Media backdrop
+
+`mediaBackdrop` puts a photo or a muted looping video behind the blocks of its `children` slot: a hero, a banner, a section with a background. The media and the optional overlay are absolutely placed first children; the block's `className` lays out the content. Keep `relative isolate` in it, so the media stays behind the content and inside the block.
+
+- Props: `image` (a photo), `alt` (empty: decoration, as most backgrounds are), `video` (an upload) or `videoUrl` (a link to a video file), `poster` (empty: the photo), `priority`, `sizes` (default `100vw`) and `overlay`. Uploads come from `builtinBlocks({ mediaCollection })`, default `media`.
+- A video wins over the photo. It starts from script, muted and looping, and never plays when the visitor asks for less motion: the poster stays. It does not play on the canvas.
+- `priority` (the hero only): the photo loads eagerly with `fetchpriority="high"`; for a video the poster is preloaded with high priority.
+- The media focal point (`focalX`, `focalY`) sets `object-position`, unless it is Payload's default 50/50: then the block's `[&>[data-backdrop-media]]:object-top` (or other position) class sets the crop. The photo gets a `srcset` from the media sizes.
+- Media URLs render as stored. When the site serves them from another host or path (Payload stores absolute URLs when `serverURL` is set), map them: `builtinComponents({ mediaUrl: (url) => new URL(url, 'http://x').pathname })`. It applies to the photo, its sizes, the video upload and the poster, not to a typed `videoUrl`. `mediaBackdropComponent(mediaUrl)` is that component alone.
+- Style the media with `[&>[data-backdrop-media]]:` classes (blur, opacity) and the overlay with `[&>[data-backdrop-overlay]]:` classes (`[&>[data-backdrop-overlay]]:bg-black/40`).
+- No WebGL effects.
+
 #### Carousel
 
 `carousel` shows the blocks of its `slides` slot as slides. It runs on [Embla Carousel](https://www.embla-carousel.com/). Each direct child is one slide. Set how many slides show at once with each slide's `className`: `basis-full md:basis-1/2` (or a width such as `w-[85%]`). A single `collectionList` or `repeat` child makes each of its items a slide: set the basis on the item. Any other single child is one slide.
@@ -1317,7 +1376,7 @@ builtinBlocks({ embed: { canEdit: ({ req }) => req.user?.role === 'admin' } })
 `tableOfContents` links to the H2 headings of a rich text field of the current document, for example the body of a post template. Bind its `content` prop to that field: `bindings: { content: 'content' }` (in the inspector, the bind button next to "Rich text"). It renders a `<nav>` of bare `<a href="#id">` links; style them with `[&>a]:` classes on the block.
 
 - Props: `content` (the rich text, usually bound), `minHeadings` (default 3; with fewer headings the block renders nothing) and `label` (the nav's name, default "On this page").
-- The `richText` and `field` blocks give each heading on the page an id from its text (`headingId(text)` in `payload-canvas/core`): lower case, accents dropped, other characters as hyphens, letters of every script kept ("Über uns?" becomes `uber-uns`). So the links find the headings with no setting. Only top-level H2 headings with letters or digits are listed.
+- The `richText` and `field` blocks give each heading on the page an id from its text (`headingId(text)` in `payload-canvas/core`): lower case, accents dropped, other characters as hyphens, letters of every script kept ("Über uns?" becomes `uber-uns`). So the links find the headings with no setting. Only top-level H2 headings with letters or digits are listed. `lexicalHeadings(value, 'h2')` in `payload-canvas/blocks` returns `{ id, text }` for each listed heading.
 - Headings with the same text get their own ids: the second `pricing-2`, the third `pricing-3`, the same ids the rich text renders.
 - On the canvas, with too few headings, it shows three sample links, so it can be selected and styled.
 
@@ -2007,12 +2066,12 @@ import { getPayload } from 'payload'
 import type { ReactNode } from 'react'
 import './globals.css'
 
-export default async function RootLayout({ children }: { children: ReactNode }) {
-  const payload = await getPayload({ config })
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
-        <ThemeStyle payload={payload} />
+        {/* The promise, not the instance: the read stays inside ThemeStyle's <Suspense> (Cache Components). */}
+        <ThemeStyle payload={getPayload({ config })} />
       </head>
       <body>{children}</body>
     </html>
@@ -2026,13 +2085,13 @@ For about 90 popular families (Inter, Roboto, Newsreader, Hanken Grotesk and oth
 
 | Prop | Default | What it does |
 |---|---|---|
-| `payload` | required | The Payload instance. |
+| `payload` | required | The Payload instance, or the promise from `getPayload({ config })`. Pass the promise under Cache Components: the connection is then made inside `ThemeStyle`'s `<Suspense>` boundary. |
 | `fonts` | `true` | `false` leaves the Google Fonts links out (for self-hosted fonts). |
 | `live` | `false` | Reloads the theme in the browser when the global is saved in another tab, or when the page becomes visible again. Use it in the canvas layout. |
 
 Other frontends: `loadTheme(payload)` from `payload-canvas/react/server` returns `{ data, css, fontsHref }`. `themeOutput(doc)` from `payload-canvas/theme` turns any theme document into the same output. `GET /api/builder/theme` returns it over HTTP.
 
-**Caching.** `ThemeStyle` reads the global once per request, never from Next's data cache. After each save the plugin calls `revalidateTag(<cacheTag>, { expire: 0 })` and `revalidatePath('/', 'layout')`, so statically rendered pages render again with the new theme. Tag your own cached theme reads with the cache tag. Saves with `context: { disableRevalidate: true }` (seed scripts) skip this.
+**Caching.** `ThemeStyle` reads the global once per request, never from Next's data cache. The read sits in its own `<Suspense>` boundary, so it works with Next's Cache Components; see [Cache Components](#cache-components) to keep the theme in the static shell. After each save the plugin calls `revalidateTag(<cacheTag>, { expire: 0 })` and `revalidatePath('/', 'layout')`, so statically rendered pages render again with the new theme. Tag your own cached theme reads with the cache tag. Saves with `context: { disableRevalidate: true }` (seed scripts) skip this.
 
 **Styles panel.** The color swatches read the canvas, so they show the theme's colors. The Font list shows the theme's families ("Inter", not `var(--font-sans)`).
 
@@ -2130,7 +2189,7 @@ Only published templates count (all templates in draft mode). Templates with an 
 
 - A **binding** connects a block prop to a document field: `bindings: { "text": "title", "image": "author.avatar" }`. Paths are dot paths from the document root. At render time the prop takes the document's value. A missing value falls back to the prop's own value. In the editor, the binding picker lists only compatible fields of the target collection, including one relationship hop.
 - The **Field** block (`field`) shows one field of the document by path, rendered by its type: rich text, an upload as an image, a date, a relationship's title, or text. Use it for the post body.
-- The **Collection list** block (`collectionList`) lists the latest documents of a collection (`collection`, `limit`, `sort`, `excludeCurrent`, `offset`, `depth`, and the filters `filterField`, `filterBy`, `where` and `queryFilters` below). Its `item` slot is the design of one item and repeats for every document. Its `empty` slot shows instead when no document matches, for example a text "No posts yet". Blocks in the item bind to the item's fields, for example a heading with `bindings: { "text": "title" }` and a link with `bindings: { "link": "$url" }` (the item's URL from the collection's `url` option). The site shows published documents only. It works on normal pages too, not only in templates.
+- The **Collection list** block (`collectionList`) lists the latest documents of a collection (`collection`, `limit`, `sort`, `excludeCurrent`, `offset`, `depth`, and the filters `filterField`, `filterBy`, `where` and `queryFilters` below). Its `item` slot is the design of one item and repeats for every document. Its `empty` slot shows instead when no document matches, for example a text "No posts yet". Blocks in the item bind to the item's fields, for example a heading with `bindings: { "text": "title" }` and a link with `bindings: { "link": "$url" }` (the item's URL from the collection's `url` option). The block offers the collections with a `url`; add data collections without pages (testimonials, team members) with the plugin's `listCollections` option. The site shows published documents only. It works on normal pages too, not only in templates.
   - In the inspector, the fields show under the headings **Filter**, **Sort and count** and **Pages**. **Sort** is a select of the collection's fields with a direction ("Newest first", "A to Z") and **Random order**. It stores the same `sort` text (`-publishedAt`, `$random`). Your own blocks can use the same controls: `admin.custom.builderSort: { collectionField: 'collection' }` on a text field, and `admin.custom.builderHeading: 'Filter'` for a heading above a field.
   - `offset` skips documents after the sort (at most 100).
   - `depth` is `"1"` (default) or `"2"`: how deep the related documents of each item load. Use `"2"` to reach, for example, `categories.image`.
@@ -2270,7 +2329,7 @@ Lists load with the visitor's access (`overrideAccess: false`). The site (`loadL
 
 | Prop | What it does |
 | --- | --- |
-| `ids` | Picked documents, in the order you pick them. A relationship (hasMany) to the collections with a `url` when the plugin knows them, else a list of ids. The list shows only these, up to 100. `limit`, `sort`, `offset` and `paginate` do not apply; the other filters still do. A pick from another collection than `collection` is left out. |
+| `ids` | Picked documents, in the order you pick them. A relationship (hasMany) to the collections the list can show (with a `url`, and `listCollections`) when the plugin knows them, else a list of ids. The list shows only these, up to 100. `limit`, `sort`, `offset` and `paginate` do not apply; the other filters still do. A pick from another collection than `collection` is left out. |
 | `sort: "$random"` | Shuffles the newest 100 matching documents, then applies `offset` and `limit`. `loadLayoutData` picks a new seed per call, so a cached page shuffles once per cache build. Pass `randomSeed` to fix the order. The canvas keeps one order while you edit. Two random lists on a page get different orders. |
 | `paginate: "pages"` | Shows `limit` documents per page and page links under the items: `?page=2`, `?page=3` (`PAGE_PARAM`). The links keep the rest of the URL query (filters, other lists' pages), and page 1 has no page param. Seven pages or fewer: a link to each. More: the first, the last and the pages next to the current one, with a gap between (`1 … 4 5 6 … 20`; `pageWindow`). Pass the query to `loadLayoutData` (`query`), as for `queryFilters`, and the page's path (`path: '/guides'`): the links then start with the path, and page 1 is the bare path (`/guides`). Without `path` the links are relative, and page 1 with no other query values is `?`. `offset` does not apply. |
 | `pageParam` | The URL parameter of the page number. Empty: `page`. Give each paginated list on one page its own (`reviewsPage`), so they page apart. Letters, digits, `_` and `-`; any other value counts as `page`. |
@@ -2727,7 +2786,7 @@ plugins: [
 - `generateImage` makes an image with the site's image adapter (`ai.images` in `websiteBuilder`) and saves it in the media collection. Clients that cannot make images (Claude Code with a Claude plan) use the site's adapter this way. The key needs `create` on the media collection.
 - Every tool checks the key's access to the collection. Handlers run as the key's user with `overrideAccess: false`.
 - Writes are commits to the document's live session, like an editor's own changes. Open editors show them at once, and the agent appears in the collaborator list while it works. The draft is saved about a second later. `getLayout` returns the session's layout, unsaved changes included.
-- `builderMcpTools` options: `blocks`, `sections`, `collections` (the same map as the plugin), `siteUrl` (default: Payload `serverURL`, then `NEXT_PUBLIC_SERVER_URL`), `apiKeyCollection`, `mediaCollection` (default `media`, the same as `ai.mediaCollection`).
+- `builderMcpTools` options: `blocks`, `sections`, `collections` (the same map as the plugin), `listCollections` (the same list as the plugin), `siteUrl` (default: Payload `serverURL`, then `NEXT_PUBLIC_SERVER_URL`), `apiKeyCollection`, `mediaCollection` (default `media`, the same as `ai.mediaCollection`).
 
 ## Multiplayer editing
 

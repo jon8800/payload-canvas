@@ -30,6 +30,7 @@ export const INTERACTIVE = [
   'filterLink',
   'carousel',
   'popup',
+  'lightbox',
   'tabs',
   'adjacentLinks',
   'accordion',

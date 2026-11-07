@@ -4,6 +4,7 @@
 import { createElement, type ComponentType } from 'react'
 import { readsClientLinks, readsLinkComponent, withClientLinks, withLinkComponent } from '../../render/marks'
 import type { BlockComponentProps, BlockComponents } from '../../render/types'
+import { buttonComponent } from '../Button'
 // The interactive blocks load their JavaScript only on pages that render them (see `../lazy`).
 import { Accordion, Carousel, FilterLink, Menu, Popup, Tab, Tabs } from '../lazy'
 import type { MenuLabels } from '../Menu'
@@ -12,7 +13,9 @@ import type { CarouselLabels } from './Carousel'
 import { Disclosure } from './Disclosure'
 import { Embed, type EmbedLabels } from './Embed'
 import { iconComponent, type IconMap } from './Icon'
+import { Lightbox } from './Lightbox'
 import { Marquee } from './Marquee'
+import { mediaBackdropComponent, type MediaUrl } from './MediaBackdrop'
 import type { PopupLabels } from './Popup'
 import { TableOfContents, type TableOfContentsLabels } from './TableOfContents'
 import type { TabsLabels } from './Tabs'
@@ -34,10 +37,18 @@ export type BuiltinLabels = {
 }
 
 export type BuiltinComponentsOptions = {
-  /** The site's icons by name, for the `icon` block. The same names as `builtinBlocks({ icons })`. */
+  /**
+   * The site's icons by name, for the `icon` block and the button's `icon` prop. The same names as
+   * `builtinBlocks({ icons })` and `defaultBlocks({ icons })`.
+   */
   icons?: IconMap
   /** The site's labels, for example in its language: `{ carousel: { nextLabel: 'Weiter' } }`. */
   labels?: BuiltinLabels
+  /**
+   * Maps a stored media URL to the one the site serves, for the media backdrop's uploads. Example:
+   * `(url) => new URL(url, 'http://x').pathname` serves absolute URLs from the current host.
+   */
+  mediaUrl?: MediaUrl
 }
 
 type Labelled<L> = ComponentType<BlockComponentProps & { labels?: L }>
@@ -73,6 +84,7 @@ export function builtinComponents(options: BuiltinComponentsOptions = {}): Block
     disclosure: Disclosure,
     accordion: Accordion,
     popup: withLabels(Popup, labels.popup),
+    lightbox: Lightbox,
     tabs: withLabels(Tabs, labels.tabs),
     tab: Tab,
     carousel: withLabels(Carousel, labels.carousel),
@@ -81,20 +93,27 @@ export function builtinComponents(options: BuiltinComponentsOptions = {}): Block
     filterLink: FilterLink,
     adjacentLinks: withLabels(AdjacentLinks, labels.adjacentLinks),
     embed: withLabels(Embed, labels.embed),
+    mediaBackdrop: mediaBackdropComponent(options.mediaUrl),
   }
-  if (options.icons) components.icon = iconComponent(options.icons)
+  if (options.icons) {
+    components.icon = iconComponent(options.icons)
+    components.button = buttonComponent(options.icons)
+  }
   // The menu is a default block: it joins the map only when the site gives it labels.
   if (labels.menu && Object.keys(labels.menu).length > 0) components.menu = withLabels(withClientLinks(Menu), labels.menu)
   return components
 }
 
+export { buttonComponent } from '../Button'
 export { Accordion, Carousel, FilterLink, Popup, Tab, Tabs } from '../lazy'
 export { AdjacentLinks, type AdjacentLinksLabels } from './AdjacentLinks'
 export type { CarouselLabels } from './Carousel'
 export { Disclosure } from './Disclosure'
 export { Embed, type EmbedLabels } from './Embed'
 export { iconComponent, type IconComponent, type IconMap } from './Icon'
+export { Lightbox } from './Lightbox'
 export { Marquee } from './Marquee'
+export { MediaBackdrop, mediaBackdropComponent, type MediaUrl } from './MediaBackdrop'
 export type { PopupLabels } from './Popup'
 export { SectionRef } from './SectionRef'
 export { TableOfContents, type TableOfContentsLabels } from './TableOfContents'
