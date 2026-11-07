@@ -91,6 +91,11 @@ export function resolveReferences(args: {
   collections: CollectionConfig[]
   sources: Record<string, Pick<ReferenceSource, 'layout' | 'blocksOnly' | 'decode'>>
   blocks: BlockDefinition[]
+  /**
+   * More collections that get "Used in" and delete protection by default when a block points at
+   * them, like upload collections: the saved sections (live `sectionRef` blocks).
+   */
+  shared?: string[]
 }): ReferencesServerConfig | null {
   const { options, collections, blocks } = args
   if (options === false) return null
@@ -98,7 +103,7 @@ export function resolveReferences(args: {
   const isUpload = (slug: string) => Boolean(bySlug.get(slug)?.upload)
   const targets = referenceTargets(blocks)
   const field = options?.field ?? DEFAULT_REFERENCES_FIELD
-  const uploads = targets.collections.filter(isUpload)
+  const uploads = targets.collections.filter((slug) => isUpload(slug) || Boolean(args.shared?.includes(slug)))
   const usedIn = options?.usedIn ?? uploads
   const protectDelete = options?.protectDelete ?? uploads
   for (const slug of [...usedIn, ...protectDelete]) {

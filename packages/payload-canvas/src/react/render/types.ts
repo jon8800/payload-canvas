@@ -1,7 +1,7 @@
 // Types shared by the renderer and the default components.
 
 import type { ComponentType, ReactNode } from 'react'
-import type { Block, BlockDefinition, Layout, TemplateContext } from '../../core'
+import type { BindingRelations, Block, BlockDefinition, Layout, TemplateContext } from '../../core'
 
 /**
  * "site" renders the public page. "canvas" adds editor attributes and empty-slot placeholders.
@@ -99,6 +99,11 @@ export type RenderLayoutProps = {
    * Load it with `depth: 1` and pass the same context to `loadLayoutData`.
    */
   context?: TemplateContext | null
+  /**
+   * Which collection each relationship field points to (`bindingRelations(payload.config.collections)`
+   * from `payload-canvas/core`), for `<path>.$url` bindings such as `categories.0.$url`.
+   */
+  relations?: BindingRelations | null
   /**
    * Data the page loads once for all its blocks (plain data). Components marked with
    * `withPageData`, and `fromPayloadComponent` components, get it as `pageData`. In the canvas it

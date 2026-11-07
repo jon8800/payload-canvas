@@ -30,6 +30,7 @@ export { builderViewPath } from './plugin/links'
 export {
   DEFAULT_TEMPLATES_SLUG,
   DOCUMENT_TEMPLATE_FIELD,
+  TEMPLATE_CONDITIONS_FIELD,
   TEMPLATE_DEFAULT_FIELD,
   TEMPLATE_LAYOUT_FIELD,
   TEMPLATE_PREVIEW_FIELD,
@@ -54,7 +55,7 @@ export {
   type MigrateIssue,
 } from './migrate'
 export type { AiAdapter, AiChatRequest, AiClientConfig, AiMessage, AiOptions, AiStreamEvent } from './ai/types'
-export { defineBlock } from './core/blocks'
+export { defineBlock, defineSection, type SectionBlockInput, type SectionInput, sectionsWithVariants, withDefaultClassNames, withInlineBlocks } from './core/blocks'
 export { EMPTY_LAYOUT } from './core/types'
 export type {
   BindingField,
@@ -65,6 +66,7 @@ export type {
   EditorOptions,
   Layout,
   SectionDefinition,
+  SectionVariant,
   TemplateContext,
   TemplatesClientConfig,
 } from './core/types'

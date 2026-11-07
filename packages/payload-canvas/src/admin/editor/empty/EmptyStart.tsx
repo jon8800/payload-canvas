@@ -11,9 +11,17 @@
 import { Button, useConfig } from '@payloadcms/ui'
 import { useEffect, useId, useMemo, useState } from 'react'
 
-import { DOCUMENT_TEMPLATE_FIELD, TEMPLATE_DEFAULT_FIELD, TEMPLATE_LAYOUT_FIELD, TEMPLATE_TARGET_FIELD } from '../../../core/bindings'
+import {
+  DOCUMENT_TEMPLATE_FIELD,
+  TEMPLATE_CONDITIONS_FIELD,
+  TEMPLATE_DEFAULT_FIELD,
+  TEMPLATE_LAYOUT_FIELD,
+  TEMPLATE_TARGET_FIELD,
+  templateConditions,
+} from '../../../core/bindings'
 import type { SectionDefinition } from '../../../core/types'
 import { builderViewPath } from '../../../plugin/links'
+import { whereParams } from '../../../react/canvas/fetchDocs'
 import { insertBlocks, sectionPosition } from '../actions'
 import { Icon } from '../icons'
 import { selectLeftTab } from '../layout/leftTabs'
@@ -28,7 +36,9 @@ import './empty.scss'
 const SUGGESTED = ['Heroes', 'Features', 'Calls to action']
 const SUGGESTION_COUNT = 3
 
-function suggestions(sections: SectionDefinition[]): SectionDefinition[] {
+function suggestions(all: SectionDefinition[]): SectionDefinition[] {
+  // One version of each section: its variants stay in the library.
+  const sections = all.filter((s) => !s.variantOf)
   const picked = SUGGESTED.flatMap((category) => sections.find((s) => s.category === category) ?? [])
   const rest = sections.filter((s) => !picked.includes(s))
   return [...picked, ...rest].slice(0, SUGGESTION_COUNT)
@@ -48,7 +58,8 @@ async function getJson(url: string): Promise<Record<string, unknown> | null> {
 
 /**
  * The published template the site renders this document through: its own template, else the
- * collection's newest default template with blocks. The same rule as `loadTemplate`.
+ * first template (by name) whose conditions match the latest draft, else the collection's newest
+ * default template with blocks. The same rule as `loadTemplate`.
  */
 async function appliedTemplate(runtime: Runtime, id: string | number): Promise<AppliedTemplate | null> {
   const templates = runtime.config.templates
@@ -66,6 +77,26 @@ async function appliedTemplate(runtime: Runtime, id: string | number): Promise<A
   if (typeof ownId === 'string' || typeof ownId === 'number') {
     const template = await getJson(`${base}/${encodeURIComponent(String(ownId))}?depth=0`)
     if (template && hasBlocks(template)) return { id: ownId, name: String(template.name ?? 'Untitled') }
+  }
+  const conditioned = await getJson(
+    `${base}?${new URLSearchParams({
+      [`where[and][0][${TEMPLATE_TARGET_FIELD}][equals]`]: runtime.config.collection,
+      'where[and][1][_status][equals]': 'published',
+      [`select[${TEMPLATE_CONDITIONS_FIELD}]`]: 'true',
+      sort: 'name',
+      depth: '0',
+      limit: '100',
+    }).toString()}`,
+  )
+  for (const candidate of (conditioned?.docs as Record<string, unknown>[] | undefined) ?? []) {
+    const where = templateConditions(candidate)
+    if (!where) continue
+    const match = new URLSearchParams({ 'where[and][0][id][equals]': String(id), depth: '0', limit: '1', draft: 'true', 'select[id]': 'true' })
+    for (const [name, value] of whereParams(where, 'where[and][1]')) match.append(name, value)
+    const found = await getJson(`${runtime.api}/${encodeURIComponent(runtime.config.collection)}?${match.toString()}`)
+    if (!(found?.docs as unknown[] | undefined)?.length) continue
+    const template = await getJson(`${base}/${encodeURIComponent(String(candidate.id))}?depth=0`)
+    if (template && hasBlocks(template)) return { id: candidate.id as string | number, name: String(template.name ?? 'Untitled') }
   }
   const query = new URLSearchParams({
     [`where[and][0][${TEMPLATE_TARGET_FIELD}][equals]`]: runtime.config.collection,

@@ -3,15 +3,18 @@
 // No `node:` imports and no Payload runtime imports here (type imports only). A test checks it.
 
 export { defaultBlocks, FIELD_CLASS_MAP, MENU_CLASS_MAP, type DefaultBlocksOptions } from './defaults'
+export * from './builtins'
 export { isLinkField, linkField, type BuilderCondition, type LinkFieldOptions } from './link'
 export { fromPayloadBlocks, type FromPayloadBlocksOptions, type PayloadBlockOverride } from './payload'
-export { defineBlock } from '../core/blocks'
+export { defineBlock, defineSection, type SectionBlockInput, type SectionInput, sectionsWithVariants, withDefaultClassNames, withInlineBlocks } from '../core/blocks'
 export { BUILDER_CSS_CLASS, withBuilderCssClass } from '../css/marker'
+export { listCollectionsOf, prepareBlocks } from '../plugin/listCollections'
 export type {
   Block,
   BlockDefinition,
   BlockProps,
   Layout,
   SectionDefinition,
+  SectionVariant,
   SlotDefinition,
 } from '../core/types'

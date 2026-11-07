@@ -13,12 +13,14 @@ import { StylesContext, writeClassName, writeStyle, type StylesContextValue } fr
 import { createReader } from './model'
 import { stopEditorKeys } from './popover'
 import { RawClasses } from './RawClasses'
+import { SiteClasses } from './SiteClasses'
 import { StyleSections } from './sections'
 import { BREAKPOINTS, breakpointAt, breakpointWidths, reloadStyleTokens, useStyleTokens, withFallback } from './tokens'
 import { VariantBar } from './VariantBar'
 import './styles.scss'
 
-export function StylesPanel({ block }: { block: Block }) {
+/** `slot`: edit the classes of that slot's own element (`slotClassName`) instead of the block's. */
+export function StylesPanel({ block, slot = null }: { block: Block; slot?: string | null }) {
   const runtime = useRuntime()
   const { tokensEndpoint } = runtime.config
   const entry = useStyleTokens(tokensEndpoint)
@@ -27,7 +29,7 @@ export function StylesPanel({ block }: { block: Block }) {
   const frame = useValue(runtime.frame)
   const widths = useMemo(() => breakpointWidths(tokens), [tokens])
   const canvasBreakpoint = frame.width > 0 ? breakpointAt(widths, frame.width) : 'base'
-  const className = block.className ?? ''
+  const className = (slot ? block.slotClassName?.[slot] : block.className) ?? ''
   const blockId = block.id
   const [error] = useState(() => createValueStore<string | null>(null))
   const message = useValue(error)
@@ -35,6 +37,7 @@ export function StylesPanel({ block }: { block: Block }) {
   const value = useMemo<StylesContextValue>(
     () => ({
       blockId,
+      slot,
       blockType: block.type,
       className,
       variant,
@@ -45,11 +48,11 @@ export function StylesPanel({ block }: { block: Block }) {
           ? createReader(className, { ...variant, breakpoint: canvasBreakpoint }, tokens)
           : null,
       canvasBreakpoint,
-      set: (property, v, options) => error.set(writeStyle(runtime, blockId, variant, tokens, property, v, options)),
-      setClassName: (next, mergeKey) => writeClassName(runtime, blockId, next, mergeKey),
+      set: (property, v, options) => error.set(writeStyle(runtime, { blockId, slot }, variant, tokens, property, v, options)),
+      setClassName: (next, mergeKey) => writeClassName(runtime, { blockId, slot }, next, mergeKey),
       error,
     }),
-    [runtime, blockId, block.type, className, variant, tokens, error, canvasBreakpoint],
+    [runtime, blockId, slot, block.type, className, variant, tokens, error, canvasBreakpoint],
   )
 
   return (
@@ -78,6 +81,7 @@ export function StylesPanel({ block }: { block: Block }) {
         ) : (
           <p className="builder-styles__hint">Visual style controls are not available yet. Edit the classes below.</p>
         )}
+        <SiteClasses />
         <RawClasses />
       </div>
     </StylesContext>

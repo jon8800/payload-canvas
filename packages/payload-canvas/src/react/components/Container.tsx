@@ -1,7 +1,10 @@
 import { createElement } from 'react'
 import type { BlockComponentProps } from '../render/types'
 
-const TAGS = new Set(['div', 'section', 'header', 'footer', 'main', 'nav', 'article', 'aside'])
+const TAGS = new Set([
+  'div', 'section', 'header', 'footer', 'main', 'nav', 'article', 'aside',
+  'ol', 'ul', 'li', 'dl', 'dt', 'dd', 'figure', 'figcaption', 'p', 'span',
+])
 
 /** Used for `stack` and `grid`. All layout comes from `className`. `as` picks the HTML tag. */
 export function Container({ props, className, attributes, slotAttributes, slots }: BlockComponentProps) {

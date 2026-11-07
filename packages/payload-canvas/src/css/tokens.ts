@@ -8,7 +8,7 @@
 // recorded stylesheets. The fallback has no class list and logs a warning.
 import * as tailwind from 'tailwindcss'
 
-import type { StyleTokens, ThemeToken } from '../core/types'
+import type { SiteClass, StyleTokens, ThemeToken } from '../core/types'
 import type { TailwindPlugins } from './index'
 import { type CanvasCssData, ENTRY_BASE, loadPlugin, splitTopLevel, stylesheetKey } from './shared'
 
@@ -113,7 +113,7 @@ export function parseThemeEntries(data: CanvasCssData): Map<string, ThemeEntry> 
 // ---------------------------------------------------------------------------------------------
 // Tokens from theme entries
 
-type GroupName = Exclude<keyof StyleTokens, 'spacing' | 'classList'>
+type GroupName = Exclude<keyof StyleTokens, 'spacing' | 'classList' | 'siteClasses'>
 
 /**
  * Theme namespace and the utility that uses it, per token group. With a class list, a token is
@@ -301,6 +301,50 @@ export function applyFontFamilies(fonts: ThemeToken[], families: FontFamilies): 
  * Builds StyleTokens from a recorded CSS input. Uses the design system API; if it is missing or
  * throws, logs a warning and parses the @theme blocks instead (no class list in that case).
  */
+/**
+ * `@utility name {` with an optional comment right above it. Only static names: `tab-*` (a
+ * functional utility) has no single class to offer. The comment may not hold `*\/`, so two
+ * comments in a row never merge: only the last one, right above the rule, counts.
+ */
+const UTILITY_RULE = /(?:\/\*((?:(?!\*\/)[^])*)\*\/\s*)?@utility\s+([A-Za-z_][\w-]*)\s*\{/g
+const CANVAS_LABEL = /^\s*@canvas\s+(?:([^:]+?)\s*:\s*)?(.+?)\s*$/s
+const PREVIEW_LENGTH = 160
+
+/** The body of the rule whose `{` is at `open`: up to its matching `}`. */
+function ruleBody(css: string, open: number): string {
+  let depth = 0
+  for (let i = open; i < css.length; i++) {
+    if (css[i] === '{') depth++
+    else if (css[i] === '}' && --depth === 0) return css.slice(open + 1, i)
+  }
+  return css.slice(open + 1)
+}
+
+/**
+ * The site's own static `@utility` classes, in CSS order: the entry first, then the stylesheets it
+ * imports, without the ones from packages (`node_modules`). A comment right above a rule like
+ * `/* @canvas Buttons: Primary button *\/` gives its group and label; `/* @canvas Primary button *\/`
+ * a label only. A name defined twice is listed once.
+ */
+export function parseSiteClasses(data: CanvasCssData): SiteClass[] {
+  const sources = [data.entry, ...Object.values(data.stylesheets).filter((sheet) => !/(^|\/)node_modules\//.test(sheet.path)).map((sheet) => sheet.content)]
+  const out = new Map<string, SiteClass>()
+  for (const css of sources) {
+    for (const match of css.matchAll(UTILITY_RULE)) {
+      const [whole, comment, name] = match
+      if (!name || out.has(name)) continue
+      const body = ruleBody(css, (match.index ?? 0) + whole.length - 1)
+      const preview = body.replace(/\/\*[^]*?\*\//g, '').replace(/\s+/g, ' ').trim()
+      const entry: SiteClass = { name, css: preview.length > PREVIEW_LENGTH ? `${preview.slice(0, PREVIEW_LENGTH - 1)}…` : preview }
+      const label = comment ? CANVAS_LABEL.exec(comment) : null
+      if (label?.[2]) entry.label = label[2]
+      if (label?.[1]) entry.group = label[1]
+      out.set(name, entry)
+    }
+  }
+  return [...out.values()]
+}
+
 export async function buildStyleTokens(
   data: CanvasCssData,
   plugins?: TailwindPlugins,
@@ -308,12 +352,12 @@ export async function buildStyleTokens(
   try {
     const ds = await loadDesignSystem(data, plugins)
     const classList = [...new Set(ds.getClassList().map((entry) => entry[0]))]
-    return { tokens: tokensFromTheme(ds.theme.entries(), classList), source: 'design-system' }
+    return { tokens: { ...tokensFromTheme(ds.theme.entries(), classList), siteClasses: parseSiteClasses(data) }, source: 'design-system' }
   } catch (error) {
     console.warn(
       `[websiteBuilder] Tailwind's design system API failed, so style tokens come from parsing @theme ` +
         `(no class list for autocomplete). Cause: ${error instanceof Error ? error.message : String(error)}`,
     )
-    return { tokens: tokensFromTheme(parseThemeEntries(data), null), source: 'theme-parse' }
+    return { tokens: { ...tokensFromTheme(parseThemeEntries(data), null), siteClasses: parseSiteClasses(data) }, source: 'theme-parse' }
   }
 }

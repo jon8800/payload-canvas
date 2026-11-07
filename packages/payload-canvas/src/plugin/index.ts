@@ -15,8 +15,8 @@ import { aiClientConfig } from '../ai/config'
 import { AI_IMAGES_KEY, createImageService } from '../ai/images/service'
 import type { AiOptions } from '../ai/types'
 import { defaultBlocks } from '../blocks'
-import { richTextFieldName } from '../core/blocks'
-import { DEFAULT_TEMPLATES_SLUG, DOCUMENT_TEMPLATE_FIELD, TEMPLATE_TARGET_FIELD } from '../core/bindings'
+import { richTextFieldName, sectionsWithDefaultClassNames, sectionsWithVariants } from '../core/blocks'
+import { bindingRelations, DEFAULT_TEMPLATES_SLUG, DOCUMENT_TEMPLATE_FIELD, TEMPLATE_TARGET_FIELD } from '../core/bindings'
 import { localeSettingsOf } from '../core/locale'
 import { resolveRegions, type RegionOption } from '../core/regions'
 import { decodePayloadBlocks, payloadBlocksProblems, payloadBlocksStorage, type PayloadBlocksStorage } from '../core/payloadBlocks'
@@ -71,7 +71,7 @@ import {
 import { syncSectionBlocks } from './sectionsBuilder'
 import { toJsonSafe } from './jsonSafe'
 import { collectionLabel } from './labels'
-import { listCollectionsOf } from './listCollections'
+import { listableCollections, prepareBlocks } from './listCollections'
 import { addReferences, REFERENCES_CONFIG_KEY, resolveReferences, type ReferencesOptions } from './references'
 import {
   bindingSources,
@@ -156,6 +156,8 @@ export type TemplatesOptions = {
   slug?: string
   /** Hooks for the templates collection, e.g. `afterChange` to revalidate the pages that use templates. */
   hooks?: CollectionConfig['hooks']
+  /** Merged into the collection's `admin` options (e.g. `group`, `hidden`). */
+  admin?: CollectionConfig['admin']
   /** `false`: template layouts are not translated. Default: as the collections (`'props'`). */
   localization?: 'props' | false
 }
@@ -166,6 +168,12 @@ export type WebsiteBuilderOptions = {
   collections: Record<string, BuilderCollectionOptions>
   /** Default: defaultBlocks(). */
   blocks?: BlockDefinition[]
+  /**
+   * More collections the collection list block can show, after the collections with a `url`:
+   * data collections without pages of their own, such as testimonials or team members. Their
+   * items have no `$url`. Each slug must be a collection of the config.
+   */
+  listCollections?: string[]
   css: {
     /** Path to the app's Tailwind entry CSS, absolute or relative to process.cwd(). */
     entry: string
@@ -304,6 +312,15 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
     const targets = Object.entries(options.collections).filter(([, o]) => o.templates).map(([slug]) => slug)
     const templatesSlug = options.templates?.slug ?? DEFAULT_TEMPLATES_SLUG
     const withUrl = new Set(Object.entries(options.collections).filter(([, o]) => o.url).map(([slug]) => slug))
+    for (const slug of options.listCollections ?? []) {
+      if (!sourceCollections.some((c) => c.slug === slug)) {
+        throw new Error(
+          `[websiteBuilder] \`listCollections\` names "${slug}", which is not a collection. Known collections: ${sourceCollections.map((c) => c.slug).join(', ')}.`,
+        )
+      }
+    }
+    // The collections the collection list block can show: with a `url`, then `listCollections`.
+    const listable = listableCollections(options.collections, options.listCollections)
     const builderOptions: Record<string, BuilderCollectionOptions> = { ...options.collections }
     let collections = sourceCollections
     if (targets.length > 0) {
@@ -331,12 +348,18 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
             sourceCollections.filter((c) => targets.includes(c.slug)).map((c) => [c.slug, collectionLabel(c)]),
           ),
           hooks: options.templates?.hooks,
+          admin: options.templates?.admin,
         }),
       ]
       builderOptions[templatesSlug] = { field: TEMPLATE_LAYOUT_FIELD, ...(options.templates?.localization === false ? { localization: false } : {}) }
     }
 
-    const blocks = listCollectionsOf(options.blocks ?? defaultBlocks(), [...withUrl])
+    // Inline blocks (`inline: true`) may sit in a link: they join its `allow` list.
+    const blocks = prepareBlocks(options.blocks ?? defaultBlocks(), listable)
+    // Each section variant is listed as a section of its own (`<id>/<variant id>`).
+    const appSections = sectionsWithVariants(options.sections ?? [])
+    // A section block without a className gets its type's default classes (JSON layouts only).
+    const sections = sectionsWithDefaultClassNames(appSections, blocks)
     const duplicate = blocks.find((b, i) => blocks.findIndex((other) => other.type === b.type) !== i)
     if (duplicate) {
       throw new Error(
@@ -396,6 +419,8 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       options: options.references,
       collections,
       blocks,
+      // Live saved sections (sectionRef): the section lists the pages that show it, and stays while one does.
+      ...(savedSections ? { shared: [savedSections.slug] } : {}),
       sources: {
         ...Object.fromEntries(
           Object.entries(builderOptions).map(([slug, o]) => {
@@ -424,6 +449,8 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       regionsOf[slug] = resolveRegions(slug, source?.fields ?? [], o.regions, { fields: new Set(own), legacy: new Set(o.legacyFields ?? []) })
     }
     const clientBlocks = toJsonSafe(blocks)
+    // Relationship targets of every collection, so the canvas resolves `<path>.$url` bindings.
+    const relations = bindingRelations(collections)
     const css: CssOptions = {
       entry: path.resolve(process.cwd(), options.css.entry),
       plugins: options.css.plugins,
@@ -455,7 +482,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
             collection: templatesSlug,
             sources: bindingSources({
               collections: collections.filter((c) => c.slug !== templatesSlug),
-              slugs: [...new Set([...targets, ...withUrl])],
+              slugs: [...new Set([...targets, ...listable])],
               skip: Object.fromEntries(
                 Object.entries(builderOptions).map(([slug, o]) => {
                   const field = o.field ?? 'layout'
@@ -519,8 +546,8 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           tokensEndpoint: `${apiRoute}${STYLE_TOKENS_PATH}`,
           // Only sections the field can store as they are.
           sections: storage
-            ? (options.sections ?? []).filter((section) => payloadBlocksProblems({ version: 1, blocks: section.blocks }, storage).length === 0)
-            : (options.sections ?? []),
+            ? appSections.filter((section) => payloadBlocksProblems({ version: 1, blocks: section.blocks }, storage).length === 0)
+            : sections,
           liveEndpoint: `${apiRoute}${LIVE_PATH}`,
           templates: clientTemplates,
           ai: options.ai ? aiClientConfig(options.ai, `${apiRoute}${AI_PATH}`) : null,
@@ -531,6 +558,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           localization: localizationOf(collection.slug),
           ...(regionsOf[collection.slug] ? { regions: toJsonSafe(regionsOf[collection.slug]) } : {}),
           ...(storage ? { storage: 'payload-blocks' as const, payloadRootTypes: [...storage.rootTypes] } : {}),
+          ...(Object.keys(relations).length > 0 ? { relations } : {}),
         }
         const isSections = collection.slug === savedSections?.slug
         const built = addBuilder(collection, {
@@ -590,7 +618,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
               images: imageService ?? undefined,
               collections: liveCollections,
               blocks,
-              sections: options.sections ?? [],
+              sections,
               savedSections,
               getTokens: () => getStyleTokens(css),
               templates: templates ? { slug: templatesSlug, sources: templates.sources } : null,

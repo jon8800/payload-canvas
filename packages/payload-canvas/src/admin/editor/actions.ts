@@ -3,7 +3,8 @@
 // Editor actions shared by the toolbar, the overlay, the outline, the inspector, the menus and the
 // shortcuts: insert, duplicate, remove, hide, move, copy and paste (blocks and styles).
 
-import { createId, findBlock, findLocation, getBlockDefinition, slotAcceptsAt, slotNames } from '../../core'
+import { sectionDetachOps, sectionRefId } from '../../blocks/builtins/sectionRef'
+import { createId, findBlock, findLocation, getBlockDefinition, htmlIdsOf, slotAcceptsAt, slotNames, withoutTakenHtmlIds } from '../../core'
 import type { Block, CanvasMeasurement, Layout, Operation, Position } from '../../core/types'
 import { normalizeClasses, parseStyles, setStylesOps, stylesText, type CopiedStyles } from './menu/styleClipboard'
 import type { Runtime } from './runtime'
@@ -95,13 +96,46 @@ export function currentPosition(layout: Layout, to: Position): Position | null {
   return { ...to, index: Math.min(to.index, parent.slots?.[to.slot ?? 'children']?.length ?? 0) }
 }
 
-/** Inserts copies (new ids) of `blocks` as one undo step and selects the first one. */
+/**
+ * Inserts copies (new ids) of `blocks` as one undo step and selects the first one. A copy leaves
+ * out the HTML ids (`attrs.id`) the page already uses, so a paste or a second section stays valid.
+ */
 export function insertBlocks(runtime: Runtime, blocks: Block[], to: Position): boolean {
-  const fresh = blocks.map(withNewIds)
+  const fresh = freshCopies(runtime, blocks)
   const first = fresh[0]
   if (!first) return false
   const ops: Operation[] = fresh.map((block, i) => ({ type: 'insert', block, to: { ...to, index: to.index + i } }))
   return runtime.store.apply(ops, { select: first.id })
+}
+
+/** Copies with new ids, without the HTML ids the page already uses. */
+function freshCopies(runtime: Runtime, blocks: readonly Block[]): Block[] {
+  const taken = htmlIdsOf(runtime.store.getState().layout.blocks)
+  return blocks.map((block) => {
+    const copy = withoutTakenHtmlIds(withNewIds(block), taken)
+    htmlIdsOf([copy], taken)
+    return copy
+  })
+}
+
+/**
+ * "Detach section": replaces a live saved section (`sectionRef`) with a copy of its blocks, as one
+ * undo step. Later changes to the saved section no longer reach this page.
+ */
+export async function detachSection(runtime: Runtime, id: string): Promise<void> {
+  const ref = findBlock(runtime.store.getState().layout, id)
+  const sectionId = ref ? sectionRefId(ref.props?.section) : null
+  if (sectionId === null) return
+  await runtime.sections.load()
+  const section = runtime.sections.saved.get()?.find((s) => s.savedId !== undefined && String(s.savedId) === String(sectionId))
+  if (!section) {
+    runtime.notify('This saved section cannot be loaded. It may be deleted.')
+    return
+  }
+  const copies = freshCopies(runtime, section.blocks)
+  const ops = sectionDetachOps(runtime.store.getState().layout, id, copies)
+  if (ops && runtime.store.apply(ops, { select: copies[0]!.id })) runtime.notify(`Detached "${section.label}": this page now has its own copy`)
+  else runtime.notify("The section's blocks cannot go here.")
 }
 
 export function duplicateBlock(runtime: Runtime, id: string) {

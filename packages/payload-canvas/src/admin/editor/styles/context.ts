@@ -7,8 +7,13 @@ import type { ValueStore } from '../valueStore'
 import type { Runtime } from '../runtime'
 import { variantKey, type StyleReader } from './model'
 
+/** What the Styles panel edits: a block's `className`, or with `slot`, that slot's `slotClassName`. */
+export type StyleTarget = { blockId: string; slot?: string | null }
+
 export type StylesContextValue = {
   blockId: string
+  /** The slot whose own classes the panel edits. Null: the block's `className`. */
+  slot: string | null
   /** The block type: it picks the style groups that open by default. */
   blockType: string
   className: string
@@ -38,29 +43,34 @@ export function useStyles(): StylesContextValue {
   return value
 }
 
-/** Reads the latest className from the store, so two edits in one frame never overwrite each other. */
-function currentClassName(runtime: Runtime, blockId: string): string {
-  return findBlock(runtime.store.getState().layout, blockId)?.className ?? ''
+/** Reads the latest classes from the store, so two edits in one frame never overwrite each other. */
+function currentClassName(runtime: Runtime, { blockId, slot }: StyleTarget): string {
+  const block = findBlock(runtime.store.getState().layout, blockId)
+  return (slot ? block?.slotClassName?.[slot] : block?.className) ?? ''
 }
 
-export function writeClassName(runtime: Runtime, blockId: string, next: string, mergeKey?: string) {
+export function writeClassName(runtime: Runtime, target: StyleTarget, next: string, mergeKey?: string) {
   // One space between classes: double spaces from typing never reach the stored value.
   const normalized = next.trim().replace(/\s+/g, ' ')
-  if (normalized === currentClassName(runtime, blockId)) return
-  runtime.store.apply({ type: 'update', id: blockId, className: normalized || null }, { mergeKey })
+  if (normalized === currentClassName(runtime, target)) return
+  const { blockId, slot } = target
+  const op = slot
+    ? ({ type: 'update', id: blockId, slotClassName: { [slot]: normalized || null } } as const)
+    : ({ type: 'update', id: blockId, className: normalized || null } as const)
+  runtime.store.apply(op, { mergeKey })
 }
 
 /** Returns an error message when the class model refuses the value. */
 export function writeStyle(
   runtime: Runtime,
-  blockId: string,
+  target: StyleTarget,
   variant: Variant,
   tokens: StyleTokens,
   property: string,
   value: string | null,
   options?: { negative?: boolean },
 ): string | null {
-  const before = currentClassName(runtime, blockId)
+  const before = currentClassName(runtime, target)
   let next: string
   try {
     next = setStyleValue(before, property, variant, value, { ...options, tokens })
@@ -69,6 +79,6 @@ export function writeStyle(
   }
   if (next === before) return null
   // Edits to one property at one variant within a second become one undo step (sliders, typing).
-  writeClassName(runtime, blockId, next, `style:${blockId}:${property}:${variantKey(variant)}`)
+  writeClassName(runtime, target, next, `style:${target.blockId}:${target.slot ?? ''}:${property}:${variantKey(variant)}`)
   return null
 }

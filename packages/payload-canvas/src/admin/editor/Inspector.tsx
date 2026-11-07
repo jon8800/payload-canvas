@@ -1,10 +1,10 @@
 'use client'
 
-import { CheckboxInput } from '@payloadcms/ui'
+import { CheckboxInput, TextInput } from '@payloadcms/ui'
 import { useDeferredValue, useEffect, useState, type ChangeEvent } from 'react'
 
-import { findBlock, getBlockDefinition } from '../../core'
-import type { Block } from '../../core/types'
+import { findBlock, getBlockDefinition, htmlIdProblem, htmlIdsOf } from '../../core'
+import type { Block, Operation } from '../../core/types'
 import { BlockIcon, Icon, type IconName } from './icons'
 import { blockMenuEntries } from './menu/blockMenu'
 import { MenuButton } from './menu/Menu'
@@ -16,12 +16,14 @@ import { LocaleNote } from './locale/LocaleField'
 import { MotionPanel } from './motion/MotionPanel'
 import { AssistantPanel } from './assistant/AssistantPanel'
 import { useAccessRefresh } from './fields/access'
+import { InputError } from './fields/CheckedInputs'
 import { BlockContentFields } from './renderField'
 import { useRuntime, type InspectorTab } from './runtime'
 import { storesBuilderData } from './actions'
 import { shortcutList } from './shortcuts'
 import { useEditor } from './store'
 import { StylesPanel } from './styles/StylesPanel'
+import { Select } from './ui/Select'
 import { usePayloadControlNames } from './ui/payloadA11y'
 import { useOptionalValue, useValue, useValueSelector } from './valueStore'
 import { RegionPane } from './regions/RegionPane'
@@ -123,7 +125,7 @@ function EmptyState() {
   )
 }
 
-type BlockTab = 'content' | 'styles' | 'motion'
+type BlockTab = 'content' | 'styles' | 'motion' | 'advanced'
 
 function BlockPane() {
   const runtime = useRuntime()
@@ -182,6 +184,7 @@ function BlockPane() {
                 { id: 'content', label: 'Content' },
                 { id: 'styles', label: 'Styles' },
                 { id: 'motion', label: 'Motion' },
+                { id: 'advanced', label: 'Advanced' },
               ]
             : // A Payload blocks field holds the blocks' own fields only.
               [{ id: 'content', label: 'Content' }]
@@ -190,6 +193,7 @@ function BlockPane() {
       {tab === 'content' && <BlockContentFields block={block} />}
       {tab === 'styles' && storesBuilderData(runtime) && <StyleFields block={block} />}
       {tab === 'motion' && storesBuilderData(runtime) && <MotionPanel blockId={block.id} blockType={block.type} motion={block.motion} />}
+      {tab === 'advanced' && storesBuilderData(runtime) && <AdvancedFields block={block} />}
     </div>
   )
 }
@@ -285,10 +289,31 @@ function BlockHeader({ block }: { block: Block }) {
 function StyleFields({ block }: { block: Block }) {
   const runtime = useRuntime()
   const def = getBlockDefinition(runtime.config.blocks, block.type)
+  // Slots with an element of their own (`styles: true`) are style targets next to the block.
+  const styledSlots = Object.entries(def?.slots ?? {}).filter(([, slot]) => slot.styles)
+  const [target, setTarget] = useState<string | null>(null)
+  const slot = target && styledSlots.some(([name]) => name === target) ? target : null
+  const blockStyles = def?.styles !== false
 
   return (
     <div className="builder-editor__fields">
-      {def?.styles === false ? (
+      {styledSlots.length > 0 && (
+        <Select
+          aria-label="Style target"
+          emptyLabel={blockStyles ? 'This block' : undefined}
+          placeholder="Pick a slot"
+          value={slot}
+          onValueChange={setTarget}
+          options={styledSlots.map(([name, s]) => ({
+            value: name,
+            label: `Slot: ${s.label?.trim() || name}`,
+            ...(block.slotClassName?.[name] ? { suffix: <span className="builder-styles__dot" aria-label="has classes" /> } : {}),
+          }))}
+        />
+      )}
+      {slot ? (
+        <StylesPanel key={slot} block={block} slot={slot} />
+      ) : !blockStyles ? (
         <p className="builder-editor__hint">This block has no style controls.</p>
       ) : (
         <StylesPanel block={block} />
@@ -301,6 +326,66 @@ function StyleFields({ block }: { block: Block }) {
         onToggle={(e: ChangeEvent<HTMLInputElement>) =>
           runtime.store.apply({ type: 'update', id: block.id, hidden: e.target.checked })
         }
+      />
+    </div>
+  )
+}
+
+/**
+ * The block's HTML attributes (`block.attrs`): an id for "#id" links, an ARIA label and
+ * aria-hidden. The id is stored only when it is valid and no other block of the page has it.
+ */
+function AdvancedFields({ block }: { block: Block }) {
+  const runtime = useRuntime()
+  const layout = useEditor(runtime.store, (s) => s.layout)
+  const stored = block.attrs?.id ?? ''
+  // `source` is the stored id the draft belongs to: another stored id (undo, AI edit) replaces the draft.
+  const [draft, setDraft] = useState({ text: stored, source: stored })
+  if (draft.source !== stored) setDraft({ text: stored, source: stored })
+  const idProblem = (text: string): string | null => {
+    if (!text) return null
+    const owner = htmlIdsOf(layout.blocks).get(text)
+    if (owner && owner !== block.id) return `Another block of this page has the id "${text}".`
+    return htmlIdProblem(text)
+  }
+  const problem = idProblem(draft.text.trim())
+  const setAttr = (attrs: NonNullable<Extract<Operation, { type: 'update' }>['attrs']>) => runtime.store.apply({ type: 'update', id: block.id, attrs })
+
+  return (
+    <div className="builder-editor__fields">
+      <div>
+        <TextInput
+          description='Links to this block with "#id", for example "contact".'
+          label="HTML id"
+          onChange={(e: ChangeEvent<HTMLInputElement>) => {
+            const text = e.target.value
+            const id = text.trim()
+            if (id === stored || idProblem(id)) {
+              setDraft({ text, source: stored })
+              return
+            }
+            setDraft({ text, source: id })
+            setAttr({ id: id || null })
+          }}
+          path={`builder.${block.id}.attrs.id`}
+          showError={problem !== null}
+          value={draft.text}
+        />
+        {problem && <InputError>{problem}</InputError>}
+      </div>
+      <TextInput
+        description="The name screen readers read, for example for a link that shows only an icon."
+        label="ARIA label"
+        onChange={(e: ChangeEvent<HTMLInputElement>) => setAttr({ ariaLabel: e.target.value || null })}
+        path={`builder.${block.id}.attrs.ariaLabel`}
+        value={block.attrs?.ariaLabel ?? ''}
+      />
+      <CheckboxInput
+        id={`builder-${block.id}-aria-hidden`}
+        name={`builder.${block.id}.attrs.ariaHidden`}
+        label="Hide from screen readers"
+        checked={block.attrs?.ariaHidden === true}
+        onToggle={(e: ChangeEvent<HTMLInputElement>) => setAttr({ ariaHidden: e.target.checked || null })}
       />
     </div>
   )

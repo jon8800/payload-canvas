@@ -3,6 +3,7 @@ import { describe, it } from 'node:test'
 import type { PayloadRequest } from 'payload'
 import { z } from 'zod'
 
+import { defaultBlocks } from '../blocks'
 import { createId } from '../core/ids'
 import { findBlock } from '../core/tree'
 import type { BlockDefinition, Layout, SectionDefinition } from '../core/types'
@@ -296,6 +297,27 @@ describe('write tools', () => {
   })
 })
 
+describe('section variants', () => {
+  const variantTools = builderMcpTools({
+    blocks,
+    sections: [{ ...hero, variants: [{ id: 'plain', label: 'Plain', blocks: [{ id: 'only', type: 'heading', props: { text: 'Plain hero' } }] }] }],
+    collections: { pages: { field: 'layout', url: (doc) => `/${String(doc.slug)}` } },
+  })
+  const variantTool = (name: string) => variantTools.find((t) => t.name === name) as BuilderMcpTool
+  it('listSections lists a variant after its section, and insertSection inserts it by id', async () => {
+    const { req } = fakeRequest({ version: 1, blocks: [] })
+    const listed = json(await variantTool('listSections').handler({ collection: 'pages' }, req, {})).sections as Record<string, unknown>[]
+    assert.deepEqual(listed.map((s) => [s.id, s.label, s.variantOf, s.category]), [
+      ['hero', 'Hero', undefined, 'Heroes'],
+      ['hero/plain', 'Hero (Plain)', 'hero', 'Heroes'],
+    ])
+    const inserted = json(await variantTool('insertSection').handler({ collection: 'pages', id: 'p1', sectionId: 'hero/plain' }, req, {}))
+    assert.equal(inserted.section, 'hero/plain')
+    const layout = json(await variantTool('getLayout').handler({ collection: 'pages', id: 'p1' }, req, {})).layout as Layout
+    assert.equal(layout.blocks[0]?.props?.text, 'Plain hero')
+  })
+})
+
 describe('motion', () => {
   const motionHero: SectionDefinition = {
     id: 'motion-hero',
@@ -573,7 +595,12 @@ describe('template tools', () => {
         config: { routes: { admin: '/admin' } },
         async find(a: Record<string, unknown>) {
           assert.equal(a.collection, 'builder-templates')
-          return { docs: [{ id: 5, name: 'Post template', targetCollection: 'posts', isDefault: true, _status: 'published', layout: { version: 1, blocks: [{ id: 'a', type: 'stack' }] } }] }
+          return {
+            docs: [
+              { id: 5, name: 'Post template', targetCollection: 'posts', isDefault: true, _status: 'published', layout: { version: 1, blocks: [{ id: 'a', type: 'stack' }] } },
+              { id: 6, name: 'VIP', targetCollection: 'posts', isDefault: false, conditions: { tier: { equals: 'vip' } } },
+            ],
+          }
         },
       },
     } as unknown as PayloadRequest
@@ -588,6 +615,7 @@ describe('template tools', () => {
       blocks: 1,
       editorPath: '/admin/builder/builder-templates/5',
     })
+    assert.deepEqual(body.templates[1].conditions, { tier: { equals: 'vip' } })
   })
 })
 
@@ -634,5 +662,21 @@ describe('builderMcpTools with locales', () => {
       {},
     )
     assert.equal(result.isError, true)
+  })
+})
+
+describe('listCollections', () => {
+  it('adds data collections to the collection list, as in the plugin', async () => {
+    const listTools = builderMcpTools({
+      blocks: defaultBlocks(),
+      collections: { pages: { field: 'layout', url: (doc) => `/${String(doc.slug)}` } },
+      listCollections: ['testimonials', 'team'],
+    })
+    const { req } = fakeRequest()
+    const listBlocks = listTools.find((t) => t.name === 'listBlocks')!
+    const body = json(await listBlocks.handler({ collection: 'pages' }, req, {}))
+    const list = (body.blocks as Record<string, unknown>[]).find((b) => b.type === 'collectionList')!
+    const field = (list.props as Record<string, unknown>[]).find((p) => p.name === 'collection')!
+    assert.deepEqual(field.options, ['pages', 'testimonials', 'team'])
   })
 })

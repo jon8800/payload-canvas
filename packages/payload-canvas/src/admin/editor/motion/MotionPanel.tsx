@@ -365,6 +365,19 @@ function ScrollSection({ scroll, edit }: { scroll: BlockMotion['scroll']; edit: 
           onReset={() => edit.value('scroll', 'scale', undefined)}
         />
       )}
+      {scroll?.preset === 'recede' && (
+        <NumberRow
+          label="End size"
+          value={toPercent(n)}
+          min={50}
+          max={100}
+          step={1}
+          unit="%"
+          isSet={scroll.scale !== undefined}
+          onChange={(value) => edit.value('scroll', 'scale', fromPercent(value))}
+          onReset={() => edit.value('scroll', 'scale', undefined)}
+        />
+      )}
     </Section>
   )
 }
