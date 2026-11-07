@@ -43,6 +43,8 @@ export type EditorAction =
   /** Opens the selected block's menu: the ContextMenu key or Shift+F10. */
   | 'menu'
   | 'rename'
+  /** C: comment mode on or off. */
+  | 'comments'
   /** Alt+1, Alt+2, Alt+3: the left panel's Layers, Blocks or Sections tab. */
   | `panel:${LeftTab}`
 
@@ -95,6 +97,7 @@ export function editorAction(e: KeyboardEvent): EditorAction | null {
   if (e.shiftKey && !mod && !e.altKey && e.key === 'Enter') return 'parent'
   if (!e.shiftKey && !mod && !e.altKey && e.key === 'Enter') return 'editText'
   if (!mod && !e.altKey && e.key === '?') return 'help'
+  if (!mod && !e.altKey && !e.shiftKey && letter === 'c') return 'comments'
   return null
 }
 
@@ -109,7 +112,7 @@ export function publishShortcut(): { keys: string[]; text: string; aria: string 
  * Key caps for the shortcut help, with the platform's modifier key. `ai` adds the assistant
  * shortcut, `publish` the Publish shortcut (collections with drafts).
  */
-export function shortcutList({ ai = false, publish = false }: { ai?: boolean; publish?: boolean } = {}): {
+export function shortcutList({ ai = false, publish = false, comments = false }: { ai?: boolean; publish?: boolean; comments?: boolean } = {}): {
   keys: string[]
   label: string
 }[] {
@@ -117,6 +120,7 @@ export function shortcutList({ ai = false, publish = false }: { ai?: boolean; pu
   return [
     ...(publish ? [{ keys: publishShortcut().keys, label: 'Publish changes' }] : []),
     ...(ai ? [{ keys: [mod, 'I'], label: 'Open or close the AI assistant' }] : []),
+    ...(comments ? [{ keys: ['C'], label: 'Comment mode' }] : []),
     { keys: [mod, 'Z'], label: 'Undo' },
     { keys: [mod, 'Shift', 'Z'], label: 'Redo' },
     { keys: [mod, 'C'], label: 'Copy block' },
@@ -216,6 +220,9 @@ export function bindShortcuts(runtime: Runtime, doc: Document, { forwarded }: { 
       case 'assistant':
         runtime.toggleAssistant()
         return
+      case 'comments':
+        runtime.comments?.toggle()
+        return
       case 'editText': {
         if (selectedId) startInlineEditing(runtime, selectedId)
         // A selected page region: edit its first text field on the canvas.
@@ -268,6 +275,7 @@ export function bindShortcuts(runtime: Runtime, doc: Document, { forwarded }: { 
     }
     if (excluded(e.target)) return
     if (action === 'assistant' && !runtime.assistant) return
+    if (action === 'comments' && !runtime.comments) return
     // Collections without drafts have no Publish.
     if (action === 'publish' && !runtime.doc.meta.get().drafts) return
     if (forwarded && keyAction(e)) return

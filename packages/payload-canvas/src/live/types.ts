@@ -3,6 +3,7 @@
 
 import type { Layout, Operation } from '../core/types'
 import type { PropAccessInfo } from '../core/fieldAccess'
+import type { BuilderComment } from '../comments/shared'
 
 /** Who made a change. `label` is what the editor shows, e.g. "Claude Desktop" or "Ana". */
 export type LiveActor = { type: 'user' | 'ai'; id: string; label: string }
@@ -201,6 +202,15 @@ export type LivePublishedEvent = {
   actor: LiveActor
 }
 
+/**
+ * A comment on the document was saved or deleted (the comments collection). Comments are not part
+ * of the layout: they never change `seq`, and a reconnect does not replay them (the editor loads
+ * the list again).
+ */
+export type LiveCommentsEvent =
+  | { type: 'comments'; change: 'saved'; comment: BuilderComment }
+  | { type: 'comments'; change: 'deleted'; id: string }
+
 export type MultiplayerEvent =
   | LiveCommitEvent
   | LiveSessionEvent
@@ -209,6 +219,7 @@ export type MultiplayerEvent =
   | LiveSavedEvent
   | LiveSaveFailedEvent
   | LivePublishedEvent
+  | LiveCommentsEvent
 
 /** Response of `POST {liveEndpoint}/:collection/:id/flush`: save the session's unsaved commits now. */
 export type LiveFlushResponse = { ok: true } | { ok: false; error: string }

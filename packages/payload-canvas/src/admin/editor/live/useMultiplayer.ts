@@ -29,6 +29,7 @@ import type {
   LiveAwarenessEvent,
   LiveCollaboratorsEvent,
   LiveCommitEvent,
+  LiveCommentsEvent,
   LiveCommitRequest,
   LivePublishedEvent,
   LiveSaveFailedEvent,
@@ -413,7 +414,14 @@ export function useMultiplayer(
       }
       es.addEventListener('session', (e) => {
         const data = parse<LiveSessionEvent & { sessionId?: string }>(e)
-        if (data) onSession(data)
+        if (!data) return
+        onSession(data)
+        // Comment events are not replayed: (re)load the list with every session.
+        void runtime.comments?.load()
+      })
+      es.addEventListener('comments', (e) => {
+        const data = parse<LiveCommentsEvent>(e)
+        if (data) runtime.comments?.handleEvent(data)
       })
       es.addEventListener('commit', (e) => {
         const data = parse<LiveCommitEvent>(e)

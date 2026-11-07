@@ -40,6 +40,7 @@ import type { CollaboratorCursor, LiveState, Peer, PeerCursor } from './live'
 import { initialTemplateState, type TemplateState } from './templates/state'
 import { createRegionsController, type RegionsController } from './regions/controller'
 import { createClassesController, type ClassesController } from './classes/controller'
+import { createCommentsController, type CommentsController } from './comments/controller'
 
 export const OUTLINE_INDENT = 16
 
@@ -132,6 +133,8 @@ export type Runtime = {
   sections: SectionsController
   /** Editable classes: the list, usage, the class the Styles panel edits, writes. Null when turned off. */
   classes: ClassesController | null
+  /** Comments on the canvas: the list, comment mode, the pin being placed. Null when turned off. */
+  comments: CommentsController | null
   /** Real thumbnails of sections for the library. */
   thumbnails: ThumbnailService
   /** Payload's REST route, e.g. "/api". */
@@ -257,6 +260,7 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
     assistant: null,
     regions: null,
     classes: null,
+    comments: null,
     assistantFlash: createValueStore<ReadonlyMap<string, number>>(new Map()),
     assistantFocus: createValueStore(0),
     toggleAssistant(open) {
@@ -292,6 +296,7 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
       if (key === 'escape') {
         if (runtime.help.get()) runtime.help.set(false)
         else if (runtime.follow.get()) runtime.follow.set(null)
+        else if (runtime.comments && closeComment(runtime.comments)) return
         else if (runtime.regions?.selected.get()) runtime.regions.selected.set(null)
         else store.select(null)
       }
@@ -333,6 +338,15 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
     runtime.classes = createClassesController(config.classes, api, store)
     if (typeof window !== 'undefined') void runtime.classes.load()
   }
+  if (config.comments) {
+    runtime.comments = createCommentsController({
+      api,
+      config: config.comments,
+      document: { collection: document.collection, id: document.id },
+      warn: (text) => runtime.warn(text),
+      notify: (text) => runtime.notify(text),
+    })
+  }
   if (config.regions?.length) {
     const regions = createRegionsController({
       regions: config.regions,
@@ -361,6 +375,18 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
     })
   }
   return runtime
+}
+
+/** Escape in comment mode: closes the composer or the open thread, else leaves comment mode. False when it did nothing. */
+function closeComment(comments: CommentsController): boolean {
+  if (comments.draft.get() || comments.open.get()) {
+    comments.draft.set(null)
+    comments.open.set(null)
+    return true
+  }
+  if (!comments.mode.get()) return false
+  comments.toggle(false)
+  return true
 }
 
 export const RuntimeContext = createContext<Runtime | null>(null)

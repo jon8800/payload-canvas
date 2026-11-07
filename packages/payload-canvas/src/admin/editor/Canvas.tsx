@@ -31,6 +31,7 @@ import { imageEditor, updateImageEditor, uploadImage } from './media/actions'
 import { EmptyStart } from './empty/EmptyStart'
 import { EDGE_BAND, INSERT_BUTTON, insertSpotAt, sameSpot } from './insert/spots'
 import { Overlay } from './Overlay'
+import { CommentLayer } from './comments/CommentLayer'
 import { useRuntime, type Runtime } from './runtime'
 import { bindShortcuts } from './shortcuts'
 import { useEditor } from './store'
@@ -394,6 +395,7 @@ export function Canvas() {
               style={{ pointerEvents: locked ? 'none' : undefined }}
             />
             <Overlay />
+            <CommentLayer />
           </div>
           <FrameResize wrapRef={wrapRef} frameRef={frameRef} frameWidth={frameWidth} zoom={zoom} space={stage.width} />
           <EmptyStart />
