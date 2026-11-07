@@ -20,6 +20,7 @@ import {
   type ComponentValues,
 } from '../../../core'
 import type { Block } from '../../../core/types'
+import { useContentMode } from '../contentMode'
 import { Icon } from '../icons'
 import { editSectionPath } from '../Library'
 import { RenderBlockFields } from '../renderField'
@@ -90,7 +91,9 @@ export function ComponentValuesPanel({ block }: { block: Block }) {
   const section = savedId === null ? undefined : saved?.find((s) => s.savedId !== undefined && String(s.savedId) === String(savedId))
   const properties = useMemo(() => (section ? componentProperties(section.blocks, runtime.config.blocks) : []), [section, runtime.config.blocks])
   const usedIn = useUsedIn(runtime, section ? savedId : null)
-  const edit = useEditComponent(section ? savedId : null)
+  // Content mode: a client fills in this copy's values; the component itself is design.
+  const contentMode = useContentMode(runtime)
+  const edit = useEditComponent(section && !contentMode ? savedId : null)
   if (savedId === null) return null
   if (saved === null) return <p className="builder-editor__hint">Loading the component…</p>
   if (!section) {

@@ -185,3 +185,18 @@ describe('editableItems flag', () => {
     assert.ok(bad.some((e) => e.path.endsWith('editableItems')))
   })
 })
+
+describe('component copies', () => {
+  it('lets editors change the values of a copy, not which component it shows', async () => {
+    const { sectionRefBlock, SECTION_REF_BLOCK, SECTION_REF_VALUES } = await import('../blocks/builtins/sectionRef')
+    const defs = [...blocks, sectionRefBlock()]
+    const start = normalizeLayout({ version: 1, blocks: [{ id: 'ref', type: SECTION_REF_BLOCK, props: { section: 1 } }] })
+    const problem = (ops: Operation[]) => {
+      const result = applyOperations(start, ops, { blocks: defs })
+      assert.ok(result.ok, result.ok ? '' : result.error)
+      return contentModeProblem(start, result.layout, defs)
+    }
+    assert.equal(problem([{ type: 'update', id: 'ref', props: { [SECTION_REF_VALUES]: { title: 'Ready?' } } }]), null)
+    assert.match(String(problem([{ type: 'update', id: 'ref', props: { section: 2 } }])), /settings/)
+  })
+})

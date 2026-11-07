@@ -87,10 +87,11 @@ export function sectionRefBlock(collection = 'builder-sections'): BlockDefinitio
         required: true,
       },
       {
-        // Edited as the component's properties (admin/editor/sections/ComponentValues.tsx).
+        // Edited as the component's properties (admin/editor/sections/ComponentFields.tsx). Content in
+        // content mode: the designer chose which text, images and links a copy may change.
         name: SECTION_REF_VALUES,
         type: 'json',
-        admin: { hidden: true },
+        admin: { hidden: true, custom: { builderContent: true } },
       },
     ],
     ai: {
