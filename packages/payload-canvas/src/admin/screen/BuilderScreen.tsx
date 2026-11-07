@@ -33,6 +33,7 @@ export function BuilderScreen({
   visibleEntities,
   locale,
   ai,
+  canEditDesign = true,
 }: {
   meta: BuilderDocMeta
   icon: ReactNode
@@ -41,6 +42,8 @@ export function BuilderScreen({
   locale?: string | null
   /** The assistant's config for this request (keys in the AI settings count). Replaces the one from the field config. */
   ai?: AiClientConfig | null
+  /** The user may change the design (`editor.canEditDesign`). False: content mode. */
+  canEditDesign?: boolean
 }) {
   const { getEntityConfig } = useConfig()
   const fieldConfig = builderConfigOf(getEntityConfig({ collectionSlug: meta.collection })?.fields ?? [])
@@ -51,7 +54,7 @@ export function BuilderScreen({
   return (
     <EntityVisibilityProvider visibleEntities={visibleEntities}>
       <EditDepthProvider>
-        <Editor config={config} meta={meta} icon={icon} locale={locale} />
+        <Editor config={config} meta={meta} icon={icon} locale={locale} canEditDesign={canEditDesign} />
       </EditDepthProvider>
     </EntityVisibilityProvider>
   )

@@ -7,6 +7,7 @@ import { createId } from '../core/ids'
 import { findBlock } from '../core/tree'
 import type { BlockDefinition, Layout, SectionDefinition } from '../core/types'
 import type { LiveDocStore } from '../live/apply'
+import { CONTENT_MODE_KEY } from '../live/contentMode'
 import { LIVE_RUNTIME_KEY, type LiveRuntime } from '../live/runtime'
 import { createSessionManager } from '../live/session'
 import type { LiveCommitEvent, MultiplayerEvent } from '../live/types'
@@ -760,5 +761,20 @@ describe('builderMcpTools with locales', () => {
       {},
     )
     assert.equal(result.isError, true)
+  })
+})
+
+describe('content mode (editor.canEditDesign)', () => {
+  it('applyOperations and insertSection refuse design changes from a user without design rights', async () => {
+    const { req, runtime } = fakeRequest({ version: 1, blocks: [{ id: 'a', type: 'heading', props: { text: 'X' } }] })
+    ;(req.payload.config.custom as Record<string, unknown>)[CONTENT_MODE_KEY] = { canEditDesign: () => false }
+    const restyle = await tool('applyOperations').handler({ collection: 'pages', id: 'p1', operations: [{ type: 'update', id: 'a', className: 'p-4' }] }, req, {})
+    assert.equal(restyle.isError, true)
+    assert.match(restyle.content[0].text, /only text, images and links/)
+    const section = await tool('insertSection').handler({ collection: 'pages', id: 'p1', sectionId: 'hero' }, req, {})
+    assert.equal(section.isError, true)
+    const text = await tool('applyOperations').handler({ collection: 'pages', id: 'p1', operations: [{ type: 'update', id: 'a', props: { text: 'Y' } }] }, req, {})
+    assert.notEqual(text.isError, true)
+    assert.equal(runtime.sessions.peek('pages', 'p1')?.layout.blocks.length, 1)
   })
 })

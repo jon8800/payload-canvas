@@ -13,6 +13,7 @@ import type { PayloadRequest, SanitizedCollectionConfig } from 'payload'
 import { normalizeLayout, walkBlocks } from '../core/tree'
 import type { Layout, Operation } from '../core/types'
 import { actorFromUser, type LiveDocStore } from '../live/apply'
+import { canEditDesign } from '../live/contentMode'
 import { builderConfigOf } from '../live/document'
 import { DRAFT_NOT_READABLE_MESSAGE, liveReadProblem, withLiveReadCheck } from '../live/draftAccess'
 import { sessionTargetOf } from '../live/endpoints'
@@ -187,6 +188,7 @@ export async function replaceClassInLayouts(req: PayloadRequest, from: string, t
       },
       blocks: classesConfigOf(req.payload)?.blocks ?? [],
       localization: builder.collections[doc.collection]?.localization ?? null,
+      contentOnly: !(await canEditDesign(req)),
       access: withLiveReadCheck(req, target),
     })
     if (commit.ok) {
