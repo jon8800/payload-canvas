@@ -3,7 +3,7 @@
 // next to the app's built-in sections. Only type imports from `payload`: the editor imports the
 // pure helpers below.
 
-import type { Access, CollectionConfig, FieldHook, PayloadRequest } from 'payload'
+import type { Access, CollectionConfig, FieldHook, PayloadRequest, Validate } from 'payload'
 
 import { hasPropHooks, runPropHooks, type FieldRunContext } from '../core/fieldHooks'
 import type { FieldRegistry } from '../core/fieldSemantics'
@@ -11,7 +11,7 @@ import { runPropValidators } from '../core/fieldValidate'
 import { describeLayoutErrors } from '../core/issues'
 import { localeSettingsOf } from '../core/locale'
 import { findSection, withoutSectionOrigin } from '../core/sections'
-import { SAVED_SECTIONS_CONFIG_KEY } from '../blocks/builtins/sectionRef'
+import { SAVED_SECTIONS_CONFIG_KEY, SECTION_REF_BLOCK, sectionRefId } from '../blocks/builtins/sectionRef'
 import { isPlainObject, normalizeLayout } from '../core/tree'
 import type { Block, BlockDefinition, Layout, LocaleSettings, SectionDefinition } from '../core/types'
 import { isLayoutWarning, validateLayout } from '../core/validate'
@@ -112,6 +112,61 @@ export async function loadSavedSections(req: PayloadRequest, slug: string): Prom
     return (result.docs as unknown as Record<string, unknown>[]).flatMap((doc) => toSavedSection(doc) ?? [])
   } catch {
     return []
+  }
+}
+
+/** The saved sections that `sectionRef` blocks in `blocks` point at (any depth), as text ids. */
+export function sectionRefIds(blocks: unknown): string[] {
+  const ids = new Set<string>()
+  const visit = (list: unknown) => {
+    if (!Array.isArray(list)) return
+    for (const block of list) {
+      if (!isPlainObject(block)) continue
+      if (block.type === SECTION_REF_BLOCK) {
+        const id = sectionRefId(isPlainObject(block.props) ? block.props.section : undefined)
+        if (id !== null) ids.add(String(id))
+      }
+      if (isPlainObject(block.slots)) for (const children of Object.values(block.slots)) visit(children)
+    }
+  }
+  visit(blocks)
+  return [...ids]
+}
+
+/**
+ * True when the blocks of saved section `self` would contain `self`: directly, or through the
+ * components they contain (up to `maxDepth` levels). `load` gives the stored blocks of saved
+ * sections by id (missing ones are left out).
+ */
+export async function containsSection(
+  self: string,
+  blocks: unknown,
+  load: (ids: string[]) => Promise<Map<string, unknown>>,
+  maxDepth = 5,
+): Promise<boolean> {
+  const seen = new Set<string>()
+  let level = sectionRefIds(blocks)
+  for (let depth = 0; depth < maxDepth && level.length > 0; depth++) {
+    if (level.includes(self)) return true
+    level.forEach((id) => seen.add(id))
+    const loaded = await load(level)
+    level = [...new Set([...loaded.values()].flatMap(sectionRefIds))].filter((id) => !seen.has(id) || id === self)
+  }
+  return level.includes(self)
+}
+
+/** Loads the stored blocks of saved sections, with the request's access. */
+function sectionBlocksLoader(req: PayloadRequest, slug: string) {
+  return async (ids: string[]): Promise<Map<string, unknown>> => {
+    const result = await req.payload.find({
+      collection: slug as never,
+      where: { id: { in: ids } },
+      depth: 0,
+      limit: ids.length,
+      pagination: false,
+      req,
+    })
+    return new Map((result.docs as unknown as Record<string, unknown>[]).map((doc) => [String(doc.id), doc.blocks]))
   }
 }
 
@@ -228,11 +283,15 @@ export function savedSectionsCollection(args: { slug: string; blocks: BlockDefin
           // Canonical form, like every layout (no empty slots or props), and the props' field hooks.
           beforeValidate: [sectionBlocksHook(blocks, slug)],
         },
-        validate: (value: unknown) => {
+        validate: (async (value: unknown, { id, req }: { id?: string | number; req: PayloadRequest }) => {
           if (!Array.isArray(value) || value.length === 0) return 'A section needs at least one block.'
           const { blocking } = splitLayoutErrors(validateLayout({ version: 1, blocks: value }, blocks))
-          return blocking.length === 0 ? true : blocking.slice(0, 3).map((e) => e.message).join(' ')
-        },
+          if (blocking.length > 0) return blocking.slice(0, 3).map((e) => e.message).join(' ')
+          if (id !== undefined && (await containsSection(String(id), value, sectionBlocksLoader(req, slug)))) {
+            return 'A component cannot contain itself. Remove the copy of this component from its own blocks.'
+          }
+          return true
+        }) as Validate,
       },
       {
         // The builder's layout (see SECTION_LAYOUT_FIELD). No database column.

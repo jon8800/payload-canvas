@@ -33,6 +33,11 @@ export type CanvasInit = {
    * their latest drafts, and follows the editor's edits on `CLASSES_CHANNEL`. Left out: no classes.
    */
   classesEndpoint?: string
+  /**
+   * The saved sections collection: the canvas loads the blocks of live saved sections (components'
+   * copies) from it. The app's own block list usually has no `sectionRef` definition to name it.
+   */
+  savedSections?: string | null
 }
 
 export type PointerKind = 'move' | 'leave' | 'click'

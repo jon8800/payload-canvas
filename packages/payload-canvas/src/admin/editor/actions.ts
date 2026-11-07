@@ -3,9 +3,10 @@
 // Editor actions shared by the toolbar, the overlay, the outline, the inspector, the menus and the
 // shortcuts: insert, duplicate, remove, hide, move, copy and paste (blocks and styles).
 
-import { sectionDetachOps, sectionRefId } from '../../blocks/builtins/sectionRef'
+import { SECTION_REF_BLOCK, sectionDetachOps, sectionRefId } from '../../blocks/builtins/sectionRef'
+import { applyComponentValues, componentValuesOf } from '../../core/components'
 import { createId, findBlock, findLocation, getBlockDefinition, htmlIdsOf, slotAcceptsAt, slotNames, withoutTakenHtmlIds } from '../../core'
-import type { Block, CanvasMeasurement, Layout, Operation, Position } from '../../core/types'
+import type { Block, CanvasMeasurement, Layout, Operation, Position, SectionDefinition } from '../../core/types'
 import { normalizeClasses, parseStyles, setStylesOps, stylesText, type CopiedStyles } from './menu/styleClipboard'
 import type { Runtime } from './runtime'
 import { countText } from './counts'
@@ -119,8 +120,23 @@ function freshCopies(runtime: Runtime, blocks: readonly Block[]): Block[] {
 }
 
 /**
+ * The blocks a saved section inserts as plain blocks: a component's own content, without its
+ * property bindings (they mean nothing outside a copy).
+ */
+export function plainSectionBlocks(runtime: Runtime, blocks: readonly Block[]): Block[] {
+  return applyComponentValues(blocks, {}, runtime.config.blocks)
+}
+
+/** A new copy of a saved section that stays in sync (a `sectionRef` block), or null for built-in sections. */
+export function componentCopy(section: SectionDefinition): Block | null {
+  if (section.savedId === undefined) return null
+  return { id: createId(), type: SECTION_REF_BLOCK, props: { section: section.savedId } }
+}
+
+/**
  * "Detach section": replaces a live saved section (`sectionRef`) with a copy of its blocks, as one
- * undo step. Later changes to the saved section no longer reach this page.
+ * undo step. A component's copy keeps its own values in the blocks. Later changes to the saved
+ * section no longer reach this page.
  */
 export async function detachSection(runtime: Runtime, id: string): Promise<void> {
   const ref = findBlock(runtime.store.getState().layout, id)
@@ -132,7 +148,7 @@ export async function detachSection(runtime: Runtime, id: string): Promise<void>
     runtime.notify('This saved section cannot be loaded. It may be deleted.')
     return
   }
-  const copies = freshCopies(runtime, section.blocks)
+  const copies = freshCopies(runtime, applyComponentValues(section.blocks, componentValuesOf(ref?.props), runtime.config.blocks))
   const ops = sectionDetachOps(runtime.store.getState().layout, id, copies)
   if (ops && runtime.store.apply(ops, { select: copies[0]!.id })) runtime.notify(`Detached "${section.label}": this page now has its own copy`)
   else runtime.notify("The section's blocks cannot go here.")

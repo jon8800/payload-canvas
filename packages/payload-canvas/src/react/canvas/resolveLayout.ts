@@ -21,10 +21,11 @@ export async function resolveCanvasLayout(
   resolveLink: ResolveLink,
   locale?: string | null,
   relations?: Record<string, Record<string, string>> | null,
+  savedSections?: string | null,
 ): Promise<Layout> {
   const fetchDocs = createRestFetchDocs(api, locale)
   // Live saved sections: their current blocks, shown as repeats (not editable here).
-  const withSections = await attachSections(layout, definitions, fetchDocs)
+  const withSections = await attachSections(layout, definitions, fetchDocs, savedSections ?? undefined)
   const bound = context
     ? resolveBindings(withSections, context, definitions, { url: urlResolver(resolveLink), ...(relations ? { relations } : {}) })
     : withSections

@@ -38,6 +38,7 @@ export * from './styles'
 export * from './motion'
 export * from './bindings'
 export * from './visibility'
+export * from './components'
 export { TEXT_LIST_BLOCK, TEXT_LIST_ITEM_BLOCK, TEXT_LIST_SLOT, joinListItem, splitListItem, type ListItemEdit } from './textList'
 export { blockName, defineBlock, defineSection, type SectionBlockInput, type SectionInput, fitsParent, getBlockDefinition, placementError, checkSectionVariants, sectionsWithDefaultClassNames, sectionsWithVariants, slotAccepts, slotAcceptsAt, slotNames, starterSlots, withDefaultClasses, withDefaultClassNames, withInlineBlocks } from './blocks'
 export {

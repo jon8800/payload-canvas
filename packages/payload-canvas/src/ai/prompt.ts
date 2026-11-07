@@ -8,6 +8,7 @@ import { localeLabel } from '../core/locale'
 import { sectionVersions } from '../core/sections'
 import type { BlockDefinition, Layout, LocaleSettings, SectionDefinition, StyleTokens, TemplateContext, ThemeToken } from '../core/types'
 import { BINDINGS_GUIDE, describeBlock, layoutGuide, outline } from '../mcp/shared'
+import { componentProperties } from '../core/components'
 
 export type PromptCatalog = {
   blocks: BlockDefinition[]
@@ -232,7 +233,9 @@ function savedSectionsBlock(sections: SectionDefinition[] | undefined): string[]
   const lines = sections.slice(0, CONTEXT_SAVED_SECTIONS).map((s) => {
     const condensed = outline(s.blocks).map((line) => line.trim()).join(', ')
     const short = condensed.length > OUTLINE_MAX ? `${condensed.slice(0, OUTLINE_MAX)}…` : condensed
-    return `- ${s.id}: ${s.label}${s.category ? ` (${s.category})` : ''}: ${short}`
+    const propertyNames = componentProperties(s.blocks, []).map((p) => p.name)
+    const component = propertyNames.length > 0 ? ` [component, properties: ${propertyNames.join(', ')}; insertSection with values]` : ''
+    return `- ${s.id}: ${s.label}${s.category ? ` (${s.category})` : ''}${component}: ${short}`
   })
   const more = sections.length - CONTEXT_SAVED_SECTIONS
   if (more > 0) lines.push(`- …and ${more} more. listSections lists them all.`)
