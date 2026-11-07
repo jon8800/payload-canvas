@@ -25,45 +25,6 @@ export type DefaultBlocksOptions = {
    * Default: a text field. The plugin turns it into a select of its collections that have a `url`.
    */
   listCollections?: string[]
-  /**
-   * The names of the site's icons: the same list as `builtinBlocks({ icons })`. With names, the
-   * button block gets the props `icon`, `iconPosition` and `iconClassName`, and
-   * `builtinComponents({ icons })` renders them. Without names the button has no icon props.
-   */
-  icons?: readonly string[]
-}
-
-/** "arrowUpRight" -> "arrow up right". */
-export const iconLabel = (name: string) => name.replace(/([A-Z])/g, ' $1').toLowerCase()
-
-/** The button's icon props, for a site with an icon set (`defaultBlocks({ icons })`). */
-function buttonIconFields(names: readonly string[]): Field[] {
-  return [
-    {
-      name: 'icon',
-      type: 'select',
-      label: 'Icon',
-      options: names.map((value) => ({ label: iconLabel(value), value })),
-      admin: { description: "Optional. An icon of the site's icon set next to the label. Screen readers skip it." },
-    },
-    {
-      name: 'iconPosition',
-      type: 'select',
-      label: 'Icon position',
-      defaultValue: 'end',
-      options: [
-        { label: 'Before the label', value: 'start' },
-        { label: 'After the label', value: 'end' },
-      ],
-    },
-    {
-      name: 'iconClassName',
-      type: 'text',
-      label: 'Icon classes',
-      defaultValue: 'size-4 shrink-0',
-      admin: { description: 'Tailwind classes of the icon, for example "size-5".', custom: { builderClasses: true } },
-    },
-  ]
 }
 
 /** Block types a Link block may hold directly: content without its own links or controls. */
@@ -310,7 +271,6 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     },
   })
 
-  const icons = options?.icons ?? []
   const button = defineBlock({
     type: 'button',
     label: 'Button',
@@ -320,19 +280,13 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
     fields: [
       { name: 'label', type: 'text', label: 'Label', required: true, localized: true },
       linkField({ collections: linkCollections }),
-      ...(icons.length > 0 ? buttonIconFields(icons) : []),
     ],
-    defaultClassName:
-      'inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground' +
-      (icons.length > 0 ? ' gap-2' : ''),
+    defaultClassName: 'inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground',
     ai: {
       description:
         'A call-to-action button. "link.type" is "url" (set "link.url") or "reference" (set "link.reference" to ' +
-        '{ relationTo, value }). Without a link it renders as plain text.' +
-        (icons.length > 0
-          ? ` Optional "icon" (one of: ${icons.join(', ')}) shows an icon before ("iconPosition": "start") or after ` +
-            '("end", the default) the label; "iconClassName" sizes it (default "size-4 shrink-0").'
-          : ' For a button with an icon, use a link block that holds a text block and an icon block.'),
+        '{ relationTo, value }). Without a link it renders as plain text. For a button with an icon, use a link block ' +
+        'that holds a text block and an icon block.',
       example: {
         type: 'button',
         props: { label: 'Contact us', link: exampleLink },
