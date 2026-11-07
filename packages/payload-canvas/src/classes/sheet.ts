@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto'
 import type { GlobalConfig, Payload, PayloadRequest } from 'payload'
 
 import { compileClassesSheet, cssInputKey } from '../css'
+import { withThemeVariables } from '../theme/server'
 import { classesConfigOf, type ClassesServerConfig } from './config'
 import { toBuilderClass, type BuilderClass } from './shared'
 
@@ -61,7 +62,9 @@ export async function publishedClasses(payload: Payload, config: ClassesServerCo
 /** Compiles the published classes. */
 export async function compilePublishedSheet(payload: Payload, config: ClassesServerConfig, req?: PayloadRequest): Promise<StoredClassSheet> {
   const classes = await publishedClasses(payload, config, req)
-  const [sheet, input] = await Promise.all([compileClassesSheet(classes, config.css), cssInputKey(config.css)])
+  // The theme's variables work inside classes too (`bg-brand` in a class's styles).
+  const css = await withThemeVariables(payload, config.css)
+  const [sheet, input] = await Promise.all([compileClassesSheet(classes, css), cssInputKey(css)])
   return { hash: sheet.css ? hashOf(sheet.css) : '', css: sheet.css, names: sheet.names, errors: sheet.errors, input }
 }
 
@@ -103,7 +106,9 @@ export async function loadClassesSheet(payload: Payload): Promise<StoredClassShe
   if (!config) return null
   const stored = asSheet(await payload.findGlobal({ slug: config.sheetSlug as never, depth: 0, overrideAccess: true }).catch(() => EMPTY))
   // A CSS entry that cannot be read cannot compile either: keep the stored sheet.
-  const input = await cssInputKey(config.css).catch(() => null)
+  const input = await withThemeVariables(payload, config.css)
+    .then(cssInputKey)
+    .catch(() => null)
   if (input === null || (stored.input && stored.input === input)) {
     remember(payload, stored)
     return stored

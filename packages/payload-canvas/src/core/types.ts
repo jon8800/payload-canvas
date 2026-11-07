@@ -6,6 +6,7 @@ import type { Field } from 'payload'
 import type { AiClientConfig } from '../ai/types'
 import type { BlockMotion, MotionPatch } from './motion'
 import type { BlockVisibility } from './visibility'
+import type { VariableToken } from '../theme/variables'
 
 // ---------------------------------------------------------------------------
 // Layout data (stored in one JSON field)
@@ -479,6 +480,12 @@ export type StyleTokens = {
    * first, with their labels. Left out by servers before this field existed.
    */
   siteClasses?: SiteClass[]
+  /**
+   * The theme's design variables (named colors, sizes and fonts, `theme/variables.ts`). Their
+   * names are in `colors`, `spacing` and `fonts` too; the Styles panel lists them first. Left out
+   * without variables.
+   */
+  variables?: VariableToken[]
 }
 
 /** One `@utility` class of the site. A `/* @canvas Group: Label *\/` comment right above the rule sets `label` and `group`. */

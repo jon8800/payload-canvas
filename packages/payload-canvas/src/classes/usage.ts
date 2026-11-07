@@ -23,7 +23,7 @@ import { classesConfigOf } from './config'
 import { bareClass, classTokens, replaceClass, usesClass, type ClassUsage } from './shared'
 
 /** One layout of a builder document. */
-type ScannedLayout = { collection: string; id: string | number; title: string; layout: Layout }
+export type ScannedLayout = { collection: string; id: string | number; title: string; layout: Layout }
 
 /** The class names a block uses (its own classes and its parts'), without variant prefixes. */
 function blockClassNames(block: { className?: string | null; partClassName?: Record<string, string | null> | null }): Set<string> {
@@ -66,7 +66,7 @@ const configOf = (req: PayloadRequest, collection: string) =>
  * only the documents the request's user may read. `published`: the published layouts instead (what
  * the live site renders; a collection without drafts: every document), saved sections left out.
  */
-async function scanLayouts(req: PayloadRequest, asUser: boolean, published = false): Promise<ScannedLayout[]> {
+export async function scanLayouts(req: PayloadRequest, asUser: boolean, published = false): Promise<ScannedLayout[]> {
   const builder = builderConfigOf(req.payload)
   if (!builder) return []
   const sessions = liveRuntimeOf(req.payload).sessions
@@ -137,6 +137,19 @@ export async function publishedClassUsage(req: PayloadRequest, names: Iterable<s
     if (blocks > 0) out.push({ collection, id, title, blocks })
   }
   return out
+}
+
+/**
+ * The names among `names` that any layout uses: the latest drafts, open live sessions and the
+ * published layouts of every document (no access check: deleting must not miss a page).
+ */
+export async function usedClassNames(req: PayloadRequest, names: Iterable<string>): Promise<Set<string>> {
+  const wanted = new Set(names)
+  const used = new Set<string>()
+  if (wanted.size === 0) return used
+  const [drafts, published] = await Promise.all([scanLayouts(req, false), scanLayouts(req, false, true)])
+  for (const { layout } of [...drafts, ...published]) for (const name of countClassUses(layout, wanted).keys()) used.add(name)
+  return used
 }
 
 export type ReplaceResult = {

@@ -5,6 +5,7 @@ import type { Payload } from 'payload'
 import { siteCssConfigOf } from '../plugin'
 import { collectClasses, type Layout } from '../core'
 import { compileClasses } from '../css'
+import { withThemeVariables } from '../theme/server'
 import { loadClassesSheet } from './classes/ClassesStyle'
 
 export { loadLayoutData, type LoadLayoutOptions } from './render/resolve'
@@ -43,7 +44,7 @@ export async function compilePageCss(payload: Payload, parts: readonly PageCssPa
   try {
     // Editable classes come from their own stylesheet (`ClassesStyle`): the page leaves them out.
     const sheet = await loadClassesSheet(payload).catch(() => null)
-    return (await compileClasses([...classes], config.css, { exclude: sheet?.names ?? [] })) || null
+    return (await compileClasses([...classes], await withThemeVariables(payload, config.css), { exclude: sheet?.names ?? [] })) || null
   } catch (error) {
     payload.logger.error({ err: error, msg: '[builder] Page CSS compile failed. Using the stored CSS of each layout.' })
     return stored()

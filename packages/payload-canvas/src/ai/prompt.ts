@@ -64,6 +64,13 @@ function stylingGuide(tokens: StyleTokens | null): string {
   if (tokens.radius.length > 0) lines.push(`- Radius (rounded-<name>): ${names(tokens.radius)}.`)
   if (tokens.shadows.length > 0) lines.push(`- Shadows (shadow-<name>): ${names(tokens.shadows)}.`)
   if (tokens.containers.length > 0) lines.push(`- Container widths (max-w-<name>): ${names(tokens.containers)}.`)
+  const variables = tokens.variables ?? []
+  if (variables.length > 0) {
+    const list = variables.slice(0, 60).map((v) => `${v.name} (${v.type}: ${v.value}${v.darkValue ? `, dark ${v.darkValue}` : ''})`)
+    lines.push(
+      `- Design variables (the site's named colors, sizes and fonts; prefer them over raw values): ${list.join(', ')}. Colors: bg-<name>, text-<name>, border-<name>. Sizes: p-<name>, m-<name>, gap-<name>, w-<name>. Fonts: font-<name>.`,
+    )
+  }
   const site = tokens.siteClasses ?? []
   if (site.length > 0) {
     const list = site.slice(0, 80).map((c) => (c.label ? `${c.name} (${c.group ? `${c.group}: ` : ''}${c.label})` : c.name))

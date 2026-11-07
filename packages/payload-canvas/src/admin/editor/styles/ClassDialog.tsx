@@ -1,6 +1,6 @@
 'use client'
 
-// The class dialogs: "New class from this block's styles", Rename and Delete. Payload's own
+// The class dialogs: "New class from this block's styles", Rename, Delete and Remove unused. Payload's own
 // ConfirmationModal and TextInput, as the saved section dialogs. A refused name (taken, a Tailwind
 // class) opens the dialog again with the name and the reason.
 
@@ -28,7 +28,7 @@ export function ClassDialog() {
 
   if (!dialog) return null
   // A new request (or the same one with an error) starts with fresh fields.
-  return <DialogContent key={`${dialog.kind}:${'id' in dialog ? dialog.id : dialog.blockId}:${dialog.error ?? ''}`} dialog={dialog} />
+  return <DialogContent key={`${dialog.kind}:${'id' in dialog ? dialog.id : 'blockId' in dialog ? dialog.blockId : ''}:${dialog.error ?? ''}`} dialog={dialog} />
 }
 
 /** The block's (or part's) classes, split into editable classes (they stay) and the rest (they move into the new class). */
@@ -58,7 +58,7 @@ function DialogContent({ dialog }: { dialog: Dialog }) {
   const [label, setLabel] = useState('')
   const nameRef = useRef<HTMLInputElement>(null)
   const busy = useRef(false)
-  useModalA11y(MODAL_SLUG, { alert: dialog.kind === 'delete' })
+  useModalA11y(MODAL_SLUG, { alert: dialog.kind === 'delete' || dialog.kind === 'remove-unused' })
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => nameRef.current?.select())
@@ -76,6 +76,13 @@ function DialogContent({ dialog }: { dialog: Dialog }) {
     if (busy.current) return
     busy.current = true
     try {
+      if (dialog.kind === 'remove-unused') {
+        close()
+        const result = await classes.removeUnused()
+        if (typeof result === 'string') runtime.warn(`The unused classes were not removed: ${result}`)
+        else runtime.notify(`Deleted ${plural(result.deleted.length, 'unused class', 'unused classes')}${result.failed > 0 ? `. ${plural(result.failed, 'class', 'classes')} could not be deleted` : ''}.`)
+        return
+      }
       if (dialog.kind === 'delete') {
         close()
         if (!item) return
@@ -126,6 +133,21 @@ function DialogContent({ dialog }: { dialog: Dialog }) {
       {dialog.error}
     </p>
   ) : null
+
+  if (dialog.kind === 'remove-unused') {
+    const names = dialog.names.map((n) => `.${n}`)
+    return (
+      <ConfirmationModal
+        modalSlug={MODAL_SLUG}
+        heading={`Delete ${plural(names.length, 'unused class', 'unused classes')}?`}
+        body={`No page uses ${names.length > 6 ? `${names.slice(0, 6).join(', ')} and ${names.length - 6} more` : names.join(', ')}. A class still on a published page stays.`}
+        confirmLabel="Delete classes"
+        confirmingLabel="Deleting…"
+        onConfirm={confirm}
+        onCancel={close}
+      />
+    )
+  }
 
   if (dialog.kind === 'delete') {
     const used = item ? usage?.[item.name] : undefined
