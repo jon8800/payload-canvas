@@ -196,6 +196,9 @@ export function hookChangesOf(context: Record<string, unknown> | undefined, coll
  * A save by the plugin itself: the session's draft, publish / unpublish / revert, or the template
  * "Default" flag. It keeps Payload's document lock and skips the stale-save check.
  */
+/** The start of the error when content mode refuses a Restore that would change the design. */
+export const RESTORE_DESIGN_MESSAGE = 'This version has a different design, so only a designer can restore it.'
+
 /** Payload's Restore of a version (its operation sets this flag): the version's values are the truth. */
 function isRestore(context: Record<string, unknown> | undefined): boolean {
   return Boolean(context?.isRestoringVersion)
@@ -422,13 +425,17 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
       const at = requestLocale(req, localization)
       if (at) layout = mergeLocaleView(savedLayout, layout, at.locale, blocks, localization)
     }
-    // Content mode (editor.canEditDesign): a user's own save (REST, GraphQL, the Edit view) may
-    // change only content. The live session checks each edit when it arrives, so its saves, the
-    // guarded saves, the plugin's own saves and Payload's Restore are not checked again.
-    const userSave = !own && !guarded && !isPluginSave(context) && !isRestore(context) && context?.[OVERRIDE_ACCESS_CONTEXT] === false
+    // Content mode (editor.canEditDesign): a user's own save (REST, GraphQL, the Edit view) and
+    // Payload's Restore of a version may change only content. The live session checks each edit
+    // when it arrives, so its saves, the guarded saves and the plugin's own saves are not checked
+    // again. A restore is compared with the session's layout when one is open (it holds edits
+    // that are not saved yet), else with the stored layout.
+    const restoring = isRestore(context)
+    const userSave = !own && !guarded && !isPluginSave(context) && context?.[OVERRIDE_ACCESS_CONTEXT] === false
     if (userSave && req.user && !(await canEditDesign(req))) {
-      const problem = contentModeProblem(savedLayout ?? EMPTY_LAYOUT, layout, blocks)
-      if (problem) throw new APIError(problem, 403, undefined, true)
+      const current = (restoring && docId !== undefined ? sessions?.peek(slug, docId)?.layout : undefined) ?? savedLayout ?? EMPTY_LAYOUT
+      const problem = contentModeProblem(current, layout, blocks)
+      if (problem) throw new APIError(restoring ? `${RESTORE_DESIGN_MESSAGE} ${problem}` : problem, 403, undefined, true)
     }
     if (registry) {
       // Field access. The live session checks every edit when it arrives (session.ts), so its

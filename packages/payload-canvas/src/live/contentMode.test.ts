@@ -164,12 +164,59 @@ describe('the save hook in content mode', () => {
     await assert.rejects(save(client, layout), (error: { status?: number; message?: string }) => error.status === 403 && /only text, images and links/.test(String(error.message)))
   })
 
-  it('lets designers, server code (overrideAccess) and Payload restores through', async () => {
+  it('lets designers and server code (overrideAccess) through', async () => {
     const layout = base()
     layout.blocks[0].className = 'text-xl'
     assert.equal(((await save(designer, layout)).layout as Layout).blocks[0].className, 'text-xl')
     assert.equal(((await save(client, layout, { builderOverrideAccess: true })).layout as Layout).blocks[0].className, 'text-xl')
-    assert.equal(((await save(client, layout, { builderOverrideAccess: false, isRestoringVersion: true })).layout as Layout).blocks[0].className, 'text-xl')
+  })
+
+  it('refuses a Payload Restore of a version with another design, and allows one that differs only in content', async () => {
+    const restore = { builderOverrideAccess: false, isRestoringVersion: true }
+    const older = base()
+    older.blocks[0].className = 'text-xl'
+    older.blocks.reverse()
+    await assert.rejects(
+      save(client, older, { ...restore }),
+      (error: { status?: number; message?: string }) => error.status === 403 && /only a designer can restore it/.test(String(error.message)),
+    )
+    const sameDesign = base()
+    sameDesign.blocks[0].props = { text: 'Older text', level: '1' }
+    assert.equal(((await save(client, sameDesign, { ...restore })).layout as Layout).blocks[0].props?.text, 'Older text')
+    assert.equal(((await save(designer, older, { ...restore })).layout as Layout).blocks[1].className, 'text-xl')
+  })
+
+  it('compares a Restore with the open live session, which may hold unsaved edits', async () => {
+    let doc: Record<string, unknown> = { id: 'p1', layout: base() }
+    const store: LiveDocStore = {
+      async findByID() {
+        return structuredClone(doc)
+      },
+      async update(args) {
+        doc = { ...doc, ...(args.data as Record<string, unknown>) }
+        return structuredClone(doc)
+      },
+    }
+    const sessions = createSessionManager({ timers: idle, logger: { error() {} } })
+    const target: SessionTarget = { collection: 'pages', id: 'p1', field: 'layout', drafts: true, autosave: true }
+    // A designer restyles the heading live; the change is not saved yet (the timers never fire).
+    const live = await sessions.commit({ target, store, user: designer, actor: actorFromUser(designer), ops: [{ type: 'update', id: 'h', className: 'text-xl' }], blocks })
+    assert.equal(live.ok, true)
+    const guarded = layoutBeforeChange({ collection: 'pages', field: 'layout', cssField: 'layoutCss', blocks, css: { entry: 'does-not-exist.css' }, sessions }) as unknown as (
+      args: Record<string, unknown>,
+    ) => Promise<Record<string, unknown>>
+    // The stored version (no class) would undo the live design change: refused for the client.
+    await assert.rejects(
+      guarded({
+        collection: { versions: { drafts: true }, fields: [] },
+        context: { builderOverrideAccess: false, isRestoringVersion: true },
+        data: { layout: base() },
+        operation: 'update',
+        originalDoc: { id: 'p1', _status: 'draft', layout: base() },
+        req: request(client),
+      }),
+      (error: { status?: number }) => error.status === 403,
+    )
   })
 })
 
