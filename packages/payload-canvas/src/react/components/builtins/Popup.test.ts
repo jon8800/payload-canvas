@@ -113,21 +113,47 @@ describe('Popup in the browser', () => {
     assert.equal(loaded.container.querySelector('dialog')!.open, true)
   })
 
-  it('on the canvas shows the content in place: from the trigger, and when a block inside is selected', async (t) => {
+  it('on the canvas opens over the page from the trigger and on selection, and is not modal', async (t) => {
     const dom = await mountDom(t)
     await dom.render(popup({}, { mode: 'canvas' }))
     const dialog = dom.container.querySelector('dialog')!
     await dom.run(() => revealBlock(dialog.querySelector('[data-block-id="h"]')!))
     assert.equal(dialog.hasAttribute('open'), true)
-    assert.equal(dialog.style.position, 'relative')
-    // The trigger toggles it on the canvas, where there is no backdrop to click.
-    await dom.run(() => dom.container.querySelector<HTMLButtonElement>('[aria-haspopup]')!.click())
-    assert.equal(dialog.hasAttribute('open'), false)
+    assert.equal(dialog.getAttribute('popover'), 'manual')
+    assert.equal(dialog.style.position, 'fixed')
+    // Not modal: the page stays scrollable, so the editor reaches the rest of the page.
+    assert.equal(dom.window.document.documentElement.style.overflow, '')
+    // A second click on the trigger keeps it open.
     await dom.run(() => dom.container.querySelector<HTMLButtonElement>('[aria-haspopup]')!.click())
     assert.equal(dialog.hasAttribute('open'), true)
-    // Selecting the popup itself shows its content too.
+    // Selecting the popup itself opens it too.
     await dom.run(() => dialog.querySelector<HTMLButtonElement>('[data-popup-close]')!.click())
+    assert.equal(dialog.hasAttribute('open'), false)
     await dom.run(() => revealBlock(dom.container.querySelector('[data-block-id="p"]')!))
+    assert.equal(dialog.hasAttribute('open'), true)
+  })
+
+  it('on the canvas closes on Escape, a click on the backdrop and a selection outside it', async (t) => {
+    const dom = await mountDom(t)
+    await dom.render(popup({}, { mode: 'canvas' }))
+    const dialog = dom.container.querySelector('dialog')!
+    const document = dom.window.document
+    const open = () => dom.run(() => revealBlock(dom.container.querySelector('[data-block-id="p"]')!))
+    await open()
+    await dom.run(() => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
+    assert.equal(dialog.hasAttribute('open'), false)
+    await open()
+    // The backdrop: a click on the dialog itself, outside its box.
+    await dom.run(() => dialog.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: -5, clientY: -5 })))
+    assert.equal(dialog.hasAttribute('open'), false)
+    await open()
+    const outside = document.createElement('p')
+    document.body.append(outside)
+    await dom.run(() => revealBlock(outside))
+    assert.equal(dialog.hasAttribute('open'), false)
+    // A selection inside keeps it open.
+    await open()
+    await dom.run(() => revealBlock(dialog.querySelector('[data-block-id="h"]')!))
     assert.equal(dialog.hasAttribute('open'), true)
   })
 })

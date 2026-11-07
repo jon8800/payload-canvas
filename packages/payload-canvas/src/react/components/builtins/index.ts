@@ -10,6 +10,7 @@ import type { MenuLabels } from '../Menu'
 import { AdjacentLinks, type AdjacentLinksLabels } from './AdjacentLinks'
 import type { CarouselLabels } from './Carousel'
 import { Disclosure } from './Disclosure'
+import { Embed, type EmbedLabels } from './Embed'
 import { iconComponent, type IconMap } from './Icon'
 import { Marquee } from './Marquee'
 import type { PopupLabels } from './Popup'
@@ -27,6 +28,7 @@ export type BuiltinLabels = {
   tabs?: TabsLabels
   tableOfContents?: TableOfContentsLabels
   adjacentLinks?: AdjacentLinksLabels
+  embed?: EmbedLabels
   /** The default menu block's labels. With them, the map includes a `menu` component. */
   menu?: MenuLabels
 }
@@ -62,8 +64,8 @@ function withLabels<L extends object>(component: Labelled<L>, labels: L | undefi
  * The components of every built-in block. Merge them into your components map:
  * `{ ...builtinComponents({ icons, labels }), ...yours }`. A key of yours with the same type wins.
  * Components of blocks you did not include are never rendered. The interactive ones (carousel,
- * popup, tabs, accordion, filter link, menu) each load their JavaScript only on pages that render
- * them. Call it once (at module level), not during a render.
+ * popup, tabs, accordion, filter link, menu, inline embed) each load their JavaScript only on pages
+ * that render them. Call it once (at module level), not during a render.
  */
 export function builtinComponents(options: BuiltinComponentsOptions = {}): BlockComponents {
   const labels = options.labels ?? {}
@@ -78,6 +80,7 @@ export function builtinComponents(options: BuiltinComponentsOptions = {}): Block
     tableOfContents: withLabels(TableOfContents, labels.tableOfContents),
     filterLink: FilterLink,
     adjacentLinks: withLabels(AdjacentLinks, labels.adjacentLinks),
+    embed: withLabels(Embed, labels.embed),
   }
   if (options.icons) components.icon = iconComponent(options.icons)
   // The menu is a default block: it joins the map only when the site gives it labels.
@@ -89,6 +92,7 @@ export { Accordion, Carousel, FilterLink, Popup, Tab, Tabs } from '../lazy'
 export { AdjacentLinks, type AdjacentLinksLabels } from './AdjacentLinks'
 export type { CarouselLabels } from './Carousel'
 export { Disclosure } from './Disclosure'
+export { Embed, type EmbedLabels } from './Embed'
 export { iconComponent, type IconComponent, type IconMap } from './Icon'
 export { Marquee } from './Marquee'
 export type { PopupLabels } from './Popup'

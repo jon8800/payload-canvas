@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useId, useRef, useState, type CSSProperties, type MouseEvent } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react'
 import { joinClasses, labelOf, textOr } from '../../../blocks/client/helpers'
 import { POPUP_CLASS_MAP as C, POPUP_LABELS } from '../../../blocks/client/popup'
-import { CANVAS_CONTROL_ATTRIBUTE, useCanvasReveal } from '../../render/reveal'
+import { CANVAS_CONTROL_ATTRIBUTE, REVEAL_EVENT, useCanvasReveal } from '../../render/reveal'
 import type { BlockComponentProps } from '../../render/types'
 import { CloseIcon } from './glyphs'
 
@@ -13,10 +13,11 @@ export type PopupLabels = Partial<typeof POPUP_LABELS>
 const CONTROL = { [CANVAS_CONTROL_ATTRIBUTE]: '' }
 
 /**
- * On the canvas the open popup is not a modal: it shows in place, below the trigger, so the editor
- * can measure and select its blocks. `relative`: the close button stays inside it.
+ * On the canvas the open popup is a popover, not a modal: it shows over the page as on the site,
+ * but the editor can still select and edit its blocks. These are the browser's styles for a modal
+ * dialog, which a popover lacks: centred in the canvas, never taller than it.
  */
-const CANVAS_PANEL: CSSProperties = { position: 'relative' }
+const CANVAS_PANEL: CSSProperties = { position: 'fixed', inset: 0, maxHeight: 'calc(100% - 2rem)', overflow: 'auto' }
 
 /** The href of links that open the popup ("#newsletter"), or null when the anchor is empty or not a plain name. */
 export function anchorHref(value: unknown): string | null {
@@ -35,8 +36,10 @@ export function isOutside(box: { left: number; top: number; right: number; botto
  * backdrop and the close button close it too, and the page does not scroll while it is open.
  * Links to `#<anchor>` open it as well. The content stays in the HTML.
  *
- * On the canvas the dialog is not modal: it shows in place when the trigger is clicked or the
- * editor selects the popup or a block inside it (the reveal event).
+ * On the canvas the dialog is a popover over the page, with the same backdrop, but not modal: the
+ * editor can select and edit the blocks in it. It opens when the trigger is clicked or the editor
+ * selects the popup or a block inside it (the reveal event). It closes on Escape, the close button,
+ * a click on the backdrop, and when the editor selects a block outside it.
  */
 export function Popup({ block, props, className, attributes, partAttributes, slots, mode, labels }: BlockComponentProps & { labels?: PopupLabels }) {
   const root = useRef<HTMLDivElement>(null)
@@ -93,13 +96,44 @@ export function Popup({ block, props, className, attributes, partAttributes, slo
     return () => document.removeEventListener('click', onClick)
   }, [canvas, href])
 
+  // Canvas: the open popup is a popover (the browser's top layer, so no parent clips it). Before
+  // paint, so the backdrop never shows without the box.
+  useLayoutEffect(() => {
+    const el = dialog.current
+    if (!el || !canvas || typeof el.showPopover !== 'function') return
+    const shown = el.matches(':popover-open')
+    if (open && !shown) el.showPopover()
+    if (!open && shown) el.hidePopover()
+  }, [canvas, open])
+
+  // Canvas: Escape and selecting a block outside the popup close it.
+  useEffect(() => {
+    if (!canvas || !open) return
+    const onKey = (event: KeyboardEvent) => {
+      // Escape in a text being edited ends the editing, not the popup. (The canvas also sends
+      // Escape to the editor, which clears the selection.)
+      const editing = event.target instanceof HTMLElement && event.target.isContentEditable
+      if (event.key === 'Escape' && !editing) setOpen(false)
+    }
+    const onReveal = (event: Event) => {
+      if (event.target instanceof Node && !root.current?.contains(event.target)) setOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    document.addEventListener(REVEAL_EVENT, onReveal)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener(REVEAL_EVENT, onReveal)
+    }
+  }, [canvas, open])
+
   // Canvas: selecting the popup or a block in its content opens it.
   useCanvasReveal(root, (target) => {
     if (target === root.current || dialog.current?.contains(target)) setOpen(true)
   })
 
+  // A click on the backdrop reaches the dialog itself (on the canvas too: it is a canvas control there).
   const onDialogClick = (event: MouseEvent<HTMLDialogElement>) => {
-    if (canvas || event.target !== event.currentTarget) return
+    if (event.target !== event.currentTarget) return
     if (isOutside(event.currentTarget.getBoundingClientRect(), event.clientX, event.clientY)) setOpen(false)
   }
 
@@ -116,8 +150,7 @@ export function Popup({ block, props, className, attributes, partAttributes, slo
           aria-haspopup="dialog"
           aria-expanded={open}
           aria-controls={dialogId}
-          // The canvas has no backdrop: the trigger also closes the popup there.
-          onClick={() => setOpen((value) => (canvas ? !value : true))}
+          onClick={() => setOpen(true)}
         >
           {slots.trigger}
         </button>
@@ -131,6 +164,7 @@ export function Popup({ block, props, className, attributes, partAttributes, slo
         aria-label={label || undefined}
         className={joinClasses(C.panel, partAttributes.panel?.className)}
         open={canvas ? open : undefined}
+        popover={canvas ? 'manual' : undefined}
         style={canvas ? CANVAS_PANEL : undefined}
         onClose={() => setOpen(false)}
         onClick={onDialogClick}

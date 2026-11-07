@@ -575,10 +575,18 @@ export type Rect = { x: number; y: number; width: number; height: number }
 
 export type Axis = 'x' | 'y'
 
-export type BlockRect = { id: string; rect: Rect }
+/** `layer`: the index in `CanvasMeasurement.layers` of the layer the block shows in. Left out on the page. */
+export type BlockRect = { id: string; rect: Rect; layer?: number }
 
 /** The element that holds a slot's children. Empty slots render a placeholder with this rect. */
-export type SlotRect = { ownerId: string; slot: string; rect: Rect; axis: Axis; empty: boolean }
+export type SlotRect = { ownerId: string; slot: string; rect: Rect; axis: Axis; empty: boolean; layer?: number }
+
+/**
+ * A box that shows over the page on the canvas: an open popup. `ownerId`: the block it belongs
+ * to; while the box is open, that block's rect is the box. Over the box the pointer reaches only
+ * the blocks in it (see `reachableAt`).
+ */
+export type LayerRect = { ownerId: string | null; rect: Rect }
 
 export type CanvasMeasurement = {
   blocks: BlockRect[]
@@ -592,6 +600,8 @@ export type CanvasMeasurement = {
   root?: Rect
   /** Fixed regions of the page frame. Left out without a frame. */
   regions?: RegionRect[]
+  /** Boxes over the page (open popups), outermost first. Left out when none is open. */
+  layers?: LayerRect[]
   viewport: { width: number; height: number }
   scroll: { x: number; y: number }
   documentHeight: number

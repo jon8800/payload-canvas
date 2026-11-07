@@ -7,14 +7,16 @@ export const ACCORDION_BLOCK = 'accordion'
 
 /**
  * Classes the disclosure component adds itself. `animate`: the browser animates the content box
- * (`::details-content`) to `height: auto`; off with reduced motion and in browsers without it.
+ * (`::details-content`) to `height: auto` and fades it in, in 200 ms, close to the fades of the
+ * tabs and the popup; off with reduced motion and in browsers without it.
  */
 export const DISCLOSURE_CLASS_MAP = classMap({
   summary: 'cursor-pointer list-none [&::-webkit-details-marker]:hidden',
   animate:
-    '[interpolate-size:allow-keywords] details-content:h-0 details-content:overflow-clip ' +
-    'details-content:transition-[height,content-visibility] details-content:duration-300 ' +
-    'details-content:[transition-behavior:allow-discrete] open:details-content:h-auto motion-reduce:details-content:transition-none',
+    '[interpolate-size:allow-keywords] details-content:h-0 details-content:overflow-clip details-content:opacity-0 ' +
+    'details-content:transition-[height,opacity,content-visibility] details-content:duration-200 details-content:ease-out ' +
+    'details-content:[transition-behavior:allow-discrete] open:details-content:h-auto open:details-content:opacity-100 ' +
+    'motion-reduce:details-content:transition-none',
 })
 
 const DISCLOSURE_CLASS =
