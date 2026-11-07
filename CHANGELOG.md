@@ -82,6 +82,21 @@ Everything since 0.2.0. The 0.2.1, 0.2.2 and 0.3.0 version numbers were set in g
 ### Removed
 
 - **Breaking:** the default blocks `spacer` and `quote`. Use gap and padding classes instead of a spacer. Use the rich text quote format, or a `stack` with `as: 'figure'`, instead of a quote. Stored `spacer` and `quote` blocks render nothing on the site, and the canvas shows "Unknown block: spacer". A layout that still holds one fails validation, so it cannot be saved until an editor deletes those blocks.
+
+### Fixed
+
+- New projects from `create-payload-canvas` now get `scripts/lib/classes.ts`, so `seed:demo` and `seed:classes` work there. The CLI left out all of `scripts/lib` before.
+- `pnpm build` of `payload-canvas` no longer stops at a code example in a comment (`lazyBlock`) that looked like a relative import.
+- In a narrow builder top bar, the save state text truncates instead of running under the buttons next to it.
+- The canvas now shows live saved sections (`sectionRef`) when the app's own block list has no `sectionRef` definition: the editor tells the canvas the saved sections collection.
+- The Sections tab gives each thumbnail a fixed 2:1 box, so the cards no longer jump while pictures load, and variant cards keep their height.
+- A carousel with one hand-made slide no longer splits it into several slides.
+- A collection list's pager no longer becomes a grid cell.
+- On the canvas, a paged list that leaves out the current document no longer shifts its page boundaries.
+- A list filtered by the current document shows nothing on a page without one.
+- A top-level `$page` binding in a template no longer shows as broken.
+- Payload's default 50/50 focal point no longer overrides an image's position classes.
+
 ## [0.4.0] - 2026-11-07
 
 ### Upgrade notes
@@ -138,17 +153,41 @@ Everything since 0.2.0. The 0.2.1, 0.2.2 and 0.3.0 version numbers were set in g
 
 ### Fixed
 
-- New projects from `create-payload-canvas` now get `scripts/lib/classes.ts`, so `seed:demo` and `seed:classes` work there. The CLI left out all of `scripts/lib` before.
-- `pnpm build` of `payload-canvas` no longer stops at a code example in a comment (`lazyBlock`) that looked like a relative import.
-- In a narrow builder top bar, the save state text truncates instead of running under the buttons next to it.
-- The canvas now shows live saved sections (`sectionRef`) when the app's own block list has no `sectionRef` definition: the editor tells the canvas the saved sections collection.
-- The Sections tab gives each thumbnail a fixed 2:1 box, so the cards no longer jump while pictures load, and variant cards keep their height.
-- A carousel with one hand-made slide no longer splits it into several slides.
-- A collection list's pager no longer becomes a grid cell.
-- On the canvas, a paged list that leaves out the current document no longer shifts its page boundaries.
-- A list filtered by the current document shows nothing on a page without one.
-- A top-level `$page` binding in a template no longer shows as broken.
-- Payload's default 50/50 focal point no longer overrides an image's position classes.
+- Site classes: a comment before a rule's `/* @canvas Group: Label */` comment no longer merges with it, so the rule keeps its label. Only the comment right above the rule counts. In the escort-starter's CSS, 10 of 32 labels were lost.
+- Media backdrop and image: Payload's default 50/50 focal point no longer sets `object-position`, so the block's position classes crop the photo. Any other focal point still wins. New `builtinComponents({ mediaUrl })` (and `mediaBackdropComponent(mediaUrl)`) maps the media backdrop's upload URLs, for example absolute URLs to paths; they were used exactly as stored.
+- `prepareBlocks(blocks, listCollections)` in `payload-canvas/blocks`: the block preparation of `websiteBuilder` and `builderMcpTools` (`listCollectionsOf`, then `withInlineBlocks`) as a function. A site's own list lacked it, so a seed's `validateLayout` refused an icon in a link and checked a list's `ids` as text. `listCollectionsOf` is exported too.
+- Pager: the page-1 link was `?`, so it rendered as `/guides?`. New `loadLayoutData` option `path` (`/guides`): the page links start with it, and page 1 is the path with the other query values, or the bare path. `pageLinks` takes it as its last argument. Without `path` the links stay relative as before.
+- README, "Table of contents": headings with the same text get `-2`, `-3` ids, as the code does. It said they share one id.
+
+## [0.3.0] - 2026-10-21
+
+### Added
+
+- The **Repeat** block (`repeat`): repeats its `item` slot once per row of an array or hasMany field of the current document (`path`), for example FAQs, rates, a photo gallery, the services of a model or tags. `limit` and `offset` pick the rows. `collection` names the related collection, so `$url` links to each related document. Blocks in the item bind to the row's fields and to `$item` (the row value, for example an upload for an image). It works in templates, inside collection list items and inside other repeats. On the canvas the first row is editable and the other rows are repeats. Without a current document the site shows nothing. After `loadLayoutData`, a repeat outside list items carries its rows as `$items`. See the README's "Repeat the rows of a field".
+- Item bindings in collection lists and repeats: `$index` (the item number from 1), `$parent.<path>` (the enclosing document) and `$page.<path>` (the page's own document).
+- Binding expressions: fallback chains (`heading|name`), formatters (`publishedAt|date:en-AU:Australia/Brisbane`, `price|currency:AUD`, `price|number`, `bio|firstSentence`) and template strings (`"Enquire about {{name}}"`). See the README's "Binding syntax".
+- Conditional blocks: the `$visible` binding key shows a block only when its condition holds: `"field"` (filled), `"!field"` (empty), `"field=value"`, `"field!=value"`. A hidden block renders nothing on the site and shows dimmed on the canvas.
+- Collection list `queryFilters`: `{ param: { value: where } }` filters by the page's URL query. Pass it as the new `loadLayoutData` option `query` (`URLSearchParams` or a Next.js `searchParams` object). Values of one param are OR-ed, params are AND-ed. The canvas shows lists without these filters. Routes should send `noindex, follow` for filtered URLs.
+- Date tokens in a list's `where` and `queryFilters`: `$now`, `$now-30d`, `$now+12h`.
+- Collection list `offset`, `depth` (`1` or `2`) and an `empty` slot that shows when no document matches.
+- `image`: `priority` (loads eagerly with `fetchpriority="high"`) and `sizes`. The media focal point sets `object-position`.
+- `heading`: `accent` words render as `<em>`.
+- `stack` `as`: `ol`, `ul`, `li`, `dl`, `dt`, `dd`, `figure`, `figcaption`, `p` and `span`.
+- In `payload-canvas/core`: `bindingValue` with expressions, `bindingPaths`, `isVisible`, `BINDING_FORMATTERS`, `repeatRows`, `repeatRowContext`, `listItemContext`, `itemSources`, `scopeSources` and `repeatAncestors`. In `payload-canvas/react`: `withDateTokens` and the `ListQueryParams` type.
+- Binding checks, the outline and the inspector read the row's fields inside a repeat and offer `$item`, `$index`, `$parent` and `$page`. The inspector shows an expression binding with a preview of its value.
+
+### Changed
+
+- `TemplateContext` has the optional fields `item`, `index`, `parent` and `page` for list and repeat items.
+
+0.2.2 was never released. Its Field list block is the Repeat block here.
+
+## [0.2.1] - 2026-10-21
+
+### Added
+
+- Collection list filters. `filterField` lists only documents related to the current document (the one a template renders). `filterBy` says how: `current` (default) lists documents whose field holds the current document, `shared` lists documents that share a value of the field with the current document, and `linked` lists the documents the current document's field points to. With `shared` or `linked` and no values, the list is empty. On a normal page the filter is ignored. `where` adds a static Payload `where` query. The site, server blocks and the canvas preview of a template build the same query (`listQueries`). See the README's "Filter a collection list".
+- `defineSection()` in `payload-canvas` and `payload-canvas/blocks`: write sections without block ids. It fills each missing id as `<section id>_1`, `_2`, … and throws on a missing `id` or `label` or a repeated block id. Input type: `SectionInput`.
 
 ## [0.2.0] - 2026-10-16
 
