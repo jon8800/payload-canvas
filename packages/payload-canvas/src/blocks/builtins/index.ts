@@ -7,6 +7,7 @@ import type { BlockDefinition } from '../../core/types'
 import { adjacentLinksBlock } from './adjacentLinks'
 import { carouselBlock } from './carousel'
 import { accordionBlock, disclosureBlock } from './disclosure'
+import { embedBlock, type EmbedOptions } from './embed'
 import { filterLinkBlock } from './filterLink'
 import { iconBlock } from './icon'
 import { marqueeBlock } from './marquee'
@@ -26,18 +27,27 @@ export const BUILTIN_TYPES = [
   'tableOfContents',
   'filterLink',
   'adjacentLinks',
+  'embed',
 ] as const
 
 export type BuiltinType = (typeof BUILTIN_TYPES)[number]
 
 export type BuiltinBlocksOptions = {
-  /** The built-ins to add. Default: all of them, but `icon` only when `icons` is given. */
+  /**
+   * The built-ins to add. Default: all of them, but `icon` only when `icons` is given and `embed`
+   * only when `embed` is given.
+   */
   include?: readonly BuiltinType[]
   /**
    * The names of the site's icons, for the `icon` block: the keys of the map the site gives
    * `builtinComponents({ icons })`. Plain strings, so the Payload config loads no React.
    */
   icons?: readonly string[]
+  /**
+   * Turns on the `embed` block (custom HTML) and sets who may change its code. `{}`: everyone who
+   * may edit the document. Custom code runs on the site, so it is never on by default.
+   */
+  embed?: EmbedOptions
 }
 
 /**
@@ -47,7 +57,8 @@ export type BuiltinBlocksOptions = {
  */
 export function builtinBlocks(options: BuiltinBlocksOptions = {}): BlockDefinition[] {
   const icons = options.icons ?? []
-  const include = new Set<string>(options.include ?? BUILTIN_TYPES.filter((type) => type !== 'icon' || icons.length > 0))
+  const byDefault = (type: BuiltinType) => (type !== 'icon' || icons.length > 0) && (type !== 'embed' || options.embed !== undefined)
+  const include = new Set<string>(options.include ?? BUILTIN_TYPES.filter(byDefault))
   for (const type of include) {
     if (!(BUILTIN_TYPES as readonly string[]).includes(type)) throw new Error(`builtinBlocks: there is no built-in block "${type}".`)
   }
@@ -65,6 +76,7 @@ export function builtinBlocks(options: BuiltinBlocksOptions = {}): BlockDefiniti
     tableOfContents: () => [tableOfContentsBlock()],
     filterLink: () => [filterLinkBlock()],
     adjacentLinks: () => [adjacentLinksBlock()],
+    embed: () => [embedBlock(options.embed)],
   }
   return BUILTIN_TYPES.filter((type) => include.has(type)).flatMap((type) => make[type]())
 }
@@ -73,6 +85,7 @@ export { ADJACENT_LINKS_BLOCK, ADJACENT_LINKS_LABELS, adjacentLinksBlock } from 
 export { CAROUSEL_BLOCK, CAROUSEL_CLASS_MAP, CAROUSEL_LABELS, carouselBlock } from './carousel'
 export { ACCORDION_BLOCK, accordionBlock, DISCLOSURE_BLOCK, DISCLOSURE_CLASS_MAP, disclosureBlock } from './disclosure'
 export { FILTER_LINK_BLOCK, filterHref, filterLinkBlock, type FilterLinkTarget, type FilterQuery } from './filterLink'
+export { EMBED_BLOCK, EMBED_LABELS, EMBED_MAX_LENGTH, embedBlock, type EmbedOptions } from './embed'
 export { faqItems, faqJsonLd, type FaqItem } from './faq'
 export { ICON_BLOCK, iconBlock } from './icon'
 export { MARQUEE_BLOCK, MARQUEE_CSS, MARQUEE_SECONDS, marqueeBlock } from './marquee'

@@ -174,3 +174,5 @@ export const collectionList = (
 }
 /** A block with no props yet, e.g. an image whose value comes from a binding. */
 export const bare = (type: string, className?: string) => block(type, undefined, className)
+/** Custom HTML (the built-in `embed` block). */
+export const embed = (props: { code: string; mode?: 'inline' | 'isolated'; title?: string }, className?: string) => block('embed', props, className)

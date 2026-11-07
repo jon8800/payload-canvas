@@ -9,7 +9,13 @@ export const POPUP_BLOCK = 'popup'
 
 /** The popup's inner elements that take classes, with the classes a new popup starts with. */
 const POPUP_PARTS = {
-  panel: { label: 'Panel', defaultClassName: 'w-[calc(100%-2rem)] max-w-lg rounded-xl p-8 shadow-xl backdrop:bg-black/60' },
+  // The box fades and grows in when it opens (150 ms; not with reduced motion).
+  panel: {
+    label: 'Panel',
+    defaultClassName:
+      'w-[calc(100%-2rem)] max-w-lg rounded-xl p-8 shadow-xl backdrop:bg-black/60 ' +
+      'transition-[opacity,scale] duration-150 ease-out starting:scale-95 starting:opacity-0 motion-reduce:transition-none',
+  },
   close: { label: 'Close button', defaultClassName: 'absolute top-3 right-3 size-9 rounded-full' },
 }
 
@@ -60,8 +66,8 @@ export function popupBlock(): BlockDefinition {
         'names it. Style with "partClassName": "trigger" (the button), "panel" (the dialog box; "backdrop:" classes colour ' +
         'the backdrop, e.g. "backdrop:bg-black/60"), "close" (the close button, placed absolutely in the panel) and ' +
         '"content". For a photo that opens large: a small image in "trigger" and the large image in "content" ' +
-        '(panel "max-w-5xl p-0", content "gap-0"). On the canvas a click on the trigger, or selecting a block inside, ' +
-        'shows the content in place.' +
+        '(panel "max-w-5xl p-0", content "gap-0"). On the canvas a click on the trigger, or selecting the popup or a block inside, ' +
+        'opens it over the page; its blocks stay editable.' +
         labelsHelp(POPUP_LABELS),
       example: {
         type: POPUP_BLOCK,
