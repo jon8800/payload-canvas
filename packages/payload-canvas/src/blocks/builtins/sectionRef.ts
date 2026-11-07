@@ -20,6 +20,15 @@ export function savedSectionsSlugOf(config: { custom?: Record<string, unknown> }
  */
 export const SECTION_REF_SLOT = '$section'
 
+/** The copy's own values for the component's properties (core/components.ts), by property name. */
+export const SECTION_REF_VALUES = 'values'
+
+/**
+ * Runtime-only prop, set by `attachSections`: the saved section could not be loaded (deleted, or
+ * no access), or it would contain itself. The canvas says so; the site shows nothing.
+ */
+export const SECTION_REF_MISSING = '$missing'
+
 /** The id of the saved section a `section` prop points at: an id, or a loaded document. */
 export function sectionRefId(value: unknown): string | number | null {
   if (typeof value === 'number' || (typeof value === 'string' && value)) return value
@@ -63,8 +72,8 @@ export function sectionDetachOps(layout: Layout, refId: string, copies: readonly
 export function sectionRefBlock(collection = 'builder-sections'): BlockDefinition {
   return defineBlock({
     type: SECTION_REF_BLOCK,
-    label: 'Saved section (live)',
-    description: 'A saved section that stays the same on every page.',
+    label: 'Component',
+    description: 'A saved section that stays in sync on every page. Each copy can set its own text, images and links.',
     icon: 'sectionRef',
     category: 'Dynamic',
     // It renders the section's blocks with their own classes and no element of its own.
@@ -73,10 +82,15 @@ export function sectionRefBlock(collection = 'builder-sections'): BlockDefinitio
       {
         name: 'section',
         type: 'relationship',
-        label: 'Saved section',
+        label: 'Component',
         relationTo: collection as CollectionSlug,
         required: true,
-        admin: { description: 'Changes to it show on every page.' },
+      },
+      {
+        // Edited as the component's properties (admin/editor/sections/ComponentValues.tsx).
+        name: SECTION_REF_VALUES,
+        type: 'json',
+        admin: { hidden: true },
       },
     ],
     ai: {
@@ -84,9 +98,12 @@ export function sectionRefBlock(collection = 'builder-sections'): BlockDefinitio
         `Shows a saved section (the "${collection}" collection) live: the page renders the section's current blocks, so one ` +
         'edit of the section changes every page that uses it. Set "section" to the saved section\'s document id ' +
         '(listSections shows saved sections as "saved:<id>"; use the number). It has no className and no slots. ' +
-        'Use it for blocks many pages share (a call to action, a footer band). To insert a copy that the page can change, ' +
-        'use insertSection instead. A sectionRef inside a saved section renders nothing.',
-      example: { type: SECTION_REF_BLOCK, props: { section: 1 } },
+        'Use it for blocks many pages share (a call to action, a footer band). A saved section with properties is a component ' +
+        '(listSections shows `component: true` and its `properties`): set "values" to { <property name>: value } to give this ' +
+        'copy its own text, rich text, image (an upload id), link ({ type: "url", url }) or visible (true/false) values; a ' +
+        'property left out shows the content of the component itself. insertSection with `values` does this for you. To insert ' +
+        'blocks the page can change freely, use insertSection with linked: false. A component never contains itself.',
+      example: { type: SECTION_REF_BLOCK, props: { section: 1, values: { title: 'Ready to start?' } } },
     },
   })
 }

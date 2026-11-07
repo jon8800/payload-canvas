@@ -922,7 +922,7 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
   useEffect(() => {
     if (!layout || !init || !definitions) return
     const run = ++resolveRun.current
-    resolveCanvasLayout(layout, context, init.api, definitions, linkResolver, locale, init.relations)
+    resolveCanvasLayout(layout, context, init.api, definitions, linkResolver, locale, init.relations, init.savedSections)
       .then((next) => {
         if (run !== resolveRun.current) return
         resolvedFrom.current = layout

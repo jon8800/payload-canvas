@@ -170,6 +170,8 @@ const PATHS = {
       <path d="m9.5 11.5 2-2M10 9.25l.5-.5a1.25 1.25 0 0 1 1.75 1.75l-.5.5M11 13.75l-.5.5a1.25 1.25 0 0 1-1.75-1.75l.5-.5" />
     </>
   ),
+  // Four diamonds: a component (a saved section with properties) and its properties.
+  component: <path d="M8 1.75 10.25 4 8 6.25 5.75 4ZM12 5.75 14.25 8 12 10.25 9.75 8ZM8 9.75 10.25 12 8 14.25 5.75 12ZM4 5.75 6.25 8 4 10.25 1.75 8Z" />,
   // Dynamic blocks (templates and binding)
   field: (
     <>
