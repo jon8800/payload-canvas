@@ -30,7 +30,9 @@ export const formBlock = defineBlock({
 
 export const builderBlocks = [
   ...defaultBlocks({ mediaCollection: 'media', linkCollections: ['pages', 'posts'] }),
-  ...builtinBlocks({ icons: ICON_NAMES }),
+  // `embed: {}` turns on the Embed block (custom HTML). Everyone who may edit a page may change its
+  // code. To limit that, pass `canEdit`, for example `({ req }) => req.user?.role === 'admin'`.
+  ...builtinBlocks({ icons: ICON_NAMES, embed: {} }),
   formBlock,
   // Dev fixture: existing Payload blocks used as builder blocks (NEXT_PUBLIC_BUILDER_LEGACY_DEMO=1).
   ...(legacyDemo ? legacyBuilderBlocks : []),

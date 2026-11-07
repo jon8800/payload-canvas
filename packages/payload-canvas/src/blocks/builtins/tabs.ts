@@ -11,7 +11,8 @@ export const TABS_BLOCK = 'tabs'
 const TABS_PARTS = {
   list: { label: 'Tab row', defaultClassName: 'flex gap-1 border-b' },
   tab: { label: 'Each tab', defaultClassName: '-mb-px border-b-2 border-transparent px-4 py-2 opacity-70 aria-selected:border-current aria-selected:opacity-100' },
-  panel: { label: 'Each panel', defaultClassName: 'pt-6' },
+  // The panel that becomes visible fades in (150 ms; not with reduced motion).
+  panel: { label: 'Each panel', defaultClassName: 'pt-6 transition-opacity duration-150 ease-out starting:opacity-0 motion-reduce:transition-none' },
 }
 
 const TABS_CLASS = 'flex flex-col'
@@ -41,7 +42,8 @@ export function tabsBlock(): BlockDefinition {
         'last. Hidden panels stay in the HTML. "vertical": the tabs stand in a column (arrow up and down); lay the block ' +
         'out with its className ("flex flex-row gap-8") and the "list" part ("flex flex-col"). Style with ' +
         '"partClassName": "list" (the row of tabs), "tab" (each tab button; the open one has aria-selected="true", so ' +
-        '"aria-selected:" classes style it) and "panel" (each panel). On the canvas a click on a tab opens it, and ' +
+        '"aria-selected:" classes style it) and "panel" (each panel; new tabs fade the shown panel in with ' +
+        '"transition-opacity duration-150 starting:opacity-0"). On the canvas a click on a tab opens it, and ' +
         'selecting a block opens its tab.' +
         labelsHelp(TABS_LABELS) +
         ' {n} is the tab number.',

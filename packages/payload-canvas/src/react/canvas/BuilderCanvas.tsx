@@ -38,7 +38,8 @@ import { CanvasModeContext } from '../render/canvasMode'
 import type { CanvasScope, CanvasServer } from '../render/canvasServerTypes'
 import { LayoutOutlet, LayoutOutletContext, LayoutOutletPresence } from '../render/LayoutOutlet'
 import { LAYOUT_ROOT_ATTRIBUTE, REGION_ATTRIBUTE } from '../render/regions'
-import { blockElement, controlAt, revealInCanvas, summaryOwner } from './controls'
+import { revealBlock } from '../render/reveal'
+import { blockElement, controlAt, onBackdrop, revealInCanvas, summaryOwner } from './controls'
 import { createCanvasDrag } from './drag'
 import { forgetDoc } from './fetchDocs'
 import { editableAt, firstEditable, type EditableTarget } from './inline/dom'
@@ -532,6 +533,8 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     // `control`: the pointer is over a canvas control (a carousel arrow): no hover, no "+".
     const sendPointer = (kind: PointerKind, x: number, y: number, control = false) =>
       send({ type: 'pointer', kind, x, y, ...(control ? { control: true } : {}) })
+    // A canvas control, or the backdrop of an open popup: it acts as on the site.
+    const isControl = (target: EventTarget | null, x: number, y: number) => Boolean(controlAt(target)) || onBackdrop(target, x, y)
 
     // Either side may load first, so repeat `ready` until the init data and a layout arrive.
     const readyTimer = window.setInterval(() => send({ type: 'ready' }), 250)
@@ -596,6 +599,9 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
         }
         case 'selection':
           if (message.selectedId && message.selectedId !== selectedRef.current) revealAndScroll(message.selectedId)
+          // Nothing selected any more (Escape): the reveal event from <html>, outside every block,
+          // so open popups close.
+          if (!message.selectedId && selectedRef.current) revealBlock(document.documentElement)
           selectedRef.current = message.selectedId
           return
         case 'scrollBy':
@@ -674,7 +680,9 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     // Images: the upload props under the pointer. Sent only when they change.
     let lastImage = ''
     let imageFrame = 0
-    const imageAt = (x: number, y: number) => (activeRef.current ? null : mapper.imageTarget(x, y))
+    // No image under the backdrop of an open popup: the page behind it is out of reach.
+    const imageAt = (x: number, y: number) =>
+      activeRef.current || onBackdrop(document.elementFromPoint(x, y), x, y) ? null : mapper.imageTarget(x, y)
     const sendImageHover = (target: CanvasImageTarget | null, dropping = false) => {
       const key = target ? JSON.stringify([target, dropping]) : ''
       if (key === lastImage) return
@@ -739,6 +747,7 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     const onContextMenu = (e: MouseEvent) => {
       if (e.defaultPrevented || isEditing(e.target)) return
       if (!(e.target instanceof Element) || !e.target.closest('[data-block-id]')) return
+      if (onBackdrop(e.target, e.clientX, e.clientY)) return
       e.preventDefault()
       send({ type: 'contextMenu', x: e.clientX, y: e.clientY })
     }
@@ -746,18 +755,25 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     const onScroll = () => {
       scheduleMeasure()
       // The block under a still pointer changes when the page scrolls.
-      if (lastPointer) sendPointer('move', lastPointer.x, lastPointer.y, Boolean(controlAt(document.elementFromPoint(lastPointer.x, lastPointer.y))))
+      if (lastPointer) sendPointer('move', lastPointer.x, lastPointer.y, isControl(document.elementFromPoint(lastPointer.x, lastPointer.y), lastPointer.x, lastPointer.y))
       scheduleImageHover()
     }
     const onPointerMove = (e: PointerEvent) => {
       lastPointer = { x: e.clientX, y: e.clientY }
-      sendPointer('move', e.clientX, e.clientY, Boolean(controlAt(e.target)))
+      sendPointer('move', e.clientX, e.clientY, isControl(e.target, e.clientX, e.clientY))
       scheduleImageHover()
     }
     const onPointerLeave = () => {
       lastPointer = null
       sendPointer('leave', 0, 0)
       sendImageHover(null)
+    }
+    // A popup or a `<details>` opened or closed (`toggle` does not bubble: captured). An open popup
+    // changes no size on the page, so measure here, and watch the blocks that now show.
+    const onToggle = (e: Event) => {
+      const ro = observer.current
+      if (ro && e.target instanceof Element) for (const el of e.target.querySelectorAll('[data-block-id], [data-slot-owner]')) ro.observe(el)
+      scheduleMeasure()
     }
     // Another canvas width: other elements may show (responsive copies), so map again.
     const onResize = () => {
@@ -782,9 +798,9 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
       else toggle()
     }
     // Edit mode: links, buttons and forms inside blocks must not act. Canvas controls (a
-    // carousel's arrows) act as on the site and select nothing.
+    // carousel's arrows, a popup's backdrop) act as on the site and select nothing.
     const onClick = (e: MouseEvent) => {
-      if (controlAt(e.target) && !isEditing(e.target)) return
+      if (isControl(e.target, e.clientX, e.clientY) && !isEditing(e.target)) return
       e.preventDefault()
       e.stopPropagation()
       toggleSummary(e)
@@ -814,6 +830,7 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     // Capture: element scrolls (a scrolling list, a carousel) do not bubble.
     document.addEventListener('scroll', onScroll, { capture: true, passive: true })
     window.addEventListener('resize', onResize)
+    document.addEventListener('toggle', onToggle, true)
     document.addEventListener('pointermove', onPointerMove)
     document.documentElement.addEventListener('pointerleave', onPointerLeave)
     document.addEventListener('click', onClick, true)
@@ -839,6 +856,7 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
       window.removeEventListener('resize', onResize)
       document.removeEventListener('pointermove', onPointerMove)
       document.documentElement.removeEventListener('pointerleave', onPointerLeave)
+      document.removeEventListener('toggle', onToggle, true)
       document.removeEventListener('click', onClick, true)
       document.removeEventListener('auxclick', block, true)
       document.removeEventListener('submit', block, true)

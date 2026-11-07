@@ -6,6 +6,7 @@ export { checkAttrs, htmlAttributes, htmlIdClash, htmlIdProblem, htmlIdsOf, patc
 export { createId } from './ids'
 export { findBlock, findLocation, walkBlocks, isSelfOrDescendant, normalizeLayout, type BlockLocation } from './tree'
 export { applyOperation, applyOperations, type ApplyOptions } from './operations'
+export { layerAt, reachableAt } from './layers'
 export { acceptingSlots, type AcceptingSlot, deepestBlockAt, canvasDropTarget, outlineDropTarget } from './dropTarget'
 export { blockParts, type BlockPart, collectClasses, defaultPartClassNames } from './classes'
 export { headingId, richTextHeadings, type RichTextHeading } from './headings'

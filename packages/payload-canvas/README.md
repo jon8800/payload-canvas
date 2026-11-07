@@ -1042,7 +1042,7 @@ A tab, a slide or a popup keeps some content out of view. On the canvas, an edit
 - `REVEAL_EVENT` (`'builder:reveal'`): the DOM event behind the hook. The canvas sends it from the selected block's element, and it bubbles. Listen for it yourself in code that is not a React component.
 - `CANVAS_CONTROL_ATTRIBUTE` (`'data-builder-control'`): put it on the block's controls (arrows, dots, tab buttons, a close button). On the canvas a click on such an element works as on the site and selects nothing. The hover outline and the "+" do not show over it.
 
-What the canvas does when a block is selected: it opens every closed `<details>` around the block, sends the reveal event from the block's element, and after two animation frames scrolls the block into view. So a native `<details>` needs no code. A block that moves its content with CSS transforms (a slider) can send `element.dispatchEvent(new Event('scroll'))` after each move, so the canvas measures the block outlines again.
+What the canvas does when a block is selected: it opens every closed `<details>` around the block, sends the reveal event from the block's element, and after two animation frames scrolls the block into view. When the selection is cleared (Escape), it sends the reveal event from `<html>`, outside every block, so a box that closes when the editor selects something outside it closes then too. So a native `<details>` needs no code. A block that moves its content with CSS transforms (a slider) can send `element.dispatchEvent(new Event('scroll'))` after each move, so the canvas measures the block outlines again.
 
 A "Read more" block that hides part of its content:
 
@@ -1071,6 +1071,8 @@ export function ReadMore({ attributes, className, partAttributes, slots }: Block
 ```
 
 The built-in carousel, popup and tabs use the hook and mark their controls. The disclosure and the accordion are native `<details>`, so the canvas opens them by itself.
+
+A box that shows over the page on the canvas (an open popover, such as the built-in popup) is a layer. The canvas measures each one (`CanvasMeasurement.layers`) and marks the blocks inside it. Over a layer, the hover outline, selection, the "+" and drops reach only the layer's blocks, never the page under it. A click on the layer's padding selects its block. A click on its backdrop works as on the site and selects nothing. `reachableAt(measurement, point)` in `payload-canvas/core` gives the blocks and slots a point can reach.
 
 ### Validation, hooks and access on block fields
 
@@ -1120,7 +1122,7 @@ Limits:
 
 ### Built-in blocks
 
-Some blocks most sites need come with the plugin, but they are off until you add them: `icon`, `disclosure`, `accordion`, `popup`, `tabs` (with its `tab` blocks), `carousel`, `marquee`, `tableOfContents`, `filterLink` and `adjacentLinks` (previous / next). (The live saved section block, `sectionRef`, is not one of them: the plugin adds it, see [Live saved sections](#live-saved-sections-sectionref).) Add the definitions next to `defaultBlocks()`, and the components next to yours:
+Some blocks most sites need come with the plugin, but they are off until you add them: `icon`, `disclosure`, `accordion`, `popup`, `tabs` (with its `tab` blocks), `carousel`, `marquee`, `tableOfContents`, `filterLink`, `adjacentLinks` (previous / next) and `embed` (custom HTML). (The live saved section block, `sectionRef`, is not one of them: the plugin adds it, see [Live saved sections](#live-saved-sections-sectionref).) Add the definitions next to `defaultBlocks()`, and the components next to yours:
 
 ```ts
 // src/builder.ts
@@ -1142,7 +1144,7 @@ import { icons } from './icons'
 export const components: BlockComponents = { ...builtinComponents({ icons, labels }), pricingTable: PricingTable }
 ```
 
-- Without `include`, `builtinBlocks()` adds all of them (`icon` only when you give `icons`).
+- Without `include`, `builtinBlocks()` adds all of them (`icon` only when you give `icons`, `embed` only when you give `embed`).
 - The MCP tools and the AI assistant read the same `blocks` list, so they see each built-in you include, with its description and example.
 - Every built-in takes its look from `className`. The definitions have plain `defaultClassName`s without colours. Inner elements that have their own entry in the **Style target** select are parts (see [Classes on inner elements](#classes-on-inner-elements)). The other inner elements have `data-*` attributes, so you style them from the block's `className` with variants such as `[&_[data-page-gap]]:opacity-50`.
 - **Replace a built-in** with your own block of the same type: leave it out of `include` and add your block. Block types must be unique, so the plugin refuses both at once. In the components map, a key of yours with the same type wins over `builtinComponents()`.
@@ -1192,7 +1194,7 @@ export const icons = { arrowRight: ArrowRight, check: Check, close: Close } sati
 
 `disclosure` is one show/hide item: a native `<details>` with a `summary` slot (always visible) and a `content` slot. It opens with the mouse and the keyboard without script, and the closed content stays in the HTML for search engines. `accordion` is a list of disclosures in its `items` slot (also a `repeat` or `collectionList` of disclosures). Include both: `include: ['disclosure', 'accordion']`.
 
-- `disclosure` props: `open` (open at first) and `animate` (the height opens in 300 ms, in CSS only; off with reduced motion, and in browsers without `::details-content`).
+- `disclosure` props: `open` (open at first) and `animate` (the content grows and fades in, in 200 ms, in CSS only; off with reduced motion, and in browsers without `::details-content`).
 - On the canvas it starts open or closed as on the site. A click on the title opens or closes it, a double-click edits the title text, and selecting a block inside opens it.
 - The summary slot refuses links, buttons and other controls: a `<summary>` is the button.
 - Style the summary row with `[&>summary]:` classes and the content with `[&>div]:` classes on the disclosure. `open:` and `group-open:` classes style the open state, for example `group-open:rotate-45` on an icon in the summary.
@@ -1214,9 +1216,9 @@ const jsonLd = faqJsonLd(items)
 - The box is a native modal `<dialog>`. It keeps the focus inside and makes the page inert. Escape, the close button and a click beside the box close it, and the page does not scroll while it is open.
 - The trigger renders inside a `<button>`, so its slot refuses links, buttons, other controls, popups and tabs.
 - Props: `label` (the box's name for screen readers; empty: the first heading in the content) and `anchor`. With `anchor: 'newsletter'`, every link to `#newsletter` on the page opens the popup, and so does a page address that ends in `#newsletter`. With an anchor the trigger may stay empty: the site then renders no button.
-- Parts: the `trigger` and `content` slots, `panel` (the dialog box; `backdrop:` classes colour the backdrop, for example `backdrop:bg-black/60`) and `close` (the close button, placed absolutely in the panel). A new popup starts with a centred panel and a round close button.
+- Parts: the `trigger` and `content` slots, `panel` (the dialog box; `backdrop:` classes colour the backdrop, for example `backdrop:bg-black/60`) and `close` (the close button, placed absolutely in the panel). A new popup starts with a centred panel that fades and grows in (150 ms, `starting:opacity-0 starting:scale-95`; not with reduced motion) and a round close button.
 - **A photo that opens large.** Put a small image in the trigger and the large image in the content. Give the panel `max-w-5xl p-0` and the content `gap-0`.
-- On the canvas the box is not modal. It shows in place under the trigger when you click the trigger, or when you select the popup or a block inside it. A second click on the trigger closes it.
+- On the canvas the box shows as on the site: centred over the page, with its backdrop. It opens when you click the trigger, or when you select the popup or a block inside it (on the canvas or in **Layers**). It is not modal: you select and edit the blocks in it as anywhere else, and a click on the box's padding selects the popup. Escape, the close button, a click on the backdrop and selecting a block outside it close it.
 - Control label, under **Labels** in the Content tab: `closeLabel` ("Close"). An empty label uses the site's label or the English one (see [Labels](#labels)).
 
 #### Tabs
@@ -1226,8 +1228,26 @@ const jsonLd = faqJsonLd(items)
 - The first tab is open at first. It follows the WAI-ARIA tabs pattern: the arrow keys move between tabs (and wrap), Home and End jump to the first and last tab, and only the open tab is in the Tab order. Hidden panels stay in the HTML with `hidden`.
 - Props: `label` (the tab row's name for screen readers) and `vertical` (the tabs stand in a column; the up and down arrows move). For a column, lay out the block with `flex flex-row gap-8` and give the `list` part `flex flex-col`.
 - Parts: `list` (the row of tabs), `tab` (each tab button) and `panel` (each panel). The open tab has `aria-selected="true"`, so `aria-selected:` classes style it: a new tabs block starts with `aria-selected:border-current aria-selected:opacity-100`. A `tab` block's own `className` styles its own panel.
+- The panel that becomes visible fades in: a new tabs block's `panel` part starts with `transition-opacity duration-150 ease-out starting:opacity-0 motion-reduce:transition-none`. Change or remove those classes in the Styles panel.
 - On the canvas a click on a tab opens it, and selecting a block opens the tab that holds it.
 - Control label: `tabLabel` ("Tab {n}"), the name of a tab without a label. `{n}` is the tab number.
+
+#### Embed
+
+`embed` holds custom HTML: a booking widget, a map, a newsletter form from another service. It is off until you turn it on, because its code runs on your site:
+
+```ts
+builtinBlocks({ embed: {} }) // or include: [..., 'embed']
+// Only admins may change the code and the mode:
+builtinBlocks({ embed: { canEdit: ({ req }) => req.user?.role === 'admin' } })
+```
+
+- Props: `code` (HTML, edited in Payload's code editor), `mode` and `title`.
+- `mode: 'inline'` (**In the page**, the default) puts the HTML in the page. Its `<script>` tags run once the page loads: the browser runs those of the server's HTML, and the block runs them again after a page change in the app (it copies each script, so external scripts keep their order). This JavaScript loads only on pages with an inline embed.
+- `mode: 'isolated'` (**In its own frame**) shows the HTML in a sandboxed `<iframe srcdoc>`. Scripts, forms and links to new tabs work, but the code cannot reach your page or the visitor's session (no `allow-same-origin`). A frame does not grow with its content: give the block a height, for example `h-96` or `aspect-video`. `title` is the frame's name for screen readers (empty: "Embedded content", or the site's label `builtinComponents({ labels: { embed: { title } } })`).
+- The editor never runs the code. The canvas shows it in a frame with scripts off, with the page's styles for inline code. Empty code, or code with nothing to see (only scripts), shows a "Custom code" box.
+- Access: `embed.canEdit` is a Payload field access function on `code` and `mode` (as `access.create` and `access.update`). Default: everyone who may edit the document may change them. Users without it see the code read-only. MCP agents and the AI assistant act as their user, so the same rule applies to them. See [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields).
+- `embed.maxLength`: the longest code, in characters. Default 50,000 (`EMBED_MAX_LENGTH`). Longer code blocks **Publish**.
 
 #### Carousel
 

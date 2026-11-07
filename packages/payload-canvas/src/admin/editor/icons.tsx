@@ -98,6 +98,8 @@ const PATHS = {
       {dot(10, 13.25, 0.75)}
     </>
   ),
+  // Angle brackets around a slash: custom code.
+  embed: <path d="M5 4.5 1.75 8 5 11.5M11 4.5 14.25 8 11 11.5M9.25 3l-2.5 10" />,
   // A panel with a close mark, over the page.
   popup: (
     <>

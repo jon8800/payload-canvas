@@ -24,4 +24,7 @@ export const Carousel = lazyBlock(
 export const FilterLink = lazyBlock(dynamic<BlockComponentProps>(() => import('./builtins/FilterLink').then((module) => module.FilterLink)))
 export const Popup = lazyBlock(dynamic<BlockComponentProps & { labels?: PopupLabels }>(() => import('./builtins/Popup').then((module) => module.Popup)))
 export const Tabs = lazyBlock(dynamic<BlockComponentProps & { labels?: TabsLabels }>(() => import('./builtins/Tabs').then((module) => module.Tabs)))
+// Not blocks: the parts of the embed block that need JavaScript (`./builtins/Embed`).
+export const EmbedHtml = dynamic(() => import('./builtins/EmbedHtml').then((module) => module.EmbedHtml))
+export const EmbedPreview = dynamic(() => import('./builtins/EmbedPreview').then((module) => module.EmbedPreview))
 export const Tab = lazyBlock(dynamic<BlockComponentProps>(() => import('./builtins/Tab').then((module) => module.Tab)))

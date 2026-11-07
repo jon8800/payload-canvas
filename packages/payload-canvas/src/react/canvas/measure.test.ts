@@ -43,3 +43,13 @@ test('clipRect: the visible part of a rect inside a clipping area', () => {
   assert.deepEqual(clipRect({ x: 400, y: 0, width: 100, height: 50 }, area), { x: 300, y: 0, width: 0, height: 50 })
   assert.equal(clipRect(inside, null), inside)
 })
+
+test('a popup that opens, moves or holds other blocks changes the measurement', () => {
+  const open = (y: number): CanvasMeasurement => ({ ...measurement(), layers: [{ ownerId: 'a', rect: rect(y) }] })
+  assert.equal(sameMeasurement(open(10), open(10)), true)
+  assert.equal(sameMeasurement(measurement(), open(10)), false)
+  assert.equal(sameMeasurement(open(10), open(12)), false)
+  const inLayer = open(10)
+  inLayer.blocks[0] = { ...inLayer.blocks[0]!, layer: 0 }
+  assert.equal(sameMeasurement(open(10), inLayer), false)
+})

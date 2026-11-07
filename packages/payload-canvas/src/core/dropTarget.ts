@@ -9,6 +9,7 @@
 // The root list accepts every type without a `parents` rule (a list item goes only in a list).
 
 import { getBlockDefinition, placementError, slotNames } from './blocks'
+import { reachableAt } from './layers'
 import { DEFAULT_SLOT, indexLayout, subtreeIds, type IndexedBlock } from './tree'
 import type {
   Axis,
@@ -136,7 +137,7 @@ export function deepestBlockAt(
   p: Point,
   excluded?: Set<string>,
 ): string | null {
-  return deepestEntry(indexLayout(layout), measurement, p, excluded ?? new Set())?.block.id ?? null
+  return deepestEntry(indexLayout(layout), reachableAt(measurement, p), p, excluded ?? new Set())?.block.id ?? null
 }
 
 /**
@@ -156,6 +157,8 @@ export function canvasDropTarget(
   p: Point,
   source: DragSource,
 ): DropTarget | null {
+  // Over an open popup only its blocks count (see `reachableAt`).
+  measurement = reachableAt(measurement, p)
   const { index, type, excluded, slotsOf, accepts, parentOf } = context(layout, blocks, source)
   if (type === null) return null
   const rects = new Map(measurement.blocks.map((b) => [b.id, b.rect]))
