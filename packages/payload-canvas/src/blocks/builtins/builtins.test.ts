@@ -52,9 +52,9 @@ describe('builtinBlocks', () => {
     assert.ok(errors.some((e) => /at most 100 characters/.test(e.message)))
   })
 
-  it('keeps the 0.4.0 names: lightbox and mediaBackdrop are built-ins, sectionRef adds nothing', () => {
+  it('has no image viewer or media backdrop any more', () => {
     assert.throws(() => builtinBlocks({ include: ['imageViewer' as 'icon'] }), /no built-in block "imageViewer"/)
-    assert.deepEqual(builtinBlocks({ include: ['lightbox', 'mediaBackdrop', 'sectionRef'] }).map((b) => b.type), ['lightbox', 'mediaBackdrop'])
+    assert.throws(() => builtinBlocks({ include: ['mediaBackdrop' as 'icon'] }), /no built-in block "mediaBackdrop"/)
   })
 
   it('adds only the included blocks, so a site block of the same type can replace one', () => {
@@ -74,7 +74,7 @@ describe('builtinBlocks', () => {
   })
 
   it('every block has its own editor icon, a category and a description', () => {
-    const glyphs = new Set(['icon', 'disclosure', 'accordion', 'popup', 'lightbox', 'mediaBackdrop', 'tabs', 'tab', 'carousel', 'marquee', 'tableOfContents', 'filter', 'adjacentLinks', 'embed'])
+    const glyphs = new Set(['icon', 'disclosure', 'accordion', 'popup', 'tabs', 'tab', 'carousel', 'marquee', 'tableOfContents', 'filter', 'adjacentLinks', 'embed'])
     for (const def of builtinBlocks({ icons: ICONS, embed: {} })) {
       assert.ok(def.icon && glyphs.has(def.icon), `${def.type} icon "${def.icon}"`)
       assert.ok(['Content', 'Media', 'Interactive', 'Dynamic'].includes(def.category ?? ''), `${def.type} category`)

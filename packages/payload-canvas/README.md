@@ -1258,7 +1258,6 @@ export const icons = { arrowRight: ArrowRight, check: Check, close: Close } sati
 
 **A button with an icon.** Put a `text` block and an `icon` block in a `link` block. An icon is an inline block, so it may go straight into a link. Give the link the button's classes (`inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2`). The `button` block has no icon props.
 
-**Icons on buttons.** Give `defaultBlocks()` the same names, and the `button` block gets three props: `icon` (optional, one of the names), `iconPosition` (`start` or `end`, default `end`) and `iconClassName` (the icon's classes, default `size-4 shrink-0`). `builtinComponents({ icons })` includes a `button` component that draws the icon; `buttonComponent(icons)` is that component alone. The icon is decoration (`aria-hidden="true"`): the label names the button. With an icon, the label sits in its own `<span>`. A button without an icon renders as before. Without icon names the button has no icon props, and the default `Button` component ignores them.
 
 #### Disclosure and accordion
 
@@ -1319,32 +1318,6 @@ builtinBlocks({ embed: { canEdit: ({ req }) => req.user?.role === 'admin' } })
 - Access: `embed.canEdit` is a Payload field access function on `code` and `mode` (as `access.create` and `access.update`). Default: everyone who may edit the document may change them. Users without it see the code read-only. MCP agents and the AI assistant act as their user, so the same rule applies to them. See [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields).
 - `embed.maxLength`: the longest code, in characters. Default 50,000 (`EMBED_MAX_LENGTH`). Longer code blocks **Publish**.
 
-#### Lightbox
-
-`lightbox` is a container whose images open full screen. Lay out the images with its `className` (a grid by default), or put a `repeat` of images in it (path `galleryImages`, the image bound to `$item`).
-
-- A click on an image, or Enter or Space on a focused image, opens it in a native modal `<dialog>`. The dialog keeps the focus inside, makes the page inert, closes on Escape and gives the focus back. Arrow keys and the arrow buttons step through the images. On touch screens a sideways swipe steps too: left for the next photo, right for the previous one (pointer events, at least 50 px and more sideways than down; a mouse drag does not swipe). A click beside the photo closes it.
-- The images get `tabindex="0"`, `role="button"` and `aria-haspopup="dialog"`. Images inside a link or a button keep that element as the control.
-- Props: `label` (the dialog's name for screen readers, default "Photos"), `group` (lightboxes with the same group on a page open as one set) `captions` (shows the alt text under the photo; screen readers always hear "2 of 6") and `count` (default on: shows "2 of 6" at the top left when the set has more than one photo).
-- A set holds each photo once: two images with the same `src` attribute are one photo. An image with `data-lightbox-skip` (on the image or an element round it; `LIGHTBOX_SKIP_ATTRIBUTE`) is not in the set, but a click on it opens the set at the photo with the same `src`. Example: an image switcher puts its thumbnails and its large photo in one lightbox and skips the large photo, so the lightbox opens on the photo shown large and steps through the thumbnails.
-- When it closes, the lightbox sends a bubbling `lightbox-close` event (`LIGHTBOX_CLOSE_EVENT`) to the page image of the photo it showed last; `detail.index` is the photo's place in the set.
-- Motion: the dialog and its backdrop fade in (320 ms, ease-out) while the photo grows from 96%; a step slides the old photo out and the new one in (260 ms); closing fades out (200 ms), also on Escape. Under reduced motion only the fades stay. A photo that has not loaded after 150 ms shows a spinning ring.
-- The large photo is the image the page already loaded, with its `srcset` and `sizes="100vw"`, so the browser picks a larger file when it has one.
-- Style the dialog from the block's `className`: `[&_dialog]:` for its text colour and backdrop (`[&_dialog]:backdrop:bg-black/85`), `[&_[data-lightbox-button]]:` for the close, previous and next buttons (`data-lightbox-button` is `close`, `previous` or `next`) `[&_[data-lightbox-photo]]:` for the large photo (during a step the leaving photo has `data-lightbox-photo="leaving"`), `[&_[data-lightbox-count]]:` for the photo number and `[&_[data-lightbox-loading]]:` for the loading ring (its colour is the text colour). The component sets only position and size.
-- The canvas never opens it, so a click selects an image there.
-- Control labels, under **Labels** in the Content tab (localized, English defaults): `closeLabel` ("Close"), `previousLabel` ("Previous photo"), `nextLabel` ("Next photo") and `countLabel` ("{n} of {count}", the photo number). An empty label uses the default.
-
-#### Media backdrop
-
-`mediaBackdrop` puts a photo or a muted looping video behind the blocks of its `children` slot: a hero, a banner, a section with a background. The media and the optional overlay are absolutely placed first children; the block's `className` lays out the content. Keep `relative isolate` in it, so the media stays behind the content and inside the block.
-
-- Props: `image` (a photo), `alt` (empty: decoration, as most backgrounds are), `video` (an upload) or `videoUrl` (a link to a video file), `poster` (empty: the photo), `priority`, `sizes` (default `100vw`) and `overlay`. Uploads come from `builtinBlocks({ mediaCollection })`, default `media`.
-- A video wins over the photo. It starts from script, muted and looping, and never plays when the visitor asks for less motion: the poster stays. It does not play on the canvas.
-- `priority` (the hero only): the photo loads eagerly with `fetchpriority="high"`; for a video the poster is preloaded with high priority.
-- The media focal point (`focalX`, `focalY`) sets `object-position`, unless it is Payload's default 50/50: then the block's `[&>[data-backdrop-media]]:object-top` (or other position) class sets the crop. The photo gets a `srcset` from the media sizes.
-- Media URLs render as stored. When the site serves them from another host or path (Payload stores absolute URLs when `serverURL` is set), map them: `builtinComponents({ mediaUrl: (url) => new URL(url, 'http://x').pathname })`. It applies to the photo, its sizes, the video upload and the poster, not to a typed `videoUrl`. `mediaBackdropComponent(mediaUrl)` is that component alone.
-- Style the media with `[&>[data-backdrop-media]]:` classes (blur, opacity) and the overlay with `[&>[data-backdrop-overlay]]:` classes (`[&>[data-backdrop-overlay]]:bg-black/40`).
-- No WebGL effects.
 
 #### Carousel
 
@@ -1376,7 +1349,7 @@ builtinBlocks({ embed: { canEdit: ({ req }) => req.user?.role === 'admin' } })
 `tableOfContents` links to the H2 headings of a rich text field of the current document, for example the body of a post template. Bind its `content` prop to that field: `bindings: { content: 'content' }` (in the inspector, the bind button next to "Rich text"). It renders a `<nav>` of bare `<a href="#id">` links; style them with `[&>a]:` classes on the block.
 
 - Props: `content` (the rich text, usually bound), `minHeadings` (default 3; with fewer headings the block renders nothing) and `label` (the nav's name, default "On this page").
-- The `richText` and `field` blocks give each heading on the page an id from its text (`headingId(text)` in `payload-canvas/core`): lower case, accents dropped, other characters as hyphens, letters of every script kept ("Über uns?" becomes `uber-uns`). So the links find the headings with no setting. Only top-level H2 headings with letters or digits are listed. `lexicalHeadings(value, 'h2')` in `payload-canvas/blocks` returns `{ id, text }` for each listed heading.
+- The `richText` and `field` blocks give each heading on the page an id from its text (`headingId(text)` in `payload-canvas/core`): lower case, accents dropped, other characters as hyphens, letters of every script kept ("Über uns?" becomes `uber-uns`). So the links find the headings with no setting. Only top-level H2 headings with letters or digits are listed.
 - Headings with the same text get their own ids: the second `pricing-2`, the third `pricing-3`, the same ids the rich text renders.
 - On the canvas, with too few headings, it shows three sample links, so it can be selected and styled.
 

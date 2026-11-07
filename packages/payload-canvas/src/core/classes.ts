@@ -1,5 +1,4 @@
-import { dataFields, type DataField } from './fields'
-import { isPlainObject, walkBlocks } from './tree'
+import { walkBlocks } from './tree'
 import type { BlockDefinition, Layout } from './types'
 
 /** One inner element of a block that takes classes of its own (`block.partClassName[name]`). */
@@ -42,19 +41,6 @@ export function defaultPartClassNames(def: Pick<BlockDefinition, 'slots' | 'part
   return entries.length > 0 ? Object.fromEntries(entries) : null
 }
 
-/**
- * The block's top-level text props that hold Tailwind classes: fields with
- * `admin: { custom: { builderClasses: true } }`, for example the button's `iconClassName`. The save
- * hook and the canvas compile their values (and their `defaultValue`) like `className`. For new
- * blocks, prefer `BlockDefinition.parts`: a part's classes are edited in the Styles panel.
- */
-export function classFields(def: Pick<BlockDefinition, 'fields'> | undefined): DataField[] {
-  return dataFields(def?.fields as unknown[] | undefined).filter((field) => {
-    const admin = (field as { admin?: unknown }).admin
-    return field.type === 'text' && isPlainObject(admin) && isPlainObject(admin.custom) && admin.custom.builderClasses === true
-  })
-}
-
 function addClasses(target: Set<string>, value: string): void {
   for (const name of value.split(/\s+/)) {
     if (name) target.add(name)
@@ -64,21 +50,15 @@ function addClasses(target: Set<string>, value: string): void {
 /**
  * Every distinct class the layout needs, sorted: each block's `className` and `partClassName`
  * (hidden blocks too), plus, when `blocks` is given, `BlockDefinition.classes` of every block type
- * in the layout and the values of its class props (`classFields`) in every locale, with their defaults.
+ * in the layout.
  */
 export function collectClasses(layout: Layout, blocks?: readonly BlockDefinition[]): string[] {
   const classes = new Set<string>()
   const types = new Set<string>()
-  const propsOf = new Map((blocks ?? []).map((def) => [def.type, classFields(def)]))
   walkBlocks(layout, (block) => {
     types.add(block.type)
     if (typeof block.className === 'string') addClasses(classes, block.className)
     for (const value of Object.values(block.partClassName ?? {})) if (typeof value === 'string') addClasses(classes, value)
-    for (const field of propsOf.get(block.type) ?? []) {
-      const fallback = (field as { defaultValue?: unknown }).defaultValue
-      const stored = [block.props, ...Object.values(block.locales ?? {})].map((values) => values?.[field.name])
-      for (const value of [...stored, fallback]) if (typeof value === 'string') addClasses(classes, value)
-    }
   })
   for (const definition of blocks ?? []) {
     if (!types.has(definition.type)) continue
