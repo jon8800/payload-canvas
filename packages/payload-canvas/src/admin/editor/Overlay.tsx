@@ -5,6 +5,7 @@ import type { CSSProperties } from 'react'
 
 import { findBlock, findLocation } from '../../core'
 import type { DropIndicator, Rect } from '../../core/types'
+import { DropOutlines } from './dnd/DropOutlines'
 import { smoothView } from './dnd/smooth'
 import { BlockIcon, Icon } from './icons'
 import { inlineEditing } from './inline'
@@ -16,7 +17,9 @@ import { MenuButton } from './menu/Menu'
 import { blockName } from './names'
 import { PeerCursors, PeerSelections } from './live/PresenceUI'
 import { RegionOverlay } from './regions/RegionOverlay'
+import { SectionVariantSwitch } from './sections/variants'
 import { shortName } from './live/presence'
+import { useContentMode } from './contentMode'
 import { toRect, useRuntime, type DragData, type DragState } from './runtime'
 import { useEditor } from './store'
 import { Tooltips } from './tooltip/Tooltips'
@@ -146,6 +149,7 @@ export function Overlay() {
           )
         })}
       {parentRect && <div className="builder-editor__parent-hint" style={box(parentRect)} />}
+      <DropOutlines />
       {smooth?.placeholder && (
         // The outer box follows the canvas scroll at once; the gap inside glides to each new place.
         <div className="builder-dnd-scroll" style={{ transform: `translate3d(${-gapShift.x}px, ${-gapShift.y}px, 0)` }}>
@@ -289,7 +293,9 @@ type ActionBarProps = {
 function ActionBar({ id, label, icon, parentId, rect, inside, below, hidden }: ActionBarProps) {
   const runtime = useRuntime()
   const data: DragData = { source: { kind: 'block', id }, label, icon }
-  const { setNodeRef, listeners, attributes } = useDraggable({ id: `canvas:${id}`, data })
+  // Content mode moves no blocks by dragging and switches no section variants.
+  const contentMode = useContentMode(runtime)
+  const { setNodeRef, listeners, attributes } = useDraggable({ id: `canvas:${id}`, data, disabled: contentMode })
 
   const place = below ? 'below' : inside ? 'inside' : 'above'
   const visibility = hidden ? 'hidden' : undefined
@@ -298,17 +304,21 @@ function ActionBar({ id, label, icon, parentId, rect, inside, below, hidden }: A
 
   return (
     <div className={`builder-editor__actions builder-editor__actions--${place}`} style={style}>
-      <button
-        ref={setNodeRef}
-        type="button"
-        className="builder-editor__action builder-editor__handle"
-        aria-label="Drag to move"
-        data-tooltip="Drag to move"
-        {...listeners}
-        {...attributes}
-      >
-        <Icon name="drag" size={14} />
-      </button>
+      {/* A ready-made section with variants: ‹ Split › switches it in place. */}
+      {!contentMode && <SectionVariantSwitch id={id} />}
+      {!contentMode && (
+        <button
+          ref={setNodeRef}
+          type="button"
+          className="builder-editor__action builder-editor__handle"
+          aria-label="Drag to move"
+          data-tooltip="Drag to move"
+          {...listeners}
+          {...attributes}
+        >
+          <Icon name="drag" size={14} />
+        </button>
+      )}
       <button
         type="button"
         className="builder-editor__action"

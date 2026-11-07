@@ -45,13 +45,13 @@ function legacyItems(props: Record<string, unknown>, mode: BlockComponentProps['
  * a list-style class it shows bullets (disc) or numbers (decimal) inline, so an ordered list never
  * shows bullets. Nothing on the site when the list is empty.
  */
-export function List({ block, props, className, attributes, slots, slotAttributes, mode }: BlockComponentProps) {
+export function List({ block, props, className, attributes, slots, partAttributes, mode }: BlockComponentProps) {
   const hasItems = (block.slots?.[TEXT_LIST_SLOT]?.length ?? 0) > 0
   const children = (hasItems ? null : legacyItems(props, mode)) ?? slots[TEXT_LIST_SLOT]
   if (!children && mode !== 'canvas') return null
   const ordered = props.ordered === true
   const style = hasListTypeClass(className) ? undefined : { listStyleType: ordered ? 'decimal' : 'disc' }
-  return createElement(ordered ? 'ol' : 'ul', { ...attributes, ...slotAttributes[TEXT_LIST_SLOT], className, style }, children)
+  return createElement(ordered ? 'ol' : 'ul', { ...attributes, ...partAttributes[TEXT_LIST_SLOT], className, style }, children)
 }
 
 /**

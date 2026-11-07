@@ -20,9 +20,7 @@ const TYPES = [
   'menu',
   'list',
   'listItem',
-  'quote',
   'divider',
-  'spacer',
   'video',
   'field',
   'collectionList',
@@ -131,14 +129,38 @@ describe('defaultBlocks', () => {
       menu: ['menu', 'Interactive'],
       list: ['list', 'Content'],
       listItem: ['text', 'Content'],
-      quote: ['quote', 'Content'],
       divider: ['divider', 'Layout'],
-      spacer: ['spacer', 'Layout'],
       video: ['video', 'Media'],
       field: ['field', 'Dynamic'],
       collectionList: ['collectionList', 'Dynamic'],
       repeat: ['repeat', 'Dynamic'],
     })
+  })
+
+  it('every block has a short description for editors, without code', () => {
+    for (const def of defaultBlocks()) {
+      assert.ok(def.description, `${def.type} has no description`)
+      assert.ok(def.description.split(' ').length <= 12, `${def.type}: description is too long`)
+      assert.doesNotMatch(def.description, /[<>{}"$|]|[a-z]+-[a-z0-9]+/, `${def.type}: description has code`)
+    }
+  })
+
+  it('tag selects show only the tag names', () => {
+    const blocks = defaultBlocks()
+    const labels = (type: string, name: string) =>
+      (fieldsOf(blocks, type).find((f) => f.name === name)?.options ?? []).map((o) => (typeof o === 'string' ? o : (o as { label: string }).label))
+    assert.deepEqual(labels('stack', 'as').slice(0, 3), ['div', 'section', 'header'])
+    assert.deepEqual(labels('heading', 'level'), ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+    assert.deepEqual(labels('repeat', 'as'), ['div', 'none'])
+  })
+
+  it('the collection list marks its sort, related filter and where fields for the inspector', () => {
+    const fields = fieldsOf(defaultBlocks(), 'collectionList')
+    const custom = (name: string) => fields.find((f) => f.name === name)?.admin?.custom
+    assert.deepEqual(custom('sort')?.builderSort, { collectionField: 'collection' })
+    assert.deepEqual(custom('filterField')?.builderRelated, { collectionField: 'collection', modeField: 'filterBy' })
+    assert.deepEqual(custom('where')?.builderWhere, { collectionField: 'collection' })
+    assert.deepEqual(custom('queryFilters')?.builderQueryFilters, { collectionField: 'collection' })
   })
 
   it('a link holds only non-interactive content, at any depth', () => {
@@ -166,7 +188,9 @@ describe('defaultBlocks', () => {
   it('the menu lists the classes of its panel button, and the field lists its rich text classes', () => {
     const blocks = defaultBlocks()
     const menu = blocks.find((b) => b.type === 'menu')
-    for (const name of ['mt-5', 'rounded-full', 'bg-primary']) assert.ok(menu?.classes?.includes(name), name)
+    for (const name of ['mt-5', 'rounded-full', 'bg-[var(--color-primary,CanvasText)]']) assert.ok(menu?.classes?.includes(name), name)
+    // No design-system class names: colours come from CSS variables with a system colour fallback.
+    for (const name of ['bg-background', 'border-border', 'text-foreground', 'bg-primary']) assert.ok(!menu?.classes?.includes(name), name)
     const field = blocks.find((b) => b.type === 'field')
     for (const name of ['prose', 'max-w-none']) assert.ok(field?.classes?.includes(name), name)
   })

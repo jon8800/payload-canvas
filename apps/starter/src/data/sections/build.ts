@@ -1,13 +1,16 @@
 // Small helpers that build canonical layout blocks (new ids, no empty props or slots).
 // The ready-made sections in this folder use them.
 import { createId, type Block, type BlockMotion } from 'payload-canvas/core'
+import { PRIMARY_HOVER } from '../classes'
+
+export { PRIMARY_HOVER }
 
 /** A link group value as stored in block props. */
 export type LinkInput =
   | { type: 'url'; url: string; newTab?: boolean }
   | { type: 'reference'; reference: { relationTo: 'pages' | 'posts'; value: number | string }; newTab?: boolean }
 
-export type StackTag = 'div' | 'section' | 'header' | 'footer' | 'main' | 'nav' | 'article' | 'aside'
+export type StackTag = 'div' | 'section' | 'header' | 'footer' | 'main' | 'nav' | 'article' | 'aside' | 'ul' | 'ol' | 'li' | 'figure' | 'figcaption'
 export type HeadingLevel = '1' | '2' | '3' | '4' | '5' | '6'
 
 /**
@@ -45,24 +48,25 @@ export const postLink = (id: number | string): LinkInput => ({ type: 'reference'
  * Class sets shared by the sections. Theme colors and fonts come from the ThemeSettings variables:
  * `font-display` is the heading font, the body uses the sans font.
  * Spacing rhythm: sections are px-5 / md:px-8 around a max-w-6xl container, py-20 / md:py-28.
+ * Plain names (`section`, `button-primary`) are the site's editable classes (src/data/classes.ts):
+ * the seed creates them, and an editor changes them in the Styles panel.
  */
-const BUTTON = 'inline-flex min-h-12 items-center justify-center rounded-full px-6 text-base font-medium'
-/** A primary-colored button gets a little darker on hover. */
-export const PRIMARY_HOVER = 'hover:bg-[color-mix(in_oklch,var(--color-primary),black_14%)]'
 export const styles = {
-  buttonPrimary: `${BUTTON} bg-primary text-primary-foreground transition-colors ${PRIMARY_HOVER}`,
-  buttonOutline: `${BUTTON} border border-foreground/25 text-foreground transition-colors hover:border-foreground`,
-  buttonInverted: `${BUTTON} bg-primary-foreground text-primary transition-opacity hover:opacity-90`,
-  buttonOutlineInverted: `${BUTTON} border border-primary-foreground/40 transition-colors hover:border-primary-foreground`,
-  section: 'px-5 py-20 md:px-8 md:py-28',
-  container: 'mx-auto flex w-full max-w-6xl flex-col gap-12 md:gap-16',
+  buttonPrimary: 'button-primary',
+  buttonOutline: 'button-secondary',
+  buttonInverted: 'button bg-primary-foreground text-primary transition-opacity hover:opacity-90',
+  buttonOutlineInverted: 'button border border-primary-foreground/40 transition-colors hover:border-primary-foreground',
+  section: 'section',
+  container: 'site-container',
+  card: 'card',
+  eyebrow: 'eyebrow',
   /** The home page's opening title. */
   displayTitle: 'font-display text-5xl leading-[1.02] tracking-[-0.03em] sm:text-6xl md:text-7xl lg:text-[5.5rem]',
   /** The title of an inner page. */
   pageTitle: 'font-display text-5xl leading-[1.04] tracking-[-0.025em] md:text-6xl lg:text-7xl',
-  sectionTitle: 'font-display text-4xl leading-[1.08] tracking-[-0.02em] md:text-5xl',
+  sectionTitle: 'section-title',
   cardTitle: 'text-xl font-semibold tracking-tight',
-  lead: 'max-w-[60ch] text-lg leading-relaxed text-muted-foreground md:text-xl',
+  lead: 'lead',
   body: 'max-w-[62ch] text-lg leading-relaxed text-muted-foreground',
   muted: 'text-muted-foreground',
   textLink: 'inline-flex min-h-11 items-center font-medium underline decoration-1 underline-offset-[6px] hover:decoration-2',
@@ -87,6 +91,11 @@ function block(type: string, props?: Record<string, unknown>, className?: string
   return result
 }
 
+/** A block with named slots, for blocks whose slot is not `children` (accordion, carousel). */
+export function slotted(type: string, props: Record<string, unknown> | undefined, className: string | undefined, slots: Record<string, Block[]>): Block {
+  return { ...block(type, props, className), slots }
+}
+
 export const stack = (as: StackTag, className: string, children: Block[]) => block('stack', { as }, className, children)
 export const grid = (className: string, children: Block[]) => block('grid', undefined, className, children)
 export const heading = (text: string, level: HeadingLevel, className?: string) => block('heading', { text, level }, className)
@@ -102,9 +111,14 @@ export function list(items: string[], ordered: boolean, className?: string, item
   if (items.length > 0) result.slots = { items: items.map((item) => block('listItem', { text: item }, itemClassName)) }
   return result
 }
-export const quote = (value: string, cite: string, className?: string) => block('quote', { quote: value, cite }, className)
+/** A quote with its source: a figure stack with the quote text and a caption. */
+export const quote = (value: string, cite: string, classNames: { figure?: string; quote?: string; cite?: string } = {}) =>
+  stack('figure', classNames.figure ?? 'flex flex-col gap-4', [
+    text(value, classNames.quote),
+    stack('figcaption', classNames.cite ?? 'text-muted-foreground', [text(cite)]),
+  ])
+export const icon = (name: string, className?: string) => block('icon', { name }, className)
 export const divider = (className?: string) => block('divider', undefined, className)
-export const spacer = (className?: string) => block('spacer', undefined, className)
 export const form = (id: number | string, className?: string) => block('form', { form: id }, className)
 /** Site navigation. `collapse`: the width below which links fold into a "Menu" button ("never" for footers). */
 /** `cta` adds a button as the last row of the small-screen panel. */
@@ -151,7 +165,7 @@ export const field = (path: string, className?: string, fallback?: string) =>
 /** Lists documents of a collection. `item` is the design of one item; its blocks bind to the item. */
 export const collectionList = (
   collection: 'posts' | 'pages',
-  options: { limit?: number; sort?: string; excludeCurrent?: boolean },
+  options: { limit?: number; sort?: string; excludeCurrent?: boolean; where?: Record<string, unknown> },
   className: string,
   item: Block[],
 ): Block => {
@@ -160,3 +174,5 @@ export const collectionList = (
 }
 /** A block with no props yet, e.g. an image whose value comes from a binding. */
 export const bare = (type: string, className?: string) => block(type, undefined, className)
+/** Custom HTML (the built-in `embed` block). */
+export const embed = (props: { code: string; mode?: 'inline' | 'isolated'; title?: string }, className?: string) => block('embed', props, className)

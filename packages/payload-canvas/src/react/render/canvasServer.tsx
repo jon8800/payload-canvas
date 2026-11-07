@@ -18,7 +18,7 @@ import type {
 } from './canvasServerTypes'
 import { isRecord } from './fields'
 import { defaultResolveLink } from './link'
-import { renderPreviewBlock } from './RenderLayout'
+import { renderPreviewBlock } from './preview'
 import { localeArgs, type LocaleArgs } from './locale'
 import { loadLayoutData } from './resolve'
 import type { BlockComponents, PageData, ResolveLink } from './types'
@@ -84,6 +84,7 @@ function scopeOf(value: unknown): CanvasScope {
     document: isDocumentRef(scope.document) ? scope.document : null,
     context: isDocumentRef(scope.context) ? scope.context : null,
     locale: typeof scope.locale === 'string' && scope.locale ? scope.locale : null,
+    mode: scope.mode === 'thumbnail' ? 'thumbnail' : 'canvas',
   }
 }
 
@@ -187,7 +188,7 @@ export function createCanvasServer(options: CanvasServerOptions) {
     try {
       // One load for every block: one `find` per collection.
       const layout = normalizeLayout({ version: 1, blocks: items.map((item) => item.block) })
-      loaded = (await loadLayoutData(layout, blocks, payload, { draft: true, context, resolveLink, user, ...localeOptions })).blocks
+      loaded = (await loadLayoutData(layout, blocks, payload, { draft: true, context, resolveLink, user, includeHidden: true, ...localeOptions })).blocks
     } catch (error) {
       for (const item of items) results[item.key] = { error: `Data failed to load: ${message(error)}` }
       return { kind: 'blocks', results }
@@ -204,7 +205,7 @@ export function createCanvasServer(options: CanvasServerOptions) {
         results[item.key] = { error: `No component for "${block.type}". Add it to the components of createCanvasServer.` }
         continue
       }
-      results[item.key] = { node: renderPreviewBlock(block, { components, blocks, resolveLink, context, pageData }) }
+      results[item.key] = { node: renderPreviewBlock(block, { components, blocks, resolveLink, context, pageData, canvasMode: scope.mode }) }
     }
     return { kind: 'blocks', results }
   }

@@ -1,12 +1,32 @@
 // The plugin option `ai` as the editor sees it. Client-safe: the editor imports clientIdentity.
 
 import { IMAGE_ASPECT_RATIOS } from './images/ratios'
-import type { AiClientConfig, AiImagesClientConfig, AiOptions } from './types'
+import type { AiAdapter, AiClientConfig, AiImageAdapter, AiImagesClientConfig, AiOptions } from './types'
+
+/**
+ * What the server knows at request time: which uses have a key in the AI settings, and the
+ * settings page (null when settings are off or the user may not open them).
+ */
+export type AiRequestState = { keys?: { chat?: boolean; images?: boolean }; settingsUrl?: string | null }
+
+/** The adapter can run: ready from its options, or only the key was missing and the AI settings have one. */
+export function adapterReady(adapter: Pick<AiAdapter | AiImageAdapter, 'ready' | 'missingKey' | 'acceptsApiKey'>, settingsKey: boolean | string | undefined): boolean {
+  return adapter.ready || Boolean(adapter.missingKey && adapter.acceptsApiKey && settingsKey)
+}
+
+/** Appended to a setup problem when the AI settings can take the key. */
+export const SETTINGS_KEY_HINT = 'Or paste an API key in the admin: AI settings.'
+
+/** The adapter's setup problem, plus the AI settings hint when a key there would fix it. */
+export function setupProblemOf(adapter: Pick<AiAdapter | AiImageAdapter, 'label' | 'setupProblem' | 'missingKey' | 'acceptsApiKey'>, settings: boolean, what = ''): string {
+  const problem = adapter.setupProblem?.trim() || `${adapter.label}${what} is not set up.`
+  return settings && adapter.missingKey && adapter.acceptsApiKey ? `${problem} ${SETTINGS_KEY_HINT}` : problem
+}
 
 /** `AiClientConfig.images`: null unless an image adapter is ready. */
-export function imagesClientConfig(ai: AiOptions, endpoint: string): AiImagesClientConfig | null {
+export function imagesClientConfig(ai: AiOptions, endpoint: string, state: AiRequestState = {}): AiImagesClientConfig | null {
   const images = ai.images
-  if (!images?.ready) return null
+  if (!images || !adapterReady(images, state.keys?.images)) return null
   return { endpoint: `${endpoint}/image`, label: images.label, model: images.model, collection: ai.mediaCollection ?? 'media', aspectRatios: [...IMAGE_ASPECT_RATIOS] }
 }
 
@@ -23,9 +43,13 @@ export function missingAdapterProblem(ai: AiOptions): string {
   return 'provider' in ai ? PROVIDER_REMOVED_PROBLEM : NO_ADAPTER_PROBLEM
 }
 
-/** `BuilderClientConfig.ai` for the editor. */
-export function aiClientConfig(ai: AiOptions, endpoint: string): AiClientConfig {
+/**
+ * `BuilderClientConfig.ai` for the editor. `state`: the AI settings at request time (the builder
+ * view passes it). Without it, readiness comes from the adapter options only.
+ */
+export function aiClientConfig(ai: AiOptions, endpoint: string, state: AiRequestState = {}): AiClientConfig {
   const adapter = ai.adapter
+  const settingsUrl = state.settingsUrl ?? null
   if (!adapter) {
     return {
       endpoint,
@@ -36,19 +60,23 @@ export function aiClientConfig(ai: AiOptions, endpoint: string): AiClientConfig 
       setupProblem: missingAdapterProblem(ai),
       keyEnv: null,
       keyUrl: null,
-      images: imagesClientConfig(ai, endpoint),
+      images: imagesClientConfig(ai, endpoint, state),
+      settingsUrl: null,
     }
   }
+  const ready = adapterReady(adapter, state.keys?.chat)
   return {
     endpoint,
     adapter: adapter.name,
     label: adapter.label,
     model: adapter.model,
-    ready: adapter.ready,
-    setupProblem: adapter.ready ? null : adapter.setupProblem?.trim() || `${adapter.label} is not set up.`,
+    ready,
+    setupProblem: ready ? null : setupProblemOf(adapter, ai.settings !== false),
     keyEnv: adapter.keyEnv ?? null,
     keyUrl: adapter.keyUrl ?? null,
-    images: imagesClientConfig(ai, endpoint),
+    images: imagesClientConfig(ai, endpoint, state),
+    // Only when a key there makes the assistant work.
+    settingsUrl: adapter.acceptsApiKey ? settingsUrl : null,
   }
 }
 

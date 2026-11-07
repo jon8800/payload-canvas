@@ -10,6 +10,7 @@
 import { dataFields, type LooseField } from '../../core/fields'
 import { richTextToPlain, isRichText } from '../../core/bindings'
 import { isPlainObject, normalizeLayout } from '../../core/tree'
+import { visibilityConditions } from '../../core/visibility'
 import type { Block, BlockDefinition, BlockProps } from '../../core/types'
 import { blockSummary } from '../editor/names'
 
@@ -271,6 +272,10 @@ function blockDetails(ctx: Context, from: Block, to: Block): LayoutChangeDetail[
     out.push({ kind: 'value', label, from: before ? `{${before}}` : '', to: after ? `{${after}}` : '' })
   }
   if (!sameValue(from.motion, to.motion)) out.push({ kind: 'note', label: 'Animation', text: motionNote(from.motion, to.motion) })
+  if (!sameValue(from.visibility, to.visibility)) {
+    const count = visibilityConditions(to.visibility).length
+    out.push({ kind: 'note', label: 'Visibility conditions', text: count === 0 ? 'Conditions removed' : `${count} ${count === 1 ? 'condition' : 'conditions'}` })
+  }
   for (const key of Object.keys(ATTR_NAMES) as Array<keyof typeof ATTR_NAMES>) {
     const before = from.attrs?.[key]
     const after = to.attrs?.[key]

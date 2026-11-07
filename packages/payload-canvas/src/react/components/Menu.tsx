@@ -8,12 +8,14 @@
 // An item with `children` (one level) is a dropdown: a <details> in the inline list, beside the
 // item's own link or in its place, and a nested list in the panel. Escape, a click outside and
 // focus leaving close an open dropdown; opening one closes the others.
+import NextLink from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useSyncExternalStore } from 'react'
-import { MENU_CLASS_MAP as C } from '../../blocks'
+import { joinClasses, labelOf } from '../../blocks/client/helpers'
+import { MENU_CLASS_MAP as C, MENU_LABELS } from '../../blocks/client/menu'
 import { editableText } from '../render/editable'
 import { linkAttributes, type LinkAttributes } from '../render/link'
-import type { RenderMode } from '../render/types'
-import type { BlockComponentProps } from '../render/types'
+import type { BlockComponentProps, LinkComponent, RenderMode } from '../render/types'
 import { asText, PlaceholderText } from './placeholder'
 
 type Collapse = 'md' | 'lg' | 'never'
@@ -73,7 +75,9 @@ export function toItems(value: unknown, path = 'items', depth = 0): Item[] {
   })
 }
 
-function MenuLink({ item, className, current, mode }: { item: Item; className: string; current: Current; mode: RenderMode }) {
+type MenuLinkProps = { item: Item; className: string; current: Current; mode: RenderMode; as: LinkComponent | 'a' }
+
+function MenuLink({ item, className, current, mode, as: A }: MenuLinkProps) {
   const editable = editableText(mode, `${item.path}.label`)
   if (!item.link) {
     return (
@@ -83,9 +87,9 @@ function MenuLink({ item, className, current, mode }: { item: Item; className: s
     )
   }
   return (
-    <a {...item.link} {...editable} className={className} aria-current={current}>
+    <A {...item.link} {...editable} className={className} aria-current={current}>
       {item.label}
-    </a>
+    </A>
   )
 }
 
@@ -112,17 +116,31 @@ export function currentOf(item: Item, pathname: string | null, origin?: string):
   return item.children.some(is) ? 'true' : undefined
 }
 
-export function Menu({ props, className, attributes, mode }: BlockComponentProps) {
+export type MenuLabels = Partial<typeof MENU_LABELS>
+
+/**
+ * `labels`: the site's labels (`builtinComponents({ labels: { menu } })`), used when a prop is empty.
+ * `clientLinks`: the site navigates on the client (`RenderLayout`'s `linkComponent`), so links are
+ * `next/link`. `linkComponent` is for direct use in client code; from the server only `clientLinks` arrives.
+ */
+export function Menu({ props, className, attributes, partAttributes, mode, labels, linkComponent, clientLinks }: BlockComponentProps & { labels?: MenuLabels }) {
+  const A = linkComponent ?? (clientLinks && mode === 'site' ? NextLink : 'a')
   const items = toItems(props.items)
   const collapse: Collapse = props.collapse === 'lg' || props.collapse === 'never' ? props.collapse : 'md'
-  const label = asText(props.label) || 'Main'
-  const submenuLabel = asText(props.submenuLabel) || '{label} menu'
+  const L = labels ? { ...MENU_LABELS, ...labels } : MENU_LABELS
+  const label = labelOf(props, L, 'label')
+  // `{label}` is filled in per link below.
+  const submenuLabel = labelOf(props, L, 'submenuLabel')
   // The panel button needs a label and a link; without both it is not shown.
   const ctaLink = linkAttributes(props.cta)
   const ctaLabel = asText(props.ctaLabel)
   const cta = ctaLink && ctaLabel ? { link: ctaLink, label: ctaLabel } : null
-  const pathname = useSyncExternalStore(subscribe, clientPath, serverPath)
-  const origin = pathname === null ? undefined : window.location.origin
+  // The browser's path once it hydrates (the server's path can differ after a rewrite). Next's
+  // path follows client-side navigation, which fires no popstate.
+  const routerPath = usePathname()
+  const browserPath = useSyncExternalStore(subscribe, clientPath, serverPath)
+  const pathname = browserPath !== null && routerPath ? routerPath : browserPath
+  const origin = browserPath === null ? undefined : window.location.origin
   const nav = useRef<HTMLElement>(null)
 
   // The panel and the dropdowns. Escape closes the one that holds the focus and focuses its
@@ -157,12 +175,20 @@ export function Menu({ props, className, attributes, mode }: BlockComponentProps
       if (!(opened instanceof HTMLDetailsElement) || !opened.open || !opened.matches(SUBMENU)) return
       for (const element of root.querySelectorAll<HTMLDetailsElement>(SUBMENU)) if (element !== opened) close(element, false)
     }
+    // A client-side navigation (`linkComponent`) keeps the page and this menu: a click on a link
+    // closes the panel and the dropdowns.
+    const onClick = (event: MouseEvent) => {
+      if (!(event.target instanceof Element) || !event.target.closest('a[href]')) return
+      for (const element of root.querySelectorAll('details')) close(element, false)
+    }
     root.addEventListener('keydown', onKeyDown)
+    root.addEventListener('click', onClick)
     root.addEventListener('focusout', onFocusOut)
     root.addEventListener('toggle', onToggle, true)
     document.addEventListener('pointerdown', onPointerDown)
     return () => {
       root.removeEventListener('keydown', onKeyDown)
+      root.removeEventListener('click', onClick)
       root.removeEventListener('focusout', onFocusOut)
       root.removeEventListener('toggle', onToggle, true)
       document.removeEventListener('pointerdown', onPointerDown)
@@ -179,11 +205,13 @@ export function Menu({ props, className, attributes, mode }: BlockComponentProps
   }
 
   const current = (item: Item) => currentOf(item, pathname, origin)
+  // The parts' own classes (`block.partClassName`) join the menu's classes.
+  const part = (name: string) => partAttributes[name]?.className
   const childList = (item: Item, listClass: string, linkClass: string) => (
     <ul className={listClass}>
       {item.children.map((child) => (
         <li key={child.key}>
-          <MenuLink item={child} className={linkClass} current={current(child)} mode={mode} />
+          <MenuLink item={child} className={linkClass} current={current(child)} mode={mode} as={A} />
         </li>
       ))}
     </ul>
@@ -193,7 +221,7 @@ export function Menu({ props, className, attributes, mode }: BlockComponentProps
       if (item.children.length === 0) {
         return (
           <li key={item.key}>
-            <MenuLink item={item} className={linkClass} current={current(item)} mode={mode} />
+            <MenuLink item={item} className={linkClass} current={current(item)} mode={mode} as={A} />
           </li>
         )
       }
@@ -201,7 +229,7 @@ export function Menu({ props, className, attributes, mode }: BlockComponentProps
       // Without one: the label is the toggle.
       return (
         <li key={item.key} className={C.submenu}>
-          {item.link ? <MenuLink item={item} className={linkClass} current={current(item)} mode={mode} /> : null}
+          {item.link ? <MenuLink item={item} className={linkClass} current={current(item)} mode={mode} as={A} /> : null}
           <details className={C.submenuDetails}>
             <summary
               className={C.submenuToggle}
@@ -211,7 +239,7 @@ export function Menu({ props, className, attributes, mode }: BlockComponentProps
               {item.link ? null : <span {...editableText(mode, `${item.path}.label`)}>{item.label}</span>}
               <Chevron className={C.submenuIcon} />
             </summary>
-            {childList(item, C.submenuList, C.submenuLink)}
+            {childList(item, joinClasses(C.submenuList, part('submenu')), joinClasses(C.submenuLink, part('submenuLink')))}
           </details>
         </li>
       )
@@ -222,28 +250,28 @@ export function Menu({ props, className, attributes, mode }: BlockComponentProps
       {/* `contents` drops the list box from layout; role="list" keeps list semantics in Safari. */}
       {/* oxlint-disable-next-line jsx-a11y/no-redundant-roles */}
       <ul role="list" className={C.list[collapse]}>
-        {list(C.link)}
+        {list(joinClasses(C.link, part('link')))}
       </ul>
       {collapse === 'never' ? null : (
         <details className={`group ${C.toggleWrap[collapse]}`}>
           <summary className={C.toggle}>
-            <span>{asText(props.toggleLabel) || 'Menu'}</span>
+            <span>{labelOf(props, L, 'toggleLabel')}</span>
             <Icon className={C.iconOpen} open={false} />
             <Icon className={C.iconClose} open />
           </summary>
-          <div className={C.panel}>
+          <div className={joinClasses(C.panel, part('panel'))}>
             <ul className={C.panelList}>
               {items.map((item) => (
                 <li key={item.key}>
-                  <MenuLink item={item} className={C.panelLink} current={current(item)} mode={mode} />
+                  <MenuLink item={item} className={C.panelLink} current={current(item)} mode={mode} as={A} />
                   {item.children.length > 0 ? childList(item, C.panelSubList, C.panelSubLink) : null}
                 </li>
               ))}
               {cta ? (
                 <li>
-                  <a {...cta.link} {...editableText(mode, 'ctaLabel')} className={C.panelCta}>
+                  <A {...cta.link} {...editableText(mode, 'ctaLabel')} className={C.panelCta}>
                     {cta.label}
-                  </a>
+                  </A>
                 </li>
               ) : null}
             </ul>

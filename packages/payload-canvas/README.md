@@ -33,11 +33,14 @@ One package holds everything: the Payload plugin and admin editor (`payload-canv
 npx create-payload-canvas my-website
 ```
 
+The starter also has a calmer Payload admin: a sidebar in groups with icons, a neutral look in light and dark mode, and a dashboard with quick actions, recent edits, drafts, form messages, site checks, scheduled publishes and optional Plausible or Umami numbers. Each part is plain code in `src/admin/` of the starter. The CLI asks which parts to keep (see [Features](../create-payload-canvas/README.md#features)).
+
 ## Contents
 
 1. [Requirements](#requirements)
 2. [Install](#install)
 3. [The builder view](#the-builder-view)
+   - [Content mode for clients](#content-mode-for-clients)
 4. [Inline editing](#inline-editing)
 5. [Plugin options](#plugin-options)
 6. [Rendering the layout on your site](#rendering-the-layout-on-your-site)
@@ -46,11 +49,13 @@ npx create-payload-canvas my-website
 7. [Server components in the canvas](#server-components-in-the-canvas)
    - [Whole-page editing: regions outside the layout](#whole-page-editing-regions-outside-the-layout)
 8. [Custom blocks](#custom-blocks)
+   - [Interactive blocks on the canvas](#interactive-blocks-on-the-canvas)
    - [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields)
    - [Built-in blocks](#built-in-blocks)
 9. [Using existing Payload blocks](#using-existing-payload-blocks)
 10. [Sections](#sections)
 11. [Styling](#styling)
+   - [Editable classes](#editable-classes)
 12. [Animations](#animations)
 13. [Theme](#theme)
 14. [Templates and binding](#templates-and-binding)
@@ -59,6 +64,7 @@ npx create-payload-canvas my-website
 17. [AI assistant](#ai-assistant)
 18. [AI editing over MCP](#ai-editing-over-mcp)
 19. [Multiplayer editing](#multiplayer-editing)
+   - [Comments on the canvas](#comments-on-the-canvas)
 20. [Production and Docker](#production-and-docker)
 21. [Deploying](#deploying)
 22. [Troubleshooting](#troubleshooting)
@@ -427,18 +433,21 @@ The builder is a full-screen admin view at `/admin/builder/<collection>/<id>`. I
 How editors open it:
 
 - the document's **Builder** tab (a link to the view),
-- the **Open builder** button on the layout field in the normal Edit view (a new document must be saved first),
-- the old tab URL `/admin/collections/<collection>/<id>/builder`, which redirects to the view.
+- the **Open builder** button on the layout field in the normal Edit view (a new document must be saved first). The field also shows "3 sections · 24 blocks" and the list of sections,
+- the old tab URL `/admin/collections/<collection>/<id>/builder`, which redirects to the view,
+- with `editor.openInBuilder: true`, a click on a saved document in the collection list.
+
+**Open documents in the builder.** `websiteBuilder({ editor: { openInBuilder: true } })` (default `false`) makes the builder the document's main view. Opening a saved document goes straight to `/admin/builder/<collection>/<id>`. Payload's form stays for new documents until their first save, in drawers, for users who cannot save, for documents in the trash, and with `?form=1` in the URL. The builder's **All fields** menu item opens the form with `?form=1`. The form then stays for that document until a full page load, or until you open the builder for it again. The builder's back arrow goes to the collection list. A collection that sets its own `admin.components.views.edit.default` keeps it. The option registers `payload-canvas/client#DocumentEditView`, so run `pnpm payload generate:importmap` after you turn it on.
 
 The top bar, left to right:
 
-- **Back** to the document's Edit view, the admin icon (to the dashboard), and `Collection › Title`. Click the title to rename the document: Enter or leaving the field saves it (as a draft when the collection has drafts). Escape cancels.
+- **Back** to the document's Edit view (to the collection list with `openInBuilder`), the admin icon (to the dashboard), and `Collection › Title`. Click the title to rename the document: Enter or leaving the field saves it (as a draft when the collection has drafts). Escape cancels.
 - The status: **Draft** (never published), **Published**, or **Changed** (published, with newer draft changes). Hover it for the last change, the creation date, the last publish and the number of versions (opens the Versions drawer).
 - Undo and redo, the canvas width and the active breakpoint. **Fluid** (the default) fills the space between the sidebars, so the breakpoint follows the free width. Desktop (1280 px), tablet, mobile and a custom width are fixed widths. In a template: the sample document the canvas previews.
 - The people on the page, and the save state: **Saving…** while changes are on their way, then **Saved · 12:04**.
 - **Preview** opens the draft preview (the collection's `admin.livePreview.url`, else `admin.preview`), or the public page (the plugin's `url` option), in a new tab.
 - **Page settings** opens the document's own edit form in a Payload drawer: title, slug, SEO, and for a template its collection and sample document. The top bar updates after each save.
-- The AI assistant (with the `ai` option), the keyboard shortcuts, and **Publish changes**. Its menu has **Unpublish**, **Revert to published** (drops all draft changes, after a confirmation), **Versions** and **API** (Payload's own screens, in a drawer over the builder), and links to the Edit view and the live page. In the Versions drawer, open a version to compare it, then **Restore as draft**: every open editor gets the restored layout, and the site keeps the published version until you publish.
+- The AI assistant (with the `ai` option), the keyboard shortcuts, and **Publish changes**. Its menu has **Unpublish**, **Revert to published** (drops all draft changes, after a confirmation), **Versions** and **API** (Payload's own screens, in a drawer over the builder), **All fields** (Payload's edit form) and a link to the live page. In the Versions drawer, open a version to compare it, then **Restore as draft**: every open editor gets the restored layout, and the site keeps the published version until you publish.
 
 The left sidebar has three tabs: **Layers** (the block tree), **Blocks** and **Sections**. Each fills the sidebar. Alt+1, Alt+2 and Alt+3 (⌥1, ⌥2, ⌥3 on a Mac) open them, and the browser keeps the last tab. To drop a block or section into the tree, drag it onto the **Layers** tab and hold it there for a moment: the tab opens.
 
@@ -450,7 +459,9 @@ Publishing. All editors of a document share one live session (see [Multiplayer e
 
 Save rules. Every save checks the layout. A broken layout (wrong shape, duplicate ids, unknown block types, wrong prop types) blocks every save. Unfinished blocks do not block drafts, autosave or live sessions: a missing required prop, a prop whose value does not match its `builderFormat` (for example a half-typed video URL), a value outside the field's limits (`minLength`, `maxLength`, `min`, `max`, `minRows`, `maxRows`, an email address without a valid form), a message from the field's own `validate` function, a block in a slot that refuses it, and a binding the prop cannot use. All of these can be true while someone is still typing. They block **Publish** only, and the problem list names the block ("Video: this YouTube link does not point to a video", "Product: SKU: use a SKU like ABC-123"). Click a problem to select the block. See [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields).
 
-Adding blocks on the canvas. Hover the canvas: a small **+** shows on the edge between two blocks next to the pointer (above or below in a column, left or right in a row), and in the middle of an empty container. Click it to open a picker with the blocks and sections that fit there (slot rules apply). Type to search, use the arrow keys and Enter, or click. The new block goes in exactly that place and is selected. The **+** hides while you drag and while you edit text on the canvas.
+Adding blocks on the canvas. Hover the canvas: a small **+** shows on the edge between two blocks next to the pointer (above or below in a column, left or right in a row), and in the middle of an empty container. Click it to open a picker with the blocks and sections that fit there (slot rules apply). Type to search, use the arrow keys and Enter, or click. The new block goes in exactly that place and is selected. The **+** hides while you drag and while you edit text on the canvas. It does not show next to a small block (under 48 px along the list and under 160 px across, at 100 % zoom), and it never covers more than a fifth of a block: the parent gets the **+** instead. It also hides over the controls of interactive blocks (a carousel's arrows, a tab).
+
+Interactive blocks on the canvas. Select a block inside a closed accordion item, a hidden tab, another slide or a closed popup, on the canvas or in Layers: the canvas opens the item, the tab or the popup, or moves to the slide, and scrolls the block into view. Arrows, dots, tab buttons and popup triggers work as on the site: a click on them selects nothing. Outlines of blocks inside a container that hides its overflow (a carousel's viewport) are cut at the container's edge.
 
 Drag and drop. Drag a block by its row in the outline, by the grip on the selected block's bar, or from the **Blocks** and **Sections** tabs. Slot rules apply: a slot that refuses the block is never a target. Escape cancels the drag. One drop is one undo step, and collaborators see the move at once. There are two styles:
 
@@ -459,7 +470,45 @@ Drag and drop. Drag a block by its row in the outline, by the grip on the select
 
 Set the default with `websiteBuilder({ editor: { dragMode: 'smooth' } })`. Each user can change it with the grip button in the canvas status bar, next to the zoom. The choice stays in that browser. When the system asks for less motion (`prefers-reduced-motion: reduce`), the editor always uses the drop line. Both styles use the same drop rules, so the same drop gives the same result. Smooth mode moves blocks with CSS transforms only and never changes the layout before the drop.
 
+Drop outlines. While you drag, a thin dashed line marks every container on the canvas that takes the block, by the same slot rules. The container the block would drop into gets a stronger line, and its name when a drop line shows. The lines are drawn over the canvas, so the page never moves. Turn them off in the same grip menu (**Outline where blocks can drop**), or set the default with `websiteBuilder({ editor: { dropOutlines: false } })`.
+
 Access. The view sends signed-out visitors to the login page and back. Users without admin access go to Payload's "unauthorized" page. A document that does not exist, or a collection without the builder, shows "not found". A user who can read but not update the document gets the normal Edit view.
+
+### Content mode for clients
+
+Content mode lets a site owner's client change text, images and links without breaking the design. Webflow's Editor and Elementor's role manager work the same way.
+
+```ts
+websiteBuilder({
+  editor: {
+    // Users with the "editor" role get content mode. Everyone else keeps full rights.
+    canEditDesign: ({ user }) => user?.role !== 'editor',
+  },
+})
+```
+
+The default is `true` for everyone, so nothing changes until you set it. A function that throws counts as `false`. The starter adds a **Role** field (Admin or Editor) to its users and uses it here.
+
+In content mode, editors can:
+
+- change text, textarea, rich text, upload (image and video), email and link props in the inspector,
+- edit text on the canvas,
+- in a block marked **Editors can add, remove and reorder its items**: duplicate, delete and reorder its direct children (FAQ items, team cards). They cannot restyle them.
+
+They cannot add, move, duplicate or delete other blocks, and they see no Blocks or Sections tab, no **+** buttons, no drag and drop, no Styles, Motion or Advanced tab, no classes, section variants, visibility conditions, bindings or page regions. Design props (selects, checkboxes, numbers, relationships, heading levels) are hidden too. The top bar shows **Content mode**.
+
+Users with design rights get **Preview as client** in the top bar. It shows the editor as clients see it. Turn it off to edit the design again.
+
+Which props are content. The field type decides: `text`, `textarea`, `richText`, `upload`, `email` and link groups (`linkField()`) are content. A group, row or array is content when every field inside it is. Everything else is design. Override it per field with `admin.custom.builderContent`:
+
+```ts
+{ name: 'anchor', type: 'text', admin: { custom: { builderContent: false } } }, // a setting, not text
+{ name: 'badge', type: 'select', options: ['New', 'Sale'], admin: { custom: { builderContent: true } } },
+```
+
+Mark a list. Select the block that holds the items, open the **Advanced** tab and turn on **Editors can add, remove and reorder its items**. It is stored as `editableItems: true` on the block. A new item must be a copy of an item already there.
+
+The server enforces it. Every write checks the change against the layout before it: the live editor's commits, the operations endpoint, the MCP tools, the AI assistant, editable class renames, and saves through REST, GraphQL or the Edit view. A design change from a user in content mode is refused with a 403 and a message such as `In content mode you can change only text, images and links. "Hero" cannot be moved.` The editable classes collection and the theme global are design too: content mode cannot create, update or delete them. Payload's **Restore** of a version is checked the same way: a version with another design is refused with `This version has a different design, so only a designer can restore it.`, and a version that differs only in content restores. (Payload's Restore button shows its own generic error; the API response carries the message.) Publishing, unpublishing and **Revert to published** stay allowed: they never bring back a design that is not already published.
 
 ## Inline editing
 
@@ -549,7 +598,7 @@ websiteBuilder({
   live: { heartbeatMs: 15000 },
   ai: { adapter: openRouterAdapter({ apiKey: process.env.OPENROUTER_API_KEY }) }, // the AI assistant
   theme: { admin: { group: 'Settings' } }, // the Theme global; `false` leaves it out
-  editor: { dragMode: 'smooth' }, // the default drag and drop style; each user can change it
+  editor: { dragMode: 'smooth', openInBuilder: true }, // drag and drop style; open saved documents in the builder
   references: { usedIn: ['media'], protectDelete: ['media'] }, // "Used in" lists; `false` turns them off
 })
 ```
@@ -578,8 +627,12 @@ websiteBuilder({
 | `ai` | `AiOptions` | Turns on the AI assistant in the editor. See [AI assistant](#ai-assistant). |
 | `theme` | `ThemeOptions \| false` | The Theme global. On by default. `false` leaves it out. See [Theme](#theme). |
 | `editor.dragMode` | `'indicator' \| 'smooth'` | The default drag and drop style. `indicator` (the default) shows a drop line; `smooth` lifts the block and moves the other blocks out of the way. Each user can change it in the editor. See [The builder view](#the-builder-view). |
+| `editor.dropOutlines` | `boolean` | Thin outlines of every container that takes the dragged block, while you drag. Default `true`. Each user can change it in the editor. See [The builder view](#the-builder-view). |
+| `editor.canEditDesign` | `({ req, user }) => boolean \| Promise<boolean>` | Who may change the design. Users for whom it returns `false` get content mode: text, images and links only. Default: everyone. See [Content mode for clients](#content-mode-for-clients). |
+| `editor.openInBuilder` | `boolean` | Opening a saved document goes straight to the builder instead of Payload's form. Default `false`. Run `generate:importmap` after you turn it on. See [The builder view](#the-builder-view). |
 | `css.fontFamilies` | `(payload) => Record<name, family>` | Font families set at runtime some other way than the Theme global, for the Styles panel's Font list. Its names win over the theme's. |
 | `references` | `{ field?, usedIn?, protectDelete?, maxListed? } \| false` | Which media and documents each layout uses: "Used in" lists and delete protection. On by default. `false` turns it off. See [References and Used in](#references-and-used-in). |
+| `comments` | `{ slug?, access?, admin?, hooks? } \| boolean` | Comments on blocks in the builder, stored in a `builder-comments` collection. On by default. `false` turns it off. See [Comments on the canvas](#comments-on-the-canvas). |
 
 For each listed collection the plugin adds:
 
@@ -625,9 +678,9 @@ It also adds these endpoints (signed-in users only):
 | `payload-canvas/ai/openrouter`, `/ai/cloudflare-gateway`, `/ai/cloudflare-workers-ai`, `/ai/openai-compatible`, `/ai/anthropic`, `/ai/fake` | `payload.config.ts` (server) | one AI adapter each. See [Adapters](#adapters). |
 | `payload-canvas/ai/images/openrouter`, `/ai/images/openai`, `/ai/images/cloudflare-workers-ai`, `/ai/images/fake` | `payload.config.ts` (server) | one image adapter each. See [Image generation](#image-generation). |
 | `payload-canvas/live` | server | the live sessions and endpoints |
-| `payload-canvas/client` | Payload import map only | admin client components (layout field, Builder tab) |
+| `payload-canvas/client` | Payload import map only | admin client components (layout field, Builder tab, `DocumentEditView` for `openInBuilder`) |
 | `payload-canvas/rsc` | Payload import map only | admin server components (the builder view, the tab redirect) |
-| `payload-canvas/react` | your site and the canvas (server and client) | `RenderLayout`, `defaultComponents`, `fromPayloadComponent(s)`, `withPageData`, `renderOnServer`, `editableText`, `editableImage`, link helpers, `ThemeLive`, types |
+| `payload-canvas/react` | your site and the canvas (server and client) | `RenderLayout`, `defaultComponents`, `fromPayloadComponent(s)`, `withPageData`, `withLinkComponent`, `lazyBlock`, `renderOnServer`, `editableText`, `editableImage`, `useCanvasMode`, `useCanvasReveal`, `REVEAL_EVENT`, `CANVAS_CONTROL_ATTRIBUTE`, `builtinComponents`, link helpers, `ThemeLive`, types |
 | `payload-canvas/react/server` | server only | `loadLayoutData`, `loadTemplate`, `loadTheme`, `ThemeStyle`, `createCanvasServer` (they call Payload's Local API) |
 | `payload-canvas/react/canvas` | client only | `BuilderCanvas`, the runtime for the editor's iframe |
 | `payload-canvas/protocol`, `/css-browser` | used by `payload-canvas/react` | the editor–canvas message types, the in-browser CSS compiler. You do not import them yourself. |
@@ -647,6 +700,26 @@ Every entry point is ESM with `.d.ts` types. Client components keep their `'use 
 | `resolveLink` | `(link) => string \| null` | Turns links into an `href`. Default: the URL, or `/<slug>` for a loaded document. |
 | `context` | `{ collection, doc }` | The document a template renders. See [Templates](#templates-and-binding). |
 | `pageData` | `Record<string, unknown>` | Data the page loads once for its blocks. See [Page data](#page-data-and--block-context--components). |
+| `linkComponent` | client component | Renders the links of the button, link and menu blocks on the site. Default: a plain `<a>`. Pass `next/link` for client-side navigation and prefetching. It must be a client component (the menu is one and gets it as a prop). Your own components get it as `linkComponent` when you mark them with `withLinkComponent(Component)`. The canvas keeps plain links. |
+| `priorityImages` | `number` | How many images of the first section load first (`fetchpriority="high"`, not lazy), in page order. Default `1`, usually the hero image. An image whose **Load first** is switched off keeps lazy loading. Give layouts further down the page (a footer) `0`. |
+
+```tsx
+import Link from 'next/link'
+
+<RenderLayout layout={layout} blocks={blocks} components={components} linkComponent={Link} />
+```
+
+The interactive blocks (menu, carousel, popup, tabs, accordion, filter link) load their JavaScript only on pages that render them: their components load with `next/dynamic`. Do the same for a heavy client block of your own, in a `'use client'` module:
+
+```tsx
+'use client'
+import dynamic from 'next/dynamic'
+import { lazyBlock } from 'payload-canvas/react'
+
+export const FormBlock = lazyBlock(dynamic(() => import('./Form').then((m) => m.FormBlock)))
+```
+
+`lazyBlock` gives the block its own Suspense boundary on the canvas, where it can mount after the page.
 
 `loadLayoutData(layout, blocks, payload, options)` (from `payload-canvas/react/server`) loads the documents that upload and relationship props point to, in one `find` per collection. Options: `draft`, `context`, `resolveLink`.
 
@@ -675,13 +748,13 @@ type BlockComponentProps = {
   className?: string
   slots: Record<string, ReactNode>  // rendered children per slot
   attributes: Record<string, string>                 // spread on the root element
-  slotAttributes: Record<string, Record<string, string>> // spread on each slot's container
+  partAttributes: Record<string, Record<string, string>> // by slot or part name: spread on its element
   mode: 'site' | 'canvas'
 }
 ```
 
 - Spread `attributes` on the root element. In the canvas it holds `data-block-id`, which the editor needs to select and measure the block.
-- Spread `slotAttributes[slot]` on the element that holds a slot's children. For a slot with `styles: true` it also carries the slot's `className` (see [Classes on slots](#classes-on-slots)), so spread it after any `className` you set on that element, or join the two.
+- Spread `partAttributes[slot]` on the element that holds a slot's children. For a part (a slot with `styles: true`, or a name in `parts`) it also carries the part's `className` (see [Classes on inner elements](#classes-on-inner-elements)), so join it with any `className` you set on that element. Components written for 0.2 that read `slotAttributes` still work: it is the same object.
 - Props are plain data. A component can be a client component (`'use client'`).
 - Use one components map for the site and the canvas, in a file without server code:
 
@@ -729,7 +802,7 @@ With Next's Cache Components (`cacheComponents: true` in `next.config`), a route
 
 ## Server components in the canvas
 
-Some block components load their own data: a model grid that calls `payload.find`, a review carousel, a blog listing, a FAQ from a collection. They are async server components, and they import Payload and your config. The canvas iframe is a client page, so it cannot import them. The canvas sends these blocks to a server action in the canvas route instead. The action renders them with your site's components and sends back the result as React Server Component output. Client components inside it (a carousel, a lightbox) work in the canvas as on the site. You do not change your components.
+Some block components load their own data: a model grid that calls `payload.find`, a review carousel, a blog listing, a FAQ from a collection. They are async server components, and they import Payload and your config. The canvas iframe is a client page, so it cannot import them. The canvas sends these blocks to a server action in the canvas route instead. The action renders them with your site's components and sends back the result as React Server Component output. Client components inside it (a carousel, a popup) work in the canvas as on the site. You do not change your components.
 
 You keep two component maps:
 
@@ -951,6 +1024,7 @@ import { defaultBlocks, defineBlock, linkField } from 'payload-canvas/blocks'
 export const pricingTable = defineBlock({
   type: 'pricingTable',
   label: 'Pricing table',
+  description: 'A price card with a button.', // the block library's tooltip, for editors
   icon: 'grid',               // a name from the editor's icon set; unknown names get a generic icon
   category: 'Marketing',      // group in the block library
   fields: [
@@ -970,30 +1044,103 @@ export const pricingTable = defineBlock({
 export const blocks = [...defaultBlocks({ linkCollections: ['pages'] }), pricingTable]
 ```
 
+- `description` is one short plain sentence for editors. The block library shows it as the tooltip. Without it, the tooltip shows only the label. The library search also reads `ai.description`. Keep code and syntax out of it: those go in `ai.description`.
 - `slots` declares where child blocks go. `allow` lists the accepted block types, or `['*']`. `max` caps the number of direct children: a full slot refuses insert, move, paste and duplicate (also from MCP and the assistant), and the canvas offers no drop target or "+" there. `min` is the fewest children: fewer block **Publish** but not draft saves.
-- `inline: true` says the block renders no link, button or other control of its own (an icon, a badge, a rating). Such a block may go directly inside a `link` block, whose content slot sets `allowInline: true`. A slot of your own can set `allowInline: true` too. `websiteBuilder` and `builderMcpTools` add the inline types to those slots' `allow` lists (`withInlineBlocks`); a slot's `disallow` still wins. Blocks without `inline` stay out of links. Your own block list does not get this change. When a seed or a test calls `validateLayout` with it, run `prepareBlocks(blocks, listCollections)` from `payload-canvas/blocks` first: it applies `withInlineBlocks` and turns the collection list's `collection` and `ids` into a select and a relationship of `listCollections` (the collections with a `url`, then the plugin's `listCollections` option), as `websiteBuilder` does.
-- `parents` limits where a block may go: only directly inside the listed block types (never in the root list). The `listItem` block uses `parents: ['list']`. A new block whose slot accepts exactly one such type starts with one child of it, so a new list starts with one item.
+- `inline: true` says the block renders no link, button or other control of its own (an icon, a badge, a rating). Such a block may go directly inside a `link` block, whose content slot sets `allowInline: true`. A slot of your own can set `allowInline: true` too. `websiteBuilder` and `builderMcpTools` add the inline types to those slots' `allow` lists (`withInlineBlocks`); a slot's `disallow` still wins. Blocks without `inline` stay out of links. `validateLayout` applies the same rule itself, so a seed or a test can check a layout against your own block list. To check a collection list's picked `ids` as a relationship, give that list `defaultBlocks({ listCollections })`, as the plugin does with the collections that have a `url`.
+- `parents` limits where a block may go: only directly inside the listed block types (never in the root list). The `listItem` block uses `parents: ['list']`. A new block whose slot accepts exactly one such type starts with children of it: the slot's `min`, or one. So a new list starts with one item, and new tabs start with two tabs.
 - `classes`: classes your component uses itself that your site's CSS does not have. Components in your app need no list: Tailwind finds their classes in your files, and the site's CSS has them on the site and on the canvas. List classes only for a component in a package that your CSS entry does not scan (no `@source` for it). The generated CSS styles only elements with the class `builder-css` (`BUILDER_CSS_CLASS` from `payload-canvas/blocks`), so add that class to each element that uses the listed classes. The built-in Menu block does this for its toggle, panel and links.
 - Block fields keep Payload's `validate`, `hooks` and `access`. See [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields).
-- `admin.custom.builderClasses: true` on a top-level `text` field says the prop holds Tailwind classes, for example a carousel's `arrowClassName`. The save hook and the canvas compile its values (in every locale) and its `defaultValue`, like `className`. The renderer adds the `builder-css` marker to the value and fills a missing one with the default, so the component uses `props.arrowClassName` as it is. Clearing the prop (`null`) leaves it empty. The MCP tools and the assistant list such props as holding Tailwind classes.
-
-  ```ts
-  { name: 'arrowClassName', type: 'text', defaultValue: 'size-10 rounded-full bg-white/80', admin: { custom: { builderClasses: true } } }
-  ```
-
+- `parts` names inner elements that take classes of their own, for example a carousel's arrows. See [Classes on inner elements](#classes-on-inner-elements).
 - `admin.custom.builderFormat` on a `text` field names a value check, for example `custom: { builderFormat: 'videoUrl' }` (the Video block's URL). The inspector shows the message while the user types, and a bad value blocks **Publish** but not draft saves. `videoUrl` is the only built-in format. Formats live in a registry in `payload-canvas/core` (`FORMATS`, `formatProblem`). The renderer can use the same parser (`parseVideoUrl`).
 - `linkField()` stores `{ type, url, reference, newTab }`. The component receives it resolved, with `href`, `target` and `rel`.
-- The default blocks are `stack`, `grid`, `heading`, `text`, `richText`, `image`, `video`, `button`, `link`, `menu`, `list` with its `listItem` blocks, `quote`, `divider`, `spacer`, `collectionList` (documents from a collection), `field` (a field of the document a template renders) and `repeat` (the rows of an array or hasMany field of that document).
+- The 15 default blocks are `stack`, `grid`, `heading`, `text`, `richText`, `image`, `video`, `button`, `link`, `menu`, `list` with its `listItem` blocks, `divider`, `collectionList` (documents from a collection), `field` (a field of the document a template renders) and `repeat` (the rows of an array or hasMany field of that document).
+- Field help in the inspector stays short. Put syntax and examples for agents in the field's `custom.ai.description`, and a hint inside an empty input in `admin.placeholder` (the inspector shows it).
 - Props worth knowing on the default blocks:
-  - `image`: `priority` (load first: `loading="eager"` and `fetchpriority="high"`, for the hero image) and `sizes` (the HTML `sizes` attribute, for example `(min-width: 768px) 50vw, 100vw`). The media's focal point (`focalX`, `focalY`) sets `object-position`, so a cropped image keeps its subject. Payload's default 50/50 counts as unset, so an `object-position` class (`object-top`) sets the crop of a photo whose focal point nobody moved. Limit: a focal point set to exactly 50/50 loses to such a class.
+  - `image`: `priority` (load first: `loading="eager"` and `fetchpriority="high"`, for the hero image; the first image of the first section gets it unless switched off, see `priorityImages`) and `sizes` (the HTML `sizes` attribute, for example `(min-width: 768px) 50vw, 100vw`). The media's focal point (`focalX`, `focalY`) sets `object-position`, so a cropped image keeps its subject. Payload's default 50/50 counts as unset, so an `object-position` class (`object-top`) sets the crop of a photo whose focal point nobody moved. Limit: a focal point set to exactly 50/50 loses to such a class.
   - `heading`: `accent`, words of the text to highlight. They render as `<em>`. Style them with classes on the heading, for example `[&_em]:text-primary [&_em]:not-italic`.
-  - `stack`: `as` also takes `ol`, `ul`, `li`, `dl`, `dt`, `dd`, `figure`, `figcaption`, `p` and `span`, for lists, term lists and captions.
-- The `menu` block folds its links into a "Menu" button and a panel on small screens. Set `ctaLabel` and `cta` (a link) to add a button as the last row of that panel, for example the header's call to action, which a header hides on phones. The inline links, and so the wide-screen header, do not change. `toggleLabel` is the text of the menu button (default "Menu").
+  - `stack`: `as` (the inspector's **Tag**) also takes `ol`, `ul`, `li`, `dl`, `dt`, `dd`, `figure` and `figcaption`, for lists, term lists and captions. It takes no `p` or `span`: those cannot hold block children such as a heading.
+- The `menu` block folds its links into a "Menu" button and a panel on small screens. Set `ctaLabel` and `cta` (a link) to add a button as the last row of that panel, for example the header's call to action, which a header hides on phones. The inline links, and so the wide-screen header, do not change. `toggleLabel` is the text of the menu button (default "Menu"). The menu's labels (`label`, `toggleLabel`, `submenuLabel`) store nothing until someone types one: empty, they use the site's labels (`builtinComponents({ labels: { menu } })`, see [Labels](#labels)) or English. The panel and dropdown colours read the theme's CSS variables (`--color-background`, `--color-foreground`, `--color-border`, `--color-primary`) with the system colours as the fallback, so the menu needs no particular design system.
 - A `menu` item can have `children`: one level of links (`label`, `link`) in a dropdown. The item's own link is optional. With a link, the item shows the link and a small arrow toggle beside it, which screen readers hear as `submenuLabel` (default "{label} menu", localized). Without a link, the label is the toggle. The dropdown is a native `<details>`: Enter and Space open it, Escape closes it and returns the focus to the toggle, and it closes when the focus or a click leaves it. Opening one closes the others. A current child gets `aria-current="page"` and its parent `aria-current="true"`. In the small-screen panel the children show as a nested list. Its classes are in `MENU_CLASS_MAP` (`submenu`, `submenuToggle`, `submenuList`, `submenuLink`, `panelSubList`, `panelSubLink`); restyle them from the menu's `className`, for example `[&_li>details>ul]:rounded-lg`. Items without children render as before.
 - The `field` block renders rich text with the `prose` typography (and `max-w-none`) when its own `className` has no `prose` class. Add `prose prose-lg` or another `prose` class to take control.
-- `field` `format` formats a number, date or text with a binding formatter (`BINDING_FORMATTERS`): `currency:AUD` gives `$1,200`, `number` gives `1,200`, `date:en-AU:Australia/Brisbane` gives a date in that language and time zone (in a `<time>` element), and `firstSentence` the first sentence. An unknown format, or a value the formatter cannot read, renders as without `format`. Rich text and uploads ignore it. `formatBindingValue(value, format)` in `payload-canvas/core` does the same.
-- `field` and `richText` `headingIds: true` give each rich-text heading an `id` from its text, for `#id` links: `headingId('Über uns & Preise')` is `uber-uns-preise`. A repeated text gets `-2`, `-3`, and a heading without letters or digits gets `section`. `richTextHeadings(value)` in `payload-canvas/core` lists the headings with the same ids (`{ id, text, level }`), for a table of contents.
+- `field` `path` takes a binding formatter after a `|` (see "Binding syntax"): `price|currency:EUR` gives `€1,200`, `publishedAt|date:en-GB` a date in that language, `content|readingTime` gives `5 min read`. The inspector edits it with the **Format** select under the field. `formatBindingValue(value, "currency:EUR")` in `payload-canvas/core` formats a value the same way.
+- `field` and `richText` give each rich-text heading an `id` from its text, for `#id` links and the [table of contents](#table-of-contents): `headingId('Über uns & Preise')` is `uber-uns-preise`. A repeated text gets `-2`, `-3`, and a heading without letters or digits gets `section`. `richTextHeadings(value)` in `payload-canvas/core` lists the headings with the same ids (`{ id, text, level, node }`). Two rich texts on one page with the same heading text give two elements the same id; the first one wins a `#id` link.
 - A list holds its items as `listItem` blocks in its `items` slot, so each item can be selected, dragged, styled and edited on the canvas. Enter at the end of an item adds the next one; Backspace at the start of an item joins it to the one before. Older layouts stored the items as a prop (`props.items: [{ text }]`). `normalizeLayout` turns them into `listItem` blocks when a layout loads, and the List component still renders the old prop until the layout is saved again. A list whose `items` prop is bound to document data keeps the old form. A `listItem` takes an optional `link` (the same link group as `button`): the item renders as `<li><a href>text</a></li>`, and the text stays editable in place. Do not set it on items of a list inside a `link` block, because a link cannot hold another link; the item's link is a prop, so the link block's type rules do not catch it.
+
+### Where a block renders: `useCanvasMode()`
+
+A block component can render differently in the editor. `useCanvasMode()` from `payload-canvas/react` tells a client component where it renders:
+
+- `'site'`: the live website. This is the value on any page without the canvas.
+- `'canvas'`: the editor's canvas iframe.
+- `'thumbnail'`: the hidden canvas that takes the pictures of the section library.
+
+Use it to keep heavy work out of the editor. This 3D block shows a still poster in a thumbnail, and pauses its animation loop on the canvas:
+
+```tsx
+'use client'
+import { useEffect, useRef } from 'react'
+import { useCanvasMode, type BlockComponentProps } from 'payload-canvas/react'
+import { startScene } from '@/lib/scene' // your WebGL code: returns { pause(), resume(), dispose() }
+
+export function ProductScene({ props, className, attributes }: BlockComponentProps) {
+  const mode = useCanvasMode()
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const poster = (props.poster as { url?: string } | undefined)?.url
+
+  useEffect(() => {
+    if (mode === 'thumbnail' || !canvasRef.current) return
+    const scene = startScene(canvasRef.current)
+    // On the canvas the scene draws one frame and stops, so the editor stays fast.
+    if (mode === 'canvas') scene.pause()
+    return () => scene.dispose()
+  }, [mode])
+
+  if (mode === 'thumbnail') return <img {...attributes} className={className} src={poster} alt="" />
+  return <canvas {...attributes} ref={canvasRef} className={className} />
+}
+```
+
+A server component cannot call hooks. When the canvas renders a block on the server (see [Server components in the canvas](#server-components-in-the-canvas)), the component gets the same value as its `canvasMode` prop: `'canvas'` or `'thumbnail'`. On the site the prop is missing. A component made with `fromPayloadComponent` gets it as `builder.canvasMode`, so a `{ block, context }` component can pass it on: `props: (block, context, builder) => ({ block, context: { ...context, mode: builder.canvasMode ?? 'site' } })`. Client components inside a server block call `useCanvasMode()` as usual.
+
+### Interactive blocks on the canvas
+
+A tab, a slide or a popup keeps some content out of view. On the canvas, an editor must still reach that content, and must still use the block's buttons. `payload-canvas/react` has three tools for this:
+
+- `useCanvasReveal(ref, onReveal)`: calls `onReveal(target)` when the editor selects a block inside the element of `ref` (on the canvas or in Layers), or that element itself. Show the hidden part there: open the item, scroll to the slide, pick the tab. Only the canvas sends the event, so on the site it never fires.
+- `REVEAL_EVENT` (`'builder:reveal'`): the DOM event behind the hook. The canvas sends it from the selected block's element, and it bubbles. Listen for it yourself in code that is not a React component.
+- `CANVAS_CONTROL_ATTRIBUTE` (`'data-builder-control'`): put it on the block's controls (arrows, dots, tab buttons, a close button). On the canvas a click on such an element works as on the site and selects nothing. The hover outline and the "+" do not show over it.
+
+What the canvas does when a block is selected: it opens every closed `<details>` around the block, sends the reveal event from the block's element, and after two animation frames scrolls the block into view. When the selection is cleared (Escape), it sends the reveal event from `<html>`, outside every block, so a box that closes when the editor selects something outside it closes then too. So a native `<details>` needs no code. A block that moves its content with CSS transforms (a slider) can send `element.dispatchEvent(new Event('scroll'))` after each move, so the canvas measures the block outlines again.
+
+A "Read more" block that hides part of its content:
+
+```tsx
+'use client'
+import { useRef, useState } from 'react'
+import { CANVAS_CONTROL_ATTRIBUTE, useCanvasReveal, type BlockComponentProps } from 'payload-canvas/react'
+
+const CONTROL = { [CANVAS_CONTROL_ATTRIBUTE]: '' }
+
+export function ReadMore({ attributes, className, partAttributes, slots }: BlockComponentProps) {
+  const root = useRef<HTMLDivElement>(null)
+  const [open, setOpen] = useState(false)
+  // The editor selected the block or a block in its hidden part: show it.
+  useCanvasReveal(root, () => setOpen(true))
+  return (
+    <div {...attributes} ref={root} className={className}>
+      <div {...partAttributes.more} hidden={!open}>{slots.more}</div>
+      {/* On the canvas the button opens and closes the part, as on the site. */}
+      <button {...CONTROL} type="button" aria-expanded={open} onClick={() => setOpen(!open)}>
+        {open ? 'Show less' : 'Read more'}
+      </button>
+    </div>
+  )
+}
+```
+
+The built-in carousel, popup and tabs use the hook and mark their controls. The disclosure and the accordion are native `<details>`, so the canvas opens them by itself.
+
+A box that shows over the page on the canvas (an open popover, such as the built-in popup) is a layer. The canvas measures each one (`CanvasMeasurement.layers`) and marks the blocks inside it. Over a layer, the hover outline, selection, the "+" and drops reach only the layer's blocks, never the page under it. A click on the layer's padding selects its block. A click on its backdrop works as on the site and selects nothing. `reachableAt(measurement, point)` in `payload-canvas/core` gives the blocks and slots a point can reach.
 
 ### Validation, hooks and access on block fields
 
@@ -1043,7 +1190,7 @@ Limits:
 
 ### Built-in blocks
 
-Some blocks most sites need come with the plugin, but they are off until you add them: `icon`, `disclosure`, `accordion`, `lightbox`, `carousel`, `tableOfContents`, `filterLink` and `mediaBackdrop`. Add the definitions next to `defaultBlocks()`, and the components next to yours:
+Some blocks most sites need come with the plugin, but they are off until you add them: `icon`, `disclosure`, `accordion`, `popup`, `tabs` (with its `tab` blocks), `carousel`, `marquee`, `tableOfContents`, `filterLink`, `adjacentLinks` (previous / next) and `embed` (custom HTML). (The live saved section block, `sectionRef`, is not one of them: the plugin adds it, see [Live saved sections](#live-saved-sections-sectionref).) Add the definitions next to `defaultBlocks()`, and the components next to yours:
 
 ```ts
 // src/builder.ts
@@ -1052,7 +1199,7 @@ import { ICON_NAMES } from './icons/names'
 
 export const blocks = [
   ...defaultBlocks({ mediaCollection: 'media' }),
-  ...builtinBlocks({ include: ['icon', 'carousel', 'lightbox'], icons: ICON_NAMES }),
+  ...builtinBlocks({ include: ['icon', 'carousel', 'popup'], icons: ICON_NAMES }),
 ]
 ```
 
@@ -1061,14 +1208,36 @@ export const blocks = [
 import { builtinComponents, type BlockComponents } from 'payload-canvas/react'
 import { icons } from './icons'
 
-export const components: BlockComponents = { ...builtinComponents({ icons }), pricingTable: PricingTable }
+// Call it once, at module level.
+export const components: BlockComponents = { ...builtinComponents({ icons, labels }), pricingTable: PricingTable }
 ```
 
-- Without `include`, `builtinBlocks()` adds all of them (`icon` only when you give `icons`).
+- Without `include`, `builtinBlocks()` adds all of them (`icon` only when you give `icons`, `embed` only when you give `embed`).
 - The MCP tools and the AI assistant read the same `blocks` list, so they see each built-in you include, with its description and example.
-- Every built-in takes its look from `className`. The definitions have plain `defaultClassName`s without colours. Elements inside a built-in have `data-*` attributes, so you style them from the block's `className` with variants such as `[&_[data-carousel-arrow]]:size-11`.
+- Every built-in takes its look from `className`. The definitions have plain `defaultClassName`s without colours. Inner elements that have their own entry in the **Style target** select are parts (see [Classes on inner elements](#classes-on-inner-elements)). The other inner elements have `data-*` attributes, so you style them from the block's `className` with variants such as `[&_[data-page-gap]]:opacity-50`.
 - **Replace a built-in** with your own block of the same type: leave it out of `include` and add your block. Block types must be unique, so the plugin refuses both at once. In the components map, a key of yours with the same type wins over `builtinComponents()`.
-- `builtinComponents()` returns every built-in component. To keep the code of blocks you do not use out of the client bundle, import single components instead (`Carousel`, `Lightbox`, …, and `iconComponent(icons)`).
+- `builtinComponents()` returns every built-in component. The interactive ones (carousel, popup, tabs, accordion, filter link) load their JavaScript only on pages that render them, so blocks you do not use cost nothing on the page. The marquee and previous / next are server components with no JavaScript.
+- For a photo that opens large, use a popup with a small image in its trigger and the large image in its content. For a background, put an `image` or `video` block first in a stack with `relative isolate`, and give the media `absolute inset-0 -z-10 size-full object-cover`.
+
+#### Labels
+
+The carousel, popup, tabs, table of contents, previous / next and menu have labels: the text of their controls and their names for screen readers ("Next slide", "Close", "Tab {n}", "On this page", "Previous and next", "Menu"). A new block stores none of them. An empty label uses the site's label, else the English one, which the empty input shows as its placeholder. Set the site's labels once, for example in its language:
+
+```ts
+const labels = {
+  carousel: { label: 'Karussell', previousLabel: 'Vorherige Folie', nextLabel: 'Nächste Folie', dotLabel: 'Folie {n}' },
+  popup: { closeLabel: 'Schließen' },
+  tabs: { tabLabel: 'Reiter {n}' },
+  tableOfContents: { label: 'Auf dieser Seite' },
+  adjacentLinks: { label: 'Vorheriger und nächster Beitrag' },
+  menu: { label: 'Hauptmenü', toggleLabel: 'Menü', submenuLabel: 'Untermenü {label}' },
+} satisfies BuiltinLabels
+builtinComponents({ labels })
+```
+
+- One block can still have its own label: type it in the block's props (under **Labels** for control labels). Label props are localized.
+- With `menu` labels, the map also holds a `menu` component (the default menu with those labels). A `menu` component of yours that comes after it in the map wins.
+- The English defaults are exported: `CAROUSEL_LABELS`, `POPUP_LABELS`, `TABS_LABELS`, `TABLE_OF_CONTENTS_LABELS`, `ADJACENT_LINKS_LABELS` and `MENU_LABELS` from `payload-canvas/blocks`.
 
 #### Icon
 
@@ -1087,86 +1256,126 @@ export const icons = { arrowRight: ArrowRight, check: Check, close: Close } sati
 - Each icon component gets `className`, the ARIA attributes and, on the canvas, the editor attributes. Spread its props on the `<svg>`.
 - An unknown name renders nothing on the site and a note on the canvas.
 
-**Icons on buttons.** Give `defaultBlocks()` the same names, and the `button` block gets three props: `icon` (optional, one of the names), `iconPosition` (`start` or `end`, default `end`) and `iconClassName` (the icon's classes, default `size-4 shrink-0`). `builtinComponents({ icons })` includes a `button` component that draws the icon; `buttonComponent(icons)` is that component alone. The icon is decoration (`aria-hidden="true"`): the label names the button. With an icon, the label sits in its own `<span>`. A button without an icon renders as before. Without icon names the button has no icon props, and the default `Button` component ignores them.
+**A button with an icon.** Put a `text` block and an `icon` block in a `link` block. An icon is an inline block, so it may go straight into a link. Give the link the button's classes (`inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2`). The `button` block has no icon props.
 
-```ts
-...defaultBlocks({ mediaCollection: 'media', icons: ICON_NAMES }),
-```
 
 #### Disclosure and accordion
 
 `disclosure` is one show/hide item: a native `<details>` with a `summary` slot (always visible) and a `content` slot. It opens with the mouse and the keyboard without script, and the closed content stays in the HTML for search engines. `accordion` is a list of disclosures in its `items` slot (also a `repeat` or `collectionList` of disclosures). Include both: `include: ['disclosure', 'accordion']`.
 
-- `disclosure` props: `open` (open at first) and `animate` (the height opens in 300 ms, in CSS only; off with reduced motion, and in browsers without `::details-content`). The canvas always shows it open.
+- `disclosure` props: `open` (open at first) and `animate` (the content grows and fades in, in 200 ms, in CSS only; off with reduced motion, and in browsers without `::details-content`).
+- On the canvas it starts open or closed as on the site. A click on the title opens or closes it, a double-click edits the title text, and selecting a block inside opens it.
 - The summary slot refuses links, buttons and other controls: a `<summary>` is the button.
 - Style the summary row with `[&>summary]:` classes and the content with `[&>div]:` classes on the disclosure. `open:` and `group-open:` classes style the open state, for example `group-open:rotate-45` on an icon in the summary.
-- `accordion` props: `multiple` (default on; off keeps one item open, with the browser's exclusive `<details name>`) and `faqSchema` (default on).
-- FAQPage JSON-LD: `faqItems(layout, blocks)` from `payload-canvas/blocks` reads the questions (summary text) and answers (content text) of the accordions with `faqSchema` on. Call it after `loadLayoutData`, so bound props, `field` blocks, repeats and collection lists hold the document's values. `faqJsonLd(items)` turns them into the JSON-LD object (null without items):
+- `accordion` props: `multiple` (default on; off keeps one item open, with the browser's exclusive `<details name>`) and `faqSchema`, **Mark up as FAQ for search engines** (default off). Turn it on only for real questions and answers: search engines treat FAQ markup on other content as spam.
+- FAQPage JSON-LD: `RenderLayout` outputs it on the site by itself. When an accordion in the layout has `faqSchema` on, the layout renders one `<script type="application/ld+json">` with the questions (summary text) and answers (content text), with `<` escaped. Bound props, `field` blocks, repeats and collection lists give the document's values. Nothing is output on the canvas, or when no accordion opts in.
+- `<RenderLayout faqJsonLd={false} />` turns it off, for a site that writes its own. `faqItems(layout, blocks)` and `faqJsonLd(items)` from `payload-canvas/blocks` build the same data, for example to merge the FAQs of several layouts into one script:
 
 ```tsx
 const items = [layout, templateLayout].flatMap((value) => faqItems(value, blocks))
 const jsonLd = faqJsonLd(items)
 // <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }} />
+// and <RenderLayout faqJsonLd={false} … /> for those layouts
 ```
 
-#### Lightbox
+#### Popup
 
-`lightbox` is a container whose images open full screen. Lay out the images with its `className` (a grid by default), or put a `repeat` of images in it (path `galleryImages`, the image bound to `$item`).
+`popup` is a button that opens a box over the page: a video, a large photo, a form. Its `trigger` slot is what the visitor clicks (a text, an icon, a small image). Its `content` slot is the box. The content stays in the HTML for search engines.
 
-- A click on an image, or Enter or Space on a focused image, opens it in a native modal `<dialog>`. The dialog keeps the focus inside, makes the page inert, closes on Escape and gives the focus back. Arrow keys and the arrow buttons step through the images. On touch screens a sideways swipe steps too: left for the next photo, right for the previous one (pointer events, at least 50 px and more sideways than down; a mouse drag does not swipe). A click beside the photo closes it.
-- The images get `tabindex="0"`, `role="button"` and `aria-haspopup="dialog"`. Images inside a link or a button keep that element as the control.
-- Props: `label` (the dialog's name for screen readers, default "Photos"), `group` (lightboxes with the same group on a page open as one set) `captions` (shows the alt text under the photo; screen readers always hear "2 of 6") and `count` (default on: shows "2 of 6" at the top left when the set has more than one photo).
-- A set holds each photo once: two images with the same `src` attribute are one photo. An image with `data-lightbox-skip` (on the image or an element round it; `LIGHTBOX_SKIP_ATTRIBUTE`) is not in the set, but a click on it opens the set at the photo with the same `src`. Example: an image switcher puts its thumbnails and its large photo in one lightbox and skips the large photo, so the lightbox opens on the photo shown large and steps through the thumbnails.
-- When it closes, the lightbox sends a bubbling `lightbox-close` event (`LIGHTBOX_CLOSE_EVENT`) to the page image of the photo it showed last; `detail.index` is the photo's place in the set.
-- Motion: the dialog and its backdrop fade in (320 ms, ease-out) while the photo grows from 96%; a step slides the old photo out and the new one in (260 ms); closing fades out (200 ms), also on Escape. Under reduced motion only the fades stay. A photo that has not loaded after 150 ms shows a spinning ring.
-- The large photo is the image the page already loaded, with its `srcset` and `sizes="100vw"`, so the browser picks a larger file when it has one.
-- Style the dialog from the block's `className`: `[&_dialog]:` for its text colour and backdrop (`[&_dialog]:backdrop:bg-black/85`), `[&_[data-lightbox-button]]:` for the close, previous and next buttons (`data-lightbox-button` is `close`, `previous` or `next`) `[&_[data-lightbox-photo]]:` for the large photo (during a step the leaving photo has `data-lightbox-photo="leaving"`), `[&_[data-lightbox-count]]:` for the photo number and `[&_[data-lightbox-loading]]:` for the loading ring (its colour is the text colour). The component sets only position and size.
-- The canvas never opens it, so a click selects an image there.
-- Control labels, under **Labels** in the Content tab (localized, English defaults): `closeLabel` ("Close"), `previousLabel` ("Previous photo"), `nextLabel` ("Next photo") and `countLabel` ("{n} of {count}", the photo number). An empty label uses the default.
+- The box is a native modal `<dialog>`. It keeps the focus inside and makes the page inert. Escape, the close button and a click beside the box close it, and the page does not scroll while it is open.
+- The trigger renders inside a `<button>`, so its slot refuses links, buttons, other controls, popups and tabs.
+- Props: `label` (the box's name for screen readers; empty: the first heading in the content) and `anchor`. With `anchor: 'newsletter'`, every link to `#newsletter` on the page opens the popup, and so does a page address that ends in `#newsletter`. With an anchor the trigger may stay empty: the site then renders no button.
+- Parts: the `trigger` and `content` slots, `panel` (the dialog box; `backdrop:` classes colour the backdrop, for example `backdrop:bg-black/60`) and `close` (the close button, placed absolutely in the panel). A new popup starts with a centred panel that fades and grows in (150 ms, `starting:opacity-0 starting:scale-95`; not with reduced motion) and a round close button.
+- **A photo that opens large.** Put a small image in the trigger and the large image in the content. Give the panel `max-w-5xl p-0` and the content `gap-0`.
+- On the canvas the box shows as on the site: centred over the page, with its backdrop. It opens when you click the trigger, or when you select the popup or a block inside it (on the canvas or in **Layers**). It is not modal: you select and edit the blocks in it as anywhere else, and a click on the box's padding selects the popup. Escape, the close button, a click on the backdrop and selecting a block outside it close it.
+- Control label, under **Labels** in the Content tab: `closeLabel` ("Close"). An empty label uses the site's label or the English one (see [Labels](#labels)).
+
+#### Tabs
+
+`tabs` shows one row of tab names and one panel at a time. Its `tabs` slot takes only `tab` blocks, at least two. A new tabs block starts with two. Each `tab` has a `label` (the tab name) and a `content` slot (its panel). Include `tabs`: it brings the `tab` block with it.
+
+- The first tab is open at first. It follows the WAI-ARIA tabs pattern: the arrow keys move between tabs (and wrap), Home and End jump to the first and last tab, and only the open tab is in the Tab order. Hidden panels stay in the HTML with `hidden`.
+- Props: `label` (the tab row's name for screen readers) and `vertical` (the tabs stand in a column; the up and down arrows move). For a column, lay out the block with `flex flex-row gap-8` and give the `list` part `flex flex-col`.
+- Parts: `list` (the row of tabs), `tab` (each tab button) and `panel` (each panel). The open tab has `aria-selected="true"`, so `aria-selected:` classes style it: a new tabs block starts with `aria-selected:border-current aria-selected:opacity-100`. A `tab` block's own `className` styles its own panel.
+- The panel that becomes visible fades in: a new tabs block's `panel` part starts with `transition-opacity duration-150 ease-out starting:opacity-0 motion-reduce:transition-none`. Change or remove those classes in the Styles panel.
+- On the canvas a click on a tab opens it, and selecting a block opens the tab that holds it.
+- Control label: `tabLabel` ("Tab {n}"), the name of a tab without a label. `{n}` is the tab number.
+
+#### Embed
+
+`embed` holds custom HTML: a booking widget, a map, a newsletter form from another service. It is off until you turn it on, because its code runs on your site:
+
+```ts
+builtinBlocks({ embed: {} }) // or include: [..., 'embed']
+// Only admins may change the code and the mode:
+builtinBlocks({ embed: { canEdit: ({ req }) => req.user?.role === 'admin' } })
+```
+
+- Props: `code` (HTML, edited in Payload's code editor), `mode` and `title`.
+- `mode: 'inline'` (**In the page**, the default) puts the HTML in the page. Its `<script>` tags run once the page loads: the browser runs those of the server's HTML, and the block runs them again after a page change in the app (it copies each script, so external scripts keep their order). This JavaScript loads only on pages with an inline embed.
+- `mode: 'isolated'` (**In its own frame**) shows the HTML in a sandboxed `<iframe srcdoc>`. Scripts, forms and links to new tabs work, but the code cannot reach your page or the visitor's session (no `allow-same-origin`). A frame does not grow with its content: give the block a height, for example `h-96` or `aspect-video`. `title` is the frame's name for screen readers (empty: "Embedded content", or the site's label `builtinComponents({ labels: { embed: { title } } })`).
+- The editor never runs the code. The canvas shows it in a frame with scripts off, with the page's styles for inline code. Empty code, or code with nothing to see (only scripts), shows a "Custom code" box.
+- Access: `embed.canEdit` is a Payload field access function on `code` and `mode` (as `access.create` and `access.update`). Default: everyone who may edit the document may change them. Users without it see the code read-only. MCP agents and the AI assistant act as their user, so the same rule applies to them. See [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields).
+- `embed.maxLength`: the longest code, in characters. Default 50,000 (`EMBED_MAX_LENGTH`). Longer code blocks **Publish**.
+
 
 #### Carousel
 
-`carousel` shows the blocks of its `slides` slot as slides. Each direct child is one slide: give it its width with its own `className` (`w-[85%] md:w-1/3`). A single `collectionList` or `repeat` child makes each of its items a slide.
+`carousel` shows the blocks of its `slides` slot as slides. It runs on [Embla Carousel](https://www.embla-carousel.com/). Each direct child is one slide. Set how many slides show at once with each slide's `className`: `basis-full md:basis-1/2` (or a width such as `w-[85%]`). A single `collectionList` or `repeat` child makes each of its items a slide: set the basis on the item. Any other single child is one slide.
 
-- Props: `mode` (`scroll`: a swipeable scroll-snap track; `fade`: the slides stack and fade), `arrows` (default on), `dots`, `loop`, `autoplay` (milliseconds, 0 is off) and `label` (the region's name, default "Carousel").
+- Visitors swipe or drag the slides, click the arrows or dots, or use the arrow keys when the carousel has the focus.
+- Props: `mode` (`scroll`: the slides slide sideways; `fade`: one slide fades into the next), `align` (**Slide position**: `start` or `center`, where the current slide sits when the slides are narrower than the carousel), `arrows` (default on), `dots`, `loop`, `autoplay` (milliseconds, 0 is off) and `label` (the region's name, default "Carousel").
+- Dots: one per stop, not one per slide. When two slides show at once, six slides have three dots.
 - The optional `previous` and `next` slots hold the content of the arrow buttons, for example an `icon` block. Empty, they show a chevron.
-- Accessibility: the carousel is a `<section>` region with `aria-roledescription="carousel"` and its label. Each slide is a group labelled "2 of 6". The scroll track takes the keyboard focus, and the arrow keys move one slide. In fade mode the hidden slides are `inert`. The track announces slide changes (`aria-live="polite"`) unless autoplay is running.
-- Autoplay shows a Pause button (WCAG 2.2.2), stops while the pointer is over the carousel and while it has focus, and never runs when the visitor asks for less motion. With reduced motion the arrows also jump instead of scroll smoothly.
-- Style it from the block's `className`: `[&_[data-carousel-track]]:` for the track (the gap between slides), `[&_[data-carousel-arrow]]:` for the arrows (`previous` or `next`; `:disabled` at either end without `loop`), `[&_[data-carousel-dot]]:` for the dots (the current dot has `aria-current="true"`), `[&_[data-carousel-controls]]:` for the row of controls and `[&_[data-carousel-pause]]:` for the pause button.
-- Control labels, under **Labels** in the Content tab (localized, English defaults): `previousLabel` ("Previous slide"), `nextLabel` ("Next slide"), `pauseLabel` ("Pause"), `playLabel` ("Play"), `dotLabel` ("Slide {n}"), `slideLabel` ("{n} of {count}") and the `aria-roledescription` names `carouselRole` ("carousel") and `slideRole` ("slide"). `{n}` is the slide number and `{count}` the number of slides. An empty label uses the default.
-- The arrows and dots appear after the script has counted the slides. On the canvas the slides always scroll and never autoplay, so each one can be selected.
+- Accessibility: the carousel is a `<section>` region with `aria-roledescription="carousel"` and its label. Each slide is a group labelled "2 of 6". The viewport takes the keyboard focus. The track announces slide changes (`aria-live="polite"`) unless autoplay is running.
+- Autoplay shows a Pause button (WCAG 2.2.2). It pauses while the pointer is over the carousel and while it has the focus, stops when the visitor swipes, and never runs when the visitor asks for less motion.
+- Style the inner elements as parts (`partClassName`, the **Style target** select): `slides` for the track (the gap between slides), `arrow` for both arrows (`disabled:` at either end without `loop`), `dot` for each dot (the current dot has `aria-current="true"`; its visible mark is its `::after`), `controls` for the row of controls and `pause` for the pause button. A new carousel starts with round bordered arrows and small round dots, in the text colour.
+- Control labels, under **Labels** in the Content tab: `previousLabel` ("Previous slide"), `nextLabel` ("Next slide"), `pauseLabel` ("Pause"), `playLabel` ("Play"), `dotLabel` ("Slide {n}"), `slideLabel` ("{n} of {count}") and the `aria-roledescription` names `carouselRole` ("carousel") and `slideRole` ("slide"). `{n}` is the slide number and `{count}` the number of slides. An empty label uses the site's label or the English one (see [Labels](#labels)).
+- On the canvas the arrows and dots work, the slides do not drag (you drag blocks there), fade shows as sliding, and autoplay is off. Selecting a block in a slide moves the carousel to that slide.
+- Carousels saved before the move to Embla render as they are.
+
+#### Marquee
+
+`marquee` is a row of logos or words that scrolls sideways without end. It is CSS only: a server component with no JavaScript. Each direct child of its `children` slot is one item; give images a fixed height (`h-8 w-auto`).
+
+- Props: `speed` (`slow`, `normal` or `fast`: 60, 35 or 20 seconds per round), `direction` (`left` or `right`) and `pauseOnHover` (default on; it also stops while a link in it has the focus).
+- The items render twice, so the row loops without a gap. The copy is hidden from screen readers and the keyboard. Keep the row wider than the screen: repeat a short list of items.
+- Space the items with margins in the `children` part (a new marquee has `*:mx-8`), not with a gap, so the loop does not jump.
+- The default `className` fades the edges with a mask, so it works on any background.
+- With reduced motion, and on the canvas, it stands still and the items wrap.
 
 #### Table of contents
 
 `tableOfContents` links to the H2 headings of a rich text field of the current document, for example the body of a post template. Bind its `content` prop to that field: `bindings: { content: 'content' }` (in the inspector, the bind button next to "Rich text"). It renders a `<nav>` of bare `<a href="#id">` links; style them with `[&>a]:` classes on the block.
 
 - Props: `content` (the rich text, usually bound), `minHeadings` (default 3; with fewer headings the block renders nothing) and `label` (the nav's name, default "On this page").
-- The ids come from `headingId(text)` in `payload-canvas/blocks`: lower case, accents dropped, other characters as hyphens, letters of every script kept ("Über uns?" becomes `uber-uns`). Give the headings of the rich text on the page the same ids. `lexicalHeadings(value, 'h2')` returns `{ id, text }` for each top-level heading.
-- Headings with the same text get their own ids: the second `rates-2`, the third `rates-3`, the same ids the rich text renders with `headingIds: true`.
+- The `richText` and `field` blocks give each heading on the page an id from its text (`headingId(text)` in `payload-canvas/core`): lower case, accents dropped, other characters as hyphens, letters of every script kept ("Über uns?" becomes `uber-uns`). So the links find the headings with no setting. Only top-level H2 headings with letters or digits are listed.
+- Headings with the same text get their own ids: the second `pricing-2`, the third `pricing-3`, the same ids the rich text renders.
 - On the canvas, with too few headings, it shows three sample links, so it can be selected and styled.
 
 #### Filter link
 
-`filterLink` is a link to the current page with one URL query value set, toggled or cleared. It pairs with a collection list's `queryFilters`: a filter link with `param: 'available'` and `value: 'today'` goes to `?available=today`, and the list filters by it. Its `children` slot holds the label (a text, an icon); links and controls are refused there.
+`filterLink` is a link to the current page with one URL query value set, toggled or cleared. It pairs with a collection list's `queryFilters`: a filter link with `param: 'category'` and `value: 'news'` goes to `?category=news`, and the list filters by it. Its `children` slot holds the label (a text, an icon); links and controls are refused there.
 
-- Props: `param`, `value` and `multiple`. An empty `param` clears every query value (the "All" link). An empty `value` clears its param. `multiple` adds or removes the value in a comma list (`?hair=blonde,red`) instead of replacing it. The page's other query values stay.
+- Props: `param`, `value` and `multiple`. An empty `param` clears every query value (the "All" link). An empty `value` clears its param. `multiple` adds or removes the value in a comma list (`?tag=css,react`) instead of replacing it. The page's other query values stay.
 - The current filter gets `aria-current="true"`. Style it with `aria-[current=true]:` classes.
 - A new filter starts the lists at page 1: the link drops `page`, and the `pageParam` of every paginated list in the same layout (`loadLayoutData` and the canvas give each filter link these as the runtime `$pageParams` prop). Limit: a list in another layout (a page region) is not known, so its own page param stays.
-- It is a client component that reads the browser's URL. The server renders a relative href (`?available=today`), so the link works before the script runs and search engines can follow it. The active state and the kept query values appear after hydration.
+- It is a client component that reads the browser's URL. The server renders a relative href (`?category=news`), so the link works before the script runs and search engines can follow it. The active state and the kept query values appear after hydration.
 - `filterHref(path, query, { param, value, multiple, pageParams })` in `payload-canvas/blocks` is the same rule as a pure function, for a server component of your own.
 - Send `noindex, follow` for filtered URLs.
 
-#### Media backdrop
+#### Previous / next
 
-`mediaBackdrop` puts a photo or a muted looping video behind the blocks of its `children` slot: a hero, a banner, a section with a background. The media and the optional overlay are absolutely placed first children; the block's `className` lays out the content. Keep `relative isolate` in it, so the media stays behind the content and inside the block.
+`adjacentLinks` (**Previous / next**) links to the previous and the next document of the same collection, at the end of a template: blog posts, case studies. It is a `<nav>` with two slots, `previous` and `next`. Each slot holds one collection list that finds its document with a value of the page's own document:
 
-- Props: `image` (a photo), `alt` (empty: decoration, as most backgrounds are), `video` (an upload) or `videoUrl` (a link to a video file), `poster` (empty: the photo), `priority`, `sizes` (default `100vw`) and `overlay`. Uploads come from `builtinBlocks({ mediaCollection })`, default `media`.
-- A video wins over the photo. It starts from script, muted and looping, and never plays when the visitor asks for less motion: the poster stays. It does not play on the canvas.
-- `priority` (the hero only): the photo loads eagerly with `fetchpriority="high"`; for a video the poster is preloaded with high priority.
-- The media focal point (`focalX`, `focalY`) sets `object-position`, unless it is Payload's default 50/50: then the block's `[&>[data-backdrop-media]]:object-top` (or other position) class sets the crop. The photo gets a `srcset` from the media sizes.
-- Media URLs render as stored. When the site serves them from another host or path (Payload stores absolute URLs when `serverURL` is set), map them: `builtinComponents({ mediaUrl: (url) => new URL(url, 'http://x').pathname })`. It applies to the photo, its sizes, the video upload and the poster, not to a typed `videoUrl`. `mediaBackdropComponent(mediaUrl)` is that component alone.
-- Style the media with `[&>[data-backdrop-media]]:` classes (blur, opacity) and the overlay with `[&>[data-backdrop-overlay]]:` classes (`[&>[data-backdrop-overlay]]:bg-black/40`).
-- No WebGL effects.
+- `previous`: `sort: '-publishedAt'`, `limit: 1`, `where: { publishedAt: { less_than: '$page.publishedAt' } }`.
+- `next`: `sort: 'publishedAt'`, `limit: 1`, `where: { publishedAt: { greater_than: '$page.publishedAt' } }`.
+
+`createdAt`, or any date or number field, works the same way. The list's `item` slot is the link: a `link` bound to `$url` around a text ("← Previous") and a heading bound to `title`. The starter's post template shows the full pattern (`apps/starter/src/data/sections/postTemplate.ts`).
+
+- On the site a side without a document renders nothing. With no document on either side, the whole block renders nothing. The canvas always shows both sides.
+- Parts: the `previous` and `next` slots. A new block puts the next link at the end (`ms-auto`).
+- Control label: `label` (the `<nav>`'s name, default "Previous and next").
 
 ## Using existing Payload blocks
 
@@ -1349,7 +1558,7 @@ export function TwoColumnComponent({ leftColumn, rightColumn, builder }: Payload
 }
 ```
 
-The `builder` prop holds `mode`, `className`, `slots` (rendered children by slot name) and `slotAttributes`. In the canvas, the adapter puts the block id on your component's first element. It adds no wrapper element, so the layout stays as on the site: container rules such as `space-y-8` and `divide-y` reach your elements. A component that renders nothing gets a small placeholder.
+The `builder` prop holds `mode`, `className`, `slots` (rendered children by slot name) and `partAttributes`. In the canvas, the adapter puts the block id on your component's first element. It adds no wrapper element, so the layout stays as on the site: container rules such as `space-y-8` and `divide-y` reach your elements. A component that renders nothing gets a small placeholder.
 
 ### Limitations
 
@@ -1438,7 +1647,15 @@ export const hero = defineSection({
 })
 ```
 
-`websiteBuilder` and `builderMcpTools` list each variant as a section of its own, right after its section: id `hero/split`, label "Hero (Split)", the section's category, and its description unless the variant has one. So the **Sections** tab shows a card for each version, and `listSections` lists the variant with `variantOf: "hero"`. `insertSection` and the assistant take the variant's id (`hero/split`). The empty-page suggestions show only the first version of each section. `defineSection` fills a variant's missing block ids as `<section id>_<variant id>_1`, `_2`, …, and throws when a variant has no `id` or `label` or two variants share an id. Variant blocks get their `defaultClassName` like section blocks. `sectionsWithVariants(sections)` (from `payload-canvas` or `payload-canvas/blocks`) is the same step for your own code, for example a seed. Saved sections have no variants.
+How the versions show up:
+
+- **Sections tab.** A section with variants is one card. The ‹ › arrows on its picture flip the card between the versions ("2 / 3"). A click or a drag inserts the version the card shows. Search also finds a section by a variant's label.
+- **Switch after the insert.** The root block of an inserted section remembers where it came from: `block.section = { id: 'hero', variant: 'split' }` (no `variant` for the section's own version). When you select that block, its action bar on the canvas shows ‹ Split ›. The arrows replace the section in place with the previous or next version, as one undo step. Text and images you changed come along: blocks pair by the same `id` in both versions first, then by type in order (the first heading with the first heading). Give a block the same `id` in each version to pair it exactly. The root block keeps its name and HTML id. Classes, animations and the structure come from the new version. Blocks you added inside the section are not carried over; undo brings them back. A translation stays only when the text it translates did not change.
+- **`variantLabel`** names the section's own version in the switch. Default "Default".
+- **MCP and the assistant.** `listSections` lists the variants under their section (`variants: [{ id, label, description?, outline }]`; `full: true` gives their `blocks`). `insertSection` takes `variant: "split"`. The old ids such as `hero/split` still work.
+- Only a section with one root block gets `block.section`: a section of several top-level blocks has nothing to switch. Saved sections have no variants, and "Save as section…" drops `block.section`.
+
+`defineSection` fills a variant's missing block ids as `<section id>_<variant id>_1`, `_2`, …, and throws when a variant has no `id` or `label` or two variants share an id. Variant blocks get their `defaultClassName` like section blocks. `sectionVersion(section, variant?)` (from `payload-canvas`) returns one version ready to insert, with `block.section` set, for your own code such as a seed. `sectionsWithVariants(sections)` still returns the old flat list (`hero/split` as a section of its own), but the plugin no longer uses it.
 
 The library shows each section as a real picture: the hidden canvas page (`?mode=thumbnail`) renders one section at a time with your components and theme, at a desktop width of 1280 px, and the editor keeps the picture in IndexedDB. A picture changes when the section, the theme or the block definitions change. Cards show a wireframe until their picture is ready, or when it fails.
 
@@ -1446,7 +1663,7 @@ The library shows each section as a real picture: the hidden canvas page (`?mode
 
 Editors save their own sections: select a block (a whole section, or any block with its children), open **…** on the canvas or in the inspector, and choose **Save as section…**. Give it a name and, if you like, a category. It appears in **Add › Sections** under **Saved**, for everyone who edits pages. Insert it like any section; every insert gets new block ids. The card's **…** menu edits, renames or deletes it. A deleted section stays on the pages that use it.
 
-**Edit section** (in the card's **…** menu) opens the section in the full-screen builder, like a page, at `/admin/builder/builder-sections/<id>`. The top bar shows "Section: <name>" and its category; click either to change it. **Back** returns to the page you came from. Sections have no drafts: each change saves to the section at once, and the library pictures follow on their own. Pages that already inserted the section keep their own copy. A change applies only to later inserts; the top bar says so ("Pages keep their copy"). The section's **Builder** tab in the admin opens the same view.
+**Edit section** (in the card's **…** menu) opens the section in the full-screen builder, like a page, at `/admin/builder/builder-sections/<id>`. The top bar shows "Section: <name>" and its category; click either to change it. **Back** returns to the page you came from. Sections have no drafts: each change saves to the section at once, and the library pictures follow on their own. Pages that already inserted the section as plain blocks keep their own copy: a change applies only to later inserts. Copies of a component (see [Components](#components-sections-with-properties)) follow every change. The section's **Builder** tab in the admin opens the same view.
 
 The collection stores the blocks in its `blocks` field. The builder edits a virtual `layout` field (no database column) that reads from `blocks`, and a save hook writes the layout back to `blocks`. While the section is open in the builder, the live session owns its blocks: a REST save of `blocks` gets the session's blocks, as on pages. Otherwise a REST or MCP save of `blocks` works as before.
 
@@ -1458,22 +1675,39 @@ A saved section runs the same field logic as a page save: the `beforeValidate` a
 
 An inserted section is a copy: later edits of the saved section do not reach the page. A `sectionRef` block shows a saved section **live** instead: the page renders the section's current blocks, so one edit changes every page that uses it. Use it for blocks many pages share, such as a call to action or a footer band.
 
-```ts
-...builtinBlocks({ include: ['sectionRef'] }), // `sectionsCollection` if you set `savedSections.slug`
-```
-
-- `builtinBlocks()` adds it only when `include` lists it, because it needs the plugin's saved sections. `builtinComponents()` has its component.
+- The plugin adds the block when saved sections are on (the default), pointed at their collection (`savedSections.slug`). Your own block list does not need it, and `defaultComponents` has its component. `loadLayoutData` reads the collection from the Payload config.
 - Prop: `section`, a relationship to the saved sections collection. It has no classes and no slots. On the site it renders the section's blocks with no element of its own.
-- `loadLayoutData` loads the sections first, so their lists, images, bindings and translations load like the page's own. The canvas does the same. Copies of the section's blocks get ids prefixed with the ref's id (`<ref id>_<block id>`). One level only: a `sectionRef` inside a saved section renders nothing, so a section never includes itself.
+- `loadLayoutData` loads the sections first, so their lists, images, bindings and translations load like the page's own. The canvas does the same. Copies of the section's blocks get ids prefixed with the ref's id (`<ref id>_<block id>`). A `sectionRef` inside a saved section loads too, up to 5 levels. A section never includes itself: saving one that would is refused, and such a ref renders nothing.
 - CSS: the save hook compiles only the page's own classes. Output the page CSS with `compilePageCss(payload, [{ layout: loaded }])` (from `payload-canvas/react/server`), with the layout `loadLayoutData` returned, so the section's classes are in it.
-- On the canvas the section's blocks show but cannot be edited there: a click selects the `sectionRef`. **Detach section** in its **…** menu replaces it with a copy of the blocks (new ids), as one undo step.
-- References: the saved section lists the pages that show it (**Used in**), and it cannot be deleted while a page uses it, as with media. Adding `sectionRef` to the blocks adds the saved sections collection to the references field: run `pnpm payload migrate:create` for production.
+- On the canvas the section's blocks show but cannot be edited there: a click selects the `sectionRef`. **Detach section** in its **…** menu replaces it with a copy of the blocks (new ids), as one undo step. A component's copy keeps its own values in the blocks.
+- A deleted section shows "Component not found" on the canvas and nothing on the site.
+- References: the saved section lists the pages that show it (**Used in**), and it cannot be deleted while a page uses it, as with media. With saved sections on, the references field also points at the saved sections collection: run `pnpm payload migrate:create` for production.
+
+#### Components (sections with properties)
+
+A component is a saved section with **properties**: the parts each copy may change, like a title, a text, an image, a link or whether a button shows. The design stays in one place: change the component, and every copy follows. This works like Webflow's components.
+
+**Make one.** Save a section, then open it with **Edit section**. Select a block and open its **Content** tab. Next to a text, rich text, image or link field, click the ◆ button (**Make it a property**) and give the property a name. The field now shows a **Property** chip; its own value is the default every copy starts with. The **Visible** row under the fields makes a property that shows or hides the block. Use the same name on two fields to fill both with one value. The **×** on the chip makes it a normal field again. A banner on top of the inspector says how many places use the component.
+
+**Use one.** Components are in **Add › Sections** under **Saved**, with a ◆ mark and "Component". A click or a drag adds a copy that stays in sync (a `sectionRef` block). Select it to see the component's properties as normal fields; an empty field shows the component's own content. **Edit component** opens the component; **Back** returns to the page. The card's **…** menu adds the component as plain blocks instead. A saved section without properties still goes in as plain blocks; its **…** menu adds a copy that stays in sync.
+
+**Detach.** **Detach section** in the copy's **…** menu turns it into plain blocks with the copy's values in them.
+
+How it is stored:
+
+- A property is a binding inside the saved section that reads `$component.<name>`, for example `bindings: { text: '$component.title' }` on a heading. The bindings are the only record of the properties: no extra field, no migration. The type comes from the bound field (`text`, `richText`, `image` for an upload, `link` for a link group), the default is the prop's own value. A visible property uses the binding key `$visible`: `bindings: { $visible: '$component.showButton' }`.
+- A copy stores its values in `props.values` of the `sectionRef` block, by property name. Images are stored as `{ relationTo, value }`, so the page's references and **Used in** count them.
+- `attachSections` (used by `loadLayoutData` and the canvas) puts the values into the section's blocks before the rest of the data loading, so it works on the site, on the canvas and in server-rendered blocks. A template string may mix both: `{{$component.title}} for {{title}}`.
+- `core`: `componentProperties(blocks, definitions)`, `applyComponentValues(blocks, values, definitions)`, `checkComponentValues(properties, values)`.
+- MCP and the assistant: `listSections` shows `component: true` and the `properties` (name, type, default). `insertSection` takes `values` and inserts a copy that stays in sync; `linked: false` inserts plain blocks with the values in them.
 
 ## Styling
 
 - **Classes.** Each block stores Tailwind v4 classes in `className`. Variants use normal Tailwind syntax: `md:flex-row`, `hover:bg-primary`, `dark:text-white`.
-- **Styles panel.** Visual controls for layout, spacing, size, position, typography, background, border and effects read and write classes. The breakpoint bar (`base`, `sm`, `md`, `lg`, `xl`, `2xl`) and the state bar (Default, Hover, Focus, Active) set the variant prefix. The **Classes** box accepts any class.
-- **Site classes.** The Styles panel lists your CSS entry's own static `@utility` classes (`type-h2`, `btn-primary`, `glass`) in a **Site classes** group, apart from Tailwind's classes. A click adds the class to the block, or removes it when the block has it, like typing it in **Classes**. Each button's tooltip shows the rule's CSS. A comment right above the rule sets a label and a group: `/* @canvas Buttons: Primary button */` (group "Buttons", label "Primary button") or `/* @canvas Primary button */` (a label only). Without a comment the button shows the class name. Classes from the files the entry imports count too, but not from packages in `node_modules`, and not functional utilities such as `tab-*`. `getStyleTokens()` returns them as `siteClasses` (`{ name, label?, group?, css }`). The MCP tool `listBlocks` and the assistant's prompt list them, so agents use the site's look.
+- **Styles panel.** Visual controls for layout, spacing, size, position, typography, background, border and effects read and write classes. The breakpoint bar (`base`, `sm`, `md`, `lg`, `xl`, `2xl`) and the state bar (Default, Hover, Focus, Active) set the variant prefix. A line under them says what the controls change: "Editing this block at all screen sizes", or "Editing .card at md · 768 px and wider" while you edit a class.
+- **The Classes field** at the top of the Styles tab holds every class the controls do not show. [Editable classes](#editable-classes) are solid chips: click one to edit that class. Other classes (`dark:pt-4`, a code `@utility` class) are quiet chips in monospace: click one to change it, or × to remove it. Classes that a control shows (`p-4`, `md:flex`) have no chip. The input at the end adds any class, with suggestions. The "⋯" menu has **New class from these styles…**, **Import from the site's CSS** and **Edit as text** (the whole class list as one text box).
+- **Hide a block.** The inspector's **Advanced** tab has **Hide at all screen sizes** (`block.hidden`): the site does not render the block. To hide it at some sizes only, use Styles → Layout → **Display** → **Hidden** at a breakpoint. Hidden at `md` writes `md:hidden`: the block hides at `md` and wider. To hide it only on small screens, set Hidden at **All sizes** and a display at `md`: `hidden md:flex`.
+- **Site classes.** The **Classes** field in the Styles panel suggests your CSS entry's own static `@utility` classes (`type-h2`, `btn-primary`, `glass`) before Tailwind's classes. When the input gets the focus, it lists them by group, without the ones the block has. Typing filters them by class name or label. After a typed variant such as `md:`, the input lists them again, and the picked class gets the variant, as when you type it. A site class on the block shows its label next to the class name, and its tooltip shows the rule's CSS. A comment right above the rule sets a label and a group: `/* @canvas Buttons: Primary button */` (group "Buttons", label "Primary button") or `/* @canvas Primary button */` (a label only). Without a comment the class shows by its name. Classes from the files the entry imports count too, but not from packages in `node_modules`, and not functional utilities such as `tab-*`. `getStyleTokens()` returns them as `siteClasses` (`{ name, label?, group?, css }`). The MCP tool `listBlocks` and the assistant's prompt list them, so agents use the site's look.
 
   ```css
   /* @canvas Buttons: Primary button */
@@ -1507,29 +1741,47 @@ export default function CanvasPage() {
 - **Theme variables in the canvas.** The canvas gets the Theme global from `<ThemeStyle live />` in its layout. If you set other variables at runtime, render the same tag in the canvas layout too.
 - **Standalone output** needs `outputFileTracingIncludes`. See [step 8](#8-add-the-standalone-tracing-lines).
 
-### Classes on slots
+### Classes on inner elements
 
-A slot that renders in an element of its own can take classes of its own: the `summary` and `content` of a disclosure, or the `empty` slot of a collection list. Set `styles: true` on the slot in the block definition. The classes live in `block.slotClassName`, by slot name.
+A block can let the user style some of its inner elements, not only its root: a carousel's arrows, a collection list's page links, the `empty` slot of a collection list. These elements are the block's **parts**. Each part's classes live in `block.partClassName`, by part name.
+
+There are two kinds of part:
+
+- A slot with `styles: true`: the element that holds the slot's children, for example the `summary` and `content` of a disclosure.
+- An entry of `parts`: any other element, for example the carousel's `arrow`. A part name must not be a slot name.
 
 ```ts
 defineBlock({
-  type: 'disclosure',
-  label: 'Disclosure',
+  type: 'gallery',
+  label: 'Gallery',
   fields: [],
-  slots: { summary: { label: 'Summary', styles: true }, content: { label: 'Content', styles: true } },
+  slots: { items: { label: 'Items', styles: true, defaultClassName: 'gap-4' } },
+  parts: { caption: { label: 'Caption', defaultClassName: 'text-sm text-muted-foreground' } },
 })
 ```
 
-```json
-{ "type": "collectionList", "className": "grid grid-cols-3 gap-6", "slotClassName": { "empty": "col-span-full text-center" } }
+```tsx
+function Gallery({ attributes, className, partAttributes, slots }: BlockComponentProps) {
+  return (
+    <figure {...attributes} className={className}>
+      <div {...partAttributes.items} className={['grid', partAttributes.items?.className].filter(Boolean).join(' ')}>{slots.items}</div>
+      <figcaption className={partAttributes.caption?.className}>A caption</figcaption>
+    </figure>
+  )
+}
 ```
 
-- The component gets the classes in `slotAttributes[slot].className`, with the `builder-css` marker. A component that spreads `slotAttributes[slot]` on the slot's element needs nothing else.
+```json
+{ "type": "collectionList", "className": "grid grid-cols-3 gap-6", "partClassName": { "empty": "col-span-full text-center", "pager": "flex gap-2" } }
+```
+
+- The component gets the classes in `partAttributes[name].className`, with the `builder-css` marker. Join them with the element's own classes.
+- `defaultClassName` on a part (or on a styled slot) gives a new block those classes, like the block's `defaultClassName`. Sections get them too (`withDefaultClassNames`).
 - The save hook and the canvas compile them like `className`.
-- In the Styles tab, a block with such slots shows a **Style target** select: **This block**, or one of its slots. The panel then edits that slot's classes.
-- An update merges per slot: `{ "type": "update", "id": "b_list01", "slotClassName": { "empty": "p-8" } }`. `null` or `""` removes a slot's classes.
-- `validateLayout` refuses classes on a slot without `styles: true`.
-- The built-in `collectionList` `empty` slot takes classes.
+- In the Styles tab, a block with parts shows a **Style target** select: **This block**, or one of its parts. The panel then edits that part's classes. A dot marks parts that have classes.
+- An update merges per part: `{ "type": "update", "id": "b_list01", "partClassName": { "empty": "p-8" } }`. `null` or `""` removes a part's classes.
+- `validateLayout` refuses classes on a name that is not a part. The MCP tools and the assistant list each block's `parts`.
+- Built-in parts: the collection list's `empty` slot, `pager` (the page links' `<nav>`) and `pageLink`; the carousel's `slides` slot (the track), `controls`, `arrow`, `dot` and `pause`; the menu's `link`, `submenu` (a dropdown box), `submenuLink` and `panel` (the small-screen panel); the disclosure's `summary` and `content`; the popup's `trigger` and `content` slots, `panel` and `close`; the tabs' `list`, `tab` and `panel`; the marquee's `children` slot; the previous / next block's `previous` and `next` slots.
 
 ### HTML attributes
 
@@ -1550,6 +1802,119 @@ Each block can carry three HTML attributes in `block.attrs`. Edit them in the in
 - Inserting a block with an id the layout already uses fails, and so does an update to such an id. A duplicate, a paste and a second copy of a section leave out the id. `validateLayout` reports a repeated id as a `constraint` problem, which blocks publishing.
 - Inside a collection list item or a repeat row, only the first item keeps the `id`. The other items leave it out, so the id stays unique on the page.
 - A Payload `blocks` field cannot store them, so the Advanced tab is hidden there.
+
+## Editable classes
+
+An editor changes a class once in the Styles panel, and every block that uses it changes, on every page, without a deploy. A class is a document of the plugin's **Classes** collection (slug `builder-classes`): a name such as `card`, Tailwind classes, and optional custom CSS. Blocks use it by name in their classes, next to Tailwind classes: `card md:col-span-2`.
+
+It is on by default. `websiteBuilder({ classes: false })` turns it off. Options: `classes: { slug?, sheetSlug?, access?, admin?, hooks? }`. Default access: signed-in users read, create, update and delete. The site never reads the collection; it loads the compiled stylesheet.
+
+**A class holds:**
+
+| Field | Holds |
+|---|---|
+| `name` | The class name, without the dot. Letters, digits, `-` and `_`, starting with a letter or `_`. It must not be a Tailwind class (`flex`, `shadow`, `prose`), and it is unique. A code `@utility` name of your site is allowed: the class replaces that rule. |
+| `label`, `group` | Shown in the Classes field's suggestions, as for code classes: "Buttons: Primary button". |
+| `styles` | Tailwind classes with variants, as in a block's classes: `rounded-xl p-6 md:p-8 hover:shadow-lg`. Another class's name applies that class (`btn bg-primary`). The Styles panel edits this field. |
+| `css` | Custom CSS inside the class rule, for what Tailwind cannot express: layered gradients, `&::before { … }`, `&:hover { … }`, `@keyframes`. `@import`, `@theme`, `@utility` and other rules that change the design system are refused. |
+| `previousNames` | Names the class had when it was published before (read-only). Published pages that still use an old name keep their look until they are published again. |
+
+The collection has drafts and versions, so every class has a history, and Payload's Versions screen compares and restores it.
+
+### In the Styles panel
+
+- **Find a class.** The **Classes** field at the top of the Styles tab shows each editable class of the block as a solid chip. A small dot on a chip means the class has unpublished changes.
+- **Edit a class.** Click its chip. A banner says "Editing .card" and how far a change reaches ("Changes 12 blocks on 3 pages"). Every control now reads and writes the class's `styles`. The breakpoint and state bars work as for a block: `md:` and `hover:` go into the class. Under the controls, **More classes in .card** holds the class's classes that no control shows, and a **Custom CSS** box edits its `css`. Click the chip again, or the banner's back button, to edit the block again.
+- **New class from these styles…** In the Classes field's "⋯" menu. It moves the block's Tailwind classes into a new class and gives the block the class. Classes the block already had stay on it. Add the class to other blocks in their Classes field: it is suggested first, with its label.
+- **Drafts.** A change shows on the canvas at once. It saves as a draft 0.6 s after the last change (one autosave version for a run of changes). **Ctrl+Z** undoes class changes in order with the other edits.
+- **Publish.** The banner's **Publish class** makes the class live on every page that uses it. Publishing a page also publishes the classes it uses that have unpublished changes (as the same user), so the live page looks like the canvas. A class the user may not update stays a draft (the server logs it).
+- **Rename and delete** are in the banner's **…** menu. Both dialogs say where the class is used first. **Rename** changes the class and every block that uses it, in each page's draft, through the live sessions (open editors see it at once). The old published name stays in `previousNames`, so published pages keep their look. **Delete** removes the class from every block's draft, then deletes it. Published pages lose its styles at once.
+- In the Payload admin, deleting a class that blocks still use is refused with the list of pages (409). Use the Styles panel's **Delete**, which removes it from the blocks first.
+
+### Manage classes
+
+**Manage classes…** in the Classes field's "⋯" menu opens every shared class in one list, as Webflow's style manager.
+
+- **Search** by name, label or group.
+- **Usage.** Each row shows how many blocks and pages use the class, or "Unused". A click on a used row lists the documents: pages, posts, templates, template parts, saved sections, every collection with a layout. Each link opens that document in the builder in a new tab. The counts include unsaved edits of open builder sessions.
+- **Rename**, **Duplicate** and **Delete** sit on each row. Rename and Delete use the same dialogs as the Styles panel: they change every layout's draft through its live session, so an open editor keeps its unsaved edits and sees the change at once. **Duplicate** makes a draft copy named `<name>-copy`.
+- **Remove unused classes** deletes every class that no layout uses. The server checks again before it deletes: the latest drafts, open builder sessions and published pages of every document, under the class's name and its former names. A class that only a published page still uses stays.
+- Endpoint: `POST /api/builder/classes/remove-unused` returns `{ deleted, failed }`. Server helpers: `unusedClasses(req)` and `removeUnusedClasses(req)` from `payload-canvas`.
+
+### Import from the site's CSS
+
+**Import from the site's CSS** (the Classes field's "⋯" menu, or `POST /api/builder/classes/import`) makes a published class from each static `@utility` rule of your CSS entry and the files it imports (not packages). The `/* @canvas Group: Label */` comment gives the label and the group. `@apply` lists become `styles`; declarations and nested rules become `css`. Names that are classes already are skipped.
+
+After the import, the classes are the source. Delete the `@utility` rules from your CSS: until then, Tailwind may still put them in the site's CSS (when its scanner finds the name in your source files), and properties the class does not set still come from them.
+
+### On the site
+
+Render `ClassesStyle` in the root layout, after `ThemeStyle`:
+
+```tsx
+import { ClassesStyle, ThemeStyle } from 'payload-canvas/react/server'
+
+<head>
+  <ThemeStyle payload={payload} />
+  <ClassesStyle payload={payload} />
+</head>
+```
+
+- **One stylesheet for all published classes.** The classes collection's hooks compile it after every publish, unpublish and delete, with the plugin's Tailwind compile against your CSS entry, so theme tokens and plugins work. It is stored with a hash of its CSS in a hidden global (`builder-classes-sheet`). Drafts never reach it.
+- **Cached by the browser.** `ClassesStyle` renders `<link rel="stylesheet" href="/api/builder/classes-sheet/<hash>.css">`, served with `Cache-Control: public, max-age=31536000, immutable`. A publish makes a new hash, and the plugin clears Next's page cache (`revalidatePath('/', 'layout')`). An old hash gets the current stylesheet, cached for 60 s.
+- **Size.** 15 typical classes (cards, buttons, type styles, a gradient and a keyframes animation) compile to 13.9 KB, 2.4 KB gzipped, in about 50 ms. The link loads at the same time as Next's own CSS file, which also blocks the first paint, and the browser keeps it for every later page. `mode="inline"` puts the CSS in a `<style>` tag in each page instead: no extra request, but no browser cache. `origin` puts a host before the path when the site and Payload run on different hosts.
+- **After a deploy** with a changed CSS entry, the first request compiles the stylesheet again.
+- **The page's CSS leaves the classes out.** `compilePageCss` and the stored `<field>Css` compile no rule for a class name, with or without a variant prefix, so a code `@utility` with the same name never comes back on the page.
+- `loadClassesSheet(payload)` (`payload-canvas/react/server`, read once per request) returns the stored stylesheet: `{ hash, css, names }`.
+
+### Which rule wins
+
+| Order on the page | Holds |
+|---|---|
+| 1. The site's CSS (`<link>` in the head) | Your Tailwind build, with code `@utility` rules |
+| 2. The theme (`ThemeStyle`) | CSS variables |
+| 3. The classes (`ClassesStyle`) | Every published class |
+| 4. The page's CSS (`<style>` in the body) | The block's own Tailwind classes |
+
+All the rules are in `@layer utilities` with the specificity of one class, so the later stylesheet wins:
+
+- A class beats a code `@utility` rule with the same name. The class's rules never include the code rule: the compile builds each class under an internal name and renames it after the build.
+- A block's own Tailwind classes beat its class: `card p-2` gets the class's look with `p-2` padding.
+- Class rules are not limited to block elements (no `builder-css` marker): your own components can use the classes too.
+- Use a class without a variant prefix. Put variants into the class's styles (`md:p-8`), not before its name (`md:card` styles nothing).
+
+The canvas keeps the same order: the classes' stylesheet (compiled in the browser from the latest drafts) comes before the layout's CSS.
+
+### MCP tools
+
+`builderMcpTools()` adds `listClasses`, `getClass`, `upsertClass` and `deleteClass`. Each takes `collection: "builder-classes"` (the default, so agents may leave it out), and the API key needs access to the classes collection.
+
+- `upsertClass` creates or changes a class (a draft; `publish: true` publishes it). `newName` renames it on every page, as the Styles panel does. Without `publish`, the result lists the published pages that still show the old version (`publishedPagesWithOldVersion`).
+- `deleteClass` refuses a class that blocks use and lists the pages, unless `removeFromBlocks: true`. The result lists the published pages that still use the class and need publishing again.
+- `listBlocks` lists the editable classes with the code classes (`siteClasses`), so agents use them in `className`.
+- `builderMcpTools({ classes: false })` leaves the tools out; `classes: { slug }` matches a custom slug.
+
+### Endpoints
+
+| Endpoint | Use |
+|---|---|
+| `GET /api/builder/classes` | The classes' latest drafts, as the user may read them. The editor and the canvas use it. |
+| `GET /api/builder/classes/usage` | Blocks and pages per class name (`?names=a,b` limits it). |
+| `POST /api/builder/classes/rename` | `{ id, name }`: renames the class everywhere. |
+| `POST /api/builder/classes/delete` | `{ id, removeFromBlocks }` |
+| `POST /api/builder/classes/import` | `{ names? }`: imports code `@utility` classes. |
+| `GET /api/builder/classes-sheet/<hash>.css` | The site's stylesheet. Public. |
+
+Style edits use Payload's own REST API (`PATCH /api/builder-classes/:id?draft=true&autosave=true`), so access, hooks, validation and versions apply. The server actions are exported from `payload-canvas` for scripts: `upsertClass`, `publishClass`, `renameClass`, `deleteClass`, `importSiteClasses`, `classUsage`, `storeClassesSheet`, `loadClassesSheet`.
+
+### Limits
+
+- Other people's class changes reach your editor when its window gets the focus again. Canvases in your own browser follow your changes at once.
+- Section thumbnails keep their picture until the section, the theme or the blocks change.
+- Usage counts read every builder layout (one query per collection: latest drafts and open sessions). This is fine for hundreds of pages.
+- The in-editor AI assistant's style hints list the code classes only; the MCP tools list both.
+- Classes are the same in every locale.
+- The new collection and global need a migration in production: run `pnpm payload migrate:create` when you prepare the release.
 
 ## Animations
 
@@ -1703,6 +2068,25 @@ Other frontends: `loadTheme(payload)` from `payload-canvas/react/server` returns
 
 **Styles panel.** The color swatches read the canvas, so they show the theme's colors. The Font list shows the theme's families ("Inter", not `var(--font-sans)`).
 
+### Design variables
+
+Named colors, sizes and fonts that blocks and classes use by name, as Webflow's variables. Change a variable once in **Theme > Variables**, and every page that uses it changes.
+
+| Type | Value | Classes | CSS variable |
+|---|---|---|---|
+| Color | a hex color or any CSS color | `bg-brand`, `text-brand/80`, `border-brand`, `from-brand` … | `--color-brand` |
+| Size | a CSS length: `24px`, `1.5rem`, `clamp(1rem, 4vw, 3rem)` | `p-gutter`, `mt-gutter`, `gap-gutter`, `w-gutter`, `-mx-gutter` … | `--spacing-gutter` |
+| Font | a Google Fonts family (the site loads it) | `font-display` | `--font-display` |
+
+- **Names**: lower-case letters, digits and single dashes, unique across all types. Names the theme already uses (`primary`, `background`, `sans`, `full`, palette shades like `red-500`) are refused.
+- **Dark mode.** Colors and sizes can have a **Dark mode** value. The theme had no dark mode before, so the variables follow the `.dark` class (Tailwind's class strategy): the dark value applies on an element with `dark` and everything inside it. `ThemeStyle` writes `:root:root.dark, :root:root .dark { --color-brand: … }`. With the `@custom-variant dark (&:is(.dark *))` of the starter, `dark:` classes and the variables switch together.
+- **How it works.** `ThemeStyle` writes the values as CSS variables. Both Tailwind compiles (the save hook and the canvas) add a `@theme inline reference { --color-brand: var(--color-brand); … }` block after your CSS entry, so the classes exist and read the variable. The compiled CSS holds no values: a new value changes every page at once, without a new compile. Adding, renaming or deleting a variable changes which classes exist; the next save or render compiles again (the stored page CSS and the classes stylesheet carry a hash of the names).
+- **Classes.** Variables work in editable classes too: `bg-brand p-gutter` in a class's styles, `var(--color-brand)` in its custom CSS.
+- **Styles panel.** The color picker lists the color variables first, under **Variables**, with a swatch. The spacing, size and font suggestions list their variables first. After a theme save, open editors and canvases load the variables again.
+- **Renaming or deleting a variable in use** shows a warning in the theme form before you save: which blocks and classes still use the old name, with links to the pages. The old classes stop working after the save.
+- **AI and MCP.** The assistant's system prompt and the MCP `listBlocks` tool list the variables with their values and example classes. `GET /api/builder/style-tokens` returns them as `variables`. `GET /api/builder/theme/variables/usage` returns where each variable is used.
+- Helpers in `payload-canvas/theme`: `variableTokens`, `variablesThemeCss`, `variableNameProblem`, `variableValueProblem`, `textUsesVariable`.
+
 **Options:**
 
 ```ts
@@ -1746,38 +2130,40 @@ websiteBuilder({
 
 What the plugin adds:
 
-- A templates collection (`builder-templates`) with drafts and the builder. Each template has a target collection (`targetCollection`), a "default for this collection" checkbox (`isDefault`), optional `conditions` and a sample document for the editor preview (`previewDocument`).
+- A templates collection (`builder-templates`) with drafts and the builder. Each template has a target collection (`targetCollection`), a "default for this collection" checkbox (`isDefault`), optional `conditions` with a `priority`, and a sample document for the editor preview (`previewDocument`).
 - A `template` relationship in the sidebar of every document in a collection with `templates: true`.
 
 Which template a document uses:
 
 1. Its own `template`.
-2. Else the first template, by name, whose `conditions` match the document.
-3. Else the newest default template of its collection.
+2. Else the template with the highest `priority` whose `conditions` match the document. On equal priority the older template (by creation date) wins. The name never counts, so renaming a template does not change which one wins.
+3. Else the most recently updated default template of its collection.
 4. Else none.
 
 Only published templates count (all templates in draft mode). Templates with an empty layout are skipped.
 
 #### Template conditions
 
-`conditions` is a Payload `where` query against the document, written as JSON in the template's edit form. Use it to give some documents their own default layout, for example touring models or VIP types:
+`conditions` is a Payload `where` query against the document. Use it to give some documents their own default layout, for example featured products or posts in one category. The template's edit form shows it as condition rows: a field of the target collection, an operator and a value, in "or" groups of AND-ed rows (the same rows as a collection list's `where`). A date value can be relative to now (`"$now-30d"`). **Edit as JSON** takes any query, for example:
 
 ```json
-{ "tier": { "equals": "vip" } }
-{ "and": [{ "touring": { "equals": true } }, { "city": { "in": ["Sydney", "Perth"] } }] }
+{ "category": { "equals": "news" } }
+{ "or": [{ "featured": { "equals": true } }, { "price": { "greater_than": 100 } }] }
 ```
 
-- `loadTemplate` asks Payload whether the document matches (one query per template with conditions, on the stored document: the latest draft in draft mode). Every operator and field path of a Payload query works, for example `equals`, `not_equals`, `in`, `not_in`, `exists`, `greater_than`, `less_than_equal`, `and`, `or` and relationship paths such as `category.slug`.
-- Two templates can match the same document. The first by name wins, so name them in order (`1 VIP`, `2 Touring`).
+- `loadTemplate` reads the collection's templates once (without their layouts). When some have conditions, it asks Payload whether the document matches, one query per template with conditions, all at the same time, on the stored document (the latest draft in draft mode). Without conditions it runs no such query. Then it loads only the chosen template. Every operator and field path of a Payload query works, for example `equals`, `not_equals`, `in`, `not_in`, `exists`, `greater_than`, `less_than_equal`, `and`, `or` and relationship paths such as `category.slug`.
+- `priority` (a number in the sidebar, default 0, shown once the template has conditions) orders templates whose conditions match the same document: the highest wins. Equal priority: the older template wins.
 - Empty conditions (`null` or `{}`) never match. A template with conditions can also be the default: then it is still the fallback for every document.
 - A query that Payload refuses (an unknown field) counts as no match, and the error goes to the Payload log.
-- The editor's notice on an empty document ("This page uses a template") follows the same rule.
+- The editor's notice on an empty document ("This page uses a template") runs the same code on the server (`GET /api/builder/live/:collection/:id/template`), with published templates and the document's latest draft.
+- The conditions field is a custom admin component (`payload-canvas/client#TemplateConditionsField`). After you add `templates: true` to a collection, run `payload generate:importmap`.
 
 ### Bindings and dynamic blocks
 
 - A **binding** connects a block prop to a document field: `bindings: { "text": "title", "image": "author.avatar" }`. Paths are dot paths from the document root. At render time the prop takes the document's value. A missing value falls back to the prop's own value. In the editor, the binding picker lists only compatible fields of the target collection, including one relationship hop.
 - The **Field** block (`field`) shows one field of the document by path, rendered by its type: rich text, an upload as an image, a date, a relationship's title, or text. Use it for the post body.
-- The **Collection list** block (`collectionList`) lists the latest documents of a collection (`collection`, `limit`, `sort`, `excludeCurrent`, `offset`, `depth`, and the filters `filterField`, `filterBy`, `where` and `queryFilters` below). Its `item` slot is the design of one item and repeats for every document. Its `empty` slot shows instead when no document matches, for example a text "Nobody is available today". Blocks in the item bind to the item's fields, for example a heading with `bindings: { "text": "title" }` and a link with `bindings: { "link": "$url" }` (the item's URL from the collection's `url` option). The block offers the collections with a `url`; add data collections without pages (testimonials, team members) with the plugin's `listCollections` option. The site shows published documents only. It works on normal pages too, not only in templates.
+- The **Collection list** block (`collectionList`) lists the latest documents of a collection (`collection`, `limit`, `sort`, `excludeCurrent`, `offset`, `depth`, and the filters `filterField`, `filterBy`, `where` and `queryFilters` below). Its `item` slot is the design of one item and repeats for every document. Its `empty` slot shows instead when no document matches, for example a text "No posts yet". Blocks in the item bind to the item's fields, for example a heading with `bindings: { "text": "title" }` and a link with `bindings: { "link": "$url" }` (the item's URL from the collection's `url` option). The block offers the collections with a `url`; add data collections without pages (testimonials, team members) with the plugin's `listCollections` option. The site shows published documents only. It works on normal pages too, not only in templates.
+  - In the inspector, the fields show under the headings **Filter**, **Sort and count** and **Pages**. **Sort** is a select of the collection's fields with a direction ("Newest first", "A to Z") and **Random order**. It stores the same `sort` text (`-publishedAt`, `$random`). Your own blocks can use the same controls: `admin.custom.builderSort: { collectionField: 'collection' }` on a text field, and `admin.custom.builderHeading: 'Filter'` for a heading above a field.
   - `offset` skips documents after the sort (at most 100).
   - `depth` is `"1"` (default) or `"2"`: how deep the related documents of each item load. Use `"2"` to reach, for example, `categories.image`.
 - The **Repeat** block (`repeat`) repeats its `item` slot per row of an array or hasMany field. See "Repeat the rows of a field" below.
@@ -1788,43 +2174,72 @@ Only published templates count (all templates in draft mode). Templates with an 
 | --- | --- | --- |
 | A path | `"title"`, `"author.name"` | The field's value. |
 | `$url` | `{ "link": "$url" }` | The document's page URL (the collection's `url` option). |
-| `<path>.$url` | `{ "link": "categories.0.$url" }` | The page URL of a related document: the first category of a model, `home.region.$url` through two relationships. See "URLs of related documents" below. |
-| A fallback chain | `"heading\|name"` | The first path that has a value. |
-| Formatters | `"publishedAt\|date:en-AU:Australia/Brisbane"`, `"price\|currency:AUD"`, `"price\|number"`, `"bio\|firstSentence"` | Text. `date[:locale[:timeZone]]` (default `en`, UTC), `currency[:code[:locale]]` (`$1,200`; whole amounts have no cents), `number[:locale]` (`1,200`), `firstSentence`. Put them after the paths: `"heading\|name\|firstSentence"`. |
-| A template string | `{ "text": "Enquire about {{name}}" }`, `"From {{price\|currency:AUD}}"` | Text with each `{{expression}}` filled in. A missing expression becomes empty. When every expression is missing, the prop keeps its own value. |
-| `$visible` | `{ "$visible": "availableToday" }` | Not a prop: the block shows only when the condition holds. See below. |
+| `<path>.$url` | `{ "link": "categories.0.$url" }` | The page URL of a related document: the first category of a post, `venue.city.$url` through two relationships. See "URLs of related documents" below. |
+| A fallback chain | `"subtitle\|title"` | The first path that has a value. |
+| Formatters | `"publishedAt\|date:en-GB:Europe/London"`, `"price\|currency:EUR"`, `"summary\|truncate:160"` | Text. See the table below. Put them after the paths: `"subtitle\|title\|uppercase"`. |
+| A template string | `{ "text": "Read about {{title}}" }`, `"From {{price\|currency:EUR}}"` | Text with each `{{expression}}` filled in. A missing expression becomes empty. When every expression is missing, the prop keeps its own value. |
 | `$item`, `$index` | `{ "image": "$item" }`, `"{{$index}}."` | Inside a repeat: the row value itself. Inside a list or repeat item: the item number, from 1. |
 | `$parent.<path>` | `"$parent.name"` | Inside a list or repeat item: the enclosing document (the page's document, the listed document, or the outer row). |
 | `$page.<path>` | `"$page.title"` | Anywhere: the page's own document, also inside list and repeat items. |
 
-`$visible` conditions:
+The syntax stops here: paths, `|` fallbacks, formatters and `{{ }}` templates. Nothing else will be added.
 
-| Condition | Shows the block when |
-| --- | --- |
-| `"field"` | the field has a value. `false`, `""`, `null` and `[]` count as empty. |
-| `"!field"` | the field is empty. |
-| `"field=value"` | the field equals the value. For a list (hasMany), any item or document id matches. |
-| `"field!=value"` | the field does not equal the value. |
-| `"field>3"`, `"field>=3"`, `"field<3"`, `"field<=3"` | the field is a number (or a numeric text) and the comparison holds. Any other value fails. |
-| `"field#>=3"` | `field#` is the number of items: a list's length, `0` for an empty value, `1` for any other value. It works with every test above, for example `"galleryImages#>=3"` (at least 3 photos), `"services#=0"` or `"!galleryImages#"`. |
+Formatters. In the inspector, a bound text prop and the Field block have a **Format** select with an input per argument, so editors never type them.
 
-The first operator in the text counts, so a value may hold `=` or `>` (`"title=a=b"` compares with `a=b`).
+| Formatter | Arguments | Example | Gives |
+| --- | --- | --- | --- |
+| `date` | language, time zone (default `en`, UTC) | `date:en-GB:Europe/London` | `11 Sept 2026` |
+| `number` | language | `number` | `1,200` |
+| `currency` | currency code (default `USD`), language | `currency:EUR` | `€1,200` (whole amounts have no cents) |
+| `uppercase`, `lowercase` | none | `uppercase` | `DESK LAMP` |
+| `truncate` | length, then `words` to count words | `truncate:160`, `truncate:25:words` | The plain text (rich text too) cut to 160 characters (on a whole word) or 25 words, with `…` |
+| `readingTime` | words per minute (default 200), text after the number (default `min read`) | `readingTime`, `readingTime:200:Min. Lesezeit` | `5 min read`: the time to read the text (rich text too), rounded up, at least 1 minute. Nothing for a text without words. |
+
+After the first part of an expression, a name that is a formatter is always a formatter. So `"title|date"` formats `title`; it never falls back to a field called `date`. A field with a formatter's name works as the first path only: `"date|title"`.
 
 URLs of related documents (`<path>.$url`):
 
 - The URL comes from your `resolveLink`, called as for a link to that document: `{ type: 'reference', reference: { relationTo, value: doc } }`. So `resolveLink` is the site's "URL of a document" function, for pages and for `$url`.
-- The renderer must know the related collection. A `{ relationTo, value }` value (a relationship to several collections) names it. For a relationship to one collection, pass `relations`: `bindingRelations(payload.config.collections)` from `payload-canvas/core` maps each relationship and upload field to its collection (in groups, named tabs and arrays too). The plugin sends the same map to the canvas.
-
-  ```tsx
-  const relations = bindingRelations(payload.config.collections)
-  const loaded = await loadLayoutData(layout, blocks, payload, { context, relations, resolveLink })
-  <RenderLayout layout={loaded} blocks={blocks} context={context} relations={relations} resolveLink={resolveLink} />
-  ```
-
+- The renderer must know the related collection. A `{ relationTo, value }` value (a relationship to several collections) names it. For a relationship to one collection, `loadLayoutData` reads it from the Payload config (`bindingRelations` in `payload-canvas/core` maps each relationship and upload field to its collection, in groups, named tabs and arrays too) and gives it to the collection lists and repeats whose items need it. You pass nothing. The plugin sends the same map to the canvas.
 - The related document must be loaded (list items load with `depth: 1`; use `depth: "2"` on the list for a relationship of a related document). An id alone gives no URL, and the prop keeps its own value.
 - `$parent.` and `$page.` paths do not take `.$url`.
 
-A block hidden by `$visible` renders nothing on the site. On the canvas it shows dimmed, like a hidden block. Expressions and `$visible` are not checked against the collection's fields when you publish. The inspector shows an expression as text with a preview of its value. Add or change one in the layout JSON or through the MCP tools.
+Expressions are not checked against the collection's fields when you publish. The inspector shows a fallback chain or a template string as text with a preview of its value. Add or change one in the layout JSON or through the MCP tools.
+
+#### Show a block only when conditions match
+
+A block in a template, a collection list item or a repeat row can show only when its document matches conditions. In the inspector, **Show only when** at the end of the Content tab has condition rows: a field, an operator and a value. The field select lists the fields of the block's document (the template's collection, the listed collection, or the row), else the collection's fields from the Payload config. The rows in a group must all match. **Add "or" group** adds another group, and one matching group is enough. The block stores them as `visibility`:
+
+```json
+{
+  "id": "b_sale01",
+  "type": "text",
+  "props": { "text": "On sale" },
+  "visibility": {
+    "match": "any",
+    "conditions": [
+      { "field": "onSale", "operator": "equals", "value": true },
+      { "field": "price", "operator": "less_than", "value": 20 }
+    ]
+  }
+}
+```
+
+| Operator | Shows the block when |
+| --- | --- |
+| `is_set`, `is_empty` | the field has a value, or not. `false`, `""`, `null` and `[]` count as empty. No `value`. |
+| `equals`, `not_equals` | the field equals the value, or not. For a list (hasMany), any item or document id matches. A checkbox without a value counts as `false`. |
+| `in`, `not_in` | the field equals one of the values, or none (`value` is a list). |
+| `greater_than`, `greater_than_equal`, `less_than`, `less_than_equal` | the field and the value are numbers (or numeric texts) or dates, and the comparison holds. Any other value fails. |
+| `like`, `contains` | the field's text holds every word of the value, or the value, in any case. |
+
+- `field` is a path of the document, or `$index`, `$item`, `$parent.<path>` and `$page.<path>`.
+- `"count": true` compares the number of items of the field instead of its value: a list's length, `0` for an empty value, `1` for any other value. For example `{ "field": "gallery", "operator": "greater_than_equal", "value": 3, "count": true }` (at least 3 photos). The inspector offers it under "Number of items" as "Gallery (count)", with operators such as "has at least".
+- `"valueField"` compares with another field of the same document instead of a fixed `value`: `{ "field": "salePrice", "operator": "less_than", "valueField": "price" }`. A condition has `value` or `valueField`, never both. In the inspector, pick **Other field** next to the value.
+- `match` is `"all"` (the default, left out) or `"any"`. With `"any"`, an entry can be a group `{ "all": [conditions] }` that matches when all its conditions match. So `{ "match": "any", "conditions": [{ "all": [a, b] }, c] }` means "(a and b) or c". This is how the inspector stores "or" groups.
+- The inspector offers the operators that fit the field's type ("is after" for dates, "contains" for text, "includes" for hasMany fields) and a value input of the same type: a select's options, checked or not checked, a number, a date, or a document picker for relationships and uploads.
+- A block that fails renders nothing on the site, and lists inside it load no documents. On the canvas it shows dimmed, like a hidden block. Without a current document (a normal page, outside list and repeat items) the conditions are not checked, and the block shows. The MCP tools return a `no-effect` warning for them there.
+- The outline marks a block whose condition reads a field the collection does not have.
 
 #### Filter a collection list
 
@@ -1832,21 +2247,23 @@ A collection list can show only the documents related to the current document (t
 
 | `filterBy` | The list shows | Payload query | Example |
 | --- | --- | --- | --- |
-| `current` (default) | documents whose `filterField` holds the current document | `{ [filterField]: { in: [doc.id] } }` | On a service template: the models whose `services` include this service. |
-| `shared` | documents whose `filterField` shares a value with the current document's own `filterField` | `{ [filterField]: { in: values } }` | Similar models with a `category` in common. Related posts with the same `category` text. |
-| `linked` | the documents that the current document's `filterField` points to | `{ id: { in: values } }` | On a model template: the services this model offers. |
+| `current` (default) | documents whose `filterField` holds the current document | `{ [filterField]: { in: [doc.id] } }` | On a category template: the posts whose `categories` include this category. |
+| `shared` | documents whose `filterField` shares a value with the current document's own `filterField` | `{ [filterField]: { in: values } }` | Related posts with a `category` in common. Products with the same `brand` text. |
+| `linked` | the documents that the current document's `filterField` points to | `{ id: { in: values } }` | On a post template: the post's `authors`. |
 
+- In the inspector this is one select, **Related to this page**, under the **Filter** heading. It lists the fields that relate the two collections in words ("Categories links to this page") and sets both props. It shows in templates, or when a filter is already set. Your own block gets it with `admin: { custom: { builderRelated: { collectionField: 'collection', modeField: 'filterBy' } } }` on the text field that stores the field name. `modeField` names the select that stores the mode.
 - `values` are read from the current document with `getByPath`. Populated documents (`{ id }`), `{ relationTo, value }` pairs, strings and numbers all work, one value or many.
 - With `shared` or `linked`, a current document without values shows an empty list. The plugin sends no query.
-- On a normal page (no current document), `filterField` is ignored and the list is not filtered.
-- `where` is a static Payload `where` query, AND-ed with the filter. For example `{ "featured": { "equals": true } }` or `{ "district": { "equals": "north" } }`. Only a plain object counts; anything else is ignored.
-- The inspector edits `where` as condition rows: a field of the chosen collection, an operator (`equals`, `not_equals`, `in`, `not_in`, `greater_than`, `greater_than_equal`, `less_than`, `less_than_equal`, `like`, `contains`, `exists`) and a value. Rows are AND-ed. Values of number and checkbox fields are stored as numbers and booleans; `in` and `not_in` take a comma-separated list. **Edit as JSON** switches to the raw query. A query the rows cannot show (with `or` or nested groups) opens as JSON. The stored value is the same Payload `where` object either way. A JSON field of your own block gets the rows with `admin: { custom: { builderWhere: { collectionField: 'collection' } } }`, where `collectionField` names the sibling prop that holds the collection slug.
-- Date values in `where` and `queryFilters` can be tokens: `"$now"`, `"$now-30d"`, `"$now+12h"` (units `d` and `h`). They become ISO dates, rounded down to the minute. Example: `{ "createdAt": { "greater_than": "$now-30d" } }` lists documents from the last 30 days.
+- On a normal page (no current document), a list with `filterField` shows nothing (its `empty` slot). The plugin sends no query. The same holds on the canvas for a template without a sample document; the editor still shows the item design once.
+- `where` is a static Payload `where` query, AND-ed with the filter. For example `{ "featured": { "equals": true } }` or `{ "category": { "equals": "news" } }`. Only a plain object counts; anything else is ignored.
+- The inspector edits `where` as condition rows: a field of the chosen collection, an operator in plain words ("is", "is any of", "is after", "has all the words", "is set") and a value. The operators and the value input follow the field's type: a select's options, checked or not checked, a number, a date, or a document picker (ids are stored). Rows in a group are AND-ed. **Add "or" group** stores `{ "or": [group, group] }`. `is set` and `is empty` store Payload's `exists`. **Edit as JSON** switches to the raw query. A query the rows cannot show (a group inside a group, an unknown operator) opens as JSON, so no part of it is lost. The stored value is the same Payload `where` object either way.
+- A row's value can also come from elsewhere (the select next to the value): **Relative date** (`"$now-30d"`, see below), **URL parameter** (`"$query.<param>"`), and in a template **Page field** (`"$page.<path>"`, a field of the document the template renders; "This page" is its id). `listQueries` reads them when the list loads, on the site and on the canvas alike. Example: `{ "category": { "equals": "$page.category" } }` on a post template lists the posts of the same category. A page field with several values (hasMany) turns `equals` into `in`. A page field without a value makes the list empty, except with `not_equals` and `not_in`, which are then left out. A URL parameter that is not in the URL leaves its condition out, as `queryFilters` do. The canvas has no URL, so it leaves URL conditions out. In an "or", a group that matches nothing or has nothing left does not count. A JSON field of your own block gets the rows with `admin: { custom: { builderWhere: { collectionField: 'collection' } } }`, where `collectionField` names the sibling prop that holds the collection slug.
+- Date values in `where`, `queryFilters` and a template's `conditions` can be tokens: `"$now"`, `"$now-30d"`, `"$now+12h"` (units `d` and `h`). They become ISO dates, rounded down to the minute. Example: `{ "createdAt": { "greater_than": "$now-30d" } }` lists documents from the last 30 days.
 
 ```json
 {
   "type": "collectionList",
-  "props": { "collection": "models", "filterField": "services", "filterBy": "current", "where": { "featured": { "equals": true } } }
+  "props": { "collection": "posts", "filterField": "categories", "filterBy": "current", "where": { "featured": { "equals": true } } }
 }
 ```
 
@@ -1854,25 +2271,29 @@ Lists load with the visitor's access (`overrideAccess: false`). The site (`loadL
 
 #### Filter by the URL query
 
-`queryFilters` filters a list by the page's URL query: `{ "<param>": { "<value>": where } }`.
+`queryFilters` filters a list by the page's URL query. Each URL parameter has one of two forms:
+
+- A field path (the usual case): `{ "category": "category" }`. The field equals the URL value, so `?category=news` lists the documents whose `category` is `news`. The value goes to Payload as it is, so a relationship field takes a document id (`?author=12`), and `tags.slug` reaches into related documents.
+- Values to `where` queries (for anything else): `{ "<param>": { "<value>": where } }`. Each `param=value` in the URL adds its `where`; unknown values are ignored.
 
 ```json
 {
   "type": "collectionList",
   "props": {
-    "collection": "models",
+    "collection": "posts",
     "queryFilters": {
-      "available": { "today": { "availableToday": { "equals": true } } },
-      "new": { "month": { "createdAt": { "greater_than": "$now-30d" } } },
-      "district": { "north": { "district": { "equals": "north" } }, "south": { "district": { "equals": "south" } } }
+      "category": "category",
+      "tag": "tags.slug",
+      "age": { "recent": { "publishedAt": { "greater_than": "$now-30d" } } }
     }
   }
 }
 ```
 
-- Each `param=value` in the URL adds its `where`. `?available=today&district=north` lists the models available today in the north.
-- Several values of one param are OR-ed: `?district=north,south` or `?district=north&district=south`.
-- Params are AND-ed with each other and with the list's other filters. Unknown params and values are ignored.
+- `?category=news&age=recent` lists the news posts of the last 30 days.
+- Several values of one param are OR-ed: `?tag=css,react` or `?tag=css&tag=react`.
+- Params are AND-ed with each other and with the list's other filters. Unknown params are ignored.
+- The inspector edits the field-path form as rows: a URL parameter and a field of the chosen collection. **Edit as JSON** switches to the raw value. A value with the full form opens as JSON. A JSON field of your own block gets the rows with `admin: { custom: { builderQueryFilters: { collectionField: 'collection' } } }`.
 - Pass the query to `loadLayoutData`: `loadLayoutData(layout, blocks, payload, { query: await searchParams })`. It takes `URLSearchParams` or a Next.js `searchParams` object. Without `query`, the filters are off.
 - The canvas has no URL query, so it shows the list without these filters.
 - Filtered URLs show the same page with fewer items. Set `robots: { index: false, follow: true }` (`noindex, follow`) in the route's metadata when the URL has a filter param, so search engines index only the unfiltered page.
@@ -1886,12 +2307,13 @@ Lists load with the visitor's access (`overrideAccess: false`). The site (`loadL
 | `paginate: "pages"` | Shows `limit` documents per page and page links under the items: `?page=2`, `?page=3` (`PAGE_PARAM`). The links keep the rest of the URL query (filters, other lists' pages), and page 1 has no page param. Seven pages or fewer: a link to each. More: the first, the last and the pages next to the current one, with a gap between (`1 … 4 5 6 … 20`; `pageWindow`). Pass the query to `loadLayoutData` (`query`), as for `queryFilters`, and the page's path (`path: '/guides'`): the links then start with the path, and page 1 is the bare path (`/guides`). Without `path` the links are relative, and page 1 with no other query values is `?`. `offset` does not apply. |
 | `pageParam` | The URL parameter of the page number. Empty: `page`. Give each paginated list on one page its own (`reviewsPage`), so they page apart. Letters, digits, `_` and `-`; any other value counts as `page`. |
 | `pagerLabel` | The name of the page links for screen readers (`aria-label` of the `<nav>`). Localized, default "Pages". |
-| `pagerClassName` | Classes of the `<nav>` around the links. Default `flex flex-wrap gap-2`. A gap is `<span data-page-gap aria-hidden="true">…</span>`: style it with `[&_[data-page-gap]]:` classes. |
-| `pageLinkClassName` | Classes of each page link. The current page has `aria-current="page"`, so `aria-[current=page]:font-bold` styles it. |
 
+- Style the links as parts (`partClassName`, the **Style target** select): `pager` is the `<nav>` around the links (a new list starts with `flex flex-wrap gap-2`), `pageLink` is each link. The current page has `aria-current="page"`, so `aria-[current=page]:font-bold` styles it. A gap is `<span data-page-gap aria-hidden="true">…</span>`: style it with `[&_[data-page-gap]]:` classes on `pager`.
+- With page links, the list renders a wrapper without classes that holds the items (with the block's classes) and then the `<nav>`, so a grid of items never takes the pager as a cell.
 - The page links are plain `<a href>` links, so search engines can crawl every page. Give `?page=N` pages their own canonical URL (with the page), not the first page.
 - Two paginated lists on one page share `page` unless one sets its own `pageParam`.
 - On the canvas a paginated list shows page 1 with its links.
+- Lists inside hidden blocks (hidden by hand or by visibility conditions) send no query on the site. The canvas shows hidden blocks dimmed, so it loads their lists.
 - After `loadLayoutData`, a paginated list carries its links as the runtime `$pages` prop (`LIST_PAGES_PROP`, type `ListPages`). A custom collection list component can render them its own way.
 - Not built: a "Load more" button. Use the page links.
 
@@ -1910,11 +2332,11 @@ const itemLists = loadedLists(layout).map((list) => ({
 
 #### Repeat the rows of a field
 
-The **Repeat** block (`repeat`) repeats its `item` slot once per row of a list field of the current document. Use it for an array field (FAQs `faqs: [{ question, answer }]`, rates `rates: [{ duration, price }]`), a hasMany upload (a gallery), a hasMany relationship (the services of a model) or a hasMany text or select field (tags).
+The **Repeat** block (`repeat`) repeats its `item` slot once per row of a list field of the current document. Use it for an array field (FAQs `faqs: [{ question, answer }]`, plans `plans: [{ name, price }]`), a hasMany upload (a gallery), a hasMany relationship (the authors of a post) or a hasMany text or select field (tags).
 
 | Prop | Type | What it does |
 | --- | --- | --- |
-| `path` | text, required | The field, as a dot path in the current document, for example `faqs` or `galleryImages`. `$parent.` and `$page.` paths work too. |
+| `path` | text, required | The field, as a dot path in the current document, for example `faqs` or `gallery`. `$parent.` and `$page.` paths work too. |
 | `limit` | number | The most rows to show. Empty shows every row. |
 | `offset` | number | Rows to skip at the start. `1` skips the first photo. |
 | `collection` | text (a select of the collections with a `url` when the plugin knows them) | For a relationship field: the related collection, so `$url` links to each document. A `{ relationTo, value }` row names its own collection. |
@@ -1931,7 +2353,7 @@ Blocks in the `item` slot bind to the **row**:
 ```json
 {
   "type": "repeat",
-  "props": { "path": "galleryImages", "offset": 1 },
+  "props": { "path": "gallery", "offset": 1 },
   "slots": { "item": [{ "type": "image", "bindings": { "image": "$item" } }] }
 }
 ```
@@ -1963,7 +2385,7 @@ return <RenderLayout layout={layout} css={found.css} context={context} blocks={b
 ```
 
 - `loadTemplate(payload, { collection, doc, templatesSlug?, draft? })` returns `{ template, layout, css }` or `null`. Without `draft` it uses published templates only. The document needs its `id` for template conditions.
-- `loadLayoutData(layout, blocks, payload, { draft, context, resolveLink, user, query })` resolves bindings and Field blocks against `context`, gives repeats their rows, loads collection lists, and loads upload and relationship props. `query` is the request's URL query for `queryFilters`. Pass the same `context` to `RenderLayout`.
+- `loadLayoutData(layout, blocks, payload, { draft, context, resolveLink, user, query })` resolves bindings, visibility conditions and Field blocks against `context`, gives repeats their rows, loads collection lists, and loads upload and relationship props. `query` is the request's URL query for `queryFilters`. Pass the same `context` to `RenderLayout`.
 - `getByPath(doc, path)` and `resolveBindings(layout, context, blocks)` from `payload-canvas/core` do the same work for a custom renderer.
 
 ## References and Used in
@@ -2034,7 +2456,7 @@ buildConfig({
 })
 ```
 
-**Which props translate.** A prop translates when its field config says `localized: true`, as in Payload. A group or array that holds a localized field translates as a whole. The default blocks mark their text as localized: heading, text, rich text, button label, image alt text, list items, quote and source, menu links and name, and the field block's fallback. Images, links, numbers, selects and checkboxes are shared. Add `localized: true` to the fields of your own blocks. Without Payload localization, `localized` does nothing.
+**Which props translate.** A prop translates when its field config says `localized: true`, as in Payload. A group or array that holds a localized field translates as a whole. The default blocks mark their text as localized: heading, text, rich text, button label, image alt text, list items, menu links and name, and the field block's fallback. Images, links, numbers, selects and checkboxes are shared. Add `localized: true` to the fields of your own blocks. Without Payload localization, `localized` does nothing.
 
 **How it is stored.** The default language stays in `props`. Each other language keeps only its own values in `locales`:
 
@@ -2119,6 +2541,20 @@ The default model is `openai/gpt-6-luna`: cheap and good at tool calls. Pick ano
 
 Without an adapter, or without a key, the panel shows a setup card. The card says what to set.
 
+### API keys in the admin
+
+An admin can also paste the API key in the admin, without a deploy. The plugin adds an **AI settings** global (slug `builder-ai-settings`) when `ai` is set.
+
+- **Precedence.** A key set there wins over the key in the adapter options (your env). Not set, or cleared: the adapter uses its own key.
+- **One field per provider.** The global shows a key field for the chat adapter and one for the image adapter. When both read the same env var (for example both use `OPENROUTER_API_KEY`), they share one field.
+- **Never shown again.** The field shows only "Set, ends in …4f2a", with **Replace key** and **Clear key**. REST and Local API reads never return the key, and the global has no GraphQL schema.
+- **Encrypted.** The key is stored with AES-256-GCM. The encryption key comes from Payload's `secret`. If the secret changes, the stored key cannot be read: it counts as not set, the server logs a warning, and the field says to paste the key again.
+- **No restart.** The server reads the key for each AI request, so a new key works on the next request. The setup card in the editor links to the settings page.
+- **Access.** Default: signed-in users of the admin user collection (`admin.user`). Sites with roles should allow admins only: `ai: { settings: { access: ({ req }) => req.user?.role === 'admin' } }`.
+- **Database.** One new global table with two text columns (`chatApiKey`, `imageApiKey`). Dev creates it on `pnpm dev` (`push: true`). Make a migration for production.
+
+`ai.settings: false` turns the global off. `ai.settings: { slug }` renames it. The model stays in code: changing it starts a new chat, so it is not an admin setting.
+
 ### Adapters
 
 | Import | Adapter | Notes |
@@ -2138,7 +2574,7 @@ ai: { adapter: openAICompatibleAdapter({ baseURL: 'http://localhost:11434/v1', m
 ai: { adapter: anthropicAdapter({ apiKey: process.env.ANTHROPIC_API_KEY }) }
 ```
 
-You choose the adapter in your own config code, so you decide which environment variables to read. The starter picks `fakeAdapter()` when `BUILDER_AI_FAKE=1` (development only), else OpenRouter when `OPENROUTER_API_KEY` is set, else no adapter.
+You choose the adapter in your own config code, so you decide which environment variables to read. The starter picks `fakeAdapter()` when `BUILDER_AI_FAKE=1` (development only), else OpenRouter. OpenRouter takes `OPENROUTER_API_KEY`, or a key an admin pastes in AI settings.
 
 ### Options
 
@@ -2152,6 +2588,7 @@ You choose the adapter in your own config code, so you decide which environment 
 | `images` | none | The image adapter. See [Image generation](#image-generation). |
 | `imageLimits` | `{ perRequest: 3, perHour: 20 }` | Images per assistant reply, and per user per hour. |
 | `imageMarkerField` | `generatedBy` | A media field that gets a note on generated images, when the collection has it. `false` turns it off. |
+| `settings` | on | The AI settings global for API keys. `{ slug?, access? }`, or `false` to turn it off. See [API keys in the admin](#api-keys-in-the-admin). |
 
 The model, the key, `maxTokens` and provider settings belong to the adapter. See [providers.md](https://github.com/jon8800/payload-canvas/blob/main/docs/ai/providers.md) for each adapter's options.
 
@@ -2168,9 +2605,13 @@ type AiAdapter = {
   setupProblem?: string | null // one sentence for the developer, e.g. "Set MY_API_KEY."
   keyEnv?: string | null  // shown in the setup card
   keyUrl?: string | null  // "Get an API key" link
+  acceptsApiKey?: boolean // reads request.apiKey: AI settings show a key field for it
+  missingKey?: boolean    // ready is false only because the key is missing
   stream(request: AiModelRequest): AsyncIterable<AiModelEvent>
 }
 ```
+
+With `acceptsApiKey: true`, the request has `apiKey` when an admin set a key in AI settings. Use it instead of your own key for that request. Set `missingKey: true` when the only problem is the missing key: a key in AI settings then makes the adapter ready. Image adapters take the same two fields, and `AiImageRequest.apiKey`.
 
 `stream` runs one model call. The request has `system` (parts; `cache: true` marks a stable prefix you may cache), `messages` (the conversation), `tools`, `effort` and `signal`. Yield these events, in order:
 
@@ -2309,6 +2750,12 @@ plugins: [
 - Agents connect to `POST <your site>/api/mcp` with an API key from **Admin > MCP > API Keys**. Claude Code and Codex setup: [docs/ai/connect-claude-code-and-codex.md](https://github.com/jon8800/payload-canvas/blob/main/docs/ai/connect-claude-code-and-codex.md).
 - Sign-in with the website account (OAuth, no key to copy) is a `payload-mcp-toolkit` feature: pass `oauth: { canAuthorize, access: 'editor' }` to `mcpToolkitPlugin()` and add the discovery rewrites. The starter shows the setup, and the doc above has the Claude Code and Codex commands. API keys keep working next to it.
 - Tools (`listSections` and `insertSection` include [saved sections](#saved-sections)): `listBlocks`, `getBlockSchema`, `listSections`, `insertSection`, `getLayout`, `applyOperations`, `validateLayout`, `getPreviewUrl`, `generateImage`, plus `listTemplates` and `getBindingSources` for templates.
+- Builder layouts change only through `applyOperations` and `insertSection`. The tool descriptions say so; agents must not write the layout field with `updateDocument` or `patchLayout`.
+- `listBlocks` returns the layout guide (`guide`: block keys, ids, positions, classes, motion presets, HTML attributes) and the bindings guide (`bindings`). The guides are in the result, not in the tool descriptions, so `tools/list` stays small.
+- `update` operations take `className` (replaces the list), `addClassName` and `removeClassName` (space-separated, the other classes stay).
+- `applyOperations` returns `changes` (id, type, changed keys, and the new class list after class changes) and the warnings of the blocks it touched. `insertSection` returns `needsContent`: blocks whose image, form or other upload or relationship is still empty.
+- `visibility` and `bindings` work only in templates and inside collection list or repeat items. On a normal page they do nothing, and `applyOperations`, `insertSection` and `validateLayout` return a `no-effect` warning.
+- When an argument has one possible value (`collection` of the class tools, `generateImage`, `listTemplates`, and every builder tool with one builder collection), agents may leave it out.
 - `generateImage` makes an image with the site's image adapter (`ai.images` in `websiteBuilder`) and saves it in the media collection. Clients that cannot make images (Claude Code with a Claude plan) use the site's adapter this way. The key needs `create` on the media collection.
 - Every tool checks the key's access to the collection. Handlers run as the key's user with `overrideAccess: false`.
 - Writes are commits to the document's live session, like an editor's own changes. Open editors show them at once, and the agent appears in the collaborator list while it works. The draft is saved about a second later. `getLayout` returns the session's layout, unsaved changes included.
@@ -2348,6 +2795,31 @@ Limits:
 - Two people who change the same prop at the same time: the later change wins.
 - On SIGINT/SIGTERM the plugin saves unsaved session edits before the process exits. To make that possible, it holds back `process.exit` for at most 3 seconds, and only while unsaved edits exist. A hard kill (`SIGKILL`, a crash) can still lose the last 1–5 seconds of edits.
 - Two people typing in the same text field at the same moment: the later value wins for the whole field.
+
+### Comments on the canvas
+
+Team members leave comments on blocks, reply, and resolve them, as in Figma or Webflow. Everyone with the page open sees new comments, replies and changes at once.
+
+In the builder:
+
+- Click the speech bubble in the top bar, or press **C**, for comment mode. The comments panel takes the inspector's place. Press **C** or **Esc** to leave.
+- In comment mode, click a block on the canvas. A pin goes on that spot, and a box opens for the comment. **Enter** sends, **Shift+Enter** adds a line.
+- Pins stay on their spot of the block when the page scrolls, the layout changes or the canvas zooms. Comment mode shows the pins; normal editing shows none.
+- Click a pin to open its thread: reply, resolve or reopen. Authors edit and delete their own comments. Deleting a thread deletes its replies.
+- The panel lists the threads: open ones first, then resolved ones. **All**, **Open** and **Resolved** filter the list. Click a thread to select its block and scroll to it.
+- A thread whose block was deleted stays in the panel, marked **Block deleted**. It opens in the panel.
+- The top bar button shows the number of open threads.
+
+Comments are not part of the layout. They never change the layout JSON, undo history, saves or publishing. The canvas does no comment work outside comment mode.
+
+Data and access:
+
+- Each comment is a document of the plugin's **Comments** collection (slug `builder-comments`): the page (`docCollection`, `docId`), the block (`blockId`), the pin (`x`, `y`, 0 to 1 inside the block's box), the text (`body`), the author, and for a thread its resolved state (`resolved`, `resolvedByName`, `resolvedAt`). A reply has `parent` set to its thread.
+- People who may change the page may comment on it, reply, resolve and reopen. A hook checks this on every save, also over REST. Only the author changes the text or deletes a comment. Signed-in users read comments; set `comments.access.read` to restrict that.
+- The editor reads and writes the collection over Payload's REST API. Each save or delete goes to the page's open editors as a `comments` event on the live channel (see [Multiplayer editing](#multiplayer-editing)). A reconnect loads the list again.
+- On by default. `websiteBuilder({ comments: false })` turns it off. Options: `comments: { slug?, access?, admin?, hooks? }`. The new collection needs a migration in production (`pnpm payload migrate:create`).
+
+Not included yet: mentions and email notifications.
 
 ## Production and Docker
 

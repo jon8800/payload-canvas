@@ -28,6 +28,16 @@ export type CanvasInit = {
   regions?: RegionConfig[]
   /** Collection -> relationship field path -> related collection, for `<path>.$url` bindings. */
   relations?: Record<string, Record<string, string>>
+  /**
+   * Full API path that lists the editable classes (`GET {api}/builder/classes`). The canvas compiles
+   * their latest drafts, and follows the editor's edits on `CLASSES_CHANNEL`. Left out: no classes.
+   */
+  classesEndpoint?: string
+  /**
+   * The saved sections collection: the canvas loads the blocks of live saved sections (components'
+   * copies) from it. The app's own block list usually has no `sectionRef` definition to name it.
+   */
+  savedSections?: string | null
 }
 
 export type PointerKind = 'move' | 'leave' | 'click'
@@ -115,8 +125,12 @@ export type CanvasToAdmin =
   /** Repeated until the iframe has both `init` and a layout, so a reload never races. */
   | { type: 'ready' }
   | { type: 'measure'; measurement: CanvasMeasurement }
-  /** Pointer position in iframe viewport coordinates. */
-  | { type: 'pointer'; kind: PointerKind; x: number; y: number }
+  /**
+   * Pointer position in iframe viewport coordinates. `control`: the pointer is over a canvas
+   * control (`data-builder-control`, a carousel's arrow), which acts as on the site: the editor
+   * shows no hover outline and no "+" there. A click on a control sends no `click`.
+   */
+  | { type: 'pointer'; kind: PointerKind; x: number; y: number; control?: boolean }
   | { type: 'key'; key: KeyAction }
   /** A press anywhere in the canvas. The editor closes its open menus and popovers. */
   | { type: 'pointerDown' }

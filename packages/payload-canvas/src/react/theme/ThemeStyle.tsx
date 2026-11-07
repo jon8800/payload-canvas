@@ -4,7 +4,7 @@ import type { Payload } from 'payload'
 import { cache, Suspense } from 'react'
 
 import { THEME_PRECEDENCE, themeStyleHref } from './constants'
-import { ThemeLive } from './ThemeLive'
+import { ThemeLive } from './ThemeLiveLoader'
 
 export type LoadedTheme = ThemeOutput & {
   /** The theme global (depth 0). */

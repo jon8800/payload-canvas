@@ -18,7 +18,7 @@ const props = (extra: Record<string, unknown>): BlockComponentProps => ({
   className: 'flex gap-6',
   slots: {},
   attributes: {},
-  slotAttributes: {},
+  partAttributes: {},
   mode: 'site',
 })
 
@@ -92,8 +92,8 @@ describe('Menu dropdowns', () => {
     label: 'Services',
     link: { href: '/services' },
     children: [
-      { id: 'd', label: 'Dinner', link: { href: '/services/dinner' } },
-      { id: 't', label: 'Travel', link: { href: '/travel' } },
+      { id: 'd', label: 'Design', link: { href: '/services/design' } },
+      { id: 't', label: 'Hosting', link: { href: '/hosting' } },
     ],
   }
   const group = { id: 'g', label: 'More', children: [{ id: 'f', label: 'FAQ', link: { href: '/faq' } }] }
@@ -104,7 +104,7 @@ describe('Menu dropdowns', () => {
       out,
       /<li class="relative flex items-center gap-1 builder-css"><a href="\/services" class="[^"]*">Services<\/a><details class="group\/submenu builder-css"><summary class="[^"]*" aria-label="Services menu"><svg[^>]*aria-hidden="true">/,
     )
-    assert.match(out, /<ul class="absolute [^"]*"><li><a href="\/services\/dinner" class="[^"]*">Dinner<\/a><\/li><li><a href="\/travel"/)
+    assert.match(out, /<ul class="absolute [^"]*"><li><a href="\/services\/design" class="[^"]*">Design<\/a><\/li><li><a href="\/hosting"/)
     assert.match(html([services], { submenuLabel: 'Untermenü {label}' }), /aria-label="Untermenü Services"/)
   })
 
@@ -115,7 +115,7 @@ describe('Menu dropdowns', () => {
   test('the panel shows the children as a nested list', () => {
     const out = html([services, group])
     const panel = out.slice(out.indexOf('<details class="group'))
-    assert.match(panel, /<li><a href="\/services" class="[^"]*">Services<\/a><ul class="flex flex-col pl-4 builder-css"><li><a href="\/services\/dinner"/)
+    assert.match(panel, /<li><a href="\/services" class="[^"]*">Services<\/a><ul class="flex flex-col pl-4 builder-css"><li><a href="\/services\/design"/)
     assert.match(panel, /<li><span class="[^"]*">More<\/span><ul class="flex flex-col pl-4 builder-css"><li><a href="\/faq"/)
   })
 
@@ -126,15 +126,15 @@ describe('Menu dropdowns', () => {
 
   test('marks the current child "page" and its parent "true"; one level only', () => {
     const [item] = toItems([{ ...services, link: { href: '/our-services' } }])
-    assert.equal(currentOf(item!, '/services/dinner'), 'true')
-    assert.equal(currentOf(item!.children[0]!, '/services/dinner'), 'page')
+    assert.equal(currentOf(item!, '/services/design'), 'true')
+    assert.equal(currentOf(item!.children[0]!, '/services/design'), 'page')
     assert.equal(currentOf(item!, '/elsewhere'), undefined)
     const [deep] = toItems([{ label: 'A', children: [{ label: 'B', children: [{ label: 'C' }] }] }])
     assert.deepEqual(deep!.children[0]!.children, [])
   })
 
   test('the canvas edits child labels in place', () => {
-    assert.match(html([services], {}, 'canvas'), /data-builder-text="items.0.children.0.label"[^>]*>Dinner</)
+    assert.match(html([services], {}, 'canvas'), /data-builder-text="items.0.children.0.label"[^>]*>Design</)
     assert.match(html([group], {}, 'canvas'), /<span data-builder-text="items.0.label">More<\/span>/)
   })
 })

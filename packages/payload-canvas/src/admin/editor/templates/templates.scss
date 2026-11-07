@@ -624,4 +624,31 @@
     border-radius: 3px;
     background: rgb(255 255 255 / 0.22);
   }
+
+  // ---------------------------------------------------------------------------
+  // Visibility conditions (Visibility.tsx); the rows use the where builder's styles
+  // ---------------------------------------------------------------------------
+
+  .builder-visibility {
+    padding-top: calc(var(--base) * 0.75);
+    border-top: 1px solid var(--theme-elevation-100);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Format picker of a bound prop and of the Field block (Bindable.tsx)
+  // ---------------------------------------------------------------------------
+
+  .builder-format {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 4px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .builder-format__name {
+    grid-column: 1 / -1;
+  }
 }

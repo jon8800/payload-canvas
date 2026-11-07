@@ -5,6 +5,8 @@
 
 import { keyAction, type KeyAction } from '../../protocol'
 import { findLocation } from '../../core'
+import { CONTENT_MODE_MESSAGE } from '../../core/contentMode'
+import { contentModeAllows } from './contentMode'
 import {
   copySelection,
   copyStyles,
@@ -43,6 +45,8 @@ export type EditorAction =
   /** Opens the selected block's menu: the ContextMenu key or Shift+F10. */
   | 'menu'
   | 'rename'
+  /** C: comment mode on or off. */
+  | 'comments'
   /** Alt+1, Alt+2, Alt+3: the left panel's Layers, Blocks or Sections tab. */
   | `panel:${LeftTab}`
 
@@ -95,6 +99,7 @@ export function editorAction(e: KeyboardEvent): EditorAction | null {
   if (e.shiftKey && !mod && !e.altKey && e.key === 'Enter') return 'parent'
   if (!e.shiftKey && !mod && !e.altKey && e.key === 'Enter') return 'editText'
   if (!mod && !e.altKey && e.key === '?') return 'help'
+  if (!mod && !e.altKey && !e.shiftKey && letter === 'c') return 'comments'
   return null
 }
 
@@ -109,7 +114,7 @@ export function publishShortcut(): { keys: string[]; text: string; aria: string 
  * Key caps for the shortcut help, with the platform's modifier key. `ai` adds the assistant
  * shortcut, `publish` the Publish shortcut (collections with drafts).
  */
-export function shortcutList({ ai = false, publish = false }: { ai?: boolean; publish?: boolean } = {}): {
+export function shortcutList({ ai = false, publish = false, comments = false }: { ai?: boolean; publish?: boolean; comments?: boolean } = {}): {
   keys: string[]
   label: string
 }[] {
@@ -117,6 +122,7 @@ export function shortcutList({ ai = false, publish = false }: { ai?: boolean; pu
   return [
     ...(publish ? [{ keys: publishShortcut().keys, label: 'Publish changes' }] : []),
     ...(ai ? [{ keys: [mod, 'I'], label: 'Open or close the AI assistant' }] : []),
+    ...(comments ? [{ keys: ['C'], label: 'Comment mode' }] : []),
     { keys: [mod, 'Z'], label: 'Undo' },
     { keys: [mod, 'Shift', 'Z'], label: 'Redo' },
     { keys: [mod, 'C'], label: 'Copy block' },
@@ -178,7 +184,12 @@ export function bindShortcuts(runtime: Runtime, doc: Document, { forwarded }: { 
   let menuKeyAt = 0
 
   const run = (action: EditorAction) => {
-    const { selectedId } = runtime.store.getState()
+    const { selectedId, layout } = runtime.store.getState()
+    // Content mode: only content changes, plus the items of a block that lets editors manage them.
+    if (runtime.contentMode.get() && !contentModeAllows(action, layout, selectedId)) {
+      if (selectedId && !isPanelAction(action)) runtime.notify(CONTENT_MODE_MESSAGE)
+      return
+    }
     switch (action) {
       case 'copy':
         // Local storage and the async clipboard API now; the native `copy` event below fills the
@@ -215,6 +226,9 @@ export function bindShortcuts(runtime: Runtime, doc: Document, { forwarded }: { 
         return
       case 'assistant':
         runtime.toggleAssistant()
+        return
+      case 'comments':
+        runtime.comments?.toggle()
         return
       case 'editText': {
         if (selectedId) startInlineEditing(runtime, selectedId)
@@ -268,6 +282,7 @@ export function bindShortcuts(runtime: Runtime, doc: Document, { forwarded }: { 
     }
     if (excluded(e.target)) return
     if (action === 'assistant' && !runtime.assistant) return
+    if (action === 'comments' && !runtime.comments) return
     // Collections without drafts have no Publish.
     if (action === 'publish' && !runtime.doc.meta.get().drafts) return
     if (forwarded && keyAction(e)) return
@@ -311,7 +326,7 @@ export function bindShortcuts(runtime: Runtime, doc: Document, { forwarded }: { 
     const text = e.clipboardData?.getData('text/plain')
     // An empty clipboard (or no access to it): use the copy in local storage.
     const blocks = parseClipboard(text || storedClipboard())
-    if (!blocks) return
+    if (!blocks || runtime.contentMode.get()) return
     e.preventDefault()
     pasteBlocks(runtime, blocks)
   }

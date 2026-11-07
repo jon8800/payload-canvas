@@ -150,6 +150,12 @@ describe('saved sections in the prompts', () => {
     assert.doesNotMatch(contextText(base), /Saved sections/)
   })
 
+  it('lists the editable classes with their labels', () => {
+    const text = contextText({ ...base, classes: [{ name: 'card', label: 'Card', group: 'Surfaces' }, { name: 'btn-ghost' }] })
+    assert.match(text, /Editable classes .*card \(Surfaces: Card\), btn-ghost\./)
+    assert.doesNotMatch(contextText({ ...base, classes: [] }), /Editable classes/)
+  })
+
   it(`lists at most ${CONTEXT_SAVED_SECTIONS} saved sections`, () => {
     const many = Array.from({ length: CONTEXT_SAVED_SECTIONS + 5 }, (_, i) => ({ ...team, id: `saved:${i}`, savedId: i }))
     const text = contextText({ ...base, savedSections: many })
@@ -167,14 +173,20 @@ describe('saved sections in the prompts', () => {
 })
 
 describe('section variants in the assistant', () => {
-  const variant: SectionDefinition = { id: 'hero/split', label: 'Hero (Split)', category: 'Heroes', blocks: hero.blocks, variantOf: 'hero' }
-  it('listSections and the catalog mark variants, and insertSection offers their ids', async () => {
-    const withVariant = env({ sections: [hero, variant] })
+  const withSplit: SectionDefinition = { ...hero, variants: [{ id: 'split', label: 'Split', blocks: [{ id: 'v1', type: 'heading', props: { text: 'Split hero' } }] }] }
+  it('listSections and the catalog list variants under their section, and insertSection takes `variant`', async () => {
+    const withVariant = env({ sections: [withSplit] })
     const outcome = await runTool('listSections', {}, new Workspace(emptyLayout(), blocks), withVariant)
-    assert.deepEqual((JSON.parse(outcome.content) as Array<{ variantOf?: string }>).map((s) => s.variantOf), [undefined, 'hero'])
-    const sectionId = schemaOf(toolDefinitions(withVariant), 'insertSection')?.properties.sectionId
-    assert.ok((sectionId?.enum as string[] | undefined)?.includes('hero/split'))
-    assert.match(systemPrompt({ blocks, sections: [hero, variant], tokens: null, bindings: false }), /## hero\/split: Hero \(Split\) \(Heroes\) \[variant of hero\]/)
+    const listed = JSON.parse(outcome.content) as Array<{ id: string; variants?: Array<{ id: string }> }>
+    assert.deepEqual(listed.map((s) => [s.id, s.variants?.map((v) => v.id)]), [['hero', ['split']]])
+    assert.ok(schemaOf(toolDefinitions(withVariant), 'insertSection')?.properties.variant)
+    assert.match(systemPrompt({ blocks, sections: [withSplit], tokens: null, bindings: false }), /### variant split: Split\nheading "Split hero"/)
+    const workspace = new Workspace(emptyLayout(), blocks)
+    const inserted = await runTool('insertSection', { sectionId: 'hero', variant: 'split' }, workspace, withVariant)
+    assert.equal((JSON.parse(inserted.content) as { variant?: string }).variant, 'split')
+    assert.deepEqual(workspace.layout.blocks[0]?.section, { id: 'hero', variant: 'split' })
+    const wrong = await runTool('insertSection', { sectionId: 'hero', variant: 'nope' }, workspace, withVariant)
+    assert.match(wrong.content, /no variant/)
   })
 })
 

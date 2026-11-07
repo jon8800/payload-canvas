@@ -70,16 +70,16 @@ function withHeadingIds(base: ReturnType<typeof converters>, content: unknown) {
 
 /**
  * Lexical rich text as React elements, with internal links resolved by `resolveLink`. No wrapper.
- * `headingIds`: each heading gets an id from its text (`richTextHeadings`), for `#id` links.
+ * Each heading gets an id from its text (`richTextHeadings`), for `#id` links and the
+ * tableOfContents block.
  */
-export function renderRichText(content: unknown, resolveLink: ResolveLink, options?: { headingIds?: boolean }): ReactNode {
+export function renderRichText(content: unknown, resolveLink: ResolveLink): ReactNode {
   let rendererConverters = convertersByResolver.get(resolveLink)
   if (!rendererConverters) {
     rendererConverters = converters(resolveLink)
     convertersByResolver.set(resolveLink, rendererConverters)
   }
-  const used = options?.headingIds ? withHeadingIds(rendererConverters, content) : rendererConverters
-  return <LexicalRichText data={content as never} disableContainer converters={used as never} />
+  return <LexicalRichText data={content as never} disableContainer converters={withHeadingIds(rendererConverters, content) as never} />
 }
 
 /**
@@ -102,7 +102,7 @@ function createRichText(resolveLink: ResolveLink): ComponentType<BlockComponentP
     }
     return (
       <div {...attributes} {...editableText(mode, 'content')} className={className}>
-        {renderRichText(content, resolveLink, { headingIds: props.headingIds === true })}
+        {renderRichText(content, resolveLink)}
       </div>
     )
   }

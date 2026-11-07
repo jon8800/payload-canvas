@@ -24,13 +24,25 @@ Each adapter has its own import path. Your site loads only the adapter you impor
 
 The first four need no extra package: they call the API with `fetch` and read the streamed reply themselves.
 
-The plugin reads no environment variables for the assistant. Your config code passes the keys to the adapter, so you choose the variable names. Without an adapter, or when the adapter has no key, the panel shows a setup card that says what to set.
+The plugin reads no environment variables for the assistant. Your config code passes the keys to the adapter, so you choose the variable names. An admin can also paste a key in the admin: see [API keys in the admin](#api-keys-in-the-admin). Without an adapter, or when the adapter has no key, the panel shows a setup card that says what to set.
 
 No API key at all? Use Claude Code or Codex with your Claude or ChatGPT plan. See [connect-claude-code-and-codex.md](connect-claude-code-and-codex.md).
 
 Image generation has its own adapter (`ai.images`), separate from the chat model. See [images.md](images.md).
 
 To write your own adapter, see the README, [Write your own adapter](../../packages/payload-canvas/README.md#write-your-own-adapter).
+
+## API keys in the admin
+
+The plugin adds an **AI settings** global (slug `builder-ai-settings`). An admin pastes the API key there, and the next AI request uses it. No deploy and no restart.
+
+- **Precedence:** the key in AI settings wins. Not set or cleared: the key from the adapter options (env).
+- **Fields:** one key field for the chat adapter, one for the image adapter. They share one field when both read the same env var, for example `OPENROUTER_API_KEY`.
+- **Which key:** OpenRouter, OpenAI-compatible, OpenAI images: the API key. Cloudflare Workers AI: the API token. Cloudflare AI Gateway: the gateway token (`cf-aig-authorization`). Anthropic: the API key. The fake adapters take no key.
+- **Security:** stored encrypted (AES-256-GCM, key derived from Payload's `secret`). Reads return only "Set, ends in …4f2a". No GraphQL. A key that cannot be decrypted (the secret changed) counts as not set, and the server logs a warning.
+- **Access:** default: signed-in users of the admin user collection. Set `ai.settings.access` to allow admins only on sites with roles.
+- **Database:** one global table. Dev creates it with `push: true`. Production needs a migration.
+- **Off:** `ai: { settings: false }`.
 
 ## Options for every OpenAI-format adapter
 

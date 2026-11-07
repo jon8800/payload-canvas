@@ -1,0 +1,539 @@
+// Comments on the canvas: pins, the composer and thread popover, the panel and the top bar button.
+// Payload CSS variables and the editor's own `--be-*` variables only, no Tailwind.
+
+@layer payload-default {
+  @keyframes builder-pin-in {
+    from {
+      opacity: 0;
+      scale: 0.6;
+    }
+  }
+
+  // The inspector stays mounted while the comments panel shows.
+  .builder-comments-keep {
+    display: contents;
+
+    &[hidden] {
+      display: none;
+    }
+  }
+
+  // ---- Top bar button -------------------------------------------------------
+
+  .builder-comments-button {
+    position: relative;
+  }
+
+  .builder-comments-button__badge {
+    position: absolute;
+    top: 0;
+    right: -2px;
+    min-width: 15px;
+    height: 15px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: var(--be-accent-solid, var(--be-accent));
+    box-shadow: 0 0 0 2px var(--theme-bg);
+    color: var(--be-accent-fg);
+    font-size: 10px;
+    font-weight: var(--be-weight-strong);
+    font-variant-numeric: tabular-nums;
+    line-height: 15px;
+    text-align: center;
+    pointer-events: none;
+  }
+
+  // ---- Canvas layer (inside the zoomed frame, iframe coordinates) -----------
+
+  .builder-comments-layer {
+    --be-px: calc(1px * var(--be-inv, 1));
+
+    position: absolute;
+    z-index: 7;
+    inset: 0;
+    overflow: hidden;
+  }
+
+  .builder-comments-layer__capture {
+    position: absolute;
+    inset: 0;
+    // A comment bubble with its point at the bottom left: the pin lands where the point is.
+    cursor:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M2 22V12a10 10 0 1 1 10 10Z' fill='%23fff' stroke='%23111' stroke-width='1.5'/%3E%3C/svg%3E")
+        2 22,
+      crosshair;
+  }
+
+  .builder-comments-layer__hover {
+    position: absolute;
+    border: var(--be-px) dashed var(--be-accent);
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--be-accent) 5%, transparent);
+    pointer-events: none;
+  }
+
+  // A teardrop: round, with its point (bottom left) on the comment's spot. Screen size at any zoom.
+  .builder-comment-pin {
+    position: absolute;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    border-radius: 50% 50% 50% 3px;
+    background: var(--theme-bg);
+    box-shadow:
+      0 2px 8px rgb(0 0 0 / 0.18),
+      0 0 0 1px rgb(0 0 0 / 0.06);
+    color: var(--theme-text);
+    cursor: pointer;
+    transform: scale(var(--be-inv, 1)) translateY(-100%);
+    transform-origin: 0 0;
+    transition:
+      scale 160ms var(--be-ease),
+      box-shadow 160ms var(--be-ease);
+    animation: builder-pin-in 200ms var(--be-ease);
+
+    .builder-comment__avatar {
+      width: 24px;
+      height: 24px;
+      background: var(--be-accent-solid, var(--be-accent));
+      color: var(--be-accent-fg);
+    }
+
+    &:hover {
+      scale: 1.08;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--be-accent);
+      outline-offset: 2px;
+    }
+  }
+
+  .builder-comment-pin--open {
+    z-index: 2;
+    box-shadow:
+      0 2px 8px rgb(0 0 0 / 0.18),
+      0 0 0 2px var(--be-accent);
+  }
+
+  .builder-comment-pin--resolved {
+    width: 24px;
+    height: 24px;
+    background: var(--theme-elevation-100);
+    color: var(--be-muted);
+  }
+
+  .builder-comment-pin--draft {
+    z-index: 3;
+    background: var(--be-accent-solid, var(--be-accent));
+    color: var(--be-accent-fg);
+    cursor: default;
+    pointer-events: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .builder-comment-pin {
+      transition: none;
+      animation: none;
+    }
+  }
+
+  // ---- Popover (editor root, screen coordinates) -----------------------------
+
+  .builder-comments-popover {
+    position: fixed;
+    z-index: 90;
+    inset: auto;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    display: flex;
+    flex-direction: column;
+    max-height: min(480px, calc(100vh - 24px));
+    overflow: hidden;
+    border-radius: var(--be-radius-m);
+    background: var(--be-panel);
+    box-shadow: var(--be-shadow);
+    color: var(--theme-text);
+    font-size: var(--be-text-m);
+    animation: builder-fade-in 140ms var(--be-ease);
+  }
+
+  // ---- Thread -----------------------------------------------------------------
+
+  .builder-thread {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .builder-thread--new {
+    padding: 8px;
+  }
+
+  .builder-thread__head {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 4px 4px 12px;
+    border-bottom: 1px solid var(--be-border-soft);
+  }
+
+  .builder-thread__status {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--be-muted);
+    font-size: var(--be-text-s);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .builder-thread__items {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 4px 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .builder-thread__reply {
+    flex: none;
+    padding: 8px;
+    border-top: 1px solid var(--be-border-soft);
+  }
+
+  .builder-comment {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
+    gap: 8px;
+    padding: 6px 12px;
+
+    &:hover .builder-comment__tools,
+    &:focus-within .builder-comment__tools {
+      opacity: 1;
+    }
+  }
+
+  .builder-comment__avatar {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--theme-elevation-150);
+    color: var(--theme-elevation-800);
+    font-size: 10px;
+    font-weight: var(--be-weight-strong);
+    letter-spacing: 0.02em;
+    line-height: 1;
+  }
+
+  .builder-comment__main {
+    min-width: 0;
+  }
+
+  .builder-comment__head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    min-height: 22px;
+  }
+
+  .builder-comment__name {
+    overflow: hidden;
+    font-weight: var(--be-weight-strong);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .builder-comment__time {
+    flex: none;
+    color: var(--be-muted);
+    font-size: var(--be-text-s);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .builder-comment__tools {
+    display: flex;
+    margin-left: auto;
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+
+  .builder-comment__body {
+    margin: 2px 0 0;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+
+  .builder-comment__confirm {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 6px;
+    padding: 4px 4px 4px 8px;
+    border-radius: var(--be-radius);
+    background: color-mix(in srgb, var(--theme-error-500) 10%, transparent);
+    font-size: var(--be-text-s);
+
+    > span {
+      flex: 1;
+    }
+  }
+
+  .builder-comment__text-button {
+    padding: 3px 8px;
+    border: 0;
+    border-radius: var(--be-radius);
+    background: transparent;
+    color: var(--theme-elevation-800);
+    font: inherit;
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-medium);
+    cursor: pointer;
+
+    &:hover {
+      background: var(--be-hover);
+      color: var(--theme-text);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--be-accent);
+      outline-offset: -2px;
+    }
+  }
+
+  .builder-comment__text-button--danger {
+    color: var(--theme-error-500);
+
+    &:hover {
+      color: var(--theme-error-500);
+    }
+  }
+
+  // ---- Text box ---------------------------------------------------------------
+
+  .builder-comment-input {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    padding: 3px 3px 3px 10px;
+    border: 1px solid var(--be-border);
+    border-radius: var(--be-radius-m);
+    background: var(--theme-input-bg, var(--theme-elevation-0));
+    transition: border-color 120ms ease;
+
+    &:focus-within {
+      border-color: var(--be-accent);
+    }
+
+    textarea {
+      flex: 1;
+      min-width: 0;
+      min-height: 26px;
+      max-height: 160px;
+      padding: 4px 0;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--theme-text);
+      font: inherit;
+      font-size: var(--be-text-m);
+      line-height: 1.45;
+      resize: none;
+      field-sizing: content;
+
+      // The box around the text area shows the focus.
+      &:focus,
+      &:focus-visible {
+        outline: 0;
+        box-shadow: none;
+      }
+
+      &::placeholder {
+        color: var(--be-muted);
+      }
+    }
+
+    .builder-comment__main & {
+      margin-top: 4px;
+    }
+  }
+
+  .builder-comment-input__actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .builder-comment__send {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--be-accent-solid, var(--be-accent));
+    color: var(--be-accent-fg);
+    cursor: pointer;
+    transition: background-color 120ms ease;
+
+    &:disabled {
+      background: var(--theme-elevation-150);
+      color: var(--be-subtle);
+      cursor: default;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--be-accent);
+      outline-offset: 2px;
+    }
+  }
+
+  // ---- Panel ------------------------------------------------------------------
+
+  .builder-comments-panel {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .builder-comments-panel__head {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 8px 8px 12px;
+    border-bottom: 1px solid var(--be-border);
+  }
+
+  .builder-comments-panel__title {
+    flex: 1;
+    margin: 0;
+    font-size: var(--be-text-l);
+    font-weight: var(--be-weight-strong);
+    line-height: 28px;
+  }
+
+  .builder-comments-panel__filter {
+    flex: none;
+    padding: 10px 12px 8px;
+  }
+
+  .builder-comments-panel__list {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-height: 0;
+    padding: 0 8px 12px;
+    overflow-y: auto;
+  }
+
+  .builder-comment-card {
+    flex: none;
+    border-radius: var(--be-radius-m);
+
+    .builder-thread {
+      border-top: 1px solid var(--be-border-soft);
+    }
+  }
+
+  .builder-comment-card--open {
+    background: var(--be-raised);
+    box-shadow: inset 0 0 0 1px var(--be-border);
+  }
+
+  .builder-comment-card__summary {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
+    gap: 8px;
+    width: 100%;
+    padding: 8px;
+    border: 0;
+    border-radius: var(--be-radius-m);
+    background: transparent;
+    color: var(--theme-text);
+    font: inherit;
+    font-size: var(--be-text-m);
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--be-hover);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--be-accent);
+      outline-offset: -2px;
+    }
+  }
+
+  .builder-comment-card__main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .builder-comment-card__body {
+    display: -webkit-box;
+    overflow: hidden;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+
+  .builder-comment-card__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 10px;
+    margin-top: 2px;
+    color: var(--be-muted);
+    font-size: var(--be-text-s);
+  }
+
+  .builder-comment-card__where {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .builder-comment-card__deleted {
+    color: var(--theme-warning-650, var(--theme-warning-500));
+    font-weight: var(--be-weight-medium);
+  }
+
+  .builder-comment-card__resolved {
+    display: inline-grid;
+    margin-left: auto;
+    color: var(--be-accent-text);
+  }
+
+  .builder-comment-card--resolved {
+    .builder-comment-card__body,
+    .builder-comment__name {
+      color: var(--be-muted);
+    }
+
+    .builder-comment__avatar {
+      opacity: 0.6;
+    }
+  }
+}

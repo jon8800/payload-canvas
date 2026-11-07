@@ -19,6 +19,7 @@ describe('aiClientConfig', () => {
       keyEnv: 'OPENROUTER_API_KEY',
       keyUrl: 'https://openrouter.ai/keys',
       images: null,
+      settingsUrl: null,
     })
     assert.equal(clientIdentity(config), 'openrouter:openai/gpt-6-luna')
   })

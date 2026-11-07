@@ -4,6 +4,8 @@
 // the server streams operations back, the editor applies them as one undo step per turn, and
 // Payload's normal autosave persists them. External agents keep using MCP (src/mcp).
 
+import type { PayloadRequest } from 'payload'
+
 import type { Layout, Operation, TemplateContext } from '../core/types'
 
 // ---------------------------------------------------------------------------
@@ -56,6 +58,11 @@ export type AiModelRequest = {
   effort?: AiEffort
   /** Aborts the request (Stop button, closed tab). */
   signal?: AbortSignal
+  /**
+   * An API key from the admin's AI settings, read for this request. When set, the adapter uses it
+   * instead of the key from its options. Only sent to adapters with `acceptsApiKey`.
+   */
+  apiKey?: string
 }
 
 /**
@@ -97,6 +104,13 @@ export type AiAdapter = {
   keyEnv?: string | null
   /** Where to create a key, for the setup card. */
   keyUrl?: string | null
+  /**
+   * The adapter reads `AiModelRequest.apiKey`. The AI settings global then has a key field for it,
+   * so an admin can paste a key without a deploy.
+   */
+  acceptsApiKey?: boolean
+  /** `ready` is false only because the API key is missing: a key from the AI settings makes the adapter ready. */
+  missingKey?: boolean
   /** Streams one model call. Must not throw for API errors: yield an `error` event instead. */
   stream(request: AiModelRequest): AsyncIterable<AiModelEvent>
 }
@@ -116,6 +130,8 @@ export type AiImageRequest = {
   /** How many images. The plugin asks for 1. Adapters may return fewer. */
   n: number
   signal?: AbortSignal
+  /** An API key from the admin's AI settings. When set, it replaces the key from the options. See `AiModelRequest.apiKey`. */
+  apiKey?: string
 }
 
 /** One generated image: the file bytes. */
@@ -153,6 +169,10 @@ export type AiImageAdapter = {
   keyEnv?: string | null
   /** Where to create a key. */
   keyUrl?: string | null
+  /** The adapter reads `AiImageRequest.apiKey`: the AI settings global has a key field for it. */
+  acceptsApiKey?: boolean
+  /** `ready` is false only because the API key is missing: a key from the AI settings makes the adapter ready. */
+  missingKey?: boolean
   /** Generates images. Throws `AiImageError` (or any Error) with a readable message on failure. */
   generate(request: AiImageRequest): Promise<AiImageResult>
 }
@@ -209,6 +229,24 @@ export type AiOptions = {
    * "generatedBy". `false` turns it off.
    */
   imageMarkerField?: string | false
+  /**
+   * The "AI settings" global, where an admin pastes API keys without a deploy. A key set there
+   * wins over the key in the adapter options (env). Keys are stored encrypted and never sent to
+   * the browser. On by default; `false` turns it off. See docs/ai/providers.md, "API keys in the admin".
+   */
+  settings?: AiSettingsOptions | false
+}
+
+/** Plugin option `ai.settings`. */
+export type AiSettingsOptions = {
+  /** Slug of the global. Default "builder-ai-settings". */
+  slug?: string
+  /**
+   * Who may read and change the settings (the global's read and update access). Default: signed-in
+   * users of the admin user collection (`admin.user`). The assistant also needs a signed-in user.
+   * Sites with roles should allow admins only.
+   */
+  access?: (args: { req: PayloadRequest }) => boolean | Promise<boolean>
 }
 
 /** Set on BuilderClientConfig.ai when the assistant is enabled. */
@@ -230,6 +268,11 @@ export type AiClientConfig = {
   keyUrl: string | null
   /** Image generation. Null when no image adapter is ready: the editor hides the Generate action. */
   images: AiImagesClientConfig | null
+  /**
+   * The admin page of the AI settings global, when a key there makes the assistant work and the
+   * user may open the page. Else null.
+   */
+  settingsUrl: string | null
 }
 
 /** Token usage of one turn (all model calls). `cost` in USD when the provider reports it (OpenRouter). */

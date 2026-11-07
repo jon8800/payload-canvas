@@ -17,8 +17,6 @@ describe('inlineKind', () => {
     assert.equal(inlineKind(def('text'), 'text', 'Hi'), 'lines')
     assert.equal(inlineKind(def('richText'), 'content', null), 'rich')
     assert.equal(inlineKind(def('button'), 'label', 'Go'), 'line')
-    assert.equal(inlineKind(def('quote'), 'quote', 'Q'), 'lines')
-    assert.equal(inlineKind(def('quote'), 'cite', 'C'), 'line')
   })
 
   test('array rows: the number segment steps into the row fields', () => {
@@ -118,7 +116,7 @@ describe('editable text marks', () => {
       { id: 'h', type: 'heading', props: { text: 'Hello', level: '2' } },
       { id: 'l', type: 'list', props: { items: [{ id: 'r1', text: '' }, { id: 'r2', text: 'Second' }] } },
       { id: 'm', type: 'list', slots: { items: [{ id: 'i1', type: 'listItem', props: { text: 'Item' } }] } },
-      { id: 'q', type: 'quote', props: { quote: 'Q', cite: 'C' } },
+      { id: 't', type: 'text', props: { text: 'Q' } },
     ],
   }
   const render = (mode: 'site' | 'canvas') => renderToStaticMarkup(createElement(RenderLayout, { layout, blocks, mode }))
@@ -128,8 +126,7 @@ describe('editable text marks', () => {
     assert.match(html, /<h2 data-block-id="h"[^>]*data-builder-text="text"/)
     assert.match(html, /<li data-builder-text="items.1.text">Second<\/li>/)
     assert.match(html, /<li data-block-id="i1" data-block-type="listItem" data-builder-text="text">Item<\/li>/)
-    assert.match(html, /<p data-builder-text="quote">Q<\/p>/)
-    assert.match(html, /<cite data-builder-text="cite">C<\/cite>/)
+    assert.match(html, /<p data-block-id="t"[^>]*data-builder-text="text"[^>]*>Q<\/p>/)
   })
 
   test('the site output has no editor marks', () => {

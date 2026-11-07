@@ -117,11 +117,13 @@ export function payloadBlocksProblems(layout: Layout, storage: PayloadBlocksStor
         continue
       }
       if (allowed && !allowed.includes(block.type)) problems.push(`${name} blocks are not allowed here.`)
-      if (block.className || block.slotClassName) problems.push(`${name}: this field cannot store Tailwind classes.`)
+      if (block.className || block.partClassName) problems.push(`${name}: this field cannot store Tailwind classes.`)
       if (block.motion) problems.push(`${name}: this field cannot store animations.`)
       if (block.attrs) problems.push(`${name}: this field cannot store HTML attributes (id, aria-label, aria-hidden).`)
       if (block.bindings) problems.push(`${name}: this field cannot store bindings.`)
       if (block.hidden) problems.push(`${name}: this field cannot store hidden blocks.`)
+      if (block.editableItems) problems.push(`${name}: this field cannot store "Editors can add, remove and reorder its items".`)
+      if (block.visibility) problems.push(`${name}: this field cannot store visibility conditions.`)
       if (block.locales) problems.push(`${name}: translations are edited in Payload's editor for this field.`)
       for (const [slot, children] of Object.entries(block.slots ?? {})) {
         if (!def.slots?.[slot]) {

@@ -67,8 +67,12 @@ export function cloudflareWorkersAIImageAdapter(options: CloudflareWorkersAIImag
     setupProblem,
     keyEnv: 'CLOUDFLARE_API_TOKEN',
     keyUrl: 'https://dash.cloudflare.com/profile/api-tokens',
+    acceptsApiKey: true,
+    missingKey: Boolean(accountId) && !token,
     async generate(request): Promise<AiImageResult> {
-      if (setupProblem) throw new AiImageError('auth', setupProblem)
+      // A token from the AI settings wins over the token from the options.
+      const authToken = clean(request.apiKey) ?? token
+      if (setupProblem && !(accountId && authToken)) throw new AiImageError('auth', setupProblem)
       const { width, height } = sizeForRatio(request.aspectRatio, longEdge, 16)
       let body: Record<string, unknown> | FormData
       if (family === 'multipart') {
@@ -84,7 +88,7 @@ export function cloudflareWorkersAIImageAdapter(options: CloudflareWorkersAIImag
         body = { prompt: request.prompt, width, height, ...extraInput }
       }
       const url = `${CLOUDFLARE_API_URL}/accounts/${encodeURIComponent(accountId ?? '')}/ai/run/${model}`
-      const headers = { Authorization: bearer(token ?? ''), ...(gatewayId ? { 'cf-aig-gateway-id': gatewayId } : {}), ...transport.headers }
+      const headers = { Authorization: bearer(authToken ?? ''), ...(gatewayId ? { 'cf-aig-gateway-id': gatewayId } : {}), ...transport.headers }
       // One image per call: Workers AI models return one.
       const images = []
       for (let i = 0; i < Math.max(1, request.n); i++) {

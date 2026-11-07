@@ -298,60 +298,6 @@
     padding: 0 0 10px;
   }
 
-  // Site classes: the site's own @utility classes as toggle buttons, by group.
-  .builder-styles__presets {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 0;
-    margin: 0;
-    padding: 0;
-    border: 0;
-  }
-
-  .builder-styles__presets-title {
-    margin: 4px 0 0;
-    padding: 0;
-    color: var(--theme-elevation-500);
-    font-size: var(--be-text-s, 11px);
-  }
-
-  .builder-styles__presets-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-  }
-
-  .builder-styles__preset {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 6px;
-    min-height: var(--bs-h);
-    padding: 2px 8px;
-    border: 1px solid var(--bs-border);
-    border-radius: var(--style-radius-s, 4px);
-    background: var(--theme-elevation-50);
-    color: var(--theme-text);
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-
-    &:hover {
-      border-color: var(--theme-elevation-300);
-    }
-
-    &[aria-pressed='true'] {
-      border-color: var(--theme-elevation-800);
-      background: var(--theme-elevation-800);
-      color: var(--theme-elevation-0);
-    }
-  }
-
-  .builder-styles__preset-name {
-    opacity: 0.7;
-    font-size: var(--be-text-s, 11px);
-  }
-
   // Rows in a sub-section keep the panel's columns; only the label text steps in.
   .builder-styles__sub-body {
     display: flex;
@@ -905,6 +851,31 @@
     }
   }
 
+  // A heading over a run of site classes of one group.
+  .builder-styles__suggest-group {
+    padding: 6px 6px 2px;
+    color: var(--bs-muted);
+    font-size: var(--be-text-s, 11px);
+
+    &:not(:first-child) {
+      margin-top: 2px;
+      border-top: 1px solid var(--bs-border);
+    }
+  }
+
+  // A site class: its label, with the class name small after it.
+  .builder-styles__suggest-label {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .builder-styles__suggest-name {
+    color: var(--bs-muted);
+    font-size: var(--be-text-s, 11px);
+  }
+
   .builder-styles__suggest-hint {
     color: var(--bs-muted);
     font-variant-numeric: tabular-nums;
@@ -1117,15 +1088,8 @@
   }
 
   // -------------------------------------------------------------------------
-  // Raw classes
+  // Small labels, classes as text ("Edit as text") and the custom CSS box
   // -------------------------------------------------------------------------
-
-  .builder-styles__raw {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 10px 0 4px;
-  }
 
   .builder-styles__raw-label {
     color: var(--bs-muted);
@@ -1146,48 +1110,6 @@
     font-size: var(--be-text-m);
     line-height: 1.5;
     resize: vertical;
-  }
-
-  .builder-styles__others {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin-top: 6px;
-  }
-
-  .builder-styles__chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .builder-styles__class-chip {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    padding: 1px 2px 1px 6px;
-    border-radius: 3px;
-    background: var(--theme-elevation-100);
-
-    .builder-styles__reset {
-      width: 16px;
-      height: 16px;
-    }
-  }
-
-  // Not in the theme's class list: probably a typo.
-  .builder-styles__class-chip--unknown {
-    outline: 1px dashed var(--theme-warning-500, #b7791f);
-    outline-offset: -1px;
-    background: color-mix(in srgb, var(--theme-warning-500, #b7791f) 12%, transparent);
-
-    code {
-      text-decoration: wavy underline var(--theme-warning-500, #b7791f);
-    }
   }
 
   .builder-styles__visually-hidden {

@@ -4,6 +4,7 @@
 // own validation.
 
 import { isRichText, richTextToPlain, withoutBoundRequired } from '../core/bindings'
+import { contentModeProblem } from '../core/contentMode'
 import { createId } from '../core/ids'
 import { MOTION_KINDS, MOTION_SPECS, type MotionKind } from '../core/motion'
 import { blockJsonSchema } from '../core/schema'
@@ -16,8 +17,8 @@ import { IMAGE_ASPECT_RATIOS } from './images/shared'
 import { IMAGES_NOT_CONFIGURED, type GenerateImageOutcome } from './images/service'
 import { validateLayout, type LayoutError } from '../core/validate'
 import { resolveOperations, splitLayoutErrors } from '../live/apply'
-import { isRootParentId, sectionInsertOps } from '../mcp/shared'
-import { findSection } from '../plugin/sections'
+import { componentListing, isRootParentId, missingContent, sectionInsertOps, sectionToInsert, variantsListing } from '../mcp/shared'
+import { findSectionVersion } from '../core/sections'
 
 /** One image (or file) of the media library, as the assistant sees it. */
 export type MediaItem = {
@@ -84,10 +85,17 @@ export class Workspace {
   readonly #localization: LocaleSettings | null
   /** The locale the assistant reads and writes. Null without localization. */
   readonly locale: string | null
+  /** The user has no design rights: only content changes apply (core/contentMode.ts). */
+  readonly contentOnly: boolean
 
-  constructor(layout: Layout, blocks: BlockDefinition[], options: { localization?: LocaleSettings | null; locale?: string | null } = {}) {
+  constructor(
+    layout: Layout,
+    blocks: BlockDefinition[],
+    options: { localization?: LocaleSettings | null; locale?: string | null; contentOnly?: boolean } = {},
+  ) {
     this.layout = layout
     this.#blocks = blocks
+    this.contentOnly = options.contentOnly === true
     this.#localization = options.localization ?? null
     this.locale = this.#localization ? (options.locale ?? this.#localization.defaultLocale) : null
     this.#baseline = new Set(this.#errors(layout).blocking.map(errorKey))
@@ -123,6 +131,9 @@ export class Workspace {
     const prepared = stampLocale(prepareOps(ops, this.layout) as Operation[], this.locale, this.#localization, { inserts: !options.copies })
     const resolved = resolveOperations(this.layout, prepared, this.#blocks, this.#localization)
     if (!resolved.ok) return { ok: false, error: resolved.error }
+    // Content mode: the user's own rights. The live session checks the same rule again.
+    const design = this.contentOnly ? contentModeProblem(this.layout, resolved.layout, this.#blocks) : null
+    if (design) return { ok: false, error: design }
     const { blocking, warnings } = this.#errors(resolved.layout)
     const added = blocking.filter((e) => !this.#baseline.has(errorKey(e)))
     if (added.length > 0) {
@@ -212,13 +223,16 @@ const MOTION_TEXT =
 const ATTRS_TEXT =
   'HTML attributes { id?, ariaLabel?, ariaHidden? }: id is an anchor for "#id" links, unique in the layout (letters, digits, - and _, starting with a letter); ariaLabel is the name screen readers read; ariaHidden true hides a decorative block from screen readers.'
 
-const SLOT_CLASS_TEXT =
-  'Tailwind classes of a slot\'s own element, by slot name, e.g. { "empty": "col-span-full" }. Only slots marked "classes" in the block catalog take them.'
+const VISIBILITY_TEXT =
+  'Visibility conditions (templates and list or repeat items only; on a normal page they do nothing) { match?: "all" | "any", conditions: [{ field, operator, value?, valueField?, count? }] }: the block shows only when they match the document. Operators: is_set, is_empty, equals, not_equals, in, not_in (list value), greater_than, greater_than_equal, less_than, less_than_equal, like, contains. valueField compares with another field instead of value. count: true compares the number of items. With match "any", an entry may be a group { all: [conditions] } ("or" of "and" groups). Example: { "conditions": [{ "field": "price", "operator": "greater_than", "value": 100 }] }.'
+
+const PART_CLASS_TEXT =
+  'Tailwind classes of the block\'s inner elements, by part name, e.g. { "empty": "col-span-full" }. Only the "parts" listed in the block catalog take them.'
 
 const BLOCK_SCHEMA = {
   type: 'object',
   description:
-    'A block: { id?, type, props?, className?, slots?, bindings?, hidden?, label?, motion?, attrs?, slotClassName? }. Children in slots have the same shape. `label` names the block for editors (e.g. "Hero"); give each top-level section one. Ids you leave out are generated; the tool result lists them.',
+    'A block: { id?, type, props?, className?, slots?, bindings?, visibility?, hidden?, label?, motion?, attrs?, partClassName? }. Children in slots have the same shape. `label` names the block for editors (e.g. "Hero"); give each top-level section one. Ids you leave out are generated; the tool result lists them.',
   properties: {
     id: { type: 'string' },
     type: { type: 'string' },
@@ -227,10 +241,12 @@ const BLOCK_SCHEMA = {
     slots: { type: 'object', description: 'Slot name -> array of child blocks.' },
     bindings: { type: 'object' },
     hidden: { type: 'boolean' },
+    editableItems: { type: 'boolean', description: 'Content mode: editors without design rights may duplicate, delete and reorder the direct children.' },
     label: { type: 'string', description: 'Name for editors (outline). Never rendered.' },
     motion: { type: 'object', description: MOTION_TEXT },
     attrs: { type: 'object', description: ATTRS_TEXT },
-    slotClassName: { type: 'object', description: SLOT_CLASS_TEXT },
+    visibility: { type: 'object', description: VISIBILITY_TEXT },
+    partClassName: { type: 'object', description: PART_CLASS_TEXT },
   },
   required: ['type'],
 } as const
@@ -260,7 +276,10 @@ const FLAT_OPERATIONS_SCHEMA: Record<string, unknown> = {
           props: { type: 'object', description: 'update: props to merge.' },
           unsetProps: { type: 'array', items: { type: 'string' } },
           className: { type: 'string', description: 'update: the FULL class list (replaces all classes).' },
+          addClassName: { type: 'string', description: 'update: classes to add, space-separated. Other classes stay.' },
+          removeClassName: { type: 'string', description: 'update: classes to remove, space-separated (exact match). Other classes stay.' },
           hidden: { type: 'boolean' },
+          editableItems: { type: 'boolean', description: 'Content mode: editors without design rights may duplicate, delete and reorder the direct children.' },
           bindings: { type: 'object' },
           label: { type: ['string', 'null'], description: 'update: name for editors (outline). null removes it.' },
           motion: {
@@ -268,7 +287,8 @@ const FLAT_OPERATIONS_SCHEMA: Record<string, unknown> = {
             description: `insert (inside block) and update: ${MOTION_TEXT} update merges per kind: a kind replaces that kind, null removes it, kinds left out stay. null removes all.`,
           },
           attrs: { type: ['object', 'null'], description: `update: ${ATTRS_TEXT} A key replaces that key, null removes it; attrs: null removes all.` },
-          slotClassName: { type: 'object', description: `update: ${SLOT_CLASS_TEXT} Merges per slot; null removes a slot's classes.` },
+          visibility: { type: ['object', 'null'], description: `update: ${VISIBILITY_TEXT} Replaces all conditions; null removes them.` },
+          partClassName: { type: 'object', description: `update: ${PART_CLASS_TEXT} Merges per part; null removes a part's classes.` },
           newId: { type: 'string' },
         },
         required: ['type'],
@@ -333,9 +353,32 @@ export function toolDefinitions(env: ToolEnv): AiToolDefinition[] {
             sectionId: saved
               ? { type: 'string', description: 'A section catalog id, a saved section id ("saved:<id>") or a section name.' }
               : { type: 'string', enum: sectionIds, description: 'Section id from the section catalog.' },
+            variant: { type: ['string', 'null'], description: 'A variant id the catalog lists under the section (e.g. "split"), or null for the section itself.' },
             parentId: { type: ['string', 'null'], description: 'Parent block id, or null for the page root.' },
             slot: { type: ['string', 'null'], description: 'Slot of the parent, or null for "children".' },
             index: { type: ['integer', 'null'], description: 'Final index in the target list, or null to append.' },
+            ...(saved
+              ? {
+                  values: {
+                    type: ['array', 'null'],
+                    description:
+                      'Components only (component: true in listSections): values for this copy. Text and rich text as text, an image as its upload id, a link as a URL, visible as true or false. Left out: the default.',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        name: { type: 'string', description: 'Property name from listSections.' },
+                        value: { type: ['string', 'number', 'boolean', 'null'] },
+                      },
+                      required: ['name', 'value'],
+                      additionalProperties: false,
+                    },
+                  },
+                  linked: {
+                    type: ['boolean', 'null'],
+                    description: 'Saved sections only. true: a copy that stays in sync (default for components). false: plain blocks. null: the default.',
+                  },
+                }
+              : {}),
           },
           required: ['sectionId'],
           additionalProperties: false,
@@ -356,7 +399,7 @@ export function toolDefinitions(env: ToolEnv): AiToolDefinition[] {
         '- move { id, to }: move a block (with children).',
         '- remove { id }: delete a block and its children.',
         '- duplicate { id, newId? }: copy a block right after itself.',
-        '- update { id, props?, unsetProps?, className?, hidden?, bindings?, label?, motion?, attrs?, slotClassName? }: props and bindings are merged (shallow); className REPLACES all classes, so send the full list; null removes it; a null binding removes that binding; label renames the block for editors (null removes it); motion merges per kind (a kind you send replaces that kind, null removes a kind, null alone removes all animations); attrs (HTML id, ariaLabel, ariaHidden) merges per key, null removes a key; slotClassName merges per slot (null removes).',
+        '- update { id, props?, unsetProps?, className?, addClassName?, removeClassName?, hidden?, bindings?, visibility?, label?, motion?, attrs?, partClassName? }: props and bindings are merged (shallow); className REPLACES all classes, so send the full list; null removes it; addClassName and removeClassName (space-separated) add or remove single classes and keep the rest; a null binding removes that binding; visibility replaces all conditions (null removes them); label renames the block for editors (null removes it); motion merges per kind (a kind you send replaces that kind, null removes a kind, null alone removes all animations); attrs (HTML id, ariaLabel, ariaHidden) merges per key, null removes a key; partClassName merges per slot (null removes).',
         'Position: { parentId (null = page root), slot? (default "children"), index (final index in the target list) }.',
         'On success the result lists the changed ids and any warnings (e.g. a required prop is empty). On error nothing changes and the error names the failing operation; fix it and call again.',
         'Example (ids come from the layout; block types and props from the block catalog): change a heading, then add a text block after it in the same section:',
@@ -382,7 +425,10 @@ export function toolDefinitions(env: ToolEnv): AiToolDefinition[] {
                     props: { type: 'object', description: 'Merged into the existing props.' },
                     unsetProps: { type: 'array', items: { type: 'string' } },
                     className: { type: ['string', 'null'], description: 'Replaces ALL classes.' },
+                    addClassName: { type: 'string', description: 'Classes to add, space-separated. Other classes stay.' },
+                    removeClassName: { type: 'string', description: 'Classes to remove, space-separated (exact match). Other classes stay.' },
                     hidden: { type: 'boolean' },
+                    editableItems: { type: 'boolean' },
                     bindings: { type: 'object', description: 'Prop path -> document field path; null removes.' },
                     label: { type: ['string', 'null'], description: 'Name for editors. null removes it.' },
                     motion: {
@@ -390,7 +436,8 @@ export function toolDefinitions(env: ToolEnv): AiToolDefinition[] {
                       description: `${MOTION_TEXT} Merges per kind: a kind replaces that kind, null removes it, kinds left out stay. null removes all.`,
                     },
                     attrs: { type: ['object', 'null'], description: `${ATTRS_TEXT} A key replaces that key, null removes it. null removes all.` },
-                    slotClassName: { type: 'object', description: `${SLOT_CLASS_TEXT} Merges per slot; null removes a slot's classes.` },
+                    visibility: { type: ['object', 'null'], description: `${VISIBILITY_TEXT} Replaces all conditions; null removes them.` },
+                    partClassName: { type: 'object', description: `${PART_CLASS_TEXT} Merges per part; null removes a part's classes.` },
                   },
                   required: ['type', 'id'],
                 },
@@ -667,9 +714,11 @@ export function repairOperations(
       })
     }
     if (op.type === 'update') {
-      if (Array.isArray(op.className)) {
-        op.className = op.className.filter((c) => typeof c === 'string').join(' ')
-        fix('"className" is one string of classes separated by spaces.')
+      for (const key of ['className', 'addClassName', 'removeClassName'] as const) {
+        const classes = op[key]
+        if (!Array.isArray(classes)) continue
+        op[key] = classes.filter((c) => typeof c === 'string').join(' ')
+        fix(`"${key}" is one string of classes separated by spaces.`)
       }
       if (typeof op.props === 'string') op.props = parseJson(op.props)
       if (op.motion !== undefined && op.motion !== null) {
@@ -708,20 +757,30 @@ export async function runTool(name: string, rawInput: unknown, workspace: Worksp
           id: s.id,
           label: s.label,
           ...(s.savedId !== undefined ? { saved: true } : {}),
-          ...(s.variantOf ? { variantOf: s.variantOf } : {}),
           ...(s.category ? { category: s.category } : {}),
           ...(input.full === true ? { blocks: s.blocks } : {}),
+          ...variantsListing(s, input.full === true),
+          ...componentListing(s, env.blocks),
         })),
         `Looked at ${list.length} section${list.length === 1 ? '' : 's'}`,
       )
     }
 
     case 'insertSection': {
-      const section = typeof input.sectionId === 'string' ? findSection(env.sections, input.sectionId) : undefined
-      if (!section) {
+      const variant = typeof input.variant === 'string' ? input.variant : undefined
+      const found = typeof input.sectionId === 'string' ? findSectionVersion(env.sections, input.sectionId, variant) : undefined
+      if (typeof found === 'string') return fail(found, 'Section not inserted')
+      if (!found) {
         const known = env.sections.map((s) => (s.savedId !== undefined ? `${s.id} (${s.label})` : s.id))
         return fail(`Unknown section "${String(input.sectionId)}"`, 'Section not inserted', { known })
       }
+      const values = Array.isArray(input.values)
+        ? Object.fromEntries(
+            input.values.flatMap((entry) => (isPlainObject(entry) && typeof entry.name === 'string' ? [[entry.name, entry.value]] : [])),
+          )
+        : undefined
+      const section = sectionToInsert(found, env.blocks, { values, linked: typeof input.linked === 'boolean' ? input.linked : null })
+      if (typeof section === 'string') return fail(section, 'Section not inserted')
       const parentId = optionalString(input, 'parentId')
       const slot = optionalString(input, 'slot')
       if (parentId instanceof Error || slot instanceof Error) return fail('parentId and slot must be strings', 'Section not inserted')
@@ -737,8 +796,18 @@ export async function runTool(name: string, rawInput: unknown, workspace: Worksp
       const result = workspace.apply(ops, { copies: true })
       if (!result.ok) return fail(result.error, `Could not insert ${section.label}`, result.errors)
       const inserted = result.ops.flatMap((op) => (op.type === 'insert' ? [op.block] : []))
+      const needsContent = missingContent(inserted, env.blocks)
       return ok(
-        { ok: true, section: section.id, inserted, ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}) },
+        {
+          ok: true,
+          section: section.id,
+          ...(section.blocks[0]?.section?.variant ? { variant: section.blocks[0].section.variant } : {}),
+          inserted,
+          ...(needsContent.length > 0 ? { needsContent, needsContentHint: env.generateImage
+                  ? 'Empty images render nothing on the site: fill them with generateImage (blockId places the image). Tell the user about other empty fields, such as a form to pick.'
+                  : 'Empty images and other empty fields render nothing on the site: tell the user which ones need content.' } : {}),
+          ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}),
+        },
         `Inserted ${section.label}`,
         result.ops,
       )

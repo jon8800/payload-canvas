@@ -126,11 +126,11 @@ test('css renders in a style tag before the content', () => {
   assert.ok(!render({ layout, css: '</style><script>' }).includes('</style><script>'))
 })
 
-const Card: BlockComponents[string] = ({ attributes, slotAttributes, slots, className }) =>
+const Card: BlockComponents[string] = ({ attributes, partAttributes, slots, className }) =>
   createElement(
     'section',
     { ...attributes, className },
-    createElement('div', slotAttributes.body, slots.body),
+    createElement('div', partAttributes.body, slots.body),
   )
 
 const imageBlock = (props: Record<string, unknown>): Block => ({
@@ -158,8 +158,9 @@ test('custom components override defaults and receive the slot attributes', () =
 test('image: resolved doc renders an img, unresolved id is empty or a placeholder', () => {
   const doc = { id: 1, url: '/media/a.jpg', alt: 'Alt', width: 800, height: 600 }
   const loaded: Layout = { version: 1, blocks: [imageBlock({ image: doc })] }
+  // `priorityImages: 0`: no image loads first (the default gives the first one priority).
   assert.equal(
-    render({ layout: loaded }),
+    render({ layout: loaded, priorityImages: 0 }),
     '<img class="rounded builder-css" src="/media/a.jpg" alt="Alt" width="800" height="600" loading="lazy"/>',
   )
   const fallbackAlt: Layout = {
@@ -179,7 +180,7 @@ test('image: resolved doc renders an img, unresolved id is empty or a placeholde
     },
   }
   assert.match(
-    render({ layout: { version: 1, blocks: [imageBlock({ image: sized })] } }),
+    render({ layout: { version: 1, blocks: [imageBlock({ image: sized })] }, priorityImages: 0 }),
     /srcSet="\/media\/a-300x225.jpg 300w, \/media\/a%20600.jpg 600w, \/media\/a.jpg 800w" sizes="auto, 100vw"/,
   )
 
@@ -188,18 +189,48 @@ test('image: resolved doc renders an img, unresolved id is empty or a placeholde
   assert.match(render({ layout: unresolved, mode: 'canvas' }), /<div data-block-id="i" data-block-type="image" data-builder-image="image" data-builder-placeholder="" class="rounded builder-css" style=/)
 })
 
-test('class props get the marker class, and a missing one its default', () => {
-  const def = {
-    type: 'chip',
-    label: 'Chip',
-    fields: [
-      { name: 'dot', type: 'text' as const, defaultValue: 'size-2', admin: { custom: { builderClasses: true } } },
-      { name: 'ring', type: 'text' as const, admin: { custom: { builderClasses: true } } },
+test('parts get their classes with the marker class', () => {
+  const def = { type: 'chip', label: 'Chip', fields: [], parts: { dot: { label: 'Dot' }, ring: { label: 'Ring' } } }
+  const components: BlockComponents = {
+    chip: ({ partAttributes }) => createElement('span', { className: partAttributes.dot?.className, 'data-ring': String(partAttributes.ring?.className) }),
+  }
+  const html = renderToStaticMarkup(
+    createElement(RenderLayout, { layout: { version: 1, blocks: [{ id: 'a', type: 'chip', partClassName: { dot: 'size-2', x: 'p-4' } }] }, blocks: [def], components }),
+  )
+  assert.match(html, /<span class="size-2 builder-css" data-ring="undefined"><\/span>/)
+})
+
+const faqItem = (id: string, question: string, answer: string): Block => ({
+  id,
+  type: 'disclosure',
+  slots: { summary: [{ id: `${id}q`, type: 'text', props: { text: question } }], content: [{ id: `${id}a`, type: 'text', props: { text: answer } }] },
+})
+const ldScripts = (html: string) => html.match(/<script type="application\/ld\+json">(.*?)<\/script>/g) ?? []
+
+test('the site outputs FAQPage JSON-LD for accordions with faqSchema, once and escaped', async () => {
+  const { builtinBlocks, defaultBlocks } = await import('../../blocks')
+  const blocks = [...defaultBlocks(), ...builtinBlocks()]
+  const faq: Layout = {
+    version: 1,
+    blocks: [
+      { id: 'acc', type: 'accordion', props: { faqSchema: true }, slots: { items: [faqItem('d1', 'Is </script> safe?', 'Yes.'), faqItem('d2', 'Bound?', 'Fallback')] } },
+      { id: 'acc2', type: 'accordion', props: { faqSchema: false }, slots: { items: [faqItem('d3', 'Not marked', 'Skip')] } },
     ],
   }
-  const components: BlockComponents = { chip: ({ props }) => createElement('span', { className: String(props.dot), 'data-ring': String(props.ring) }) }
-  const html = renderToStaticMarkup(
-    createElement(RenderLayout, { layout: { version: 1, blocks: [{ id: 'a', type: 'chip', props: { ring: 'ring-2' } }] }, blocks: [def], components }),
-  )
-  assert.match(html, /class="size-2 builder-css" data-ring="ring-2 builder-css"/)
+  const html = render({ layout: faq, blocks })
+  assert.equal(ldScripts(html).length, 1)
+  assert.ok(!html.includes('Is </script>'))
+  const json = JSON.parse(ldScripts(html)[0]!.replace(/^<script[^>]*>|<\/script>$/g, '')) as { '@type': string; mainEntity: Array<{ name: string; acceptedAnswer: { text: string } }> }
+  assert.equal(json['@type'], 'FAQPage')
+  assert.deepEqual(json.mainEntity.map((q) => q.name), ['Is </script> safe?', 'Bound?'])
+  // Bindings resolve against the context, also without loadLayoutData.
+  const bound: Layout = structuredClone(faq)
+  bound.blocks[0]!.slots!.items![1]!.slots!.content![0]!.bindings = { text: 'answer' }
+  const withContext = render({ layout: bound, blocks, context: { collection: 'pages', doc: { answer: 'From the document.' } } })
+  assert.equal(ldScripts(withContext).length, 1)
+  assert.match(ldScripts(withContext)[0]!, /From the document\./)
+  // Not on the canvas, not with the opt-out, not without an opted-in accordion.
+  assert.equal(ldScripts(render({ layout: faq, blocks, mode: 'canvas' })).length, 0)
+  assert.equal(ldScripts(render({ layout: faq, blocks, faqJsonLd: false })).length, 0)
+  assert.equal(ldScripts(render({ layout: { version: 1, blocks: [faq.blocks[1]!] }, blocks })).length, 0)
 })

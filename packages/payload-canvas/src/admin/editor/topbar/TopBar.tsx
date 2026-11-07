@@ -10,18 +10,23 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNod
 
 import { Icon, type IconName } from '../icons'
 import { Presence } from '../live/PresenceUI'
+import { CommentsButton } from '../comments/CommentsPanel'
 import { useRuntime } from '../runtime'
 import { shortcutList } from '../shortcuts'
 import { useEditor } from '../store'
 import { TemplateControl } from '../templates/SamplePicker'
+import { useCollectionLabel } from '../templates/useTemplate'
 import { breakpointAt, breakpointWidths, useStyleTokens, withFallback } from '../styles/tokens'
 import { DESKTOP_WIDTH, DEVICE_WIDTHS, deviceForWidth, MAX_CANVAS_WIDTH, MIN_CANVAS_WIDTH, type Device } from '../styles/viewport'
 import { useValue } from '../valueStore'
 import { LocaleSwitcher } from '../locale/LocaleSwitcher'
 import { DocumentTitle, documentTitle, SectionNote, StatusChip } from './DocumentTitle'
 import { PageSettings, PreviewButton, PublishButton, SaveState } from './DocumentActions'
+import { ContentModeLabel, PreviewAsClientToggle } from './ContentModeToggle'
 import { ScreenDrawer } from './screens/ScreenDrawer'
 import { useDismiss } from './useDismiss'
+import { editViewPath, listViewPath } from '../../../plugin/links'
+import { forgetForm } from '../../formChoice'
 import './topbar.scss'
 
 /**
@@ -53,10 +58,17 @@ export function TopBar({ icon }: { icon: ReactNode }) {
   } = useConfig()
   const admin = routes.admin === '/' ? '' : routes.admin
   // Back: where the editor came from (a saved section opened from a page), else the edit view.
+  // With `editor.openInBuilder` the builder is the document's view, so back goes to the list.
   const from = backPath(useSearchParams().get('from'), admin)
+  const openInBuilder = runtime.config.editor?.openInBuilder === true
+  const listLabel = useCollectionLabel(collection)
   const back = from
     ? { href: from, label: 'Back to where you came from' }
-    : { href: `${admin}/collections/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`, label: 'Back to the edit view' }
+    : openInBuilder
+      ? { href: listViewPath(routes.admin, collection), label: `Back to ${listLabel}` }
+      : { href: editViewPath(routes.admin, collection, id), label: 'Back to the edit view' }
+  // The builder is open: opening the document again goes to the builder, not to the form.
+  useEffect(() => forgetForm(collection, id), [collection, id])
   // Loads the tokens early (shared cache with the Styles panel) for the breakpoint widths.
   const { tokens } = useStyleTokens(runtime.config.tokensEndpoint)
   const widths = useMemo(() => breakpointWidths(withFallback(tokens)), [tokens])
@@ -86,6 +98,7 @@ export function TopBar({ icon }: { icon: ReactNode }) {
         </Link>
         <DocumentTitle />
         <StatusChip />
+        <ContentModeLabel />
         <SectionNote />
       </div>
 
@@ -102,6 +115,8 @@ export function TopBar({ icon }: { icon: ReactNode }) {
         <Presence widths={widths} />
         <SaveState />
         <span className="builder-bar__divider" />
+        <CommentsButton />
+        <PreviewAsClientToggle />
         <PreviewButton />
         <PageSettings />
         <ShortcutHelp />
@@ -269,7 +284,7 @@ function ShortcutHelp() {
         <section className="builder-editor__help-panel" aria-label="Keyboard shortcuts">
           <p className="builder-editor__help-title">Keyboard shortcuts</p>
           <dl>
-            {shortcutList({ ai: Boolean(runtime.config.ai), publish: drafts }).map(({ keys, label }) => (
+            {shortcutList({ ai: Boolean(runtime.config.ai), publish: drafts, comments: Boolean(runtime.comments) }).map(({ keys, label }) => (
               <div key={label} className="builder-editor__help-row">
                 <dt>{label}</dt>
                 <dd>

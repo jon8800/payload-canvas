@@ -8,6 +8,7 @@
 // recorded stylesheets. The fallback has no class list and logs a warning.
 import * as tailwind from 'tailwindcss'
 
+import type { SiteClassRule } from '../classes/shared'
 import type { SiteClass, StyleTokens, ThemeToken } from '../core/types'
 import type { TailwindPlugins } from './index'
 import { type CanvasCssData, ENTRY_BASE, loadPlugin, splitTopLevel, stylesheetKey } from './shared'
@@ -113,7 +114,7 @@ export function parseThemeEntries(data: CanvasCssData): Map<string, ThemeEntry> 
 // ---------------------------------------------------------------------------------------------
 // Tokens from theme entries
 
-type GroupName = Exclude<keyof StyleTokens, 'spacing' | 'classList' | 'siteClasses'>
+type GroupName = Exclude<keyof StyleTokens, 'spacing' | 'classList' | 'siteClasses' | 'variables'>
 
 /**
  * Theme namespace and the utility that uses it, per token group. With a class list, a token is
@@ -298,10 +299,6 @@ export function applyFontFamilies(fonts: ThemeToken[], families: FontFamilies): 
 // Entry point
 
 /**
- * Builds StyleTokens from a recorded CSS input. Uses the design system API; if it is missing or
- * throws, logs a warning and parses the @theme blocks instead (no class list in that case).
- */
-/**
  * `@utility name {` with an optional comment right above it. Only static names: `tab-*` (a
  * functional utility) has no single class to offer. The comment may not hold `*\/`, so two
  * comments in a row never merge: only the last one, right above the rule, counts.
@@ -327,24 +324,40 @@ function ruleBody(css: string, open: number): string {
  * a label only. A name defined twice is listed once.
  */
 export function parseSiteClasses(data: CanvasCssData): SiteClass[] {
+  return siteClassRules(data).map(({ name, label, group, body }) => {
+    const preview = body.replace(/\/\*[^]*?\*\//g, '').replace(/\s+/g, ' ').trim()
+    const entry: SiteClass = { name, css: preview.length > PREVIEW_LENGTH ? `${preview.slice(0, PREVIEW_LENGTH - 1)}…` : preview }
+    if (label) entry.label = label
+    if (group) entry.group = group
+    return entry
+  })
+}
+
+/**
+ * The same rules as `parseSiteClasses`, with each rule's full body (for "Import from site CSS",
+ * which turns them into editable classes).
+ */
+export function siteClassRules(data: CanvasCssData): SiteClassRule[] {
   const sources = [data.entry, ...Object.values(data.stylesheets).filter((sheet) => !/(^|\/)node_modules\//.test(sheet.path)).map((sheet) => sheet.content)]
-  const out = new Map<string, SiteClass>()
+  const out = new Map<string, SiteClassRule>()
   for (const css of sources) {
     for (const match of css.matchAll(UTILITY_RULE)) {
       const [whole, comment, name] = match
       if (!name || out.has(name)) continue
-      const body = ruleBody(css, (match.index ?? 0) + whole.length - 1)
-      const preview = body.replace(/\/\*[^]*?\*\//g, '').replace(/\s+/g, ' ').trim()
-      const entry: SiteClass = { name, css: preview.length > PREVIEW_LENGTH ? `${preview.slice(0, PREVIEW_LENGTH - 1)}…` : preview }
+      const rule: SiteClassRule = { name, body: ruleBody(css, (match.index ?? 0) + whole.length - 1) }
       const label = comment ? CANVAS_LABEL.exec(comment) : null
-      if (label?.[2]) entry.label = label[2]
-      if (label?.[1]) entry.group = label[1]
-      out.set(name, entry)
+      if (label?.[2]) rule.label = label[2]
+      if (label?.[1]) rule.group = label[1]
+      out.set(name, rule)
     }
   }
   return [...out.values()]
 }
 
+/**
+ * Builds StyleTokens from a recorded CSS input. Uses the design system API; if it is missing or
+ * throws, logs a warning and parses the @theme blocks instead (no class list in that case).
+ */
 export async function buildStyleTokens(
   data: CanvasCssData,
   plugins?: TailwindPlugins,

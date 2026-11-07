@@ -206,7 +206,50 @@
     }
   }
 
+  // Drop outlines (canvas overlay, iframe coordinates): every slot that takes the dragged block.
+  // Thin and faint, so they never compete with the drop indicator. `--be-px` is one screen pixel.
+  @keyframes builder-dnd-drops-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  .builder-dnd-drops {
+    position: absolute;
+    inset: 0;
+    animation: builder-dnd-drops-in 160ms ease-out;
+  }
+
+  .builder-dnd-drop {
+    position: absolute;
+    box-sizing: border-box;
+    border-radius: 2px;
+    outline: var(--be-px) dashed color-mix(in srgb, var(--be-accent) 40%, transparent);
+    outline-offset: calc(var(--be-px) * -1);
+  }
+
+  .builder-dnd-drop--target {
+    outline-color: color-mix(in srgb, var(--be-accent) 75%, transparent);
+  }
+
+  .builder-dnd-drop__label {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 18px;
+    padding: 0 6px;
+    border-radius: 0 0 4px;
+    background: color-mix(in srgb, var(--be-accent) 16%, var(--be-panel));
+    color: var(--be-accent-text);
+    font-size: var(--be-text-s);
+    line-height: 18px;
+    white-space: nowrap;
+    transform-origin: 0 0;
+    transform: scale(var(--be-inv, 1));
+  }
+
   @media (prefers-reduced-motion: reduce) {
+    .builder-dnd-drops,
     .builder-dnd-outline--active .builder-editor__row,
     .builder-dnd-gap,
     .builder-dnd-gap-row,

@@ -193,9 +193,20 @@ describe('template conditions field', () => {
   it('is a JSON field on the templates collection', () => {
     const field = templatesCollection({ slug: 'builder-templates', targets: ['posts'] }).fields.find((f) => 'name' in f && f.name === 'conditions')
     assert.equal(field?.type, 'json')
+    // Edited as condition rows, not raw JSON.
+    assert.equal((field as { admin?: { components?: { Field?: unknown } } }).admin?.components?.Field, 'payload-canvas/client#TemplateConditionsField')
+  })
+  it('has a priority field that shows once the template has conditions', () => {
+    const field = templatesCollection({ slug: 'builder-templates', targets: ['posts'] }).fields.find((f) => 'name' in f && f.name === 'priority') as
+      | { type: string; defaultValue: unknown; admin: { condition: (data: Record<string, unknown>) => boolean } }
+      | undefined
+    assert.equal(field?.type, 'number')
+    assert.equal(field?.defaultValue, 0)
+    assert.equal(field?.admin.condition({ conditions: { category: { equals: 'news' } } }), true)
+    for (const conditions of [null, undefined, {}]) assert.equal(field?.admin.condition({ conditions }), false)
   })
   it('accepts empty values and objects, refuses other JSON', () => {
-    for (const ok of [null, undefined, '', {}, { tier: { equals: 'vip' } }]) assert.equal(validateConditions(ok), true)
-    for (const bad of [[{ tier: { equals: 'vip' } }], 'tier', 3, true]) assert.equal(typeof validateConditions(bad), 'string')
+    for (const ok of [null, undefined, '', {}, { category: { equals: 'news' } }]) assert.equal(validateConditions(ok), true)
+    for (const bad of [[{ category: { equals: 'news' } }], 'category', 3, true]) assert.equal(typeof validateConditions(bad), 'string')
   })
 })

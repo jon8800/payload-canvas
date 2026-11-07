@@ -6,8 +6,9 @@ export { checkAttrs, htmlAttributes, htmlIdClash, htmlIdProblem, htmlIdsOf, patc
 export { createId } from './ids'
 export { findBlock, findLocation, walkBlocks, isSelfOrDescendant, normalizeLayout, type BlockLocation } from './tree'
 export { applyOperation, applyOperations, type ApplyOptions } from './operations'
-export { deepestBlockAt, canvasDropTarget, outlineDropTarget } from './dropTarget'
-export { classFields, collectClasses } from './classes'
+export { layerAt, reachableAt } from './layers'
+export { acceptingSlots, type AcceptingSlot, deepestBlockAt, canvasDropTarget, outlineDropTarget } from './dropTarget'
+export { blockParts, type BlockPart, collectClasses, defaultPartClassNames } from './classes'
 export { headingId, richTextHeadings, type RichTextHeading } from './headings'
 export { blockJsonSchema, layoutJsonSchema } from './schema'
 export { validateLayout, isBlockingError, isLayoutWarning, PUBLISH_ONLY_CODES, type LayoutError, type LayoutErrorCode, type ValidateOptions } from './validate'
@@ -37,8 +38,27 @@ export {
 export * from './styles'
 export * from './motion'
 export * from './bindings'
+export * from './visibility'
+export * from './components'
 export { TEXT_LIST_BLOCK, TEXT_LIST_ITEM_BLOCK, TEXT_LIST_SLOT, joinListItem, splitListItem, type ListItemEdit } from './textList'
-export { blockName, defineBlock, defineSection, type SectionBlockInput, type SectionInput, fitsParent, getBlockDefinition, placementError, sectionsWithDefaultClassNames, sectionsWithVariants, slotAccepts, slotAcceptsAt, slotNames, starterSlots, withDefaultClassNames, withInlineBlocks } from './blocks'
+export { blockName, defineBlock, defineSection, type SectionBlockInput, type SectionInput, fitsParent, getBlockDefinition, placementError, checkSectionVariants, sectionsWithDefaultClassNames, sectionsWithVariants, slotAccepts, slotAcceptsAt, slotNames, starterSlots, withDefaultClasses, withDefaultClassNames, withInlineBlocks } from './blocks'
+export {
+  carryContent,
+  DEFAULT_VARIANT_LABEL,
+  findSection,
+  findSectionVersion,
+  hasVariants,
+  listedVariants,
+  sectionVersion,
+  sectionVersions,
+  switchSectionVariant,
+  versionIndex,
+  withoutSectionOrigin,
+  withSectionOrigin,
+  type SectionVersion,
+  type VariantSwitch,
+} from './sections'
+export { checkSectionOrigin } from './sectionOrigin'
 export { FORMATS, formatProblem, isPlayableVideoUrl, parseVideoUrl, videoUrlProblem, type FormatCheck, type VideoEmbed, type VideoOptions } from './formats'
 export { describeLayoutErrors, summarizeProblems, type LayoutIssue } from './issues'
 export { conditionFromFunction, conditionMet, readCondition, type BuilderCondition } from './conditions'

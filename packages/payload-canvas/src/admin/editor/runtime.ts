@@ -10,6 +10,7 @@ import {
   getBlockDefinition,
   outlineDropTarget,
   starterSlots,
+  withDefaultClasses,
   withFieldDefaults,
 } from '../../core'
 import type {
@@ -24,6 +25,7 @@ import type {
 } from '../../core/types'
 import type { BuilderDocMeta } from '../../live/types'
 import { post, rectContains, type AdminToCanvas, type CanvasInit, type KeyAction } from '../../protocol'
+import { contentModeProblem } from '../../core/contentMode'
 import { removeBlock } from './actions'
 import { storageProblemOf } from './storage'
 import { createAssistant, type AssistantController } from './assistant/controller'
@@ -38,6 +40,8 @@ import { createThumbnailService, type ThumbnailService } from './sections/thumbn
 import type { CollaboratorCursor, LiveState, Peer, PeerCursor } from './live'
 import { initialTemplateState, type TemplateState } from './templates/state'
 import { createRegionsController, type RegionsController } from './regions/controller'
+import { createClassesController, type ClassesController } from './classes/controller'
+import { createCommentsController, type CommentsController } from './comments/controller'
 
 export const OUTLINE_INDENT = 16
 
@@ -70,6 +74,13 @@ export type InspectorTab = 'block' | 'assistant'
 
 export type Runtime = {
   config: BuilderClientConfig
+  /** The user may change the design (`editor.canEditDesign` on the server). False: always content mode. */
+  canEditDesign: boolean
+  /**
+   * Content mode (core/contentMode.ts): only text, images and links change. True for users without
+   * design rights, and while a designer uses "Preview as client".
+   */
+  contentMode: ValueStore<boolean>
   /** Sent to the iframe on every `ready`. */
   canvasInit: CanvasInit
   store: EditorStore
@@ -128,6 +139,10 @@ export type Runtime = {
   insertSpot: ValueStore<InsertSpot | null>
   /** Saved sections and the section dialog. */
   sections: SectionsController
+  /** Editable classes: the list, usage, the class the Styles panel edits, writes. Null when turned off. */
+  classes: ClassesController | null
+  /** Comments on the canvas: the list, comment mode, the pin being placed. Null when turned off. */
+  comments: CommentsController | null
   /** Real thumbnails of sections for the library. */
   thumbnails: ThumbnailService
   /** Payload's REST route, e.g. "/api". */
@@ -161,7 +176,13 @@ function loadCollapsed(): ReadonlySet<string> {
  * `api` is Payload's REST route (`config.routes.api`), used by the iframe to load documents.
  * `document` is the open document as the server loaded it.
  */
-export function createRuntime(config: BuilderClientConfig, api: string, document: BuilderDocMeta, options: { locale?: string | null } = {}): Runtime {
+export function createRuntime(
+  config: BuilderClientConfig,
+  api: string,
+  document: BuilderDocMeta,
+  options: { locale?: string | null; canEditDesign?: boolean } = {},
+): Runtime {
+  const canEditDesign = options.canEditDesign !== false
   const storageProblem = storageProblemOf(config)
   const store = createEditorStore(EMPTY_LAYOUT, {
     ...(storageProblem ? { storageProblem } : {}),
@@ -203,9 +224,13 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
     document: { collection: document.collection, id: document.id },
     ...(config.regions?.length ? { regions: config.regions } : {}),
     ...(config.relations && Object.keys(config.relations).length > 0 ? { relations: config.relations } : {}),
+    ...(config.classes ? { classesEndpoint: config.classes.endpoint } : {}),
+    ...(config.savedSections ? { savedSections: config.savedSections.collection } : {}),
   }
   const runtime: Runtime = {
     config,
+    canEditDesign,
+    contentMode: createValueStore(!canEditDesign),
     canvasInit,
     store,
     measurement: createValueStore<CanvasMeasurement | null>(null),
@@ -237,7 +262,11 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
           problemsRequest.set(Date.now())
           return problemSummary(list) || null
         },
-        onPublished: () => problems.set([]),
+        onPublished: () => {
+          problems.set([])
+          // Publishing the page published its classes with unpublished changes.
+          void runtime.classes?.load()
+        },
         // The settings drawer, a region or a rename saved a field: its old problem is gone.
         onFieldsSaved: (fields) => problems.set(withoutSavedFields(problems.get(), fields)),
       },
@@ -247,6 +276,8 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
     problemsRequest,
     assistant: null,
     regions: null,
+    classes: null,
+    comments: null,
     assistantFlash: createValueStore<ReadonlyMap<string, number>>(new Map()),
     assistantFocus: createValueStore(0),
     toggleAssistant(open) {
@@ -282,6 +313,7 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
       if (key === 'escape') {
         if (runtime.help.get()) runtime.help.set(false)
         else if (runtime.follow.get()) runtime.follow.set(null)
+        else if (runtime.comments && closeComment(runtime.comments)) return
         else if (runtime.regions?.selected.get()) runtime.regions.selected.set(null)
         else store.select(null)
       }
@@ -297,13 +329,12 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
     createBlock(type) {
       const def = getBlockDefinition(config.blocks, type)
       if (!def) return null
-      const block: Block = { id: createId(), type }
+      // A Payload blocks field stores no classes: a new block there starts without them.
+      const block: Block = config.storage === 'payload-blocks' ? { id: createId(), type } : withDefaultClasses({ id: createId(), type }, def)
       // Field defaults that are plain data, inside groups, rows and tabs too (function defaults
       // were stripped from the client config). From now on the block stores its own values.
       const props = withFieldDefaults({}, def.fields)
       if (Object.keys(props).length > 0) block.props = props
-      // A Payload blocks field stores no classes: a new block there starts without them.
-      if (def.defaultClassName && config.storage !== 'payload-blocks') block.className = def.defaultClassName
       // A new list starts with one list item (see `starterSlots`).
       const slots = starterSlots(config.blocks, type, createId)
       if (slots) block.slots = slots
@@ -312,6 +343,14 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
     },
   }
   store.onWarning((text) => runtime.warn(text))
+  // Content mode refuses design edits in the editor already, with the server's own rule.
+  const guardContent = () => {
+    const on = runtime.contentMode.get()
+    store.setEditGuard(on ? (before, after) => contentModeProblem(before, after, config.blocks) : null)
+    if (on) runtime.insertSpot.set(null)
+  }
+  guardContent()
+  runtime.contentMode.subscribe(guardContent)
   // The first edit of blocks, classes or shared props in another locale says that it changes every language.
   let sharedNoted = false
   store.onSharedEdit(() => {
@@ -320,6 +359,19 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
     runtime.notify('Blocks, styles and fields that are not translated change in every language.')
   })
   if (config.ai) runtime.assistant = createAssistant(runtime, config.ai.endpoint)
+  if (config.classes) {
+    runtime.classes = createClassesController(config.classes, api, store)
+    if (typeof window !== 'undefined') void runtime.classes.load()
+  }
+  if (config.comments) {
+    runtime.comments = createCommentsController({
+      api,
+      config: config.comments,
+      document: { collection: document.collection, id: document.id },
+      warn: (text) => runtime.warn(text),
+      notify: (text) => runtime.notify(text),
+    })
+  }
   if (config.regions?.length) {
     const regions = createRegionsController({
       regions: config.regions,
@@ -332,6 +384,15 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
     })
     runtime.regions = regions
     store.setFieldWriter((changes, locale) => regions.writeEdits(changes, locale))
+    // Content mode does not edit the page's fixed regions.
+    const leaveRegions = () => {
+      if (!runtime.contentMode.get()) return
+      if (regions.selected.get()) regions.selected.set(null)
+      if (regions.hovered.get()) regions.hovered.set(null)
+    }
+    regions.selected.subscribe(leaveRegions)
+    regions.hovered.subscribe(leaveRegions)
+    runtime.contentMode.subscribe(leaveRegions)
     // A selected block and a selected region exclude each other.
     store.subscribe(() => {
       if (store.getState().selectedId && regions.selected.get()) regions.selected.set(null)
@@ -348,6 +409,18 @@ export function createRuntime(config: BuilderClientConfig, api: string, document
     })
   }
   return runtime
+}
+
+/** Escape in comment mode: closes the composer or the open thread, else leaves comment mode. False when it did nothing. */
+function closeComment(comments: CommentsController): boolean {
+  if (comments.draft.get() || comments.open.get()) {
+    comments.draft.set(null)
+    comments.open.set(null)
+    return true
+  }
+  if (!comments.mode.get()) return false
+  comments.toggle(false)
+  return true
 }
 
 export const RuntimeContext = createContext<Runtime | null>(null)

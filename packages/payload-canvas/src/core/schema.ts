@@ -2,9 +2,11 @@
 // AI tools read these schemas to write layouts, so they must match what validateLayout accepts.
 
 import { slotAccepts } from './blocks'
+import { blockParts } from './classes'
 import { dataFields, fieldBlocks, optionValues, textOf, type DataField, type LooseField } from './fields'
 import { isPlainObject } from './tree'
 import { motionJsonSchema } from './motion'
+import { visibilityJsonSchema } from './visibility'
 import type { BlockDefinition, SlotDefinition } from './types'
 
 type Schema = Record<string, unknown>
@@ -134,21 +136,29 @@ function blockSchema(def: BlockDefinition, all: BlockDefinition[]): Schema {
       additionalProperties: false,
     }
   }
-  const styled = Object.entries(def.slots ?? {}).filter(([, slot]) => slot.styles)
-  if (styled.length > 0) {
-    properties.slotClassName = {
+  const parts = blockParts(def)
+  if (parts.length > 0) {
+    properties.partClassName = {
       type: 'object',
-      description: `Tailwind classes of a slot's own element, by slot name. Only these slots take classes: ${styled.map(([name]) => name).join(', ')}.`,
-      properties: Object.fromEntries(styled.map(([name]) => [name, { type: 'string' }])),
+      description: `Tailwind classes of the block's inner elements, by part name. Only these parts take classes: ${parts.map((part) => part.name).join(', ')}.`,
+      properties: Object.fromEntries(
+        parts.map((part) => [part.name, { type: 'string', description: part.slot ? `${part.label} (the slot's own element)` : part.label }]),
+      ),
       additionalProperties: false,
     }
   }
   properties.bindings = {
     type: 'object',
-    description: 'Prop path -> document field path. Bound props take the document\'s value at render time.',
+    description:
+      'Prop path -> binding: a field path ("title"), a fallback chain ("subtitle|title"), formatters ("price|currency:EUR") or a template ("Read {{title}}"). Bound props take the document\'s value at render time.',
     additionalProperties: { type: 'string' },
   }
   properties.hidden = { type: 'boolean', description: 'Hidden blocks stay in the data but do not render.' }
+  properties.editableItems = {
+    type: 'boolean',
+    description: 'Content mode: true lets editors without design rights duplicate, delete and reorder the direct children. Stored only when true.',
+  }
+  properties.visibility = visibilityJsonSchema()
   properties.motion = { $ref: `#/$defs/${encodeURIComponent(MOTION_DEF)}` }
   properties.attrs = {
     type: 'object',
@@ -165,6 +175,13 @@ function blockSchema(def: BlockDefinition, all: BlockDefinition[]): Schema {
   properties.label = {
     type: 'string',
     description: 'Optional name for editors, shown in the outline (e.g. "Hero", "Pricing"). Never rendered on the site.',
+  }
+  properties.section = {
+    type: 'object',
+    description: 'Set by insertSection on the root block of a ready-made section: the section id and its variant. Keep it as it is; never rendered.',
+    properties: { id: { type: 'string', minLength: 1 }, variant: { type: 'string' } },
+    required: ['id'],
+    additionalProperties: false,
   }
 
   const required = ['id', 'type']

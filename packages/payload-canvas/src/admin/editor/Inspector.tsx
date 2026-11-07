@@ -3,9 +3,10 @@
 import { CheckboxInput, TextInput } from '@payloadcms/ui'
 import { useDeferredValue, useEffect, useState, type ChangeEvent } from 'react'
 
-import { findBlock, getBlockDefinition, htmlIdProblem, htmlIdsOf } from '../../core'
-import type { Block, Operation } from '../../core/types'
+import { blockParts, findBlock, getBlockDefinition, htmlIdProblem, htmlIdsOf } from '../../core'
+import type { Block, BlockDefinition, Operation } from '../../core/types'
 import { BlockIcon, Icon, type IconName } from './icons'
+import { useContentMode } from './contentMode'
 import { blockMenuEntries } from './menu/blockMenu'
 import { MenuButton } from './menu/Menu'
 import { renameRequest } from './menu/requests'
@@ -27,6 +28,8 @@ import { Select } from './ui/Select'
 import { usePayloadControlNames } from './ui/payloadA11y'
 import { useOptionalValue, useValue, useValueSelector } from './valueStore'
 import { RegionPane } from './regions/RegionPane'
+import { SECTION_REF_BLOCK } from '../../blocks/builtins/sectionRef'
+import { ComponentBanner, ComponentValuesPanel } from './sections/ComponentFields'
 
 type TabsProps<T extends string> = {
   value: T
@@ -81,6 +84,7 @@ export function Inspector() {
         </div>
       )}
       <div className="builder-editor__inspector-body" hidden={tab !== 'block'}>
+        <ComponentBanner />
         <BlockPane />
       </div>
       {runtime.assistant && <AssistantPanel hidden={tab !== 'assistant'} />}
@@ -97,17 +101,22 @@ const TIP_LABELS: Record<string, string> = {
   'Show this list': 'All shortcuts',
 }
 
+/** The tips content mode keeps: the others add, copy or paste blocks. */
+const CONTENT_TIPS = new Set(['Publish changes', 'Open or close the AI assistant', 'Undo', 'Show this list'])
+
 function EmptyState() {
   const runtime = useRuntime()
   const drafts = useValueSelector(runtime.doc.meta, (meta) => meta.drafts)
-  const tips = shortcutList({ ai: Boolean(runtime.assistant), publish: drafts }).filter((s) => s.label in TIP_LABELS)
+  const contentMode = useContentMode(runtime)
+  const tips = shortcutList({ ai: Boolean(runtime.assistant), publish: drafts }).filter((s) => s.label in TIP_LABELS && (!contentMode || s.label in CONTENT_TIPS))
   return (
     <div className="builder-editor__empty builder-editor__empty--inspector">
       <Icon name="cursor" size={20} />
       <p>No block selected</p>
       <p className="builder-editor__hint">
-        Click a block on the canvas or in Layers to edit its content and styles. Drag blocks from the Blocks tab to build the
-        page.
+        {contentMode
+          ? 'Click a text, image or link on the canvas or in Layers to edit it.'
+          : 'Click a block on the canvas or in Layers to edit its content and styles. Drag blocks from the Blocks tab to build the page.'}
       </p>
       <dl className="builder-editor__tips">
         {tips.map(({ keys, label }) => (
@@ -127,6 +136,37 @@ function EmptyState() {
 
 type BlockTab = 'content' | 'styles' | 'motion' | 'advanced'
 
+const TAB_STORAGE_KEY = 'payload-builder:inspector-tab'
+const BLOCK_TABS: readonly BlockTab[] = ['content', 'styles', 'motion', 'advanced']
+
+/** The tab the user last chose, kept in this browser. Styles first, as in Webflow. */
+function readTabChoice(): BlockTab {
+  try {
+    const value = localStorage.getItem(TAB_STORAGE_KEY)
+    return BLOCK_TABS.includes(value as BlockTab) ? (value as BlockTab) : 'styles'
+  } catch {
+    return 'styles'
+  }
+}
+
+function saveTabChoice(tab: BlockTab) {
+  try {
+    localStorage.setItem(TAB_STORAGE_KEY, tab)
+  } catch {
+    // Storage blocked: the choice lasts until the editor closes.
+  }
+}
+
+/** The tab a block opens on: the chosen tab, unless the block has nothing to show there. */
+function tabFor(chosen: BlockTab, def: BlockDefinition | undefined, justAdded: boolean): BlockTab {
+  const hasFields = (def?.fields.length ?? 0) > 0
+  // A block that was just added opens on its content, so typing starts at once.
+  if (justAdded && hasFields) return 'content'
+  if (chosen !== 'content' && def?.styles === false) return 'content'
+  if (chosen === 'content' && !hasFields && def?.styles !== false) return 'styles'
+  return chosen
+}
+
 function BlockPane() {
   const runtime = useRuntime()
   // Another block selected: the selection on the canvas and in the outline paints first, the
@@ -136,20 +176,24 @@ function BlockPane() {
   const shownId = useDeferredValue(selectedId)
   // The block in the editor's locale: the inspector shows and edits that locale's values.
   const block = useEditor(runtime.store, (s) => (shownId ? findBlock(s.view, shownId) : null))
-  const [tab, setTab] = useState<BlockTab>('content')
-  const [shownType, setShownType] = useState<string | null>(null)
+  // The user's tab stays chosen across blocks and visits, like Webflow's Style panel.
+  const [chosen, setChosen] = useState<BlockTab>(() => (typeof window === 'undefined' ? 'styles' : readTabChoice()))
   const focusRequest = useValue(runtime.focusRequest)
   // A selected page region shows its own pane.
   const region = useOptionalValue(runtime.regions?.selected ?? null)
-
-  // Styles and Motion stay open while the user edits blocks of one type. Another type opens its content,
-  // so its fields never seem to vanish.
-  if (block && block.type !== shownType) {
-    setShownType(block.type)
-    if (shownType !== null) setTab('content')
+  // A block that was just added keeps its content open while it stays selected, also after the
+  // focus request clears.
+  const [addedId, setAddedId] = useState<string | null>(null)
+  if (block && focusRequest === block.id && addedId !== block.id) setAddedId(block.id)
+  const def = block ? getBlockDefinition(runtime.config.blocks, block.type) : undefined
+  // Content mode edits content only: no Styles, Motion or Advanced tab.
+  const contentMode = useContentMode(runtime)
+  const tab = storesBuilderData(runtime) && !contentMode ? tabFor(chosen, def, block !== null && block.id === addedId) : 'content'
+  const setTab = (next: BlockTab) => {
+    setAddedId(null)
+    setChosen(next)
+    saveTabChoice(next)
   }
-  // A block that was just added opens on its content.
-  if (block && focusRequest === block.id && tab !== 'content') setTab('content')
 
   // A block that was just added: focus its first content field.
   useEffect(() => {
@@ -175,22 +219,25 @@ function BlockPane() {
       <BlockProblems blockId={block.id} />
       <EditingBanner blockId={block.id} />
       <LocaleNote blockId={block.id} tab={tab} />
-      <Tabs
-        value={tab}
-        onChange={setTab}
-        options={
-          storesBuilderData(runtime)
-            ? [
-                { id: 'content', label: 'Content' },
-                { id: 'styles', label: 'Styles' },
-                { id: 'motion', label: 'Motion' },
-                { id: 'advanced', label: 'Advanced' },
-              ]
-            : // A Payload blocks field holds the blocks' own fields only.
-              [{ id: 'content', label: 'Content' }]
-        }
-      />
+      {!contentMode && (
+        <Tabs
+          value={tab}
+          onChange={setTab}
+          options={
+            storesBuilderData(runtime)
+              ? [
+                  { id: 'content', label: 'Content' },
+                  { id: 'styles', label: 'Styles' },
+                  { id: 'motion', label: 'Motion' },
+                  { id: 'advanced', label: 'Advanced' },
+                ]
+              : // A Payload blocks field holds the blocks' own fields only.
+                [{ id: 'content', label: 'Content' }]
+          }
+        />
+      )}
       {tab === 'content' && <BlockContentFields block={block} />}
+      {tab === 'content' && block.type === SECTION_REF_BLOCK && <ComponentValuesPanel block={block} />}
       {tab === 'styles' && storesBuilderData(runtime) && <StyleFields block={block} />}
       {tab === 'motion' && storesBuilderData(runtime) && <MotionPanel blockId={block.id} blockType={block.type} motion={block.motion} />}
       {tab === 'advanced' && storesBuilderData(runtime) && <AdvancedFields block={block} />}
@@ -223,7 +270,9 @@ function BlockHeader({ block }: { block: Block }) {
   const [renamingHere, setRenaming] = useState(false)
   // "Rename" in a block menu (or F2 outside the outline) renames here.
   const requested = useValueSelector(renameRequest(runtime), (r) => r?.where === 'inspector' && r.id === block.id)
-  const renaming = renamingHere || requested
+  // Content mode does not rename blocks.
+  const contentMode = useContentMode(runtime)
+  const renaming = !contentMode && (renamingHere || requested)
   const endRename = () => {
     setRenaming(false)
     if (requested) renameRequest(runtime).set(null)
@@ -244,6 +293,8 @@ function BlockHeader({ block }: { block: Block }) {
       <span className="builder-editor__block-name">
         {renaming ? (
           <RenameInput block={block} placeholder={kind} onDone={endRename} />
+        ) : contentMode ? (
+          <span className="builder-editor__block-title">{name}</span>
         ) : (
           <button
             type="button"
@@ -289,44 +340,35 @@ function BlockHeader({ block }: { block: Block }) {
 function StyleFields({ block }: { block: Block }) {
   const runtime = useRuntime()
   const def = getBlockDefinition(runtime.config.blocks, block.type)
-  // Slots with an element of their own (`styles: true`) are style targets next to the block.
-  const styledSlots = Object.entries(def?.slots ?? {}).filter(([, slot]) => slot.styles)
+  // The block's parts (styled slots and `parts` entries) are style targets next to the block.
+  const parts = blockParts(def)
   const [target, setTarget] = useState<string | null>(null)
-  const slot = target && styledSlots.some(([name]) => name === target) ? target : null
+  const part = target && parts.some(({ name }) => name === target) ? target : null
   const blockStyles = def?.styles !== false
 
   return (
     <div className="builder-editor__fields">
-      {styledSlots.length > 0 && (
+      {parts.length > 0 && (
         <Select
           aria-label="Style target"
           emptyLabel={blockStyles ? 'This block' : undefined}
-          placeholder="Pick a slot"
-          value={slot}
+          placeholder="Pick a part"
+          value={part}
           onValueChange={setTarget}
-          options={styledSlots.map(([name, s]) => ({
+          options={parts.map(({ name, label }) => ({
             value: name,
-            label: `Slot: ${s.label?.trim() || name}`,
-            ...(block.slotClassName?.[name] ? { suffix: <span className="builder-styles__dot" aria-label="has classes" /> } : {}),
+            label,
+            ...(block.partClassName?.[name] ? { suffix: <span className="builder-styles__dot" aria-label="has classes" /> } : {}),
           }))}
         />
       )}
-      {slot ? (
-        <StylesPanel key={slot} block={block} slot={slot} />
+      {part ? (
+        <StylesPanel key={part} block={block} part={part} />
       ) : !blockStyles ? (
         <p className="builder-editor__hint">This block has no style controls.</p>
       ) : (
         <StylesPanel block={block} />
       )}
-      <CheckboxInput
-        id={`builder-${block.id}-hidden`}
-        name={`builder.${block.id}.hidden`}
-        label="Hide on the site"
-        checked={block.hidden === true}
-        onToggle={(e: ChangeEvent<HTMLInputElement>) =>
-          runtime.store.apply({ type: 'update', id: block.id, hidden: e.target.checked })
-        }
-      />
     </div>
   )
 }
@@ -337,6 +379,7 @@ function StyleFields({ block }: { block: Block }) {
  */
 function AdvancedFields({ block }: { block: Block }) {
   const runtime = useRuntime()
+  const def = getBlockDefinition(runtime.config.blocks, block.type)
   const layout = useEditor(runtime.store, (s) => s.layout)
   const stored = block.attrs?.id ?? ''
   // `source` is the stored id the draft belongs to: another stored id (undo, AI edit) replaces the draft.
@@ -380,6 +423,31 @@ function AdvancedFields({ block }: { block: Block }) {
         path={`builder.${block.id}.attrs.ariaLabel`}
         value={block.attrs?.ariaLabel ?? ''}
       />
+      <div>
+        <CheckboxInput
+          id={`builder-${block.id}-hidden`}
+          name={`builder.${block.id}.hidden`}
+          label="Hide at all screen sizes"
+          checked={block.hidden === true}
+          onToggle={(e: ChangeEvent<HTMLInputElement>) => runtime.store.apply({ type: 'update', id: block.id, hidden: e.target.checked })}
+        />
+        <p className="field-description">
+          The site does not show this block. To hide it on some screens only, open Styles, pick a screen size, and set
+          Display to Hidden. That hides it at this size and wider.
+        </p>
+      </div>
+      {def?.slots && Object.keys(def.slots).length > 0 && (
+        <div>
+          <CheckboxInput
+            id={`builder-${block.id}-editable-items`}
+            name={`builder.${block.id}.editableItems`}
+            label="Editors can add, remove and reorder its items"
+            checked={block.editableItems === true}
+            onToggle={(e: ChangeEvent<HTMLInputElement>) => runtime.store.apply({ type: 'update', id: block.id, editableItems: e.target.checked })}
+          />
+          <p className="field-description">For lists like FAQs or team cards. Editors can copy, delete and reorder the items, but not restyle them.</p>
+        </div>
+      )}
       <CheckboxInput
         id={`builder-${block.id}-aria-hidden`}
         name={`builder.${block.id}.attrs.ariaHidden`}

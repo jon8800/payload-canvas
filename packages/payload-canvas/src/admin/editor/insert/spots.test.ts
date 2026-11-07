@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import type { BlockDefinition, CanvasMeasurement, Layout } from '../../../core/types'
-import { insertSpotAt, sameSpot, spotPosition } from './spots'
+import { insertSpotAt, sameSpot, spotPosition, tooSmallForInsert } from './spots'
+import type { Rect } from '../../../core/types'
 
 const blocks: BlockDefinition[] = [
   { type: 'stack', label: 'Stack', fields: [], slots: { children: {} } },
@@ -138,5 +139,91 @@ describe('insertSpotAt', () => {
     assert.equal(sameSpot(a, insertSpotAt(layout, blocks, m, { x: 100, y: 80 })), false)
     assert.equal(sameSpot(null, null), true)
     assert.equal(sameSpot(a, null), false)
+  })
+})
+
+const icon = (x: number, y: number): Rect => ({ x, y, width: 24, height: 24 })
+
+describe('the "+" and small blocks', () => {
+  it('tooSmallForInsert: short along the axis and not wide across it', () => {
+    // An icon in a row, or stacked.
+    assert.equal(tooSmallForInsert({ x: 0, y: 0, width: 24, height: 24 }, 'x'), true)
+    assert.equal(tooSmallForInsert({ x: 0, y: 0, width: 24, height: 24 }, 'y'), true)
+    // A one-line text across a column keeps its "+" above and below.
+    assert.equal(tooSmallForInsert({ x: 0, y: 0, width: 360, height: 24 }, 'y'), false)
+    // A button in a row: wide enough along the row.
+    assert.equal(tooSmallForInsert({ x: 0, y: 0, width: 120, height: 40 }, 'x'), false)
+    // Zoomed out to 50 %: the button is 40 iframe pixels, so a 60 px block is small.
+    assert.equal(tooSmallForInsert({ x: 0, y: 0, width: 60, height: 60 }, 'x', 40), true)
+  })
+
+  // Root: a heading, a row of three 24 px icons (8 px apart), and a feature row whose first item
+  // is an icon followed by a label 4 px after it.
+  const smallLayout: Layout = {
+    version: 1,
+    blocks: [
+      { id: 'h', type: 'heading' },
+      { id: 'icons', type: 'row', slots: { children: [{ id: 'i1', type: 'text' }, { id: 'i2', type: 'text' }, { id: 'i3', type: 'text' }] } },
+      { id: 'f', type: 'row', slots: { children: [{ id: 'fi', type: 'text' }, { id: 'fl', type: 'text' }] } },
+    ],
+  }
+  const sm: CanvasMeasurement = {
+    blocks: [
+      { id: 'h', rect: { x: 0, y: 0, width: 400, height: 60 } },
+      { id: 'icons', rect: { x: 0, y: 100, width: 400, height: 24 } },
+      { id: 'i1', rect: icon(0, 100) },
+      { id: 'i2', rect: icon(32, 100) },
+      { id: 'i3', rect: icon(64, 100) },
+      { id: 'f', rect: { x: 0, y: 200, width: 400, height: 28 } },
+      { id: 'fi', rect: icon(0, 202) },
+      { id: 'fl', rect: { x: 28, y: 200, width: 80, height: 28 } },
+    ],
+    slots: [
+      { ownerId: 'icons', slot: 'children', rect: { x: 0, y: 100, width: 400, height: 24 }, axis: 'x', empty: false },
+      { ownerId: 'f', slot: 'children', rect: { x: 0, y: 200, width: 400, height: 28 }, axis: 'x', empty: false },
+    ],
+    rootAxis: 'y',
+    viewport: { width: 400, height: 800 },
+    scroll: { x: 0, y: 0 },
+    documentHeight: 300,
+  }
+  const icons = sm.blocks.filter((b) => b.id.startsWith('i') && b.id !== 'icons').map((b) => b.rect)
+  // More than a fifth of an icon under the 20 px button.
+  const coversAnIcon = (at: { x: number; y: number }) =>
+    [...icons, icon(0, 202)].some((r) => {
+      const w = Math.min(at.x + 10, r.x + r.width) - Math.max(at.x - 10, r.x)
+      const h = Math.min(at.y + 10, r.y + r.height) - Math.max(at.y - 10, r.y)
+      return w > 0 && h > 0 && (w * h) / (r.width * r.height) > 0.2
+    })
+
+  it('offers no "+" beside an icon in a row; the row itself takes it, clear of the icons', () => {
+    for (const p of [
+      { x: 4, y: 112 },
+      { x: 30, y: 112 },
+      { x: 44, y: 112 },
+      { x: 86, y: 112 },
+    ]) {
+      const spot = insertSpotAt(smallLayout, blocks, sm, p)
+      assert.notEqual(spot?.parentId, 'icons', `no spot inside the row at ${p.x}`)
+      if (spot) assert.equal(coversAnIcon(spot.at), false, `the "+" lies over no icon at ${p.x}`)
+    }
+    // The pointer in the lower half of the row: after the row, on its bottom edge.
+    const after = insertSpotAt(smallLayout, blocks, sm, { x: 44, y: 120 })
+    assert.deepEqual(after && spotPosition(after), { parentId: null, slot: 'children', index: 2 })
+  })
+
+  it('never puts the "+" over a small block, even beside a large one', () => {
+    // Left half of the label: the spot between the icon and the label would cover the icon.
+    const spot = insertSpotAt(smallLayout, blocks, sm, { x: 40, y: 214 })
+    assert.notDeepEqual(spot && spotPosition(spot), { parentId: 'f', slot: 'children', index: 1 })
+    if (spot) assert.equal(coversAnIcon(spot.at), false)
+    // Right half of the label: after it, far from the icon.
+    const right = insertSpotAt(smallLayout, blocks, sm, { x: 100, y: 214 })
+    assert.deepEqual(right && spotPosition(right), { parentId: 'f', slot: 'children', index: 2 })
+  })
+
+  it('keeps the "+" between normal blocks', () => {
+    const spot = insertSpotAt(smallLayout, blocks, sm, { x: 200, y: 50 })
+    assert.deepEqual(spot && spotPosition(spot), { parentId: null, slot: 'children', index: 1 })
   })
 })

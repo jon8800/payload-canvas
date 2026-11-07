@@ -1,5 +1,5 @@
 import { draftMode } from 'next/headers'
-import { LivePreviewListener } from '@/components/LivePreviewListener'
+import { LivePreviewListener } from '@/components/LivePreviewLoader'
 import { SiteFrame } from '@/components/BuilderContent'
 
 export default async function StyleGuidePage() {

@@ -1,50 +1,23 @@
 import { defineBlock } from '../../core/blocks'
 import type { BlockDefinition } from '../../core/types'
-import { classesOf, classMap, labelsField, labelsHelp } from './shared'
+import { CAROUSEL_CLASS_MAP, CAROUSEL_LABELS, CAROUSEL_PART_CLASSES } from '../client/carousel'
+import { classesOf, labelField, labelsField, labelsHelp } from './shared'
+
+export { CAROUSEL_CLASS_MAP, CAROUSEL_LABELS, CAROUSEL_PART_CLASSES }
 
 export const CAROUSEL_BLOCK = 'carousel'
 
+const CAROUSEL_CLASS = 'flex flex-col gap-4'
+
 /**
- * Classes the carousel component adds itself: how the track moves its slides and where the
- * controls sit. A single child of the track (a collection list or a repeat) is unwrapped with
- * `display: contents`, so its items are the slides. No colours or sizes: those come from the
- * block's className (see `CAROUSEL_CLASS`).
+ * The carousel's inner elements that take classes (`block.partClassName`), with the classes a new
+ * carousel starts with. The "slides" slot (the track) is a part too.
  */
-export const CAROUSEL_CLASS_MAP = classMap({
-  scroll:
-    'flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] *:shrink-0 *:snap-start ' +
-    '[&>*:only-child]:contents [&>*:only-child>*]:shrink-0 [&>*:only-child>*]:snap-start',
-  fade:
-    'grid *:col-start-1 *:row-start-1 *:transition-opacity *:duration-500 motion-reduce:*:transition-none ' +
-    '[&>*:only-child]:contents [&>*:only-child>*]:col-start-1 [&>*:only-child>*]:row-start-1 ' +
-    '[&>*:only-child>*]:transition-opacity [&>*:only-child>*]:duration-500 motion-reduce:[&>*:only-child>*]:transition-none',
-  /** Until the script has counted the slides, only the first one shows. */
-  fadeBefore: '[&>*:not(:first-child)]:opacity-0 [&>*:only-child>*:not(:first-child)]:opacity-0',
-  fadeReady: '[&_[data-slide-off]]:pointer-events-none [&_[data-slide-off]]:opacity-0',
-  controls: 'flex flex-wrap items-center justify-between gap-4',
-  dots: 'flex flex-wrap items-center',
-  arrows: 'ms-auto flex items-center gap-2',
-  button: 'inline-flex cursor-pointer items-center justify-center disabled:cursor-default',
-  icon: 'size-5',
-})
-
-const CAROUSEL_CLASS =
-  'flex flex-col gap-4 [&_[data-carousel-track]]:gap-4 [&_[data-carousel-arrow]]:size-11 [&_[data-carousel-arrow]]:rounded-full ' +
-  '[&_[data-carousel-arrow]]:border [&_[data-carousel-arrow]:disabled]:opacity-30 [&_[data-carousel-dot]]:size-6 ' +
-  '[&_[data-carousel-dot]]:after:size-2 [&_[data-carousel-dot]]:after:rounded-full [&_[data-carousel-dot]]:after:bg-current ' +
-  '[&_[data-carousel-dot]]:after:opacity-30 [&_[data-carousel-dot][aria-current=true]]:after:opacity-100 ' +
-  '[&_[data-carousel-pause]]:text-sm [&_[data-carousel-pause]]:underline'
-
-/** The carousel's control labels and their English defaults. */
-export const CAROUSEL_LABELS = {
-  previousLabel: 'Previous slide',
-  nextLabel: 'Next slide',
-  pauseLabel: 'Pause',
-  playLabel: 'Play',
-  dotLabel: 'Slide {n}',
-  slideLabel: '{n} of {count}',
-  carouselRole: 'carousel',
-  slideRole: 'slide',
+const CAROUSEL_PARTS = {
+  controls: { label: 'Controls row' },
+  arrow: { label: 'Arrows', defaultClassName: CAROUSEL_PART_CLASSES.arrow },
+  dot: { label: 'Dots', defaultClassName: CAROUSEL_PART_CLASSES.dot },
+  pause: { label: 'Pause button', defaultClassName: CAROUSEL_PART_CLASSES.pause },
 }
 
 const LABEL_NAMES = {
@@ -65,8 +38,9 @@ export function carouselBlock(): BlockDefinition {
   return defineBlock({
     type: CAROUSEL_BLOCK,
     label: 'Carousel',
-    icon: 'right',
+    icon: 'carousel',
     category: 'Interactive',
+    description: 'Slides that visitors move through with arrows, dots or a swipe.',
     fields: [
       {
         name: 'mode',
@@ -74,13 +48,24 @@ export function carouselBlock(): BlockDefinition {
         label: 'Movement',
         defaultValue: 'scroll',
         options: [
-          { label: 'Swipe and scroll', value: 'scroll' },
+          { label: 'Slide sideways', value: 'scroll' },
           { label: 'Fade, one slide at a time', value: 'fade' },
         ],
       },
+      {
+        name: 'align',
+        type: 'select',
+        label: 'Slide position',
+        defaultValue: 'start',
+        options: [
+          { label: 'Start', value: 'start' },
+          { label: 'Center', value: 'center' },
+        ],
+        admin: { description: 'Where the current slide sits when the slides are narrower than the carousel.' },
+      },
       { name: 'arrows', type: 'checkbox', label: 'Arrows', defaultValue: true },
       { name: 'dots', type: 'checkbox', label: 'Dots', defaultValue: false },
-      { name: 'loop', type: 'checkbox', label: 'Back to the start after the last slide', defaultValue: false },
+      { name: 'loop', type: 'checkbox', label: 'Loop: the first slide follows the last', defaultValue: false },
       {
         name: 'autoplay',
         type: 'number',
@@ -89,42 +74,47 @@ export function carouselBlock(): BlockDefinition {
         min: 0,
         admin: {
           description:
-            '0 is off. With autoplay the carousel shows a pause button. It also stops while the pointer is over it, while it has ' +
-            'focus, and when the visitor asks for less motion.',
+            '0 is off. With autoplay the carousel shows a pause button. It pauses while the pointer is over it or it has focus, ' +
+            'stops when the visitor swipes, and never runs when the visitor asks for less motion. The editor never autoplays.',
         },
       },
-      { name: 'label', type: 'text', label: 'Label for screen readers', defaultValue: 'Carousel', localized: true },
+      labelField('label', CAROUSEL_LABELS.label, 'Label for screen readers'),
       labelsField(CAROUSEL_LABELS, LABEL_NAMES),
     ],
     slots: {
-      slides: { label: 'Slides', styles: true },
+      slides: { label: 'Slides', styles: true, defaultClassName: CAROUSEL_PART_CLASSES.slides },
       previous: { label: 'Previous button', allow: ARROW_CONTENT, max: 1 },
       next: { label: 'Next button', allow: ARROW_CONTENT, max: 1 },
     },
+    parts: CAROUSEL_PARTS,
     defaultClassName: CAROUSEL_CLASS,
     classes: classesOf(CAROUSEL_CLASS_MAP),
     ai: {
       description:
-        'Slides that swipe sideways (mode "scroll") or fade one into the next (mode "fade"), with optional arrows, dots, loop and ' +
-        'autoplay. Each direct child of the "slides" slot is one slide; give each slide its width with its own className ' +
-        '("w-[85%] md:w-1/3"). A single collectionList or repeat child makes each of its items a slide (set the width on the item). ' +
-        'The optional "previous" and "next" slots hold the arrow content (an icon); empty, they show a chevron. Style from the ' +
-        'carousel className: [&_[data-carousel-track]]: for the track (the gap between slides), [&_[data-carousel-arrow]]: for ' +
-        'the arrows, [&_[data-carousel-dot]]: for the dots (the current dot has aria-current="true"), [&_[data-carousel-controls]]: ' +
-        'for the row of controls, [&_[data-carousel-pause]]: for the pause button that autoplay adds. It is a <section> region with aria-roledescription "carousel"; each slide gets an "i of n" label. The canvas ' +
-        'always scrolls and never autoplays.' +
+        'Slides that move sideways (mode "scroll": swipe, drag, arrows, dots, arrow keys) or fade one into the next (mode "fade"), ' +
+        'with optional arrows, dots, loop and autoplay. Each direct child of the "slides" slot is one slide; set how many show at ' +
+        'once with the className of each slide, e.g. "basis-full md:basis-1/2 lg:basis-1/3" (or a width like "w-[85%]"). A ' +
+        'single collectionList or repeat child makes each of its items a slide (set the basis on the item); any other single ' +
+        'child is one slide. "align" "start" or "center" places the current slide. Dots: one per stop, so fewer dots than slides ' +
+        'when several slides show at once. The optional "previous" and "next" slots hold the arrow content (an icon); empty, they ' +
+        'show a chevron. Style the inner elements with "partClassName": "slides" for the track (the gap between slides), "arrow" ' +
+        'for both arrows, "dot" for each dot (the current dot has aria-current="true"; its mark is its ::after), "controls" for ' +
+        'the row of controls, "pause" for the pause button that autoplay adds. It is a <section> region with ' +
+        'aria-roledescription "carousel"; each slide gets an "i of n" label. In the editor the controls work, slides do not drag, ' +
+        'fade shows as sliding and autoplay is off; selecting a block in a slide moves the carousel to it.' +
         labelsHelp(CAROUSEL_LABELS) +
         ' {n} is the slide number and {count} the number of slides. "carouselRole" and "slideRole" are the aria-roledescription values.',
       example: {
         type: CAROUSEL_BLOCK,
         props: { mode: 'scroll', arrows: true, dots: true, label: 'Reviews' },
         className: CAROUSEL_CLASS,
+        partClassName: { slides: CAROUSEL_PART_CLASSES.slides, arrow: CAROUSEL_PART_CLASSES.arrow, dot: CAROUSEL_PART_CLASSES.dot },
         slots: {
           slides: [
             {
               id: 'b_example_1',
               type: 'stack',
-              className: 'flex w-[85%] flex-col gap-2 rounded-lg border p-6 md:w-1/3',
+              className: 'flex basis-[85%] flex-col gap-2 rounded-lg border p-6 md:basis-1/3',
               slots: { children: [{ id: 'b_example_2', type: 'text', props: { text: 'A slide.' } }] },
             },
           ],

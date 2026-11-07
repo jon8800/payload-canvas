@@ -153,8 +153,15 @@ export function anthropicAdapter(options: AnthropicAdapterOptions = {}): AiAdapt
   const seesKey = Boolean(apiKey || process.env.ANTHROPIC_API_KEY?.trim() || process.env.ANTHROPIC_AUTH_TOKEN?.trim() || options.client)
   let client: AnthropicClient | null = options.client ?? null
 
+  /** A key from the AI settings gets its own client, made again when the key changes. */
+  let keyed: { key: string; client: AnthropicClient } | null = null
+
   /** Credentials resolve once per client: a client that had none is dropped after a failure. */
-  const getClient = (): AnthropicClient => {
+  const getClient = (settingsKey?: string): AnthropicClient => {
+    if (settingsKey && !options.client) {
+      if (keyed?.key !== settingsKey) keyed = { key: settingsKey, client: new Anthropic({ apiKey: settingsKey }) as unknown as AnthropicClient }
+      return keyed.client
+    }
     client ??= (apiKey ? new Anthropic({ apiKey }) : new Anthropic()) as unknown as AnthropicClient
     return client
   }
@@ -162,7 +169,10 @@ export function anthropicAdapter(options: AnthropicAdapterOptions = {}): AiAdapt
 
   const describe = (error: unknown, streamStarted: boolean, current: AnthropicClient): ErrorEvent => {
     if (error instanceof AuthenticationError) {
-      if (!options.client) client = null
+      if (!options.client) {
+        client = null
+        keyed = null
+      }
       return { type: 'error', code: 'auth', message: `The Anthropic API rejected the credentials (401). ${NO_KEY_MESSAGE}` }
     }
     if (error instanceof RateLimitError) return { type: 'error', code: 'api_error', message: 'The Anthropic API rate limit was reached. Wait a moment and try again.' }
@@ -175,7 +185,10 @@ export function anthropicAdapter(options: AnthropicAdapterOptions = {}): AiAdapt
     // Not an API error: before any stream event this is a missing credential; after events it is
     // a tool input the SDK could not parse (eager input streaming), which the loop retries.
     if (!streamStarted && !hasCredentials(current)) {
-      if (!options.client) client = null
+      if (!options.client) {
+        client = null
+        keyed = null
+      }
       return { type: 'error', code: 'auth', message: NO_KEY_MESSAGE }
     }
     if (streamStarted) return { type: 'error', code: 'invalid_output', message: `The model sent a tool call that could not be read (${message}).` }
@@ -190,10 +203,12 @@ export function anthropicAdapter(options: AnthropicAdapterOptions = {}): AiAdapt
     setupProblem: seesKey ? null : 'The AI assistant is probably not set up: the server has no ANTHROPIC_API_KEY. Ask your developer to add an API key.',
     keyEnv: 'ANTHROPIC_API_KEY',
     keyUrl: KEY_URL,
+    acceptsApiKey: true,
+    missingKey: !seesKey,
     async *stream(request) {
       let current: AnthropicClient
       try {
-        current = getClient()
+        current = getClient(request.apiKey?.trim() || undefined)
       } catch (error) {
         yield { type: 'error', code: 'auth', message: `${NO_KEY_MESSAGE} (${error instanceof Error ? error.message : String(error)})` }
         return

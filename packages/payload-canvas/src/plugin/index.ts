@@ -13,15 +13,17 @@ import type {
 import { AI_PATH, aiEndpoints } from '../ai/endpoint'
 import { aiClientConfig } from '../ai/config'
 import { AI_IMAGES_KEY, createImageService } from '../ai/images/service'
+import { AI_SETTINGS_KEY, aiSettingsGlobal, aiSettingsRuntime, DEFAULT_AI_SETTINGS_SLUG } from '../ai/settings'
 import type { AiOptions } from '../ai/types'
 import { defaultBlocks } from '../blocks'
-import { richTextFieldName, sectionsWithDefaultClassNames, sectionsWithVariants } from '../core/blocks'
+import { checkSectionVariants, richTextFieldName, sectionsWithDefaultClassNames } from '../core/blocks'
 import { bindingRelations, DEFAULT_TEMPLATES_SLUG, DOCUMENT_TEMPLATE_FIELD, TEMPLATE_TARGET_FIELD } from '../core/bindings'
 import { localeSettingsOf } from '../core/locale'
 import { resolveRegions, type RegionOption } from '../core/regions'
 import { decodePayloadBlocks, payloadBlocksProblems, payloadBlocksStorage, type PayloadBlocksStorage } from '../core/payloadBlocks'
 import {
   EMPTY_LAYOUT,
+  type Block,
   type BlockDefinition,
   type BuilderClientConfig,
   type EditorOptions,
@@ -34,6 +36,8 @@ import { applyFontFamilies, getCanvasCssInput, getStyleTokens, type CssOptions, 
 import { DEFAULT_THEME_SLUG, THEME_CONFIG_KEY, THEME_PATH, type ThemeOptions, type ThemeServerConfig } from '../theme/config'
 import { themeFontFamilies, themeOutput, type ThemeData } from '../theme/css'
 import { themeGlobal } from '../theme/global'
+import { themeStyleTokens, withThemeVariables } from '../theme/server'
+import { variableUsageEndpoint } from '../theme/usage'
 import {
   BUILDER_CONFIG_KEY,
   defaultLiveRuntime,
@@ -48,6 +52,7 @@ import {
 } from '../live'
 import { captureFieldSemantics, type FieldRegistry } from '../core/fieldSemantics'
 import { FIELD_REGISTRY_KEY } from '../live/fieldChecks'
+import { CONTENT_MODE_KEY, withDesignAccess, type ContentModeConfig } from '../live/contentMode'
 import { regionEndpoints } from '../live/regions'
 import { defaultWriteGate, installLocalApiBoundary, installTransactionSignals, withGateSignals, type WriteGate } from '../live/writeGate'
 import {
@@ -69,6 +74,7 @@ import {
   type SavedSectionsServerConfig,
 } from './sections'
 import { syncSectionBlocks } from './sectionsBuilder'
+import { withSectionUsedIn } from './sectionsUsedIn'
 import { toJsonSafe } from './jsonSafe'
 import { collectionLabel } from './labels'
 import { listableCollections, prepareBlocks } from './listCollections'
@@ -82,6 +88,9 @@ import {
   TEMPLATES_CONFIG_KEY,
   templatesCollection,
 } from './templates'
+import { templateEndpoint } from './templateEndpoint'
+import { CLASSES_CONFIG_KEY, resolveClasses, type ClassesOptions } from '../classes'
+import { resolveComments, type CommentsOptions } from '../comments'
 
 export type { GeneratedCss } from './hook'
 export type { SavedSectionsOptions } from './sections'
@@ -221,7 +230,10 @@ export type WebsiteBuilderOptions = {
    * `payload-canvas/react/server`. See the README's "Theme" section.
    */
   theme?: ThemeOptions | false
-  /** Editor behaviour, e.g. `{ dragMode: 'smooth' }`. See the README's "Drag and drop" section. */
+  /**
+   * Editor behaviour, e.g. `{ dragMode: 'smooth', dropOutlines: false }` (see the README's "Drag and
+   * drop" section), or `{ openInBuilder: true }`: opening a saved document goes straight to the builder.
+   */
   editor?: EditorOptions
   /**
    * References: a hidden `builderRefs` field on every builder collection lists the media and
@@ -230,10 +242,24 @@ export type WebsiteBuilderOptions = {
    * the README's "References and Used in" section.
    */
   references?: ReferencesOptions | false
+  /**
+   * Editable classes: a collection of named classes (`card`, `btn-primary`) with Tailwind classes
+   * and custom CSS, edited in the Styles panel. A change restyles every block that uses the class,
+   * without a deploy. On by default; `false` turns it off. Render the stylesheet on the site with
+   * `ClassesStyle` from `payload-canvas/react/server`. See the README's "Editable classes" section.
+   */
+  classes?: ClassesOptions | boolean
+  /**
+   * Comments on the canvas: people who may change a page leave comments on its blocks, reply and
+   * resolve them in the builder, live for everyone. Stored in a `builder-comments` collection, never
+   * in the layout. On by default; `false` turns it off. See the README's "Comments" section.
+   */
+  comments?: CommentsOptions | boolean
 }
 
 const LAYOUT_FIELD_COMPONENT = 'payload-canvas/client#LayoutField'
 const BUILDER_TAB_COMPONENT = 'payload-canvas/client#BuilderTab'
+const DOCUMENT_EDIT_VIEW_COMPONENT = 'payload-canvas/client#DocumentEditView'
 const PUBLISH_BUTTON_COMPONENT = 'payload-canvas/client#PublishButton'
 const BUILDER_VIEW_COMPONENT = 'payload-canvas/rsc#BuilderView'
 const BUILDER_REDIRECT_COMPONENT = 'payload-canvas/rsc#BuilderRedirect'
@@ -258,6 +284,14 @@ export function cssFieldName(field: string): string {
  * Editors open the builder full screen at `{admin}/builder/:collection/:id` (a root admin view
  * without Payload's nav and header). The document's "Builder" tab and the layout field link there.
  */
+/** The sections, and their variants, whose blocks `fits` accepts (a Payload blocks field stores only some). */
+function sectionsThatFit(sections: SectionDefinition[], fits: (blocks: Block[]) => boolean): SectionDefinition[] {
+  return sections.flatMap((section) => {
+    if (!fits(section.blocks)) return []
+    return [section.variants ? { ...section, variants: section.variants.filter((v) => fits(v.blocks)) } : section]
+  })
+}
+
 export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
   return (config: Config): Config => {
     const apiRoute = config.routes?.api ?? '/api'
@@ -354,10 +388,15 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       builderOptions[templatesSlug] = { field: TEMPLATE_LAYOUT_FIELD, ...(options.templates?.localization === false ? { localization: false } : {}) }
     }
 
-    // Inline blocks (`inline: true`) may sit in a link: they join its `allow` list.
-    const blocks = prepareBlocks(options.blocks ?? defaultBlocks(), listable)
-    // Each section variant is listed as a section of its own (`<id>/<variant id>`).
-    const appSections = sectionsWithVariants(options.sections ?? [])
+    // Saved sections: a collection of sections people saved from the editor.
+    const savedSections: SavedSectionsServerConfig | null =
+      options.savedSections === false ? null : { slug: options.savedSections?.slug ?? DEFAULT_SAVED_SECTIONS_SLUG }
+    // Inline blocks (`inline: true`) may sit in a link: they join its `allow` list. With saved
+    // sections on, the live saved section block (`sectionRef`) joins the list, pointed at their collection.
+    const blocks = prepareBlocks(options.blocks ?? defaultBlocks(), listable, savedSections?.slug ?? null)
+    // Variants stay under their section (core/sections.ts): one library card, a switch on the canvas.
+    const appSections = options.sections ?? []
+    checkSectionVariants(appSections)
     // A section block without a className gets its type's default classes (JSON layouts only).
     const sections = sectionsWithDefaultClassNames(appSections, blocks)
     const duplicate = blocks.find((b, i) => blocks.findIndex((other) => other.type === b.type) !== i)
@@ -398,9 +437,6 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       blocksStorageOf[slug] = payloadBlocksStorage([...new Set(slugs)], blocks, `"${slug}.${field}"`)
     }
 
-    // Saved sections: a collection of sections people saved from the editor.
-    const savedSections: SavedSectionsServerConfig | null =
-      options.savedSections === false ? null : { slug: options.savedSections?.slug ?? DEFAULT_SAVED_SECTIONS_SLUG }
     if (savedSections) {
       if (collections.some((c) => c.slug === savedSections.slug)) {
         throw new Error(
@@ -409,7 +445,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       }
       collections = [
         ...collections,
-        savedSectionsCollection({ slug: savedSections.slug, blocks, options: options.savedSections || undefined }),
+        withSectionUsedIn(savedSectionsCollection({ slug: savedSections.slug, blocks, options: options.savedSections || undefined })),
       ]
       // The full-screen builder edits saved sections like pages (no drafts: changes save at once).
       builderOptions[savedSections.slug] = { field: SECTION_LAYOUT_FIELD }
@@ -455,6 +491,10 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       entry: path.resolve(process.cwd(), options.css.entry),
       plugins: options.css.plugins,
     }
+    // Editable classes: a collection, a hidden global with the compiled stylesheet, endpoints.
+    const classes = resolveClasses(options.classes, { apiRoute, css, blocks, collections, globals: config.globals ?? [] })
+    // Comments on the canvas: a collection the editor reads and writes over REST.
+    const comments = resolveComments(options.comments, { collections, userSlug: config.admin?.user ?? 'users' })
     const liveCollections: Record<string, BuilderCollectionServer> = Object.fromEntries(
       Object.entries(builderOptions).map(([slug, o]) => [
         slug,
@@ -510,7 +550,17 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
 
     const fieldNames: Record<string, string> = {}
     // Image generation: one service (and one hourly limit) for the assistant, the editor and the MCP tools.
-    const imageService = options.ai ? createImageService(options.ai) : null
+    // AI settings: a global where an admin pastes API keys. The endpoints read them per request.
+    const aiSettingsOptions = options.ai && options.ai.settings !== false ? (options.ai.settings ?? {}) : null
+    const aiSettings = options.ai && aiSettingsOptions ? aiSettingsRuntime(options.ai, aiSettingsOptions, `${apiRoute}${AI_PATH}`) : null
+    if (aiSettings && (config.globals ?? []).some((g) => g.slug === aiSettings.slug)) {
+      throw new Error(
+        `[websiteBuilder] A global named "${aiSettings.slug}" already exists. Set \`ai.settings.slug\` to another name, or set \`ai.settings: false\`. (Default slug: "${DEFAULT_AI_SETTINGS_SLUG}".)`,
+      )
+    }
+    const imageService = options.ai
+      ? createImageService(options.ai, { resolveKey: aiSettings ? (payload) => aiSettings.keyFor(payload, 'images') : null })
+      : null
 
     return {
       ...config,
@@ -546,14 +596,21 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           tokensEndpoint: `${apiRoute}${STYLE_TOKENS_PATH}`,
           // Only sections the field can store as they are.
           sections: storage
-            ? appSections.filter((section) => payloadBlocksProblems({ version: 1, blocks: section.blocks }, storage).length === 0)
+            ? sectionsThatFit(appSections, (list) => payloadBlocksProblems({ version: 1, blocks: list }, storage).length === 0)
             : sections,
           liveEndpoint: `${apiRoute}${LIVE_PATH}`,
           templates: clientTemplates,
           ai: options.ai ? aiClientConfig(options.ai, `${apiRoute}${AI_PATH}`) : null,
           savedSections: savedSections ? { collection: savedSections.slug } : null,
           themeEndpoint: theme ? theme.endpoint : null,
-          editor: { dragMode: options.editor?.dragMode ?? 'indicator' },
+          // A Payload blocks field stores no classes.
+          classes: classes && !storage ? classes.client : null,
+          comments: comments ? comments.client : null,
+          editor: {
+            dragMode: options.editor?.dragMode ?? 'indicator',
+            dropOutlines: options.editor?.dropOutlines ?? true,
+            openInBuilder: options.editor?.openInBuilder ?? false,
+          },
           validateTypes: [...fieldRegistry.types('validate')],
           localization: localizationOf(collection.slug),
           ...(regionsOf[collection.slug] ? { regions: toJsonSafe(regionsOf[collection.slug]) } : {}),
@@ -578,22 +635,35 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           payloadBlocks: storage,
         })
         // After the layout hook, so the references follow the layout the session guard put in.
-        return references ? addReferences(built, references) : built
-      }),
+        // Publishing a page publishes the classes it uses that have unpublished changes.
+        const withClasses = classes && !storage ? classes.withPublish(built, field) : built
+        return references ? addReferences(withClasses, references) : withClasses
+      })
+        .concat(classes ? [withDesignAccess(classes.collection)] : [])
+        .concat(comments ? [comments.collection] : []),
       // Server-only: the MCP tools read the live runtime from here, so they share the bus and lock.
       custom: {
         ...config.custom,
         [LIVE_RUNTIME_KEY]: live,
         [FIELD_REGISTRY_KEY]: fieldRegistry,
         [BUILDER_CONFIG_KEY]: serverConfig,
+        [CONTENT_MODE_KEY]: { canEditDesign: options.editor?.canEditDesign } satisfies ContentModeConfig,
         [SITE_CSS_KEY]: { css, blocks } satisfies SiteCssConfig,
+        ...(classes ? { [CLASSES_CONFIG_KEY]: classes.server } : {}),
         ...(templates ? { [TEMPLATES_CONFIG_KEY]: templates } : {}),
         ...(theme ? { [THEME_CONFIG_KEY]: theme } : {}),
         ...(savedSections ? { [SAVED_SECTIONS_CONFIG_KEY]: savedSections } : {}),
         ...(references ? { [REFERENCES_CONFIG_KEY]: references } : {}),
         ...(imageService ? { [AI_IMAGES_KEY]: imageService } : {}),
+        ...(aiSettings ? { [AI_SETTINGS_KEY]: aiSettings } : {}),
       },
-      globals: themeOptions ? [...(config.globals ?? []), themeGlobal(themeOptions)] : config.globals,
+      globals: [
+        ...(config.globals ?? []),
+        // The theme is design: content mode cannot change it (nor the classes, above).
+        ...(themeOptions ? [withDesignAccess(themeGlobal(themeOptions), ['update'])] : []),
+        ...(classes ? [classes.global] : []),
+        ...(options.ai && aiSettingsOptions ? [aiSettingsGlobal(options.ai, aiSettingsOptions)] : []),
+      ],
       // A failed GraphQL or REST request ends its builder saves without a transaction (live/writeGate.ts).
       hooks: {
         ...config.hooks,
@@ -612,15 +682,19 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           // The publish check uses the same binding rules as the save hook of each collection.
           check: { blocks, bindings: bindingCheck(templatesSlug), fieldRegistry },
         }),
+        // The template a document renders through, for the editor's empty page.
+        ...(targets.length > 0 ? [templateEndpoint({ collections: liveCollections, templatesSlug, targets })] : []),
+        ...(classes ? classes.endpoints : []),
         ...(options.ai
           ? aiEndpoints({
               ai: options.ai,
               images: imageService ?? undefined,
+              settings: aiSettings,
               collections: liveCollections,
               blocks,
               sections,
               savedSections,
-              getTokens: () => getStyleTokens(css),
+              getTokens: (req) => (req ? themeStyleTokens(req.payload, css) : getStyleTokens(css)),
               templates: templates ? { slug: templatesSlug, sources: templates.sources } : null,
             })
           : []),
@@ -629,8 +703,9 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           method: 'get',
           handler: async (req) => {
             if (!req.user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-            const input = await getCanvasCssInput(css)
-            return Response.json(input, { headers: { 'Cache-Control': 'private, max-age=60' } })
+            // With the theme's variables, so `bg-brand` works on the canvas. Not cached: a theme save changes it.
+            const input = await getCanvasCssInput(await withThemeVariables(req.payload, css))
+            return Response.json(input, { headers: { 'Cache-Control': 'private, no-cache' } })
           },
         },
         {
@@ -638,7 +713,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           method: 'get',
           handler: async (req) => {
             if (!req.user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-            const tokens = await getStyleTokens(css)
+            const tokens = await themeStyleTokens(req.payload, css)
             const custom = await Promise.resolve(options.css.fontFamilies?.(req.payload)).catch(() => undefined)
             const families = { ...(await themeFamilies(req.payload)), ...custom }
             const fonts = applyFontFamilies(tokens.fonts, families)
@@ -648,6 +723,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
         },
         ...(theme
           ? [
+              variableUsageEndpoint(),
               {
                 // The theme as CSS and a Google Fonts URL, for ThemeLive in the canvas. Read access applies.
                 path: THEME_PATH,
@@ -774,6 +850,7 @@ function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): Collect
   // Payload's edit view type mixes an index signature with known keys, so a literal never fits.
   const edit = {
     ...views?.edit,
+    ...openInBuilderView(views?.edit, clientConfig),
     builder: {
       Component: BUILDER_REDIRECT_COMPONENT,
       path: '/builder',
@@ -848,6 +925,7 @@ function addPayloadBlocksBuilder(collection: CollectionConfig, args: AddBuilderA
   }
   const edit = {
     ...views?.edit,
+    ...openInBuilderView(views?.edit, clientConfig),
     builder: { Component: BUILDER_REDIRECT_COMPONENT, path: '/builder', tab: { Component: BUILDER_TAB_COMPONENT } },
   } as EditViews
   // The builder view reads its config from here: a hidden virtual field, so the blocks field stays untouched.
@@ -891,9 +969,19 @@ function addPayloadBlocksBuilder(collection: CollectionConfig, args: AddBuilderA
   }
 }
 
-/** A block definition without style controls (classes, animations, default classes). */
+/**
+ * `editor.openInBuilder`: the default edit view becomes `DocumentEditView`, which opens a saved
+ * document in the builder and otherwise renders Payload's own edit view. A collection with its own
+ * default edit view keeps it.
+ */
+function openInBuilderView(edit: Record<string, unknown> | undefined, clientConfig: BuilderClientConfig): { default?: { Component: string } } {
+  if (!clientConfig.editor.openInBuilder || edit?.default) return {}
+  return { default: { Component: DOCUMENT_EDIT_VIEW_COMPONENT } }
+}
+
+/** A block definition without style controls (classes, parts, animations, default classes). */
 function withoutStyles(def: BlockDefinition): BlockDefinition {
-  const { defaultClassName: _defaultClassName, ...rest } = def
+  const { defaultClassName: _defaultClassName, parts: _parts, ...rest } = def
   return { ...rest, styles: false }
 }
 

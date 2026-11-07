@@ -7,7 +7,7 @@ import type { ReactNode } from 'react'
 
 import { getServerSideURL } from '@/utilities/getURL'
 import { mergeOpenGraph } from '@/utilities/mergeOpenGraph'
-import { ThemeStyle } from 'payload-canvas/react/server'
+import { ClassesStyle, ThemeStyle } from 'payload-canvas/react/server'
 import config from '@payload-config'
 import { getPayload } from 'payload'
 
@@ -23,6 +23,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     <html className={cn(GeistSans.variable, GeistMono.variable)} lang="en">
       <head>
         <ThemeStyle payload={payload} />
+        {/* The editable classes: after the site's CSS and the theme, before each page's CSS. */}
+        <ClassesStyle payload={payload} />
       </head>
       <body className="font-sans antialiased">{children}</body>
     </html>

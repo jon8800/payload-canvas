@@ -8,7 +8,7 @@
 
 /* oxlint-disable jsx-a11y/prefer-tag-over-role, jsx-a11y/no-noninteractive-element-to-interactive-role -- a native select cannot be a combobox popup, so the list uses listbox/option roles */
 
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
 
 import { onDismissMenus } from '../menu/dismiss'
 
@@ -173,7 +173,11 @@ export function Popover({
   )
 }
 
-export type Suggestion = { value: string; hint?: string }
+/**
+ * `label`: shown instead of the value, which then shows small next to it (a site class's label).
+ * `group`: a heading over a run of items with the same group.
+ */
+export type Suggestion = { value: string; hint?: string; label?: string; group?: string }
 
 const scrollIntoView = (el: HTMLElement | null) => el?.scrollIntoView({ block: 'nearest' })
 
@@ -193,21 +197,33 @@ export function SuggestList({
   return (
     <ul className="builder-styles__suggest" role="listbox">
       {items.map((item, i) => (
-        <li
-          key={item.value}
-          ref={i === active ? scrollIntoView : undefined}
-          role="option"
-          aria-selected={i === active}
-          className="builder-styles__suggest-item"
-          onMouseDown={(e) => {
-            e.preventDefault()
-            onPick(item)
-          }}
-          onMouseEnter={() => onHover(i)}
-        >
-          <span>{item.value}</span>
-          {item.hint && <span className="builder-styles__suggest-hint">{item.hint}</span>}
-        </li>
+        <Fragment key={item.value}>
+          {item.group !== undefined && item.group !== items[i - 1]?.group && (
+            <li role="presentation" className="builder-styles__suggest-group">
+              {item.group}
+            </li>
+          )}
+          <li
+            ref={i === active ? scrollIntoView : undefined}
+            role="option"
+            aria-selected={i === active}
+            className="builder-styles__suggest-item"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              onPick(item)
+            }}
+            onMouseEnter={() => onHover(i)}
+          >
+            {item.label ? (
+              <span className="builder-styles__suggest-label">
+                {item.label} <code className="builder-styles__suggest-name">{item.value}</code>
+              </span>
+            ) : (
+              <span>{item.value}</span>
+            )}
+            {item.hint && <span className="builder-styles__suggest-hint">{item.hint}</span>}
+          </li>
+        </Fragment>
       ))}
     </ul>
   )
