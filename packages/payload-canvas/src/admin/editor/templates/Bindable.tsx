@@ -52,6 +52,9 @@ import {
   valueAt,
   type PropKind,
 } from './binding'
+import { propertyOf } from '../../../core/components'
+import { editsSection, propertyTypeOf } from '../sections/components'
+import { PropertySlot, VisibleProperty } from '../sections/PropertyControls'
 import { FieldPicker, fieldIcon } from './FieldPicker'
 import { useCollectionLabel, useListSample, useTitleField } from './useTemplate'
 import './templates.scss'
@@ -167,6 +170,7 @@ export function BindingScopeProvider({ block, prefix, children }: { block: Block
     <BindingScopeContext value={{ block, def, prefix, scope }}>
       <ScopeBanner block={block} scope={scope} />
       {children}
+      {!scope && <VisibleProperty block={block} />}
     </BindingScopeContext>
   )
 }
@@ -186,6 +190,7 @@ type SlotProps = {
  * bound chip when it is bound; or a special input for the Field block and the collection list.
  */
 export function FieldSlot(props: SlotProps) {
+  const runtime = useRuntime()
   const ctx = use(BindingScopeContext)
   if (!ctx) return props.children
   const propPath = propPathOf(ctx.prefix, props.path)
@@ -196,6 +201,17 @@ export function FieldSlot(props: SlotProps) {
   if (block.type === REPEAT_BLOCK && propPath === 'path') return <FieldPathInput {...props} scope={scope} rows />
   if (block.type === LIST_BLOCK && propPath === 'collection') return <ListCollectionInput {...props} />
   if (block.type === FIELD_BLOCK || block.type === LIST_BLOCK || block.type === REPEAT_BLOCK) return props.children
+
+  // A saved section (outside lists): content fields can become the component's properties.
+  const inLinkGroup = def && propPath.includes('.') && isLinkField(propField(def.fields as unknown[], propPath.slice(0, propPath.lastIndexOf('.'))))
+  const isProperty = propertyOf(block.bindings?.[propPath] ?? '') !== null
+  if (!scope && !inLinkGroup && editsSection(runtime) && (isProperty || propertyTypeOf(runtime, block, propPath))) {
+    return (
+      <PropertySlot block={block} propPath={propPath} label={props.label}>
+        {props.children}
+      </PropertySlot>
+    )
+  }
 
   const kind = propKind(props.field as { type: string; hasMany?: boolean })
   if (!kind) return props.children

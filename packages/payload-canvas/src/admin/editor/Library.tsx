@@ -5,10 +5,11 @@ import { useConfig, useRouteTransition } from '@payloadcms/ui'
 import { useRouter } from 'next/navigation'
 import { memo, useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 
+import { isComponent } from '../../core/components'
 import { sectionVersion, sectionVersions } from '../../core/sections'
 import type { Block, BlockDefinition, SectionDefinition } from '../../core/types'
 import { builderViewPath } from '../../plugin/links'
-import { insertBlocks, insertNewBlock, sectionPosition } from './actions'
+import { componentCopy, insertBlocks, insertNewBlock, plainSectionBlocks, sectionPosition } from './actions'
 import { BlockIcon, Icon } from './icons'
 import { MenuButton } from './menu/Menu'
 import { useRuntime, type DragData } from './runtime'
@@ -213,19 +214,22 @@ function SectionCard({ section }: { section: SectionDefinition }) {
   const at = Math.min(index, versions.length - 1)
   // The version shown, ready to insert: its root block remembers the section and the variant.
   const shown = useMemo(() => sectionVersion(section, versions[at]?.variant) ?? section, [section, versions, at])
-  const root = shown.blocks[0]
   const isSaved = section.savedId !== undefined
+  // A saved section with properties is a component: it goes in as a copy that stays in sync.
+  const copy = useMemo(() => (isComponent(section.blocks) ? componentCopy(section) : null), [section])
+  const blocks = useMemo(() => (copy ? [copy] : isSaved ? plainSectionBlocks(runtime, shown.blocks) : shown.blocks), [copy, isSaved, runtime, shown.blocks])
+  const root = blocks[0]
   const data: DragData = {
     // Drop rules check the root block's type.
     source: { kind: 'new', blockType: root?.type ?? 'stack' },
     label: shown.label,
-    icon: 'section',
-    blocks: shown.blocks,
+    icon: copy ? 'component' : 'section',
+    blocks,
   }
   const { setNodeRef, listeners, attributes } = useDraggable({ id: `section:${section.id}`, data, disabled: !root })
 
   const insert = () => {
-    if (insertBlocks(runtime, shown.blocks, sectionPosition(runtime))) runtime.notify(`Added ${shown.label}`)
+    if (insertBlocks(runtime, blocks, sectionPosition(runtime))) runtime.notify(`Added ${shown.label}`)
   }
 
   // Versions flip in place: the card keeps one height (one label line, two description lines).
@@ -244,8 +248,13 @@ function SectionCard({ section }: { section: SectionDefinition }) {
       >
         <SectionThumb section={shown} />
         <span className="builder-editor__card-text">
-          <span className="builder-editor__card-label">{shown.label}</span>
-          {(description || (flips && versions.some((v) => v.description))) && <span className="builder-editor__card-desc">{description}</span>}
+          <span className="builder-editor__card-label">
+            {copy && <Icon name="component" size={12} className="builder-editor__card-component" />}
+            {shown.label}
+          </span>
+          {(description || copy || (flips && versions.some((v) => v.description))) && (
+            <span className="builder-editor__card-desc">{description ?? (copy ? 'Component' : undefined)}</span>
+          )}
         </span>
       </button>
       {flips && (
@@ -258,7 +267,7 @@ function SectionCard({ section }: { section: SectionDefinition }) {
           onChange={setIndex}
         />
       )}
-      {isSaved && <SavedSectionMenu section={section} />}
+      {isSaved && <SavedSectionMenu section={section} component={copy !== null} />}
     </div>
   )
 }
@@ -269,7 +278,7 @@ export function editSectionPath(adminRoute: string, collection: string, id: stri
 }
 
 /** Edit, rename and delete for a saved section. */
-function SavedSectionMenu({ section }: { section: SectionDefinition }) {
+function SavedSectionMenu({ section, component }: { section: SectionDefinition; component: boolean }) {
   const runtime = useRuntime()
   const router = useRouter()
   const { startRouteTransition } = useRouteTransition()
@@ -277,7 +286,10 @@ function SavedSectionMenu({ section }: { section: SectionDefinition }) {
     config: { routes },
   } = useConfig()
   const collection = runtime.config.savedSections?.collection
-  // Opens the section in the full-screen builder, like a page. Pages that use it keep their copy.
+  const addSaved = (blocks: Block[]) => {
+    if (insertBlocks(runtime, blocks, sectionPosition(runtime))) runtime.notify(`Added ${section.label}`)
+  }
+  // Opens the section in the full-screen builder, like a page.
   const edit = () => {
     if (!collection || section.savedId === undefined) return
     const href = editSectionPath(routes.admin, collection, section.savedId, `${window.location.pathname}${window.location.search}`)
@@ -289,9 +301,12 @@ function SavedSectionMenu({ section }: { section: SectionDefinition }) {
       triggerLabel={`Actions for ${section.label}`}
       tooltip="Edit, rename or delete"
       label="Saved section actions"
-      footer="Pages that use this section keep their own copy."
+      footer={component ? 'Changes show on every copy.' : 'Pages that use this section keep their own copy.'}
       items={() => [
-        ...(collection ? [{ icon: 'compose' as const, label: 'Edit section', run: edit }] : []),
+        ...(collection ? [{ icon: 'compose' as const, label: component ? 'Edit component' : 'Edit section', run: edit }] : []),
+        component
+          ? { icon: 'section' as const, label: 'Add as plain blocks', run: () => addSaved(plainSectionBlocks(runtime, section.blocks)) }
+          : { icon: 'sectionRef' as const, label: 'Add a copy that stays in sync', run: () => addSaved([componentCopy(section)!]) },
         { icon: 'rename', label: 'Rename…', ownFocus: true, run: () => requestRenameSection(runtime, section) },
         { icon: 'delete', label: 'Delete…', ownFocus: true, danger: true, run: () => requestDeleteSection(runtime, section) },
       ]}

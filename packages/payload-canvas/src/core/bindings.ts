@@ -866,6 +866,39 @@ export function isVisible(context: TemplateContext, visibility: BlockVisibility 
 }
 
 /**
+ * Puts the values of `bindings` (prop path -> binding) into `props`. Bindings without a value
+ * stay in `left`, and their props keep the literal value. Never mutates.
+ */
+export function bindProps(
+  props: BlockProps,
+  bindings: Record<string, string>,
+  context: TemplateContext,
+  definition: BlockDefinition | undefined,
+  options?: BindingOptions,
+): { props: BlockProps; left: Record<string, string>; changed: boolean } {
+  let next = props
+  let changed = false
+  const left: Record<string, string> = {}
+  for (const [propPath, fieldPath] of Object.entries(bindings)) {
+    const field = definition ? propField(definition.fields as unknown[], propPath) : undefined
+    const value = coerceValue(bindingValue(context, fieldPath, options), field)
+    if (value === undefined) {
+      left[propPath] = fieldPath
+      continue
+    }
+    const path = propPath.split('.')
+    next = setByPath(next, path, value)
+    // Binding a link group's URL makes it a URL link.
+    if (path.length > 1 && path.at(-1) === 'url' && definition) {
+      const parent = propField(definition.fields as unknown[], path.slice(0, -1).join('.'))
+      if (parent && isLinkField(parent)) next = setByPath(next, [...path.slice(0, -1), 'type'], 'url')
+    }
+    changed = true
+  }
+  return { props: next, left, changed }
+}
+
+/**
  * Resolves one block's bindings (not its children). Bound props with a value take it; applied
  * bindings are removed from the result, unresolved ones stay. Visibility conditions that do not
  * match make the block `hidden`. A Field block gets `props.value`, a repeat its rows (`$items`).
@@ -877,28 +910,11 @@ export function resolveBlockBindings(
   definition: BlockDefinition | undefined,
   options?: BindingOptions,
 ): Block {
-  let props = block.props ?? {}
-  let changed = false
-  const left: Record<string, string> = {}
-
   const hidden = block.visibility ? !isVisible(context, block.visibility, options) : false
-  if (hidden) changed = true
-  for (const [propPath, fieldPath] of Object.entries(block.bindings ?? {})) {
-    const field = definition ? propField(definition.fields as unknown[], propPath) : undefined
-    const value = coerceValue(bindingValue(context, fieldPath, options), field)
-    if (value === undefined) {
-      left[propPath] = fieldPath
-      continue
-    }
-    const path = propPath.split('.')
-    props = setByPath(props, path, value)
-    // Binding a link group's URL makes it a URL link.
-    if (path.length > 1 && path.at(-1) === 'url' && definition) {
-      const parent = propField(definition.fields as unknown[], path.slice(0, -1).join('.'))
-      if (parent && isLinkField(parent)) props = setByPath(props, [...path.slice(0, -1), 'type'], 'url')
-    }
-    changed = true
-  }
+  const bound = bindProps(block.props ?? {}, block.bindings ?? {}, context, definition, options)
+  let props = bound.props
+  let changed = hidden || bound.changed
+  const left = bound.left
 
   if (block.type === FIELD_BLOCK && typeof props.path === 'string' && props.path) {
     const value = bindingValue(context, props.path, options)

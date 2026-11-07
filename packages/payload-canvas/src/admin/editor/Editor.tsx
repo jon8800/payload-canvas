@@ -34,6 +34,7 @@ import { useFollow } from './live/useFollow'
 import { useTemplateController } from './templates/useTemplate'
 import { TopBar } from './topbar/TopBar'
 import { useValueSelector } from './valueStore'
+import { useComponentRefresh } from './sections/components'
 
 const COLLISION_ID = 'builder-drop'
 /** Distance from the canvas top or bottom edge where auto-scroll starts. */
@@ -82,6 +83,7 @@ export function Editor({ config, meta, icon, locale }: EditorProps) {
   const ready = useValueSelector(runtime.live, (live) => Boolean(live?.self))
   useFollow(runtime)
   useTemplateController(runtime)
+  useComponentRefresh(runtime)
   useEffect(() => runtime.assistant?.setDocument(config.collection, docId), [runtime, config.collection, docId])
   useEffect(() => () => runtime.assistant?.stop(), [runtime])
   // The hidden thumbnail iframe goes with the editor.

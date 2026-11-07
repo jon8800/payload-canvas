@@ -1,7 +1,9 @@
 // Texts and helpers shared by the MCP tools (src/mcp) and the editor's AI assistant (src/ai).
 // No zod and no Payload runtime here, so the assistant does not need the MCP dependencies.
 
-import { COLLECTION_LIST_BLOCK, FIELD_BLOCK, INDEX_PATH, isRepeatSlot, ITEM_PATH, PAGE_PATH, PARENT_PATH, REPEAT_BLOCK, URL_PATH } from '../core/bindings'
+import { SECTION_REF_BLOCK, SECTION_REF_VALUES } from '../blocks/builtins/sectionRef'
+import { applyComponentValues, checkComponentValues, componentProperties, fieldValue, type ComponentProperty } from '../core/components'
+import { COLLECTION_LIST_BLOCK, FIELD_BLOCK, INDEX_PATH, isRichText, richTextToPlain, isRepeatSlot, ITEM_PATH, PAGE_PATH, PARENT_PATH, REPEAT_BLOCK, URL_PATH } from '../core/bindings'
 import { blockParts } from '../core/classes'
 import { conditionMet, readCondition } from '../core/conditions'
 import { dataFields, optionValues } from '../core/fields'
@@ -385,3 +387,51 @@ export const CONTEXT_ONLY_VISIBILITY =
   'visibility does nothing here: it only applies in templates and in collection list or repeat items. On a normal page the block always shows. Remove it, or set "hidden": true to hide the block.'
 export const CONTEXT_ONLY_BINDINGS =
   'bindings do nothing here: they only apply in templates and in collection list or repeat items. On a normal page the props keep their own values. Write the values into props instead.'
+
+/** A property's default as AI models read it: rich text as plain text, an image as its upload id. */
+function defaultForModels(property: ComponentProperty): unknown {
+  if (property.type === 'richText') return isRichText(property.default) ? richTextToPlain(property.default) : property.default
+  if (property.type === 'image') return fieldValue(property, property.default)
+  return property.default
+}
+
+/**
+ * `listSections` fields of a component (a saved section with properties): `component: true` and
+ * its properties with their type and default. Nothing for other sections.
+ */
+export function componentListing(
+  section: SectionDefinition,
+  blocks: readonly BlockDefinition[],
+): { component?: true; properties?: Array<{ name: string; type: string; default?: unknown }> } {
+  if (section.savedId === undefined) return {}
+  const properties = componentProperties(section.blocks, blocks)
+  if (properties.length === 0) return {}
+  return {
+    component: true,
+    properties: properties.map((p) => {
+      const value = defaultForModels(p)
+      return { name: p.name, type: p.type, ...(value !== undefined ? { default: value } : {}) }
+    }),
+  }
+}
+
+/**
+ * The section `insertSection` puts in. A component (or `linked: true`) goes in as one copy that
+ * stays in sync (a `sectionRef` block) with `values`; else the section's blocks go in as plain
+ * blocks, with `values` put into them. Returns the problem as text.
+ */
+export function sectionToInsert(
+  section: SectionDefinition,
+  blocks: readonly BlockDefinition[],
+  options: { values?: unknown; linked?: boolean | null },
+): SectionDefinition | string {
+  const properties = section.savedId !== undefined ? componentProperties(section.blocks, blocks) : []
+  const linked = options.linked ?? properties.length > 0
+  const { values, problems } = checkComponentValues(properties, options.values)
+  if (problems.length > 0) return problems.join(' ')
+  if (!linked) return { ...section, blocks: applyComponentValues(section.blocks, values, blocks) }
+  if (section.savedId === undefined) return 'Only saved sections can be inserted as linked copies (linked: true).'
+  if (!blocks.some((def) => def.type === SECTION_REF_BLOCK)) return 'Linked copies of saved sections are turned off on this site.'
+  const props = { section: section.savedId, ...(Object.keys(values).length > 0 ? { [SECTION_REF_VALUES]: values } : {}) }
+  return { ...section, blocks: [{ id: 'component', type: SECTION_REF_BLOCK, props }] }
+}

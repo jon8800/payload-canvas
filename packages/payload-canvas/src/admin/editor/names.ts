@@ -2,6 +2,7 @@
 // Pure functions: the type label comes from the caller (the block definition's `label`).
 
 import { iconLabel } from '../../blocks/builtins/icon'
+import { readsComponent } from '../../core/components'
 import type { Block } from '../../core/types'
 import { FIELD_BLOCK, LIST_BLOCK } from './templates/binding'
 
@@ -64,9 +65,12 @@ function linkText(value: unknown): string {
   return typeof url === 'string' ? url : ''
 }
 
-/** Bound blocks show the field they read: `{title}`. */
+/**
+ * Bound blocks show the field they read: `{title}`. A component's properties do not count: the
+ * block shows its own content, the default of every copy.
+ */
 function boundPreview(block: Block): string {
-  const first = Object.values(block.bindings ?? {})[0]
+  const first = Object.values(block.bindings ?? {}).find((binding) => !readsComponent(binding))
   return first ? `{${first}}` : ''
 }
 

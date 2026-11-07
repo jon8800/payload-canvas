@@ -54,11 +54,13 @@ import { DEFAULT_SAVED_SECTIONS_SLUG, loadSavedSections, savedSectionsConfigOf }
 import { templatesConfigOf } from '../plugin/templates'
 import { generateImageToMedia, imageServiceOf } from '../ai/images/service'
 import { IMAGE_ASPECT_RATIOS } from '../ai/images/ratios'
+import { SECTION_REF_BLOCK } from '../blocks/builtins/sectionRef'
 import { classesConfigOf, loadClasses, mergeSiteClasses } from '../classes'
 import { classMcpTools } from '../classes/mcp'
 import {
   BINDINGS_GUIDE,
   changeSummary,
+  componentListing,
   contextOnlyWarnings,
   describeBlock,
   layoutGuide,
@@ -67,6 +69,7 @@ import {
   outline,
   repairRootParents,
   sectionInsertOps,
+  sectionToInsert,
   touchedIds,
   variantsListing,
   withNewIds,
@@ -548,6 +551,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       'Lists ready-made sections (heroes, features, testimonials, calls to action, contact, footers, …) with an outline of their blocks. Sections are the best way to build a page: insert them with insertSection, then change their text, images and classes with applyOperations "update". Set `full: true` to get the complete block JSON of each section.',
       'A section can come in variants (other versions of the same section, e.g. a split hero): they are listed under it in `variants`. Pick the version that fits the page and pass its id as `variant` to insertSection.',
       'The list also has the sections people saved on this site. They have `saved: true` and an id like "saved:12".',
+      'A saved section with `component: true` is a component: insertSection puts in a copy that stays in sync with it, and each copy sets its own `values` for the listed `properties` (text, richText as plain text, image as an upload id, link as a URL or { type, url }, visible as true/false). A property left out shows its `default`.',
     ].join('\n'),
     parameters: {
       collection: collectionArg,
@@ -567,6 +571,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
           ...(s.description ? { description: s.description } : {}),
           ...(args.full ? { blocks: s.blocks } : { outline: outline(s.blocks).join('\n') }),
           ...variantsListing(s, args.full === true),
+          ...componentListing(s, blocks),
         })),
       })
     },
@@ -579,6 +584,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       'Inserts a ready-made or saved section (from listSections) into the draft of a document. All block ids are regenerated. Saves a draft about a second later (never publishes). People with the page open in the editor see the section appear live.',
       'Default position: the end of the page. Set parentId/slot/index to insert elsewhere (index = final index in the target list).',
       'Returns the inserted blocks with their NEW ids, and `needsContent`: blocks whose image, form or other upload or relationship is still empty (fill them with generateImage, an existing upload, or findDocument). Then adjust text and classes with applyOperations "update".',
+      'Components (`component: true` in listSections) go in as one copy that stays in sync: pass `values` ({ <property name>: value }) for its properties. To change a copy later, "update" its props.values. linked: false inserts plain blocks the page can change freely (values still fill them).',
     ].join('\n'),
     parameters: {
       collection: collectionArg,
@@ -591,15 +597,25 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       parentId: z.string().nullable().optional().describe('Parent block id. Default null (page root).'),
       slot: z.string().optional().describe('Slot of the parent. Default "children".'),
       index: z.number().int().min(0).optional().describe('Final index in the target list. Default: append.'),
+      values: z
+        .record(z.string(), z.unknown())
+        .optional()
+        .describe('Components only: values for its properties, by property name (see `properties` in listSections).'),
+      linked: z
+        .boolean()
+        .optional()
+        .describe('Saved sections only. true: a copy that stays in sync with the saved section (default for components). false: plain blocks.'),
     },
     handler: async (args, req) => {
       const all = await allSections(req)
-      const section = findSectionVersion(all, String(args.sectionId), typeof args.variant === 'string' ? args.variant : undefined)
-      if (typeof section === 'string') return fail(section)
-      if (!section) {
+      const found = findSectionVersion(all, String(args.sectionId), typeof args.variant === 'string' ? args.variant : undefined)
+      if (typeof found === 'string') return fail(found)
+      if (!found) {
         const known = all.map((s) => (s.savedId !== undefined ? `${s.id} ("${s.label}")` : s.id))
         return fail(`Unknown section "${String(args.sectionId)}". Known sections: ${known.join(', ') || 'none'}.`)
       }
+      const section = sectionToInsert(found, blocks, { values: args.values, linked: typeof args.linked === 'boolean' ? args.linked : null })
+      if (typeof section === 'string') return fail(section)
       const collection = String(args.collection)
       const result = await apply(req, collection, String(args.id), (layout) =>
         sectionInsertOps(layout, section, {
@@ -615,6 +631,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       return text({
         ok: true,
         section: section.id,
+        ...(section.blocks[0]?.type === SECTION_REF_BLOCK ? { linked: true } : {}),
         ...(section.blocks[0]?.section?.variant ? { variant: section.blocks[0].section.variant } : {}),
         seq: result.seq,
         inserted,
