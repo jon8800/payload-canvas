@@ -4,6 +4,12 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-11-08
+
+### Fixed
+
+- Opening a document's edit URL with a full page load (a typed or pasted URL, a new tab, a reload) with `editor.openInBuilder` on no longer locks the admin in a render loop in development. The console logged "Maximum update depth exceeded" many times, the CPU stayed busy, and the loop went on after leaving the builder. The cause: the edit view opened the builder with a client navigation while the page was still starting. With React Strict Mode, Payload's `CloseModalOnRouteChange` closes all modals once at idle priority on mount. The navigation kept React busy, and the second close at the route change then made every render create a new `modalState`. The effects that read it set state again, so the idle close never ran. Now an edit view that is the page the browser loaded opens the builder with a full page load (`window.location.replace`). An edit view that Next's router opened still opens it with a client navigation. Production builds were not affected.
+
 ## [0.5.1] - 2026-11-08
 
 ### Fixed
