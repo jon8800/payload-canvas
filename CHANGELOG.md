@@ -4,6 +4,12 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-08
+
+### Fixed
+
+- `prepareBlocks` and `listCollectionsOf` are exported from `payload-canvas/blocks` again, with the same signatures as in 0.4.0. 0.5.0 dropped them by mistake and did not list it in the upgrade notes, so `import { prepareBlocks } from 'payload-canvas/blocks'` failed. A new test checks the entry's documented exports. `defaultBlocks({ listCollections })` stays the simplest way for a list built with `defaultBlocks`.
+
 ## [0.5.0] - 2026-11-08
 
 ### Upgrade notes
