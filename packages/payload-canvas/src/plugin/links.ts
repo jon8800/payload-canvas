@@ -41,6 +41,28 @@ export function opensInBuilder(state: {
   return formParam === null
 }
 
+/**
+ * How the edit view goes on to the builder. `page`: a full page load, for an edit view that is the
+ * page the browser loaded (a typed or pasted URL, a new tab, a reload). `router`: a client
+ * navigation, for an edit view that Next's router opened (a link in the admin).
+ *
+ * A client navigation right after a full load can lock React in a render loop in development
+ * ("Maximum update depth exceeded" many times, the CPU busy). Strict Mode runs Payload's
+ * `CloseModalOnRouteChange` effect twice on mount, so it closes all modals once at idle priority.
+ * The navigation keeps React busy until the builder arrives, and then closes all modals again.
+ * From then on every render applies that close again and makes a new `modalState` object, and the
+ * effects that read it set state again, so the idle close never runs. A full page load gives
+ * the builder a fresh page. `loadedUrl` is the URL of the page load (Navigation Timing).
+ */
+export function builderOpening(loadedUrl: string | null | undefined, currentUrl: string): 'page' | 'router' {
+  if (!loadedUrl) return 'router'
+  try {
+    return new URL(loadedUrl).pathname === new URL(currentUrl).pathname ? 'page' : 'router'
+  } catch {
+    return 'router'
+  }
+}
+
 /** The public path of a document from the collection's `url` option. Null when it has none or it throws. */
 export function documentPath(url: ((doc: Record<string, unknown>) => string) | undefined, doc: Record<string, unknown>): string | null {
   if (!url) return null
