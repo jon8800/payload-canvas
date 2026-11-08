@@ -8,6 +8,8 @@ export { isLinkField, linkField, type BuilderCondition, type LinkFieldOptions } 
 export { fromPayloadBlocks, type FromPayloadBlocksOptions, type PayloadBlockOverride } from './payload'
 export { defineBlock, defineSection, type SectionBlockInput, type SectionInput, sectionsWithVariants, withDefaultClassNames, withInlineBlocks } from '../core/blocks'
 export { BUILDER_CSS_CLASS, withBuilderCssClass } from '../css/marker'
+// Public since 0.4.0. 0.5.0 dropped this line by mistake; `exports.test.ts` keeps it.
+export { listCollectionsOf, prepareBlocks } from '../plugin/listCollections'
 export type {
   Block,
   BlockDefinition,
