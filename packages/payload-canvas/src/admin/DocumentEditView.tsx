@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import type { DocumentViewClientProps } from 'payload'
 import { useEffect } from 'react'
 
-import { builderViewPath, FORM_PARAM, opensInBuilder } from '../plugin/links'
+import { builderOpening, builderViewPath, FORM_PARAM, opensInBuilder } from '../plugin/links'
 import { formChosen, rememberForm } from './formChoice'
 import './layoutField.scss'
 
@@ -42,7 +42,12 @@ export function DocumentEditView(props: DocumentViewClientProps) {
   }, [asked, hasId, collectionSlug, id, drawerSlug])
 
   useEffect(() => {
-    if (target) router.replace(target)
+    if (!target) return
+    // A client navigation right after a full page load can lock React in a render loop in
+    // development: see `builderOpening`.
+    const loaded = performance.getEntriesByType('navigation')[0]?.name
+    if (builderOpening(loaded, window.location.href) === 'page') window.location.replace(target)
+    else router.replace(target)
   }, [target, router])
 
   if (target) {
