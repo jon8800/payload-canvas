@@ -4,7 +4,7 @@ import type { CollectionConfig, Config } from 'payload'
 
 import type { BuilderClientConfig } from '../core/types'
 import { websiteBuilder } from './index'
-import { editViewPath, listViewPath, opensInBuilder } from './links'
+import { builderOpening, editViewPath, listViewPath, opensInBuilder } from './links'
 
 describe('admin paths', () => {
   it('builds the edit view path, with the form flag on request', () => {
@@ -30,6 +30,27 @@ describe('opensInBuilder', () => {
     assert.equal(opensInBuilder({ ...open, trashed: true }), false)
     assert.equal(opensInBuilder({ ...open, inDrawer: true }), false, 'a document drawer, also the builder’s settings drawer')
     assert.equal(opensInBuilder({ ...open, formParam: '1' }), false, '“All fields” in the builder')
+  })
+})
+
+describe('builderOpening', () => {
+  const edit = 'https://site.test/admin/collections/pages/12'
+
+  it('opens the builder with a full page load when the edit view is the page the browser loaded', () => {
+    // A client navigation here locks React in a render loop in development (see builderOpening).
+    assert.equal(builderOpening(edit, edit), 'page')
+    assert.equal(builderOpening(`${edit}?locale=en`, `${edit}?depth=1`), 'page', 'the search string does not matter')
+  })
+
+  it('keeps the client navigation when the router opened the edit view', () => {
+    assert.equal(builderOpening('https://site.test/admin/collections/pages', edit), 'router', 'a link in the list')
+    assert.equal(builderOpening('https://site.test/admin/builder/pages/3', edit), 'router', 'All fields in the builder, then back')
+  })
+
+  it('keeps the client navigation without a page load URL', () => {
+    assert.equal(builderOpening(undefined, edit), 'router')
+    assert.equal(builderOpening('', edit), 'router')
+    assert.equal(builderOpening('not a url', edit), 'router')
   })
 })
 
