@@ -27,6 +27,8 @@ export const formClasses = {
   previewInput: 'pointer-events-none',
   // Under a field in the builder's preview, e.g. its display conditions.
   note: 'm-0 text-xs text-muted-foreground',
+  // The spam honeypot: off screen, so people never see it.
+  honeypot: 'absolute -left-[10000px] top-auto size-px overflow-hidden',
   footer: 'flex w-full flex-col items-start gap-3 pt-1',
   submit:
     'inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-primary px-6 text-base ' +
