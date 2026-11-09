@@ -15,7 +15,7 @@ export const Pages: CollectionConfig = {
     update: authenticated,
   },
   admin: {
-    defaultColumns: ['title', 'slug', '_status', 'updatedAt'],
+    defaultColumns: ['title', 'slug', '_status', 'publishedAt', 'updatedAt'],
     useAsTitle: 'title',
     livePreview: {
       url: ({ data, req }) =>
