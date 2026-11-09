@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { draftMode, headers } from 'next/headers'
 import { notFound } from 'next/navigation'
 import { SiteFrame } from '@/components/BuilderContent'
+import { recordNotFound } from '@/lib/recordNotFound'
 
 /**
  * How a site page answers a missing document.
@@ -46,7 +47,8 @@ function NotFoundSignal(): null {
 }
 
 /** What a site page returns for a missing document. See `SITE_404_STATUS`. */
-export function MissingPage({ pathname }: { pathname: string }) {
+export async function MissingPage({ pathname }: { pathname: string }) {
+  await recordNotFound(pathname)
   if (SITE_404_STATUS) notFound()
   return (
     <>

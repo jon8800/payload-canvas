@@ -38,6 +38,7 @@ import { PublishButton as PublishButton_1611a9327f20600aee6a9d537ba4315b } from 
 import { DocumentEditView as DocumentEditView_1611a9327f20600aee6a9d537ba4315b } from 'payload-canvas/client'
 import { BuilderRedirect as BuilderRedirect_57c6923ff8049349bee2a220c5ac4c2a } from 'payload-canvas/rsc'
 import { BuilderTab as BuilderTab_1611a9327f20600aee6a9d537ba4315b } from 'payload-canvas/client'
+import { FromField as FromField_a92a4075a1ccfafb152a468cf888d804 } from '../../../admin/redirects/FromField'
 import { FormatField as FormatField_cdf7e044479f899a31f804427d568b36 } from '@payloadcms/plugin-import-export/rsc'
 import { LimitField as LimitField_cdf7e044479f899a31f804427d568b36 } from '@payloadcms/plugin-import-export/rsc'
 import { Page as Page_cdf7e044479f899a31f804427d568b36 } from '@payloadcms/plugin-import-export/rsc'
@@ -84,6 +85,9 @@ import { FormMessages as FormMessages_a2e72e0cb2f3cc3c6dd631c2dafbdde7 } from '.
 import { SiteChecks as SiteChecks_1e7c5e3ba038e1b84cc38433d632fbc5 } from '../../../admin/dashboard/widgets/SiteChecks'
 import { Scheduled as Scheduled_fa8fba270e908023554cdf9339b7aa6d } from '../../../admin/dashboard/widgets/Scheduled'
 import { Analytics as Analytics_84f7c76db2483f5089a4484a901f3edf } from '../../../admin/dashboard/widgets/Analytics'
+import { OpenComments as OpenComments_b22a138bb07824169ab15239a35d416c } from '../../../admin/dashboard/widgets/OpenComments'
+import { UnusedMedia as UnusedMedia_cae561eba782d037463875ebc1283a4d } from '../../../admin/dashboard/widgets/UnusedMedia'
+import { BrokenLinks as BrokenLinks_e9f957950b34c51d9fdeca2f701a428e } from '../../../admin/dashboard/widgets/BrokenLinks'
 import { CollectionCards as CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1 } from '@payloadcms/next/rsc'
 
 /** @type import('payload').ImportMap */
@@ -128,6 +132,7 @@ export const importMap = {
   "payload-canvas/client#DocumentEditView": DocumentEditView_1611a9327f20600aee6a9d537ba4315b,
   "payload-canvas/rsc#BuilderRedirect": BuilderRedirect_57c6923ff8049349bee2a220c5ac4c2a,
   "payload-canvas/client#BuilderTab": BuilderTab_1611a9327f20600aee6a9d537ba4315b,
+  "/admin/redirects/FromField#FromField": FromField_a92a4075a1ccfafb152a468cf888d804,
   "@payloadcms/plugin-import-export/rsc#FormatField": FormatField_cdf7e044479f899a31f804427d568b36,
   "@payloadcms/plugin-import-export/rsc#LimitField": LimitField_cdf7e044479f899a31f804427d568b36,
   "@payloadcms/plugin-import-export/rsc#Page": Page_cdf7e044479f899a31f804427d568b36,
@@ -174,5 +179,8 @@ export const importMap = {
   "/admin/dashboard/widgets/SiteChecks#SiteChecks": SiteChecks_1e7c5e3ba038e1b84cc38433d632fbc5,
   "/admin/dashboard/widgets/Scheduled#Scheduled": Scheduled_fa8fba270e908023554cdf9339b7aa6d,
   "/admin/dashboard/widgets/Analytics#Analytics": Analytics_84f7c76db2483f5089a4484a901f3edf,
+  "/admin/dashboard/widgets/OpenComments#OpenComments": OpenComments_b22a138bb07824169ab15239a35d416c,
+  "/admin/dashboard/widgets/UnusedMedia#UnusedMedia": UnusedMedia_cae561eba782d037463875ebc1283a4d,
+  "/admin/dashboard/widgets/BrokenLinks#BrokenLinks": BrokenLinks_e9f957950b34c51d9fdeca2f701a428e,
   "@payloadcms/next/rsc#CollectionCards": CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1
 }

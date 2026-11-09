@@ -4,6 +4,20 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ## [Unreleased]
 
+### Added
+
+- **Open a comment thread from a URL:** `/admin/builder/pages/12?comment=34` opens the builder in comment mode with that thread open and its block selected. `builderViewPath(admin, collection, id, { comment })` builds the URL; `COMMENT_PARAM` is the parameter name.
+- **`fieldReferences(fields, data)`** in `payload-canvas/core`: every document one document's data points at, read along its Payload field config (uploads, relationships, rich text, `{ relationTo, value }` pairs in JSON). **`layoutReferences(config, slug, doc)`**: every document a builder document's stored layout points at, also documents deleted since.
+- **Starter dashboard widgets:**
+  - **Open comments:** unresolved comment threads, newest first, with author, page, reply count and time. A row opens the page in the builder with the thread open.
+  - **Unused media:** files that no page, post, template, section, other document or global uses, with thumbnails.
+  - **Broken links:** the 404 paths with the most hits, each with **Create redirect** (opens a new redirect with "From" filled in), and links in builder layouts to deleted or unpublished documents.
+- **Starter 404 log:** the new `not-found-log` collection (Site group, admins only) counts each missing path the site serves, with the last time and referrer. It writes after the response is sent, skips prefetches and paths only bots ask for (`/wp-admin`, `.php`, dot files). Needs a migration in production (`pnpm payload migrate:create`).
+
+### Changed
+
+- **Starter dashboard:** the default layout no longer has "Waiting to publish". Add it back with "Edit dashboard".
+
 ## [0.5.0] - 2026-11-08
 
 ### Upgrade notes
