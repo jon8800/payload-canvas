@@ -79,6 +79,8 @@ export interface Config {
     redirects: Redirect;
     forms: Form;
     'form-submissions': FormSubmission;
+    workflows: Workflow;
+    reviews: Review;
     exports: Export;
     imports: Import;
     'payload-mcp-api-keys': PayloadMcpApiKey;
@@ -90,7 +92,6 @@ export interface Config {
     'builder-comments': BuilderComment;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
-    'payload-folders': FolderInterface;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
     'payload-migrations': PayloadMigration;
@@ -111,9 +112,6 @@ export interface Config {
       usedInBuilderTemplates: 'builder-templates';
       usedInBuilderSections: 'builder-sections';
     };
-    'payload-folders': {
-      documentsAndFolders: 'payload-folders' | 'media';
-    };
   };
   collectionsSelect: {
     users: UsersSelect<false> | UsersSelect<true>;
@@ -127,6 +125,8 @@ export interface Config {
     redirects: RedirectsSelect<false> | RedirectsSelect<true>;
     forms: FormsSelect<false> | FormsSelect<true>;
     'form-submissions': FormSubmissionsSelect<false> | FormSubmissionsSelect<true>;
+    workflows: WorkflowsSelect<false> | WorkflowsSelect<true>;
+    reviews: ReviewsSelect<false> | ReviewsSelect<true>;
     exports: ExportsSelect<false> | ExportsSelect<true>;
     imports: ImportsSelect<false> | ImportsSelect<true>;
     'payload-mcp-api-keys': PayloadMcpApiKeysSelect<false> | PayloadMcpApiKeysSelect<true>;
@@ -138,7 +138,6 @@ export interface Config {
     'builder-comments': BuilderCommentsSelect<false> | BuilderCommentsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
-    'payload-folders': PayloadFoldersSelect<false> | PayloadFoldersSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
     'payload-migrations': PayloadMigrationsSelect<false> | PayloadMigrationsSelect<true>;
@@ -150,15 +149,19 @@ export interface Config {
   fallbackLocale: null;
   globals: {
     'site-settings': SiteSetting;
+    'review-settings': ReviewSetting;
     'theme-settings': ThemeSetting;
     'builder-classes-sheet': BuilderClassesSheet;
     'builder-ai-settings': BuilderAiSetting;
+    'payload-jobs-stats': PayloadJobsStat;
   };
   globalsSelect: {
     'site-settings': SiteSettingsSelect<false> | SiteSettingsSelect<true>;
+    'review-settings': ReviewSettingsSelect<false> | ReviewSettingsSelect<true>;
     'theme-settings': ThemeSettingsSelect<false> | ThemeSettingsSelect<true>;
     'builder-classes-sheet': BuilderClassesSheetSelect<false> | BuilderClassesSheetSelect<true>;
     'builder-ai-settings': BuilderAiSettingsSelect<false> | BuilderAiSettingsSelect<true>;
+    'payload-jobs-stats': PayloadJobsStatsSelect<false> | PayloadJobsStatsSelect<true>;
   };
   locale: null;
   widgets: {
@@ -177,6 +180,13 @@ export interface Config {
   user: User | PayloadMcpApiKey;
   jobs: {
     tasks: {
+      sendEmail: TaskSendEmail;
+      createDocument: TaskCreateDocument;
+      updateDocument: TaskUpdateDocument;
+      callWebhook: TaskCallWebhook;
+      revalidatePath: TaskRevalidatePath;
+      payloadWorkflowsSchedule: TaskPayloadWorkflowsSchedule;
+      'reviews-sync': TaskReviewsSync;
       createCollectionExport: TaskCreateCollectionExport;
       createCollectionImport: TaskCreateCollectionImport;
       schedulePublish: TaskSchedulePublish;
@@ -185,7 +195,9 @@ export interface Config {
         output: unknown;
       };
     };
-    workflows: unknown;
+    workflows: {
+      payloadWorkflowsRun: WorkflowPayloadWorkflowsRun;
+    };
   };
 }
 export interface UserAuthOperations {
@@ -302,7 +314,6 @@ export interface Media {
     hasNextPage?: boolean;
     totalDocs?: number;
   };
-  folder?: (number | null) | FolderInterface;
   updatedAt: string;
   createdAt: string;
   url?: string | null;
@@ -1379,32 +1390,6 @@ export interface TemplatePart {
   _status?: ('draft' | 'published') | null;
 }
 /**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "payload-folders".
- */
-export interface FolderInterface {
-  id: number;
-  name: string;
-  folder?: (number | null) | FolderInterface;
-  documentsAndFolders?: {
-    docs?: (
-      | {
-          relationTo?: 'payload-folders';
-          value: number | FolderInterface;
-        }
-      | {
-          relationTo?: 'media';
-          value: number | Media;
-        }
-    )[];
-    hasNextPage?: boolean;
-    totalDocs?: number;
-  };
-  folderType?: 'media'[] | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
  * Addresses visitors opened that do not exist. Add a redirect for the ones that matter, then delete them here.
  *
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1461,6 +1446,55 @@ export interface FormSubmission {
    * Files uploaded with this submission
    */
   attachments?: (number | Media)[] | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Automations that run tasks when something happens. Drag tasks onto the canvas and connect them.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "workflows".
+ */
+export interface Workflow {
+  id: number;
+  title: string;
+  /**
+   * Starts on its schedule or collection event. "Run now" works either way.
+   */
+  enabled?: boolean | null;
+  triggerKind?: ('manual' | 'schedule' | 'collection') | null;
+  nextRunAt?: string | null;
+  graph?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  triggerCollection?: string | null;
+  cron?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "reviews".
+ */
+export interface Review {
+  id: number;
+  googleReviewId: string;
+  authorName: string;
+  authorPhotoUrl?: string | null;
+  rating: number;
+  reviewText?: string | null;
+  publishedAt?: string | null;
+  /**
+   * Photos attached to this review, uploaded from Google
+   */
+  photos?: (number | Media)[] | null;
+  source?: ('places' | 'scraper') | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -1784,7 +1818,18 @@ export interface PayloadJob {
     | {
         executedAt: string;
         completedAt: string;
-        taskSlug: 'inline' | 'createCollectionExport' | 'createCollectionImport' | 'schedulePublish';
+        taskSlug:
+          | 'inline'
+          | 'sendEmail'
+          | 'createDocument'
+          | 'updateDocument'
+          | 'callWebhook'
+          | 'revalidatePath'
+          | 'payloadWorkflowsSchedule'
+          | 'reviews-sync'
+          | 'createCollectionExport'
+          | 'createCollectionImport'
+          | 'schedulePublish';
         taskID: string;
         input?:
           | {
@@ -1817,10 +1862,34 @@ export interface PayloadJob {
         id?: string | null;
       }[]
     | null;
-  taskSlug?: ('inline' | 'createCollectionExport' | 'createCollectionImport' | 'schedulePublish') | null;
+  workflowSlug?: 'payloadWorkflowsRun' | null;
+  taskSlug?:
+    | (
+        | 'inline'
+        | 'sendEmail'
+        | 'createDocument'
+        | 'updateDocument'
+        | 'callWebhook'
+        | 'revalidatePath'
+        | 'payloadWorkflowsSchedule'
+        | 'reviews-sync'
+        | 'createCollectionExport'
+        | 'createCollectionImport'
+        | 'schedulePublish'
+      )
+    | null;
   queue?: string | null;
   waitUntil?: string | null;
   processing?: boolean | null;
+  meta?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -1876,6 +1945,14 @@ export interface PayloadLockedDocument {
         value: number | FormSubmission;
       } | null)
     | ({
+        relationTo: 'workflows';
+        value: number | Workflow;
+      } | null)
+    | ({
+        relationTo: 'reviews';
+        value: number | Review;
+      } | null)
+    | ({
         relationTo: 'payload-mcp-api-keys';
         value: number | PayloadMcpApiKey;
       } | null)
@@ -1902,10 +1979,6 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'builder-comments';
         value: number | BuilderComment;
-      } | null)
-    | ({
-        relationTo: 'payload-folders';
-        value: number | FolderInterface;
       } | null);
   globalSlug?: string | null;
   user:
@@ -2045,7 +2118,6 @@ export interface MediaSelect<T extends boolean = true> {
   usedInTemplateParts?: T;
   usedInBuilderTemplates?: T;
   usedInBuilderSections?: T;
-  folder?: T;
   updatedAt?: T;
   createdAt?: T;
   url?: T;
@@ -2541,6 +2613,37 @@ export interface FormSubmissionsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "workflows_select".
+ */
+export interface WorkflowsSelect<T extends boolean = true> {
+  title?: T;
+  enabled?: T;
+  triggerKind?: T;
+  nextRunAt?: T;
+  graph?: T;
+  triggerCollection?: T;
+  cron?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "reviews_select".
+ */
+export interface ReviewsSelect<T extends boolean = true> {
+  googleReviewId?: T;
+  authorName?: T;
+  authorPhotoUrl?: T;
+  rating?: T;
+  reviewText?: T;
+  publishedAt?: T;
+  photos?: T;
+  source?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "exports_select".
  */
 export interface ExportsSelect<T extends boolean = true> {
@@ -2755,22 +2858,12 @@ export interface PayloadJobsSelect<T extends boolean = true> {
         error?: T;
         id?: T;
       };
+  workflowSlug?: T;
   taskSlug?: T;
   queue?: T;
   waitUntil?: T;
   processing?: T;
-  updatedAt?: T;
-  createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "payload-folders_select".
- */
-export interface PayloadFoldersSelect<T extends boolean = true> {
-  name?: T;
-  folder?: T;
-  documentsAndFolders?: T;
-  folderType?: T;
+  meta?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -2861,6 +2954,39 @@ export interface SiteSetting {
    * Select the page to display at the root URL (/)
    */
   homePage?: (number | null) | Page;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "review-settings".
+ */
+export interface ReviewSetting {
+  id: number;
+  /**
+   * Places API returns up to 5 reviews and needs the GOOGLE_PLACES_API_KEY environment variable. Scraper fetches all public reviews and needs the google-maps-review-scraper package installed on the site.
+   */
+  reviewSource?: ('places' | 'scraper') | null;
+  /**
+   * The Place ID for this business (used by Places API). Find it at https://developers.google.com/maps/documentation/places/web-service/place-id
+   */
+  googlePlaceId?: string | null;
+  /**
+   * The full Google Maps URL for this business (used by Scraper). Copy it from your browser address bar when viewing the business on Google Maps.
+   */
+  googleMapsUrl?: string | null;
+  /**
+   * Auto-synced from Google
+   */
+  averageRating?: number | null;
+  /**
+   * Auto-synced from Google
+   */
+  totalReviewCount?: number | null;
+  /**
+   * Last successful sync timestamp
+   */
+  lastSyncedAt?: string | null;
   updatedAt?: string | null;
   createdAt?: string | null;
 }
@@ -3011,12 +3137,45 @@ export interface BuilderAiSetting {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payload-jobs-stats".
+ */
+export interface PayloadJobsStat {
+  id: number;
+  stats?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "site-settings_select".
  */
 export interface SiteSettingsSelect<T extends boolean = true> {
   siteName?: T;
   siteDescription?: T;
   homePage?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  globalType?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "review-settings_select".
+ */
+export interface ReviewSettingsSelect<T extends boolean = true> {
+  reviewSource?: T;
+  googlePlaceId?: T;
+  googleMapsUrl?: T;
+  averageRating?: T;
+  totalReviewCount?: T;
+  lastSyncedAt?: T;
   updatedAt?: T;
   createdAt?: T;
   globalType?: T;
@@ -3086,6 +3245,16 @@ export interface BuilderAiSettingsSelect<T extends boolean = true> {
   chatApiKey?: T;
   imageApiKey?: T;
   keyStatus?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  globalType?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payload-jobs-stats_select".
+ */
+export interface PayloadJobsStatsSelect<T extends boolean = true> {
+  stats?: T;
   updatedAt?: T;
   createdAt?: T;
   globalType?: T;
@@ -3202,6 +3371,163 @@ export interface CollectionsWidget {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskSendEmail".
+ */
+export interface TaskSendEmail {
+  input: {
+    to: string;
+    subject: string;
+    /**
+     * Plain text.
+     */
+    body: string;
+    replyTo?: string | null;
+  };
+  output: {
+    messageId?: string | null;
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskCreateDocument".
+ */
+export interface TaskCreateDocument {
+  input: {
+    /**
+     * Collection slug, for example "posts".
+     */
+    collection: string;
+    /**
+     * The fields, for example { "title": "Hello" }.
+     */
+    data:
+      | {
+          [k: string]: unknown;
+        }
+      | unknown[]
+      | string
+      | number
+      | boolean
+      | null;
+    /**
+     * Save as a draft when the collection has drafts.
+     */
+    draft?: boolean | null;
+  };
+  output: {
+    id?: string | null;
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskUpdateDocument".
+ */
+export interface TaskUpdateDocument {
+  input: {
+    /**
+     * Collection slug, for example "posts".
+     */
+    collection: string;
+    /**
+     * For example {{trigger.doc.id}}.
+     */
+    id: string;
+    /**
+     * Only the fields to change.
+     */
+    data:
+      | {
+          [k: string]: unknown;
+        }
+      | unknown[]
+      | string
+      | number
+      | boolean
+      | null;
+  };
+  output: {
+    id?: string | null;
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskCallWebhook".
+ */
+export interface TaskCallWebhook {
+  input: {
+    /**
+     * An http or https address.
+     */
+    url: string;
+    method?: ('POST' | 'PUT' | 'PATCH' | 'GET' | 'DELETE') | null;
+    /**
+     * Sent as JSON. Not sent with GET.
+     */
+    body?:
+      | {
+          [k: string]: unknown;
+        }
+      | unknown[]
+      | string
+      | number
+      | boolean
+      | null;
+    /**
+     * For example { "Authorization": "Bearer ..." }.
+     */
+    headers?:
+      | {
+          [k: string]: unknown;
+        }
+      | unknown[]
+      | string
+      | number
+      | boolean
+      | null;
+  };
+  output: {
+    status?: number | null;
+    response?: string | null;
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskRevalidatePath".
+ */
+export interface TaskRevalidatePath {
+  input: {
+    /**
+     * A site path, for example /about or /blog.
+     */
+    path: string;
+  };
+  output: {
+    path?: string | null;
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskPayloadWorkflowsSchedule".
+ */
+export interface TaskPayloadWorkflowsSchedule {
+  input?: unknown;
+  output: {
+    queued?: number | null;
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskReviews-sync".
+ */
+export interface TaskReviewsSync {
+  input?: unknown;
+  output: {
+    created: number;
+    updated: number;
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "TaskCreateCollectionExport".
  */
 export interface TaskCreateCollectionExport {
@@ -3221,6 +3547,8 @@ export interface TaskCreateCollectionExport {
       | 'redirects'
       | 'forms'
       | 'form-submissions'
+      | 'workflows'
+      | 'reviews'
       | 'exports'
       | 'imports';
     drafts?: ('yes' | 'no') | null;
@@ -3292,6 +3620,44 @@ export interface TaskSchedulePublish {
         } | null);
   };
   output?: unknown;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "WorkflowPayloadWorkflowsRun".
+ */
+export interface WorkflowPayloadWorkflowsRun {
+  input: {
+    workflowId: string;
+    workflowTitle?: string | null;
+    graph:
+      | {
+          [k: string]: unknown;
+        }
+      | unknown[]
+      | string
+      | number
+      | boolean
+      | null;
+    trigger?:
+      | {
+          [k: string]: unknown;
+        }
+      | unknown[]
+      | string
+      | number
+      | boolean
+      | null;
+    resume?:
+      | {
+          [k: string]: unknown;
+        }
+      | unknown[]
+      | string
+      | number
+      | boolean
+      | null;
+    depth?: number | null;
+  };
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

@@ -10,6 +10,17 @@ import { fields as formFieldConfigs, formBuilderPlugin } from '@payloadcms/plugi
 import { importExportPlugin } from '@payloadcms/plugin-import-export'
 import { mcpToolkitPlugin } from 'payload-mcp-toolkit'
 import { searchPlugin } from '@payloadcms/plugin-search'
+// @feature:gallery
+import { mediaGalleryPlugin } from 'payload-media-gallery'
+// @end:gallery
+// @feature:workflows
+import { workflowsPlugin } from 'payload-workflows'
+import { workflowTasks } from '@/jobs/tasks'
+import { revalidatePathEndpoint } from '@/jobs/revalidate'
+// @end:workflows
+// @feature:reviews
+import { googleReviewsPlugin } from 'payload-google-reviews'
+// @end:reviews
 import { formSubmissionConditions, websiteBuilder, type WebsiteBuilderOptions } from 'payload-canvas'
 import { withFormConditions } from 'payload-canvas/forms'
 // @feature:ai
@@ -182,8 +193,19 @@ export default buildConfig({
   globals: [SiteSettings],
   // Dev demo of translated pages (BUILDER_I18N_DEMO=1): English and German, /de on the site.
   ...(i18nDemo ? { localization: demoLocalization } : {}),
+  // @feature:workflows
+  // POST /api/revalidate-path: the "Revalidate page path" task calls it from timer-run jobs (src/jobs/revalidate.ts).
+  endpoints: [revalidatePathEndpoint],
+  // @end:workflows
   jobs: {
+    // The `default` queue: scheduled publishing and the Google reviews sync. payload-workflows adds its
+    // own entry for the `workflows` queue (every minute). Runs in `next dev` and `next start`, not on serverless.
     autoRun: [{ cron: '*/5 * * * *', queue: 'default' }],
+    shouldAutoRun: () => process.env.NEXT_PHASE !== 'phase-production-build',
+    // @feature:workflows
+    // Tasks for the visual workflow builder (src/jobs/tasks.ts).
+    tasks: workflowTasks,
+    // @end:workflows
   },
   plugins: [
     nestedDocsPlugin({
@@ -258,6 +280,27 @@ export default buildConfig({
       },
     }),
 
+    // @feature:workflows
+    // Visual workflows (Automation → Workflows) and a Run tab on every job (Automation → Payload Jobs).
+    // After formBuilderPlugin: the trigger collections must exist. Collection triggers fire on drafts
+    // and autosaves too; add a rule such as {{trigger.doc._status}} equals published for live changes only.
+    workflowsPlugin({ collections: ['pages', 'posts', 'form-submissions'] }),
+
+    // @end:workflows
+    // @feature:reviews
+    // Google reviews (Content → Reviews, Settings → Review Settings). Set the Place ID or Maps URL in
+    // Review Settings; the Places API source needs GOOGLE_PLACES_API_KEY. Syncs weekly on the `default` queue.
+    googleReviewsPlugin({
+      reviews: { admin: { group: 'Content' } },
+      settings: { admin: { group: 'Settings' } },
+    }),
+
+    // @end:reviews
+    // @feature:gallery
+    // Media as a visual grid with a lightbox and drag-and-drop upload. Upload pickers use it too.
+    mediaGalleryPlugin({ collectionSlug: 'media' }),
+
+    // @end:gallery
     importExportPlugin({
       collections: [
         { slug: 'pages' },
