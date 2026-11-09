@@ -110,19 +110,6 @@ export function fromRelationshipInput(next: unknown, polymorphic: boolean): unkn
   return fromPair(next, polymorphic)
 }
 
-const LABEL_TYPES = new Set(['text', 'textarea', 'email', 'select', 'number'])
-
-/** First non-empty text value of an array row, for the row's label. */
-export function rowLabel(row: unknown, fields: readonly FieldShape[]): string | null {
-  if (!isRecord(row)) return null
-  for (const field of fields) {
-    if (!field.name || !LABEL_TYPES.has(field.type)) continue
-    const value = row[field.name]
-    if ((typeof value === 'string' && value.trim()) || typeof value === 'number') return String(value).trim()
-  }
-  return null
-}
-
 /** JSON text for the json field's textarea. */
 export function toJsonText(value: unknown): string {
   return value === undefined || value === null ? '' : JSON.stringify(value, null, 2)

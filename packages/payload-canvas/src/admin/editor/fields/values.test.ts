@@ -8,7 +8,6 @@ import {
   numberMessage,
   parseJsonText,
   parseNumberText,
-  rowLabel,
   setKey,
   toJsonText,
   toRelationshipInput,
@@ -80,19 +79,6 @@ describe('relationship values', () => {
     assert.equal(toRelationshipInput(3, ['pages', 'posts'], true, false), null)
     assert.deepEqual(fromRelationshipInput({ relationTo: 'posts', value: 3 }, true), pair)
     assert.deepEqual(fromRelationshipInput([pair, { relationTo: 'pages', value: null }], true), [pair])
-  })
-})
-
-describe('rowLabel', () => {
-  it('uses the first text-like value', () => {
-    const fields = [
-      { name: 'image', type: 'upload' },
-      { name: 'title', type: 'text' },
-      { name: 'body', type: 'textarea' },
-    ]
-    assert.equal(rowLabel({ image: 1, title: ' Hello ' }, fields), 'Hello')
-    assert.equal(rowLabel({ image: 1, title: '', body: 'Body' }, fields), 'Body')
-    assert.equal(rowLabel({ image: 1 }, fields), null)
   })
 })
 
