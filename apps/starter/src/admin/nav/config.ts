@@ -2,6 +2,7 @@ import {
   Brush,
   ClipboardList,
   FileText,
+  FileX,
   FolderTree,
   Image,
   Inbox,
@@ -27,7 +28,7 @@ import {
  * (or "Other") and appear after these groups. Add your own slugs here.
  */
 export const NAV_GROUPS: Array<{ label: string; slugs: string[] }> = [
-  { label: 'Site', slugs: ['pages', 'posts', 'template-parts', 'builder-templates', 'builder-sections', 'redirects'] },
+  { label: 'Site', slugs: ['pages', 'posts', 'template-parts', 'builder-templates', 'builder-sections', 'redirects', 'not-found-log'] },
   { label: 'Content', slugs: ['media', 'categories', 'tags', 'forms', 'form-submissions', 'builder-comments'] },
   { label: 'Design', slugs: ['theme-settings', 'builder-classes'] },
   { label: 'Settings', slugs: ['site-settings', 'users', 'builder-ai-settings', 'payload-mcp-api-keys', 'search'] },
@@ -41,6 +42,7 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   'builder-templates': LayoutTemplate,
   'builder-sections': Rows3,
   redirects: Signpost,
+  'not-found-log': FileX,
   media: Image,
   categories: FolderTree,
   tags: Tag,

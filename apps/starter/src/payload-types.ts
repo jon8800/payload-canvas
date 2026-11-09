@@ -75,6 +75,7 @@ export interface Config {
     categories: Category;
     tags: Tag;
     'template-parts': TemplatePart;
+    'not-found-log': NotFoundLog;
     redirects: Redirect;
     forms: Form;
     'form-submissions': FormSubmission;
@@ -122,6 +123,7 @@ export interface Config {
     categories: CategoriesSelect<false> | CategoriesSelect<true>;
     tags: TagsSelect<false> | TagsSelect<true>;
     'template-parts': TemplatePartsSelect<false> | TemplatePartsSelect<true>;
+    'not-found-log': NotFoundLogSelect<false> | NotFoundLogSelect<true>;
     redirects: RedirectsSelect<false> | RedirectsSelect<true>;
     forms: FormsSelect<false> | FormsSelect<true>;
     'form-submissions': FormSubmissionsSelect<false> | FormSubmissionsSelect<true>;
@@ -167,6 +169,9 @@ export interface Config {
     'site-checks': SiteChecksWidget;
     scheduled: ScheduledWidget;
     analytics: AnalyticsWidget;
+    'open-comments': OpenCommentsWidget;
+    'unused-media': UnusedMediaWidget;
+    'broken-links': BrokenLinksWidget;
     collections: CollectionsWidget;
   };
   user: User | PayloadMcpApiKey;
@@ -1196,6 +1201,21 @@ export interface FolderInterface {
   createdAt: string;
 }
 /**
+ * Addresses visitors opened that do not exist. Add a redirect for the ones that matter, then delete them here.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "not-found-log".
+ */
+export interface NotFoundLog {
+  id: number;
+  path: string;
+  hits: number;
+  lastSeen?: string | null;
+  lastReferrer?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "redirects".
  */
@@ -1636,6 +1656,10 @@ export interface PayloadLockedDocument {
         value: number | TemplatePart;
       } | null)
     | ({
+        relationTo: 'not-found-log';
+        value: number | NotFoundLog;
+      } | null)
+    | ({
         relationTo: 'redirects';
         value: number | Redirect;
       } | null)
@@ -2010,6 +2034,18 @@ export interface TemplatePartsSelect<T extends boolean = true> {
   createdAt?: T;
   deletedAt?: T;
   _status?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "not-found-log_select".
+ */
+export interface NotFoundLogSelect<T extends boolean = true> {
+  path?: T;
+  hits?: T;
+  lastSeen?: T;
+  lastReferrer?: T;
+  updatedAt?: T;
+  createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -2803,6 +2839,36 @@ export interface AnalyticsWidget {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "open-comments_widget".
+ */
+export interface OpenCommentsWidget {
+  data?: {
+    limit?: number | null;
+  };
+  width: 'small' | 'medium' | 'large' | 'x-large' | 'full';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "unused-media_widget".
+ */
+export interface UnusedMediaWidget {
+  data?: {
+    limit?: number | null;
+  };
+  width: 'small' | 'medium' | 'large' | 'x-large' | 'full';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "broken-links_widget".
+ */
+export interface BrokenLinksWidget {
+  data?: {
+    limit?: number | null;
+  };
+  width: 'small' | 'medium' | 'large' | 'x-large' | 'full';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "collections_widget".
  */
 export interface CollectionsWidget {
@@ -2828,6 +2894,7 @@ export interface TaskCreateCollectionExport {
       | 'categories'
       | 'tags'
       | 'template-parts'
+      | 'not-found-log'
       | 'redirects'
       | 'forms'
       | 'form-submissions'

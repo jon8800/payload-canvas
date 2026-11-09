@@ -2,7 +2,22 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import { analyticsProvider } from './analytics'
-import { docTitle, docURL, emptyField, listURL, relativeTime, submissionSummary, whereToQuery } from './lib'
+import {
+  docTitle,
+  docURL,
+  emptyField,
+  linkProblem,
+  listURL,
+  mayReference,
+  redirectCreateURL,
+  relativeTime,
+  replyCounts,
+  shortText,
+  submissionSummary,
+  thumbnailOf,
+  unusedDocs,
+  whereToQuery,
+} from './lib'
 import { settingNumber } from './server'
 
 describe('whereToQuery', () => {
@@ -110,5 +125,68 @@ describe('analyticsProvider', () => {
       apiKey: 'key',
       websiteId: 'id',
     })
+  })
+})
+
+describe('redirectCreateURL', () => {
+  it('opens the redirects create view with the path filled in', () => {
+    assert.equal(redirectCreateURL('/admin', '/old page'), '/admin/collections/redirects/create?from=%2Fold%20page')
+    assert.equal(redirectCreateURL('/', '/x'), '/collections/redirects/create?from=%2Fx')
+  })
+})
+
+describe('shortText', () => {
+  it('keeps one line and cuts long text', () => {
+    assert.equal(shortText('  Hello\n  world  '), 'Hello world')
+    assert.equal(shortText('abcdefghij', 6), 'abcde…')
+    assert.equal(shortText(null), '')
+  })
+})
+
+describe('replyCounts', () => {
+  it('counts replies per thread, with plain or populated parents', () => {
+    const counts = replyCounts([{ parent: 1 }, { parent: '1' }, { parent: { id: 2 } }, { parent: null }])
+    assert.equal(counts.get('1'), 2)
+    assert.equal(counts.get('2'), 1)
+    assert.equal(counts.size, 2)
+  })
+})
+
+describe('mayReference', () => {
+  it('finds fields that can point at a collection, at any depth', () => {
+    assert.equal(mayReference([{ name: 'image', type: 'upload', relationTo: 'media' }], 'media'), true)
+    assert.equal(mayReference([{ name: 'refs', type: 'relationship', relationTo: ['pages', 'media'] }], 'media'), true)
+    assert.equal(mayReference([{ name: 'body', type: 'richText' }], 'media'), true)
+    assert.equal(mayReference([{ type: 'tabs', tabs: [{ name: 'meta', fields: [{ name: 'image', type: 'upload', relationTo: 'media' }] }] }], 'media'), true)
+    assert.equal(mayReference([{ name: 'rows', type: 'blocks', blocks: [{ slug: 'a', fields: [{ name: 'img', type: 'upload', relationTo: 'media' }] }] }], 'media'), true)
+  })
+
+  it('skips collections that cannot', () => {
+    assert.equal(mayReference([{ name: 'title', type: 'text' }, { name: 'author', type: 'relationship', relationTo: 'users' }], 'media'), false)
+  })
+})
+
+describe('linkProblem', () => {
+  it('reports deleted and unpublished targets', () => {
+    assert.equal(linkProblem({ found: false, drafts: true }), 'deleted')
+    assert.equal(linkProblem({ found: true, drafts: true, status: 'draft' }), 'unpublished')
+    assert.equal(linkProblem({ found: true, drafts: true, status: 'published' }), null)
+    assert.equal(linkProblem({ found: true, drafts: false }), null)
+  })
+})
+
+describe('unusedDocs', () => {
+  it('keeps documents whose id is not used, comparing ids as text', () => {
+    const docs = [{ id: 1 }, { id: 2 }, { id: 'c' }]
+    assert.deepEqual(unusedDocs(docs, new Set(['1', 'c'])), [{ id: 2 }])
+  })
+})
+
+describe('thumbnailOf', () => {
+  it('prefers the thumbnail size, then the admin thumbnail, then the image itself', () => {
+    assert.equal(thumbnailOf({ sizes: { thumbnail: { url: '/t.jpg' } }, thumbnailURL: '/a.jpg', url: '/x.jpg' }), '/t.jpg')
+    assert.equal(thumbnailOf({ thumbnailURL: '/a.jpg', url: '/x.jpg' }), '/a.jpg')
+    assert.equal(thumbnailOf({ mimeType: 'image/png', url: '/x.png' }), '/x.png')
+    assert.equal(thumbnailOf({ mimeType: 'application/pdf', url: '/x.pdf' }), null)
   })
 })

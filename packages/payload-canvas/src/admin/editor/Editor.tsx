@@ -21,6 +21,7 @@ import { DragLayer } from './DragLayer'
 import { dropAt, endSmoothDrag, isSmoothDrag, MAKE_ROOM_EASING, SETTLE_EASING, startSmoothDrag } from './dnd/smooth'
 import { Inspector } from './Inspector'
 import { CommentsOrInspector } from './comments/CommentsPanel'
+import { useCommentFromURL } from './comments/useCommentFromURL'
 import { LeftPanel } from './layout/LeftPanel'
 import { applySizes, readSizes } from './layout/panels'
 import { Splitter } from './layout/Splitter'
@@ -86,6 +87,7 @@ export function Editor({ config, meta, icon, locale, canEditDesign }: EditorProp
   useFollow(runtime)
   useTemplateController(runtime)
   useComponentRefresh(runtime)
+  useCommentFromURL(runtime)
   useEffect(() => runtime.assistant?.setDocument(config.collection, docId), [runtime, config.collection, docId])
   useEffect(() => () => runtime.assistant?.stop(), [runtime])
   // The hidden thumbnail iframe goes with the editor.

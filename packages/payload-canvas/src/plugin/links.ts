@@ -1,8 +1,15 @@
 import type { PayloadRequest, SanitizedCollectionConfig } from 'payload'
 
-/** The admin URL of the full-screen builder for a document, e.g. `/admin/builder/pages/12`. */
-export function builderViewPath(adminRoute: string, collection: string, id: string | number): string {
-  return `${adminRoute === '/' ? '' : adminRoute}/builder/${encodeURIComponent(collection)}/${encodeURIComponent(String(id))}`
+import { COMMENT_PARAM } from '../comments/shared'
+
+/**
+ * The admin URL of the full-screen builder for a document, e.g. `/admin/builder/pages/12`.
+ * `comment`: open that thread in comment mode (`?comment=34`).
+ */
+export function builderViewPath(adminRoute: string, collection: string, id: string | number, options: { comment?: string | number } = {}): string {
+  const path = `${adminRoute === '/' ? '' : adminRoute}/builder/${encodeURIComponent(collection)}/${encodeURIComponent(String(id))}`
+  const comment = options.comment === undefined ? '' : String(options.comment)
+  return comment ? `${path}?${COMMENT_PARAM}=${encodeURIComponent(comment)}` : path
 }
 
 /**

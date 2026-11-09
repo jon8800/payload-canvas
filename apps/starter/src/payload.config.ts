@@ -1,6 +1,6 @@
 import { sectionLibrary } from './data/sections/library'
 import { buildConfig } from 'payload'
-import type { EmailAdapter } from 'payload'
+import type { EmailAdapter, Field } from 'payload'
 import { postgresAdapter } from '@payloadcms/db-postgres'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import { nestedDocsPlugin } from '@payloadcms/plugin-nested-docs'
@@ -34,6 +34,7 @@ import { Posts } from '@/collections/Posts'
 import { Categories } from '@/collections/Categories'
 import { Tags } from '@/collections/Tags'
 import { TemplateParts } from '@/collections/TemplateParts'
+import { NotFoundLog } from '@/collections/NotFoundLog'
 import { SiteSettings } from '@/globals/SiteSettings'
 import { LegacyPages } from '@/legacy-fixture/collection'
 import { SharedBlocksPages } from '@/legacy-fixture/sharedCollection'
@@ -160,6 +161,7 @@ export default buildConfig({
     Categories,
     Tags,
     TemplateParts,
+    NotFoundLog,
     ...(legacyDemo ? [LegacyPages, SharedBlocksPages] : []),
   ],
   // Dev fixture: the legacy pages' blocks, referenced by slug (`blockReferences`).
@@ -198,7 +200,12 @@ export default buildConfig({
       collections: ['pages', 'posts'],
       overrides: {
         fields: ({ defaultFields }) => [
-          ...defaultFields,
+          // "Create redirect" on the dashboard opens the create view with `?from=/old-path`.
+          ...defaultFields.map((field): Field =>
+            field.type === 'text' && field.name === 'from'
+              ? { ...field, admin: { ...field.admin, components: { ...field.admin?.components, Field: '/admin/redirects/FromField#FromField' } } }
+              : field,
+          ),
           {
             name: 'isRegex',
             type: 'checkbox',
