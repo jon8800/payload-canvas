@@ -6,6 +6,7 @@ import { authenticated } from '../access/authenticated'
 export const Tags: CollectionConfig = {
   slug: 'tags',
   admin: {
+    defaultColumns: ['title', 'slug', 'updatedAt'],
     useAsTitle: 'title',
   },
   access: {

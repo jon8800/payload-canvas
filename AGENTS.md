@@ -69,7 +69,7 @@ Builder rules that are easy to break:
 - `Position.index` is the block's final index in the target list; for a move within the same list, count after the block leaves.
 - Every edit goes through `applyOperation(s)`; undo applies the returned inverse operations.
 - Block components add no Tailwind classes of their own — styling comes only from `block.className`, because the generated CSS covers only classes in the data.
-- `websiteBuilder()` must be the last plugin, so the layout field stays top-level.
+- `websiteBuilder()` must come after every plugin that moves fields (into tabs or groups), so the layout field stays top-level. The starter's `statusBadges()` runs after it: it only adds a list cell to `_status`.
 - Block components receive only plain data (links arrive pre-resolved), so custom blocks may be client components. Never pass functions as component props.
 - Generated layout CSS is scoped to block elements (`.flex:where(.builder-css)`); `RenderLayout` adds `builder-css` to every block's `className`. App components need no `classes` list (the app's own CSS covers them). Only a component from a package the app's CSS does not scan lists its classes in `classes` and puts `builder-css` (`BUILDER_CSS_CLASS`) on those elements.
 - Exactly one copy of `@payloadcms/ui` / `next` may be installed. After any dependency change, check that `readlink -f packages/payload-canvas/node_modules/@payloadcms/ui apps/starter/node_modules/@payloadcms/ui` all point to one `.pnpm` folder. The root `@babel/core` + `babel-plugin-macros` devDependencies exist only for this.
