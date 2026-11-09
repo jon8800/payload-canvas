@@ -1,0 +1,184 @@
+// The form submissions admin: the detail view (SubmissionView.tsx) and the list cells
+// (SubmissionCells.tsx). Payload CSS variables only, no Tailwind (it would leak into the admin).
+
+@layer payload-default {
+  .form-submission {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--base) * 1.25);
+    margin-bottom: calc(var(--base) * 1.5);
+  }
+
+  .form-submission__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--base);
+  }
+
+  .form-submission__heading {
+    min-width: 0;
+  }
+
+  .form-submission__form {
+    margin: 0 0 calc(var(--base) * 0.25);
+    color: var(--theme-elevation-500);
+    font-size: 0.8125rem;
+    font-weight: 500;
+  }
+
+  .form-submission__title {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .form-submission__meta {
+    margin: calc(var(--base) * 0.25) 0 0;
+    color: var(--theme-elevation-600);
+
+    a {
+      color: inherit;
+    }
+  }
+
+  .form-submission__answers {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1px solid var(--theme-elevation-150);
+    border-radius: var(--style-radius-m);
+    overflow: hidden;
+
+    th,
+    td {
+      padding: calc(var(--base) * 0.6) calc(var(--base) * 0.75);
+      border-bottom: 1px solid var(--theme-elevation-100);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    tr:last-child th,
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    th {
+      width: 32%;
+      color: var(--theme-elevation-600);
+      font-weight: 500;
+      background: var(--theme-elevation-50);
+    }
+
+    td {
+      color: var(--theme-elevation-1000);
+      overflow-wrap: anywhere;
+    }
+  }
+
+  .form-submission__text {
+    white-space: pre-wrap;
+  }
+
+  .form-submission__empty {
+    margin: 0;
+    color: var(--theme-elevation-400);
+  }
+
+  .form-submission__subtitle {
+    margin: 0 0 calc(var(--base) * 0.5);
+    font-size: 1rem;
+  }
+
+  .form-submission__files {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(calc(var(--base) * 14), 1fr));
+    gap: calc(var(--base) * 0.5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .form-submission__file {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--base) * 0.6);
+    padding: calc(var(--base) * 0.4);
+    border: 1px solid var(--theme-elevation-150);
+    border-radius: var(--style-radius-m);
+    color: inherit;
+    text-decoration: none;
+  }
+
+  a.form-submission__file:hover {
+    border-color: var(--theme-elevation-300);
+    background: var(--theme-elevation-50);
+  }
+
+  .form-submission__thumb {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: calc(var(--base) * 2.75);
+    height: calc(var(--base) * 2.75);
+    overflow: hidden;
+    border-radius: var(--style-radius-s);
+    background: var(--theme-elevation-100);
+    color: var(--theme-elevation-600);
+    font-size: 0.6875rem;
+    font-weight: 600;
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+  }
+
+  .form-submission__file-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .form-submission__file-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .form-submission__file-meta {
+    color: var(--theme-elevation-500);
+    font-size: 0.75rem;
+  }
+
+  // List cells.
+  .form-submission-cell {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .form-submission-cell__line {
+    font-weight: 500;
+  }
+
+  .form-submission-cell__text,
+  .form-submission-cell__opened {
+    color: var(--theme-elevation-500);
+    font-size: 0.8125rem;
+  }
+
+  // Payload flips these scales in dark mode, so the same steps work in both themes.
+  .form-submission-badge {
+    display: inline-block;
+    // List cells make their children block boxes: keep the badge as wide as its text.
+    width: fit-content;
+    padding: 0 calc(var(--base) * 0.35);
+    border-radius: 999px;
+    background: var(--theme-success-100);
+    color: var(--theme-success-750);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.6;
+  }
+}
