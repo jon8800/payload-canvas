@@ -1,6 +1,6 @@
 'use client'
 
-// The right side of the top bar: the save state, Preview, the settings drawer and Publish.
+// The right side of the top bar: the save state, the Preview and settings icon buttons, and Publish.
 
 import { ConfirmationModal, useConfig, useDocumentDrawer, useModal, useRouteTransition } from '@payloadcms/ui'
 import { useRouter } from 'next/navigation'
@@ -99,17 +99,10 @@ export function PreviewButton() {
   const { previewUrl, url } = useValue(runtime.doc.meta)
   const href = previewUrl ?? url
   if (!href) return null
+  const label = previewUrl ? 'Preview the draft in a new tab' : 'Open the page in a new tab'
   return (
-    <a
-      className="builder-bar__button"
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label={previewUrl ? 'Preview the draft in a new tab' : 'Open the page in a new tab'}
-      data-tooltip={previewUrl ? 'Preview the draft in a new tab' : 'Open the page in a new tab'}
-    >
-      <Icon name="external" size={14} />
-      <span className="builder-bar__label">Preview</span>
+    <a className="builder-editor__icon-button" href={href} target="_blank" rel="noopener noreferrer" aria-label={label} data-tooltip={label}>
+      <Icon name="external" />
     </a>
   )
 }
@@ -210,13 +203,12 @@ export function PageSettings() {
     <>
       <button
         type="button"
-        className="builder-bar__button"
+        className="builder-editor__icon-button"
         aria-label={`${singular} settings`}
         data-tooltip={`Title and other ${singular.toLowerCase()} settings`}
         onClick={() => runtime.doc.openSettings()}
       >
-        <Icon name="settings" size={14} />
-        <span className="builder-bar__label">{singular} settings</span>
+        <Icon name="settings" />
       </button>
       {/* The settings drawer holds a few document fields, not a whole page: narrow, on the right. */}
       <DrawerWidth slug={drawerSlug} width="min(720px, calc(100% - var(--gutter-h)))" />

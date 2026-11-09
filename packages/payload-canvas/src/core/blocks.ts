@@ -320,11 +320,22 @@ export function slotFullError(blocks: readonly BlockDefinition[], owner: Block, 
  * a slot without a limit, or an unknown parent.
  */
 export function slotRoom(blocks: readonly BlockDefinition[], layout: Layout, parentId: string | null, slot: string): number {
-  if (parentId === null) return Infinity
+  const max = slotDefinitionAt(blocks, layout, parentId, slot)?.max
+  if (typeof max !== 'number') return Infinity
+  const owner = parentId === null ? null : indexLayout(layout).get(parentId)?.block
+  return Math.max(0, max - (owner?.slots?.[slot]?.length ?? 0))
+}
+
+/** The definition of `slot` of block `parentId`. Undefined for the root list and undeclared slots. */
+export function slotDefinitionAt(
+  blocks: readonly BlockDefinition[],
+  layout: Layout,
+  parentId: string | null,
+  slot: string,
+): SlotDefinition | undefined {
+  if (parentId === null) return undefined
   const owner = indexLayout(layout).get(parentId)?.block
-  const max = owner ? getBlockDefinition(blocks, owner.type)?.slots?.[slot]?.max : undefined
-  if (!owner || typeof max !== 'number') return Infinity
-  return Math.max(0, max - (owner.slots?.[slot]?.length ?? 0))
+  return owner ? getBlockDefinition(blocks, owner.type)?.slots?.[slot] : undefined
 }
 
 /** True when `block` (a type or a whole block) may go into `slot` of `parentId`. See `placementError`. */

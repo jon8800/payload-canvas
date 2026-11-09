@@ -498,7 +498,7 @@ In content mode, editors can:
 
 They cannot add, move, duplicate or delete other blocks, and they see no Blocks or Sections tab, no **+** buttons, no drag and drop, no Styles, Motion or Advanced tab, no classes, section variants, visibility conditions, bindings or page regions. Design props (selects, checkboxes, numbers, relationships, heading levels) are hidden too. The top bar shows **Content mode**.
 
-Users with design rights get **Preview as client** in the top bar. It shows the editor as clients see it. Turn it off to edit the design again.
+Users with design rights get **Preview as client** (the eye icon) in the top bar. It shows the editor as clients see it. Turn it off to edit the design again.
 
 Which props are content. The field type decides: `text`, `textarea`, `richText`, `upload`, `email` and link groups (`linkField()`) are content. A group, row or array is content when every field inside it is. Everything else is design. Override it per field with `admin.custom.builderContent`:
 
@@ -555,7 +555,7 @@ Put the mark on the element that holds the text and nothing else.
 
 Every image that shows an upload prop can be replaced on the canvas:
 
-- Hover the image: a **Replace** chip shows in its top left corner. Text over an image (a hero heading) wins: hover a free part of the image.
+- Hover the image: a **Replace** chip shows inside its top right corner (above a small image, and lower down when the selected block's action bar sits in that corner). It uses the part of the image that shows, so an image cut off by a carousel or a card gets the chip on its visible part. Text over an image (a hero heading) wins: hover a free part of the image.
 - Double-click the image, or click the chip, to open the media popover:
   - **Choose from library**: Payload's list drawer for the field's upload collection.
   - **Upload a file**: a file picker. The file goes to the upload collection with its name as alt text.
@@ -1049,7 +1049,7 @@ export const blocks = [...defaultBlocks({ linkCollections: ['pages'] }), pricing
 ```
 
 - `description` is one short plain sentence for editors. The block library shows it as the tooltip. Without it, the tooltip shows only the label. The library search also reads `ai.description`. Keep code and syntax out of it: those go in `ai.description`.
-- `slots` declares where child blocks go. `allow` lists the accepted block types, or `['*']`. `max` caps the number of direct children: a full slot refuses insert, move, paste and duplicate (also from MCP and the assistant), and the canvas offers no drop target or "+" there. `min` is the fewest children: fewer block **Publish** but not draft saves.
+- `slots` declares where child blocks go. `allow` lists the accepted block types, or `['*']`. `max` caps the number of direct children: a full slot refuses insert, move, paste and duplicate (also from MCP and the assistant), and the canvas offers no drop target or "+" there. `min` is the fewest children: fewer block **Publish** but not draft saves. Three optional keys explain a slot to editors: `description` (one short sentence, shown inside the slot while it is empty, and given to MCP), `itemLabel` (Layers names each direct child without a name of its own "<itemLabel> 1", "<itemLabel> 2", …) and `newBlock` (`{ type, label?, className?, props? }`: the block the canvas "+" picker offers first in this slot). The carousel's `slides` slot sets all three: "Each block here is one slide", `Slide`, and a Stack named "Slide".
 - `inline: true` says the block renders no link, button or other control of its own (an icon, a badge, a rating). Such a block may go directly inside a `link` block, whose content slot sets `allowInline: true`. A slot of your own can set `allowInline: true` too. `websiteBuilder` and `builderMcpTools` add the inline types to those slots' `allow` lists (`withInlineBlocks`); a slot's `disallow` still wins. Blocks without `inline` stay out of links. `validateLayout` applies the same rule itself, so a seed or a test can check a layout against your own block list. To check a collection list's picked `ids` as a relationship, give that list `defaultBlocks({ listCollections })`, as the plugin does with the collections that have a `url`.
 - `parents` limits where a block may go: only directly inside the listed block types (never in the root list). The `listItem` block uses `parents: ['list']`. A new block whose slot accepts exactly one such type starts with children of it: the slot's `min`, or one. So a new list starts with one item, and new tabs start with two tabs.
 - `classes`: classes your component uses itself that your site's CSS does not have. Components in your app need no list: Tailwind finds their classes in your files, and the site's CSS has them on the site and on the canvas. List classes only for a component in a package that your CSS entry does not scan (no `@source` for it). The generated CSS styles only elements with the class `builder-css` (`BUILDER_CSS_CLASS` from `payload-canvas/blocks`), so add that class to each element that uses the listed classes. The built-in Menu block does this for its toggle, panel and links.
@@ -1325,7 +1325,7 @@ builtinBlocks({ embed: { canEdit: ({ req }) => req.user?.role === 'admin' } })
 
 #### Carousel
 
-`carousel` shows the blocks of its `slides` slot as slides. It runs on [Embla Carousel](https://www.embla-carousel.com/). Each direct child is one slide. Set how many slides show at once with each slide's `className`: `basis-full md:basis-1/2` (or a width such as `w-[85%]`). A single `collectionList` or `repeat` child makes each of its items a slide: set the basis on the item. Any other single child is one slide.
+`carousel` shows the blocks of its `slides` slot as slides. It runs on [Embla Carousel](https://www.embla-carousel.com/). Each direct child is one slide: Layers names them "Slide 1", "Slide 2", … (unless a slide has its own name), the empty slot says "Each block here is one slide", and the "+" picker offers a **Slide** (a Stack named "Slide") first. Set how many slides show at once with each slide's `className`: `basis-full md:basis-1/2` (or a width such as `w-[85%]`). A single `collectionList` or `repeat` child makes each of its items a slide: set the basis on the item. Any other single child is one slide.
 
 - Visitors swipe or drag the slides, click the arrows or dots, or use the arrow keys when the carousel has the focus.
 - Props: `mode` (`scroll`: the slides slide sideways; `fade`: one slide fades into the next), `align` (**Slide position**: `start` or `center`, where the current slide sits when the slides are narrower than the carousel), `arrows` (default on), `dots`, `loop`, `autoplay` (milliseconds, 0 is off) and `label` (the region's name, default "Carousel").
@@ -1760,7 +1760,7 @@ An inserted section is a copy: later edits of the saved section do not reach the
 - Prop: `section`, a relationship to the saved sections collection. It has no classes and no slots. On the site it renders the section's blocks with no element of its own.
 - `loadLayoutData` loads the sections first, so their lists, images, bindings and translations load like the page's own. The canvas does the same. Copies of the section's blocks get ids prefixed with the ref's id (`<ref id>_<block id>`). A `sectionRef` inside a saved section loads too, up to 5 levels. A section never includes itself: saving one that would is refused, and such a ref renders nothing.
 - CSS: the save hook compiles only the page's own classes. Output the page CSS with `compilePageCss(payload, [{ layout: loaded }])` (from `payload-canvas/react/server`), with the layout `loadLayoutData` returned, so the section's classes are in it.
-- On the canvas the section's blocks show but cannot be edited there: a click selects the `sectionRef`. **Detach section** in its **…** menu replaces it with a copy of the blocks (new ids), as one undo step. A component's copy keeps its own values in the blocks.
+- On the canvas the section's blocks show as on the site, at full strength, but cannot be edited there: a click selects the `sectionRef`. Components have their own colour (purple, as in Figma) for the hover and selection outline, the name tag, the action bar and their Layers row. Change it with the `--be-component`, `--be-component-solid` and `--be-component-text` CSS variables on `.builder-editor`. **Detach section** in its **…** menu replaces it with a copy of the blocks (new ids), as one undo step. A component's copy keeps its own values in the blocks.
 - A deleted section shows "Component not found" on the canvas and nothing on the site.
 - References: the saved section lists the pages that show it (**Used in**), and it cannot be deleted while a page uses it, as with media. With saved sections on, the references field also points at the saved sections collection: run `pnpm payload migrate:create` for production.
 

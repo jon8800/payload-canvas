@@ -3,7 +3,7 @@ import { describe, test } from 'node:test'
 
 import { fieldAtPropPath } from '../../../core'
 import type { Block, BlockDefinition } from '../../../core/types'
-import { altFromFileName, altPropPath, mediaRef, propAt, removeOp, uploadFieldAt, uploadValue } from './model'
+import { altFromFileName, altPropPath, chipPlace, mediaRef, propAt, removeOp, uploadFieldAt, uploadValue } from './model'
 
 const definition: BlockDefinition = {
   type: 'card',
@@ -98,4 +98,23 @@ test('propAt reads rows and hasMany values', () => {
 test('altFromFileName makes a sentence from a file name', () => {
   assert.equal(altFromFileName('sunset_over-the-bay.JPG'), 'Sunset over the bay')
   assert.equal(altFromFileName('.png'), '')
+})
+
+describe('chipPlace', () => {
+  const image = { x: 100, y: 200, width: 400, height: 300 }
+  test('inside the top right corner of a roomy image', () => {
+    assert.equal(chipPlace(image, 1, null), 'inside')
+    // The action bar of a block elsewhere does not move it.
+    assert.equal(chipPlace(image, 1, { right: 900, top: 0 }), 'inside')
+  })
+  test('under the action bar when the bar sits in the same corner', () => {
+    assert.equal(chipPlace(image, 1, { right: 500, top: 200 }), 'under-bar')
+    assert.equal(chipPlace(image, 1, { right: 520, top: 190 }), 'under-bar')
+  })
+  test('above a small image, inside when there is no room above', () => {
+    assert.equal(chipPlace({ x: 0, y: 100, width: 60, height: 40 }, 1, null), 'above')
+    assert.equal(chipPlace({ x: 0, y: 10, width: 60, height: 40 }, 1, null), 'inside')
+    // Zoomed out, a big image is small on screen.
+    assert.equal(chipPlace({ x: 0, y: 400, width: 300, height: 100 }, 0.25, null), 'above')
+  })
 })
