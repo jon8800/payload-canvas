@@ -34,6 +34,7 @@ import { PreviewComponent as PreviewComponent_a8a977ebc872c5d5ea7ee689724c0860 }
 import { LayoutField as LayoutField_1611a9327f20600aee6a9d537ba4315b } from 'payload-canvas/client'
 import { LayoutDiff as LayoutDiff_57c6923ff8049349bee2a220c5ac4c2a } from 'payload-canvas/rsc'
 import { NoDiff as NoDiff_57c6923ff8049349bee2a220c5ac4c2a } from 'payload-canvas/rsc'
+import { StatusCell as StatusCell_96f146af655904b6156703b4fa72d20b } from '../../../admin/list/StatusCell'
 import { PublishButton as PublishButton_1611a9327f20600aee6a9d537ba4315b } from 'payload-canvas/client'
 import { DocumentEditView as DocumentEditView_1611a9327f20600aee6a9d537ba4315b } from 'payload-canvas/client'
 import { BuilderRedirect as BuilderRedirect_57c6923ff8049349bee2a220c5ac4c2a } from 'payload-canvas/rsc'
@@ -73,7 +74,10 @@ import { ThemeVariablesWarning as ThemeVariablesWarning_d408ea8a7b9c9e7b6f237d6b
 import { ThemeSaveSignal as ThemeSaveSignal_d408ea8a7b9c9e7b6f237d6bc68a93d5 } from 'payload-canvas/theme-client'
 import { AiKeyField as AiKeyField_1611a9327f20600aee6a9d537ba4315b } from 'payload-canvas/client'
 import { Nav as Nav_3cd2cf7bec23406b09c4440fd44d1976 } from '../../../admin/nav/Nav'
+import { Icon as Icon_07eaf1d5745ea58d191ef5762e282db9 } from '../../../admin/brand/Icon'
+import { Logo as Logo_e2609525d3cb4faff6e05c9e8878dd7a } from '../../../admin/brand/Logo'
 import { AgentConnectPill as AgentConnectPill_60f30f580e97936338e112b8b2cc7161 } from 'payload-mcp-toolkit/client'
+import { Welcome as Welcome_8051c90801dc4fc23bd7322d70e9328a } from '../../../admin/brand/Welcome'
 import { ImportExportProvider as ImportExportProvider_cdf7e044479f899a31f804427d568b36 } from '@payloadcms/plugin-import-export/rsc'
 import { OAuthView as OAuthView_60f30f580e97936338e112b8b2cc7161 } from 'payload-mcp-toolkit/client'
 import { BuilderView as BuilderView_57c6923ff8049349bee2a220c5ac4c2a } from 'payload-canvas/rsc'
@@ -124,6 +128,7 @@ export const importMap = {
   "payload-canvas/client#LayoutField": LayoutField_1611a9327f20600aee6a9d537ba4315b,
   "payload-canvas/rsc#LayoutDiff": LayoutDiff_57c6923ff8049349bee2a220c5ac4c2a,
   "payload-canvas/rsc#NoDiff": NoDiff_57c6923ff8049349bee2a220c5ac4c2a,
+  "/admin/list/StatusCell#StatusCell": StatusCell_96f146af655904b6156703b4fa72d20b,
   "payload-canvas/client#PublishButton": PublishButton_1611a9327f20600aee6a9d537ba4315b,
   "payload-canvas/client#DocumentEditView": DocumentEditView_1611a9327f20600aee6a9d537ba4315b,
   "payload-canvas/rsc#BuilderRedirect": BuilderRedirect_57c6923ff8049349bee2a220c5ac4c2a,
@@ -163,7 +168,10 @@ export const importMap = {
   "payload-canvas/theme-client#ThemeSaveSignal": ThemeSaveSignal_d408ea8a7b9c9e7b6f237d6bc68a93d5,
   "payload-canvas/client#AiKeyField": AiKeyField_1611a9327f20600aee6a9d537ba4315b,
   "/admin/nav/Nav#Nav": Nav_3cd2cf7bec23406b09c4440fd44d1976,
+  "/admin/brand/Icon#Icon": Icon_07eaf1d5745ea58d191ef5762e282db9,
+  "/admin/brand/Logo#Logo": Logo_e2609525d3cb4faff6e05c9e8878dd7a,
   "payload-mcp-toolkit/client#AgentConnectPill": AgentConnectPill_60f30f580e97936338e112b8b2cc7161,
+  "/admin/brand/Welcome#Welcome": Welcome_8051c90801dc4fc23bd7322d70e9328a,
   "@payloadcms/plugin-import-export/rsc#ImportExportProvider": ImportExportProvider_cdf7e044479f899a31f804427d568b36,
   "payload-mcp-toolkit/client#OAuthView": OAuthView_60f30f580e97936338e112b8b2cc7161,
   "payload-canvas/rsc#BuilderView": BuilderView_57c6923ff8049349bee2a220c5ac4c2a,

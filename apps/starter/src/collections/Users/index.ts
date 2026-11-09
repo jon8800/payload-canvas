@@ -15,8 +15,9 @@ export const Users: CollectionConfig = {
     update: authenticated,
   },
   admin: {
-    defaultColumns: ['name', 'email', 'role'],
-    useAsTitle: 'name',
+    defaultColumns: ['email', 'name', 'role', 'updatedAt'],
+    // Every user has an email; the name is optional. So pickers (a post's Author) never show a bare ID.
+    useAsTitle: 'email',
   },
   auth: true,
   fields: [

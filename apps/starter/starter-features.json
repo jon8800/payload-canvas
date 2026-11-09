@@ -1,6 +1,6 @@
 {
   "features": [
-    { "id": "look", "paths": ["src/admin/look"] },
+    { "id": "look", "paths": ["src/admin/look", "src/admin/brand", "src/admin/list"] },
     { "id": "nav", "paths": ["src/admin/nav"] },
     { "id": "dashboard", "paths": ["src/admin/dashboard"] },
     { "id": "demo", "paths": ["scripts/seed-demo.ts", "scripts/seed-demo-images.ts"], "scripts": ["seed:demo"] },
