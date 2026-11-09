@@ -32,14 +32,13 @@ export function PreviewAsClientToggle() {
   return (
     <button
       type="button"
-      className="builder-bar__button builder-bar__client-toggle"
+      className="builder-editor__icon-button"
       aria-pressed={on}
       aria-label="Preview as client"
-      data-tooltip={tip}
+      data-tooltip={`Preview as client · ${tip}`}
       onClick={() => setPreviewAsClient(runtime, !on)}
     >
-      <Icon name={on ? 'eyeOff' : 'eye'} size={14} />
-      <span className="builder-bar__label">Preview as client</span>
+      <Icon name={on ? 'eyeOff' : 'eye'} />
     </button>
   )
 }
