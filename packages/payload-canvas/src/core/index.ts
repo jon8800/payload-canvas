@@ -86,6 +86,7 @@ export {
   type PayloadBlocksStorage,
 } from './payloadBlocks'
 export { dataFields, fieldAtPropPath, type DataField } from './fields'
+export { rowLabel } from './rowLabel'
 export {
   pathWithoutIndexes,
   regionAccessAt,

@@ -90,8 +90,3 @@ export function cloneRow(row: ArrayRow, fields: readonly unknown[], newId: () =>
   renewNestedIds(copy, fields as FieldLike[], newId)
   return { ...copy, id: newId() }
 }
-
-/** "Item 01": Payload's fallback row label, from the singular label and the row number. */
-export function fallbackRowLabel(singular: string, index: number): string {
-  return `${singular} ${String(index + 1).padStart(2, '0')}`
-}

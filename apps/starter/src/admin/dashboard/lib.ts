@@ -1,5 +1,4 @@
 import type { Where } from 'payload'
-import { dataFields } from 'payload-canvas/core'
 import { submissionSummary, type SubmissionDataRow, type SubmissionFormField } from 'payload-canvas/forms'
 
 import { FROM_PARAM } from '@/lib/redirects'
@@ -125,35 +124,11 @@ export function replyCounts(replies: ReadonlyArray<{ parent?: unknown }>): Map<s
   return counts
 }
 
-/**
- * True when documents with these fields can point at `target`: an upload or relationship field to
- * it, rich text (upload nodes) or JSON (a builder layout), also inside groups, tabs, arrays and blocks.
- * The unused media check reads only these collections.
- */
-export function mayReference(fields: readonly unknown[] | undefined, target: string): boolean {
-  return dataFields(fields).some((field) => {
-    if (field.type === 'upload' || field.type === 'relationship') {
-      return Array.isArray(field.relationTo) ? field.relationTo.includes(target) : field.relationTo === target
-    }
-    if (field.type === 'richText' || field.type === 'json') return true
-    if (field.type === 'group' || field.type === 'array') return mayReference(field.fields, target)
-    if (field.type === 'blocks') {
-      return (field.blocks ?? []).some((block) => mayReference((block as { fields?: unknown[] } | null)?.fields, target))
-    }
-    return false
-  })
-}
-
 /** Why a link target is broken: it was deleted, or it is not published. Null when it is fine. */
 export function linkProblem(target: { found: boolean; drafts: boolean; status?: unknown }): 'deleted' | 'unpublished' | null {
   if (!target.found) return 'deleted'
   if (target.drafts && target.status !== 'published') return 'unpublished'
   return null
-}
-
-/** The documents whose id is not in `used` (ids compared as text). */
-export function unusedDocs<T extends { id: string | number }>(docs: readonly T[], used: ReadonlySet<string>): T[] {
-  return docs.filter((doc) => !used.has(String(doc.id)))
 }
 
 /** The URL of a media document's small preview: the thumbnail size, the admin thumbnail, or the image. */

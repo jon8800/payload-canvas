@@ -90,6 +90,7 @@ export interface Config {
     'builder-sections': BuilderSection;
     'builder-classes': BuilderClass;
     'builder-comments': BuilderComment;
+    'reference-index': ReferenceIndex;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
@@ -104,6 +105,13 @@ export interface Config {
       usedInTemplateParts: 'template-parts';
       usedInBuilderTemplates: 'builder-templates';
       usedInBuilderSections: 'builder-sections';
+      indexedUses: 'reference-index';
+    };
+    exports: {
+      indexedUses: 'reference-index';
+    };
+    imports: {
+      indexedUses: 'reference-index';
     };
     'builder-sections': {
       usedInPages: 'pages';
@@ -136,6 +144,7 @@ export interface Config {
     'builder-sections': BuilderSectionsSelect<false> | BuilderSectionsSelect<true>;
     'builder-classes': BuilderClassesSelect<false> | BuilderClassesSelect<true>;
     'builder-comments': BuilderCommentsSelect<false> | BuilderCommentsSelect<true>;
+    'reference-index': ReferenceIndexSelect<false> | ReferenceIndexSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -316,6 +325,11 @@ export interface Media {
   };
   updatedAt: string;
   createdAt: string;
+  indexedUses?: {
+    docs?: (number | ReferenceIndex)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
   url?: string | null;
   thumbnailURL?: string | null;
   filename?: string | null;
@@ -1564,6 +1578,11 @@ export interface Export {
     | null;
   updatedAt: string;
   createdAt: string;
+  indexedUses?: {
+    docs?: (number | ReferenceIndex)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
   url?: string | null;
   thumbnailURL?: string | null;
   filename?: string | null;
@@ -1573,6 +1592,27 @@ export interface Export {
   height?: number | null;
   focalX?: number | null;
   focalY?: number | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "reference-index".
+ */
+export interface ReferenceIndex {
+  id: number;
+  source: string;
+  sourceCollection?: string | null;
+  sourceId?: string | null;
+  sourceTitle?: string | null;
+  relationTo: string;
+  value: string;
+  published?: boolean | null;
+  latest?: boolean | null;
+  layout?: boolean | null;
+  problem?: string | null;
+  targetTitle?: string | null;
+  mediaUpload?: (number | null) | Media;
+  exportsUpload?: (number | null) | Export;
+  importsUpload?: (number | null) | Import;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1601,6 +1641,11 @@ export interface Import {
   };
   updatedAt: string;
   createdAt: string;
+  indexedUses?: {
+    docs?: (number | ReferenceIndex)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
   url?: string | null;
   thumbnailURL?: string | null;
   filename?: string | null;
@@ -2305,6 +2350,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'builder-comments';
         value: number | BuilderComment;
+      } | null)
+    | ({
+        relationTo: 'reference-index';
+        value: number | ReferenceIndex;
       } | null);
   globalSlug?: string | null;
   user:
@@ -2446,6 +2495,7 @@ export interface MediaSelect<T extends boolean = true> {
   usedInBuilderSections?: T;
   updatedAt?: T;
   createdAt?: T;
+  indexedUses?: T;
   url?: T;
   thumbnailURL?: T;
   filename?: T;
@@ -3181,6 +3231,7 @@ export interface ExportsSelect<T extends boolean = true> {
   where?: T;
   updatedAt?: T;
   createdAt?: T;
+  indexedUses?: T;
   url?: T;
   thumbnailURL?: T;
   filename?: T;
@@ -3211,6 +3262,7 @@ export interface ImportsSelect<T extends boolean = true> {
       };
   updatedAt?: T;
   createdAt?: T;
+  indexedUses?: T;
   url?: T;
   thumbnailURL?: T;
   filename?: T;
@@ -3346,6 +3398,26 @@ export interface BuilderCommentsSelect<T extends boolean = true> {
   editedAt?: T;
   updatedAt?: T;
   createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "reference-index_select".
+ */
+export interface ReferenceIndexSelect<T extends boolean = true> {
+  source?: T;
+  sourceCollection?: T;
+  sourceId?: T;
+  sourceTitle?: T;
+  relationTo?: T;
+  value?: T;
+  published?: T;
+  latest?: T;
+  layout?: T;
+  problem?: T;
+  targetTitle?: T;
+  mediaUpload?: T;
+  exportsUpload?: T;
+  importsUpload?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

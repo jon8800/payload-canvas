@@ -9,9 +9,9 @@ import { Icon } from '../icons'
 import { RenderBlockFields } from '../renderField'
 import { Popover, usePopover } from '../styles/popover'
 import { AddButton } from './AddButton'
-import { arrayStateKey, cloneRow, fallbackRowLabel, moveItem, toggleId, withRowIds, type ArrayRow } from './arrayRows'
+import { rowLabel } from '../../../core/rowLabel'
+import { arrayStateKey, cloneRow, moveItem, toggleId, withRowIds, type ArrayRow } from './arrayRows'
 import { ArrayRowContext, asStructuralChange, generatedRowId, getCollapsedRows, setCollapsedRows, useCollapsedRows } from './arrayState'
-import { rowLabel, type FieldShape } from './values'
 
 type Props = {
   readonly fields: Field[]
@@ -161,7 +161,7 @@ const ArrayFieldRow = memo(function ArrayFieldRow({
   const rowPath = `${path}.${index}`
   const rowKey = `${stateKey}.${row.id}`
   const context = useMemo(() => ({ rowPath, rowKey }), [rowPath, rowKey])
-  const title = rowLabel(row, fields as FieldShape[]) ?? fallbackRowLabel(itemLabel, index)
+  const title = rowLabel(row, fields, index, itemLabel)
 
   return (
     <div
