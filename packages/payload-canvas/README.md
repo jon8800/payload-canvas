@@ -33,7 +33,7 @@ One package holds everything: the Payload plugin and admin editor (`payload-canv
 npx create-payload-canvas my-website
 ```
 
-The starter also has a calmer Payload admin: a sidebar in groups with icons, a neutral look in light and dark mode, and a dashboard with quick actions, recent edits, open comments, form messages, site checks, broken links (a 404 log and links to missing pages), unused media, scheduled publishes and optional Plausible or Umami numbers. Each part is plain code in `src/admin/` of the starter. The CLI asks which parts to keep (see [Features](../create-payload-canvas/README.md#features)).
+The starter also has a calmer Payload admin: a sidebar in groups with icons, a neutral look in light and dark mode, list cells that show values by field type (a check mark, option chips, short dates, "3 links", a rich text excerpt) instead of raw code, array rows named by their content, and a dashboard with quick actions, recent edits, open comments, form messages, site checks, broken links (a 404 log and links to missing pages), unused media, scheduled publishes and optional Plausible or Umami numbers. Each part is plain code in `src/admin/` of the starter. The CLI asks which parts to keep (see [Features](../create-payload-canvas/README.md#features)).
 
 ## Contents
 
@@ -61,6 +61,7 @@ The starter also has a calmer Payload admin: a sidebar in groups with icons, a n
 14. [Theme](#theme)
 15. [Templates and binding](#templates-and-binding)
 16. [References and Used in](#references-and-used-in)
+   - [Array row labels](#array-row-labels)
 17. [Localization](#localization)
 18. [AI assistant](#ai-assistant)
 19. [AI editing over MCP](#ai-editing-over-mcp)
@@ -673,7 +674,7 @@ It also adds these endpoints (signed-in users only):
 | `payload-canvas` | `payload.config.ts` (server) | `websiteBuilder`, `defineBlock`, `defaultBlocks`, `fromPayloadBlocks`, `migrateBlocksField`, `formSubmissionConditions`, types |
 | `payload-canvas/forms` | anywhere | form display conditions (`withFormConditions`, `hiddenFormFields`, `describeConditions`), `formFieldType`, `formFieldSlug`, `FORM_SETTINGS_REGION`. See [Form builder](#form-builder). |
 | `payload-canvas/blocks` | anywhere | `defaultBlocks`, `defineBlock`, `linkField`, `fromPayloadBlocks`, `BUILDER_CSS_CLASS`, `withBuilderCssClass` |
-| `payload-canvas/core` | anywhere | layout types, `normalizeLayout`, `validateLayout`, `applyOperations`, tree helpers, `convertPayloadBlocksLayout`, `toPayloadBlock` |
+| `payload-canvas/core` | anywhere | layout types, `normalizeLayout`, `validateLayout`, `applyOperations`, tree helpers, `convertPayloadBlocksLayout`, `toPayloadBlock`, `fieldReferences`, `rowLabel` |
 | `payload-canvas/css` | server | `compileClasses`, `getStyleTokens`, `tracingIncludes` |
 | `payload-canvas/theme` | anywhere | `themeCss`, `themeVariables`, `themeOutput`, `deriveColors`, `googleFontsHref`, `themeConfigOf`, theme types |
 | `payload-canvas/theme-client` | Payload import map, or your own fields | `ThemeColorField`, `ThemeFontField`, `ThemeSliderField` |
@@ -682,7 +683,7 @@ It also adds these endpoints (signed-in users only):
 | `payload-canvas/ai/openrouter`, `/ai/cloudflare-gateway`, `/ai/cloudflare-workers-ai`, `/ai/openai-compatible`, `/ai/anthropic`, `/ai/fake` | `payload.config.ts` (server) | one AI adapter each. See [Adapters](#adapters). |
 | `payload-canvas/ai/images/openrouter`, `/ai/images/openai`, `/ai/images/cloudflare-workers-ai`, `/ai/images/fake` | `payload.config.ts` (server) | one image adapter each. See [Image generation](#image-generation). |
 | `payload-canvas/live` | server | the live sessions and endpoints |
-| `payload-canvas/client` | Payload import map only | admin client components (layout field, Builder tab, `DocumentEditView` for `openInBuilder`) |
+| `payload-canvas/client` | Payload import map only | admin client components (layout field, Builder tab, `DocumentEditView` for `openInBuilder`, `ArrayRowLabel`) |
 | `payload-canvas/rsc` | Payload import map only | admin server components (the builder view, the tab redirect) |
 | `payload-canvas/react` | your site and the canvas (server and client) | `RenderLayout`, `defaultComponents`, `fromPayloadComponent(s)`, `withPageData`, `withLinkComponent`, `lazyBlock`, `renderOnServer`, `editableText`, `editableImage`, `useCanvasMode`, `useCanvasReveal`, `REVEAL_EVENT`, `CANVAS_CONTROL_ATTRIBUTE`, `builtinComponents`, link helpers, `ThemeLive`, types |
 | `payload-canvas/react/server` | server only | `loadLayoutData`, `loadTemplate`, `loadTheme`, `ThemeStyle`, `createCanvasServer` (they call Payload's Local API) |
@@ -2525,6 +2526,15 @@ process.exit(0)
 It writes only the `builderRefs` field of each document and of each latest draft, through the database adapter: no hooks run, no new versions, and `updatedAt` does not change. It skips documents that are already right, so you can run it again.
 
 **Database schema.** The field adds rows to the builder collections' `_rels` tables (and their version tables). In development, `pnpm dev` pushes the change. Before a production deploy, create a migration with `pnpm payload migrate:create`.
+
+### Array row labels
+
+The inspector names each array row by its content: "Sales team (sales)" for a dropdown option, "email: ada@example.com" for a key and value, the heading of a slide. It reads the row's text fields in this order of names: label, title, name, heading, question, text, value, url, href, slug, email, caption, alt. Then it takes the first text field, also inside groups. A row without text gets "Item 1" (the field's singular label and the row number from 1).
+
+The same rule is public, so Payload's own admin can name rows the same way:
+
+- `rowLabel(row, fields, index, singular?)` from `payload-canvas/core` returns the label as text.
+- `ArrayRowLabel` is a RowLabel component for any Payload array field: `admin: { components: { RowLabel: 'payload-canvas/client#ArrayRowLabel' } }`. Run `pnpm generate:importmap` after you add it. The starter sets it on every array field without its own RowLabel (`src/admin/fields/rowLabels.ts`).
 
 ## Localization
 
