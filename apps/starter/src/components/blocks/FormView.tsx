@@ -12,7 +12,7 @@
 // Without JavaScript the browser's own required checks still apply (noValidate is set on hydration).
 import { useId, useRef, useState, useSyncExternalStore, type FormEvent } from 'react'
 import { hiddenFormFields, isFormFieldShown } from 'payload-canvas/forms'
-import { FormFieldView, initialValues, lexicalToText, SubmitButton, validateField, type FormDoc, type NamedField, type Values } from './FormParts'
+import { answerText, FormFieldView, initialValues, lexicalToText, SubmitButton, validateField, type FormDoc, type NamedField, type Value, type Values } from './FormParts'
 import { formClasses } from './formClasses'
 
 export type { FormDoc } from './FormParts'
@@ -21,6 +21,17 @@ type Errors = Record<string, string>
 type Status = 'idle' | 'submitting' | 'success' | 'error'
 
 const isNamed = (field: { name?: string | null; blockType: string }): field is NamedField => Boolean(field.name) && field.blockType !== 'message'
+
+/** The messages of a Payload validation error response, or none. */
+async function errorMessages(response: Response): Promise<string[]> {
+  type PayloadError = { message?: string; data?: { errors?: Array<{ message?: string }> } }
+  const body = (await response.json().catch(() => null)) as { errors?: PayloadError[] } | null
+  const messages = (body?.errors ?? []).flatMap((error) => {
+    const inner = (error.data?.errors ?? []).flatMap((e) => (e.message ? [e.message] : []))
+    return inner.length > 0 ? inner : []
+  })
+  return [...new Set(messages)]
+}
 
 const noop = () => () => {}
 /** False during the server render and hydration, true after. */
@@ -34,9 +45,10 @@ export function FormView({ form, disabled }: { form: FormDoc; disabled: boolean 
   const [values, setValues] = useState<Values>(() => initialValues(fields))
   const [errors, setErrors] = useState<Errors>({})
   const [status, setStatus] = useState<Status>('idle')
+  const [serverErrors, setServerErrors] = useState<string[]>([])
   const fieldId = (name: string) => `${idPrefix}-${name}`
   // The fields the current answers hide. They update as the visitor types.
-  const hidden = hiddenFormFields(fields, values)
+  const hidden = hiddenFormFields(fields, Object.fromEntries(Object.entries(values).map(([name, value]) => [name, value instanceof File ? value.name : value])))
   const shown = fields.filter((field) => isFormFieldShown(field, hidden))
   const named = shown.filter(isNamed)
 
@@ -67,7 +79,7 @@ export function FormView({ form, disabled }: { form: FormDoc; disabled: boolean 
     )
   }
 
-  function change(field: NamedField, value: string | boolean) {
+  function change(field: NamedField, value: Value) {
     setValues((prev) => ({ ...prev, [field.name]: value }))
     // Re-check only a field that already shows an error, so typing never raises a new one.
     if (errors[field.name]) setErrors((prev) => ({ ...prev, [field.name]: validateField(field, value) }))
@@ -89,17 +101,30 @@ export function FormView({ form, disabled }: { form: FormDoc; disabled: boolean 
     }
 
     setStatus('submitting')
+    setServerErrors([])
     // Hidden fields send nothing, also when the visitor typed in them before they hid.
-    const submissionData = Object.entries(values)
-      .filter(([field]) => !hidden.has(field))
-      .map(([field, value]) => ({ field, value: String(value) }))
+    const sent = Object.entries(values).filter(([field, value]) => !hidden.has(field) && value !== '')
+    const submissionData = sent.map(([field, value]) => ({ field, value: answerText(value) }))
+    const files = sent.filter((entry): entry is [string, File] => entry[1] instanceof File)
+    // With files: multipart form data, the JSON in `_payload` and one part per file field.
+    let body: BodyInit = JSON.stringify({ form: form.id, submissionData })
+    if (files.length > 0) {
+      const data = new FormData()
+      data.append('_payload', body)
+      for (const [field, file] of files) data.append(field, file)
+      body = data
+    }
     try {
       const response = await fetch('/api/form-submissions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ form: form.id, submissionData }),
+        ...(files.length > 0 ? {} : { headers: { 'Content-Type': 'application/json' } }),
+        body,
       })
-      if (!response.ok) throw new Error(`Submission failed with status ${response.status}`)
+      if (!response.ok) {
+        // The server's own checks (formSubmissionConditions, formFileUploads) say what is wrong.
+        setServerErrors(await errorMessages(response))
+        throw new Error(`Submission failed with status ${response.status}`)
+      }
       if (form.confirmationType === 'redirect' && form.redirect?.url) {
         window.location.assign(form.redirect.url)
         return
@@ -138,9 +163,20 @@ export function FormView({ form, disabled }: { form: FormDoc; disabled: boolean 
       </div>
       <div className={formClasses.footer}>
         {status === 'error' ? (
-          <p className={formClasses.error} role="alert">
-            Your message was not sent. Check your connection and try again. Your text is still here.
-          </p>
+          <div className={formClasses.error} role="alert">
+            {serverErrors.length > 0 ? (
+              <>
+                <p className={formClasses.errorText}>Your message was not sent. Fix this and try again:</p>
+                <ul className={formClasses.errorList}>
+                  {serverErrors.map((message) => (
+                    <li key={message}>{message}</li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className={formClasses.errorText}>Your message was not sent. Check your connection and try again. Your text is still here.</p>
+            )}
+          </div>
         ) : null}
         <SubmitButton label={form.submitButtonLabel} submitting={submitting} />
       </div>

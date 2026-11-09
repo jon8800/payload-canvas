@@ -1,20 +1,22 @@
-// Server side of form display conditions: a `beforeValidate` hook for the form-builder plugin's
-// submissions collection. It reads the form, works out which fields the visitor's answers hide,
-// drops the values of hidden fields, and refuses a submission that leaves a shown required field
-// empty. A hidden required field is never required.
+// Server side of form display conditions and answer checks: a `beforeValidate` hook for the
+// form-builder plugin's submissions collection. It reads the form, works out which fields the
+// visitor's answers hide, drops the values of hidden fields, and refuses a submission that leaves a
+// shown required field empty or gives an answer in the wrong format (email, phone, web address,
+// number, date, an option the field does not have). A hidden required field is never required.
 
 import { ValidationError, type CollectionBeforeValidateHook } from 'payload'
 
+import { formAnswerProblem, TICK_FIELD_TYPES, type FormAnswerField } from './answers'
 import { hiddenFormFields, isEmptyFormValue, isFormFieldShown, type FormFieldLike, type FormValue } from './conditions'
 
 /** One answer, as the plugin stores it in `submissionData`. */
 export type SubmissionRow = { field?: string | null; value?: unknown; id?: string | null }
 
-type FormFieldWithLabel = FormFieldLike & { label?: string | null }
+type FormFieldWithLabel = FormAnswerField
 
-/** A checkbox answer arrives as text ("true"); the conditions compare booleans. */
+/** A checkbox or consent answer arrives as text ("true"); the conditions compare booleans. */
 function answerValue(field: FormFieldLike | undefined, value: unknown): FormValue {
-  if (field?.blockType === 'checkbox') {
+  if (TICK_FIELD_TYPES.has(field?.blockType ?? '')) {
     if (typeof value === 'boolean') return value
     return typeof value === 'string' ? ['true', 'on', '1', 'yes'].includes(value.trim().toLowerCase()) : false
   }
@@ -25,13 +27,14 @@ function answerValue(field: FormFieldLike | undefined, value: unknown): FormValu
 const hasName = (field: FormFieldLike): field is FormFieldLike & { name: string } => typeof field.name === 'string' && field.name !== ''
 
 /**
- * The answers to keep and the shown required fields left empty. Pure: the hook and the tests use it.
- * Answers for hidden fields are dropped; answers for names the form does not have stay.
+ * The answers to keep, the shown required fields left empty, and the shown fields whose answer has
+ * the wrong format (`invalid`, with the message). Pure: the hook and the tests use it. Answers for
+ * hidden fields are dropped; answers for names the form does not have stay.
  */
 export function applyFormConditions(
   fields: readonly FormFieldWithLabel[] | null | undefined,
   rows: readonly SubmissionRow[] | null | undefined,
-): { rows: SubmissionRow[]; hidden: Set<string>; missing: FormFieldWithLabel[] } {
+): { rows: SubmissionRow[]; hidden: Set<string>; missing: FormFieldWithLabel[]; invalid: Array<{ field: FormFieldWithLabel; message: string }> } {
   const named = (fields ?? []).filter(hasName)
   const byName = new Map(named.map((f) => [f.name, f]))
   const values: Record<string, FormValue> = {}
@@ -44,9 +47,14 @@ export function applyFormConditions(
   const missing = named.filter((field) => {
     if (!field.required || field.blockType === 'message' || !isFormFieldShown(field, hidden)) return false
     const value = values[field.name]
-    return field.blockType === 'checkbox' ? value !== true : isEmptyFormValue(value)
+    return TICK_FIELD_TYPES.has(field.blockType ?? '') ? value !== true : isEmptyFormValue(value)
   })
-  return { rows: kept, hidden, missing }
+  const invalid = named.flatMap((field) => {
+    if (missing.includes(field) || !isFormFieldShown(field, hidden)) return []
+    const message = formAnswerProblem(field, values[field.name])
+    return message ? [{ field, message }] : []
+  })
+  return { rows: kept, hidden, missing, invalid }
 }
 
 export type FormSubmissionConditionsOptions = {
@@ -75,12 +83,15 @@ export function formSubmissionConditions(options: FormSubmissionConditionsOption
       .findByID({ collection: formsSlug as never, id, depth: 0, req, overrideAccess: true })
       .catch(() => null)) as { fields?: FormFieldWithLabel[] } | null
     if (!form) return data
-    const { rows, missing } = applyFormConditions(form.fields, data.submissionData as SubmissionRow[] | undefined)
-    if (missing.length > 0) {
+    const { rows, missing, invalid } = applyFormConditions(form.fields, data.submissionData as SubmissionRow[] | undefined)
+    if (missing.length > 0 || invalid.length > 0) {
       throw new ValidationError({
         collection: collection.slug,
         req,
-        errors: missing.map((field) => ({ path: 'submissionData', message: `${field.label || field.name} is required.` })),
+        errors: [
+          ...missing.map((field) => ({ path: 'submissionData', message: `${field.label || field.name} is required.` })),
+          ...invalid.map(({ field, message }) => ({ path: 'submissionData', message: `${field.label || field.name}: ${message}` })),
+        ],
       })
     }
     return { ...data, submissionData: rows }

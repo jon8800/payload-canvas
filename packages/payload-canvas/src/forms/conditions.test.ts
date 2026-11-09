@@ -178,6 +178,28 @@ describe('formFieldType and formFieldSlug', () => {
 })
 
 describe('formFieldBlocks', () => {
+  it('puts the display conditions on their own tab and leaves a block without them alone', async () => {
+    const { formFieldBlocks } = await import('./blocks')
+    const [withConditions, plain] = formFieldBlocks([
+      withFormConditions({ slug: 'phone', fields: [{ name: 'name', type: 'text' }, { name: 'required', type: 'checkbox' }] } as never),
+      { slug: 'message', fields: [{ name: 'message', type: 'richText' }] },
+    ] as never)
+    const tabs = (withConditions.fields[0] as unknown as { tabs: Array<{ label: string; fields: Array<{ name: string }> }> }).tabs
+    assert.deepEqual(
+      tabs.map((t) => [t.label, t.fields.map((f) => f.name)]),
+      [
+        ['Field', ['name']],
+        ['Validation', ['required']],
+        ['Conditions', ['conditions']],
+      ],
+    )
+    assert.equal(withConditions.label, 'Phone')
+    assert.deepEqual(
+      plain.fields.map((f) => (f as { name: string }).name),
+      ['message'],
+    )
+  })
+
   it('gives new fields a name and a label, and a category', async () => {
     const { formFieldBlocks } = await import('./blocks')
     const [def] = formFieldBlocks([
@@ -186,10 +208,22 @@ describe('formFieldBlocks', () => {
     assert.equal(def.type, 'formCheckbox')
     assert.equal(def.category, 'Fields')
     assert.equal(def.label, 'Checkbox')
-    const row = def.fields[0] as unknown as { fields: Array<{ name: string; defaultValue?: unknown }> }
+    type Loose = { type?: string; name?: string; defaultValue?: unknown; fields?: Loose[]; tabs?: Array<{ label: string; fields: Loose[] }> }
+    // The fields sit on the Field and Validation tabs; the data stays flat (unnamed tabs).
+    const [tabs] = def.fields as unknown as Loose[]
+    assert.equal(tabs.type, 'tabs')
     assert.deepEqual(
-      row.fields.map((f) => f.defaultValue),
+      tabs.tabs?.map((t) => t.label),
+      ['Field', 'Validation'],
+    )
+    const row = tabs.tabs?.[0].fields[0] as Loose
+    assert.deepEqual(
+      row.fields?.map((f) => f.defaultValue),
       ['checkbox', 'Checkbox'],
+    )
+    assert.deepEqual(
+      tabs.tabs?.[1].fields.map((f) => f.name),
+      ['required'],
     )
   })
 })

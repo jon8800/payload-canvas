@@ -1,7 +1,8 @@
 'use client'
 
 // The fields of a panel region (`panel: true`, for example a form's settings), edited in the
-// inspector with the same Payload inputs as block props. Each change saves to the document
+// inspector with the same Payload inputs as block props. The region's `sections` fold (the first
+// starts open); a group field in no section folds on its own. Each change saves to the document
 // through the regions controller (one undo step per save). Typing waits for a short pause, or
 // for the focus to leave the field, so a sentence is one save, not one per key. A change that
 // shows a required field (choosing "Redirect" shows "Document to link to") waits until that field
@@ -11,8 +12,10 @@ import { useEffect, useLayoutEffect, useRef, useState, type FocusEvent } from 'r
 import type { Field } from 'payload'
 
 import { setDocPath, valueAtDocPath } from '../../../core/regions'
-import type { RegionConfig } from '../../../core/types'
+import type { RegionConfig, RegionField } from '../../../core/types'
 import { FieldAccessFrame } from '../fields/access'
+import { PanelSection } from '../fields/GroupField'
+import { isFieldVisible, isRecord, type FieldShape } from '../fields/values'
 import { RenderBlockFields, undoKeysHandler } from '../renderField'
 import { useRuntime } from '../runtime'
 import { useValue } from '../valueStore'
@@ -98,6 +101,37 @@ export function RegionFields({ regions, region }: { regions: RegionsController; 
   // Fields that share a parent object see each other as siblings (conditions, defaults).
   const scopeOf = (path: string): Field[] => region.fields.filter((f) => parentPath(f.path) === parentPath(path)).map((f) => f.field as unknown as Field)
 
+  // A field of the region, with its access. `own`: a group in no section is a section of its own.
+  const renderField = (field: RegionField, own = false) => {
+    const parent = parentPath(field.path)
+    const siblings = parent ? valueAtDocPath(data, parent) : data
+    const name = field.path.split('.').at(-1) as string
+    const locked = regions.lockedMessage(field.path) !== null && state.access !== null
+    const config = field.field as unknown as Field
+    const path = `region.${region.name}${parent ? `.${parent}` : ''}`
+    if (own && config.type === 'group') {
+      const record = isRecord(siblings) ? siblings : {}
+      if (!isFieldVisible(config as FieldShape, record, scopeOf(field.path))) return null
+      const description = typeof config.admin?.description === 'string' ? config.admin.description : undefined
+      return (
+        <PanelSection key={field.path} label={field.label}>
+          {description && <p className="builder-field-group__description">{description}</p>}
+          <FieldAccessFrame locked={locked}>
+            <RenderBlockFields fields={config.fields} data={record[name]} path={`${path}.${name}`} onChange={(next) => change(field.path, next)} />
+          </FieldAccessFrame>
+        </PanelSection>
+      )
+    }
+    return (
+      <FieldAccessFrame key={field.path} locked={locked}>
+        <RenderBlockFields fields={[config]} scope={scopeOf(field.path)} data={siblings} path={path} onChange={(next) => change(field.path, next?.[name])} />
+      </FieldAccessFrame>
+    )
+  }
+  // Fields in no section show first; groups in no section come last, each folded on its own.
+  const inSection = new Set(region.sections?.flatMap((section) => section.fields) ?? [])
+  const loose = region.fields.filter((field) => !inSection.has(field.path))
+
   const onBlur = (e: FocusEvent<HTMLDivElement>) => {
     if (e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget)) return
     flush()
@@ -109,23 +143,13 @@ export function RegionFields({ regions, region }: { regions: RegionsController; 
       {waiting.length > 0 && Object.keys(pending).length > 0 && (
         <output className="builder-editor__hint">Not saved yet. Fill in {waiting.join(', ')} to save.</output>
       )}
-      {region.fields.map((field) => {
-        const parent = parentPath(field.path)
-        const siblings = parent ? valueAtDocPath(data, parent) : data
-        const name = field.path.split('.').at(-1) as string
-        const locked = regions.lockedMessage(field.path) !== null && state.access !== null
-        return (
-          <FieldAccessFrame key={field.path} locked={locked}>
-            <RenderBlockFields
-              fields={[field.field as unknown as Field]}
-              scope={scopeOf(field.path)}
-              data={siblings}
-              path={`region.${region.name}${parent ? `.${parent}` : ''}`}
-              onChange={(next) => change(field.path, next?.[name])}
-            />
-          </FieldAccessFrame>
-        )
-      })}
+      {loose.filter((field) => field.field.type !== 'group').map((field) => renderField(field))}
+      {region.sections?.map((section, index) => (
+        <PanelSection key={section.label} label={section.label} open={index === 0}>
+          {region.fields.filter((field) => section.fields.includes(field.path)).map((field) => renderField(field))}
+        </PanelSection>
+      ))}
+      {loose.filter((field) => field.field.type === 'group').map((field) => renderField(field, true))}
     </div>
   )
 }

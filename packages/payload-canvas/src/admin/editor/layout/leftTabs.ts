@@ -12,6 +12,15 @@ export const LEFT_TABS: readonly { id: LeftTab; label: string; icon: IconName; d
   { id: 'sections', label: 'Sections', icon: 'section', digit: '3' },
 ]
 
+/**
+ * The tabs this editor offers: Sections only when there are sections to insert or a place to save
+ * them (the form builder has neither: `sections: false`).
+ */
+export function offeredLeftTabs<T extends { id: LeftTab }>(config: Pick<Runtime['config'], 'sections' | 'savedSections'>, tabs: readonly T[]): readonly T[] {
+  const sections = (config.sections?.length ?? 0) > 0 || Boolean(config.savedSections)
+  return sections ? tabs : tabs.filter((tab) => tab.id !== 'sections')
+}
+
 const STORAGE_KEY = 'payload-builder:left-tab'
 
 const isLeftTab = (value: unknown): value is LeftTab => LEFT_TABS.some((tab) => tab.id === value)

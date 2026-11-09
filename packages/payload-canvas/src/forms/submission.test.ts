@@ -56,7 +56,7 @@ describe('applyFormConditions', () => {
   })
 
   it('accepts a form without fields', () => {
-    assert.deepEqual(applyFormConditions(undefined, undefined), { rows: [], hidden: new Set(), missing: [] })
+    assert.deepEqual(applyFormConditions(undefined, undefined), { rows: [], hidden: new Set(), missing: [], invalid: [] })
   })
 })
 

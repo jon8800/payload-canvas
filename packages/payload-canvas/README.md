@@ -450,7 +450,7 @@ The top bar, left to right:
 - **Page settings** opens the document's own edit form in a Payload drawer: title, slug, SEO, and for a template its collection and sample document. The top bar updates after each save.
 - The AI assistant (with the `ai` option), the keyboard shortcuts, and **Publish changes**. Its menu has **Unpublish**, **Revert to published** (drops all draft changes, after a confirmation), **Versions** and **API** (Payload's own screens, in a drawer over the builder), **All fields** (Payload's edit form) and a link to the live page. In the Versions drawer, open a version to compare it, then **Restore as draft**: every open editor gets the restored layout, and the site keeps the published version until you publish.
 
-The left sidebar has three tabs: **Layers** (the block tree), **Blocks** and **Sections**. Each fills the sidebar. Alt+1, Alt+2 and Alt+3 (⌥1, ⌥2, ⌥3 on a Mac) open them, and the browser keeps the last tab. To drop a block or section into the tree, drag it onto the **Layers** tab and hold it there for a moment: the tab opens.
+The left sidebar has three tabs: **Layers** (the block tree), **Blocks** and **Sections** (only when there are sections to insert or a place to save them). Each fills the sidebar. Alt+1, Alt+2 and Alt+3 (⌥1, ⌥2, ⌥3 on a Mac) open them, and the browser keeps the last tab. To drop a block or section into the tree, drag it onto the **Layers** tab and hold it there for a moment: the tab opens.
 
 The sidebars resize: drag the edge, or focus it with Tab and use the arrow keys (Shift for larger steps). A double-click or Enter resets the default size. The sizes are kept in the browser.
 
@@ -612,7 +612,8 @@ websiteBuilder({
 | `collections[slug].url` | `(doc) => string` | The frontend path of a document. AI tools use it for preview links. The collection list block uses it for links. |
 | `collections[slug].templates` | `boolean` | Documents render through templates. See [Templates](#templates-and-binding). |
 | `collections[slug].legacyFields` | `string[]` | Top-level fields the builder replaced but the collection still has (the old `blocks` field after `migrateBlocksField`). **Publish** in the builder keeps their published value, so only the builder content goes live. See [Using existing Payload blocks](#using-existing-payload-blocks), step 7. |
-| `collections[slug].regions` | `{ name, label?, fields, panel? }[]` | Fixed parts of the page that show ordinary document fields outside the layout (a header made of the title and an image). The builder shows and edits the whole page. Left out: the layout alone. `panel: true`: the right panel edits the region's fields itself, and shows them when no block is selected (the form builder's settings use it). See [Whole-page editing](#whole-page-editing-regions-outside-the-layout). |
+| `collections[slug].regions` | `{ name, label?, fields, panel?, sections? }[]` | Fixed parts of the page that show ordinary document fields outside the layout (a header made of the title and an image). The builder shows and edits the whole page. Left out: the layout alone. `panel: true`: the right panel edits the region's fields itself, and shows them when no block is selected (the form builder's settings use it). `sections: [{ label, fields }]` puts a panel region's fields under headings that open and close (the first starts open); a `group` field in no section gets a section of its own. See [Whole-page editing](#whole-page-editing-regions-outside-the-layout). |
+| `collections[slug].sections` | `false` | The editor of this collection offers no sections: no Sections tab and no "Save as section…". The `forms` option sets it. |
 | `collections[slug].localization` | `'props' \| false` | With Payload `localization` on: `'props'` (the default) translates localized props in one shared layout; `false` keeps one set of values. See [Localization](#localization). |
 | `blocks` | `BlockDefinition[]` | The blocks editors can use. Default `defaultBlocks()`. |
 | `listCollections` | `string[]` | More collections the collection list block can show, after the collections with a `url`. Use it for data collections without pages of their own, such as testimonials or team members. Their items have no `$url`. Each slug must be a collection of the config. Pass the same list to `builderMcpTools`. |
@@ -671,7 +672,7 @@ It also adds these endpoints (signed-in users only):
 | Import | Use it in | Holds |
 |---|---|---|
 | `payload-canvas` | `payload.config.ts` (server) | `websiteBuilder`, `defineBlock`, `defaultBlocks`, `fromPayloadBlocks`, `migrateBlocksField`, `formSubmissionConditions`, types |
-| `payload-canvas/forms` | anywhere | form display conditions (`withFormConditions`, `hiddenFormFields`, `describeConditions`), `formFieldType`, `formFieldSlug`, `FORM_SETTINGS_REGION`. See [Form builder](#form-builder). |
+| `payload-canvas/forms` | anywhere | form display conditions (`withFormConditions`, `hiddenFormFields`, `describeConditions`), answer checks (`formAnswerProblem`, `fileProblem`), the extra field types (`moreFormFields`), the email fields (`withFormEmailFields`) and merge tags (`mergeTags`, `formEmailMessage`), `formFieldType`, `formFieldSlug`, `FORM_SETTINGS_REGION`. See [Form builder](#form-builder). |
 | `payload-canvas/blocks` | anywhere | `defaultBlocks`, `defineBlock`, `linkField`, `fromPayloadBlocks`, `BUILDER_CSS_CLASS`, `withBuilderCssClass` |
 | `payload-canvas/core` | anywhere | layout types, `normalizeLayout`, `validateLayout`, `applyOperations`, tree helpers, `convertPayloadBlocksLayout`, `toPayloadBlock` |
 | `payload-canvas/css` | server | `compileClasses`, `getStyleTokens`, `tracingIncludes` |
@@ -1580,7 +1581,8 @@ Edit the forms of the official [`@payloadcms/plugin-form-builder`](https://paylo
 
 - **Left:** the form's fields in Layers. Drag to reorder. The Blocks tab adds a field of any type the form-builder plugin offers. Duplicate and delete work as for blocks.
 - **Centre:** a live preview of the form alone, rendered by your app's own form component, so it matches the site. A click on a field selects it.
-- **Right:** the selected field's settings (name, label, width, required, default value, placeholder, options, display conditions) with Payload's own inputs. With no field selected, the panel shows the form's settings: title, submit button label, confirmation type and message, redirect, emails.
+- **Right:** the selected field's settings with Payload's own inputs, on three tabs: **Field** (name, label, width, default value, placeholder, options), **Validation** (required, file types and size) and **Conditions** (display conditions). With no field selected, the panel shows the form's settings in sections that fold: **General** (title, submit button label), **After submit** (confirmation type, message, redirect) and **Mail** (the emails). Any other top-level `group` field of the forms collection (for example spam protection settings) gets a section of its own.
+- **No sections:** form fields are not page sections, so the form builder has no Sections tab and no "Save as section…".
 - **Top bar:** title, save state, undo and redo, and **All fields** for Payload's own edit screen. Each change saves at once (forms have no drafts).
 
 The form's `fields` stay a Payload `blocks` field: the builder edits it in place, as in [Using existing Payload blocks](#using-existing-payload-blocks). Nothing is copied and nothing needs a migration.
@@ -1591,15 +1593,24 @@ The form's `fields` stay a Payload `blocks` field: the builder edits it in place
 
    ```ts
    import { fields as formFields, formBuilderPlugin } from '@payloadcms/plugin-form-builder'
-   import { formSubmissionConditions, websiteBuilder } from 'payload-canvas'
-   import { withFormConditions } from 'payload-canvas/forms'
+   import { formEmails, formFileUploads, formSubmissionConditions, websiteBuilder } from 'payload-canvas'
+   import { withFormConditions, withFormEmailFields } from 'payload-canvas/forms'
 
    plugins: [
      formBuilderPlugin({
        // The plugin's own field blocks, each with a `conditions` field (optional, see below).
        fields: { text: withFormConditions(formFields.text), email: withFormConditions(formFields.email) /* … */ },
-       // Hidden fields are never required, and their answers are dropped.
-       formSubmissionOverrides: { hooks: { beforeValidate: [formSubmissionConditions()] } },
+       // Each email: To, From name, From email, Reply-To, CC, BCC, Subject, rich text or HTML body (see "Emails").
+       beforeEmail: formEmails(),
+       formOverrides: { fields: ({ defaultFields }) => withFormEmailFields(defaultFields) },
+       formSubmissionOverrides: {
+         hooks: {
+           // Hidden fields are never required, and their answers are dropped. Wrong formats are refused.
+           beforeValidate: [formSubmissionConditions()],
+           // Files of `file` fields go to Media and are linked on the submission (see "More field types").
+           beforeChange: [formFileUploads({ collection: 'media', field: 'attachments' })],
+         },
+       },
      }),
      websiteBuilder({ collections, forms: true /* … */ }),
    ]
@@ -1641,8 +1652,49 @@ The form's `fields` stay a Payload `blocks` field: the builder edits it in place
 `withFormConditions(block)` adds a **Display conditions** group to a field block. **Show when** is "all rules match" or "any rule matches". Each rule is *field*, *test*, *value*. Tests: equals, does not equal, contains, is empty, is not empty. Text compares without case; a ticked checkbox equals `true`. In the builder, the rule's field is a list of the form's other fields, and the preview notes each field's conditions under it ("Shows when topic equals “website”"). The preview always shows every field.
 
 - **On the site:** `hiddenFormFields(fields, values)` from `payload-canvas/forms` returns the names of the fields the current answers hide. Do not render, check or send those fields. A rule that reads a hidden field sees it as empty, so chains of conditions work.
-- **On submission:** `formSubmissionConditions()` (a `beforeValidate` hook for the submissions collection) reads the form and drops the answers of hidden fields. It refuses a submission that leaves a shown required field empty (400, "Company is required."). The form-builder plugin has no server check for required fields of its own; this hook adds one.
+- **On submission:** `formSubmissionConditions()` (a `beforeValidate` hook for the submissions collection) reads the form and drops the answers of hidden fields. It refuses a submission that leaves a shown required field empty (400, "Company is required.") or gives an answer in the wrong format (400, "Web address: Enter a web address like https://example.com."). The form-builder plugin has no server checks of its own; this hook adds them. `formAnswerProblem(field, value)` in `payload-canvas/forms` is the same check for the site's form, so both show the same messages.
 - `applyFormConditions(fields, submissionData)` (pure, in `payload-canvas`) is the same rule without Payload, for your own handlers.
+
+### More field types
+
+`moreFormFields` from `payload-canvas/forms` adds five field types to the plugin's `fields` option. Each has a label, an icon and a tooltip in the Blocks tab, and display conditions work with all of them.
+
+| Type | Stores | Checks |
+|---|---|---|
+| `phone` | text | 6 to 15 digits; `+`, spaces, `-`, `.`, `(` `)` allowed |
+| `url` | text | an http or https address; `example.com` counts |
+| `hidden` | its **Value**, sent with every answer | none. The preview shows it as a dashed note |
+| `consent` | `true` or `false` | must be ticked when required (the default). Its **Text** is rich text, so it can link to the privacy policy |
+| `file` | the file, in an upload collection | **Allowed file types** (`image/*, application/pdf, .docx`) and **Largest file (MB)**, at most 10 MB |
+
+The plugin's own `radio` and `date` types need nothing extra. `formAnswerProblem` checks that a radio or select answer is one of the options, and that a date is a real date.
+
+```ts
+import { fields as formFields } from '@payloadcms/plugin-form-builder'
+import { moreFormFields, withFormConditions } from 'payload-canvas/forms'
+
+formBuilderPlugin({
+  fields: {
+    radio: withFormConditions(formFields.radio),
+    date: withFormConditions(formFields.date),
+    ...Object.fromEntries(Object.entries(moreFormFields).map(([slug, block]) => [slug, withFormConditions(block)])),
+  },
+})
+```
+
+Your form renders them (the starter's `FormParts.tsx` is an example). For a `file` field, send the submission as multipart form data: the JSON in `_payload`, and each file as a part named after its field, with the file name as the field's answer in `submissionData`. `formFileUploads({ collection, field })` (a submissions `beforeChange` hook) checks type and size again, stores each file in `collection` (default `media`), and links it on `field` (default `attachments`: a `hasMany` relationship or upload field you add to the submissions). It replaces the answer with the file name and address, so emails show it. A file field that the visitor's answers hide is skipped. Links a visitor sends in `attachments` are ignored. The plugin's own `upload` type cannot take display conditions (the plugin ignores a config for it), so use `file`.
+
+### Emails
+
+Each form has a list of emails, as in Contact Form 7: for example a notification to the site owner and an auto-reply to the visitor. `withFormEmailFields(defaultFields)` (for `formOverrides.fields`) gives each email **To**, **From name**, **From email**, **Reply-To**, **CC**, **BCC**, **Subject** and a **Body** that is rich text or **Custom HTML**. The plugin's own field names stay, so stored emails keep working. `fromName`, `bodyType` and `html` are new columns (production needs a migration).
+
+Merge tags work in every line and in the body:
+
+- `{{name}}`: the answer of the field named `name`. An empty or hidden answer gives nothing. A tag that names no field stays as it is, so you see the typo.
+- `{{*}}`: every answer, with the field labels. A table in the body, "Label: value" in a line. A ticked box reads "Yes".
+- `{{formTitle}}` and `{{formSubmissionID}}`.
+
+In the builder, each of these inputs has an **Insert field** menu with the form's fields and `{{*}}`. It inserts the tag at the cursor, also in the rich text body. `formEmails()` (the plugin's `beforeEmail`) builds each email. Answers are HTML-escaped in the body. Address lines keep only valid addresses, so an answer can never add a recipient or a header. An email with no To address is not sent. Without a From email, the email adapter's address is used; without both From fields, its name too. Each email also gets a plain text part.
 
 ### Limits
 
@@ -2244,7 +2296,7 @@ Only published templates count (all templates in draft mode). Templates with an 
 - A **binding** connects a block prop to a document field: `bindings: { "text": "title", "image": "author.avatar" }`. Paths are dot paths from the document root. At render time the prop takes the document's value. A missing value falls back to the prop's own value. In the editor, the binding picker lists only compatible fields of the target collection, including one relationship hop.
 - The **Field** block (`field`) shows one field of the document by path, rendered by its type: rich text, an upload as an image, a date, a relationship's title, or text. Use it for the post body.
 - The **Collection list** block (`collectionList`) lists the latest documents of a collection (`collection`, `limit`, `sort`, `excludeCurrent`, `offset`, `depth`, and the filters `filterField`, `filterBy`, `where` and `queryFilters` below). Its `item` slot is the design of one item and repeats for every document. Its `empty` slot shows instead when no document matches, for example a text "No posts yet". Blocks in the item bind to the item's fields, for example a heading with `bindings: { "text": "title" }` and a link with `bindings: { "link": "$url" }` (the item's URL from the collection's `url` option). The block offers the collections with a `url`; add data collections without pages (testimonials, team members) with the plugin's `listCollections` option. The site shows published documents only. It works on normal pages too, not only in templates.
-  - In the inspector, the fields show under the headings **Filter**, **Sort and count** and **Pages**. **Sort** is a select of the collection's fields with a direction ("Newest first", "A to Z") and **Random order**. It stores the same `sort` text (`-publishedAt`, `$random`). Your own blocks can use the same controls: `admin.custom.builderSort: { collectionField: 'collection' }` on a text field, and `admin.custom.builderHeading: 'Filter'` for a heading above a field.
+  - In the inspector, the fields show under the headings **Filter**, **Sort and count** and **Pages**. **Sort** is a select of the collection's fields with a direction ("Newest first", "A to Z") and **Random order**. It stores the same `sort` text (`-publishedAt`, `$random`). Your own blocks can use the same controls: `admin.custom.builderSort: { collectionField: 'collection' }` on a text field, and `admin.custom.builderHeading: 'Filter'` for a heading above a field. A Payload `tabs` field with several tabs shows as a tab strip in the inspector (the tab stays chosen when you select another block with the same tabs); a `collapsible` with `admin.initCollapsed` starts folded.
   - `offset` skips documents after the sort (at most 100).
   - `depth` is `"1"` (default) or `"2"`: how deep the related documents of each item load. Use `"2"` to reach, for example, `categories.image`.
 - The **Repeat** block (`repeat`) repeats its `item` slot per row of an array or hasMany field. See "Repeat the rows of a field" below.

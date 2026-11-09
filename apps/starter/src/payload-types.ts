@@ -1017,6 +1017,271 @@ export interface Form {
             blockName?: string | null;
             blockType: 'textarea';
           }
+        | {
+            name: string;
+            label?: string | null;
+            width?: number | null;
+            defaultValue?: string | null;
+            options?:
+              | {
+                  label: string;
+                  value: string;
+                  id?: string | null;
+                }[]
+              | null;
+            required?: boolean | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'radio';
+          }
+        | {
+            name: string;
+            label?: string | null;
+            width?: number | null;
+            required?: boolean | null;
+            defaultValue?: string | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'date';
+          }
+        | {
+            /**
+             * Lowercase, no spaces. Emails show the answer with {{name}}.
+             */
+            name: string;
+            label?: string | null;
+            width?: number | null;
+            defaultValue?: string | null;
+            placeholder?: string | null;
+            required?: boolean | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'phone';
+          }
+        | {
+            /**
+             * Lowercase, no spaces. Emails show the answer with {{name}}.
+             */
+            name: string;
+            label?: string | null;
+            width?: number | null;
+            defaultValue?: string | null;
+            placeholder?: string | null;
+            required?: boolean | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'url';
+          }
+        | {
+            /**
+             * Lowercase, no spaces. Emails show the answer with {{name}}.
+             */
+            name: string;
+            /**
+             * For emails and submissions only. Visitors do not see it.
+             */
+            label?: string | null;
+            /**
+             * Sent with every answer.
+             */
+            defaultValue?: string | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'hidden';
+          }
+        | {
+            /**
+             * Lowercase, no spaces. Emails show the answer with {{name}}.
+             */
+            name: string;
+            /**
+             * A short name for emails and submissions.
+             */
+            label?: string | null;
+            /**
+             * The text next to the box. Select words and add a link, for example to the privacy policy.
+             */
+            text?: {
+              root: {
+                type: string;
+                children: {
+                  type: any;
+                  version: number;
+                  [k: string]: unknown;
+                }[];
+                direction: ('ltr' | 'rtl') | null;
+                format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+                indent: number;
+                version: number;
+              };
+              [k: string]: unknown;
+            } | null;
+            width?: number | null;
+            required?: boolean | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'consent';
+          }
+        | {
+            /**
+             * Lowercase, no spaces. Emails show the answer with {{name}}.
+             */
+            name: string;
+            label?: string | null;
+            width?: number | null;
+            required?: boolean | null;
+            /**
+             * File types or endings, separated by commas, for example "image/*, application/pdf, .docx". Empty: any type.
+             */
+            accept?: string | null;
+            /**
+             * At most 10 MB.
+             */
+            maxSize?: number | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'file';
+          }
       )[]
     | null;
   submitButtonLabel?: string | null;
@@ -1046,12 +1311,23 @@ export interface Form {
   };
   emails?:
     | {
+        /**
+         * Addresses separated by commas. {{email}} sends to the visitor. Type {{name}} for a field’s answer, or use Insert field.
+         */
         emailTo?: string | null;
+        fromName?: string | null;
+        /**
+         * Empty: the site’s address.
+         */
+        emailFrom?: string | null;
+        replyTo?: string | null;
         cc?: string | null;
         bcc?: string | null;
-        replyTo?: string | null;
-        emailFrom?: string | null;
         subject: string;
+        bodyType?: ('richText' | 'html') | null;
+        /**
+         * Type {{name}} for a field’s answer, or use Insert field. {{*}} adds every answer as a table.
+         */
         message?: {
           root: {
             type: string;
@@ -1067,6 +1343,10 @@ export interface Form {
           };
           [k: string]: unknown;
         } | null;
+        /**
+         * Your own HTML. Type {{name}} for a field’s answer, or use Insert field. {{*}} adds every answer as a table. Answers are escaped.
+         */
+        html?: string | null;
         id?: string | null;
       }[]
     | null;
@@ -2494,6 +2774,182 @@ export interface FormsSelect<T extends boolean = true> {
               id?: T;
               blockName?: T;
             };
+        radio?:
+          | T
+          | {
+              name?: T;
+              label?: T;
+              width?: T;
+              defaultValue?: T;
+              options?:
+                | T
+                | {
+                    label?: T;
+                    value?: T;
+                    id?: T;
+                  };
+              required?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
+              id?: T;
+              blockName?: T;
+            };
+        date?:
+          | T
+          | {
+              name?: T;
+              label?: T;
+              width?: T;
+              required?: T;
+              defaultValue?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
+              id?: T;
+              blockName?: T;
+            };
+        phone?:
+          | T
+          | {
+              name?: T;
+              label?: T;
+              width?: T;
+              defaultValue?: T;
+              placeholder?: T;
+              required?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
+              id?: T;
+              blockName?: T;
+            };
+        url?:
+          | T
+          | {
+              name?: T;
+              label?: T;
+              width?: T;
+              defaultValue?: T;
+              placeholder?: T;
+              required?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
+              id?: T;
+              blockName?: T;
+            };
+        hidden?:
+          | T
+          | {
+              name?: T;
+              label?: T;
+              defaultValue?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
+              id?: T;
+              blockName?: T;
+            };
+        consent?:
+          | T
+          | {
+              name?: T;
+              label?: T;
+              text?: T;
+              width?: T;
+              required?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
+              id?: T;
+              blockName?: T;
+            };
+        file?:
+          | T
+          | {
+              name?: T;
+              label?: T;
+              width?: T;
+              required?: T;
+              accept?: T;
+              maxSize?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
+              id?: T;
+              blockName?: T;
+            };
       };
   submitButtonLabel?: T;
   confirmationType?: T;
@@ -2509,12 +2965,15 @@ export interface FormsSelect<T extends boolean = true> {
     | T
     | {
         emailTo?: T;
+        fromName?: T;
+        emailFrom?: T;
+        replyTo?: T;
         cc?: T;
         bcc?: T;
-        replyTo?: T;
-        emailFrom?: T;
         subject?: T;
+        bodyType?: T;
         message?: T;
+        html?: T;
         id?: T;
       };
   fieldsBuilder?: T;

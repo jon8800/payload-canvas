@@ -20,24 +20,31 @@ type Props = {
   readonly onChange: (value: unknown) => void
 }
 
-export function FormFieldNameField({ label, description, path, value, required, onChange }: Props) {
+/**
+ * The named fields of the form being edited (the layout's blocks), as options: "Topic (topic)".
+ * `except`: the id of a field to leave out (the field itself).
+ */
+export function useFormFieldOptions(except?: string): { label: string; value: string; title: string }[] {
   const runtime = useRuntime()
   const layout = useEditor(runtime.store, (s) => s.view)
-  const own = propPathOf(path)?.blockId
-  const current = typeof value === 'string' ? value : ''
-  const options = useMemo(() => {
-    const out: { label: string; value: string }[] = []
+  return useMemo(() => {
+    const out: { label: string; value: string; title: string }[] = []
     for (const block of layout.blocks) {
       const name = block.props?.name
-      if (block.id === own || typeof name !== 'string' || !name.trim()) continue
+      if (block.id === except || typeof name !== 'string' || !name.trim()) continue
       if (out.some((o) => o.value === name)) continue
       const text = typeof block.props?.label === 'string' && block.props.label.trim() ? block.props.label.trim() : name
-      out.push({ label: text === name ? name : `${text} (${name})`, value: name })
+      out.push({ label: text === name ? name : `${text} (${name})`, value: name, title: text })
     }
-    // A name no field has any more stays visible, so the editor sees what to fix.
-    if (current && !out.some((o) => o.value === current)) out.push({ label: `${current} (not in this form)`, value: current })
     return out
-  }, [layout, own, current])
+  }, [layout, except])
+}
+
+export function FormFieldNameField({ label, description, path, value, required, onChange }: Props) {
+  const fields = useFormFieldOptions(propPathOf(path)?.blockId)
+  const current = typeof value === 'string' ? value : ''
+  // A name no field has any more stays visible, so the editor sees what to fix.
+  const options = current && !fields.some((o) => o.value === current) ? [...fields, { label: `${current} (not in this form)`, value: current, title: current }] : fields
 
   return (
     <SelectInput

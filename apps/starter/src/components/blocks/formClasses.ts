@@ -21,6 +21,20 @@ export const formClasses = {
   fieldError: 'm-0 text-sm text-destructive',
   checkboxRow: 'flex w-full items-start gap-3 text-base',
   checkbox: 'mt-1 size-5 shrink-0 accent-primary',
+  // A consent box's rich text, next to the box: links underlined.
+  consentText: 'min-w-0 text-base [&_a]:underline [&_a]:underline-offset-4 [&_a:hover]:no-underline [&_p]:m-0',
+  // Radio buttons: a fieldset with the label as its legend.
+  radioGroup: 'm-0 flex w-full min-w-0 flex-col gap-2 border-0 p-0',
+  legend: 'mb-2 p-0 text-sm font-medium text-foreground',
+  radioList: 'flex flex-col gap-2',
+  radioRow: 'flex items-center gap-3 text-base',
+  radio: 'size-5 shrink-0 accent-primary',
+  file:
+    'block w-full text-base text-foreground file:mr-4 file:cursor-pointer file:rounded-full file:border-0 file:bg-muted ' +
+    'file:px-4 file:py-2 file:text-sm file:font-medium file:text-foreground hover:file:bg-[color-mix(in_oklch,var(--color-muted),black_6%)]',
+  hint: 'm-0 text-sm text-muted-foreground',
+  // A hidden field in the builder's preview: visitors never see it.
+  hiddenPreview: 'w-full rounded-md border border-dashed border-border px-3.5 py-2 text-sm text-muted-foreground',
   message: 'w-full',
   messageText: 'm-0 text-muted-foreground',
   // The builder's preview: inputs take no clicks, so a click selects the field.
@@ -33,6 +47,8 @@ export const formClasses = {
     'font-medium text-primary-foreground transition-colors hover:bg-[color-mix(in_oklch,var(--color-primary),black_14%)] sm:w-auto ' +
     'disabled:cursor-progress disabled:opacity-70',
   spinner: 'size-4 animate-spin motion-reduce:animate-none',
+  errorText: 'm-0',
+  errorList: 'm-0 mt-1 list-disc pl-5',
   error: 'm-0 w-full rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-foreground',
   success: 'flex flex-col items-start gap-3 outline-none',
   successTitle: 'm-0 font-display text-2xl text-foreground',

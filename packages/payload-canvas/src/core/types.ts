@@ -426,6 +426,8 @@ export type RegionConfig = {
    * block is selected (form settings in the form builder). Other regions edit in the settings drawer.
    */
   panel?: boolean
+  /** Panel regions: sections that fold, each with the paths of its fields (`RegionOption.sections`). */
+  sections?: Array<{ label: string; fields: string[] }>
 }
 
 /** A region on the canvas: its name and its box, in iframe viewport coordinates. */
