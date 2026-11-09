@@ -4,6 +4,11 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ## [Unreleased]
 
+### Added
+
+- **Starter: a branded admin.** The login page shows the site's mark and name (the Site name from Site Settings) and a welcome line in a centred card; the forgot and reset password pages use the same card. The header shows the mark instead of Payload's. Change the brand in `src/admin/brand/` (`brand.ts`, `Mark.tsx`). Part of the "Admin look" feature (`--no-look` leaves it out).
+- **Starter: tidier list views.** The Status column is a coloured badge (Draft, Published, Changed) in every collection with drafts, the plugin's Templates and Classes too (`src/admin/list/`). Posts show the featured image as a thumbnail. Every collection has chosen columns, and Redirects use the From field as their title. Rows line up on their middle line, and the Media rows no longer double in height from the folder button. Users show their email as the title, so pickers never show a bare ID.
+
 ## [0.5.0] - 2026-11-08
 
 ### Upgrade notes

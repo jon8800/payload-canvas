@@ -97,6 +97,111 @@
           text-underline-offset: 3px;
         }
       }
+
+      // Every cell centred on the row's middle line, so text, checkboxes, thumbnails and
+      // badges line up. Rows get a little more height.
+      tbody td {
+        vertical-align: middle;
+        padding-block: 10px;
+      }
+
+      // Buttons in cells (the Folder column's "Move to folder") lose Payload's button margins,
+      // which made those rows twice as tall.
+      tbody td .btn {
+        margin-block: 0;
+      }
+
+      // Thumbnails: rounded, with a hairline so light images keep an edge.
+      .file__thumbnail {
+        border-radius: var(--style-radius-s);
+        box-shadow: 0 0 0 1px var(--theme-border-color);
+      }
+
+      // An image field (like a post's Featured Image): the thumbnail alone, without the file name.
+      td:not(.cell-filename) .file__filename {
+        display: none;
+      }
+    }
+
+    // The Status column: Draft, Published or Changed as a coloured badge (src/admin/list/StatusCell.tsx).
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 18px;
+      white-space: nowrap;
+      color: var(--theme-elevation-650);
+      background: var(--theme-elevation-100);
+
+      &::before {
+        content: '';
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+        opacity: 0.8;
+      }
+
+      &--published {
+        color: var(--theme-success-750);
+        background: var(--theme-success-100);
+      }
+
+      &--changed {
+        color: var(--theme-warning-750);
+        background: var(--theme-warning-100);
+      }
+    }
+
+    // Login and the other signed-out pages (forgot password, reset, create first user): the logo
+    // and form in one centred card. The brand is in src/admin/brand.
+    .template-minimal {
+      background: var(--theme-elevation-50);
+    }
+
+    .template-minimal__wrap {
+      padding: 40px 40px 32px;
+      border: 1px solid var(--theme-border-color);
+      border-radius: var(--style-radius-l);
+      background: var(--theme-bg);
+      box-shadow:
+        0 1px 2px rgb(0 0 0 / 0.04),
+        0 12px 32px -12px rgb(0 0 0 / 0.12);
+    }
+
+    .login__brand {
+      margin-bottom: 12px;
+    }
+
+    .brand-logo {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-logo__name {
+      font-size: 22px;
+      line-height: 28px;
+      font-weight: 600;
+      letter-spacing: -0.015em;
+      color: var(--theme-text);
+    }
+
+    .brand-welcome {
+      margin: 0 0 28px;
+      text-align: center;
+      color: var(--theme-elevation-500);
+    }
+
+    // The mark in the header breadcrumb: no extra box around it.
+    .brand-mark {
+      display: block;
+      flex-shrink: 0;
     }
 
     // The search and filter bar above lists.

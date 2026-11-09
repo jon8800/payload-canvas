@@ -45,6 +45,9 @@ import { demoLocalization, withoutFieldLocalization } from '@/lib/localizationDe
 import { dashboard } from '@/admin/dashboard'
 // @end:dashboard
 import { isDesigner } from '@/access/roles'
+// @feature:look
+import { statusBadges } from '@/admin/list/statusBadges'
+// @end:look
 
 /** Collections with the page builder. Shared by the builder plugin and its MCP tools. */
 const builderCollections: WebsiteBuilderOptions['collections'] = {
@@ -128,12 +131,20 @@ export default buildConfig({
     },
     user: Users.slug,
     autoLogin: devAutoLogin,
-    // @feature:nav
-    // The sidebar: grouped collections and globals with icons (src/admin/nav).
     components: {
+      // @feature:nav
+      // The sidebar: grouped collections and globals with icons (src/admin/nav).
       Nav: '/admin/nav/Nav#Nav',
+      // @end:nav
+      // @feature:look
+      // The brand on the login page and in the header. Change it in src/admin/brand (brand.ts, Mark.tsx).
+      graphics: {
+        Logo: '/admin/brand/Logo#Logo',
+        Icon: '/admin/brand/Icon#Icon',
+      },
+      beforeLogin: ['/admin/brand/Welcome#Welcome'],
+      // @end:look
     },
-    // @end:nav
     // @feature:dashboard
     // Dashboard widgets (src/admin/dashboard). Each user can rearrange them with "Edit dashboard".
     dashboard,
@@ -197,6 +208,7 @@ export default buildConfig({
     redirectsPlugin({
       collections: ['pages', 'posts'],
       overrides: {
+        admin: { useAsTitle: 'from', defaultColumns: ['from', 'to', 'isRegex', 'updatedAt'] },
         fields: ({ defaultFields }) => [
           ...defaultFields,
           {
@@ -223,10 +235,10 @@ export default buildConfig({
       },
       redirectRelationships: ['pages'],
       formOverrides: {
-        admin: { group: 'Forms' },
+        admin: { group: 'Forms', defaultColumns: ['title', 'fields', 'confirmationType', 'updatedAt'] },
       },
       formSubmissionOverrides: {
-        admin: { group: 'Forms' },
+        admin: { group: 'Forms', defaultColumns: ['form', 'submissionData', 'createdAt'] },
         fields: ({ defaultFields }) => [
           ...defaultFields,
           {
@@ -342,6 +354,12 @@ export default buildConfig({
         },
       },
     }),
+
+    // @feature:look
+    // List views: the Status column as a coloured badge. After websiteBuilder, so its Templates and
+    // Classes get the badge too. It only adds a list cell (src/admin/list/statusBadges.ts).
+    statusBadges(),
+    // @end:look
   ],
   queryPresets: {
     access: {

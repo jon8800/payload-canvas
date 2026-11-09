@@ -17,6 +17,11 @@ const dirname = path.dirname(filename)
 export const Media: CollectionConfig = {
   slug: 'media',
   folders: true,
+  admin: {
+    // The File Name column shows a thumbnail next to the name.
+    defaultColumns: ['filename', 'alt', 'folder', 'updatedAt'],
+    useAsTitle: 'filename',
+  },
   access: {
     create: authenticated,
     delete: authenticated,
