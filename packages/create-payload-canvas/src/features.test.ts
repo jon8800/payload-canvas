@@ -74,6 +74,18 @@ describe('stripImportMap', () => {
   it('ignores paths outside src', () => {
     assert.equal(stripImportMap(map, ['scripts/seed-demo.ts']), map)
   })
+
+  it('removes the lines of a removed package, and no package with a longer name', () => {
+    const withPackages = lines(
+      "import { Grid as Grid_4 } from 'payload-media-gallery/rsc'",
+      "import { Other as Other_5 } from 'payload-media-gallery-pro/rsc'",
+      '  "payload-media-gallery/rsc#Grid": Grid_4,',
+      '  "payload-media-gallery-pro/rsc#Other": Other_5,',
+    )
+    const result = stripImportMap(withPackages, [], ['payload-media-gallery'])
+    assert.ok(!result.includes('Grid_4'))
+    assert.equal(result.split('Other_5').length, 3, 'both lines of the longer name stay')
+  })
 })
 
 describe('applyFeatures', () => {
@@ -99,21 +111,28 @@ describe('applyFeatures', () => {
       { id: 'nav', paths: ['src/admin/nav'] },
       { id: 'demo', paths: ['scripts/seed-demo.ts'], scripts: ['seed:demo'] },
       { id: 'custom', paths: ['src/custom'] },
+      { id: 'gallery', paths: [], dependencies: ['payload-media-gallery'] },
     ],
   }
   const files = {
     'starter-features.json': JSON.stringify(manifest),
-    'package.json': JSON.stringify({ scripts: { dev: 'next dev', 'seed:demo': 'x' } }),
+    'package.json': JSON.stringify({ scripts: { dev: 'next dev', 'seed:demo': 'x' }, dependencies: { next: '16', 'payload-media-gallery': '^0.3.0' } }),
     'src/admin/nav/Nav.tsx': 'export {}',
     'src/custom/a.ts': 'export {}',
     'scripts/seed-demo.ts': 'export {}',
     'src/payload.config.ts': lines('a', '// @feature:nav', 'nav', '// @end:nav', '// @feature:custom', 'custom', '// @end:custom'),
-    'src/app/(payload)/admin/importMap.js': lines("import { Nav as N } from '../../../admin/nav/Nav'", '"/admin/nav/Nav#Nav": N,', 'keep'),
+    'src/app/(payload)/admin/importMap.js': lines(
+      "import { Nav as N } from '../../../admin/nav/Nav'",
+      "import { Grid as G } from 'payload-media-gallery/rsc'",
+      '"/admin/nav/Nav#Nav": N,',
+      '"payload-media-gallery/rsc#Grid": G,',
+      'keep',
+    ),
   }
 
   it('removes the files, scripts, regions and importMap lines of features that are off', () => {
     project(files)
-    assert.deepEqual(applyFeatures(dir, ['nav']), ['demo'])
+    assert.deepEqual(applyFeatures(dir, ['nav', 'gallery']), ['demo'])
     assert.ok(fs.existsSync(path.join(dir, 'src/admin/nav/Nav.tsx')))
     assert.ok(!fs.existsSync(path.join(dir, 'scripts/seed-demo.ts')))
     assert.deepEqual(JSON.parse(read('package.json')).scripts, { dev: 'next dev' })
@@ -122,9 +141,12 @@ describe('applyFeatures', () => {
     assert.equal(read('src/payload.config.ts'), lines('a', 'nav', 'custom'))
     assert.ok(!fs.existsSync(path.join(dir, 'starter-features.json')))
 
+    assert.deepEqual(JSON.parse(read('package.json')).dependencies, { next: '16', 'payload-media-gallery': '^0.3.0' })
+
     project(files)
     applyFeatures(dir, [])
     assert.ok(!fs.existsSync(path.join(dir, 'src/admin/nav')))
+    assert.deepEqual(JSON.parse(read('package.json')).dependencies, { next: '16' })
     assert.equal(read('src/payload.config.ts'), lines('a', 'custom'))
     assert.equal(read('src/app/(payload)/admin/importMap.js'), 'keep')
   })

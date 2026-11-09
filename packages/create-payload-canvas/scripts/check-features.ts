@@ -3,8 +3,8 @@
 // starter's own, apply the features, run the starter's TypeScript compiler, and look for leftovers.
 //
 // Usage: pnpm check:features [--all | --quick]
-//   --all     every mix (32 runs)
-//   --quick   all on, all off, and each feature off alone (7 runs)
+//   --all     every mix (2 ^ number of features runs)
+//   --quick   all on, all off, the defaults, and each feature off alone
 //   default   times the first run: under 20 seconds means --all, else --quick
 
 import { execFile } from 'node:child_process'
@@ -13,7 +13,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 
-import { FEATURES, STARTER_SUBDIR, type FeatureId } from '../src/config.js'
+import { DEFAULT_FEATURES, FEATURES, STARTER_SUBDIR, type FeatureId } from '../src/config.js'
 import { applyFeatures, filesWithMarkers, IMPORT_MAP_FILE, readManifest, stripImportMap } from '../src/features.js'
 import { copyStarterFromRepo, findRepoRoot } from '../src/source.js'
 
@@ -58,6 +58,7 @@ async function check(enabled: FeatureId[]): Promise<string[]> {
     const off = applyFeatures(dir, enabled) ?? []
     const offFeatures = manifest.features.filter((feature) => off.includes(feature.id))
     const removedPaths = offFeatures.flatMap((feature) => feature.paths)
+    const removedPackages = offFeatures.flatMap((feature) => feature.dependencies ?? [])
 
     const problems: string[] = []
     const result = await run(process.execPath, [tsc, '--noEmit', '-p', path.join(dir, 'tsconfig.json')], { cwd: dir, maxBuffer: 64 * 1024 * 1024 }).then(
@@ -70,12 +71,15 @@ async function check(enabled: FeatureId[]): Promise<string[]> {
     const importMap = path.join(dir, IMPORT_MAP_FILE)
     if (fs.existsSync(importMap)) {
       const text = fs.readFileSync(importMap, 'utf8')
-      if (stripImportMap(text, removedPaths) !== text) problems.push(`${IMPORT_MAP_FILE} still points into a deleted path`)
+      if (stripImportMap(text, removedPaths, removedPackages) !== text) problems.push(`${IMPORT_MAP_FILE} still points into a deleted path or package`)
     }
     for (const rel of removedPaths) if (fs.existsSync(path.join(dir, rel))) problems.push(`${rel} was not deleted`)
-    const scripts = (JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')) as { scripts?: Record<string, string> }).scripts ?? {}
+    const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')) as Partial<Record<'scripts' | 'dependencies', Record<string, string>>>
     for (const name of offFeatures.flatMap((feature) => feature.scripts ?? [])) {
-      if (scripts[name]) problems.push(`script "${name}" was not deleted`)
+      if (pkg.scripts?.[name]) problems.push(`script "${name}" was not deleted`)
+    }
+    for (const name of removedPackages) {
+      if (pkg.dependencies?.[name]) problems.push(`dependency "${name}" was not deleted`)
     }
     if (fs.existsSync(path.join(dir, 'starter-features.json'))) problems.push('starter-features.json was not deleted')
     return problems
@@ -87,7 +91,7 @@ async function check(enabled: FeatureId[]): Promise<string[]> {
 async function main() {
   const all: FeatureId[][] = []
   for (let mask = 0; mask < 1 << ids.length; mask++) all.push(ids.filter((_, bit) => !(mask & (1 << bit))))
-  const quick: FeatureId[][] = [ids, [], ...ids.map((id) => ids.filter((other) => other !== id))]
+  const quick: FeatureId[][] = [ids, [], DEFAULT_FEATURES, ...ids.map((id) => ids.filter((other) => other !== id))]
 
   const results: { name: string; problems: string[]; seconds: number }[] = []
   const timed = async (enabled: FeatureId[]) => {
