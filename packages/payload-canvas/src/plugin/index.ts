@@ -715,6 +715,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
               savedSections,
               getTokens: (req) => (req ? themeStyleTokens(req.payload, css) : getStyleTokens(css)),
               templates: templates ? { slug: templatesSlug, sources: templates.sources } : null,
+              forms: forms ? { slug: forms.slug, blocks: forms.blocks } : null,
             })
           : []),
         {

@@ -19,6 +19,7 @@ import { failedAction, failureParts, humanizeTool, retriedCalls, transcript, typ
 import { Markdown } from './MarkdownView'
 
 import './assistant.scss'
+import { FORM_SETTINGS_REGION } from '../../../forms/blocks'
 
 const PROVIDER_DOCS = 'https://github.com/jon8800/payload-canvas/blob/main/docs/ai/providers.md'
 /** Distance from the bottom (px) within which new content keeps the list scrolled to the end. */
@@ -436,6 +437,14 @@ const BLOCK_SUGGESTIONS: Record<BlockKind, string[]> = {
   other: ['Make this stand out more', 'Add more space around this', 'Make this look good on mobile'],
 }
 
+/** Suggestions in the form builder: the assistant edits the form's fields there. */
+const FORM_SUGGESTIONS = [
+  'Add a phone field after the email',
+  'Make every field required except the message',
+  'Ask for the budget only when the topic is a new website',
+  'Put name and email side by side',
+]
+
 /** The empty chat: a short intro and suggestions that fit the page, the selection or the template. */
 function Welcome({ assistant, note }: { assistant: AssistantController; note: string | null }) {
   const runtime = useRuntime()
@@ -444,8 +453,12 @@ function Welcome({ assistant, note }: { assistant: AssistantController; note: st
   const isEmptyPage = useEditor(runtime.store, (s) => s.layout.blocks.length === 0)
   const selectedType = useEditor(runtime.store, (s) => (s.selectedId ? (findBlock(s.layout, s.selectedId)?.type ?? null) : null))
   const kind = selectedType ? blockKind(selectedType, runtime.config.blocks) : null
+  // The form builder: forms have a settings panel region.
+  const isForm = Boolean(runtime.regions?.region(FORM_SETTINGS_REGION)?.panel)
 
-  const suggestions = kind
+  const suggestions = isForm
+    ? FORM_SUGGESTIONS
+    : kind
     ? BLOCK_SUGGESTIONS[kind]
     : template.isTemplate && template.target
       ? [

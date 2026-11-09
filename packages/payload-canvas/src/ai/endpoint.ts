@@ -16,7 +16,7 @@ import { missingAdapterProblem, SETTINGS_KEY_HINT } from './config'
 import { createImageService, generateImageToMedia, type GenerateImageOutcome, type ImageService } from './images/service'
 import { adapterIdentity, runAgent } from './loop'
 import { classesConfigOf, loadClasses } from '../classes'
-import { breakpointsPx, contextText, systemPrompt } from './prompt'
+import { breakpointsPx, contextText, formSystemPrompt, systemPrompt } from './prompt'
 import { withSettingsKey, type AiSettingsRuntime } from './settings'
 import { toolDefinitions, Workspace, type MediaItem, type ToolEnv } from './tools'
 import type { AiChatRequest, AiMessage, AiOptions, AiStreamEvent, AiSystemPart } from './types'
@@ -44,6 +44,8 @@ export type AiEndpointOptions = {
   images?: ImageService
   /** The AI settings global: its chat key is read on every request and wins over the adapter's own key. Null: off. */
   settings?: AiSettingsRuntime | null
+  /** The form builder: the forms collection and its field types. The assistant edits a form's fields there. */
+  forms?: { slug: string; blocks: BlockDefinition[] } | null
   /** Tests: replaces the update-access check (default: Payload's docAccessOperation). */
   canUpdate?: (req: PayloadRequest, collection: string, id: string | number, field: string) => Promise<boolean>
 }
@@ -205,6 +207,13 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
   }
   // Built once, in a fixed order: tools and system prompt are the cached prompt prefix.
   const tools = toolDefinitions({ ...env, searchMedia: async () => [] })
+  // The form builder: its own field types, tools and prompt (forms/fieldOps.ts).
+  const forms = options.forms ?? null
+  const formEnv: Omit<ToolEnv, 'searchMedia'> | null = forms
+    ? { blocks: forms.blocks, sections: [], savedSections: false, bindingSources: null, mediaCollection, form: true }
+    : null
+  const formTools = formEnv ? toolDefinitions({ ...formEnv, searchMedia: async () => [] }) : []
+  const formSystem: AiSystemPart[] = forms ? [{ text: formSystemPrompt({ blocks: forms.blocks, instructions: ai.instructions }), cache: true }] : []
 
   // The system prompt is reused byte for byte while the theme's tokens stay the same (a theme save
   // that changes the design variables builds it again).
@@ -281,7 +290,10 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
           `This chat was started with another AI model (${foreign.provider}). The assistant now uses ${identity}. Start a new chat.`,
         )
       }
-      const { system, breakpoints } = await getPrompt(req)
+      const isForm = forms !== null && formEnv !== null && body.collection === forms.slug
+      const prompted = await getPrompt(req)
+      const system = isForm ? formSystem : prompted.system
+      const { breakpoints } = prompted
       // The key from the AI settings, read now: a new key works without a restart.
       const settings = options.settings ?? null
       const settingsKey = settings && adapter.acceptsApiKey ? await settings.keyFor(req.payload, 'chat') : undefined
@@ -292,14 +304,14 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
       const localization = target.localization ?? null
       const locale = localization ? knownLocale(localization, body.locale) : null
       const contentOnly = !(await canEditDesign(req))
-      const workspace = new Workspace(layout, blocks, { localization, locale, contentOnly })
+      const workspace = new Workspace(layout, isForm ? forms.blocks : blocks, { localization, locale, contentOnly })
       const selectedId = body.selectedId && indexLayout(layout).has(body.selectedId) ? body.selectedId : null
       const titleField = config?.admin?.useAsTitle
       const title = titleField && typeof doc[titleField] === 'string' ? (doc[titleField] as string) : undefined
       // Saved sections differ per user and change often: they go in the context, not the cached prompt.
-      const saved = savedSections ? await loadSavedSections(req, savedSections.slug) : []
+      const saved = savedSections && !isForm ? await loadSavedSections(req, savedSections.slug) : []
       // Editable classes change at any time too.
-      const classes = classesConfigOf(req.payload) ? await loadClasses(req).catch(() => []) : []
+      const classes = classesConfigOf(req.payload) && !isForm ? await loadClasses(req).catch(() => []) : []
       const isTemplate = templates !== null && body.collection === templates.slug
       const templateTarget = isTemplate
         ? (typeof doc[TEMPLATE_TARGET_FIELD] === 'string' ? (doc[TEMPLATE_TARGET_FIELD] as string) : (body.context?.collection ?? null))
@@ -354,15 +366,15 @@ export function aiEndpoints(options: AiEndpointOptions): Endpoint[] {
             await runAgent({
               adapter: model,
               system,
-              tools,
+              tools: isForm ? formTools : tools,
               effort: ai.effort,
               maxSteps: ai.maxSteps ?? DEFAULT_MAX_STEPS,
               messages: body.messages,
               context,
               workspace,
               env: {
-                ...env,
-                sections: [...sections, ...saved],
+                ...(isForm ? formEnv : env),
+                sections: isForm ? [] : [...sections, ...saved],
                 searchMedia: mediaSearch(req, mediaCollection),
                 generateImage: assistantImageGenerator(req, images, controller.signal),
               },

@@ -32,6 +32,17 @@ export {
   type FormSpamValues,
 } from './spamSettings'
 export {
+  FORM_FIELDS_GUIDE,
+  formFieldOps,
+  formFieldsOf,
+  formFieldTypes,
+  nameFromLabel,
+  type FormFieldChange,
+  type FormFieldOpsResult,
+  type FormFieldView,
+} from './fieldOps'
+export { FORM_SETTINGS_GUIDE, formSettingsChanges, formSettingsView } from './settings'
+export {
   isEmailAddress,
   replyMailto,
   safePageUrl,
