@@ -10,8 +10,10 @@ import {
   getBlockDefinition,
   outlineDropTarget,
   starterSlots,
+  uniquePropValues,
   withDefaultClasses,
   withFieldDefaults,
+  withUniqueProps,
 } from '../../core'
 import type {
   Block,
@@ -339,7 +341,8 @@ export function createRuntime(
       const slots = starterSlots(config.blocks, type, createId)
       if (slots) block.slots = slots
       // No empty slot arrays: layouts are canonical. The canvas still shows placeholders for declared slots.
-      return block
+      // Props that must stay unique (a form field name) get a free value: `text2` next to `text`.
+      return withUniqueProps(block, config.blocks, uniquePropValues(store.getState().layout.blocks, config.blocks))
     },
   }
   store.onWarning((text) => runtime.warn(text))
