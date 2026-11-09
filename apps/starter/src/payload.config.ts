@@ -1,16 +1,17 @@
 import { sectionLibrary } from './data/sections/library'
 import { buildConfig } from 'payload'
-import type { EmailAdapter } from 'payload'
+import type { Block, EmailAdapter } from 'payload'
 import { postgresAdapter } from '@payloadcms/db-postgres'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import { nestedDocsPlugin } from '@payloadcms/plugin-nested-docs'
 import { seoPlugin } from '@payloadcms/plugin-seo'
 import { redirectsPlugin } from '@payloadcms/plugin-redirects'
-import { formBuilderPlugin } from '@payloadcms/plugin-form-builder'
+import { fields as formFieldConfigs, formBuilderPlugin } from '@payloadcms/plugin-form-builder'
 import { importExportPlugin } from '@payloadcms/plugin-import-export'
 import { mcpToolkitPlugin } from 'payload-mcp-toolkit'
 import { searchPlugin } from '@payloadcms/plugin-search'
-import { websiteBuilder, type WebsiteBuilderOptions } from 'payload-canvas'
+import { formSubmissionConditions, websiteBuilder, type WebsiteBuilderOptions } from 'payload-canvas'
+import { withFormConditions } from 'payload-canvas/forms'
 // @feature:ai
 import { fakeAdapter } from 'payload-canvas/ai/fake'
 import { openRouterAdapter } from 'payload-canvas/ai/openrouter'
@@ -45,6 +46,7 @@ import { demoLocalization, withoutFieldLocalization } from '@/lib/localizationDe
 import { dashboard } from '@/admin/dashboard'
 // @end:dashboard
 import { isDesigner } from '@/access/roles'
+import { FORM_FIELD_SLUGS } from '@/forms/fields'
 
 /** Collections with the page builder. Shared by the builder plugin and its MCP tools. */
 const builderCollections: WebsiteBuilderOptions['collections'] = {
@@ -210,23 +212,17 @@ export default buildConfig({
     }),
 
     formBuilderPlugin({
-      fields: {
-        text: true,
-        email: true,
-        textarea: true,
-        select: true,
-        checkbox: true,
-        number: true,
-        message: true,
-        country: true,
-        state: true,
-      },
+      // The plugin's own field blocks, each with display conditions ("show when field X equals Y").
+      // The site's form renderer and the submissions hook below apply them.
+      fields: Object.fromEntries(FORM_FIELD_SLUGS.map((slug) => [slug, withFormConditions(formFieldConfigs[slug] as Block)])),
       redirectRelationships: ['pages'],
       formOverrides: {
         admin: { group: 'Forms' },
       },
       formSubmissionOverrides: {
         admin: { group: 'Forms' },
+        // Hidden fields are never required, and their answers are dropped.
+        hooks: { beforeValidate: [formSubmissionConditions()] },
         fields: ({ defaultFields }) => [
           ...defaultFields,
           {
@@ -300,6 +296,8 @@ export default buildConfig({
       // Opening a saved page or post goes straight to the visual builder. "All fields" in the builder's menu opens the form.
       // Users with the Editor role get content mode: they change text, images and links, not the design.
       editor: { openInBuilder: true, canEditDesign: ({ user }) => isDesigner(user) },
+      // The form builder: forms open in the same full-screen builder (fields left, preview, settings right).
+      forms: true,
       // @feature:ai
       // AI assistant in the editor. BUILDER_AI_FAKE=1 (dev only) plays a scripted model. Else OpenRouter:
       // the key comes from OPENROUTER_API_KEY, or an admin pastes one in the "AI settings" global
