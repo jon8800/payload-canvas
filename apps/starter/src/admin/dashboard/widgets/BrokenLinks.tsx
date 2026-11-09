@@ -16,10 +16,10 @@ type NotFoundDoc = { id: string | number; path: string; hits: number; lastSeen?:
  */
 export async function BrokenLinks({ req, permissions, widgetData }: WidgetProps) {
   const limit = settingNumber(widgetData?.limit, DEFAULT_LIMIT)
-  const [notFound, links] = await Promise.all([topNotFound(req, permissions, limit), brokenLinks(req, permissions)])
+  const [notFound, broken] = await Promise.all([topNotFound(req, permissions, limit), brokenLinks(req, permissions, limit)])
   const adminRoute = req.payload.config.routes.admin
 
-  const linkRows = links.slice(0, limit).map(
+  const linkRows = (broken?.links ?? []).map(
     (link): ListRow => ({
       key: link.key,
       href: link.href,
@@ -37,8 +37,14 @@ export async function BrokenLinks({ req, permissions, widgetData }: WidgetProps)
           {notFound.rows.length ? <WidgetList rows={notFound.rows} /> : <WidgetEmpty>No visitor hit a missing page.</WidgetEmpty>}
         </WidgetSection>
       )}
-      <WidgetSection title="Links to missing pages" count={links.length}>
-        {linkRows.length ? <WidgetList rows={linkRows} /> : <WidgetEmpty>Every link points to a published page.</WidgetEmpty>}
+      <WidgetSection title="Links to missing pages" count={broken?.total ?? 0}>
+        {!broken ? (
+          <WidgetEmpty>Checking the links. This takes a few minutes after the first start.</WidgetEmpty>
+        ) : linkRows.length ? (
+          <WidgetList rows={linkRows} />
+        ) : (
+          <WidgetEmpty>Every link points to a published page.</WidgetEmpty>
+        )}
       </WidgetSection>
     </WidgetCard>
   )

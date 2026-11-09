@@ -157,6 +157,77 @@
       }
     }
 
+    // Cells by field type (src/admin/list/FieldCell.tsx): check marks, option chips, counts,
+    // summaries. Empty values show a quiet dash instead of Payload's "<No Label>".
+    .field-cell {
+      max-width: 100%;
+    }
+
+    .field-cell-empty {
+      color: var(--theme-elevation-300);
+    }
+
+    .field-cell-check {
+      display: inline-flex;
+      align-items: center;
+      vertical-align: middle;
+      color: var(--theme-success-600);
+
+      svg {
+        display: block;
+      }
+    }
+
+    .field-cell-sr {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+
+    .field-cell-chips {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .field-cell-chip {
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 18px;
+      white-space: nowrap;
+      color: var(--theme-elevation-750);
+      background: var(--theme-elevation-100);
+    }
+
+    .field-cell-count {
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      column-gap: 8px;
+      white-space: nowrap;
+    }
+
+    .field-cell-muted {
+      color: var(--theme-elevation-500);
+    }
+
+    .field-cell-date {
+      white-space: nowrap;
+    }
+
+    .field-cell-text {
+      display: -webkit-box;
+      max-width: 48ch;
+      overflow: hidden;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+
     // Login and the other signed-out pages (forgot password, reset, create first user): the logo
     // and form in one centred card. The brand is in src/admin/brand.
     .template-minimal {

@@ -8,14 +8,12 @@ import {
   emptyField,
   linkProblem,
   listURL,
-  mayReference,
   redirectCreateURL,
   relativeTime,
   replyCounts,
   shortText,
   submissionSummary,
   thumbnailOf,
-  unusedDocs,
   whereToQuery,
 } from './lib'
 import { settingNumber } from './server'
@@ -152,33 +150,12 @@ describe('replyCounts', () => {
   })
 })
 
-describe('mayReference', () => {
-  it('finds fields that can point at a collection, at any depth', () => {
-    assert.equal(mayReference([{ name: 'image', type: 'upload', relationTo: 'media' }], 'media'), true)
-    assert.equal(mayReference([{ name: 'refs', type: 'relationship', relationTo: ['pages', 'media'] }], 'media'), true)
-    assert.equal(mayReference([{ name: 'body', type: 'richText' }], 'media'), true)
-    assert.equal(mayReference([{ type: 'tabs', tabs: [{ name: 'meta', fields: [{ name: 'image', type: 'upload', relationTo: 'media' }] }] }], 'media'), true)
-    assert.equal(mayReference([{ name: 'rows', type: 'blocks', blocks: [{ slug: 'a', fields: [{ name: 'img', type: 'upload', relationTo: 'media' }] }] }], 'media'), true)
-  })
-
-  it('skips collections that cannot', () => {
-    assert.equal(mayReference([{ name: 'title', type: 'text' }, { name: 'author', type: 'relationship', relationTo: 'users' }], 'media'), false)
-  })
-})
-
 describe('linkProblem', () => {
   it('reports deleted and unpublished targets', () => {
     assert.equal(linkProblem({ found: false, drafts: true }), 'deleted')
     assert.equal(linkProblem({ found: true, drafts: true, status: 'draft' }), 'unpublished')
     assert.equal(linkProblem({ found: true, drafts: true, status: 'published' }), null)
     assert.equal(linkProblem({ found: true, drafts: false }), null)
-  })
-})
-
-describe('unusedDocs', () => {
-  it('keeps documents whose id is not used, comparing ids as text', () => {
-    const docs = [{ id: 1 }, { id: 2 }, { id: 'c' }]
-    assert.deepEqual(unusedDocs(docs, new Set(['1', 'c'])), [{ id: 2 }])
   })
 })
 
