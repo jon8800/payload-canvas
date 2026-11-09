@@ -65,10 +65,13 @@ import { i18nDemo } from '@/lib/locales'
 import { demoLocalization, withoutFieldLocalization } from '@/lib/localizationDemo'
 // @feature:dashboard
 import { dashboard } from '@/admin/dashboard'
+import { referenceIndex } from '@/admin/references'
 // @end:dashboard
 import { isDesigner } from '@/access/roles'
 // @feature:look
 import { statusBadges } from '@/admin/list/statusBadges'
+import { listCells } from '@/admin/list/listCells'
+import { rowLabels } from '@/admin/fields/rowLabels'
 // @end:look
 import { MORE_FORM_FIELD_SLUGS, PLUGIN_FORM_FIELD_SLUGS } from '@/forms/fields'
 
@@ -185,6 +188,12 @@ export default buildConfig({
       },
       beforeLogin: ['/admin/brand/Welcome#Welcome'],
       // @end:look
+      // @feature:dashboard
+      views: {
+        // "View all" in the Unused media widget: every file nothing uses, 50 a page.
+        unusedMedia: { Component: '/admin/dashboard/UnusedMediaView#UnusedMediaView', path: '/unused-media' },
+      },
+      // @end:dashboard
     },
     // @feature:dashboard
     // Dashboard widgets (src/admin/dashboard). Each user can rearrange them with "Edit dashboard".
@@ -453,6 +462,19 @@ export default buildConfig({
     // List views: the Status column as a coloured badge. After websiteBuilder, so its Templates and
     // Classes get the badge too. It only adds a list cell (src/admin/list/statusBadges.ts).
     statusBadges(),
+    // Better list cells by field type: check marks, option chips, short dates, row counts,
+    // JSON summaries and rich text excerpts (src/admin/list/listCells.ts). After statusBadges.
+    listCells(),
+    // @end:look
+    // @feature:dashboard
+    // Which document points at which (src/admin/references): hooks keep it current, so "Unused
+    // media" and "Broken links" on the dashboard run small queries instead of reading every page.
+    referenceIndex(),
+    // @end:dashboard
+    // @feature:look
+    // Array rows named by their content ("Sales team (sales)") in every collection, global and
+    // block, as in the builder's inspector (src/admin/fields/rowLabels.ts).
+    rowLabels(),
     // @end:look
   ],
   queryPresets: {
