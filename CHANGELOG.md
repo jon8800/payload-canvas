@@ -4,6 +4,19 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ## [Unreleased]
 
+### Added
+
+- **Form builder** for the forms of `@payloadcms/plugin-form-builder`: `websiteBuilder({ forms: true })`. A form opens in the full-screen builder: its fields in Layers (drag to reorder, add from the Blocks tab, duplicate, delete), a live preview rendered by the app's own form component (a click selects a field), the field's settings with Payload's inputs on the right, and the form's settings (title, submit button, confirmation, redirect, emails) when no field is selected. Undo, redo and live saves as for pages. The form's `fields` stay its own Payload blocks field: no copy, no migration. Each form gets a **Builder** tab.
+- **Display conditions for form fields** (`payload-canvas/forms`): `withFormConditions(block)` adds "Show when all / any rules match" with rules *field equals / does not equal / contains / is empty / is not empty value*. `hiddenFormFields(fields, values)` for the site's renderer; `formSubmissionConditions()` (submissions `beforeValidate` hook) drops the answers of hidden fields and refuses a shown required field left empty. The starter's form shows and hides fields live.
+- Regions with `panel: true`: the right panel edits the region's fields itself and shows them when no block is selected.
+- `<LayoutOutlet className>`: a page frame can style the layout's box (for example a wrapping flex row).
+
+### Changed
+
+- The canvas uses the definitions the admin sends for block types that the app's `blocks` list lacks.
+- Live commits to a Payload blocks field check against that field's own block types.
+- The starter's form renders through `FormParts.tsx` (one field, the submit button), shared by the site and the builder preview, and now shows each field's placeholder. Its form posts only shown fields.
+
 ## [0.5.0] - 2026-11-08
 
 ### Upgrade notes
