@@ -10,7 +10,16 @@ import { fields as formFieldConfigs, formBuilderPlugin } from '@payloadcms/plugi
 import { importExportPlugin } from '@payloadcms/plugin-import-export'
 import { mcpToolkitPlugin } from 'payload-mcp-toolkit'
 import { searchPlugin } from '@payloadcms/plugin-search'
-import { formEmails, formFileUploads, formSubmissionConditions, websiteBuilder, type WebsiteBuilderOptions } from 'payload-canvas'
+import {
+  formEmails,
+  formFileUploads,
+  formSpamProtection,
+  formSubmissionConditions,
+  formSubmissionsAdmin,
+  spamProtectionField,
+  websiteBuilder,
+  type WebsiteBuilderOptions,
+} from 'payload-canvas'
 import { moreFormFields, withFormConditions, withFormEmailFields } from 'payload-canvas/forms'
 // @feature:ai
 import { fakeAdapter } from 'payload-canvas/ai/fake'
@@ -69,6 +78,9 @@ const builderCollections: WebsiteBuilderOptions['collections'] = {
       }
     : {}),
 }
+
+// Form submissions admin: answers as a table, a "New" badge until opened, reply by email.
+const submissionsAdmin = formSubmissionsAdmin()
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -260,29 +272,34 @@ export default buildConfig({
       beforeEmail: formEmails(),
       formOverrides: {
         admin: { group: 'Forms', defaultColumns: ['title', 'fields', 'confirmationType', 'updatedAt'] },
-        fields: ({ defaultFields }) => withFormEmailFields(defaultFields),
+        // Spam protection per form (honeypot, minimum fill time, optional Turnstile, rate limit per IP).
+        // Turnstile needs TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY. The hook below checks it all.
+        fields: ({ defaultFields }) => [...withFormEmailFields(defaultFields), spamProtectionField()],
       },
       formSubmissionOverrides: {
-        admin: { group: 'Forms', defaultColumns: ['form', 'submissionData', 'createdAt'] },
+        admin: { group: 'Forms', ...submissionsAdmin.admin },
         hooks: {
-          // Hidden fields are never required, and their answers are dropped. Answers in the wrong format are refused.
-          beforeValidate: [formSubmissionConditions()],
+          // Spam checks first (a blocked submission is refused, logged and not stored). Then display
+          // conditions: hidden fields are never required, and their answers are dropped. Answers in
+          // the wrong format are refused.
+          beforeValidate: [formSpamProtection(), formSubmissionConditions()],
           // Files of file fields go to Media and are linked in `attachments`.
           beforeChange: [formFileUploads({ collection: 'media', field: 'attachments' })],
         },
-        fields: ({ defaultFields }) => [
-          ...defaultFields,
-          {
-            name: 'attachments',
-            type: 'upload',
-            relationTo: 'media',
-            hasMany: true,
-            label: 'File Attachments',
-            admin: {
-              description: 'Files uploaded with this submission',
+        fields: ({ defaultFields }) =>
+          submissionsAdmin.fields([
+            ...defaultFields,
+            {
+              name: 'attachments',
+              type: 'upload',
+              relationTo: 'media',
+              hasMany: true,
+              label: 'File Attachments',
+              admin: {
+                description: 'Files uploaded with this submission',
+              },
             },
-          },
-        ],
+          ]),
       },
     }),
 
@@ -311,7 +328,8 @@ export default buildConfig({
         collections: ['users', 'form-submissions', 'exports', 'imports', 'search'],
         globals: ['theme-settings'],
       },
-      customTools: builderMcpTools({ blocks: builderBlocks, sections: sectionLibrary, collections: builderCollections }),
+      // `forms: true` adds the form tools (listForms, getForm, createForm, editFormFields, updateFormSettings).
+      customTools: builderMcpTools({ blocks: builderBlocks, sections: sectionLibrary, collections: builderCollections, forms: true }),
     }),
 
     searchPlugin({

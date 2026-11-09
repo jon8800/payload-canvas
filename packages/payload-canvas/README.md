@@ -1696,12 +1696,79 @@ Merge tags work in every line and in the body:
 
 In the builder, each of these inputs has an **Insert field** menu with the form's fields and `{{*}}`. It inserts the tag at the cursor, also in the rich text body. `formEmails()` (the plugin's `beforeEmail`) builds each email. Answers are HTML-escaped in the body. Address lines keep only valid addresses, so an answer can never add a recipient or a header. An email with no To address is not sent. Without a From email, the email adapter's address is used; without both From fields, its name too. Each email also gets a plain text part.
 
+### AI agents edit forms
+
+`builderMcpTools({ forms: true })` (the same value as the plugin's `forms`) adds five MCP tools:
+
+| Tool | Does |
+|---|---|
+| `listForms` | The forms with their field names and the form builder link. |
+| `getForm` | One form: its fields in order (type, name, label, required, width, options, message text, display conditions and `shows`, the conditions in words), the field types this site offers, the settings and a guide. Includes unsaved edits of people who have the form open. |
+| `createForm` | A new form with its fields and settings. |
+| `editFormFields` | Changes the fields, in order, all or nothing: `add { type, values, index? }`, `update { field, values, unset? }`, `move { field, index }`, `remove { field }`, `setConditions { field, conditions }`. `field` is the name or the id. |
+| `updateFormSettings` | Title, submit button, confirmation, redirect, emails and other settings groups (spam protection). |
+
+- Field changes are commits to the form's live session, as in the form builder. An open builder shows each change at once, and the form saves about a second later.
+- Settings save through the same code as the settings panel (Payload's Local API as the key's user, with the document's write gate). An open builder reloads them.
+- Agents send rich text (a message field, the confirmation message, email bodies) as plain text, one paragraph per line, and read it back as plain text.
+- The tools check names (letters, digits and `_`, unique in the form) and conditions (a rule names another field of the form). A new field without a name gets one from its label ("Company size" becomes `company_size`); options sent as strings get a value from the label. Renaming a field renames it in the other fields' rules.
+- The tool descriptions explain the field types and the condition format: `{ match: "all" | "any", rules: [{ field, operator, value }] }`, operators `equals`, `notEquals`, `contains`, `isEmpty`, `isNotEmpty`.
+- The editor's AI assistant has the same field changes in the form builder (`getForm`, `editFormFields`), with a prompt and suggestions for forms.
+- `formFieldOps(layout, changes, definitions)` (pure, in `payload-canvas/forms`) turns the changes into builder operations, for your own tools.
+
+### Spam protection
+
+`spamProtectionField()` adds a **Spam protection** group to each form, and `formSpamProtection()` checks every submission on the server:
+
+```ts
+import { formSpamProtection, formSubmissionConditions, spamProtectionField } from 'payload-canvas'
+
+formBuilderPlugin({
+  formOverrides: { fields: ({ defaultFields }) => [...defaultFields, spamProtectionField()] },
+  // Spam checks first, then the display conditions.
+  formSubmissionOverrides: { hooks: { beforeValidate: [formSpamProtection(), formSubmissionConditions()] } },
+})
+```
+
+- **Honeypot** (on by default): a hidden input people never see. A bot that fills it is refused.
+- **Minimum fill time** (default 3 seconds): a form sent faster than this after it showed is refused.
+- **Cloudflare Turnstile** (off by default): needs `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY`. Without both keys it stays off, even when a form turns it on. The server checks each token with Cloudflare and refuses when the check fails.
+- **Rate limit** per visitor IP (default 5 per 10 minutes, 0 turns it off). Counts live in Payload's key-value store (`payload.kv`) under a hash of the IP. The IP comes from `cf-connecting-ip`, `x-real-ip`, then the first `x-forwarded-for` entry; without one the limit does not apply.
+
+A blocked submission is not stored. The server logs it (`Form submission blocked`, with the reason) and answers with one generic message, "Your message could not be sent. Please try again later." (400, or 429 for the rate limit), so bots learn nothing.
+
+Your form sends the checks' values next to the answers: `{ form, submissionData, spam: { honeypot, elapsedMs, token } }`. `honeypot` is the value of the hidden input named `HONEYPOT_NAME`, `elapsedMs` the time since the form showed, `token` the Turnstile token. The hook removes `spam` before the submission is stored. `spamProtection.turnstileSiteKey` (a virtual field) holds the site key on read, only when the form uses Turnstile and both keys are set, so the renderer needs no environment variable. Server code (Local API) and signed-in admins in the admin's create view are not checked. The starter's `FormView.tsx` and `Turnstile.tsx` are a complete renderer.
+
+### Form submissions admin
+
+`formSubmissionsAdmin()` arranges the plugin's submissions for the people who read them:
+
+```ts
+import { formSubmissionsAdmin } from 'payload-canvas'
+
+const submissionsAdmin = formSubmissionsAdmin()
+
+formBuilderPlugin({
+  formSubmissionOverrides: {
+    admin: { ...submissionsAdmin.admin },
+    fields: ({ defaultFields }) => submissionsAdmin.fields([...defaultFields /* your fields */]),
+  },
+})
+```
+
+- **List:** the sender (name and email when the form has them) with the start of the message, the form, a **New** badge until someone opens the submission, and the date.
+- **Detail:** a table of the form's questions (its field labels) and the answers, checkboxes as Yes or No, email answers as links, files as thumbnails (the `attachments` upload field, option `attachments`, and the plugin's own uploads), the date and the page the form was sent from, and **Reply by email**. The raw `submissionData` stays in a collapsed **Raw data** group.
+- Opening a submission as an admin user sets `readAt` once (`context.formSubmissionRead`, so hooks can skip that update).
+- `sourceUrl` stores the page on create: the value the form sends, else the `Referer` header. Only site paths and http(s) URLs are kept.
+- `submissionSummary(submissionData, formFields)` and `submissionAnswers(formFields, submissionData)` from `payload-canvas/forms` give the same summary and table to your own views (the starter's dashboard widget uses them).
+- The new fields need a migration in production: run `pnpm payload migrate:create` when you prepare the release.
+
 ### Limits
 
-- A new field starts with its type as its name (`text`, `checkbox`). Give it a unique name before visitors use the form: Payload does not check that names are unique.
+- A new field starts with its type as its name (`text`, `checkbox`). A second one gets `text2`, and a duplicated or pasted field gets a free name too (`uniqueProps`). Payload itself does not check that names are unique, so a field renamed by hand can still clash.
 - A setting that needs another field (choosing **Redirect** needs a page or a URL) waits until that field has a value, then both save together.
 - Labels that the form-builder plugin writes as translation functions show as words from the field name in the builder ("Submit Button Label").
-- The AI assistant and the MCP tools do not edit forms yet.
+- The AI assistant edits a form's fields, not its settings. It tells people where the settings are.
 
 ## Sections
 
@@ -2892,7 +2959,7 @@ plugins: [
 - `generateImage` makes an image with the site's image adapter (`ai.images` in `websiteBuilder`) and saves it in the media collection. Clients that cannot make images (Claude Code with a Claude plan) use the site's adapter this way. The key needs `create` on the media collection.
 - Every tool checks the key's access to the collection. Handlers run as the key's user with `overrideAccess: false`.
 - Writes are commits to the document's live session, like an editor's own changes. Open editors show them at once, and the agent appears in the collaborator list while it works. The draft is saved about a second later. `getLayout` returns the session's layout, unsaved changes included.
-- `builderMcpTools` options: `blocks`, `sections`, `collections` (the same map as the plugin), `listCollections` (the same list as the plugin), `siteUrl` (default: Payload `serverURL`, then `NEXT_PUBLIC_SERVER_URL`), `apiKeyCollection`, `mediaCollection` (default `media`, the same as `ai.mediaCollection`).
+- `builderMcpTools` options: `blocks`, `sections`, `collections` (the same map as the plugin), `listCollections` (the same list as the plugin), `siteUrl` (default: Payload `serverURL`, then `NEXT_PUBLIC_SERVER_URL`), `apiKeyCollection`, `mediaCollection` (default `media`, the same as `ai.mediaCollection`), `forms` (the same value as the plugin's `forms`: adds the [form tools](#ai-agents-edit-forms)).
 
 ## Multiplayer editing
 

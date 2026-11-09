@@ -33,6 +33,27 @@ export { formEmails, type FormEmailsOptions } from './forms/emails'
 export { formFileUploads, type FormFileUploadsOptions } from './forms/uploads'
 export { FORM_FIELDS_FIELD, FORM_SETTINGS_REGION, type FormsOptions } from './plugin/forms'
 export {
+  formSpamProtection,
+  spamProtectionField,
+  checkSubmission,
+  clientIp,
+  filledTooFast,
+  honeypotFilled,
+  turnstileKeys,
+  verifyTurnstile,
+  type FormSpamProtectionOptions,
+  type SpamProtectionFieldOptions,
+  type SpamReason,
+} from './forms/spam'
+export {
+  formSubmissionsAdmin,
+  SUBMISSION_ANSWERS_FIELD,
+  SUBMISSION_PAGE_FIELD,
+  SUBMISSION_READ_FIELD,
+  SUBMISSION_SUMMARY_FIELD,
+  type FormSubmissionsAdminOptions,
+} from './forms/submissionsAdmin'
+export {
   DEFAULT_TEMPLATES_SLUG,
   DOCUMENT_TEMPLATE_FIELD,
   TEMPLATE_CONDITIONS_FIELD,
