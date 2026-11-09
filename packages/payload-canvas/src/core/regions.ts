@@ -19,6 +19,12 @@ export type RegionOption = {
    * links to the settings drawer. For document settings that sit next to the layout.
    */
   panel?: boolean
+  /**
+   * Panel regions: sections with a heading that opens and closes them, each over some of the
+   * region's fields (in the region's order). The first section starts open. Fields in no section
+   * show above the sections; a `group` field in no section gets its own section.
+   */
+  sections?: Array<{ label: string; fields: string[] }>
 }
 
 /** Fields the plugin or Payload owns. A region never edits them. */
@@ -120,7 +126,22 @@ export function resolveRegions(
         tabs,
       }
     })
-    return { name: option.name, label: option.label?.trim() || humanize(option.name), fields: resolved, ...(option.panel ? { panel: true } : {}) }
+    const sections = (option.sections ?? []).map((section) => {
+      if (!section || typeof section.label !== 'string' || !Array.isArray(section.fields)) {
+        throw new Error(`${where}: each of the \`sections\` of region "${option.name}" needs a \`label\` and a \`fields\` list.`)
+      }
+      for (const path of section.fields) {
+        if (!resolved.some((f) => f.path === path)) throw new Error(`${where}: section "${section.label}" of region "${option.name}" names "${String(path)}", which the region does not show.`)
+      }
+      return { label: section.label, fields: [...section.fields] }
+    })
+    return {
+      name: option.name,
+      label: option.label?.trim() || humanize(option.name),
+      fields: resolved,
+      ...(option.panel ? { panel: true } : {}),
+      ...(sections.length > 0 ? { sections } : {}),
+    }
   })
 }
 

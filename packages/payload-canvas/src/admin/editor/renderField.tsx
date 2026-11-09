@@ -20,7 +20,7 @@ import type { Block } from '../../core/types'
 import { ArrayField } from './fields/ArrayField'
 import { isStructuralChange } from './fields/arrayState'
 import { CheckedTextField, NumberField } from './fields/CheckedInputs'
-import { FieldSection, GroupField } from './fields/GroupField'
+import { FieldSection, FieldTabs, GroupField } from './fields/GroupField'
 import { JsonField } from './fields/JsonField'
 import { QueryFiltersField } from './fields/QueryFiltersField'
 import { ListWhereField } from './fields/ListWhereField'
@@ -29,6 +29,8 @@ import { PointField } from './fields/PointField'
 import { RelatedField } from './fields/RelatedField'
 import { RichTextField } from './fields/RichTextField'
 import { FormFieldNameField } from './fields/FormFieldName'
+import { MergeTagsFrame } from './fields/MergeTags'
+import { MERGE_TAGS_MARKER } from '../../forms/fieldConfigs'
 import { SortField } from './fields/SortField'
 import { fieldMergeKey } from './fields/undoPath'
 import { asId, formatProblem, fromRelationshipInput, isFieldVisible, isRecord, toRelationshipInput, type FieldShape } from './fields/values'
@@ -412,8 +414,8 @@ type FieldsProps = {
 /**
  * Renders a list of fields against one object. Handles `admin.custom.builderCondition`, hidden
  * fields, and layout-only fields (row, collapsible, unnamed group, unnamed tabs) that share
- * the parent's data. Collapsibles, and unnamed tabs when there are several, get a small heading.
- * Named tabs render as groups.
+ * the parent's data. Collapsibles get a small heading; a tabs field with several tabs gets a tab
+ * strip (`FieldTabs`). Named tabs render as groups.
  */
 export function RenderBlockFields({ fields, data, path, onChange, scope = fields }: FieldsProps) {
   const record = isRecord(data) ? data : {}
@@ -464,31 +466,27 @@ export function RenderBlockFields({ fields, data, path, onChange, scope = fields
       return
     }
     if (field.type === 'tabs') {
-      // Several tabs get their labels as headings; a single tab shows its fields as they are.
-      const headed = field.tabs.length > 1
-      field.tabs.forEach((tab, tabIndex) => {
-        const key = `tab-${index}-${tabIndex}`
+      // One tab shows its fields as they are; several get a tab strip.
+      const renderTab = (tabIndex: number, key: string): ReactNode => {
+        const tab = field.tabs[tabIndex]
         if ('name' in tab && tab.name) {
           const name = tab.name
           const tabAccess = accessOf(`${path}.${name}`)
-          if (!tabAccess.read) return
-          out.push(
+          if (!tabAccess.read) return null
+          return (
             <FieldAccessFrame key={key} locked={!tabAccess.update}>
-              <GroupField
-                fields={tab.fields}
-                label={text(tab.label) ?? name}
-                onChange={(value) => setField(name, value)}
-                path={`${path}.${name}`}
-                value={record[name]}
-              />
-            </FieldAccessFrame>,
+              <GroupField fields={tab.fields} label={text(tab.label) ?? name} onChange={(value) => setField(name, value)} path={`${path}.${name}`} value={record[name]} />
+            </FieldAccessFrame>
           )
-          return
         }
-        const shared = <RenderBlockFields fields={tab.fields} data={record} path={path} onChange={onChange} scope={scope} />
-        const title = headed ? text(tab.label) : undefined
-        out.push(title ? <FieldSection key={key} label={title}>{shared}</FieldSection> : <Fragment key={key}>{shared}</Fragment>)
-      })
+        return <RenderBlockFields key={key} fields={tab.fields} data={record} path={path} onChange={onChange} scope={scope} />
+      }
+      if (field.tabs.length === 1) {
+        out.push(renderTab(0, `tab-${index}-0`))
+        return
+      }
+      const labels = field.tabs.map((tab, tabIndex) => text(tab.label) ?? ('name' in tab && tab.name ? tab.name : `Tab ${tabIndex + 1}`))
+      out.push(<FieldTabs key={`tabs-${index}`} labels={labels} path={`${path}.tabs-${index}`} render={(tabIndex) => renderTab(tabIndex, `tab-${index}-${tabIndex}`)} />)
       return
     }
     if (!('name' in field) || !field.name) return
@@ -514,7 +512,14 @@ export function RenderBlockFields({ fields, data, path, onChange, scope = fields
           <LocaleFieldFrame path={fieldPath} name={name}>
             {/* The slot adds binding controls (templates, collection lists) around the normal input. */}
             <FieldSlot field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} label={fieldLabel(field)}>
-              <RenderBlockField field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} siblings={record} onSiblingsChange={setFields} />
+              {field.admin?.custom?.[MERGE_TAGS_MARKER] ? (
+                // `admin.custom.builderMergeTags`: an "Insert field" menu with the form's merge tags.
+                <MergeTagsFrame value={record[name]} onChange={onFieldChange}>
+                  <RenderBlockField field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} siblings={record} onSiblingsChange={setFields} />
+                </MergeTagsFrame>
+              ) : (
+                <RenderBlockField field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} siblings={record} onSiblingsChange={setFields} />
+              )}
             </FieldSlot>
           </LocaleFieldFrame>
         </FieldAccessFrame>

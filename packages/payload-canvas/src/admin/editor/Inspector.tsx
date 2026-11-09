@@ -5,7 +5,8 @@ import { useDeferredValue, useEffect, useState, type ChangeEvent } from 'react'
 
 import { blockParts, findBlock, getBlockDefinition, htmlIdProblem, htmlIdsOf } from '../../core'
 import type { Block, BlockDefinition, Operation } from '../../core/types'
-import { BlockIcon, Icon, type IconName } from './icons'
+import { BlockIcon, Icon } from './icons'
+import { Tabs } from './ui/Tabs'
 import { useContentMode } from './contentMode'
 import { blockMenuEntries } from './menu/blockMenu'
 import { MenuButton } from './menu/Menu'
@@ -30,33 +31,6 @@ import { useOptionalValue, useValue, useValueSelector } from './valueStore'
 import { RegionPane } from './regions/RegionPane'
 import { SECTION_REF_BLOCK } from '../../blocks/builtins/sectionRef'
 import { ComponentBanner, ComponentValuesPanel } from './sections/ComponentFields'
-
-type TabsProps<T extends string> = {
-  value: T
-  options: { id: T; label: string; icon?: IconName }[]
-  onChange: (id: T) => void
-  variant?: 'segmented' | 'underline'
-}
-
-function Tabs<T extends string>({ value, options, onChange, variant = 'underline' }: TabsProps<T>) {
-  return (
-    <div className={variant === 'segmented' ? 'builder-editor__segmented builder-editor__segmented--full' : 'builder-editor__tabs'} role="tablist">
-      {options.map((option) => (
-        <button
-          key={option.id}
-          type="button"
-          role="tab"
-          aria-selected={value === option.id}
-          className={variant === 'segmented' ? 'builder-editor__segment' : 'builder-editor__tab'}
-          onClick={() => onChange(option.id)}
-        >
-          {option.icon && <Icon name={option.icon} size={13} />}
-          {option.label}
-        </button>
-      ))}
-    </div>
-  )
-}
 
 export function Inspector() {
   const runtime = useRuntime()
@@ -223,21 +197,17 @@ function BlockPane() {
       <BlockProblems blockId={block.id} />
       <EditingBanner blockId={block.id} />
       <LocaleNote blockId={block.id} tab={tab} />
-      {!contentMode && (
+      {/* A Payload blocks field holds the blocks' own fields only: no tabs, the content shows. */}
+      {!contentMode && storesBuilderData(runtime) && (
         <Tabs
           value={tab}
           onChange={setTab}
-          options={
-            storesBuilderData(runtime)
-              ? [
-                  { id: 'content', label: 'Content' },
-                  { id: 'styles', label: 'Styles' },
-                  { id: 'motion', label: 'Motion' },
-                  { id: 'advanced', label: 'Advanced' },
-                ]
-              : // A Payload blocks field holds the blocks' own fields only.
-                [{ id: 'content', label: 'Content' }]
-          }
+          options={[
+            { id: 'content', label: 'Content' },
+            { id: 'styles', label: 'Styles' },
+            { id: 'motion', label: 'Motion' },
+            { id: 'advanced', label: 'Advanced' },
+          ]}
         />
       )}
       {tab === 'content' && <BlockContentFields block={block} />}

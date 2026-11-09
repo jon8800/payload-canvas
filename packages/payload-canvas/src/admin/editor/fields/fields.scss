@@ -625,4 +625,111 @@
     gap: 6px;
     margin: 0;
   }
+
+  // A block's Payload `tabs` field (FieldTabs): a segmented switch over the chosen tab's fields.
+  .builder-field-tabs {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--base) * 0.75);
+  }
+
+  .builder-field-tabs__panel {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--base) * 0.75);
+  }
+
+  // A section of a settings panel (PanelSection): a full-width heading row that folds its fields.
+  .builder-panel-section {
+    margin: 0 -12px;
+    border-top: 1px solid var(--be-border);
+
+    &:last-child {
+      border-bottom: 1px solid var(--be-border);
+    }
+  }
+
+  .builder-panel-section__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 12px;
+    color: var(--theme-text);
+    font-size: var(--be-text-m);
+    font-weight: var(--be-weight-strong);
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+
+    &:hover {
+      background: var(--be-hover);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--be-accent);
+      outline-offset: -2px;
+    }
+  }
+
+  .builder-panel-section__chevron {
+    flex: none;
+    color: var(--be-muted);
+    transform: rotate(-90deg);
+    transition: transform 120ms var(--be-ease);
+  }
+
+  .builder-panel-section[open] > .builder-panel-section__head .builder-panel-section__chevron {
+    transform: none;
+  }
+
+  .builder-panel-section__fields {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--base) * 0.75);
+    padding: 2px 12px 16px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .builder-panel-section__chevron {
+      transition: none;
+    }
+  }
+
+  // "Insert field" over an email line or body (MergeTagsFrame), on the label's line.
+  .builder-merge-tags {
+    position: relative;
+  }
+
+  .builder-merge-tags__button {
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    right: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 6px;
+    border: 0;
+    border-radius: var(--be-radius);
+    background: transparent;
+    color: var(--be-accent-text);
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-medium);
+    cursor: pointer;
+
+    &:hover,
+    &[data-popup-open] {
+      background: var(--be-accent-soft);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--be-accent);
+    }
+  }
 }
