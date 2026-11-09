@@ -1070,6 +1070,34 @@ export interface Form {
         id?: string | null;
       }[]
     | null;
+  /**
+   * Checks that run on the server for every submission. Blocked submissions are not stored.
+   */
+  spamProtection?: {
+    /**
+     * A hidden input that people never see. Bots that fill it in are blocked.
+     */
+    honeypot?: boolean | null;
+    /**
+     * Submissions sent faster than this after the form shows are blocked. 0 turns it off.
+     */
+    minFillSeconds?: number | null;
+    /**
+     * Shows a Turnstile check. Needs TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY on the server; without them it stays off.
+     */
+    turnstile?: boolean | null;
+    /**
+     * At most this many submissions per visitor (IP address) in the time window.
+     */
+    rateLimit?: {
+      /**
+       * 0 turns the limit off.
+       */
+      max?: number | null;
+      windowMinutes?: number | null;
+    };
+    turnstileSiteKey?: string | null;
+  };
   fieldsBuilder?:
     | {
         [k: string]: unknown;
@@ -1461,6 +1489,14 @@ export interface FormSubmission {
    * Files uploaded with this submission
    */
   attachments?: (number | Media)[] | null;
+  /**
+   * When someone first opened this message. Empty: the list shows "New".
+   */
+  readAt?: string | null;
+  /**
+   * The page the form was sent from.
+   */
+  sourceUrl?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -1535,6 +1571,11 @@ export interface PayloadMcpApiKey {
         | 'getClass'
         | 'upsertClass'
         | 'deleteClass'
+        | 'listForms'
+        | 'getForm'
+        | 'createForm'
+        | 'editFormFields'
+        | 'updateFormSettings'
         | 'listTemplates'
         | 'getBindingSources'
       )[]
@@ -1572,6 +1613,11 @@ export interface PayloadMcpApiKey {
         | 'getClass'
         | 'upsertClass'
         | 'deleteClass'
+        | 'listForms'
+        | 'getForm'
+        | 'createForm'
+        | 'editFormFields'
+        | 'updateFormSettings'
         | 'listTemplates'
         | 'getBindingSources'
       )[]
@@ -2517,6 +2563,20 @@ export interface FormsSelect<T extends boolean = true> {
         message?: T;
         id?: T;
       };
+  spamProtection?:
+    | T
+    | {
+        honeypot?: T;
+        minFillSeconds?: T;
+        turnstile?: T;
+        rateLimit?:
+          | T
+          | {
+              max?: T;
+              windowMinutes?: T;
+            };
+        turnstileSiteKey?: T;
+      };
   fieldsBuilder?: T;
   fieldsRichText?: T;
   updatedAt?: T;
@@ -2536,6 +2596,8 @@ export interface FormSubmissionsSelect<T extends boolean = true> {
         id?: T;
       };
   attachments?: T;
+  readAt?: T;
+  sourceUrl?: T;
   updatedAt?: T;
   createdAt?: T;
 }
