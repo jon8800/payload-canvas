@@ -41,7 +41,7 @@ The starter has a few parts you can leave out. All of them are kept by default. 
 |---|---|---|
 | Admin look | `--no-look` | Neutral colors and finer details in the admin (`src/admin/look`). |
 | Sidebar navigation | `--no-nav` | The grouped sidebar with icons (`src/admin/nav`). The admin uses Payload's default sidebar. |
-| Dashboard widgets | `--no-dashboard` | Quick actions, recent edits, drafts, form messages, site checks, scheduled publishes and analytics (`src/admin/dashboard`). The admin shows Payload's collection cards. |
+| Dashboard widgets | `--no-dashboard` | Quick actions, recent edits, open comments, form messages, site checks, broken links (404s and links to missing pages), unused media, scheduled publishes and analytics; "Waiting to publish" can be added (`src/admin/dashboard`). The admin shows Payload's collection cards. |
 | Demo content | `--no-demo` | The demo pages, posts and images seed (`scripts/seed-demo.ts` and the `seed:demo` script). This also turns off seeding. |
 | AI assistant | `--no-ai` | The chat panel in the page builder, and its settings in `.env`. |
 
