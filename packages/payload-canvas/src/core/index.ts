@@ -99,4 +99,4 @@ export {
   valueAtDocPath,
   type RegionOption,
 } from './regions'
-export { collectReferences, readReferences, referenceKey, referenceTargets, sameReferences, type Reference, type ReferenceTargets } from './references'
+export { collectReferences, fieldReferences, readReferences, referenceKey, referenceTargets, sameReferences, type Reference, type ReferenceTargets } from './references'

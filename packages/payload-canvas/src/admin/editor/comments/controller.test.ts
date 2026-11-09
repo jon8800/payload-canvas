@@ -98,3 +98,16 @@ test('leaving comment mode closes the composer and the thread', () => {
   assert.equal(comments.mode.get(), false)
   assert.equal(comments.draft.get(), null)
 })
+
+test('focus opens a thread in comment mode and shows it in the filter', async () => {
+  const { comments } = setup([{ body: { docs: [doc(1, { resolved: true }), doc(2, { parent: 1, blockId: null })] } }])
+  assert.equal(comments.focus('1'), null, 'nothing loaded yet')
+  await comments.load()
+  comments.filter.set('open')
+  assert.deepEqual(comments.focus('1'), { blockId: 'hero' })
+  assert.equal(comments.mode.get(), true)
+  assert.equal(comments.open.get(), '1')
+  assert.equal(comments.filter.get(), 'all')
+  assert.equal(comments.focus('2'), null, 'a reply is not a thread')
+  assert.equal(comments.focus('99'), null)
+})
