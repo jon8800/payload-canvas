@@ -60,7 +60,8 @@
     "./ai/images/fake": "./src/ai/images/fake.ts",
     "./react": "./src/react/index.ts",
     "./react/canvas": "./src/react/canvas/index.ts",
-    "./react/server": "./src/react/server.ts"
+    "./react/server": "./src/react/server.ts",
+    "./forms": "./src/forms/index.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -172,6 +173,10 @@
       "./react/server": {
         "types": "./dist/react/server.d.ts",
         "default": "./dist/react/server.js"
+      },
+      "./forms": {
+        "types": "./dist/forms/index.d.ts",
+        "default": "./dist/forms/index.js"
       }
     }
   },

@@ -91,8 +91,11 @@ import {
 import { templateEndpoint } from './templateEndpoint'
 import { CLASSES_CONFIG_KEY, resolveClasses, type ClassesOptions } from '../classes'
 import { resolveComments, type CommentsOptions } from '../comments'
+import { withBuilderConditions } from '../core/conditions'
+import { resolveForms, type FormsOptions } from './forms'
 
 export type { GeneratedCss } from './hook'
+export type { FormsOptions } from './forms'
 export type { SavedSectionsOptions } from './sections'
 export type { ReferencesOptions } from './references'
 
@@ -255,6 +258,13 @@ export type WebsiteBuilderOptions = {
    * in the layout. On by default; `false` turns it off. See the README's "Comments" section.
    */
   comments?: CommentsOptions | boolean
+  /**
+   * The form builder: a full-screen builder for the forms of `@payloadcms/plugin-form-builder`
+   * (add that plugin before this one). The form's fields are its own `fields` blocks field; the
+   * right panel edits the form's settings when no field is selected. The canvas shows the form
+   * through the app's page frame (`createCanvasServer({ frame })`). See the README's "Form builder".
+   */
+  forms?: FormsOptions | boolean
 }
 
 const LAYOUT_FIELD_COMPONENT = 'payload-canvas/client#LayoutField'
@@ -297,6 +307,9 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
     const apiRoute = config.routes?.api ?? '/api'
     const canvasPath = options.canvasPath ?? '/builder-canvas'
     const sourceCollections = config.collections ?? []
+    // The form builder: the forms collection joins the builder collections, with its own blocks.
+    const forms = resolveForms(options.forms, sourceCollections, options.collections)
+    const listedCollections: Record<string, BuilderCollectionOptions> = forms ? { ...options.collections, [forms.slug]: forms.collection } : options.collections
     const live = defaultLiveRuntime()
     const writeGate = defaultWriteGate()
     // Payload's locales. Each builder collection uses them unless it sets `localization: false`.
@@ -313,7 +326,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       return option === false ? null : locales
     }
 
-    for (const slug of Object.keys(options.collections)) {
+    for (const slug of Object.keys(listedCollections)) {
       if (!sourceCollections.some((c) => c.slug === slug)) {
         throw new Error(
           `[websiteBuilder] Collection "${slug}" does not exist. Known collections: ${sourceCollections.map((c) => c.slug).join(', ')}.`,
@@ -343,9 +356,9 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
     }
 
     // Templates: a collection of layouts for the template-enabled collections.
-    const targets = Object.entries(options.collections).filter(([, o]) => o.templates).map(([slug]) => slug)
+    const targets = Object.entries(listedCollections).filter(([, o]) => o.templates).map(([slug]) => slug)
     const templatesSlug = options.templates?.slug ?? DEFAULT_TEMPLATES_SLUG
-    const withUrl = new Set(Object.entries(options.collections).filter(([, o]) => o.url).map(([slug]) => slug))
+    const withUrl = new Set(Object.entries(listedCollections).filter(([, o]) => o.url).map(([slug]) => slug))
     for (const slug of options.listCollections ?? []) {
       if (!sourceCollections.some((c) => c.slug === slug)) {
         throw new Error(
@@ -354,8 +367,8 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       }
     }
     // The collections the collection list block can show: with a `url`, then `listCollections`.
-    const listable = listableCollections(options.collections, options.listCollections)
-    const builderOptions: Record<string, BuilderCollectionOptions> = { ...options.collections }
+    const listable = listableCollections(listedCollections, options.listCollections)
+    const builderOptions: Record<string, BuilderCollectionOptions> = { ...listedCollections }
     let collections = sourceCollections
     if (targets.length > 0) {
       if (sourceCollections.some((c) => c.slug === templatesSlug)) {
@@ -399,7 +412,8 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
     checkSectionVariants(appSections)
     // A section block without a className gets its type's default classes (JSON layouts only).
     const sections = sectionsWithDefaultClassNames(appSections, blocks)
-    const duplicate = blocks.find((b, i) => blocks.findIndex((other) => other.type === b.type) !== i)
+    const allTypes = [...blocks, ...(forms?.blocks ?? [])]
+    const duplicate = allTypes.find((b, i) => allTypes.findIndex((other) => other.type === b.type) !== i)
     if (duplicate) {
       throw new Error(
         `[websiteBuilder] Two blocks have the type "${duplicate.type}". Every block type must be unique. For blocks made with fromPayloadBlocks(), set \`prefix\` (for example \`prefix: 'site'\` makes "${duplicate.type}" "site${duplicate.type.charAt(0).toUpperCase()}${duplicate.type.slice(1)}").`,
@@ -408,7 +422,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
     // The props' validate, hooks and access, read now: Payload's config sanitizing later adds its
     // default validators and editor hooks to the same field objects (core/fieldSemantics.ts).
     const fieldRegistry = captureFieldSemantics(blocks)
-    for (const [slug, o] of Object.entries(options.collections)) {
+    for (const [slug, o] of Object.entries(listedCollections)) {
       for (const name of o.legacyFields ?? []) {
         const source = sourceCollections.find((c) => c.slug === slug)
         if (name === (o.field ?? 'layout') || !source || !hasFieldNamed(source.fields, name)) {
@@ -420,7 +434,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
     }
 
     // A builder field that is the collection's own Payload blocks field stays the source of truth.
-    for (const [slug, o] of Object.entries(options.collections)) {
+    for (const [slug, o] of Object.entries(listedCollections)) {
       const source = sourceCollections.find((c) => c.slug === slug)
       const field = o.field ?? 'layout'
       const found = source ? takeField(source.fields, field).found : undefined
@@ -434,7 +448,9 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
         ...(found.blocks ?? []).map((b) => (typeof b === 'string' ? b : b.slug)),
         ...((found as { blockReferences?: Array<string | { slug: string }> }).blockReferences ?? []).map((b) => (typeof b === 'string' ? b : b.slug)),
       ]
-      blocksStorageOf[slug] = payloadBlocksStorage([...new Set(slugs)], blocks, `"${slug}.${field}"`)
+      // The form's field blocks are its own: they never show in other builders.
+      const definitions = slug === forms?.slug ? [...blocks, ...forms.blocks] : blocks
+      blocksStorageOf[slug] = payloadBlocksStorage([...new Set(slugs)], definitions, `"${slug}.${field}"`)
     }
 
     if (savedSections) {
@@ -459,7 +475,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       ...(savedSections ? { shared: [savedSections.slug] } : {}),
       sources: {
         ...Object.fromEntries(
-          Object.entries(builderOptions).map(([slug, o]) => {
+          Object.entries(builderOptions).filter(([slug]) => slug !== forms?.slug).map(([slug, o]) => {
             const storage = blocksStorageOf[slug]
             if (!storage) return [slug, { layout: o.field ?? 'layout' }]
             // The references index follows the blocks field itself (no copy of the content).
@@ -475,7 +491,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
     })
     // Page regions: document fields outside the layout that the builder shows and edits.
     const regionsOf: Record<string, RegionConfig[]> = {}
-    for (const [slug, o] of Object.entries(options.collections)) {
+    for (const [slug, o] of Object.entries(listedCollections)) {
       if (!o.regions) continue
       if (!Array.isArray(o.regions)) throw new Error(`[websiteBuilder] \`regions\` of "${slug}" must be a list.`)
       if (o.regions.length === 0) continue
@@ -613,7 +629,10 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           },
           validateTypes: [...fieldRegistry.types('validate')],
           localization: localizationOf(collection.slug),
-          ...(regionsOf[collection.slug] ? { regions: toJsonSafe(regionsOf[collection.slug]) } : {}),
+          // Simple `admin.condition` functions become JSON rules, so the inspector can show and hide panel fields.
+          ...(regionsOf[collection.slug]
+            ? { regions: toJsonSafe(regionsOf[collection.slug].map((r) => ({ ...r, fields: r.fields.map((f) => ({ ...f, field: withBuilderConditions(f.field) })) }))) }
+            : {}),
           ...(storage ? { storage: 'payload-blocks' as const, payloadRootTypes: [...storage.rootTypes] } : {}),
           ...(Object.keys(relations).length > 0 ? { relations } : {}),
         }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { conditionFromFunction, conditionMet, readCondition } from './conditions'
+import { conditionFromFunction, conditionMet, readCondition, withBuilderConditions } from './conditions'
 
 describe('conditionFromFunction', () => {
   const cases: Array<[string, unknown, unknown]> = [
@@ -64,5 +64,25 @@ describe('readCondition', () => {
     assert.deepEqual(readCondition({ admin: { custom: { builderCondition: { field: 'a', equals: 1 } } } }), { field: 'a', equals: 1 })
     assert.equal(readCondition({ admin: {} }), null)
     assert.equal(readCondition(null), null)
+  })
+})
+
+describe('withBuilderConditions', () => {
+  it('turns nested conditions into JSON rules', () => {
+    const field = {
+      name: 'redirect',
+      type: 'group',
+      admin: { condition: (_: unknown, s: { confirmationType?: string }) => s?.confirmationType === 'redirect' },
+      fields: [{ name: 'url', type: 'text', admin: { condition: (_: unknown, s: { type?: string }) => s?.type === 'custom' } }],
+    }
+    const out = withBuilderConditions(field)
+    assert.deepEqual(readCondition(out), { field: 'confirmationType', equals: 'redirect' })
+    assert.deepEqual(readCondition(out.fields[0]), { field: 'type', equals: 'custom' })
+    assert.equal(readCondition(field), null)
+  })
+
+  it('keeps a rule that is there', () => {
+    const field = { name: 'a', type: 'text', admin: { condition: () => true, custom: { builderCondition: { field: 'b', truthy: true } } } }
+    assert.deepEqual(readCondition(withBuilderConditions(field)), { field: 'b', truthy: true })
   })
 })
