@@ -19,6 +19,8 @@ import { validateLayout, type LayoutError } from '../core/validate'
 import { resolveOperations, splitLayoutErrors } from '../live/apply'
 import { componentListing, isRootParentId, missingContent, sectionInsertOps, sectionToInsert, variantsListing } from '../mcp/shared'
 import { findSectionVersion } from '../core/sections'
+import { formFieldSlug } from '../forms/blocks'
+import { formFieldOps, formFieldsOf, formFieldTypes, FORM_FIELDS_GUIDE, type FormFieldChange } from '../forms/fieldOps'
 
 /** One image (or file) of the media library, as the assistant sees it. */
 export type MediaItem = {
@@ -50,6 +52,11 @@ export type ToolEnv = {
   generateImage?: (input: { prompt: unknown; aspectRatio?: unknown; alt?: unknown }) => Promise<GenerateImageOutcome>
   /** The upload collection images come from and go to. Default "media". */
   mediaCollection?: string
+  /**
+   * The open document is a form (`websiteBuilder({ forms })`): `blocks` are its field types, and
+   * the tools are getForm, getBlockSchema and editFormFields (forms/fieldOps.ts).
+   */
+  form?: boolean
 }
 
 /** Result of one tool call. `ops` is set when the call changed the layout. */
@@ -183,17 +190,22 @@ function changedIds(ops: Operation[]): Set<string> {
   return changed
 }
 
-const plural = (n: number) => `${n} block${n === 1 ? '' : 's'}`
+const plural = (n: number, noun = 'block') => `${n} ${noun}${n === 1 ? '' : 's'}`
+
+/** "Added 2 fields, updated 1 field" for the form builder. */
+function describeFormOps(ops: Operation[]): string {
+  return describeOps(ops, 'field')
+}
 
 /** "Added 2 blocks, updated 1 block" for the editor. */
-export function describeOps(ops: Operation[]): string {
+export function describeOps(ops: Operation[], noun = 'block'): string {
   const count = { insert: 0, update: 0, move: 0, remove: 0 }
   for (const op of ops) if (op.type in count) count[op.type as keyof typeof count]++
   const parts = [
-    count.insert ? `added ${plural(count.insert)}` : '',
-    count.update ? `updated ${plural(count.update)}` : '',
-    count.move ? `moved ${plural(count.move)}` : '',
-    count.remove ? `removed ${plural(count.remove)}` : '',
+    count.insert ? `added ${plural(count.insert, noun)}` : '',
+    count.update ? `updated ${plural(count.update, noun)}` : '',
+    count.move ? `moved ${plural(count.move, noun)}` : '',
+    count.remove ? `removed ${plural(count.remove, noun)}` : '',
   ].filter(Boolean)
   const text = parts.join(', ') || 'no changes'
   return text.charAt(0).toUpperCase() + text.slice(1)
@@ -298,8 +310,66 @@ const FLAT_OPERATIONS_SCHEMA: Record<string, unknown> = {
   required: ['operations'],
 }
 
+/** The form builder's tools: the same field changes as the MCP tool editFormFields. */
+function formToolDefinitions(env: ToolEnv): AiToolDefinition[] {
+  const types = env.blocks.map((b) => formFieldSlug(b.type) ?? b.type)
+  return [
+    {
+      name: 'getForm',
+      description:
+        'Returns the fields of the open form in order (id, type, name, label, required, width, options, message text, conditions and `shows`, the conditions in words), including your changes so far in this reply.',
+      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+      strict: true,
+    },
+    {
+      name: 'getBlockSchema',
+      description: 'Returns the JSON Schema of the props of one field type. Its block type is "form" plus the type, e.g. "formEmail". Call it when a prop shape is unclear.',
+      inputSchema: {
+        type: 'object',
+        properties: { type: { type: 'string', enum: env.blocks.map((b) => b.type) } },
+        required: ['type'],
+        additionalProperties: false,
+      },
+      strict: true,
+    },
+    {
+      // Not strict: `values` and `conditions` are free-form. formFieldOps checks every change.
+      name: 'editFormFields',
+      description: [
+        'Changes the fields of the open form, applied in order, all or nothing. Each change appears in the form builder at once.',
+        "Changes: add { type, values?, index? }; update { field, values?, unset? } (merges values; a rename also renames the field in other fields' rules); move { field, index } (final position, 0 = first); remove { field }; setConditions { field, conditions } (null = always show). `field` is the field's name or id.",
+        FORM_FIELDS_GUIDE,
+      ].join('\n\n'),
+      inputSchema: {
+        type: 'object',
+        properties: {
+          changes: {
+            type: 'array',
+            minItems: 1,
+            items: {
+              type: 'object',
+              properties: {
+                action: { type: 'string', enum: ['add', 'update', 'move', 'remove', 'setConditions'] },
+                type: { type: 'string', enum: types, description: 'add: the field type.' },
+                field: { type: 'string', description: "The field's name or id." },
+                values: { type: 'object', description: 'add, update: props, e.g. { "label": "Email", "required": true, "width": 50 }.' },
+                unset: { type: 'array', items: { type: 'string' } },
+                index: { type: 'integer', minimum: 0 },
+                conditions: { type: ['object', 'null'], description: '{ match?: "all" | "any", rules: [{ field, operator, value? }] }' },
+              },
+              required: ['action'],
+            },
+          },
+        },
+        required: ['changes'],
+      },
+    },
+  ]
+}
+
 /** Tool definitions in a fixed order (the order is part of the cached prompt prefix). */
 export function toolDefinitions(env: ToolEnv): AiToolDefinition[] {
+  if (env.form) return formToolDefinitions(env)
   const types = env.blocks.map((b) => b.type)
   const saved = env.savedSections === true
   const sectionIds = env.sections.map((s) => s.id)
@@ -529,6 +599,8 @@ export const RUNNING_SUMMARY: Record<string, string> = {
   searchMedia: 'Searching the media library',
   generateImage: 'Generating an image',
   getBindingSources: 'Reading document fields',
+  getForm: 'Reading the form',
+  editFormFields: 'Editing the form',
 }
 
 // ---------------------------------------------------------------------------
@@ -741,6 +813,28 @@ export async function runTool(name: string, rawInput: unknown, workspace: Worksp
   switch (name) {
     case 'getLayout':
       return ok({ layout: workspace.view }, 'Read the page')
+
+    case 'getForm':
+      return ok({ fields: formFieldsOf(workspace.view), fieldTypes: formFieldTypes(env.blocks) }, 'Read the form')
+
+    case 'editFormFields': {
+      const changes = parseJson(input.changes)
+      if (!Array.isArray(changes) || changes.length === 0) return fail('`changes` must be a non-empty list', 'Edit failed')
+      const planned = formFieldOps(workspace.layout, changes as FormFieldChange[], env.blocks)
+      if (!planned.ok) return fail(planned.error, 'Edit failed')
+      const result = workspace.apply(planned.ops)
+      if (!result.ok) return fail(result.error, 'Edit failed', result.errors)
+      return ok(
+        {
+          ok: true,
+          fields: formFieldsOf(workspace.view),
+          ...(planned.notes.length > 0 ? { notes: planned.notes } : {}),
+          ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}),
+        },
+        describeFormOps(result.ops),
+        result.ops,
+      )
+    }
 
     case 'getBlockSchema': {
       const def = env.blocks.find((b) => b.type === input.type)

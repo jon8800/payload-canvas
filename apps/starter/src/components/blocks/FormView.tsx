@@ -7,13 +7,19 @@
 // Display conditions (payload-canvas/forms): a field whose rules fail is not shown, not checked
 // and not sent. The server hook (formSubmissionConditions) applies the same rules again.
 //
+// Spam protection (payload-canvas `formSpamProtection`, checked on the server): a honeypot input
+// people never see, the time from showing the form to the submit, and a Cloudflare Turnstile check
+// when the form uses it and the server has the keys (`spamProtection.turnstileSiteKey` is set).
+// They go in the request body as `spam`; the server removes them before storing.
+//
 // Validation runs on submit, then on every change of a field that has an error. Errors show under
 // their field (aria-invalid + aria-describedby) and focus moves to the first invalid field.
 // Without JavaScript the browser's own required checks still apply (noValidate is set on hydration).
-import { useId, useRef, useState, useSyncExternalStore, type FormEvent } from 'react'
-import { hiddenFormFields, isFormFieldShown } from 'payload-canvas/forms'
+import { useEffect, useId, useRef, useState, useSyncExternalStore, type FormEvent } from 'react'
+import { FORM_SPAM_KEY, HONEYPOT_NAME, hiddenFormFields, isFormFieldShown, type FormSpamValues } from 'payload-canvas/forms'
 import { answerText, FormFieldView, initialValues, lexicalToText, SubmitButton, validateField, type FormDoc, type NamedField, type Value, type Values } from './FormParts'
 import { formClasses } from './formClasses'
+import { Turnstile } from './Turnstile'
 
 export type { FormDoc } from './FormParts'
 
@@ -22,16 +28,23 @@ type Status = 'idle' | 'submitting' | 'success' | 'error'
 
 const isNamed = (field: { name?: string | null; blockType: string }): field is NamedField => Boolean(field.name) && field.blockType !== 'message'
 
-/** The messages of a Payload validation error response, or none. */
-async function errorMessages(response: Response): Promise<string[]> {
+const CONNECTION_ERROR = 'Your message was not sent. Check your connection and try again. Your text is still here.'
+
+/**
+ * What a refused submission says: the problems of Payload's validation errors (one per field, from
+ * formSubmissionConditions and formFileUploads), else its first message (a spam refusal, the rate
+ * limit), else the connection error.
+ */
+async function refusal(response: Response): Promise<{ problems: string[]; message: string }> {
+  if (response.status < 400 || response.status >= 500) return { problems: [], message: CONNECTION_ERROR }
   type PayloadError = { message?: string; data?: { errors?: Array<{ message?: string }> } }
   const body = (await response.json().catch(() => null)) as { errors?: PayloadError[] } | null
-  const messages = (body?.errors ?? []).flatMap((error) => {
-    const inner = (error.data?.errors ?? []).flatMap((e) => (e.message ? [e.message] : []))
-    return inner.length > 0 ? inner : []
-  })
-  return [...new Set(messages)]
+  const problems = (body?.errors ?? []).flatMap((error) => (error.data?.errors ?? []).flatMap((e) => (e.message ? [e.message] : [])))
+  return { problems: [...new Set(problems)], message: body?.errors?.[0]?.message || CONNECTION_ERROR }
 }
+
+/** Milliseconds since `start` (a performance.now() time), or null without a start. */
+const elapsedSince = (start: number | null) => (start === null ? null : Math.round(performance.now() - start))
 
 const noop = () => () => {}
 /** False during the server render and hydration, true after. */
@@ -46,6 +59,15 @@ export function FormView({ form, disabled }: { form: FormDoc; disabled: boolean 
   const [errors, setErrors] = useState<Errors>({})
   const [status, setStatus] = useState<Status>('idle')
   const [serverErrors, setServerErrors] = useState<string[]>([])
+  const [failure, setFailure] = useState(CONNECTION_ERROR)
+  // When the form showed (performance.now()), for the minimum fill time.
+  const shownAt = useRef<number | null>(null)
+  const [token, setToken] = useState<string | null>(null)
+  const [resetKey, setResetKey] = useState(0)
+  const siteKey = disabled ? null : form.spamProtection?.turnstileSiteKey || null
+  useEffect(() => {
+    if (status === 'idle' && shownAt.current === null) shownAt.current = performance.now()
+  }, [status])
   const fieldId = (name: string) => `${idPrefix}-${name}`
   // The fields the current answers hide. They update as the visitor types.
   const hidden = hiddenFormFields(fields, Object.fromEntries(Object.entries(values).map(([name, value]) => [name, value instanceof File ? value.name : value])))
@@ -70,6 +92,8 @@ export function FormView({ form, disabled }: { form: FormDoc; disabled: boolean 
           className={formClasses.again}
           onClick={() => {
             setValues(initialValues(fields))
+            shownAt.current = null
+            setToken(null)
             setStatus('idle')
           }}
         >
@@ -100,14 +124,26 @@ export function FormView({ form, disabled }: { form: FormDoc; disabled: boolean 
       return
     }
 
+    if (siteKey && !token) {
+      setFailure('Complete the check above the button, then send again.')
+      setStatus('error')
+      return
+    }
+
     setStatus('submitting')
     setServerErrors([])
     // Hidden fields send nothing, also when the visitor typed in them before they hid.
     const sent = Object.entries(values).filter(([field, value]) => !hidden.has(field) && value !== '')
     const submissionData = sent.map(([field, value]) => ({ field, value: answerText(value) }))
     const files = sent.filter((entry): entry is [string, File] => entry[1] instanceof File)
+    const honeypot = formRef.current?.elements.namedItem(HONEYPOT_NAME)
+    const spam: FormSpamValues = {
+      honeypot: honeypot instanceof HTMLInputElement ? honeypot.value : '',
+      elapsedMs: elapsedSince(shownAt.current),
+      ...(token ? { token } : {}),
+    }
     // With files: multipart form data, the JSON in `_payload` and one part per file field.
-    let body: BodyInit = JSON.stringify({ form: form.id, submissionData })
+    let body: BodyInit = JSON.stringify({ form: form.id, submissionData, [FORM_SPAM_KEY]: spam })
     if (files.length > 0) {
       const data = new FormData()
       data.append('_payload', body)
@@ -121,9 +157,13 @@ export function FormView({ form, disabled }: { form: FormDoc; disabled: boolean 
         body,
       })
       if (!response.ok) {
-        // The server's own checks (formSubmissionConditions, formFileUploads) say what is wrong.
-        setServerErrors(await errorMessages(response))
-        throw new Error(`Submission failed with status ${response.status}`)
+        const { problems, message } = await refusal(response)
+        setServerErrors(problems)
+        setFailure(message)
+        // A Turnstile token works once: ask for a new one.
+        if (siteKey) setResetKey((key) => key + 1)
+        setStatus('error')
+        return
       }
       if (form.confirmationType === 'redirect' && form.redirect?.url) {
         window.location.assign(form.redirect.url)
@@ -131,6 +171,7 @@ export function FormView({ form, disabled }: { form: FormDoc; disabled: boolean 
       }
       setStatus('success')
     } catch {
+      setFailure(CONNECTION_ERROR)
       setStatus('error')
     }
   }
@@ -161,7 +202,15 @@ export function FormView({ form, disabled }: { form: FormDoc; disabled: boolean 
           )
         })}
       </div>
+      {/* The honeypot: off screen and out of the tab order, so only bots fill it in. */}
+      <div className={formClasses.honeypot} aria-hidden="true">
+        <label>
+          Website
+          <input type="text" name={HONEYPOT_NAME} tabIndex={-1} autoComplete="off" defaultValue="" />
+        </label>
+      </div>
       <div className={formClasses.footer}>
+        {siteKey ? <Turnstile siteKey={siteKey} resetKey={resetKey} onToken={setToken} /> : null}
         {status === 'error' ? (
           <div className={formClasses.error} role="alert">
             {serverErrors.length > 0 ? (
@@ -174,7 +223,7 @@ export function FormView({ form, disabled }: { form: FormDoc; disabled: boolean 
                 </ul>
               </>
             ) : (
-              <p className={formClasses.errorText}>Your message was not sent. Check your connection and try again. Your text is still here.</p>
+              <p className={formClasses.errorText}>{failure}</p>
             )}
           </div>
         ) : null}

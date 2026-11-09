@@ -13,7 +13,7 @@ import {
   relativeTime,
   replyCounts,
   shortText,
-  submissionSummary,
+  submissionRows,
   thumbnailOf,
   unusedDocs,
   whereToQuery,
@@ -68,27 +68,37 @@ describe('docTitle', () => {
   })
 })
 
-describe('submissionSummary', () => {
-  it('shows the name and the message', () => {
-    const summary = submissionSummary([
-      { field: 'email', value: 'ada@example.com' },
-      { field: 'name', value: 'Ada' },
-      { field: 'message', value: 'Hello there' },
-    ])
-    assert.deepEqual(summary, { from: 'Ada', text: 'Hello there' })
+describe('submissionRows', () => {
+  const now = new Date('2026-11-09T12:00:00Z')
+  const form = { title: 'Contact', fields: [{ blockType: 'text', name: 'fullName', label: 'Name' }, { blockType: 'email', name: 'contact' }, { blockType: 'textarea', name: 'message' }] }
+
+  it('shows the message, who sent it, the form and "New" until opened', () => {
+    const [row] = submissionRows(
+      [{ id: 7, createdAt: '2026-11-09T11:00:00Z', form, submissionData: [{ field: 'contact', value: 'ada@example.com' }, { field: 'fullName', value: 'Ada' }, { field: 'message', value: 'Hello there' }] }],
+      '/admin',
+      'en',
+      now,
+    )
+    assert.equal(row?.href, '/admin/collections/form-submissions/7')
+    assert.equal(row?.title, 'Hello there')
+    assert.equal(row?.meta, 'Ada · Contact · 1 hour ago')
+    assert.deepEqual(row?.badge, { label: 'New', tone: 'new' })
   })
 
-  it('falls back to the email and the first other value', () => {
-    const summary = submissionSummary([
-      { field: 'contact', value: 'ada@example.com' },
-      { field: 'budget', value: '5000' },
-    ])
-    assert.deepEqual(summary, { from: 'ada@example.com', text: '5000' })
-  })
-
-  it('handles empty data', () => {
-    assert.deepEqual(submissionSummary(null), { from: null, text: null })
-    assert.deepEqual(submissionSummary([{ field: 'message', value: '  ' }]), { from: null, text: null })
+  it('falls back to the sender, then to "Empty message", and drops the badge once read', () => {
+    const rows = submissionRows(
+      [
+        { id: 1, createdAt: '2026-11-09T11:00:00Z', readAt: '2026-11-09T11:30:00Z', form: 3, submissionData: [{ field: 'email', value: 'ada@example.com' }] },
+        { id: 2, createdAt: '2026-11-09T11:00:00Z', submissionData: [] },
+      ],
+      '/admin',
+      'en',
+      now,
+    )
+    assert.equal(rows[0]?.title, 'ada@example.com')
+    assert.equal(rows[0]?.meta, 'Form · 1 hour ago')
+    assert.equal('badge' in (rows[0] ?? {}), false)
+    assert.equal(rows[1]?.title, 'Empty message')
   })
 })
 

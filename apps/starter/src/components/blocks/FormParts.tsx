@@ -34,6 +34,8 @@ export type FormDoc = {
   confirmationType?: 'message' | 'redirect' | null
   confirmationMessage?: unknown
   redirect?: { url?: string | null } | null
+  /** Spam protection settings. `turnstileSiteKey` is set on read when the form shows Turnstile. */
+  spamProtection?: { turnstileSiteKey?: string | null } | null
 }
 
 export type NamedField = FormField & { name: string }

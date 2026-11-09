@@ -40,6 +40,9 @@ import { DocumentEditView as DocumentEditView_1611a9327f20600aee6a9d537ba4315b }
 import { BuilderRedirect as BuilderRedirect_57c6923ff8049349bee2a220c5ac4c2a } from 'payload-canvas/rsc'
 import { BuilderTab as BuilderTab_1611a9327f20600aee6a9d537ba4315b } from 'payload-canvas/client'
 import { FromField as FromField_a92a4075a1ccfafb152a468cf888d804 } from '../../../admin/redirects/FromField'
+import { SubmissionView as SubmissionView_57c6923ff8049349bee2a220c5ac4c2a } from 'payload-canvas/rsc'
+import { SubmissionSummaryCell as SubmissionSummaryCell_57c6923ff8049349bee2a220c5ac4c2a } from 'payload-canvas/rsc'
+import { SubmissionReadCell as SubmissionReadCell_57c6923ff8049349bee2a220c5ac4c2a } from 'payload-canvas/rsc'
 import { FormatField as FormatField_cdf7e044479f899a31f804427d568b36 } from '@payloadcms/plugin-import-export/rsc'
 import { LimitField as LimitField_cdf7e044479f899a31f804427d568b36 } from '@payloadcms/plugin-import-export/rsc'
 import { Page as Page_cdf7e044479f899a31f804427d568b36 } from '@payloadcms/plugin-import-export/rsc'
@@ -138,6 +141,9 @@ export const importMap = {
   "payload-canvas/rsc#BuilderRedirect": BuilderRedirect_57c6923ff8049349bee2a220c5ac4c2a,
   "payload-canvas/client#BuilderTab": BuilderTab_1611a9327f20600aee6a9d537ba4315b,
   "/admin/redirects/FromField#FromField": FromField_a92a4075a1ccfafb152a468cf888d804,
+  "payload-canvas/rsc#SubmissionView": SubmissionView_57c6923ff8049349bee2a220c5ac4c2a,
+  "payload-canvas/rsc#SubmissionSummaryCell": SubmissionSummaryCell_57c6923ff8049349bee2a220c5ac4c2a,
+  "payload-canvas/rsc#SubmissionReadCell": SubmissionReadCell_57c6923ff8049349bee2a220c5ac4c2a,
   "@payloadcms/plugin-import-export/rsc#FormatField": FormatField_cdf7e044479f899a31f804427d568b36,
   "@payloadcms/plugin-import-export/rsc#LimitField": LimitField_cdf7e044479f899a31f804427d568b36,
   "@payloadcms/plugin-import-export/rsc#Page": Page_cdf7e044479f899a31f804427d568b36,

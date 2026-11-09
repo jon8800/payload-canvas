@@ -37,7 +37,7 @@ export type ListRow = {
   href: string
   title: string
   meta?: ReactNode
-  badge?: { label: string; tone: 'draft' | 'scheduled' | 'neutral' }
+  badge?: { label: string; tone: 'draft' | 'scheduled' | 'neutral' | 'new' }
   icon?: ReactNode
   /** A second link at the end of the row, such as "Create redirect". */
   action?: { href: string; label: string }
