@@ -6,6 +6,7 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ### Added
 
+- **Slot hints for editors:** a slot definition can set `description` (shown inside the empty slot on the canvas, and in MCP), `itemLabel` (Layers names unnamed direct children "Slide 1", "Slide 2", …) and `newBlock` (the block the "+" picker offers first in that slot). The carousel's Slides slot uses all three: "Each block here is one slide", and a Stack named "Slide".
 - **Open a comment thread from a URL:** `/admin/builder/pages/12?comment=34` opens the builder in comment mode with that thread open and its block selected. `builderViewPath(admin, collection, id, { comment })` builds the URL; `COMMENT_PARAM` is the parameter name.
 - **`fieldReferences(fields, data)`** in `payload-canvas/core`: every document one document's data points at, read along its Payload field config (uploads, relationships, rich text, `{ relationTo, value }` pairs in JSON). **`layoutReferences(config, slug, doc)`**: every document a builder document's stored layout points at, also documents deleted since.
 - **Starter dashboard widgets:**
@@ -16,6 +17,10 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ### Changed
 
+- **Editor top bar:** Preview, Page settings and Preview as client are icon buttons with a tooltip and an `aria-label` at every width. Publish keeps its label.
+- **Components look like components:** on the canvas and in Layers a live saved section copy (`sectionRef`) uses its own colour (purple) for hover, selection, its name tag, action bar and Layers row, and its content is no longer faded. The colour is the `--be-component` CSS variable (with `--be-component-solid` and `--be-component-text`).
+- **The image "Replace" chip** sits inside the image's top right corner with a small inset. It was pushed 28 px down on purpose to clear a name tag drawn inside the image, so it looked out of place whenever the tag sat above the block, and it fell off small images. Small images now get the chip above them; when the selected block's action bar sits in the same corner, the chip goes under it. Images cut off by a carousel or card use their visible part.
+- **Starter Components page:** the carousel's slides are Stacks named "Slide 1" … "Slide 4" (was an unnamed "article"). Run `pnpm seed:demo` to get it.
 - **Starter dashboard:** the default layout no longer has "Waiting to publish". Add it back with "Edit dashboard".
 - **Starter: a branded admin.** The login page shows the site's mark and name (the Site name from Site Settings) and a welcome line in a centred card; the forgot and reset password pages use the same card. The header shows the mark instead of Payload's. Change the brand in `src/admin/brand/` (`brand.ts`, `Mark.tsx`). Part of the "Admin look" feature (`--no-look` leaves it out).
 - **Starter: tidier list views.** The Status column is a coloured badge (Draft, Published, Changed) in every collection with drafts, the plugin's Templates and Classes too (`src/admin/list/`). Posts show the featured image as a thumbnail. Every collection has chosen columns, and Redirects use the From field as their title. Rows line up on their middle line, and the Media rows no longer double in height from the folder button. Users show their email as the title, so pickers never show a bare ID.
