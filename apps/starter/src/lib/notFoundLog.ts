@@ -15,9 +15,15 @@ const JUNK_EXTENSION = /\.(php\d?|aspx?|asp|jsp|cgi|pl|env|ini|sql|bak|old|swp|l
 /** Paths of other platforms and admin tools that bots scan for. */
 const JUNK_PREFIX = /^\/(wp-|wordpress|wp\/|xmlrpc|cgi-bin|phpmyadmin|pma|myadmin|vendor\/|administrator|owa\/|autodiscover|actuator|boaform|hnap1|remote\/|_ignition|telescope|solr|druid|console\/)/i
 
-/** True for paths only bots ask for: other platforms' admin pages, scripts, dot files. */
+/**
+ * Files browsers and apps ask for on their own, whether or not a page links to them (the site's
+ * icon is `icon.svg`). A missing one is not a broken link.
+ */
+const AUTO_REQUEST = /^\/(favicon\.ico|apple-touch-icon[\w-]*\.png|browserconfig\.xml|site\.webmanifest|manifest\.json|ads\.txt|app-ads\.txt|humans\.txt|security\.txt)$/i
+
+/** True for paths only bots or browsers ask for: other platforms' admin pages, scripts, dot files, automatic icon requests. */
 export function isJunkPath(path: string): boolean {
-  if (JUNK_PREFIX.test(path) || JUNK_EXTENSION.test(path)) return true
+  if (JUNK_PREFIX.test(path) || JUNK_EXTENSION.test(path) || AUTO_REQUEST.test(path)) return true
   // Dot files and folders (`/.env`, `/.git/config`, `/.well-known/…`): never pages of the site.
   return path.split('/').some((segment) => segment.startsWith('.'))
 }

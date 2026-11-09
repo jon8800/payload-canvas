@@ -31,6 +31,10 @@ describe('isJunkPath', () => {
     }
   })
 
+  it('flags files browsers ask for on their own', () => {
+    for (const path of ['/favicon.ico', '/apple-touch-icon.png', '/apple-touch-icon-precomposed.png', '/site.webmanifest']) assert.equal(isJunkPath(path), true, path)
+  })
+
   it('keeps real pages', () => {
     for (const path of ['/about-us', '/blog/my-post', '/pricing', '/docs/v1.2/intro', '/wp']) assert.equal(isJunkPath(path), false, path)
   })
