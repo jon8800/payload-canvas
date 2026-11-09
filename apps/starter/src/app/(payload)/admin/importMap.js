@@ -1,3 +1,4 @@
+import { FieldCell as FieldCell_2e83907a4a6a83a9b547468042370bc7 } from '../../../admin/list/FieldCell'
 import { RscEntryLexicalCell as RscEntryLexicalCell_44fe37237e0ebf4470c9990d8cb7b07e } from '@payloadcms/richtext-lexical/rsc'
 import { RscEntryLexicalField as RscEntryLexicalField_44fe37237e0ebf4470c9990d8cb7b07e } from '@payloadcms/richtext-lexical/rsc'
 import { LexicalDiffComponent as LexicalDiffComponent_44fe37237e0ebf4470c9990d8cb7b07e } from '@payloadcms/richtext-lexical/rsc'
@@ -39,6 +40,7 @@ import { PublishButton as PublishButton_1611a9327f20600aee6a9d537ba4315b } from 
 import { DocumentEditView as DocumentEditView_1611a9327f20600aee6a9d537ba4315b } from 'payload-canvas/client'
 import { BuilderRedirect as BuilderRedirect_57c6923ff8049349bee2a220c5ac4c2a } from 'payload-canvas/rsc'
 import { BuilderTab as BuilderTab_1611a9327f20600aee6a9d537ba4315b } from 'payload-canvas/client'
+import { ArrayRowLabel as ArrayRowLabel_1611a9327f20600aee6a9d537ba4315b } from 'payload-canvas/client'
 import { FromField as FromField_a92a4075a1ccfafb152a468cf888d804 } from '../../../admin/redirects/FromField'
 import { FormatField as FormatField_cdf7e044479f899a31f804427d568b36 } from '@payloadcms/plugin-import-export/rsc'
 import { LimitField as LimitField_cdf7e044479f899a31f804427d568b36 } from '@payloadcms/plugin-import-export/rsc'
@@ -80,6 +82,7 @@ import { Logo as Logo_e2609525d3cb4faff6e05c9e8878dd7a } from '../../../admin/br
 import { AgentConnectPill as AgentConnectPill_60f30f580e97936338e112b8b2cc7161 } from 'payload-mcp-toolkit/client'
 import { Welcome as Welcome_8051c90801dc4fc23bd7322d70e9328a } from '../../../admin/brand/Welcome'
 import { ImportExportProvider as ImportExportProvider_cdf7e044479f899a31f804427d568b36 } from '@payloadcms/plugin-import-export/rsc'
+import { UnusedMediaView as UnusedMediaView_faabb18d9cb56f23ced66377814e9db2 } from '../../../admin/dashboard/UnusedMediaView'
 import { OAuthView as OAuthView_60f30f580e97936338e112b8b2cc7161 } from 'payload-mcp-toolkit/client'
 import { BuilderView as BuilderView_57c6923ff8049349bee2a220c5ac4c2a } from 'payload-canvas/rsc'
 import { QuickActions as QuickActions_55ca8aa1511a4cfef083b0f50992f37c } from '../../../admin/dashboard/widgets/QuickActions'
@@ -96,6 +99,7 @@ import { CollectionCards as CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1 } f
 
 /** @type import('payload').ImportMap */
 export const importMap = {
+  "/admin/list/FieldCell#FieldCell": FieldCell_2e83907a4a6a83a9b547468042370bc7,
   "@payloadcms/richtext-lexical/rsc#RscEntryLexicalCell": RscEntryLexicalCell_44fe37237e0ebf4470c9990d8cb7b07e,
   "@payloadcms/richtext-lexical/rsc#RscEntryLexicalField": RscEntryLexicalField_44fe37237e0ebf4470c9990d8cb7b07e,
   "@payloadcms/richtext-lexical/rsc#LexicalDiffComponent": LexicalDiffComponent_44fe37237e0ebf4470c9990d8cb7b07e,
@@ -137,6 +141,7 @@ export const importMap = {
   "payload-canvas/client#DocumentEditView": DocumentEditView_1611a9327f20600aee6a9d537ba4315b,
   "payload-canvas/rsc#BuilderRedirect": BuilderRedirect_57c6923ff8049349bee2a220c5ac4c2a,
   "payload-canvas/client#BuilderTab": BuilderTab_1611a9327f20600aee6a9d537ba4315b,
+  "payload-canvas/client#ArrayRowLabel": ArrayRowLabel_1611a9327f20600aee6a9d537ba4315b,
   "/admin/redirects/FromField#FromField": FromField_a92a4075a1ccfafb152a468cf888d804,
   "@payloadcms/plugin-import-export/rsc#FormatField": FormatField_cdf7e044479f899a31f804427d568b36,
   "@payloadcms/plugin-import-export/rsc#LimitField": LimitField_cdf7e044479f899a31f804427d568b36,
@@ -178,6 +183,7 @@ export const importMap = {
   "payload-mcp-toolkit/client#AgentConnectPill": AgentConnectPill_60f30f580e97936338e112b8b2cc7161,
   "/admin/brand/Welcome#Welcome": Welcome_8051c90801dc4fc23bd7322d70e9328a,
   "@payloadcms/plugin-import-export/rsc#ImportExportProvider": ImportExportProvider_cdf7e044479f899a31f804427d568b36,
+  "/admin/dashboard/UnusedMediaView#UnusedMediaView": UnusedMediaView_faabb18d9cb56f23ced66377814e9db2,
   "payload-mcp-toolkit/client#OAuthView": OAuthView_60f30f580e97936338e112b8b2cc7161,
   "payload-canvas/rsc#BuilderView": BuilderView_57c6923ff8049349bee2a220c5ac4c2a,
   "/admin/dashboard/widgets/QuickActions#QuickActions": QuickActions_55ca8aa1511a4cfef083b0f50992f37c,

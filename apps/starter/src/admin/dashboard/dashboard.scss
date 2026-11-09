@@ -398,4 +398,28 @@
     color: var(--theme-elevation-500);
     font-variant-numeric: tabular-nums;
   }
+
+  // The "Unused media" page (UnusedMediaView.tsx).
+  .unused-media {
+    max-width: 960px;
+    padding-block: 24px 64px;
+  }
+
+  .unused-media__title {
+    margin: 0 0 8px;
+  }
+
+  .unused-media__pager {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 16px;
+    font-size: 13px;
+    color: var(--theme-elevation-500);
+
+    a {
+      color: var(--theme-text);
+      font-weight: 500;
+    }
+  }
 }
