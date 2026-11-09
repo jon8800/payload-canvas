@@ -4,6 +4,9 @@
 // in the background while requests keep using the old one. A changed redirect applies within
 // about a minute. No server imports: the proxy bundles this file.
 
+/** The search parameter that fills in a new redirect's "From" field: `/admin/collections/redirects/create?from=/old` (src/admin/redirects/FromField.tsx). */
+export const FROM_PARAM = 'from'
+
 /** A document of the redirects plugin's collection (depth 1), with the starter's `isRegex` field. */
 export type RedirectDoc = {
   from?: string | null

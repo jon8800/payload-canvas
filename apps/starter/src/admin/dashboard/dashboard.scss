@@ -131,6 +131,105 @@
     }
   }
 
+  // A row with a second link at its end ("Create redirect").
+  .dash-list__item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+
+    .dash-list__row {
+      flex: 1;
+      min-width: 0;
+    }
+  }
+
+  .dash-list__action {
+    flex-shrink: 0;
+    padding: 4px 8px;
+    border: 1px solid var(--theme-border-color);
+    border-radius: var(--style-radius-s);
+    color: var(--theme-elevation-800);
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+    transition:
+      background-color 100ms ease-out,
+      border-color 100ms ease-out;
+
+    &:hover,
+    &:focus-visible {
+      background: var(--theme-elevation-50);
+      border-color: var(--theme-elevation-200);
+      color: var(--theme-elevation-1000);
+    }
+
+    &:focus-visible {
+      outline: var(--accessibility-outline);
+      outline-offset: 2px;
+    }
+  }
+
+  // A media thumbnail in a list row.
+  .dash-thumb {
+    display: block;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--style-radius-s);
+    background: var(--theme-elevation-100);
+    object-fit: cover;
+  }
+
+  .dash-thumb--file {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--theme-elevation-500);
+  }
+
+  // Widgets with more than one list.
+  .dash-section + .dash-section {
+    margin-top: 14px;
+  }
+
+  .dash-section__title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 4px;
+    color: var(--theme-elevation-500);
+    font-size: 12px;
+    line-height: 18px;
+    font-weight: 500;
+  }
+
+  .dash-section__count {
+    color: var(--theme-elevation-800);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dash-section .dash-empty {
+    padding: 4px 0 8px;
+  }
+
+  // A big number above a list ("12 unused files").
+  .dash-total {
+    margin: 0 0 8px;
+    font-size: 13px;
+    color: var(--theme-elevation-500);
+
+    strong {
+      margin-right: 4px;
+      color: var(--theme-elevation-1000);
+      font-size: 22px;
+      line-height: 28px;
+      font-weight: 600;
+      letter-spacing: -0.015em;
+      font-variant-numeric: tabular-nums;
+    }
+  }
+
   .dash-list__icon {
     display: inline-flex;
     flex-shrink: 0;

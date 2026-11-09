@@ -8,6 +8,12 @@ export const DEFAULT_COMMENTS_SLUG = 'builder-comments'
 /** Server-only key in `config.custom` that holds `CommentsServerConfig`. */
 export const COMMENTS_CONFIG_KEY = 'websiteBuilderComments'
 
+/**
+ * The builder URL's search parameter that opens one thread in comment mode:
+ * `/admin/builder/pages/12?comment=34`. The dashboard's "Open comments" links use it.
+ */
+export const COMMENT_PARAM = 'comment'
+
 /** Longest comment text, in characters. */
 export const COMMENT_MAX = 5000
 
