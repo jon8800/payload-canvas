@@ -31,6 +31,19 @@ export { builderViewPath } from './plugin/links'
 export { formSubmissionConditions, applyFormConditions, type FormSubmissionConditionsOptions, type SubmissionRow } from './forms/submission'
 export { FORM_FIELDS_FIELD, FORM_SETTINGS_REGION, type FormsOptions } from './plugin/forms'
 export {
+  formSpamProtection,
+  spamProtectionField,
+  checkSubmission,
+  clientIp,
+  filledTooFast,
+  honeypotFilled,
+  turnstileKeys,
+  verifyTurnstile,
+  type FormSpamProtectionOptions,
+  type SpamProtectionFieldOptions,
+  type SpamReason,
+} from './forms/spam'
+export {
   DEFAULT_TEMPLATES_SLUG,
   DOCUMENT_TEMPLATE_FIELD,
   TEMPLATE_CONDITIONS_FIELD,

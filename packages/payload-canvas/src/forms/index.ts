@@ -20,3 +20,14 @@ export {
   type FormValue,
 } from './conditions'
 export { FORM_FIELD_CATEGORY, FORM_SETTINGS_REGION, FORM_FIELD_PREFIX, formFieldBlocks, formFieldSlug, formFieldType } from './blocks'
+export {
+  FORM_SPAM_FIELD,
+  FORM_SPAM_KEY,
+  HONEYPOT_NAME,
+  SPAM_BLOCKED_MESSAGE,
+  SPAM_DEFAULTS,
+  spamSettings,
+  type FormSpamSettings,
+  type FormSpamSettingsInput,
+  type FormSpamValues,
+} from './spamSettings'

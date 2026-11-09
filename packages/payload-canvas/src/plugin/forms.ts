@@ -9,6 +9,7 @@ import type { Block as PayloadBlockConfig, CollectionConfig } from 'payload'
 import type { BlockDefinition } from '../core/types'
 import type { RegionOption } from '../core/regions'
 import { FORM_SETTINGS_REGION, formFieldBlocks } from '../forms/blocks'
+import { FORM_SPAM_FIELD } from '../forms/spamSettings'
 
 export { FORM_SETTINGS_REGION }
 
@@ -21,7 +22,7 @@ export type FormsOptions = {
 export const FORM_FIELDS_FIELD = 'fields'
 
 /** The plugin's form fields the settings panel shows, in this order, when the collection has them. */
-const SETTINGS_FIELDS = ['title', 'submitButtonLabel', 'confirmationType', 'confirmationMessage', 'redirect', 'emails']
+const SETTINGS_FIELDS = ['title', 'submitButtonLabel', 'confirmationType', 'confirmationMessage', 'redirect', 'emails', FORM_SPAM_FIELD]
 
 export type ResolvedForms = {
   slug: string
