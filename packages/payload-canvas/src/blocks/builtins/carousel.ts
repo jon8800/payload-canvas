@@ -8,6 +8,8 @@ export { CAROUSEL_CLASS_MAP, CAROUSEL_LABELS, CAROUSEL_PART_CLASSES }
 export const CAROUSEL_BLOCK = 'carousel'
 
 const CAROUSEL_CLASS = 'flex flex-col gap-4'
+/** A new slide: one full-width slide at a time, its content in a column. */
+const SLIDE_CLASS = 'flex min-w-0 shrink-0 grow-0 basis-full flex-col gap-3'
 
 /**
  * The carousel's inner elements that take classes (`block.partClassName`), with the classes a new
@@ -82,7 +84,14 @@ export function carouselBlock(): BlockDefinition {
       labelsField(CAROUSEL_LABELS, LABEL_NAMES),
     ],
     slots: {
-      slides: { label: 'Slides', styles: true, defaultClassName: CAROUSEL_PART_CLASSES.slides },
+      slides: {
+        label: 'Slides',
+        styles: true,
+        defaultClassName: CAROUSEL_PART_CLASSES.slides,
+        description: 'Each block here is one slide',
+        itemLabel: 'Slide',
+        newBlock: { type: 'stack', label: 'Slide', className: SLIDE_CLASS },
+      },
       previous: { label: 'Previous button', allow: ARROW_CONTENT, max: 1 },
       next: { label: 'Next button', allow: ARROW_CONTENT, max: 1 },
     },

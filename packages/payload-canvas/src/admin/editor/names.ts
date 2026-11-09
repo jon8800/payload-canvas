@@ -2,6 +2,7 @@
 // Pure functions: the type label comes from the caller (the block definition's `label`).
 
 import { iconLabel } from '../../blocks/builtins/icon'
+import { SECTION_REF_BLOCK } from '../../blocks/builtins/sectionRef'
 import { readsComponent } from '../../core/components'
 import type { Block } from '../../core/types'
 import { FIELD_BLOCK, LIST_BLOCK } from './templates/binding'
@@ -25,6 +26,19 @@ const TAG_NAMES: Record<string, string> = {
 
 export function childrenOf(block: Block): Block[] {
   return Object.values(block.slots ?? {}).flat()
+}
+
+/**
+ * The `data-component` attribute for a component (a live saved section copy). The editor draws
+ * components in their own color (`--be-component`) on the canvas and in Layers.
+ */
+export function componentMark(block: Block | null | undefined): { 'data-component'?: '' } {
+  return isComponent(block) ? { 'data-component': '' } : {}
+}
+
+/** True for a component: a live saved section copy (`sectionRef`). */
+export function isComponent(block: Block | null | undefined): boolean {
+  return block?.type === SECTION_REF_BLOCK
 }
 
 /** The name the user gave the block, or null. */

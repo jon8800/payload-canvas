@@ -89,7 +89,7 @@ describe('sectionRef rendering', () => {
   test('the canvas selects the ref; the section blocks are repeats, not editable', async () => {
     const layout = await attachSections(page(ref('r', 7)), blocks, fakeFetch([]))
     const html = render(layout, 'canvas')
-    assert.match(html, /<div data-block-id="r" data-block-type="sectionRef" style="display:contents"><div data-builder-repeat="" class="flex gap-4 builder-css">/)
+    assert.match(html, /<div data-block-id="r" data-block-type="sectionRef" style="display:contents"><div data-builder-repeat="" data-builder-component="" class="flex gap-4 builder-css">/)
     assert.doesNotMatch(html, /data-block-id="r_/)
     assert.doesNotMatch(html, /data-slot-owner="r"/)
     assert.match(render(page(ref('r')), 'canvas'), /data-block-id="r"[^>]*data-builder-placeholder=""[^>]*>Component: pick one/)
