@@ -20,3 +20,31 @@ export {
   type FormValue,
 } from './conditions'
 export { FORM_FIELD_CATEGORY, FORM_SETTINGS_REGION, FORM_FIELD_PREFIX, formFieldBlocks, formFieldSlug, formFieldType } from './blocks'
+export { formAnswerProblem, isDateText, isPhoneNumber, isWebAddress, TICK_FIELD_TYPES, type FormAnswerField } from './answers'
+export {
+  addressLine,
+  ALL_ANSWERS_TAG,
+  answersTable,
+  formAnswers,
+  formEmailMessage,
+  htmlToText,
+  mergeTag,
+  mergeTags,
+  tablesOutsideParagraphs,
+  type FormAnswer,
+  type FormEmailConfig,
+  type FormEmailMessage,
+} from './mergeTags'
+export {
+  consentFormField,
+  FILE_FIELD_MAX_MB,
+  fileFormField,
+  formEmailFields,
+  hiddenFormField,
+  MERGE_TAGS_MARKER,
+  moreFormFields,
+  phoneFormField,
+  urlFormField,
+  withFormEmailFields,
+} from './fieldConfigs'
+export { acceptPatterns, fileProblem, fileTypeAllowed, maxFileBytes, type FileRules } from './files'

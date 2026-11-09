@@ -161,6 +161,11 @@ export type BuilderCollectionOptions = {
    * A separate layout per locale (`localized: true` on the whole field) is not supported yet.
    */
   localization?: 'props' | false
+  /**
+   * `false`: the editor of this collection offers no sections: no Sections tab and no "Save as
+   * section…". The `forms` option sets it, because form fields are not page sections.
+   */
+  sections?: false
 }
 
 export type TemplatesOptions = {
@@ -611,13 +616,16 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           cssEndpoint: `${apiRoute}${CANVAS_CSS_PATH}`,
           tokensEndpoint: `${apiRoute}${STYLE_TOKENS_PATH}`,
           // Only sections the field can store as they are.
-          sections: storage
-            ? sectionsThatFit(appSections, (list) => payloadBlocksProblems({ version: 1, blocks: list }, storage).length === 0)
-            : sections,
+          sections:
+            collectionOptions.sections === false
+              ? []
+              : storage
+                ? sectionsThatFit(appSections, (list) => payloadBlocksProblems({ version: 1, blocks: list }, storage).length === 0)
+                : sections,
           liveEndpoint: `${apiRoute}${LIVE_PATH}`,
           templates: clientTemplates,
           ai: options.ai ? aiClientConfig(options.ai, `${apiRoute}${AI_PATH}`) : null,
-          savedSections: savedSections ? { collection: savedSections.slug } : null,
+          savedSections: savedSections && collectionOptions.sections !== false ? { collection: savedSections.slug } : null,
           themeEndpoint: theme ? theme.endpoint : null,
           // A Payload blocks field stores no classes.
           classes: classes && !storage ? classes.client : null,

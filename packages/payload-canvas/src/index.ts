@@ -29,6 +29,8 @@ export {
 } from './plugin/references'
 export { builderViewPath } from './plugin/links'
 export { formSubmissionConditions, applyFormConditions, type FormSubmissionConditionsOptions, type SubmissionRow } from './forms/submission'
+export { formEmails, type FormEmailsOptions } from './forms/emails'
+export { formFileUploads, type FormFileUploadsOptions } from './forms/uploads'
 export { FORM_FIELDS_FIELD, FORM_SETTINGS_REGION, type FormsOptions } from './plugin/forms'
 export {
   DEFAULT_TEMPLATES_SLUG,
