@@ -14,6 +14,10 @@ const nextConfig: NextConfig = {
     globalNotFound: true,
   },
   transpilePackages: ['payload-canvas'],
+  // @feature:reviews
+  // The Google reviews scraper loads native code (impit). Keep it out of the bundle.
+  serverExternalPackages: ['impit', 'google-maps-review-scraper'],
+  // @end:reviews
   // The website builder compiles Tailwind classes on save. Standalone output must ship the CSS
   // entry and the stylesheets it imports.
   outputFileTracingIncludes: {

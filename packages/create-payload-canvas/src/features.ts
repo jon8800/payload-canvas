@@ -11,7 +11,7 @@ export const MANIFEST_FILE = 'starter-features.json'
 /** Payload writes this file. It imports every admin component by path. */
 export const IMPORT_MAP_FILE = 'src/app/(payload)/admin/importMap.js'
 
-export type ManifestFeature = { id: string; paths: string[]; scripts?: string[] }
+export type ManifestFeature = { id: string; paths: string[]; scripts?: string[]; dependencies?: string[] }
 export type Manifest = { features: ManifestFeature[] }
 
 const OPEN = /@feature:([\w-]+)/
@@ -58,11 +58,14 @@ function importMapKey(removedPath: string): string | null {
 }
 
 /**
- * Removes the importMap.js lines that point into deleted files or folders: the import lines
- * and the map entries. `removedPaths` are relative to the project root, like `src/admin/nav`.
+ * Removes the importMap.js lines that point into deleted files or folders, or into removed
+ * packages: the import lines and the map entries. `removedPaths` are relative to the project root,
+ * like `src/admin/nav`. `removedPackages` are npm names, like `payload-workflows`.
  */
-export function stripImportMap(text: string, removedPaths: string[]): string {
+export function stripImportMap(text: string, removedPaths: string[], removedPackages: string[] = []): string {
   const keys = removedPaths.map(importMapKey).filter((key): key is string => key !== null)
+  // A package specifier starts right after a quote: 'pkg/rsc' or "pkg/rsc#Name".
+  keys.push(...removedPackages.flatMap((name) => [`'${name}`, `"${name}`]))
   if (keys.length === 0) return text
   // The key must end at a path separator, a quote or the `#export` part, so `/admin/nav` does not match `/admin/navbar`.
   const pointsIntoRemoved = (line: string) =>
@@ -118,8 +121,8 @@ export function filesWithMarkers(targetDir: string): { file: string; text: strin
 
 /**
  * Turns the starter's features on or off in a copied project. For each known feature that is not in
- * `enabledIds`, it deletes the feature's files, its package.json scripts, its marked regions and its
- * importMap.js lines. Then it deletes `starter-features.json`.
+ * `enabledIds`, it deletes the feature's files, its package.json scripts and dependencies, its marked
+ * regions and its importMap.js lines. Then it deletes `starter-features.json`.
  * Returns the ids it turned off, or null when the starter has no manifest (then it changes nothing).
  */
 export function applyFeatures(targetDir: string, enabledIds: Iterable<string>): string[] | null {
@@ -147,17 +150,23 @@ export function applyFeatures(targetDir: string, enabledIds: Iterable<string>): 
   const removedPaths = off.flatMap((feature) => feature.paths)
   for (const rel of removedPaths) fs.rmSync(resolveInside(targetDir, rel), { recursive: true, force: true })
 
+  const removedPackages = off.flatMap((feature) => feature.dependencies ?? [])
   const importMap = path.join(targetDir, IMPORT_MAP_FILE)
-  if (removedPaths.length > 0 && fs.existsSync(importMap)) {
-    fs.writeFileSync(importMap, stripImportMap(fs.readFileSync(importMap, 'utf8'), removedPaths))
+  if ((removedPaths.length > 0 || removedPackages.length > 0) && fs.existsSync(importMap)) {
+    fs.writeFileSync(importMap, stripImportMap(fs.readFileSync(importMap, 'utf8'), removedPaths, removedPackages))
   }
 
-  // package.json scripts.
+  // package.json scripts and dependencies.
   const scripts = off.flatMap((feature) => feature.scripts ?? [])
   const pkgFile = path.join(targetDir, 'package.json')
-  if (scripts.length > 0 && fs.existsSync(pkgFile)) {
-    const pkg = JSON.parse(fs.readFileSync(pkgFile, 'utf8')) as { scripts?: Record<string, string> }
+  if ((scripts.length > 0 || removedPackages.length > 0) && fs.existsSync(pkgFile)) {
+    type Lists = Partial<Record<'scripts' | 'dependencies' | 'devDependencies', Record<string, string>>>
+    const pkg = JSON.parse(fs.readFileSync(pkgFile, 'utf8')) as Lists
     for (const name of scripts) delete pkg.scripts?.[name]
+    for (const name of removedPackages) {
+      delete pkg.dependencies?.[name]
+      delete pkg.devDependencies?.[name]
+    }
     fs.writeFileSync(pkgFile, `${JSON.stringify(pkg, null, 2)}\n`)
   }
 
