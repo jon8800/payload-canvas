@@ -4,6 +4,7 @@
 export * from './types'
 export { checkAttrs, htmlAttributes, htmlIdClash, htmlIdProblem, htmlIdsOf, patchAttrs, withoutTakenHtmlIds } from './attrs'
 export { createId } from './ids'
+export { freeValue, uniquePropValues, withUniqueProps } from './uniqueProps'
 export { findBlock, findLocation, walkBlocks, isSelfOrDescendant, normalizeLayout, type BlockLocation } from './tree'
 export { applyOperation, applyOperations, type ApplyOptions } from './operations'
 export { layerAt, reachableAt } from './layers'

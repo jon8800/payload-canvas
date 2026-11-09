@@ -5,7 +5,18 @@
 
 import { SECTION_REF_BLOCK, sectionDetachOps, sectionRefId } from '../../blocks/builtins/sectionRef'
 import { applyComponentValues, componentValuesOf } from '../../core/components'
-import { createId, findBlock, findLocation, getBlockDefinition, htmlIdsOf, slotAcceptsAt, slotNames, withoutTakenHtmlIds } from '../../core'
+import {
+  createId,
+  findBlock,
+  findLocation,
+  getBlockDefinition,
+  htmlIdsOf,
+  slotAcceptsAt,
+  slotNames,
+  uniquePropValues,
+  withoutTakenHtmlIds,
+  withUniqueProps,
+} from '../../core'
 import type { Block, CanvasMeasurement, Layout, Operation, Position, SectionDefinition } from '../../core/types'
 import { normalizeClasses, parseStyles, setStylesOps, stylesText, type CopiedStyles } from './menu/styleClipboard'
 import type { Runtime } from './runtime'
@@ -109,11 +120,13 @@ export function insertBlocks(runtime: Runtime, blocks: Block[], to: Position): b
   return runtime.store.apply(ops, { select: first.id })
 }
 
-/** Copies with new ids, without the HTML ids the page already uses. */
+/** Copies with new ids, without the HTML ids the page already uses, and with free unique props (see `uniqueProps`). */
 function freshCopies(runtime: Runtime, blocks: readonly Block[]): Block[] {
-  const taken = htmlIdsOf(runtime.store.getState().layout.blocks)
+  const { layout } = runtime.store.getState()
+  const taken = htmlIdsOf(layout.blocks)
+  const values = uniquePropValues(layout.blocks, runtime.config.blocks)
   return blocks.map((block) => {
-    const copy = withoutTakenHtmlIds(withNewIds(block), taken)
+    const copy = withUniqueProps(withoutTakenHtmlIds(withNewIds(block), taken), runtime.config.blocks, values)
     htmlIdsOf([copy], taken)
     return copy
   })
@@ -156,7 +169,17 @@ export async function detachSection(runtime: Runtime, id: string): Promise<void>
 
 export function duplicateBlock(runtime: Runtime, id: string) {
   const newId = createId()
-  if (runtime.store.apply({ type: 'duplicate', id, newId }, { select: newId })) runtime.notify('Duplicated')
+  const ops: Operation[] = [{ type: 'duplicate', id, newId }]
+  // The copy gets free values for its unique props (a form field name), in the same undo step.
+  // Only the block itself: blocks with unique props (form fields) have no slots.
+  const { layout } = runtime.store.getState()
+  const block = findBlock(layout, id)
+  if (block) {
+    const copy = withUniqueProps(block, runtime.config.blocks, uniquePropValues(layout.blocks, runtime.config.blocks))
+    const props = Object.fromEntries(Object.entries(copy.props ?? {}).filter(([key, value]) => block.props?.[key] !== value))
+    if (Object.keys(props).length > 0) ops.push({ type: 'update', id: newId, props })
+  }
+  if (runtime.store.apply(ops, { select: newId })) runtime.notify('Duplicated')
 }
 
 export function removeBlock(runtime: Runtime, id: string) {

@@ -174,6 +174,11 @@ export type BlockDefinition = {
   /** Classes a newly inserted block starts with (e.g. "flex flex-col gap-4" for a stack). */
   defaultClassName?: string
   /**
+   * Text props that no two blocks of a layout may share, such as a form field's `name`. A block
+   * the editor adds, duplicates or pastes gets a free value: `text`, then `text2`, `text3`.
+   */
+  uniqueProps?: string[]
+  /**
    * Inner elements that take classes of their own, by name (`PartDefinition`). Slots with
    * `styles: true` are parts too. A name must not be a slot name.
    */

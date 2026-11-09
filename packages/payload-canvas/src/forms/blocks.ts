@@ -69,7 +69,8 @@ export function formFieldBlocks(blocks: readonly PayloadBlockConfig[]): BlockDef
     // A new field starts with a name and a label, so the form saves at once (the plugin requires
     // a name). Only the builder's insert uses these defaults; the stored data is unchanged.
     const fields = withStartValues(def.fields, { name: slug, label: known?.label ?? def.label })
-    return { ...def, fields, ...(known ? { description: known.description } : {}) }
+    // Two fields with one name would overwrite each other's answers: a new or copied field gets `text2`.
+    return { ...def, fields, uniqueProps: ['name'], ...(known ? { description: known.description } : {}) }
   })
 }
 
