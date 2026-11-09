@@ -58,6 +58,8 @@ import { IMAGE_ASPECT_RATIOS } from '../ai/images/ratios'
 import { SECTION_REF_BLOCK } from '../blocks/builtins/sectionRef'
 import { classesConfigOf, loadClasses, mergeSiteClasses } from '../classes'
 import { classMcpTools } from '../classes/mcp'
+import { FORM_FIELDS_FIELD } from '../plugin/forms'
+import { formMcpTools } from './forms'
 import {
   BINDINGS_GUIDE,
   changeSummary,
@@ -120,6 +122,11 @@ export type BuilderMcpToolsOptions = {
    * `classes.slug` there.
    */
   classes?: { slug?: string } | false
+  /**
+   * The form tools (listForms, getForm, createForm, editFormFields, updateFormSettings) for the
+   * forms of `websiteBuilder({ forms })`. Set the same value as there: `true`, or `{ collection }`.
+   */
+  forms?: { collection?: string } | boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -354,7 +361,9 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     : options.collections
   const slugs = Object.keys(collections)
   if (slugs.length === 0) throw new Error('[builderMcpTools] `collections` is empty.')
-  const fieldOf = (collection: string) => collections[collection]?.field ?? 'layout'
+  // Forms have their own tools; their builder field is the form-builder plugin's `fields` blocks field.
+  const formsSlug = options.forms ? ((options.forms === true ? undefined : options.forms.collection) ?? 'forms') : null
+  const fieldOf = (collection: string) => (collection === formsSlug ? FORM_FIELDS_FIELD : (collections[collection]?.field ?? 'layout'))
   const apiKeyCollection = options.apiKeyCollection ?? 'payload-mcp-api-keys'
   const keyNames = new Map<string, { name: string | null; at: number }>()
 
@@ -814,6 +823,10 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     },
   }
 
+  /** The site's absolute origin, for links. */
+  const siteOf = (req: PayloadRequest) =>
+    (options.siteUrl || req.payload.config.serverURL || process.env.NEXT_PUBLIC_SERVER_URL || (req.url ? new URL(req.url).origin : '')).replace(/\/$/, '')
+
   const getPreviewUrl: BuilderMcpTool = {
     name: 'getPreviewUrl',
     routing: { kind: 'collection', action: 'read' },
@@ -828,12 +841,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       } catch (error) {
         return fail(errorMessage(error))
       }
-      const site = (
-        options.siteUrl ||
-        req.payload.config.serverURL ||
-        process.env.NEXT_PUBLIC_SERVER_URL ||
-        (req.url ? new URL(req.url).origin : '')
-      ).replace(/\/$/, '')
+      const site = siteOf(req)
       const absolute = (path: string | null | undefined) =>
         !path ? undefined : /^https?:\/\//.test(path) ? path : `${site}${path.startsWith('/') ? '' : '/'}${path}`
 
@@ -894,7 +902,10 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
 
   // Editable classes: listClasses, getClass, upsertClass, deleteClass.
   const classTools = options.classes === false ? [] : classMcpTools(options.classes)
-  const tools = [listBlocks, getBlockSchema, listSections, insertSection, getLayout, applyOperationsTool, validateLayoutTool, getPreviewUrl, generateImage, ...classTools]
+  const formTools = formsSlug
+    ? formMcpTools({ slug: formsSlug, apply, currentLayout, loadDraft, warnings: touchedWarnings, siteOf, text, fail })
+    : []
+  const tools = [listBlocks, getBlockSchema, listSections, insertSection, getLayout, applyOperationsTool, validateLayoutTool, getPreviewUrl, generateImage, ...classTools, ...formTools]
   if (!templatesSlug) return tools
 
   const listTemplates: BuilderMcpTool = {
