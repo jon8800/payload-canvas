@@ -196,6 +196,18 @@ function layoutOf(source: Pick<ReferenceSource, 'layout' | 'blocksOnly' | 'decod
   return source.blocksOnly ? normalizeLayout({ version: 1, blocks: value }) : normalizeLayout(value)
 }
 
+/**
+ * Every document one builder document's stored layout references (links, images, sections), as
+ * written: also documents that were deleted since. `null` when the collection stores no layout.
+ * Read the document with `context: { builderRawLayout: true }` so every locale counts.
+ */
+export function layoutReferences(config: ReferencesServerConfig, slug: string, doc: Record<string, unknown>): Reference[] | null {
+  const source = config.sources[slug]
+  if (!source) return null
+  const layout = layoutOf(source, doc)
+  return layout ? collectReferences(layout, config.blocks) : []
+}
+
 /** The references of one document's layout, checked against the database. */
 async function computeReferences(args: {
   payload: Payload

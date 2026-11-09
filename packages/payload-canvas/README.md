@@ -33,7 +33,7 @@ One package holds everything: the Payload plugin and admin editor (`payload-canv
 npx create-payload-canvas my-website
 ```
 
-The starter also has a calmer Payload admin: a sidebar in groups with icons, a neutral look in light and dark mode, and a dashboard with quick actions, recent edits, drafts, form messages, site checks, scheduled publishes and optional Plausible or Umami numbers. Each part is plain code in `src/admin/` of the starter. The CLI asks which parts to keep (see [Features](../create-payload-canvas/README.md#features)).
+The starter also has a calmer Payload admin: a sidebar in groups with icons, a neutral look in light and dark mode, and a dashboard with quick actions, recent edits, open comments, form messages, site checks, broken links (a 404 log and links to missing pages), unused media, scheduled publishes and optional Plausible or Umami numbers. Each part is plain code in `src/admin/` of the starter. The CLI asks which parts to keep (see [Features](../create-payload-canvas/README.md#features)).
 
 ## Contents
 
@@ -2817,6 +2817,7 @@ Data and access:
 - Each comment is a document of the plugin's **Comments** collection (slug `builder-comments`): the page (`docCollection`, `docId`), the block (`blockId`), the pin (`x`, `y`, 0 to 1 inside the block's box), the text (`body`), the author, and for a thread its resolved state (`resolved`, `resolvedByName`, `resolvedAt`). A reply has `parent` set to its thread.
 - People who may change the page may comment on it, reply, resolve and reopen. A hook checks this on every save, also over REST. Only the author changes the text or deletes a comment. Signed-in users read comments; set `comments.access.read` to restrict that.
 - The editor reads and writes the collection over Payload's REST API. Each save or delete goes to the page's open editors as a `comments` event on the live channel (see [Multiplayer editing](#multiplayer-editing)). A reconnect loads the list again.
+- `/admin/builder/<collection>/<id>?comment=<thread id>` opens the builder in comment mode with that thread open (`builderViewPath(admin, collection, id, { comment })`). The starter's "Open comments" dashboard widget links there.
 - On by default. `websiteBuilder({ comments: false })` turns it off. Options: `comments: { slug?, access?, admin?, hooks? }`. The new collection needs a migration in production (`pnpm payload migrate:create`).
 
 Not included yet: mentions and email notifications.

@@ -18,6 +18,7 @@ export {
   backfillReferences,
   DEFAULT_REFERENCES_FIELD,
   findReferrers,
+  layoutReferences,
   FORCE_DELETE_CONTEXT,
   referencesConfigOf,
   REFERENCES_CONFIG_KEY,
@@ -94,4 +95,4 @@ export {
   type ClassUsage,
 } from './classes'
 // Comments on the canvas: the collection's options and the comment shape.
-export { DEFAULT_COMMENTS_SLUG, type BuilderComment, type CommentsOptions } from './comments'
+export { COMMENT_PARAM, DEFAULT_COMMENTS_SLUG, type BuilderComment, type CommentsOptions } from './comments'
