@@ -51,6 +51,11 @@
     --be-radius: var(--style-radius-s, 4px);
     --be-radius-m: var(--style-radius-m, 6px);
     --be-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    // Components (live saved section copies) get their own color, as in Figma: the outline,
+    // the solid fill of the name tag and action bar (white text passes AA on it), and text.
+    --be-component: #8b5cf6;
+    --be-component-solid: #7c3aed;
+    --be-component-text: #6d28d9;
 
     display: flex;
     flex-direction: column;
@@ -987,6 +992,19 @@
     }
   }
 
+  // Dark admin theme: a lighter text color, so it passes AA on the dark panel.
+  html[data-theme='dark'] .builder-editor {
+    --be-component-text: #a78bfa;
+  }
+
+  // A component's Layers row: its icon and name in the component color.
+  .builder-editor__row[data-component] {
+    .builder-editor__row-icon,
+    .builder-editor__row-type {
+      color: var(--be-component-text);
+    }
+  }
+
   .builder-editor__row--dragging {
     opacity: 0.4;
   }
@@ -1608,6 +1626,16 @@
 
   .builder-editor__hover {
     box-shadow: inset 0 0 0 var(--be-px) var(--be-accent);
+  }
+
+  // A component (`data-component`): its hover and selection outline, name tag, action bar and
+  // Layers row use the component color instead of the accent.
+  :is(.builder-editor__hover, .builder-editor__selection, .builder-editor__actions, .builder-editor__row)[data-component] {
+    --be-accent: var(--be-component);
+    --be-accent-strong: var(--be-component-solid);
+    --be-accent-soft: color-mix(in srgb, var(--be-component) 14%, transparent);
+    --be-accent-text: var(--be-component-text);
+    --be-accent-solid: var(--be-component-solid);
   }
 
   .builder-editor__parent-hint {

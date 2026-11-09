@@ -14,7 +14,7 @@ import { InsertHandle } from './insert/InsertHandle'
 import { ImageEditor } from './media/ImageEditor'
 import { BlockContextMenu, blockMenuEntries } from './menu/blockMenu'
 import { MenuButton } from './menu/Menu'
-import { blockName } from './names'
+import { blockName, componentMark, isComponent } from './names'
 import { PeerCursors, PeerSelections } from './live/PresenceUI'
 import { RegionOverlay } from './regions/RegionOverlay'
 import { SectionVariantSwitch } from './sections/variants'
@@ -131,6 +131,8 @@ export function Overlay() {
     return { className: classes.filter(Boolean).join(' '), style }
   }
   const taggedActors = new Set<string>()
+  // The action bar sits inside the selected block's top right corner (no room above it).
+  const barInside = Boolean(selected && selectedRect && !editing && !drag && !roomAbove(selectedRect) && selectedRect.width * zoom >= NARROW_BLOCK)
 
   return (
     <div className="builder-editor__overlay">
@@ -170,7 +172,7 @@ export function Overlay() {
         </div>
       )}
       {hovered && hoverRect && (
-        <div className="builder-editor__hover" style={box(hoverRect)}>
+        <div className="builder-editor__hover" style={box(hoverRect)} {...componentMark(hovered)}>
           <span {...tagProps(hoverRect, 'hover')}>
             <BlockIcon name={runtime.blockIcon(hovered.type)} size={12} />
             {blockName(hovered, runtime.blockLabel(hovered.type))}
@@ -184,6 +186,7 @@ export function Overlay() {
             hidden={Boolean(smooth)}
             className={`builder-editor__selection${selected.hidden ? ' builder-editor__selection--hidden' : ''}${editing ? ' builder-editor__selection--editing' : ''}`}
             style={box(editing && editRect ? editRect : selectedRect)}
+            {...componentMark(selected)}
           >
             {editing && editRect && inline?.kind !== 'rich' && (
               <span {...tagProps(editRect, 'editing')}>
@@ -214,13 +217,14 @@ export function Overlay() {
             inside={!roomAbove(selectedRect)}
             below={selectedRect.width * zoom < NARROW_BLOCK}
             hidden={Boolean(drag) || Boolean(smooth) || editing}
+            component={isComponent(selected)}
           />
           {editing && editRect && inline?.kind === 'rich' && <InlineToolbar inline={inline} rect={editRect} zoom={zoom} />}
         </>
       )}
       <RegionOverlay tagProps={tagProps} editedRect={inline?.region ? editedRect(runtime.iframeRef.current) : null} zoom={zoom} />
       <InsertHandle />
-      <ImageEditor />
+      <ImageEditor barRight={barInside && selectedRect ? selectedRect.x + selectedRect.width : null} barTop={barInside && selectedRect ? selectedRect.y : null} />
       <BlockContextMenu />
       <Tooltips />
       <PeerCursors />
@@ -287,10 +291,12 @@ type ActionBarProps = {
   below: boolean
   /** Hidden but mounted, e.g. while dragging. */
   hidden: boolean
+  /** The block is a component: the bar takes the component color. */
+  component: boolean
 }
 
 /** The bar on the selected block: drag, select parent, and a menu with the other actions. */
-function ActionBar({ id, label, icon, parentId, rect, inside, below, hidden }: ActionBarProps) {
+function ActionBar({ id, label, icon, parentId, rect, inside, below, hidden, component }: ActionBarProps) {
   const runtime = useRuntime()
   const data: DragData = { source: { kind: 'block', id }, label, icon }
   // Content mode moves no blocks by dragging and switches no section variants.
@@ -303,7 +309,7 @@ function ActionBar({ id, label, icon, parentId, rect, inside, below, hidden }: A
     place === 'below' ? { left: rect.x, top: rect.y + rect.height, visibility } : { left: rect.x + rect.width, top: rect.y, visibility }
 
   return (
-    <div className={`builder-editor__actions builder-editor__actions--${place}`} style={style}>
+    <div className={`builder-editor__actions builder-editor__actions--${place}`} style={style} data-component={component ? '' : undefined}>
       {/* A ready-made section with variants: ‹ Split › switches it in place. */}
       {!contentMode && <SectionVariantSwitch id={id} />}
       {!contentMode && (

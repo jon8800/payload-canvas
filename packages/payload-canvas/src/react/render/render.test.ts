@@ -92,6 +92,13 @@ test('empty slot: nothing on the site, droppable placeholder in the canvas', () 
   )
 })
 
+test('an empty slot with a description shows it in the canvas placeholder', () => {
+  const layout: Layout = { version: 1, blocks: [{ id: 'r', type: 'reel' }] }
+  const blocks = [{ type: 'reel', label: 'Reel', fields: [], slots: { slides: { description: 'Each block here is one slide' } } }]
+  const components: BlockComponents = { reel: ({ slots, attributes }) => createElement('div', attributes, slots.slides) }
+  assert.match(render({ layout, blocks, components, mode: 'canvas' }), /data-slot="slides" data-slot-hint="Each block here is one slide"/)
+})
+
 test('canvas gives a placeholder even when the block has no slots entry', () => {
   const layout: Layout = { version: 1, blocks: [{ id: 's', type: 'stack' }] }
   assert.match(render({ layout, mode: 'canvas' }), /data-slot-empty="" data-slot-owner="s"/)

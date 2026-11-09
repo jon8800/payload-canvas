@@ -62,14 +62,16 @@ export function componentsPage(media: Record<string, Photo>): Block[] {
     ]),
     section('max-w-6xl', [
       heading('Carousel', '2', styles.sectionTitle),
+      // Each direct child of "slides" is one slide: a Stack named "Slide 1", "Slide 2", …
       slotted('carousel', { dots: true }, undefined, {
-        slides: work.map(({ title, meta, photo }) =>
-          stack('article', 'flex min-w-0 shrink-0 grow-0 basis-[85%] flex-col gap-3 md:basis-[40%]', [
+        slides: work.map(({ title, meta, photo }, i) => ({
+          ...stack('div', 'flex min-w-0 shrink-0 grow-0 basis-[85%] flex-col gap-3 md:basis-[40%]', [
             image(photo.id, `${title} website`, 'aspect-[4/3] w-full rounded-lg object-cover'),
             heading(title, '3', 'text-xl font-semibold'),
             text(meta, 'text-muted-foreground'),
           ]),
-        ),
+          label: `Slide ${i + 1}`,
+        })),
       }),
     ]),
     section('max-w-3xl', [

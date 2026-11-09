@@ -17,7 +17,7 @@ import {
   withoutTakenHtmlIds,
   withUniqueProps,
 } from '../../core'
-import type { Block, CanvasMeasurement, Layout, Operation, Position, SectionDefinition } from '../../core/types'
+import type { Block, CanvasMeasurement, Layout, Operation, Position, SectionDefinition, SlotDefinition } from '../../core/types'
 import { normalizeClasses, parseStyles, setStylesOps, stylesText, type CopiedStyles } from './menu/styleClipboard'
 import type { Runtime } from './runtime'
 import { countText } from './counts'
@@ -86,13 +86,22 @@ export function insertNewBlock(runtime: Runtime, type: string): boolean {
 }
 
 /** Adds a new block of `type` at `to`, selects it and asks the inspector to focus its first field. */
-export function insertNewBlockAt(runtime: Runtime, type: string, to: Position): boolean {
-  const block = runtime.createBlock(type)
-  if (!block) return false
+export function insertNewBlockAt(runtime: Runtime, type: string, to: Position, template?: SlotDefinition['newBlock']): boolean {
+  const created = runtime.createBlock(type)
+  if (!created) return false
+  // A slot's `newBlock` (a carousel's "Slide"): its name, classes and props over the defaults.
+  const block: Block = template
+    ? {
+        ...created,
+        ...(template.label ? { label: template.label } : {}),
+        ...(template.className ? { className: template.className } : {}),
+        ...(template.props ? { props: { ...created.props, ...template.props } } : {}),
+      }
+    : created
   if (!runtime.store.apply({ type: 'insert', block, to }, { select: block.id, newContent: true })) return false
   runtime.focusRequest.set(block.id)
   const parent = to.parentId ? findBlock(runtime.store.getState().layout, to.parentId) : null
-  const label = runtime.blockLabel(type)
+  const label = template?.label ?? runtime.blockLabel(type)
   runtime.notify(parent ? `Added ${label} in ${parent.label?.trim() || runtime.blockLabel(parent.type)}` : `Added ${label}`)
   return true
 }
