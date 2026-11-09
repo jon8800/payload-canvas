@@ -130,7 +130,7 @@ function InsertPicker({ spot, onDone }: { spot: InsertSpot; onDone: () => void }
       return
     }
     if (item.kind === 'block') {
-      insertNewBlockAt(runtime, item.type, to)
+      insertNewBlockAt(runtime, item.type, to, item.template)
       return
     }
     if (insertBlocks(runtime, item.section.blocks, to)) runtime.notify(`Added ${item.section.label}`)

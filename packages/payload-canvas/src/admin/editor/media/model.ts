@@ -3,7 +3,7 @@
 // No React and no DOM, so the tests run in Node.
 
 import { fieldAtPropPath, type DataField } from '../../../core'
-import type { Block, BlockDefinition, Operation } from '../../../core/types'
+import type { Block, BlockDefinition, Operation, Rect } from '../../../core/types'
 import { inlineUpdate } from '../inline'
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -111,4 +111,23 @@ export function propAt(props: Record<string, unknown> | undefined, path: string)
     else return undefined
   }
   return current
+}
+
+/** Smallest image (screen pixels) that holds the chip inside it; a smaller one gets it above. */
+const CHIP_ROOM = { width: 96, height: 36 }
+/** How far the selected block's action bar reaches into the block when it sits inside (screen pixels). */
+const BAR_REACH = { width: 120, height: 32 }
+
+/**
+ * Where the "Replace" chip goes: inside the image's top right corner (`inside`); lower down
+ * (`under-bar`) when the selected block's action bar sits in that corner; above the image when the
+ * image is too small for the chip.
+ */
+export function chipPlace(image: Rect, zoom: number, bar: { right: number; top: number } | null): 'inside' | 'under-bar' | 'above' {
+  if (image.width * zoom < CHIP_ROOM.width || image.height * zoom < CHIP_ROOM.height) return image.y * zoom >= CHIP_ROOM.height ? 'above' : 'inside'
+  if (!bar) return 'inside'
+  const right = image.x + image.width
+  const nearRight = Math.abs(bar.right - right) * zoom < BAR_REACH.width
+  const nearTop = (image.y - bar.top) * zoom < BAR_REACH.height && (bar.top - image.y) * zoom < BAR_REACH.height
+  return nearRight && nearTop ? 'under-bar' : 'inside'
 }

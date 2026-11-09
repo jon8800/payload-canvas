@@ -138,6 +138,21 @@ export type SlotDefinition = {
   styles?: boolean
   /** With `styles`: the classes a newly inserted block starts with on the slot's element. */
   defaultClassName?: string
+  /**
+   * What the slot holds, in one short sentence, e.g. "Each block here is one slide". The canvas
+   * shows it in the slot while it is empty; the AI reads it.
+   */
+  description?: string
+  /**
+   * The name of one direct child, e.g. "Slide". Layers shows "Slide 1", "Slide 2" after each
+   * child that has no name of its own.
+   */
+  itemLabel?: string
+  /**
+   * The block the "+" picker offers first in this slot, e.g. a Stack named "Slide". It starts
+   * with the block type's defaults, then these `label`, `className` and `props`.
+   */
+  newBlock?: { type: string; label?: string; className?: string; props?: Record<string, unknown> }
 }
 
 /**

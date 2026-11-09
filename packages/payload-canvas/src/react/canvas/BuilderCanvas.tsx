@@ -88,10 +88,20 @@ const EDITOR_CSS = `
   border-radius: 4px;
   background: repeating-linear-gradient(45deg, rgb(0 0 0 / 0.03) 0 6px, transparent 6px 12px);
 }
+/* An empty slot with a description: the description, centered. */
+[data-slot-empty][data-slot-hint] { display: grid; place-items: center; padding: 8px; }
+[data-slot-empty][data-slot-hint]::before {
+  content: attr(data-slot-hint);
+  font: 12px/1.4 system-ui, sans-serif;
+  color: rgb(0 0 0 / 0.55);
+  text-align: center;
+  pointer-events: none;
+}
 [data-builder-hidden] { opacity: 0.35; }
-/* Repeated collection list items (2nd, 3rd, …): shown dimmed, never selectable. */
+/* Repeated collection list items (2nd, 3rd, …): shown dimmed, never selectable. A component's
+   blocks are not selectable either (the component is), but they show as on the site. */
 [data-builder-repeat] { pointer-events: none; }
-[data-builder-repeat]:not([data-builder-repeat] [data-builder-repeat]) { opacity: 0.6; }
+[data-builder-repeat]:not([data-builder-component]):not([data-builder-repeat] [data-builder-repeat]) { opacity: 0.6; }
 [data-builder-empty-page] { min-height: 240px; }
 /* The layout inside the page frame: the same box the canvas root gives a layout without a frame.
    A frame that gives the box its own classes (\`<LayoutOutlet className>\`) styles it itself. */
