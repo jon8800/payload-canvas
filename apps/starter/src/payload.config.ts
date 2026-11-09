@@ -10,8 +10,8 @@ import { fields as formFieldConfigs, formBuilderPlugin } from '@payloadcms/plugi
 import { importExportPlugin } from '@payloadcms/plugin-import-export'
 import { mcpToolkitPlugin } from 'payload-mcp-toolkit'
 import { searchPlugin } from '@payloadcms/plugin-search'
-import { formSubmissionConditions, websiteBuilder, type WebsiteBuilderOptions } from 'payload-canvas'
-import { withFormConditions } from 'payload-canvas/forms'
+import { formEmails, formFileUploads, formSubmissionConditions, websiteBuilder, type WebsiteBuilderOptions } from 'payload-canvas'
+import { moreFormFields, withFormConditions, withFormEmailFields } from 'payload-canvas/forms'
 // @feature:ai
 import { fakeAdapter } from 'payload-canvas/ai/fake'
 import { openRouterAdapter } from 'payload-canvas/ai/openrouter'
@@ -50,7 +50,7 @@ import { isDesigner } from '@/access/roles'
 // @feature:look
 import { statusBadges } from '@/admin/list/statusBadges'
 // @end:look
-import { FORM_FIELD_SLUGS } from '@/forms/fields'
+import { MORE_FORM_FIELD_SLUGS, PLUGIN_FORM_FIELD_SLUGS } from '@/forms/fields'
 
 /** Collections with the page builder. Shared by the builder plugin and its MCP tools. */
 const builderCollections: WebsiteBuilderOptions['collections'] = {
@@ -100,6 +100,21 @@ const devAutoLogin =
   process.env.NODE_ENV === 'development' && process.env.DEV_AUTOLOGIN_EMAIL
     ? { email: process.env.DEV_AUTOLOGIN_EMAIL }
     : false
+
+/** Development without SMTP: every email goes to the server console, with its headers and text. */
+const consoleEmailAdapter: EmailAdapter = ({ payload }) => ({
+  defaultFromAddress: 'noreply@example.com',
+  defaultFromName: 'Payload Starter',
+  name: 'console',
+  sendEmail: async (message) => {
+    const lines = ['from', 'to', 'replyTo', 'cc', 'bcc', 'subject'].flatMap((key) => {
+      const value = (message as Record<string, unknown>)[key]
+      return value ? [`${key}: ${String(value)}`] : []
+    })
+    payload.logger.info(['Email (not sent, no SMTP):', ...lines, '---', String(message.text ?? ''), '---', `html: ${String(message.html ?? '')}`].join('\n'))
+    return { accepted: [message.to] }
+  },
+})
 
 const smtpAdapter: EmailAdapter = ({ payload }) => {
   const transport = createTransport({
@@ -165,7 +180,8 @@ export default buildConfig({
     blocksAsJSON: true,
   }),
   editor: lexicalEditor(),
-  email: process.env.SMTP_HOST ? smtpAdapter : undefined,
+  // Without SMTP, development writes each email to the console (Payload's own fallback shows only To and Subject).
+  email: process.env.SMTP_HOST ? smtpAdapter : process.env.NODE_ENV === 'development' ? consoleEmailAdapter : undefined,
   collections: [
     Users,
     Media,
@@ -233,15 +249,27 @@ export default buildConfig({
     formBuilderPlugin({
       // The plugin's own field blocks, each with display conditions ("show when field X equals Y").
       // The site's form renderer and the submissions hook below apply them.
-      fields: Object.fromEntries(FORM_FIELD_SLUGS.map((slug) => [slug, withFormConditions(formFieldConfigs[slug] as Block)])),
+      // The extra types (phone, web address, hidden, consent, file) come from payload-canvas.
+      fields: {
+        ...Object.fromEntries(PLUGIN_FORM_FIELD_SLUGS.map((slug) => [slug, withFormConditions(formFieldConfigs[slug] as Block)])),
+        ...Object.fromEntries(MORE_FORM_FIELD_SLUGS.map((slug) => [slug, withFormConditions(moreFormFields[slug])])),
+      },
       redirectRelationships: ['pages'],
+      // Each email of a form: To, From name, From email, Reply-To, CC, BCC, Subject, and a rich text
+      // or HTML body, all with merge tags ({{email}}, {{*}} for every answer).
+      beforeEmail: formEmails(),
       formOverrides: {
         admin: { group: 'Forms', defaultColumns: ['title', 'fields', 'confirmationType', 'updatedAt'] },
+        fields: ({ defaultFields }) => withFormEmailFields(defaultFields),
       },
       formSubmissionOverrides: {
         admin: { group: 'Forms', defaultColumns: ['form', 'submissionData', 'createdAt'] },
-        // Hidden fields are never required, and their answers are dropped.
-        hooks: { beforeValidate: [formSubmissionConditions()] },
+        hooks: {
+          // Hidden fields are never required, and their answers are dropped. Answers in the wrong format are refused.
+          beforeValidate: [formSubmissionConditions()],
+          // Files of file fields go to Media and are linked in `attachments`.
+          beforeChange: [formFileUploads({ collection: 'media', field: 'attachments' })],
+        },
         fields: ({ defaultFields }) => [
           ...defaultFields,
           {
