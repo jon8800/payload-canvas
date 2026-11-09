@@ -105,12 +105,6 @@
         padding-block: 10px;
       }
 
-      // Buttons in cells (the Folder column's "Move to folder") lose Payload's button margins,
-      // which made those rows twice as tall.
-      tbody td .btn {
-        margin-block: 0;
-      }
-
       // Thumbnails: rounded, with a hairline so light images keep an edge.
       .file__thumbnail {
         border-radius: var(--style-radius-s);

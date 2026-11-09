@@ -124,6 +124,11 @@ async function main() {
     if (!installed) {
       throw new Error(`"${manager} install" failed. The project is in ${targetDir}. Fix the error above, then run "${manager} install" there.`)
     }
+    // The starter's payload-types.ts has the collections of every feature. Write it again for the kept ones.
+    if (removed && removed.length > 0) {
+      p.log.step('Updating src/payload-types.ts for the chosen features...')
+      if (!run(manager, ['run', 'generate:types'], targetDir)) p.log.warn(`Updating the types failed. Run "${manager} run generate:types" in ${targetDir}.`)
+    }
   }
 
   // 5. Seed.

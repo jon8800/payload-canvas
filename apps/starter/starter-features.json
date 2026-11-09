@@ -4,6 +4,9 @@
     { "id": "nav", "paths": ["src/admin/nav"] },
     { "id": "dashboard", "paths": ["src/admin/dashboard"] },
     { "id": "demo", "paths": ["scripts/seed-demo.ts", "scripts/seed-demo-images.ts"], "scripts": ["seed:demo"] },
-    { "id": "ai", "paths": [] }
+    { "id": "ai", "paths": [] },
+    { "id": "gallery", "paths": [], "dependencies": ["payload-media-gallery"] },
+    { "id": "workflows", "paths": ["src/jobs"], "dependencies": ["payload-workflows"] },
+    { "id": "reviews", "paths": [], "dependencies": ["payload-google-reviews", "google-maps-review-scraper"] }
   ]
 }
