@@ -210,7 +210,11 @@ function BlockPane() {
     return () => cancelAnimationFrame(frame)
   }, [block, focusRequest, runtime])
 
-  if (!block) return region && runtime.regions ? <RegionPane key={region} regions={runtime.regions} name={region} /> : <EmptyState />
+  if (!block) {
+    // A selected region shows its pane. Without a selection, a panel region (a form's settings) shows its fields.
+    const shownRegion = region ?? runtime.regions?.config.find((r) => r.panel)?.name ?? null
+    return shownRegion && runtime.regions ? <RegionPane key={shownRegion} regions={runtime.regions} name={shownRegion} /> : <EmptyState />
+  }
 
   return (
     // `key` remounts the inputs per block, so input state (loaded documents) never leaks between blocks.

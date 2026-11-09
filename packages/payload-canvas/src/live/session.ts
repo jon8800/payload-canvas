@@ -1252,7 +1252,9 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
     },
 
     async commit(args) {
-      const { target, store, user, actor, blocks, clientId, batchId, baseSeq } = args
+      const { target, store, user, actor, clientId, batchId, baseSeq } = args
+      // A Payload blocks field checks against its own block types (a form's field blocks).
+      const blocks = (target.codec?.blocks as BlockDefinition[] | undefined) ?? args.blocks
       return mutex.run(channelKey(target.collection, target.id), async (): Promise<CommitResult> => {
         let session: Session
         try {

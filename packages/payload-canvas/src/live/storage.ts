@@ -11,7 +11,7 @@ import { APIError, docAccessOperation, type PayloadRequest } from 'payload'
 import { decodePayloadBlocks, encodePayloadBlocks, payloadBlocksProblems, payloadRowIds, withUniqueRowIds, type PayloadBlocksStorage } from '../core/payloadBlocks'
 import { normalizeLayout } from '../core/tree'
 import { applyOperation } from '../core/operations'
-import type { Layout, Operation } from '../core/types'
+import type { BlockDefinition, Layout, Operation } from '../core/types'
 
 export type LayoutCodec = {
   kind: 'json' | 'payload-blocks'
@@ -32,6 +32,11 @@ export type LayoutCodec = {
   prepare?(layout: Layout, ops: Operation[], owned?: ReadonlySet<string>): Operation[]
   /** The row ids of a stored value (a Payload blocks field). */
   rowIds?(value: unknown): Set<string>
+  /**
+   * The block types the field holds (a Payload blocks field: its own definitions, such as a form's
+   * field blocks). Commits check against them. Left out: the builder's blocks.
+   */
+  blocks?: readonly BlockDefinition[]
 }
 
 export const JSON_CODEC: LayoutCodec = {
@@ -45,6 +50,7 @@ export const JSON_CODEC: LayoutCodec = {
 export function payloadBlocksCodec(storage: PayloadBlocksStorage): LayoutCodec {
   return {
     kind: 'payload-blocks',
+    blocks: storage.blocks as BlockDefinition[],
     decode(value) {
       const result = decodePayloadBlocks(value, storage)
       if (!result.ok) throw new APIError(`The builder cannot open these blocks without changing them: ${result.error}`, 422, undefined, true)

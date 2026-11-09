@@ -12,6 +12,7 @@ import { useRuntime } from '../runtime'
 import { useValue } from '../valueStore'
 import type { RegionsController } from './controller'
 import { editRegionFields } from './RegionOverlay'
+import { RegionFields } from './RegionFields'
 
 export function RegionPane({ regions, name }: { regions: RegionsController; name: string }) {
   const runtime = useRuntime()
@@ -26,11 +27,11 @@ export function RegionPane({ regions, name }: { regions: RegionsController; name
     <div className="builder-editor__block-pane">
       <div className="builder-editor__block-head">
         <span className="builder-editor__block-icon">
-          <Icon name="lock" size={16} />
+          <Icon name={region.panel ? 'rename' : 'lock'} size={16} />
         </span>
         <span className="builder-editor__block-name">
           <span className="builder-editor__block-title">{region.label}</span>
-          <span className="builder-editor__block-sub">Fixed part of the page</span>
+          <span className="builder-editor__block-sub">{region.panel ? (drafts ? 'Changes save as a draft' : 'Changes save as you type') : 'Fixed part of the page'}</span>
         </span>
       </div>
       {problems.length > 0 && (
@@ -46,6 +47,16 @@ export function RegionPane({ regions, name }: { regions: RegionsController; name
           </div>
         </div>
       )}
+      {region.panel ? (
+        <>
+          {state.status === 'error' && (
+            <p className="builder-editor__hint" role="alert">
+              {state.error}
+            </p>
+          )}
+          <RegionFields regions={regions} region={region} />
+        </>
+      ) : (
       <div className="builder-editor__fields">
         <p className="builder-editor__hint">
           It shows fields of this document, outside the layout. Double-click its text or images on the canvas to edit them. Changes save to
@@ -83,6 +94,7 @@ export function RegionPane({ regions, name }: { regions: RegionsController; name
           Edit fields in the settings
         </Button>
       </div>
+      )}
     </div>
   )
 }

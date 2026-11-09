@@ -401,6 +401,11 @@ export type RegionConfig = {
   name: string
   label: string
   fields: RegionField[]
+  /**
+   * The inspector edits the region's fields itself, with Payload's inputs, and shows them when no
+   * block is selected (form settings in the form builder). Other regions edit in the settings drawer.
+   */
+  panel?: boolean
 }
 
 /** A region on the canvas: its name and its box, in iframe viewport coordinates. */

@@ -167,3 +167,22 @@ function fieldOf(match: RegExpExecArray, from: number): string {
 function escape(text: string): string {
   return text.replace(/[$]/g, '\\$')
 }
+
+/**
+ * A copy of a field config whose simple `admin.condition` functions (also in nested fields) are
+ * JSON rules in `admin.custom.builderCondition`, so the inspector can show and hide the field.
+ * A field that has a rule already keeps it. For document fields the inspector edits (regions
+ * with `panel`); `fromPayloadBlocks` does the same for block fields.
+ */
+export function withBuilderConditions<T>(field: T): T {
+  if (!isPlainObject(field)) return field
+  const out: Record<string, unknown> = { ...field }
+  const admin = isPlainObject(field.admin) ? field.admin : null
+  if (admin && typeof admin.condition === 'function' && !readCondition(field)) {
+    const condition = conditionFromFunction(admin.condition)
+    if (condition) out.admin = { ...admin, custom: { ...(isPlainObject(admin.custom) ? admin.custom : {}), builderCondition: condition } }
+  }
+  if (Array.isArray(field.fields)) out.fields = field.fields.map(withBuilderConditions)
+  if (Array.isArray(field.tabs)) out.tabs = field.tabs.map(withBuilderConditions)
+  return out as T
+}
