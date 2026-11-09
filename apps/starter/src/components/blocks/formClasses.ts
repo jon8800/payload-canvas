@@ -3,7 +3,9 @@
 // theme tokens.
 
 export const formClasses = {
-  form: 'flex flex-wrap gap-x-4 gap-y-5',
+  form: 'flex flex-col gap-5',
+  // The fields' box: a wrapping row, so fields with a width share a line.
+  fields: 'flex flex-wrap gap-x-4 gap-y-5',
   field: 'flex w-full min-w-0 flex-col gap-2',
   label: 'text-sm font-medium text-foreground',
   optional: 'font-normal text-muted-foreground',
@@ -19,7 +21,12 @@ export const formClasses = {
   fieldError: 'm-0 text-sm text-destructive',
   checkboxRow: 'flex w-full items-start gap-3 text-base',
   checkbox: 'mt-1 size-5 shrink-0 accent-primary',
-  message: 'm-0 w-full text-muted-foreground',
+  message: 'w-full',
+  messageText: 'm-0 text-muted-foreground',
+  // The builder's preview: inputs take no clicks, so a click selects the field.
+  previewInput: 'pointer-events-none',
+  // Under a field in the builder's preview, e.g. its display conditions.
+  note: 'm-0 text-xs text-muted-foreground',
   footer: 'flex w-full flex-col items-start gap-3 pt-1',
   submit:
     'inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-primary px-6 text-base ' +

@@ -53,22 +53,23 @@ The starter also has a calmer Payload admin: a sidebar in groups with icons, a n
    - [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields)
    - [Built-in blocks](#built-in-blocks)
 9. [Using existing Payload blocks](#using-existing-payload-blocks)
-10. [Sections](#sections)
-11. [Styling](#styling)
+10. [Form builder](#form-builder)
+11. [Sections](#sections)
+12. [Styling](#styling)
    - [Editable classes](#editable-classes)
-12. [Animations](#animations)
-13. [Theme](#theme)
-14. [Templates and binding](#templates-and-binding)
-15. [References and Used in](#references-and-used-in)
-16. [Localization](#localization)
-17. [AI assistant](#ai-assistant)
-18. [AI editing over MCP](#ai-editing-over-mcp)
-19. [Multiplayer editing](#multiplayer-editing)
+13. [Animations](#animations)
+14. [Theme](#theme)
+15. [Templates and binding](#templates-and-binding)
+16. [References and Used in](#references-and-used-in)
+17. [Localization](#localization)
+18. [AI assistant](#ai-assistant)
+19. [AI editing over MCP](#ai-editing-over-mcp)
+20. [Multiplayer editing](#multiplayer-editing)
    - [Comments on the canvas](#comments-on-the-canvas)
-20. [Production and Docker](#production-and-docker)
-21. [Deploying](#deploying)
-22. [Troubleshooting](#troubleshooting)
-23. [Limits](#limits)
+21. [Production and Docker](#production-and-docker)
+22. [Deploying](#deploying)
+23. [Troubleshooting](#troubleshooting)
+24. [Limits](#limits)
 
 ## Requirements
 
@@ -600,6 +601,7 @@ websiteBuilder({
   theme: { admin: { group: 'Settings' } }, // the Theme global; `false` leaves it out
   editor: { dragMode: 'smooth', openInBuilder: true }, // drag and drop style; open saved documents in the builder
   references: { usedIn: ['media'], protectDelete: ['media'] }, // "Used in" lists; `false` turns them off
+  forms: true,                 // the form builder for @payloadcms/plugin-form-builder
 })
 ```
 
@@ -610,7 +612,7 @@ websiteBuilder({
 | `collections[slug].url` | `(doc) => string` | The frontend path of a document. AI tools use it for preview links. The collection list block uses it for links. |
 | `collections[slug].templates` | `boolean` | Documents render through templates. See [Templates](#templates-and-binding). |
 | `collections[slug].legacyFields` | `string[]` | Top-level fields the builder replaced but the collection still has (the old `blocks` field after `migrateBlocksField`). **Publish** in the builder keeps their published value, so only the builder content goes live. See [Using existing Payload blocks](#using-existing-payload-blocks), step 7. |
-| `collections[slug].regions` | `{ name, label?, fields }[]` | Fixed parts of the page that show ordinary document fields outside the layout (a header made of the title and an image). The builder shows and edits the whole page. Left out: the layout alone. See [Whole-page editing](#whole-page-editing-regions-outside-the-layout). |
+| `collections[slug].regions` | `{ name, label?, fields, panel? }[]` | Fixed parts of the page that show ordinary document fields outside the layout (a header made of the title and an image). The builder shows and edits the whole page. Left out: the layout alone. `panel: true`: the right panel edits the region's fields itself, and shows them when no block is selected (the form builder's settings use it). See [Whole-page editing](#whole-page-editing-regions-outside-the-layout). |
 | `collections[slug].localization` | `'props' \| false` | With Payload `localization` on: `'props'` (the default) translates localized props in one shared layout; `false` keeps one set of values. See [Localization](#localization). |
 | `blocks` | `BlockDefinition[]` | The blocks editors can use. Default `defaultBlocks()`. |
 | `listCollections` | `string[]` | More collections the collection list block can show, after the collections with a `url`. Use it for data collections without pages of their own, such as testimonials or team members. Their items have no `$url`. Each slug must be a collection of the config. Pass the same list to `builderMcpTools`. |
@@ -632,6 +634,7 @@ websiteBuilder({
 | `editor.openInBuilder` | `boolean` | Opening a saved document goes straight to the builder instead of Payload's form. Default `false`. Run `generate:importmap` after you turn it on. See [The builder view](#the-builder-view). |
 | `css.fontFamilies` | `(payload) => Record<name, family>` | Font families set at runtime some other way than the Theme global, for the Styles panel's Font list. Its names win over the theme's. |
 | `references` | `{ field?, usedIn?, protectDelete?, maxListed? } \| false` | Which media and documents each layout uses: "Used in" lists and delete protection. On by default. `false` turns it off. See [References and Used in](#references-and-used-in). |
+| `forms` | `{ collection? } \| boolean` | The form builder for the forms of `@payloadcms/plugin-form-builder` (add that plugin first). Default slug `forms`. See [Form builder](#form-builder). |
 | `comments` | `{ slug?, access?, admin?, hooks? } \| boolean` | Comments on blocks in the builder, stored in a `builder-comments` collection. On by default. `false` turns it off. See [Comments on the canvas](#comments-on-the-canvas). |
 
 For each listed collection the plugin adds:
@@ -667,7 +670,8 @@ It also adds these endpoints (signed-in users only):
 
 | Import | Use it in | Holds |
 |---|---|---|
-| `payload-canvas` | `payload.config.ts` (server) | `websiteBuilder`, `defineBlock`, `defaultBlocks`, `fromPayloadBlocks`, `migrateBlocksField`, types |
+| `payload-canvas` | `payload.config.ts` (server) | `websiteBuilder`, `defineBlock`, `defaultBlocks`, `fromPayloadBlocks`, `migrateBlocksField`, `formSubmissionConditions`, types |
+| `payload-canvas/forms` | anywhere | form display conditions (`withFormConditions`, `hiddenFormFields`, `describeConditions`), `formFieldType`, `formFieldSlug`, `FORM_SETTINGS_REGION`. See [Form builder](#form-builder). |
 | `payload-canvas/blocks` | anywhere | `defaultBlocks`, `defineBlock`, `linkField`, `fromPayloadBlocks`, `BUILDER_CSS_CLASS`, `withBuilderCssClass` |
 | `payload-canvas/core` | anywhere | layout types, `normalizeLayout`, `validateLayout`, `applyOperations`, tree helpers, `convertPayloadBlocksLayout`, `toPayloadBlock` |
 | `payload-canvas/css` | server | `compileClasses`, `getStyleTokens`, `tracingIncludes` |
@@ -986,7 +990,7 @@ export async function builderCanvas(request: CanvasServerRequest) {
 }
 ```
 
-`frame` gets the document's latest draft, read as the signed-in user, at `frameDepth` (default 1, so uploads and relationships arrive as documents), in the language the editor shows. It also gets `pageData`, `user`, `locale`, `context` and `mode`. Put `layout` where the page shows the layout: the canvas renders the live layout there, so every block stays selectable, draggable and editable at once. Return `layout` alone (or `null`) to show the layout without a frame.
+`frame` gets the document's latest draft, read as the signed-in user, at `frameDepth` (default 1, so uploads and relationships arrive as documents), in the language the editor shows. It also gets `pageData`, `user`, `locale`, `context` and `mode`. Put `layout` where the page shows the layout: the canvas renders the live layout there, so every block stays selectable, draggable and editable at once. The layout sits in one `div`. To style that box (a flex row of blocks), render `<LayoutOutlet className="…" />` from `payload-canvas/react` instead of `layout`. Return `layout` alone (or `null`) to show the layout without a frame.
 
 **What editors can do with a region:**
 
@@ -1569,6 +1573,83 @@ The `builder` prop holds `mode`, `className`, `slots` (rendered children by slot
 - **Loaded data** is one level deep. A component that needs deeper data loads it itself.
 - **Blocks fields inside a group, a named tab or an array** stay props, edited as JSON. With a Payload blocks field as the builder field, localized fields inside blocks keep every locale, and the builder edits the default locale. A copied JSON layout does not support localized block fields.
 - A Payload slug `list` with an `items` array is read as the old built-in list (`normalizeLayout`). Use `prefix` to avoid that.
+
+## Form builder
+
+Edit the forms of the official [`@payloadcms/plugin-form-builder`](https://payloadcms.com/docs/plugins/form-builder) in the same full-screen builder as pages:
+
+- **Left:** the form's fields in Layers. Drag to reorder. The Blocks tab adds a field of any type the form-builder plugin offers. Duplicate and delete work as for blocks.
+- **Centre:** a live preview of the form alone, rendered by your app's own form component, so it matches the site. A click on a field selects it.
+- **Right:** the selected field's settings (name, label, width, required, default value, placeholder, options, display conditions) with Payload's own inputs. With no field selected, the panel shows the form's settings: title, submit button label, confirmation type and message, redirect, emails.
+- **Top bar:** title, save state, undo and redo, and **All fields** for Payload's own edit screen. Each change saves at once (forms have no drafts).
+
+The form's `fields` stay a Payload `blocks` field: the builder edits it in place, as in [Using existing Payload blocks](#using-existing-payload-blocks). Nothing is copied and nothing needs a migration.
+
+### Turn it on
+
+1. Add `formBuilderPlugin()` before `websiteBuilder()`, and set `forms: true` (or `{ collection: 'my-forms' }` for another slug):
+
+   ```ts
+   import { fields as formFields, formBuilderPlugin } from '@payloadcms/plugin-form-builder'
+   import { formSubmissionConditions, websiteBuilder } from 'payload-canvas'
+   import { withFormConditions } from 'payload-canvas/forms'
+
+   plugins: [
+     formBuilderPlugin({
+       // The plugin's own field blocks, each with a `conditions` field (optional, see below).
+       fields: { text: withFormConditions(formFields.text), email: withFormConditions(formFields.email) /* … */ },
+       // Hidden fields are never required, and their answers are dropped.
+       formSubmissionOverrides: { hooks: { beforeValidate: [formSubmissionConditions()] } },
+     }),
+     websiteBuilder({ collections, forms: true /* … */ }),
+   ]
+   ```
+
+   The plugin adds a **Builder** tab to each form. With `editor.openInBuilder`, a saved form opens in the builder.
+
+2. Show the form in the canvas. The canvas route renders each field with a component of yours. The server action renders the form around the fields as a page frame (see [Whole-page editing](#whole-page-editing-regions-outside-the-layout)). The field types are `formText`, `formEmail`, and so on (`formFieldType('text')`); `formFieldSlug(type)` gives the plugin's `blockType` back.
+
+   ```tsx
+   // CanvasClient.tsx ('use client')
+   import { formFieldType } from 'payload-canvas/forms'
+   const formComponents = Object.fromEntries(['text', 'email', 'textarea', 'select', 'checkbox'].map((slug) => [formFieldType(slug), FormFieldBlock]))
+   <BuilderCanvas components={{ ...blockComponents, ...formComponents }} /* … */ />
+
+   // FormFieldBlock: one field, with the canvas attributes on its root element
+   export function FormFieldBlock({ block, props, attributes }: BlockComponentProps) {
+     const field = { ...props, blockType: formFieldSlug(block.type) }
+     return <MyFormField field={field} attributes={attributes} preview />
+   }
+
+   // actions.tsx ('use server'): the form around the fields
+   createCanvasServer({
+     /* … */
+     frame: ({ document, doc, region }) =>
+       document.collection === 'forms' ? (
+         <form className="flex flex-col gap-5">
+           <LayoutOutlet className="flex flex-wrap gap-x-4 gap-y-5" />
+           {region(FORM_SETTINGS_REGION, <SubmitButton label={doc.submitButtonLabel} />)}
+         </form>
+       ) : null,
+   })
+   ```
+
+   `LayoutOutlet` (from `payload-canvas/react`) is where the fields go. Its `className` styles their box, so fields with a width share a line as on the site. The submit button is the form settings region: a click on it selects the settings. In the preview, inputs should take no clicks (`pointer-events: none`), so a click selects the field. The starter's `FormParts.tsx`, `FormFieldBlock.tsx` and `FormFrame.tsx` are a complete example: the site's `FormView` and the preview render the same field component.
+
+### Display conditions
+
+`withFormConditions(block)` adds a **Display conditions** group to a field block. **Show when** is "all rules match" or "any rule matches". Each rule is *field*, *test*, *value*. Tests: equals, does not equal, contains, is empty, is not empty. Text compares without case; a ticked checkbox equals `true`. In the builder, the rule's field is a list of the form's other fields, and the preview notes each field's conditions under it ("Shows when topic equals “website”"). The preview always shows every field.
+
+- **On the site:** `hiddenFormFields(fields, values)` from `payload-canvas/forms` returns the names of the fields the current answers hide. Do not render, check or send those fields. A rule that reads a hidden field sees it as empty, so chains of conditions work.
+- **On submission:** `formSubmissionConditions()` (a `beforeValidate` hook for the submissions collection) reads the form and drops the answers of hidden fields. It refuses a submission that leaves a shown required field empty (400, "Company is required."). The form-builder plugin has no server check for required fields of its own; this hook adds one.
+- `applyFormConditions(fields, submissionData)` (pure, in `payload-canvas`) is the same rule without Payload, for your own handlers.
+
+### Limits
+
+- A new field starts with its type as its name (`text`, `checkbox`). Give it a unique name before visitors use the form: Payload does not check that names are unique.
+- A setting that needs another field (choosing **Redirect** needs a page or a URL) waits until that field has a value, then both save together.
+- Labels that the form-builder plugin writes as translation functions show as words from the field name in the builder ("Submit Button Label").
+- The AI assistant and the MCP tools do not edit forms yet.
 
 ## Sections
 
