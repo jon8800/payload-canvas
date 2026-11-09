@@ -733,6 +733,26 @@ export interface Form {
             width?: number | null;
             required?: boolean | null;
             defaultValue?: boolean | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
             id?: string | null;
             blockName?: string | null;
             blockType: 'checkbox';
@@ -742,6 +762,26 @@ export interface Form {
             label?: string | null;
             width?: number | null;
             required?: boolean | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
             id?: string | null;
             blockName?: string | null;
             blockType: 'country';
@@ -751,6 +791,26 @@ export interface Form {
             label?: string | null;
             width?: number | null;
             required?: boolean | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
             id?: string | null;
             blockName?: string | null;
             blockType: 'email';
@@ -771,6 +831,26 @@ export interface Form {
               };
               [k: string]: unknown;
             } | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
             id?: string | null;
             blockName?: string | null;
             blockType: 'message';
@@ -781,6 +861,26 @@ export interface Form {
             width?: number | null;
             defaultValue?: number | null;
             required?: boolean | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
             id?: string | null;
             blockName?: string | null;
             blockType: 'number';
@@ -799,6 +899,26 @@ export interface Form {
                 }[]
               | null;
             required?: boolean | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
             id?: string | null;
             blockName?: string | null;
             blockType: 'select';
@@ -808,6 +928,26 @@ export interface Form {
             label?: string | null;
             width?: number | null;
             required?: boolean | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
             id?: string | null;
             blockName?: string | null;
             blockType: 'state';
@@ -818,6 +958,26 @@ export interface Form {
             width?: number | null;
             defaultValue?: string | null;
             required?: boolean | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
             id?: string | null;
             blockName?: string | null;
             blockType: 'text';
@@ -828,6 +988,26 @@ export interface Form {
             width?: number | null;
             defaultValue?: string | null;
             required?: boolean | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
             id?: string | null;
             blockName?: string | null;
             blockType: 'textarea';
@@ -885,6 +1065,30 @@ export interface Form {
         id?: string | null;
       }[]
     | null;
+  fieldsBuilder?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  fieldsRichText?: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  } | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -2045,6 +2249,19 @@ export interface FormsSelect<T extends boolean = true> {
               width?: T;
               required?: T;
               defaultValue?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
               id?: T;
               blockName?: T;
             };
@@ -2055,6 +2272,19 @@ export interface FormsSelect<T extends boolean = true> {
               label?: T;
               width?: T;
               required?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
               id?: T;
               blockName?: T;
             };
@@ -2065,6 +2295,19 @@ export interface FormsSelect<T extends boolean = true> {
               label?: T;
               width?: T;
               required?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
               id?: T;
               blockName?: T;
             };
@@ -2072,6 +2315,19 @@ export interface FormsSelect<T extends boolean = true> {
           | T
           | {
               message?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
               id?: T;
               blockName?: T;
             };
@@ -2083,6 +2339,19 @@ export interface FormsSelect<T extends boolean = true> {
               width?: T;
               defaultValue?: T;
               required?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
               id?: T;
               blockName?: T;
             };
@@ -2102,6 +2371,19 @@ export interface FormsSelect<T extends boolean = true> {
                     id?: T;
                   };
               required?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
               id?: T;
               blockName?: T;
             };
@@ -2112,6 +2394,19 @@ export interface FormsSelect<T extends boolean = true> {
               label?: T;
               width?: T;
               required?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
               id?: T;
               blockName?: T;
             };
@@ -2123,6 +2418,19 @@ export interface FormsSelect<T extends boolean = true> {
               width?: T;
               defaultValue?: T;
               required?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
               id?: T;
               blockName?: T;
             };
@@ -2134,6 +2442,19 @@ export interface FormsSelect<T extends boolean = true> {
               width?: T;
               defaultValue?: T;
               required?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
               id?: T;
               blockName?: T;
             };
@@ -2160,6 +2481,8 @@ export interface FormsSelect<T extends boolean = true> {
         message?: T;
         id?: T;
       };
+  fieldsBuilder?: T;
+  fieldsRichText?: T;
   updatedAt?: T;
   createdAt?: T;
 }

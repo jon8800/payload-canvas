@@ -7,6 +7,7 @@ import config from '@payload-config'
 import { createCanvasServer, type CanvasServerRequest } from 'payload-canvas/react/server'
 import { builderBlocks, resolveLink } from '@/builder'
 import { loadPageData, serverBlockComponents } from '@/components/blocks/server'
+import { FormFrame } from '@/components/blocks/FormFrame'
 
 const canvas = createCanvasServer({
   config,
@@ -14,6 +15,9 @@ const canvas = createCanvasServer({
   components: serverBlockComponents,
   resolveLink,
   pageData: async (args) => (await loadPageData(args)) ?? {},
+  // The form builder (`websiteBuilder({ forms })`): the form around its fields, as the site shows
+  // it. Other documents have no regions, so they never ask for a frame.
+  frame: ({ document, doc, region }) => (document.collection === 'forms' ? <FormFrame doc={doc} region={region} /> : null),
 })
 
 export async function builderCanvas(request: CanvasServerRequest) {
