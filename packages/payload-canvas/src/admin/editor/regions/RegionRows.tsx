@@ -14,7 +14,7 @@ export function RegionRows() {
   const hovered = useOptionalValue(regions?.hovered ?? null)
   if (!regions || regions.config.length === 0) return null
   return (
-    <section className="builder-region__rows" aria-label="Fixed parts of the page">
+    <section className="builder-region__rows" aria-label={regions.config.every((r) => r.panel) ? 'Settings' : 'Fixed parts of the page'}>
       {regions.config.map((region) => (
         <button
           key={region.name}
@@ -28,17 +28,17 @@ export function RegionRows() {
             .filter(Boolean)
             .join(' ')}
           aria-pressed={selected === region.name}
-          data-tooltip="A fixed part of the page: its fields, not blocks"
+          data-tooltip={region.panel ? 'Settings of this document' : 'A fixed part of the page: its fields, not blocks'}
           data-tooltip-side="right"
           onClick={() => regions.selected.set(region.name)}
           onPointerEnter={() => regions.hovered.set(region.name)}
           onPointerLeave={() => regions.hovered.set(null)}
         >
           <span className="builder-editor__row-icon">
-            <Icon name="lock" size={14} />
+            <Icon name={region.panel ? 'rename' : 'lock'} size={14} />
           </span>
           <span className="builder-editor__row-type">{region.label}</span>
-          <span className="builder-editor__row-text">Fixed</span>
+          <span className="builder-editor__row-text">{region.panel ? 'Settings' : 'Fixed'}</span>
         </button>
       ))}
     </section>

@@ -28,6 +28,7 @@ import { ManyValuesField } from './fields/ManyValuesField'
 import { PointField } from './fields/PointField'
 import { RelatedField } from './fields/RelatedField'
 import { RichTextField } from './fields/RichTextField'
+import { FormFieldNameField } from './fields/FormFieldName'
 import { SortField } from './fields/SortField'
 import { fieldMergeKey } from './fields/undoPath'
 import { asId, formatProblem, fromRelationshipInput, isFieldVisible, isRecord, toRelationshipInput, type FieldShape } from './fields/values'
@@ -81,8 +82,15 @@ function fieldDescription(field: Field): string | undefined {
   return text((field.admin as { description?: unknown } | undefined)?.description)
 }
 
+/** Words from an option value, for options whose label was a function (it does not reach the admin). */
+const valueWords = (value: string) => value.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').replace(/^./, (c) => c.toUpperCase())
+
 function toOptions(options: unknown[]): OptionObject[] {
-  return options.map((o) => (typeof o === 'string' ? { label: o, value: o } : (o as OptionObject)))
+  return options.map((o) => {
+    if (typeof o === 'string') return { label: o, value: o }
+    const option = o as OptionObject
+    return option.label === undefined || option.label === null ? { ...option, label: valueWords(String(option.value)) } : option
+  })
 }
 
 function asString(value: unknown): string {
@@ -124,6 +132,10 @@ export function RenderBlockField({ field, onChange, path, value, siblings, onSib
   switch (field.type) {
     case 'text':
     case 'email': {
+      // `admin.custom.builderFormField`: the name of another field of the same form (display conditions).
+      if (field.admin?.custom?.builderFormField) {
+        return <FormFieldNameField description={description} label={label} onChange={onChange} path={path} required={required} value={value} />
+      }
       if (field.type === 'text' && field.hasMany) {
         return <ManyValuesField description={description} kind="text" label={label} onChange={onChange} path={path} required={required} value={value} />
       }
@@ -523,6 +535,23 @@ const fieldAt = (node: EventTarget | null) =>
 const TEXT_INPUT = 'textarea, input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="url"], input[type="number"], input[type="tel"]'
 
 /**
+ * Ctrl+Z / Ctrl+Shift+Z (Cmd on a Mac) and Ctrl+Y in an inspector text input run the editor's undo
+ * and redo, not the browser's text undo. Put it on the element around the inputs (`onKeyDown`).
+ */
+export function undoKeysHandler(runtime: ReturnType<typeof useRuntime>) {
+  return (e: KeyboardEvent<HTMLDivElement>) => {
+    const mod = e.ctrlKey || e.metaKey
+    if (!mod || e.altKey || !(e.target instanceof Element) || !e.target.matches(TEXT_INPUT)) return
+    const key = e.key.toLowerCase()
+    const action = key === 'z' ? (e.shiftKey ? 'redo' : 'undo') : key === 'y' && !e.shiftKey ? 'redo' : null
+    if (!action) return
+    e.preventDefault()
+    if (action === 'undo') runtime.store.undo()
+    else runtime.store.redo()
+  }
+}
+
+/**
  * The Content tab of the block inspector: every field of the selected block, with conditions.
  * Each changed prop becomes one `update` operation.
  *
@@ -577,16 +606,7 @@ export function BlockContentFields({ block }: { readonly block: Block }) {
     runtime.store.endMerge()
     if (!(e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget))) field.set(null)
   }
-  const onUndoKeys = (e: KeyboardEvent<HTMLDivElement>) => {
-    const mod = e.ctrlKey || e.metaKey
-    if (!mod || e.altKey || !(e.target instanceof Element) || !e.target.matches(TEXT_INPUT)) return
-    const key = e.key.toLowerCase()
-    const action = key === 'z' ? (e.shiftKey ? 'redo' : 'undo') : key === 'y' && !e.shiftKey ? 'redo' : null
-    if (!action) return
-    e.preventDefault()
-    if (action === 'undo') runtime.store.undo()
-    else runtime.store.redo()
-  }
+  const onUndoKeys = undoKeysHandler(runtime)
 
   const fieldList = (
     <FieldProblemsProvider block={block}>

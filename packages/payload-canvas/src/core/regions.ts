@@ -14,6 +14,11 @@ export type RegionOption = {
   label?: string
   /** Dot paths of the document fields the region shows, e.g. `['title', 'header.image']`. */
   fields: string[]
+  /**
+   * The inspector shows the region's fields itself, also when no block is selected, instead of
+   * links to the settings drawer. For document settings that sit next to the layout.
+   */
+  panel?: boolean
 }
 
 /** Fields the plugin or Payload owns. A region never edits them. */
@@ -115,7 +120,7 @@ export function resolveRegions(
         tabs,
       }
     })
-    return { name: option.name, label: option.label?.trim() || humanize(option.name), fields: resolved }
+    return { name: option.name, label: option.label?.trim() || humanize(option.name), fields: resolved, ...(option.panel ? { panel: true } : {}) }
   })
 }
 
