@@ -168,17 +168,30 @@
     font-size: 0.8125rem;
   }
 
+  // Same size as the starter's Status badges (Draft, Published): 12px text, a dot, 2px 8px padding.
   // Payload flips these scales in dark mode, so the same steps work in both themes.
   .form-submission-badge {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     // List cells make their children block boxes: keep the badge as wide as its text.
     width: fit-content;
-    padding: 0 calc(var(--base) * 0.35);
+    padding: 2px 8px;
     border-radius: 999px;
     background: var(--theme-success-100);
     color: var(--theme-success-750);
-    font-size: 0.6875rem;
-    font-weight: 600;
-    line-height: 1.6;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 18px;
+    white-space: nowrap;
+
+    &::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      opacity: 0.8;
+    }
   }
 }
