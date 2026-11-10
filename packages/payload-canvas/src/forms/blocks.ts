@@ -4,9 +4,12 @@
 import type { Block as PayloadBlockConfig } from 'payload'
 
 import { fromPayloadBlocks } from '../blocks/payload'
-import type { BlockDefinition } from '../core/types'
+import type { BlockDefinition, PartDefinition } from '../core/types'
 import { FORM_CONDITIONS_FIELD } from './conditions'
 import { WIDTH_PICKER_MARKER } from './fieldSettings'
+
+/** `admin.custom.builderFieldName` on a field's `name`: the builder warns when a form with submissions renames it. */
+export const FIELD_NAME_MARKER = 'builderFieldName'
 
 /** Prefix of the builder types: the form-builder block `text` is the builder type `formText`. */
 export const FORM_FIELD_PREFIX = 'form'
@@ -51,13 +54,43 @@ const KNOWN: Record<string, { label: string; icon: string; description: string }
   payment: { label: 'Payment', icon: 'block', description: 'A payment field.' },
 }
 
+/** The parts of a field block (its own classes win over the form's). */
+export const FORM_FIELD_PARTS = {
+  label: 'Label',
+  input: 'Input',
+  help: 'Help text',
+  error: 'Error message',
+  options: 'Options',
+} as const
+
+export type FormFieldPartName = keyof typeof FORM_FIELD_PARTS
+
+/** The parts each field type has. Types not listed have label, input, help text and error. */
+const FIELD_PARTS_BY_SLUG: Record<string, FormFieldPartName[]> = {
+  message: [],
+  hidden: [],
+  checkbox: ['label', 'help', 'error'],
+  consent: ['label', 'help', 'error'],
+  radio: ['label', 'options', 'help', 'error'],
+  file: ['label', 'help', 'error'],
+}
+
+/** The `parts` of a field block of the plugin's type `slug`. Undefined when it has none. */
+export function formFieldParts(slug: string): Record<string, PartDefinition> | undefined {
+  const names = FIELD_PARTS_BY_SLUG[slug] ?? (['label', 'input', 'help', 'error'] as FormFieldPartName[])
+  if (names.length === 0) return undefined
+  // Until the field sets its own classes, a part uses the same part of its Form block (options have none there).
+  return Object.fromEntries(
+    names.map((name) => [name, { label: FORM_FIELD_PARTS[name], ...(name === 'options' ? {} : { inherits: { ancestor: 'form' } }) }]),
+  )
+}
+
 /** The tab of a form field's settings, by field name. Other fields stay on the Field tab. */
 const TAB_OF: Record<string, 'Appearance' | 'Validation' | 'Conditions'> = {
   width: 'Appearance',
   labelVisibility: 'Appearance',
   placeholder: 'Appearance',
   display: 'Appearance',
-  cssClass: 'Appearance',
   required: 'Validation',
   accept: 'Validation',
   maxSize: 'Validation',
@@ -85,7 +118,9 @@ export function formFieldBlocks(blocks: readonly PayloadBlockConfig[]): BlockDef
         {
           category: FORM_FIELD_CATEGORY,
           ...(known ? { label: known.label, icon: known.icon } : {}),
-          ai: { description: `${known?.label ?? block.slug} field of a form (form-builder "${block.slug}" block).` },
+          ai: {
+            description: `${known?.label ?? block.slug} field of a form (form-builder "${block.slug}" block). On a page it goes inside a Form block (at any depth); \`name\` is unique in that form.`,
+          },
         },
       ]
     }),
@@ -95,9 +130,11 @@ export function formFieldBlocks(blocks: readonly PayloadBlockConfig[]): BlockDef
     const known = KNOWN[slug]
     // A new field starts with a name and a label, so the form saves at once (the plugin requires
     // a name). Only the builder's insert uses these defaults; the stored data is unchanged.
-    const fields = inTabs(withWidthPicker(withStartValues(def.fields, { name: slug, label: known?.label ?? def.label })))
+    const fields = inTabs(withWidthPicker(withNameMarker(withStartValues(def.fields, { name: slug, label: known?.label ?? def.label }))))
     // Two fields with one name would overwrite each other's answers: a new or copied field gets `text2`.
-    return { ...def, fields, uniqueProps: ['name'], ...(known ? { description: known.description } : {}) }
+    // Parts: the label, input, help text, error and options take classes of their own (Styles panel).
+    const parts = formFieldParts(slug)
+    return { ...def, fields, uniqueProps: ['name'], ...(parts ? { parts } : {}), ...(known ? { description: known.description } : {}) }
   })
 }
 
@@ -111,6 +148,17 @@ function withStartValues<T>(fields: T[], values: Record<string, string>): T[] {
     const name = typeof field.name === 'string' ? field.name : ''
     if (name in values && field.defaultValue === undefined) return { ...field, defaultValue: values[name] } as T
     return raw
+  })
+}
+
+/** The fields with the top-level `name` text (also inside rows) marked for the rename warning. */
+function withNameMarker<T>(fields: T[]): T[] {
+  return fields.map((raw) => {
+    const field = raw as unknown as LooseField
+    if (Array.isArray(field.fields) && !field.name) return { ...field, fields: withNameMarker(field.fields) } as T
+    if (field.name !== 'name' || field.type !== 'text') return raw
+    const admin = (field.admin ?? {}) as { custom?: Record<string, unknown> }
+    return { ...field, admin: { ...admin, custom: { ...admin.custom, [FIELD_NAME_MARKER]: true } } } as T
   })
 }
 
