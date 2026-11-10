@@ -101,7 +101,7 @@ export function FormBlockActions({ path }: { path: string }) {
   const { config } = useConfig()
   const blockId = propPathOf(path)?.blockId ?? ''
   const block = useEditor(runtime.store, (s) => findBlock(s.view, blockId))
-  const mode = formBlockMode(block?.props)
+  const mode = formBlockMode(block?.props, block?.slots)
   const formId = formIdOf(block?.props?.form)
   const count = useSubmissionCount(runtime, formId)
   const [busy, setBusy] = useState(false)

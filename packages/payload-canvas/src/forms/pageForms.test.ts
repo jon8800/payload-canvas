@@ -102,6 +102,9 @@ describe('forms on pages: definitions', () => {
     assert.equal(formBlockMode({ mode: 'build', form: 3 }), 'build')
     assert.equal(formBlockMode({ form: 15 }), 'saved')
     assert.equal(formBlockMode({}), 'build')
+    // A block without a mode that holds fields (MCP, the assistant) stays "build" once the publish gave it a form id.
+    assert.equal(formBlockMode({ form: 15 }, { [FORM_SLOT]: [text('t', 'name')] }), 'build')
+    assert.equal(formBlockMode({ mode: 'saved', form: 15 }, { [FORM_SLOT]: [text('t', 'name')] }), 'saved')
   })
 
   it('starts a new Form block as a ready contact form', () => {
@@ -269,6 +272,17 @@ describe('forms on pages: sync with the forms collection', () => {
     const next = withFormIds(page, new Map([['f1', 42]]))
     assert.equal(pageFormBlocks(next)[0]?.props?.form, 42)
     assert.equal(withFormIds(next, new Map([['f1', 42]])), next)
+  })
+
+  it('keeps a Form block without a mode in "build" after the first publish', () => {
+    // As MCP or the assistant inserts it: no `mode`.
+    const layout: Layout = { version: 1, blocks: [form('m', [text('t', 'name'), { id: 's', type: FORM_SUBMIT_BLOCK }], {})] }
+    assert.deepEqual(pageFormBlocks(layout).map((b) => b.id), ['m'])
+    const next = withFormIds(layout, new Map([['m', 7]]))
+    assert.deepEqual(next.blocks[0]?.props, { mode: 'build', form: 7 })
+    // Still synced on the next publish, and the site never puts a saved form's fields over its children.
+    assert.deepEqual(pageFormBlocks(next).map((b) => b.id), ['m'])
+    assert.equal(withSavedFormFields({ version: 1, blocks: [{ ...next.blocks[0]!, props: { form: { id: 7, fields: [] } } }] }).blocks[0]!.slots![FORM_SLOT]!.length, 2)
   })
 
   it('gives a saved form\'s fields to its Form block on the site, and its classes to the page CSS', () => {
