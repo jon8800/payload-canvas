@@ -2,7 +2,7 @@
 
 import { createContext, use } from 'react'
 
-import { findBlock, setStyleValue, type Breakpoint, type StyleTokens, type Variant } from '../../../core'
+import { findBlock, partClassNameOf, setStyleValue, type Breakpoint, type StyleTokens, type Variant } from '../../../core'
 import type { BuilderClass } from '../../../classes/shared'
 import type { ClassesController } from '../classes/controller'
 import type { ValueStore } from '../valueStore'
@@ -49,10 +49,14 @@ export function useStyles(): StylesContextValue {
   return value
 }
 
-/** Reads the latest classes from the store, so two edits in one frame never overwrite each other. */
+/**
+ * Reads the latest classes from the store, so two edits in one frame never overwrite each other.
+ * A part without classes of its own starts from the classes it inherits (a field's label from its form's).
+ */
 function currentClassName(runtime: Runtime, { blockId, part }: StyleTarget): string {
-  const block = findBlock(runtime.store.getState().layout, blockId)
-  return (part ? block?.partClassName?.[part] : block?.className) ?? ''
+  const { layout } = runtime.store.getState()
+  if (part) return partClassNameOf(layout, blockId, part, runtime.config.blocks)
+  return findBlock(layout, blockId)?.className ?? ''
 }
 
 export function writeClassName(runtime: Runtime, target: StyleTarget, next: string, mergeKey?: string) {
