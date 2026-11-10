@@ -1595,7 +1595,7 @@ The form's `fields` stay a Payload `blocks` field: the builder edits it in place
 
    ```ts
    import { fields as formFields, formBuilderPlugin } from '@payloadcms/plugin-form-builder'
-   import { formEmails, formFileUploads, formSubmissionConditions, websiteBuilder } from 'payload-canvas'
+   import { formEmails, formFileUploads, formFileUploadsCleanup, formSubmissionConditions, websiteBuilder } from 'payload-canvas'
    import { withFormConditions, withFormEmailFields, withFormFieldSettings } from 'payload-canvas/forms'
 
    plugins: [
@@ -1611,6 +1611,8 @@ The form's `fields` stay a Payload `blocks` field: the builder edits it in place
            beforeValidate: [formSubmissionConditions()],
            // Files of `file` fields go to a private upload collection and are linked on the submission (see "More field types").
            beforeChange: [formFileUploads({ collection: 'form-files', field: 'attachments' })],
+           // A submission that fails after its files were stored removes them again.
+           afterError: [formFileUploadsCleanup()],
          },
        },
      }),
@@ -1677,12 +1679,25 @@ Build a form right on a page, like in Webflow: the fields are blocks inside a **
 
 - **Field names** are unique within one Form block: two forms may each have an `email`. A copied, pasted or duplicated field gets a free name (`email2`). Renaming a field of a form with submissions shows a warning: old submissions keep the old name.
 - **A field's own looks:** each field block has its own classes (its box) and parts (Label, Input, Help text, Error message, Options). A part without classes uses the Form block's classes; the Styles panel starts from them, so changing one value copies the rest. Clearing a part's classes goes back to the form's.
-- **Publishing** the page (or saving it, for collections without drafts) writes each "Build here" Form block to a document of the Forms collection: its fields in tree order (the plugin's own field rows) and its settings. Emails, spam protection and submissions keep working through the plugin. Drafts and the canvas use the block's own data, so a draft never changes the live form. A form without a title gets the page title ("Contact form"); without a confirmation message, "Thank you. We will reply soon."
-- **Copies:** each form remembers the block it was made from (a hidden `source` group: collection, document id, block id). A copied page or a duplicated Form block gets its own new form when it is published, never the original's. Deleting a Form block keeps its form, with its submissions.
-- **Move into this page** keeps the form's id (and its submissions) when no other page uses it; otherwise this page gets its own copy on publish. The form builder shows a note on forms built on a page, with a link to the page: a publish that changes the form there replaces changes made in the form builder.
+- **Publishing** the page (or saving it, for collections without drafts) writes each "Build here" Form block to a document of the Forms collection: its fields in tree order (the plugin's own field rows) and its settings. Emails, spam protection and submissions keep working through the plugin. Drafts and the canvas use the block's own data, so a draft never changes the live form. A form without a title gets the page title ("Contact form"); without a confirmation message, "Thank you. We will reply soon." A page created already published (REST, MCP, a copy in a collection without drafts) gets its forms right after the create. A Form block without a `mode` that holds fields (as MCP and the assistant insert it) is "Build here", and the publish sets `mode: 'build'`.
+- **Copies:** each form remembers the block it was made from (a hidden `source` group: collection, document id, block id). A copied page or a duplicated Form block gets its own new form when it is published, never the original's. A create never takes over another document's form.
+- **Removed forms:** deleting a Form block keeps its form, with its submissions. A new submission to a form built on a page or a saved section is refused (410, "This form is no longer on the site.") when that document no longer shows it: the block is gone, or the page is unpublished or deleted. Forms made in the Forms collection are not checked.
+- **Saved sections:** a Form block in a saved section (`builder-sections`) is written when the section is saved (sections have no drafts): one form per section block, shared by every page that shows the section live. A copy of the section on a page (inserted or detached) is a page block and gets its own form.
+- **Move into this page** puts the saved form's fields in place of the block's content, in one undo step. It writes nothing: the page's next publish takes the form over (its id and its submissions stay) when no other document uses it and no other block owns it. Otherwise, or without the references index (`references: false`, so usage is unknown), the page gets its own copy on publish. An undo, or closing the page without publishing, leaves the form as it was. The form is read with the user's access. The form builder shows a note on forms built on a page, with a link to the page: a publish that changes the form there replaces changes made in the form builder.
+- **Who edits a page form:** the publish writes the form as the system (access off), so whoever may publish the page edits its form, emails included. To limit that, limit who may update or publish the page collection, or give a setting field of the forms collection its own `access.update` (for example on `emails`): the Form block's props keep the field's access, so the inspector, REST and MCP keep the stored value for users without it.
+- **Locales:** with Payload's localization the publish writes the default locale explicitly. When the forms collection has localized fields, it writes each other locale too, from the block's translations.
 - **AI:** MCP tools and the assistant use the same blocks. `listBlocks` explains the Form block, its modes and that fields go inside it.
 
 The `source` group is a new set of columns on the forms table: production needs a migration (`pnpm payload migrate:create`).
+
+### Forms without JavaScript
+
+A form must send when JavaScript is off or failed to load. The starter's form is a real `<form method="post" action="/forms/submit" enctype="multipart/form-data">` with two hidden inputs (`_form`: the form id, `_return`: the page path). With JavaScript, its submit handler sends the request as before and the post never happens.
+
+- `app/(frontend)/forms/submit/route.ts` reads the native form data, builds the same submission the script sends (`noScriptSubmission(form.fields, formData)`: answers by field name, files as parts, the honeypot), and creates it with the Local API as the visitor (no user, `overrideAccess: false`, the request's headers and files), so every submissions hook runs. It sets `context[FORM_NO_SCRIPT_CONTEXT]` (only server code can): the fill time cannot be measured, so that check passes; the honeypot and the rate limit stay. A form that uses Turnstile is refused with a clear message (the check needs its widget). Files of a failed submission are removed (`removeStoredFormFiles`).
+- It redirects with 303 back to the page (the `Referer` on this site, else `_return`; `safeReturnPath` refuses other hosts), with the result in the query (`formResultSearch`: `?form-result=sent|error&form-id=…`, the message and the problems) and `#form-<id>`. A form with a redirect confirmation goes there instead.
+- Pages stay static: `proxy.ts` rewrites only addresses with `form-result` to the dynamic `app/(frontend)/form-result/[[...slug]]` route, which renders the same page inside `FormResultProvider` (`readFormResult`). The form the result belongs to shows its confirmation, or its problems above the button, in the server render. A result view is `noindex`, and a submission's page address leaves the result out (`withoutFormResult`).
+- Limits: after a refused post the answers are empty again (they never go into the address). Fields that need JavaScript to change (the dropdown, the file drop zone's list) post their default or native value.
 
 ### Display conditions
 
@@ -1717,7 +1732,7 @@ The `source` group is a new set of columns on the forms table: production needs 
 | `url` | text | an http or https address; `example.com` counts |
 | `hidden` | its **Value**, sent with every answer | none. The preview shows it as a dashed note |
 | `consent` | `true` or `false` | must be ticked when required (the default). Its **Text** is rich text, so it can link to the privacy policy |
-| `file` | the files, in an upload collection | **Allowed file types** (`image/*, application/pdf, .docx`), **Largest file (MB)** for each file (at most 10 MB), and **Allow several files** with **Most files** (default 5, at most 20) |
+| `file` | the files, in an upload collection | **Allowed file types** (`image/*, application/pdf, .docx`; empty: images, PDF, office documents, text and CSV), **Largest file (MB)** for each file (at most 10 MB), and **Allow several files** with **Most files** (default 5, at most 20). HTML, SVG, scripts and XML are never taken |
 
 The plugin's own `radio` and `date` types need nothing extra. `formAnswerProblem` checks that a radio or select answer is one of the options, and that a date is a real date.
 
@@ -1734,7 +1749,11 @@ formBuilderPlugin({
 })
 ```
 
-Your form renders them (the starter's `FormParts.tsx` is an example). For a `file` field, send the submission as multipart form data: the JSON in `_payload`, and each file as a part named after its field (several files: several parts with the same name), with the file names as the field's answer in `submissionData`. `filesProblem(files, field)` checks the number of files, their type and size; the starter's drop zone (`FileDropZone.tsx`) shows its message at once. `formFileUploads({ collection, field })` (a submissions `beforeChange` hook) runs the same check again, stores each file in `collection` (required), and links them on `field` (default `attachments`: a `hasMany` relationship or upload field you add to the submissions). It replaces the answer with the file names and addresses, so emails show them. Keep `collection` private: visitors send CVs and other private files. Give it `read` access for signed-in users only and a `staticDir` outside `public/` (the starter's `src/collections/FormFiles.ts`); never use a public collection such as Media. A file field that the visitor's answers hide is skipped. Links a visitor sends in `attachments` are ignored. The plugin's own `upload` type cannot take display conditions (the plugin ignores a config for it), so use `file`.
+Your form renders them (the starter's `FormParts.tsx` is an example). For a `file` field, send the submission as multipart form data: the JSON in `_payload`, and each file as a part named after its field (several files: several parts with the same name), with the file names as the field's answer in `submissionData`. `filesProblem(files, field)` checks the number of files, their type and size; the starter's drop zone (`FileDropZone.tsx`) shows its message at once. `formFileUploads({ collection, field })` (a submissions `beforeChange` hook) runs the same check again, stores each file in `collection` (required), and links them on `field` (default `attachments`: a `hasMany` relationship or upload field you add to the submissions). It replaces the answer with the file names and addresses, so emails show them. Keep `collection` private: visitors send CVs and other private files. Give it `read` access for signed-in users only and a `staticDir` outside `public/` (the starter's `src/collections/FormFiles.ts`); never use a public collection such as Media. A file field that the visitor's answers hide is skipped. Links a visitor sends in `attachments` are ignored, and so is any answer a visitor writes for a file field: only stored files answer it.
+
+File types are checked by the file's ending and its MIME type (`fileTypeAllowed`). An ending in `accept` (`.pdf`) must match the name; a MIME pattern (`image/*`) needs both the type the browser sends and the type of the ending to match, so a file never passes on the browser's word alone. An empty `accept` takes `DEFAULT_FILE_ACCEPT` (images except SVG, PDF, office documents, text, CSV), never any type. HTML, SVG, scripts and XML (`fileTypeBlocked`) are refused whatever `accept` says: a stored file opens on the site's own address, where its script would run with a signed-in admin's cookies. Serve the upload collection's files as downloads too: the starter's `FormFiles.ts` sets `Content-Disposition: attachment` and `X-Content-Type-Options: nosniff` with `upload.modifyResponseHeaders`.
+
+When a submission fails after its files were stored (a refused answer, a database error), `formFileUploadsCleanup()` (a submissions `afterError` hook) deletes the upload documents and their files on disk. Payload runs `afterError` for REST and GraphQL requests; server code calls `removeStoredFormFiles(req)` after a failed Local API create. With a cloud storage adapter (no `staticDir`) the files stay. The plugin's own `upload` type cannot take display conditions (the plugin ignores a config for it), so use `file`.
 
 ### Emails
 
@@ -1778,18 +1797,19 @@ import { formSpamProtection, formSubmissionConditions, spamProtectionField } fro
 formBuilderPlugin({
   formOverrides: { fields: ({ defaultFields }) => [...defaultFields, spamProtectionField()] },
   // Spam checks first, then the display conditions.
-  formSubmissionOverrides: { hooks: { beforeValidate: [formSpamProtection(), formSubmissionConditions()] } },
+  // trustedIpHeader: the header the proxy in front of the server sets (see "Rate limit").
+  formSubmissionOverrides: { hooks: { beforeValidate: [formSpamProtection({ trustedIpHeader: 'x-forwarded-for' }), formSubmissionConditions()] } },
 })
 ```
 
 - **Honeypot** (on by default): a hidden input people never see. A bot that fills it is refused.
-- **Minimum fill time** (default 3 seconds): a form sent faster than this after it showed is refused.
+- **Minimum fill time** (default 3 seconds): a form sent faster than this after it showed is refused. This is a heuristic only: the visitor's browser measures the time, so a bot can send any value. The honeypot, the rate limit and Turnstile are the real checks. (Signed timestamps are not used: cached pages make them unreliable.)
 - **Cloudflare Turnstile** (off by default): needs `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY`. Without both keys it stays off, even when a form turns it on. The server checks each token with Cloudflare and refuses when the check fails.
-- **Rate limit** per visitor IP (default 5 per 10 minutes, 0 turns it off). Counts live in Payload's key-value store (`payload.kv`) under a hash of the IP. The IP comes from `cf-connecting-ip`, `x-real-ip`, then the first `x-forwarded-for` entry; without one the limit does not apply.
+- **Rate limit** per visitor IP (default 5 per 10 minutes, 0 turns it off). Counts live in Payload's key-value store (`payload.kv`) under a hash of the IP. Any visitor can send IP headers, so none is trusted by default, and without an IP the limit does not apply. Set `trustedIpHeader` to the header your proxy sets: `'x-forwarded-for'` behind one reverse proxy (nginx, Caddy, Traefik) that appends the address it sees (the rightmost entry is used, never the ones the visitor wrote before it); `'x-real-ip'` for a proxy that sets that header; `'cf-connecting-ip'` only when Cloudflare is the only way to reach the server. For other setups pass `ipOf(req)`. The starter trusts `x-forwarded-for`.
 
 A blocked submission is not stored. The server logs it (`Form submission blocked`, with the reason) and answers with one generic message, "Your message could not be sent. Please try again later." (400, or 429 for the rate limit), so bots learn nothing.
 
-Your form sends the checks' values next to the answers: `{ form, submissionData, spam: { honeypot, elapsedMs, token } }`. `honeypot` is the value of the hidden input named `HONEYPOT_NAME`, `elapsedMs` the time since the form showed, `token` the Turnstile token. The hook removes `spam` before the submission is stored. `spamProtection.turnstileSiteKey` (a virtual field) holds the site key on read, only when the form uses Turnstile and both keys are set, so the renderer needs no environment variable. Server code (Local API) and signed-in admins in the admin's create view are not checked. The starter's `FormView.tsx` and `Turnstile.tsx` are a complete renderer.
+Your form sends the checks' values next to the answers: `{ form, submissionData, spam: { honeypot, elapsedMs, token } }`. `honeypot` is the value of the hidden input named `HONEYPOT_NAME`, `elapsedMs` the time since the form showed, `token` the Turnstile token. The hook removes `spam` before the submission is stored. `spamProtection.turnstileSiteKey` (a virtual field) holds the site key on read, only when the form uses Turnstile and both keys are set, so the renderer needs no environment variable. Server code (Local API) that sends no `spam` values and signed-in admins in the admin's create view are not checked; server code that sends them (the no-JavaScript route) is. The starter's `FormView.tsx` and `Turnstile.tsx` are a complete renderer.
 
 ### Form submissions admin
 
@@ -1819,7 +1839,7 @@ formBuilderPlugin({
 ### Limits
 
 - A new field starts with its type as its name (`text`, `checkbox`). A second one gets `text2`, and a duplicated or pasted field gets a free name too (`uniqueProps`, scoped to the Form block on pages). Payload itself does not check that names are unique, so a field renamed by hand can still clash; on pages, Publish reports it.
-- Forms on pages use the default locale's values of their props.
+- Forms on pages write the forms collection's other locales only when its fields are localized; otherwise the form holds the default locale's text.
 - A Form block in "Use a saved form" mode shows the saved form's own field classes on the site; the canvas preview of it shows only classes the site's CSS has.
 - A setting that needs another field (choosing **Redirect** needs a page or a URL) waits until that field has a value, then both save together.
 - Labels that the form-builder plugin writes as translation functions show as words from the field name in the builder ("Submit Button Label").
