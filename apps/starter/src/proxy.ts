@@ -3,6 +3,16 @@ import type { NextRequest } from 'next/server'
 import { LOCALE_HEADER, localeOfPath } from '@/lib/locales'
 import { findRedirect, redirectTable } from '@/lib/redirects'
 
+/** A form sent without JavaScript came back with its result: render it through the dynamic result route. */
+const FORM_RESULT_PARAM = 'form-result'
+const FORM_RESULT_ROUTE = '/form-result'
+
+/** The rewrite target of a page path: the result route when the address holds a form result. */
+function pageRoute(request: NextRequest, path: string): string | null {
+  if (!request.nextUrl.searchParams.has(FORM_RESULT_PARAM)) return null
+  return path === '/' ? FORM_RESULT_ROUTE : `${FORM_RESULT_ROUTE}${path}`
+}
+
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
@@ -21,11 +31,17 @@ export async function proxy(request: NextRequest) {
     requestHeaders.set('x-pathname', path)
     requestHeaders.set(LOCALE_HEADER, locale)
     const url = request.nextUrl.clone()
-    url.pathname = path
+    url.pathname = pageRoute(request, path) ?? path
     return NextResponse.rewrite(url, { request: { headers: requestHeaders } })
   }
   requestHeaders.delete(LOCALE_HEADER)
   requestHeaders.set('x-pathname', pathname)
+  const result = pageRoute(request, pathname)
+  if (result) {
+    const url = request.nextUrl.clone()
+    url.pathname = result
+    return NextResponse.rewrite(url, { request: { headers: requestHeaders } })
+  }
   return NextResponse.next({ request: { headers: requestHeaders } })
 }
 

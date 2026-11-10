@@ -13,6 +13,7 @@
 
 import type { CollectionConfig, Field, FieldHook } from 'payload'
 
+import { withoutFormResult } from './noScript'
 import { safePageUrl } from './summary'
 
 /** The date an admin first opened the submission. Empty: the list shows "New". */
@@ -38,7 +39,9 @@ export type SubmissionsAdminCustom = { attachments: string | null }
 /** The page address on create: the one the form sent, else the request's Referer. Only links that are safe to show. */
 const pageOnCreate: FieldHook = ({ operation, req, value }) => {
   if (operation !== 'create') return value
-  return safePageUrl(value) ?? safePageUrl(req.headers?.get?.('referer')) ?? null
+  const page = safePageUrl(value) ?? safePageUrl(req.headers?.get?.('referer'))
+  // A form sent again from a no-JavaScript result view: the page, without the result.
+  return page ? withoutFormResult(page) : null
 }
 
 const nameOf = (field: Field): string | null => ('name' in field && typeof field.name === 'string' ? field.name : null)
