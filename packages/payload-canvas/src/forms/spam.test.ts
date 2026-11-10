@@ -4,7 +4,7 @@ import { describe, it } from 'node:test'
 import { APIError, type PayloadRequest } from 'payload'
 
 import { memoryStore, WindowCounter } from './rateLimit'
-import { clientIp, filledTooFast, formSpamProtection, honeypotFilled, spamProtectionField, turnstileKeys, verifyTurnstile } from './spam'
+import { clientIp, filledTooFast, FORM_NO_SCRIPT_CONTEXT, formSpamProtection, honeypotFilled, spamProtectionField, TURNSTILE_NEEDS_SCRIPT_MESSAGE, turnstileKeys, verifyTurnstile } from './spam'
 import { FORM_SPAM_KEY, SPAM_BLOCKED_MESSAGE, SPAM_DEFAULTS, spamSettings } from './spamSettings'
 
 describe('spamSettings', () => {
@@ -42,12 +42,22 @@ describe('honeypotFilled and filledTooFast', () => {
 })
 
 describe('clientIp', () => {
-  it('prefers the proxy headers in order', () => {
-    assert.equal(clientIp(new Headers({ 'x-forwarded-for': '1.1.1.1, 2.2.2.2', 'x-real-ip': '3.3.3.3', 'cf-connecting-ip': '4.4.4.4' })), '4.4.4.4')
-    assert.equal(clientIp(new Headers({ 'x-forwarded-for': '1.1.1.1, 2.2.2.2', 'x-real-ip': '3.3.3.3' })), '3.3.3.3')
-    assert.equal(clientIp(new Headers({ 'x-forwarded-for': ' 1.1.1.1 , 2.2.2.2' })), '1.1.1.1')
-    assert.equal(clientIp(new Headers()), null)
-    assert.equal(clientIp(undefined), null)
+  const headers = new Headers({ 'x-forwarded-for': '6.6.6.6, 1.1.1.1 , 2.2.2.2', 'x-real-ip': '3.3.3.3', 'cf-connecting-ip': '4.4.4.4' })
+
+  it('trusts no header by default: a visitor can send any of them', () => {
+    assert.equal(clientIp(headers, undefined), null)
+  })
+
+  it('takes the rightmost x-forwarded-for entry, which the nearest proxy adds', () => {
+    assert.equal(clientIp(headers, 'x-forwarded-for'), '2.2.2.2')
+    assert.equal(clientIp(new Headers({ 'x-forwarded-for': ' 1.1.1.1 , ' }), 'x-forwarded-for'), '1.1.1.1')
+  })
+
+  it('takes cf-connecting-ip or x-real-ip only when told to', () => {
+    assert.equal(clientIp(headers, 'cf-connecting-ip'), '4.4.4.4')
+    assert.equal(clientIp(headers, 'x-real-ip'), '3.3.3.3')
+    assert.equal(clientIp(new Headers(), 'x-forwarded-for'), null)
+    assert.equal(clientIp(undefined, 'x-forwarded-for'), null)
   })
 })
 
@@ -138,8 +148,11 @@ function fakeReq(form: Record<string, unknown> | null, options: { ip?: string; p
   return { req, logged }
 }
 
-const run = (hook: ReturnType<typeof formSpamProtection>, req: PayloadRequest, data: Record<string, unknown>) =>
-  hook({ collection: { slug: 'form-submissions' }, context: {}, data, operation: 'create', req } as unknown as Parameters<typeof hook>[0])
+const run = (hook: ReturnType<typeof formSpamProtection>, req: PayloadRequest, data: Record<string, unknown>, context: Record<string, unknown> = {}) =>
+  hook({ collection: { slug: 'form-submissions' }, context, data, operation: 'create', req } as unknown as Parameters<typeof hook>[0])
+
+/** Behind one reverse proxy, as the starter sets it. */
+const proxied = { trustedIpHeader: 'x-forwarded-for' } as const
 
 const ok = { honeypot: '', elapsedMs: 8000 }
 
@@ -152,7 +165,7 @@ describe('formSpamProtection', () => {
   })
 
   it('refuses a filled honeypot and a fast submission with the generic message, and logs why', async () => {
-    const hook = formSpamProtection({ store: memoryStore() })
+    const hook = formSpamProtection({ store: memoryStore(), ...proxied })
     const { req, logged } = fakeReq({ id: 1 }, { ip: '1.1.1.1' })
     for (const spam of [{ honeypot: 'x', elapsedMs: 8000 }, { elapsedMs: 500 }, undefined]) {
       await assert.rejects(run(hook, req, { form: 1, submissionData: [], [FORM_SPAM_KEY]: spam }), (error: unknown) => {
@@ -179,7 +192,7 @@ describe('formSpamProtection', () => {
   })
 
   it('limits submissions per IP and form', async () => {
-    const hook = formSpamProtection({ store: memoryStore() })
+    const hook = formSpamProtection({ store: memoryStore(), ...proxied })
     const form = { id: 1, spamProtection: { rateLimit: { max: 2, windowMinutes: 10 } } }
     const { req, logged } = fakeReq(form, { ip: '9.9.9.9' })
     await run(hook, req, { form: 1, [FORM_SPAM_KEY]: ok })
@@ -189,11 +202,17 @@ describe('formSpamProtection', () => {
     // Another visitor is not affected.
     const other = fakeReq(form, { ip: '8.8.8.8' })
     assert.ok(await run(hook, other.req, { form: 1, [FORM_SPAM_KEY]: ok }))
+    // A visitor who writes another address before the proxy's own is still the same visitor.
+    const forged = fakeReq(form, { ip: '7.7.7.7, 9.9.9.9' })
+    await assert.rejects(run(hook, forged.req, { form: 1, [FORM_SPAM_KEY]: ok }), (error: unknown) => error instanceof APIError && error.status === 429)
+    // Without a trusted header there is no IP, so no limit.
+    const open = formSpamProtection({ store: memoryStore() })
+    for (let i = 0; i < 4; i++) assert.ok(await run(open, req, { form: 1, [FORM_SPAM_KEY]: ok }))
   })
 
   it('stores the counts in payload.kv when there is one', async () => {
     const kv = memoryStore()
-    const hook = formSpamProtection()
+    const hook = formSpamProtection(proxied)
     const { req } = fakeReq({ id: 1 }, { ip: '1.1.1.1' })
     ;(req.payload as unknown as { kv: typeof kv }).kv = kv
     const set: string[] = []
@@ -230,11 +249,25 @@ describe('formSpamProtection', () => {
   it('does not check server code or the admin\'s create view, but removes the spam values', async () => {
     const hook = formSpamProtection({ store: memoryStore() })
     const local = fakeReq({ id: 1 }, { payloadAPI: 'local' })
-    assert.deepEqual(await run(hook, local.req, { form: 1, [FORM_SPAM_KEY]: { honeypot: 'x' } }), { form: 1 })
+    assert.deepEqual(await run(hook, local.req, { form: 1 }), { form: 1 })
+    // Server code that sends spam values (the no-JavaScript route) is checked.
+    await assert.rejects(run(hook, local.req, { form: 1, [FORM_SPAM_KEY]: { honeypot: 'x' } }))
     const admin = fakeReq({ id: 1 }, { user: { id: 1, collection: 'users' } })
     assert.deepEqual(await run(hook, admin.req, { form: 1 }), { form: 1 })
     // A signed-in user who sends spam values (the site's form) is checked like anyone.
     await assert.rejects(run(hook, admin.req, { form: 1, [FORM_SPAM_KEY]: { honeypot: 'x', elapsedMs: 9000 } }))
+  })
+
+  it('passes the fill time of a no-JavaScript post, keeps the honeypot, and refuses a Turnstile form', async () => {
+    const hook = formSpamProtection({ store: memoryStore(), env: { TURNSTILE_SITE_KEY: 'site', TURNSTILE_SECRET_KEY: 'secret' } })
+    const noScript = { [FORM_NO_SCRIPT_CONTEXT]: true }
+    const { req } = fakeReq({ id: 1 }, { payloadAPI: 'local' })
+    assert.deepEqual(await run(hook, req, { form: 1, [FORM_SPAM_KEY]: { honeypot: '' } }, noScript), { form: 1 })
+    await assert.rejects(run(hook, req, { form: 1, [FORM_SPAM_KEY]: { honeypot: 'bot' } }, noScript))
+    // Only server code sets the flag: the same values without it are too fast.
+    await assert.rejects(run(hook, req, { form: 1, [FORM_SPAM_KEY]: { honeypot: '' } }))
+    const turnstile = fakeReq({ id: 1, spamProtection: { turnstile: true } }, { payloadAPI: 'local' })
+    await assert.rejects(run(hook, turnstile.req, { form: 1, [FORM_SPAM_KEY]: { honeypot: '' } }, noScript), (error: Error) => error.message === TURNSTILE_NEEDS_SCRIPT_MESSAGE)
   })
 
   it('runs on create only', async () => {

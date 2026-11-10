@@ -57,9 +57,14 @@ export type FormPartName = keyof typeof FORM_PARTS
 /** Default classes of the form-wide parts. */
 export type FormPartClasses = Partial<Record<FormPartName, string>>
 
-/** The mode of a Form block: its `mode`, else "saved" when it names a form (layouts from before), else "build". */
-export function formBlockMode(props: Record<string, unknown> | undefined): FormMode {
+/**
+ * The mode of a Form block: its `mode`; else "build" when it holds blocks (a Form block that MCP or
+ * the assistant inserted without a mode, also after the publish gave it its form id); else "saved"
+ * when it names a form (layouts from before the modes); else "build".
+ */
+export function formBlockMode(props: Record<string, unknown> | undefined, slots?: Block['slots']): FormMode {
   if (props?.mode === 'build' || props?.mode === 'saved') return props.mode
+  if ((slots?.[FORM_SLOT]?.length ?? 0) > 0) return 'build'
   return props?.form !== undefined && props.form !== null && props.form !== '' ? 'saved' : 'build'
 }
 

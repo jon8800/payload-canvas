@@ -32,5 +32,12 @@ export const FormFiles: CollectionConfig = {
   fields: [{ name: 'alt', type: 'text', label: 'Original name', admin: { readOnly: true } }],
   upload: {
     staticDir: path.resolve(dirname, '../../uploads/form-files'),
+    // Every file downloads, and the browser never guesses another type: a file never runs as a
+    // page on the site's own address (the form field already refuses HTML, SVG and scripts).
+    modifyResponseHeaders: ({ headers }) => {
+      headers.set('Content-Disposition', 'attachment')
+      headers.set('X-Content-Type-Options', 'nosniff')
+      return headers
+    },
   },
 }

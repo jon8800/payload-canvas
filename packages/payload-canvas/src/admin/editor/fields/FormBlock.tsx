@@ -10,7 +10,6 @@
 import { Button, useConfig } from '@payloadcms/ui'
 import { useEffect, useState, type ReactNode } from 'react'
 
-import { uniquePropValuesAt, withUniqueProps } from '../../../core/uniqueProps'
 import { findBlock } from '../../../core/tree'
 import type { Block, Operation } from '../../../core/types'
 import { FORM_SLOT, formBlockMode, formIdOf } from '../../../forms/pageForms'
@@ -72,16 +71,16 @@ async function moveIntoPage(runtime: Runtime, blockId: string, formId: string | 
   const { layout } = runtime.store.getState()
   const form = findBlock(layout, blockId)
   if (!form) return
-  // New ids (two blocks may move the same form in), and names free among the fields already here.
-  const taken = uniquePropValuesAt(layout, blockId, runtime.config.blocks)
-  const children = body.children.map((child) => withUniqueProps(withNewIds(child), runtime.config.blocks, taken))
-  const start = form.slots?.[FORM_SLOT]?.length ?? 0
+  // The saved form's fields replace what the block holds (a block switched from "Build here" may
+  // still hold fields): no second set of names and Submit buttons. New ids: two blocks may move the same form in.
+  const children = body.children.map(withNewIds)
   const unset = body.kept ? [] : ['form']
   // A block that was only a box around the saved form gets the Form block's layout and part classes.
   const look = movedFormLook(form, getBlockDefinition(runtime.config.blocks, form.type))
   const ops: Operation[] = [
+    ...(form.slots?.[FORM_SLOT] ?? []).map((child): Operation => ({ type: 'remove', id: child.id })),
     { type: 'update', id: blockId, props: body.props, ...(unset.length > 0 ? { unsetProps: unset } : {}), ...look },
-    ...children.map((block, i): Operation => ({ type: 'insert', block, to: { parentId: blockId, slot: FORM_SLOT, index: start + i } })),
+    ...children.map((block, i): Operation => ({ type: 'insert', block, to: { parentId: blockId, slot: FORM_SLOT, index: i } })),
   ]
   if (!runtime.store.apply(ops, { select: blockId })) return
   runtime.notify(
@@ -101,7 +100,7 @@ export function FormBlockActions({ path }: { path: string }) {
   const { config } = useConfig()
   const blockId = propPathOf(path)?.blockId ?? ''
   const block = useEditor(runtime.store, (s) => findBlock(s.view, blockId))
-  const mode = formBlockMode(block?.props)
+  const mode = formBlockMode(block?.props, block?.slots)
   const formId = formIdOf(block?.props?.form)
   const count = useSubmissionCount(runtime, formId)
   const [busy, setBusy] = useState(false)

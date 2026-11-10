@@ -30,7 +30,7 @@ export {
 export { builderViewPath } from './plugin/links'
 export { formSubmissionConditions, applyFormConditions, type FormSubmissionConditionsOptions, type SubmissionRow } from './forms/submission'
 export { formEmails, type FormEmailsOptions } from './forms/emails'
-export { formFileUploads, type FormFileUploadsOptions } from './forms/uploads'
+export { FORM_FILES_CONTEXT, formFileUploads, formFileUploadsCleanup, removeStoredFormFiles, type FormFileUploadsOptions } from './forms/uploads'
 export { FORM_FIELDS_FIELD, FORM_SETTINGS_REGION, type FormsOptions } from './plugin/forms'
 export {
   formSpamProtection,
@@ -38,10 +38,13 @@ export {
   checkSubmission,
   clientIp,
   filledTooFast,
+  FORM_NO_SCRIPT_CONTEXT,
   honeypotFilled,
   turnstileKeys,
+  TURNSTILE_NEEDS_SCRIPT_MESSAGE,
   verifyTurnstile,
   type FormSpamProtectionOptions,
+  type TrustedIpHeader,
   type SpamProtectionFieldOptions,
   type SpamReason,
 } from './forms/spam'

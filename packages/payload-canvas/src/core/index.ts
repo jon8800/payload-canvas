@@ -4,7 +4,7 @@
 export * from './types'
 export { checkAttrs, htmlAttributes, htmlIdClash, htmlIdProblem, htmlIdsOf, patchAttrs, withoutTakenHtmlIds } from './attrs'
 export { createId } from './ids'
-export { freeValue, uniquePropClashes, uniquePropValues, uniquePropValuesAt, uniqueScopeOf, withUniqueProps, type UniquePropClash } from './uniqueProps'
+export { duplicateOperation, freeValue, uniquePropClashes, uniquePropValues, uniquePropValuesAt, uniqueScopeOf, withUniqueProps, type UniquePropClash } from './uniqueProps'
 export { newBlockOf } from './starter'
 export { findBlock, findLocation, walkBlocks, isSelfOrDescendant, normalizeLayout, type BlockLocation } from './tree'
 export { applyOperation, applyOperations, type ApplyOptions } from './operations'

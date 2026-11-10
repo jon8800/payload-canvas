@@ -7,6 +7,7 @@ import { SECTION_REF_BLOCK, sectionDetachOps, sectionRefId } from '../../blocks/
 import { applyComponentValues, componentValuesOf } from '../../core/components'
 import {
   createId,
+  duplicateOperation,
   findBlock,
   findLocation,
   getBlockDefinition,
@@ -189,19 +190,11 @@ export async function detachSection(runtime: Runtime, id: string): Promise<void>
 }
 
 export function duplicateBlock(runtime: Runtime, id: string) {
+  // One insert of a ready copy (one undo step): its blocks get free values for their unique props
+  // (form field names) in its scope, also inside a Stack or Grid of form fields.
   const newId = createId()
-  const ops: Operation[] = [{ type: 'duplicate', id, newId }]
-  // The copy gets free values for its unique props (a form field name) in its scope, in the same
-  // undo step. Only the block itself: blocks with unique props (form fields) have no slots, and a
-  // copied Form block is a scope of its own, so its fields keep their names.
-  const { layout } = runtime.store.getState()
-  const block = findBlock(layout, id)
-  if (block) {
-    const copy = withUniqueProps(block, runtime.config.blocks, uniquePropValuesAt(layout, findLocation(layout, id)?.parentId ?? null, runtime.config.blocks))
-    const props = Object.fromEntries(Object.entries(copy.props ?? {}).filter(([key, value]) => block.props?.[key] !== value))
-    if (Object.keys(props).length > 0) ops.push({ type: 'update', id: newId, props })
-  }
-  if (runtime.store.apply(ops, { select: newId })) runtime.notify('Duplicated')
+  const op = duplicateOperation(runtime.store.getState().layout, id, newId, runtime.config.blocks)
+  if (op && runtime.store.apply(op, { select: newId })) runtime.notify('Duplicated')
 }
 
 export function removeBlock(runtime: Runtime, id: string) {

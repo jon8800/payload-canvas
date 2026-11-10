@@ -31,7 +31,7 @@ export function pageFormBlocks(layout: Layout): Block[] {
   const visit = (list: readonly Block[]) => {
     for (const block of list) {
       if (block.type === FORM_BLOCK) {
-        if (formBlockMode(block.props) === 'build') out.push(block)
+        if (formBlockMode(block.props, block.slots) === 'build') out.push(block)
         continue
       }
       for (const children of Object.values(block.slots ?? {})) visit(children)
@@ -201,8 +201,9 @@ export function isFormOf(doc: Record<string, unknown>, source: FormSource): bool
 }
 
 /**
- * The layout with `props.form` of each Form block in `ids` (block id -> form id) set. Returns the
- * same layout when nothing changes.
+ * The layout with `props.form` of each Form block in `ids` (block id -> form id) set, and its
+ * `mode` set to "build" (a block without a mode that names a form would read as "saved"). Returns
+ * the same layout when nothing changes.
  */
 export function withFormIds(layout: Layout, ids: ReadonlyMap<string, string | number>): Layout {
   let changed = false
@@ -210,8 +211,8 @@ export function withFormIds(layout: Layout, ids: ReadonlyMap<string, string | nu
     list.map((block) => {
       let next = block
       const id = ids.get(block.id)
-      if (block.type === FORM_BLOCK && id !== undefined && formIdOf(block.props?.form) !== id) {
-        next = { ...block, props: { ...block.props, form: id } }
+      if (block.type === FORM_BLOCK && id !== undefined && (formIdOf(block.props?.form) !== id || block.props?.mode !== 'build')) {
+        next = { ...block, props: { ...block.props, mode: 'build', form: id } }
         changed = true
       }
       if (next.slots) {
@@ -238,7 +239,7 @@ export function withSavedFormFields(layout: Layout): Layout {
   let changed = false
   const visit = (list: Block[]): Block[] =>
     list.map((block) => {
-      if (block.type === FORM_BLOCK && formBlockMode(block.props) === 'saved' && isPlainObject(block.props?.form)) {
+      if (block.type === FORM_BLOCK && formBlockMode(block.props, block.slots) === 'saved' && isPlainObject(block.props?.form)) {
         const doc = block.props.form
         const rows = Array.isArray(doc.fields) ? doc.fields.filter(isPlainObject) : []
         const fields = rows.flatMap((row) => {
@@ -246,7 +247,8 @@ export function withSavedFormFields(layout: Layout): Layout {
           return field ? [{ ...field, id: `${block.id}-${field.id}` }] : []
         })
         changed = true
-        return { ...block, slots: { ...block.slots, [FORM_SLOT]: [...fields, { id: `${block.id}-submit`, type: FORM_SUBMIT_BLOCK }] } }
+        // `mode` stays "saved" now that the block holds the form's fields.
+        return { ...block, props: { ...block.props, mode: 'saved' }, slots: { ...block.slots, [FORM_SLOT]: [...fields, { id: `${block.id}-submit`, type: FORM_SUBMIT_BLOCK }] } }
       }
       if (!block.slots) return block
       return { ...block, slots: Object.fromEntries(Object.entries(block.slots).map(([name, children]) => [name, visit(children)])) }
@@ -260,7 +262,7 @@ export function savedFormIds(layouts: readonly Layout[]): Array<string | number>
   const out = new Map<string, string | number>()
   const visit = (list: readonly Block[]) => {
     for (const block of list) {
-      if (block.type === FORM_BLOCK && formBlockMode(block.props) === 'saved') {
+      if (block.type === FORM_BLOCK && formBlockMode(block.props, block.slots) === 'saved') {
         const id = formIdOf(block.props?.form)
         if (id !== null) out.set(String(id), id)
       }

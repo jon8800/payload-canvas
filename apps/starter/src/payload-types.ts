@@ -1531,7 +1531,7 @@ export interface Form {
             width?: number | null;
             required?: boolean | null;
             /**
-             * File types or endings, separated by commas, for example "image/*, application/pdf, .docx". Empty: any type.
+             * File types or endings, separated by commas, for example "image/*, application/pdf, .docx". Empty: images, PDF, office documents, text and CSV. HTML, SVG, scripts and XML are never taken.
              */
             accept?: string | null;
             /**
