@@ -146,6 +146,7 @@ export {
   fieldRowOf,
   FORM_SOURCE_FIELD,
   formBlockFromDoc,
+  withoutVirtualFields,
   formDataHash,
   formDataFromBlock,
   formSourceOf,

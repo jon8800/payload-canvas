@@ -5,13 +5,15 @@
 // document id, block id), so a copied page or a duplicated block gets a new document instead of
 // changing the original's. Pure, client-safe.
 
+import type { Field } from 'payload'
+
 import { isRichText, plainToRichText } from '../core/bindings'
 import { createId } from '../core/ids'
 import { isPlainObject } from '../core/tree'
 import type { Block, BlockDefinition, Layout } from '../core/types'
 import { formFieldSlug, formFieldType } from './blocks'
 import { FORM_FIELD_CLASS_KEY, FORM_FIELD_PARTS_KEY } from './fieldSettings'
-import { FORM_BLOCK, FORM_SLOT, FORM_SUBMIT_BLOCK, formBlockFields, formBlockMode, formIdOf, formSubmitBlocks } from './pageForms'
+import { FORM_BLOCK, FORM_SLOT, FORM_SUBMIT_BLOCK, formBlockFields, formBlockMode, formIdOf, formSettingNames, formSubmitBlocks } from './pageForms'
 
 /** Name of the hidden group on the forms collection that names the block a form was made from. */
 export const FORM_SOURCE_FIELD = 'source'
@@ -111,9 +113,16 @@ export function formDataFromBlock(form: Block, options: FormDataOptions): Record
 /**
  * The Form block's content made from a forms document ("Move into this page"): the settings as
  * props, "build" mode, the form's id kept, and the fields (row id = block id) followed by a Submit
- * button. `settings`: the setting names to copy.
+ * button. `fields` are the forms collection's fields: the values of virtual fields (the spam settings'
+ * Turnstile site key, which Payload computes on read) never become block props. `settings`: the
+ * setting names, by default all of them (`formSettingNames`).
  */
-export function formBlockFromDoc(doc: Record<string, unknown>, settings: readonly string[]): { props: Record<string, unknown>; children: Block[] } {
+export function formBlockFromDoc(
+  stored: Record<string, unknown>,
+  fields: readonly Field[],
+  settings: readonly string[] = formSettingNames(fields),
+): { props: Record<string, unknown>; children: Block[] } {
+  const doc = withoutVirtualFields(stored, fields)
   const props: Record<string, unknown> = { mode: 'build' }
   const id = formIdOf(doc)
   if (id !== null) props.form = id
@@ -122,11 +131,31 @@ export function formBlockFromDoc(doc: Record<string, unknown>, settings: readonl
     if (value !== undefined && value !== null && value !== '') props[key] = value
   }
   const rows = Array.isArray(doc.fields) ? doc.fields.filter(isPlainObject) : []
-  const fields = rows.flatMap((row) => {
+  const fieldBlocks = rows.flatMap((row) => {
     const block = fieldBlockOf(row)
     return block ? [block] : []
   })
-  return { props, children: [...fields, { id: createId(), type: FORM_SUBMIT_BLOCK }] }
+  return { props, children: [...fieldBlocks, { id: createId(), type: FORM_SUBMIT_BLOCK }] }
+}
+
+/** The document without the values of virtual fields, also inside named groups (read-only values Payload computes on read). */
+export function withoutVirtualFields(doc: Record<string, unknown>, fields: readonly Field[]): Record<string, unknown> {
+  const out = { ...doc }
+  for (const field of fields) {
+    if (!('name' in field) || !field.name) {
+      if ('fields' in field && Array.isArray(field.fields)) Object.assign(out, withoutVirtualFields(out, field.fields))
+      continue
+    }
+    if ('virtual' in field && field.virtual) {
+      delete out[field.name]
+      continue
+    }
+    const value = out[field.name]
+    if (field.type === 'group' && value && typeof value === 'object' && !Array.isArray(value)) {
+      out[field.name] = withoutVirtualFields(value as Record<string, unknown>, field.fields)
+    }
+  }
+  return out
 }
 
 /** A value without Payload's `id` keys in array rows (emails), except where a row needs it. */

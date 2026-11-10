@@ -236,12 +236,22 @@ describe('forms on pages: sync with the forms collection', () => {
         { id: 'r2', blockType: 'email', name: 'email', label: 'Email', required: true },
       ],
     }
-    const { props, children } = formBlockFromDoc(doc, settings)
+    const { props, children } = formBlockFromDoc(doc, [], settings)
     assert.deepEqual(props, { mode: 'build', form: 15, title: 'Contact', submitButtonLabel: 'Go', emails: [{ emailTo: 'x@example.com' }] })
     assert.deepEqual(children[0], { id: 'r1', type: formFieldType('text'), props: { name: 'name', label: 'Name' }, className: 'p-1', partClassName: { input: 'border' } })
     assert.equal(children.at(-1)?.type, FORM_SUBMIT_BLOCK)
     // Round trip: the rows come back as they were stored (empty values left out).
     assert.deepEqual(fieldRowOf(fieldBlockOf(doc.fields[1]!)!), { id: 'r2', blockType: 'email', name: 'email', label: 'Email', required: true, blockName: null, cssClass: null, partClasses: null })
+  })
+
+  it('leaves the values of virtual fields out of the block (the Turnstile site key)', () => {
+    const fields = [
+      { name: 'title', type: 'text' },
+      { name: 'spamProtection', type: 'group', fields: [{ name: 'honeypot', type: 'checkbox' }, { name: 'turnstileSiteKey', type: 'text', virtual: true }] },
+    ] as never
+    const doc = { id: 3, title: 'Contact', spamProtection: { honeypot: true, turnstileSiteKey: 'site-key' }, fields: [] }
+    const { props } = formBlockFromDoc(doc, fields)
+    assert.deepEqual(props, { mode: 'build', form: 3, title: 'Contact', spamProtection: { honeypot: true } })
   })
 
   it('hashes the written data, so only a real change writes the form, and clears removed settings', () => {
