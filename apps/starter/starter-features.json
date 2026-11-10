@@ -2,7 +2,7 @@
   "features": [
     { "id": "look", "paths": ["src/admin/look", "src/admin/brand", "src/admin/list", "src/admin/fields"] },
     { "id": "nav", "paths": ["src/admin/nav"] },
-    { "id": "dashboard", "paths": ["src/admin/dashboard", "src/admin/references", "scripts/rebuild-references.ts"], "scripts": ["references:rebuild"] },
+    { "id": "dashboard", "paths": ["src/admin/dashboard", "src/admin/references", "scripts/rebuild-references.ts", "scripts/capture-widget-previews.ts", "public/admin/widget-previews"], "scripts": ["references:rebuild", "previews:widgets"], "dependencies": ["playwright-core"] },
     { "id": "demo", "paths": ["scripts/seed-demo.ts", "scripts/seed-demo-images.ts"], "scripts": ["seed:demo"] },
     { "id": "ai", "paths": [] },
     { "id": "gallery", "paths": [], "dependencies": ["payload-media-gallery"] },

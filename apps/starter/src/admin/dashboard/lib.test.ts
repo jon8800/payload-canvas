@@ -10,7 +10,6 @@ import {
   listURL,
   redirectCreateURL,
   relativeTime,
-  replyCounts,
   shortText,
   submissionRows,
   thumbnailOf,
@@ -148,15 +147,6 @@ describe('shortText', () => {
     assert.equal(shortText('  Hello\n  world  '), 'Hello world')
     assert.equal(shortText('abcdefghij', 6), 'abcde…')
     assert.equal(shortText(null), '')
-  })
-})
-
-describe('replyCounts', () => {
-  it('counts replies per thread, with plain or populated parents', () => {
-    const counts = replyCounts([{ parent: 1 }, { parent: '1' }, { parent: { id: 2 } }, { parent: null }])
-    assert.equal(counts.get('1'), 2)
-    assert.equal(counts.get('2'), 1)
-    assert.equal(counts.size, 2)
   })
 })
 

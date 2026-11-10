@@ -113,16 +113,6 @@ export function shortText(text: string | null | undefined, max = 90): string {
   return line.length > max ? `${line.slice(0, max - 1).trimEnd()}…` : line
 }
 
-/** How many replies each thread has, by thread id. */
-export function replyCounts(replies: ReadonlyArray<{ parent?: unknown }>): Map<string, number> {
-  const counts = new Map<string, number>()
-  for (const reply of replies) {
-    const parent = reply.parent && typeof reply.parent === 'object' ? (reply.parent as { id?: unknown }).id : reply.parent
-    if (typeof parent !== 'string' && typeof parent !== 'number') continue
-    counts.set(String(parent), (counts.get(String(parent)) ?? 0) + 1)
-  }
-  return counts
-}
 
 /** Why a link target is broken: it was deleted, or it is not published. Null when it is fine. */
 export function linkProblem(target: { found: boolean; drafts: boolean; status?: unknown }): 'deleted' | 'unpublished' | null {
