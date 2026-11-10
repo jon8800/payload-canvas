@@ -3,9 +3,11 @@
 // block with `uniqueScope` (a Form block) is a scope of its own: its fields differ from each other,
 // not from the fields of another form. The rest of the layout is one scope.
 
+import { htmlIdsOf, withoutTakenHtmlIds } from './attrs'
 import { getBlockDefinition } from './blocks'
-import { indexLayout } from './tree'
-import type { Block, BlockDefinition, Layout } from './types'
+import { createId } from './ids'
+import { findBlock, findLocation, indexLayout } from './tree'
+import type { Block, BlockDefinition, Layout, Operation } from './types'
 
 const isScope = (definitions: readonly BlockDefinition[], type: string) => getBlockDefinition(definitions, type)?.uniqueScope === true
 
@@ -114,4 +116,32 @@ export function uniquePropClashes(layout: Layout, definitions: readonly BlockDef
   }
   visit(layout.blocks, new Map())
   return out
+}
+
+/**
+ * The operation that duplicates block `id` as one undo step: an `insert` of a copy right after it,
+ * with new ids (`newId` for the copy, fresh ones inside), without the HTML ids the layout already
+ * uses, and with free values for the unique props of the copy and of every block inside it (a
+ * Stack of form fields inside a form gets `email2`). A copied Form block is a scope of its own: its
+ * fields keep their names. Null when the block is not in the layout.
+ */
+export function duplicateOperation(layout: Layout, id: string, newId: string, definitions: readonly BlockDefinition[], makeId: () => string = createId): Operation | null {
+  const block = findBlock(layout, id)
+  const location = findLocation(layout, id)
+  if (!block || !location) return null
+  const used = new Set([...indexLayout(layout).keys(), newId])
+  const fresh = (): string => {
+    let next = makeId()
+    while (used.has(next)) next = makeId()
+    used.add(next)
+    return next
+  }
+  const withIds = (source: Block, blockId: string): Block => {
+    const copy: Block = { ...structuredClone(source), id: blockId }
+    if (source.slots) copy.slots = Object.fromEntries(Object.entries(source.slots).map(([name, list]) => [name, list.map((child) => withIds(child, fresh()))]))
+    return copy
+  }
+  const taken = uniquePropValuesAt(layout, location.parentId, definitions)
+  const copy = withUniqueProps(withoutTakenHtmlIds(withIds(block, newId), htmlIdsOf(layout.blocks)), definitions, taken)
+  return { type: 'insert', block: copy, to: { parentId: location.parentId, ...(location.parentId === null ? {} : { slot: location.slot }), index: location.index + 1 } }
 }
