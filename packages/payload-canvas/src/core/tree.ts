@@ -197,6 +197,10 @@ function normalizeBlock(value: unknown, seen: Set<string>): Block | null {
   if (origin && typeof origin !== 'string') block.section = origin
   // Old shapes of built-in blocks (see textList.ts).
   migrateTextList(block, (raw) => uniqueId(raw, seen))
+  // A Form block from before forms on pages names a saved form and holds no fields: "Use a saved form".
+  if (block.type === 'form' && block.props && block.props.mode === undefined && block.props.form !== undefined && block.props.form !== null && !block.slots) {
+    block.props = { mode: 'saved', ...block.props }
+  }
   return block
 }
 

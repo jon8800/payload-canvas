@@ -79,7 +79,17 @@ type HookOptions = {
   fieldRegistry?: FieldRegistry
   /** The locales of localized props. Null or left out: the layout is not localized. */
   localization?: LocaleSettings | null
+  /**
+   * Forms on pages: writes each "Build here" Form block to the forms collection and returns the
+   * layout with the form ids. Runs when the document is published (collections with drafts) or
+   * saved (without drafts), after the layout passed its checks. Its changes reach open editors
+   * like the props' hook changes.
+   */
+  formSync?: FormSync
 }
+
+/** See `HookOptions.formSync`. Returns the same layout when nothing changed. */
+export type FormSync = (layout: Layout, args: { req: PayloadRequest; id: string | number; data: Record<string, unknown>; originalDoc: Record<string, unknown> | undefined }) => Promise<Layout>
 
 /** `context` flag of the session's own draft saves. */
 export const SESSION_SAVE_CONTEXT = 'builderSession'
@@ -403,6 +413,13 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
       throw new ValidationError({ collection: slug, errors: [{ path: field, message: lines.join('\n') }], req }, req.t)
     }
 
+    // Forms on pages go to the forms collection when the page is published (or saved, without drafts).
+    const syncForms = options.formSync && docId !== undefined && (publishing || !collection.versions?.drafts) ? options.formSync : null
+    // A publish without the layout (REST `{ _status: 'published' }`) still writes the page's forms:
+    // it goes on with the stored layout.
+    if (data[field] === undefined && syncForms && publishing && isPlainObject(originalDoc?.[field])) {
+      data[field] = (localization && docId !== undefined ? await storedLayout(req, collection, docId, field) : null) ?? normalizeLayout(originalDoc[field])
+    }
     // Partial update without the layout: keep the stored layout and CSS. A publish of that kind
     // (REST `{ _status: 'published' }`) still runs the props' own `validate` functions.
     if (data[field] === undefined) {
@@ -437,6 +454,9 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
       const problem = contentModeProblem(current, layout, blocks)
       if (problem) throw new APIError(restoring ? `${RESTORE_DESIGN_MESSAGE} ${problem}` : problem, 403, undefined, true)
     }
+    // The layout before the props' hooks and the form sync: their changes go to open editors.
+    const propHooks = Boolean(registry && (hasPropHooks(registry, 'beforeValidate') || hasPropHooks(registry, 'beforeChange')))
+    const beforeHooks = propHooks || syncForms ? structuredClone(layout) : null
     if (registry) {
       // Field access. The live session checks every edit when it arrives (session.ts), so its
       // saves and the layouts the guard put in are not checked again. Other saves (REST, the
@@ -451,18 +471,19 @@ export function layoutBeforeChange(options: HookOptions): CollectionBeforeChange
         }
       }
       // Prop hooks, in Payload's order: beforeValidate, then beforeChange, then validation.
-      if (hasPropHooks(registry, 'beforeValidate') || hasPropHooks(registry, 'beforeChange')) {
-        const input = structuredClone(layout)
+      if (propHooks) {
         await runPropHooks('beforeValidate', layout, { blocks, registry, previous: savedLayout, ctx, localization })
         await runPropHooks('beforeChange', layout, { blocks, registry, previous: savedLayout, ctx, localization })
-        if (docId !== undefined) {
-          const changes = sameJson(input, layout) ? undefined : ({ input, output: structuredClone(layout) } satisfies HookChanges)
-          setDocEntry(context, HOOK_CHANGES_CONTEXT, slug, docId, changes)
-        }
       }
     }
     const { blocking, warnings } = await checkLayout(layout, { blocks, publishing, bindings, doc: merged, fields: fieldCheck(savedLayout), localization })
     if (blocking.length > 0) reject(layout, blocking)
+    // Only a layout that passed its checks writes forms (same transaction: a failed save writes none).
+    if (syncForms && docId !== undefined) layout = await syncForms(layout, { req, id: docId, data, originalDoc })
+    if (beforeHooks && docId !== undefined) {
+      const changes = sameJson(beforeHooks, layout) ? undefined : ({ input: beforeHooks, output: structuredClone(layout) } satisfies HookChanges)
+      setDocEntry(context, HOOK_CHANGES_CONTEXT, slug, docId, changes)
+    }
     const logged = warnings.filter(isLayoutWarning)
     if (logged.length > 0) {
       req.payload.logger.warn(`[websiteBuilder] ${slug}.${field} saved with warnings:\n${formatErrors(logged)}`)
