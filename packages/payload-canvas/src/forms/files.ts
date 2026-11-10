@@ -1,7 +1,8 @@
-// Checks of a file for the `file` form field: type (as in `<input accept>`) and size. Pure and
+// Checks of the files of a `file` form field: their number, type (as in `<input accept>`) and size. Pure and
 // client-safe: the site's form checks a file when the visitor picks it, `formFileUploads` again.
 
 import { FILE_FIELD_MAX_MB } from './fieldConfigs'
+import { maxFileCount } from './fieldSettings'
 
 const MB = 1024 * 1024
 
@@ -35,5 +36,23 @@ export function fileProblem(file: { name: string; mimetype: string; size: number
   if (!fileTypeAllowed(file, rules.accept)) return `This file type is not allowed. Allowed: ${acceptPatterns(rules.accept).join(', ')}.`
   const max = maxFileBytes(rules, limitMb)
   if (file.size > max) return `The file is too large. The limit is ${Math.round((max / MB) * 10) / 10} MB.`
+  return ''
+}
+
+/** A file field's rules for the files it takes: required, several files, the most files. */
+export type FileCountRules = FileRules & { required?: boolean | null; multiple?: boolean | null; maxFiles?: number | null }
+
+/**
+ * The message for the files of one file field, or '' when they are fine: none when it is required,
+ * more than it takes, then each file's type and size. With several files the message names the file.
+ */
+export function filesProblem(files: ReadonlyArray<{ name: string; mimetype: string; size: number }>, rules: FileCountRules, limitMb = FILE_FIELD_MAX_MB): string {
+  if (files.length === 0) return rules.required ? 'Choose a file.' : ''
+  const most = maxFileCount(rules)
+  if (files.length > most) return most === 1 ? 'Choose one file only.' : `Choose at most ${most} files.`
+  for (const file of files) {
+    const problem = fileProblem(file, rules, limitMb)
+    if (problem) return files.length > 1 ? `${file.name}: ${problem}` : problem
+  }
   return ''
 }

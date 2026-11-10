@@ -6,6 +6,8 @@
 
 import type { Block, Field } from 'payload'
 
+import { fileCountFields } from './fieldSettings'
+
 /** `admin.custom.builderMergeTags`: the builder adds an "Insert field" menu with the form's merge tags. */
 export const MERGE_TAGS_MARKER = 'builderMergeTags'
 
@@ -65,7 +67,7 @@ export const consentFormField: Block = {
 /** Default and upper limit of a file field's size, in MB. */
 export const FILE_FIELD_MAX_MB = 10
 
-/** A file the visitor uploads. `formFileUploads` stores it in the media collection. */
+/** Files the visitor uploads: one, or several when "Allow several files" is on. `formFileUploads` stores them in the media collection. */
 export const fileFormField: Block = {
   slug: 'file',
   labels: { singular: 'File upload', plural: 'File uploads' },
@@ -87,8 +89,9 @@ export const fileFormField: Block = {
       defaultValue: 5,
       min: 0.1,
       max: FILE_FIELD_MAX_MB,
-      admin: { description: `At most ${FILE_FIELD_MAX_MB} MB.` },
+      admin: { description: `For each file. At most ${FILE_FIELD_MAX_MB} MB.` },
     },
+    ...fileCountFields(),
   ],
 }
 
