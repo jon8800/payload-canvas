@@ -31,7 +31,7 @@ import {
   websiteBuilder,
   type WebsiteBuilderOptions,
 } from 'payload-canvas'
-import { moreFormFields, withFormConditions, withFormEmailFields } from 'payload-canvas/forms'
+import { moreFormFields, withFormConditions, withFormEmailFields, withFormFieldSettings } from 'payload-canvas/forms'
 // @feature:ai
 import { fakeAdapter } from 'payload-canvas/ai/fake'
 import { openRouterAdapter } from 'payload-canvas/ai/openrouter'
@@ -290,12 +290,13 @@ export default buildConfig({
     }),
 
     formBuilderPlugin({
-      // The plugin's own field blocks, each with display conditions ("show when field X equals Y").
-      // The site's form renderer and the submissions hook below apply them.
+      // The plugin's own field blocks, each with display conditions ("show when field X equals Y")
+      // and Gravity Forms style settings (description, label visibility, placeholder, default value,
+      // CSS class, radio display). The site's form renderer and the submissions hook below apply them.
       // The extra types (phone, web address, hidden, consent, file) come from payload-canvas.
       fields: {
-        ...Object.fromEntries(PLUGIN_FORM_FIELD_SLUGS.map((slug) => [slug, withFormConditions(formFieldConfigs[slug] as Block)])),
-        ...Object.fromEntries(MORE_FORM_FIELD_SLUGS.map((slug) => [slug, withFormConditions(moreFormFields[slug])])),
+        ...Object.fromEntries(PLUGIN_FORM_FIELD_SLUGS.map((slug) => [slug, withFormFieldSettings(withFormConditions(formFieldConfigs[slug] as Block))])),
+        ...Object.fromEntries(MORE_FORM_FIELD_SLUGS.map((slug) => [slug, withFormFieldSettings(withFormConditions(moreFormFields[slug]))])),
       },
       redirectRelationships: ['pages'],
       // Each email of a form: To, From name, From email, Reply-To, CC, BCC, Subject, and a rich text
