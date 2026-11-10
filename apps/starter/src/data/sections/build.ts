@@ -1,6 +1,7 @@
 // Small helpers that build canonical layout blocks (new ids, no empty props or slots).
 // The ready-made sections in this folder use them.
 import { createId, type Block, type BlockMotion } from 'payload-canvas/core'
+import { FORM_BLOCK, FORM_FIELD_WIDTH_CLASSES, FORM_SLOT, FORM_SUBMIT_BLOCK, formFieldType } from 'payload-canvas/forms'
 import { PRIMARY_HOVER } from '../classes'
 
 export { PRIMARY_HOVER }
@@ -119,7 +120,24 @@ export const quote = (value: string, cite: string, classNames: { figure?: string
   ])
 export const icon = (name: string, className?: string) => block('icon', { name }, className)
 export const divider = (className?: string) => block('divider', undefined, className)
-export const form = (id: number | string, className?: string) => block('form', { form: id }, className)
+/** The fields' row of a Form block: fields with a width class share a line (as `formClasses.fields`). */
+export const FORM_ROW = 'flex flex-wrap gap-x-4 gap-y-5'
+/** A field's width in a `FORM_ROW` from the sm breakpoint: half, a third or two thirds of the row. */
+export const FIELD_WIDTH = { half: FORM_FIELD_WIDTH_CLASSES[50], third: FORM_FIELD_WIDTH_CLASSES[33], twoThirds: FORM_FIELD_WIDTH_CLASSES[67] } as const
+/**
+ * A Form block built on the page ("Build here"): `settings` are the form's settings (title, submit
+ * button label, confirmation, emails), `children` its fields, layout blocks and Submit button.
+ */
+export const form = (settings: Record<string, unknown>, children: Block[], className: string = FORM_ROW): Block => ({
+  ...block(FORM_BLOCK, { mode: 'build', ...settings }, className),
+  slots: { [FORM_SLOT]: children },
+})
+/** A Form block that shows a form of the Forms collection ("Use a saved form"). */
+export const savedForm = (id: number | string, className?: string) => block(FORM_BLOCK, { mode: 'saved', form: id }, className)
+/** A form field block: `type` is the form-builder field type (`text`, `email`, `radio`, …). */
+export const formField = (type: string, props: Record<string, unknown>, className?: string) => block(formFieldType(type), props, className)
+/** The form's Submit button. Without a label it shows the form's submit button label. */
+export const submit = (label?: string, className?: string) => block(FORM_SUBMIT_BLOCK, label ? { label } : undefined, className)
 /** Site navigation. `collapse`: the width below which links fold into a "Menu" button ("never" for footers). */
 /** `cta` adds a button as the last row of the small-screen panel. */
 export const menu = (items: Action[], label: string, collapse: 'md' | 'lg' | 'never', className: string, cta?: Action) =>

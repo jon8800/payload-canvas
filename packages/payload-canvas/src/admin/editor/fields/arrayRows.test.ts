@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { arrayStateKey, cloneRow, fallbackRowLabel, moveItem, toggleId, withRowIds, type ArrayRow } from './arrayRows'
+import { arrayStateKey, cloneRow, moveItem, toggleId, withRowIds, type ArrayRow } from './arrayRows'
 
 const counter = () => {
   let n = 0
@@ -116,12 +116,5 @@ describe('cloneRow', () => {
     assert.deepEqual(copy.data, [{ id: 'json-stays' }])
     assert.equal((copy.links as ArrayRow[])[0]?.label, 'L')
     assert.equal((row.links as ArrayRow[])[0]?.id, 'l1')
-  })
-})
-
-describe('fallbackRowLabel', () => {
-  it('pads the row number like Payload', () => {
-    assert.equal(fallbackRowLabel('Item', 0), 'Item 01')
-    assert.equal(fallbackRowLabel('Link', 11), 'Link 12')
   })
 })

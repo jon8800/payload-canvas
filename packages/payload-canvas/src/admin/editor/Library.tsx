@@ -11,6 +11,7 @@ import type { Block, BlockDefinition, SectionDefinition } from '../../core/types
 import { builderViewPath } from '../../plugin/links'
 import { componentCopy, insertBlocks, insertNewBlock, plainSectionBlocks, sectionPosition } from './actions'
 import { BlockIcon, Icon } from './icons'
+import { showAddedInLayers } from './layout/leftTabs'
 import { MenuButton } from './menu/Menu'
 import { useRuntime, type DragData } from './runtime'
 import { requestDeleteSection, requestRenameSection } from './sections/SectionDialog'
@@ -46,8 +47,8 @@ const matches = (query: string, ...texts: (string | undefined)[]) => {
 
 /**
  * A library tab of the left panel: blocks or ready-made sections, with a search field. Drag an
- * item onto the canvas (or the Layers tab, which opens the tree), or click it to insert it at the
- * selection.
+ * item onto the canvas or into the Layers tree (Layers opens when the drag starts), or click it to
+ * insert it at the selection (Layers then opens with the new block selected).
  */
 export function Library({ kind }: { kind: 'blocks' | 'sections' }) {
   const [query, setQuery] = useState('')
@@ -120,7 +121,8 @@ function BlockTile({ def }: { def: BlockDefinition }) {
   const data: DragData = { source: { kind: 'new', blockType: def.type }, label: def.label, icon }
   const { setNodeRef, listeners, attributes } = useDraggable({ id: `library:${def.type}`, data })
 
-  const insert = () => insertNewBlock(runtime, def.type)
+  // The inspector takes the focus (its first field).
+  const insert = () => showAddedInLayers(runtime, insertNewBlock(runtime, def.type))
 
   return (
     <button
@@ -229,7 +231,7 @@ function SectionCard({ section }: { section: SectionDefinition }) {
   const { setNodeRef, listeners, attributes } = useDraggable({ id: `section:${section.id}`, data, disabled: !root })
 
   const insert = () => {
-    if (insertBlocks(runtime, blocks, sectionPosition(runtime))) runtime.notify(`Added ${shown.label}`)
+    if (showAddedInLayers(runtime, insertBlocks(runtime, blocks, sectionPosition(runtime)), { focus: true })) runtime.notify(`Added ${shown.label}`)
   }
 
   // Versions flip in place: the card keeps one height (one label line, two description lines).
@@ -287,7 +289,7 @@ function SavedSectionMenu({ section, component }: { section: SectionDefinition; 
   } = useConfig()
   const collection = runtime.config.savedSections?.collection
   const addSaved = (blocks: Block[]) => {
-    if (insertBlocks(runtime, blocks, sectionPosition(runtime))) runtime.notify(`Added ${section.label}`)
+    if (showAddedInLayers(runtime, insertBlocks(runtime, blocks, sectionPosition(runtime)), { focus: true })) runtime.notify(`Added ${section.label}`)
   }
   // Opens the section in the full-screen builder, like a page.
   const edit = () => {

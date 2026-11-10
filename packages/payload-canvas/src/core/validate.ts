@@ -13,7 +13,8 @@ import { motionProblems } from './motion'
 import { checkSectionOrigin } from './sectionOrigin'
 import { checkVisibility } from './visibility'
 import { fallbackChain, localizedKeys } from './locale'
-import type { BlockDefinition, LocaleSettings, SlotDefinition } from './types'
+import { uniquePropClashes } from './uniqueProps'
+import type { Block, BlockDefinition, Layout, LocaleSettings, SlotDefinition } from './types'
 
 /**
  * - `invalid`: blocks every save (wrong shape or type: a layout no renderer can trust).
@@ -85,8 +86,36 @@ export function validateLayout(layout: unknown, blocks: BlockDefinition[], optio
   const htmlIds = new Map<string, string>()
   // Inline blocks may go into `allowInline` slots, as in the editor, also with a site's own list.
   const definitions = withInlineBlocks(blocks)
-  layout.blocks.forEach((block, i) => checkBlock(block, `blocks[${i}]`, null, [], definitions, seen, errors, localization, htmlIds))
+  layout.blocks.forEach((block, i) => checkBlock(block, `blocks[${i}]`, null, [], definitions, seen, errors, localization, htmlIds, []))
+  // Unique props (a form field's name) repeated in one scope. Publish-only: a copy may clash for a moment.
+  if (errors.every((e) => e.code !== 'invalid')) {
+    for (const clash of uniquePropClashes(layout as Layout, definitions)) {
+      errors.push({
+        blockId: clash.blockId,
+        path: `${pathOfBlock(layout as Layout, clash.blockId)}.props.${clash.prop}`,
+        message: `Another block here already uses the ${clash.prop} "${clash.value}". Each one must be different.`,
+        code: 'constraint',
+      })
+    }
+  }
   return errors
+}
+
+/** The data path of a block (`blocks[0].slots.children[2]`), or '' when it is not in the layout. */
+function pathOfBlock(layout: Layout, id: string): string {
+  const visit = (list: readonly Block[], at: string): string | null => {
+    for (let i = 0; i < list.length; i++) {
+      const block = list[i]!
+      const here = `${at}[${i}]`
+      if (block.id === id) return here
+      for (const [name, children] of Object.entries(block.slots ?? {})) {
+        const found = visit(children, `${here}.slots.${name}`)
+        if (found) return found
+      }
+    }
+    return null
+  }
+  return visit(layout.blocks, 'blocks') ?? ''
 }
 
 /** `label`: the owner block's name for messages. */
@@ -107,6 +136,8 @@ function checkBlock(
   errors: LayoutError[],
   localization: LocaleSettings | null,
   htmlIds: Map<string, string>,
+  /** The types of the blocks above this one, outermost first (`ancestors` rules). */
+  above: readonly string[],
 ): void {
   if (!isPlainObject(value)) {
     errors.push({ path, message: 'Block must be an object', code: 'invalid' })
@@ -138,6 +169,10 @@ function checkBlock(
   if (type && def?.parents && !(owner && def.parents.includes(owner.type))) {
     const parents = def.parents.map((t) => getBlockDefinition(blocks, t)?.label ?? t).join(' or ')
     report(path, `${typeLabel} can only go inside ${parents}`, 'nesting')
+  }
+  if (type && def?.ancestors && !def.ancestors.some((t) => above.includes(t))) {
+    const ancestors = def.ancestors.map((t) => getBlockDefinition(blocks, t)?.label ?? t).join(' or ')
+    report(path, `${typeLabel} can only go inside ${ancestors}`, 'nesting')
   }
   const refusedBy = type ? banned.find((b) => b.type === type) : undefined
   if (refusedBy) report(path, `${typeLabel} cannot go inside ${refusedBy.by}`, 'nesting')
@@ -224,7 +259,7 @@ function checkBlock(
     const label = nameOf(value, def, type ?? '')
     const childOwner: Owner = slotDef && type ? { type, label, slot: name, def: slotDef } : null
     const childBanned = slotDef?.disallow?.length ? [...banned, ...slotDef.disallow.map((t) => ({ type: t, by: label }))] : banned
-    children.forEach((child, i) => checkBlock(child, `${slotPath}[${i}]`, childOwner, childBanned, blocks, seen, errors, localization, htmlIds))
+    children.forEach((child, i) => checkBlock(child, `${slotPath}[${i}]`, childOwner, childBanned, blocks, seen, errors, localization, htmlIds, type ? [...above, type] : above))
   }
 }
 
@@ -352,6 +387,9 @@ function checkFields(fields: readonly unknown[], data: Record<string, unknown>, 
       }
       if (value === undefined || value === null) continue
     }
+    // A group or array its condition hides is not checked inside: a leftover value there is never
+    // shown or used (Payload skips hidden fields too). A form's redirect group while it shows a message.
+    if ((field.type === 'group' || field.type === 'array') && !shown(field, data, list)) continue
     checkValue(field, value, at, report)
     checkFormat(field, value, data, list, at, report)
   }

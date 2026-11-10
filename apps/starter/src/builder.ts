@@ -1,7 +1,8 @@
 // Website builder blocks: one list for payload.config.ts, the site renderer, the canvas iframe and
 // the seed. Client-safe: `payload-canvas/blocks` has no server code.
-import { builtinBlocks, defaultBlocks, defineBlock } from 'payload-canvas/blocks'
-import { formClassList } from '@/components/blocks/formClasses'
+import { builtinBlocks, defaultBlocks } from 'payload-canvas/blocks'
+import { formBlocks } from 'payload-canvas/forms'
+import { formClasses, formPartClasses } from '@/components/blocks/formClasses'
 import { ICON_NAMES } from '@/components/blocks/iconNames'
 import { legacyBuilderBlocks, legacyDemo } from '@/legacy-fixture'
 import { fieldSemanticsBlocks } from '@/legacy-fixture/fieldSemantics'
@@ -9,31 +10,14 @@ import { accessDemo, accessDemoBlock } from '@/legacy-fixture/accessDemo'
 
 export { resolveLink } from '@/lib/links'
 
-/** Custom block: embeds a form from the form-builder plugin's "forms" collection. */
-export const formBlock = defineBlock({
-  type: 'form',
-  label: 'Form',
-  icon: 'form',
-  category: 'Interactive',
-  // Optional, so a ready-made contact section publishes before a form is chosen. Without a form the
-  // site renders nothing and the canvas shows a "choose a form" placeholder.
-  fields: [{ name: 'form', type: 'relationship', relationTo: 'forms' }],
-  // The component's own Tailwind classes. The plugin adds them to the generated CSS.
-  classes: formClassList,
-  ai: {
-    description:
-      'Embeds a form from the Forms collection (form-builder plugin). Visitors fill it in and ' +
-      'submit it. Use it for contact and sign-up sections. `form` is the ID of a form document.',
-    example: { type: 'form', props: { form: 1 }, className: 'w-full max-w-xl' },
-  },
-})
-
 export const builderBlocks = [
   ...defaultBlocks({ mediaCollection: 'media', linkCollections: ['pages', 'posts'] }),
   // `embed: {}` turns on the Embed block (custom HTML). Everyone who may edit a page may change its
   // code. To limit that, pass `canEdit`, for example `({ req }) => req.user?.role === 'admin'`.
   ...builtinBlocks({ icons: ICON_NAMES, embed: {} }),
-  formBlock,
+  // Forms on pages: the Form block (build its fields here, or show a saved form) and the Submit
+  // button block. The plugin adds the field blocks (`formText`, …) from the forms collection.
+  ...formBlocks({ partClassNames: formPartClasses, defaultClassName: formClasses.fields }),
   // Dev fixture: existing Payload blocks used as builder blocks (NEXT_PUBLIC_BUILDER_LEGACY_DEMO=1).
   ...(legacyDemo ? legacyBuilderBlocks : []),
   // Dev fixture: a block with Payload validate, hooks and access on its props.

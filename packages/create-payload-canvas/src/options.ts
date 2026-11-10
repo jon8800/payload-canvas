@@ -36,12 +36,15 @@ Project:
       --no-install          Do not install dependencies (this also skips seeding)
       --seed / --no-seed    Seed demo content (default: yes with --yes, else ask)
 
-Features (all kept by default; without --yes the CLI asks about the ones you did not pass):
+Features (without --yes the CLI asks about the ones you did not pass):
       --no-look             Leave out the admin look (neutral colors, finer details)
       --no-nav              Leave out the grouped sidebar navigation
       --no-dashboard        Leave out the dashboard widgets
       --no-demo             Leave out the demo content seed (this also turns off seeding)
       --no-ai               Leave out the AI assistant in the page builder
+      --no-gallery          Leave out the media gallery (Media keeps Payload's table)
+      --no-workflows        Leave out the workflow builder and the job run viewer
+      --reviews             Add Google reviews (off by default; needs a Google place)
 
 Database (default user and password: postgres):
       --db-url <url>        postgresql://user:pass@host:5432/name (replaces the flags below)
@@ -62,11 +65,29 @@ Source:
   -h, --help                Show this help
 `
 
-// One `--no-<id>` flag per starter feature.
-const featureFlags = Object.fromEntries(FEATURES.map((feature) => [`no-${feature.id}`, { type: 'boolean' }])) as Record<
-  `no-${FeatureId}`,
-  { type: 'boolean' }
->
+// A `--<id>` and a `--no-<id>` flag per starter feature. Help lists the one that changes the default.
+const featureFlags = Object.fromEntries(
+  FEATURES.flatMap((feature) => [
+    [feature.id, { type: 'boolean' }],
+    [`no-${feature.id}`, { type: 'boolean' }],
+  ]),
+) as Record<FeatureId | `no-${FeatureId}`, { type: 'boolean' }>
+
+/**
+ * The features chosen with flags: `--<id>` turns one on, `--no-<id>` turns it off. Returns the
+ * features that are on (flag or default) and the ids the flags decided, which the CLI does not ask about.
+ */
+export function featuresFromFlags(values: Partial<Record<string, boolean | string>>): { features: FeatureId[]; decided: Set<FeatureId> } {
+  const decided = new Set<FeatureId>()
+  const features = FEATURES.filter((feature) => {
+    const on = values[feature.id] === true
+    const off = values[`no-${feature.id}`] === true
+    if (on && off) throw new Error(`--${feature.id} and --no-${feature.id} cannot be used together.`)
+    if (on || off) decided.add(feature.id)
+    return on || (!off && feature.on)
+  }).map((feature) => feature.id)
+  return { features, decided }
+}
 
 function parseFlags() {
   return parseArgs({
@@ -184,19 +205,22 @@ export async function resolveOptions(): Promise<Options | null> {
   // Source.
   const packages = values.packages ? path.resolve(process.cwd(), values.packages) : null
 
-  // Features. A --no-<id> flag turns one off without asking. Ask about the rest.
-  const turnedOff = new Set<FeatureId>(FEATURES.filter((feature) => values[`no-${feature.id}`] === true).map((feature) => feature.id))
-  const open = FEATURES.filter((feature) => !turnedOff.has(feature.id))
-  let features: FeatureId[] = open.map((feature) => feature.id)
+  // Features. A --<id> or --no-<id> flag decides one without asking. Ask about the rest.
+  const fromFlags = featuresFromFlags(values)
+  let features = fromFlags.features
+  const open = FEATURES.filter((feature) => !fromFlags.decided.has(feature.id))
   if (!yes && open.length > 0) {
     const answer = await p.multiselect<FeatureId>({
       message: 'Which starter features do you want? (space toggles, enter confirms)',
       options: open.map((feature) => ({ value: feature.id, label: feature.label, hint: feature.hint })),
-      initialValues: features,
+      initialValues: open.filter((feature) => feature.on).map((feature) => feature.id),
       required: false,
     })
     if (p.isCancel(answer)) cancelled()
-    features = answer
+    const picked = new Set<FeatureId>(answer)
+    features = FEATURES.filter((feature) => (fromFlags.decided.has(feature.id) ? features.includes(feature.id) : picked.has(feature.id))).map(
+      (feature) => feature.id,
+    )
   }
   const demo = features.includes('demo')
 

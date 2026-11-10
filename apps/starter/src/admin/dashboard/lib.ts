@@ -1,10 +1,16 @@
 import type { Where } from 'payload'
+import { submissionSummary, type SubmissionDataRow, type SubmissionFormField } from 'payload-canvas/forms'
+
+import { FROM_PARAM } from '@/lib/redirects'
 
 /** Collections the content widgets read. Slugs that are not in the config are skipped. */
 export const CONTENT_COLLECTIONS = ['pages', 'posts'] as const
 
 /** The upload collection that "Site checks" checks for alt text. */
 export const MEDIA_COLLECTION = 'media'
+
+/** The redirects plugin's collection: "Create redirect" opens its create view. */
+export const REDIRECTS_COLLECTION = 'redirects'
 
 /** The form submissions collection from the form builder plugin. */
 export const FORM_SUBMISSIONS = 'form-submissions'
@@ -71,18 +77,56 @@ export function listURL(adminRoute: string, collection: string, where?: Where): 
   return where ? `${base}?${whereToQuery(where)}` : base
 }
 
-/** A short preview of a form submission: the email (if any) and the first other value. */
-export function submissionSummary(data: Array<{ field?: string | null; value?: string | null }> | null | undefined): {
-  from: string | null
-  text: string | null
-} {
-  const rows = (data ?? []).filter((row) => typeof row.value === 'string' && row.value.trim())
-  const email = rows.find((row) => /email/i.test(row.field ?? '') || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.value ?? ''))
-  const name = rows.find((row) => row !== email && /name/i.test(row.field ?? ''))
-  const rest = rows.filter((row) => row !== email && row !== name)
-  const message = rest.find((row) => /message|comment|question/i.test(row.field ?? '')) ?? rest[0]
-  return {
-    from: (name?.value ?? email?.value ?? null)?.trim() ?? null,
-    text: (message?.value ?? null)?.trim() ?? null,
+/** A form submission as the Form messages widget reads it (`form` at depth 1). */
+export type SubmissionRowDoc = {
+  id: string | number
+  createdAt: string
+  readAt?: string | null
+  form?: { title?: string | null; fields?: SubmissionFormField[] | null } | string | number | null
+  submissionData?: SubmissionDataRow[] | null
+}
+
+/** The widget's rows: the message (or who sent it), the sender, the form and the time, and "New" until someone opened it. */
+export function submissionRows(docs: readonly SubmissionRowDoc[], adminRoute: string, language: string, now: Date = new Date()) {
+  return docs.map((doc) => {
+    const form = typeof doc.form === 'object' && doc.form ? doc.form : null
+    const { name, email, text } = submissionSummary(doc.submissionData, form?.fields)
+    const from = name ?? email
+    return {
+      key: String(doc.id),
+      href: docURL(adminRoute, FORM_SUBMISSIONS, doc.id),
+      title: shortText(text ?? from) || 'Empty message',
+      meta: [text ? from : null, form?.title || 'Form', relativeTime(doc.createdAt, now, language)].filter(Boolean).join(' · '),
+      ...(doc.readAt ? {} : { badge: { label: 'New', tone: 'new' as const } }),
+    }
+  })
+}
+
+/** The admin URL that creates a redirect from `path`. */
+export function redirectCreateURL(adminRoute: string, path: string): string {
+  return `${adminRoute === '/' ? '' : adminRoute}/collections/${REDIRECTS_COLLECTION}/create?${FROM_PARAM}=${encodeURIComponent(path)}`
+}
+
+/** One line of text, at most `max` characters, with an ellipsis when cut. */
+export function shortText(text: string | null | undefined, max = 90): string {
+  const line = (text ?? '').replace(/\s+/g, ' ').trim()
+  return line.length > max ? `${line.slice(0, max - 1).trimEnd()}…` : line
+}
+
+
+/** Why a link target is broken: it was deleted, or it is not published. Null when it is fine. */
+export function linkProblem(target: { found: boolean; drafts: boolean; status?: unknown }): 'deleted' | 'unpublished' | null {
+  if (!target.found) return 'deleted'
+  if (target.drafts && target.status !== 'published') return 'unpublished'
+  return null
+}
+
+/** The URL of a media document's small preview: the thumbnail size, the admin thumbnail, or the image. */
+export function thumbnailOf(doc: { url?: unknown; thumbnailURL?: unknown; mimeType?: unknown; sizes?: unknown }): string | null {
+  const sizes = doc.sizes as Record<string, { url?: unknown } | undefined> | undefined
+  for (const candidate of [sizes?.thumbnail?.url, doc.thumbnailURL]) {
+    if (typeof candidate === 'string' && candidate) return candidate
   }
+  const image = typeof doc.mimeType === 'string' && doc.mimeType.startsWith('image/')
+  return image && typeof doc.url === 'string' && doc.url ? doc.url : null
 }

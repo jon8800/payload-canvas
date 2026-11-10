@@ -64,6 +64,7 @@ import {
   layoutBeforeChange,
   recordOverrideAccess,
   type BindingCheck,
+  type FormSync,
 } from './hook'
 import {
   DEFAULT_SAVED_SECTIONS_SLUG,
@@ -91,8 +92,13 @@ import {
 import { templateEndpoint } from './templateEndpoint'
 import { CLASSES_CONFIG_KEY, resolveClasses, type ClassesOptions } from '../classes'
 import { resolveComments, type CommentsOptions } from '../comments'
+import { withBuilderConditions } from '../core/conditions'
+import { resolveForms, type FormsOptions } from './forms'
+import { formClaimEndpoint, formLiveCheck, formSourceField, formSyncAfterCreate, pageFormSync, sectionFormSync, type SourceField } from './formsSync'
+import { FORM_BLOCK, FORM_SLOT, withPageForms } from '../forms/pageForms'
 
 export type { GeneratedCss } from './hook'
+export type { FormsOptions } from './forms'
 export type { SavedSectionsOptions } from './sections'
 export type { ReferencesOptions } from './references'
 
@@ -158,6 +164,11 @@ export type BuilderCollectionOptions = {
    * A separate layout per locale (`localized: true` on the whole field) is not supported yet.
    */
   localization?: 'props' | false
+  /**
+   * `false`: the editor of this collection offers no sections: no Sections tab and no "Save as
+   * section…". The `forms` option sets it, because form fields are not page sections.
+   */
+  sections?: false
 }
 
 export type TemplatesOptions = {
@@ -255,6 +266,13 @@ export type WebsiteBuilderOptions = {
    * in the layout. On by default; `false` turns it off. See the README's "Comments" section.
    */
   comments?: CommentsOptions | boolean
+  /**
+   * The form builder: a full-screen builder for the forms of `@payloadcms/plugin-form-builder`
+   * (add that plugin before this one). The form's fields are its own `fields` blocks field; the
+   * right panel edits the form's settings when no field is selected. The canvas shows the form
+   * through the app's page frame (`createCanvasServer({ frame })`). See the README's "Form builder".
+   */
+  forms?: FormsOptions | boolean
 }
 
 const LAYOUT_FIELD_COMPONENT = 'payload-canvas/client#LayoutField'
@@ -297,6 +315,9 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
     const apiRoute = config.routes?.api ?? '/api'
     const canvasPath = options.canvasPath ?? '/builder-canvas'
     const sourceCollections = config.collections ?? []
+    // The form builder: the forms collection joins the builder collections, with its own blocks.
+    const forms = resolveForms(options.forms, sourceCollections, options.collections)
+    const listedCollections: Record<string, BuilderCollectionOptions> = forms ? { ...options.collections, [forms.slug]: forms.collection } : options.collections
     const live = defaultLiveRuntime()
     const writeGate = defaultWriteGate()
     // Payload's locales. Each builder collection uses them unless it sets `localization: false`.
@@ -313,7 +334,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       return option === false ? null : locales
     }
 
-    for (const slug of Object.keys(options.collections)) {
+    for (const slug of Object.keys(listedCollections)) {
       if (!sourceCollections.some((c) => c.slug === slug)) {
         throw new Error(
           `[websiteBuilder] Collection "${slug}" does not exist. Known collections: ${sourceCollections.map((c) => c.slug).join(', ')}.`,
@@ -343,9 +364,9 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
     }
 
     // Templates: a collection of layouts for the template-enabled collections.
-    const targets = Object.entries(options.collections).filter(([, o]) => o.templates).map(([slug]) => slug)
+    const targets = Object.entries(listedCollections).filter(([, o]) => o.templates).map(([slug]) => slug)
     const templatesSlug = options.templates?.slug ?? DEFAULT_TEMPLATES_SLUG
-    const withUrl = new Set(Object.entries(options.collections).filter(([, o]) => o.url).map(([slug]) => slug))
+    const withUrl = new Set(Object.entries(listedCollections).filter(([, o]) => o.url).map(([slug]) => slug))
     for (const slug of options.listCollections ?? []) {
       if (!sourceCollections.some((c) => c.slug === slug)) {
         throw new Error(
@@ -354,9 +375,11 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       }
     }
     // The collections the collection list block can show: with a `url`, then `listCollections`.
-    const listable = listableCollections(options.collections, options.listCollections)
-    const builderOptions: Record<string, BuilderCollectionOptions> = { ...options.collections }
-    let collections = sourceCollections
+    const listable = listableCollections(listedCollections, options.listCollections)
+    const builderOptions: Record<string, BuilderCollectionOptions> = { ...listedCollections }
+    // Forms on pages: the app lists a Form block (`formBlocks()`), and each form remembers its block.
+    const pageForms = Boolean(forms && options.blocks?.some((b) => b.type === FORM_BLOCK && b.slots?.[FORM_SLOT]))
+    let collections = pageForms && forms ? sourceCollections.map((c) => (c.slug === forms.slug ? { ...c, fields: [...c.fields, formSourceField()] } : c)) : sourceCollections
     if (targets.length > 0) {
       if (sourceCollections.some((c) => c.slug === templatesSlug)) {
         throw new Error(
@@ -372,7 +395,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
         }
       }
       collections = [
-        ...sourceCollections.map((c) =>
+        ...collections.map((c) =>
           targets.includes(c.slug) ? { ...c, fields: [...c.fields, documentTemplateField(c.slug, templatesSlug)] } : c,
         ),
         templatesCollection({
@@ -393,13 +416,17 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       options.savedSections === false ? null : { slug: options.savedSections?.slug ?? DEFAULT_SAVED_SECTIONS_SLUG }
     // Inline blocks (`inline: true`) may sit in a link: they join its `allow` list. With saved
     // sections on, the live saved section block (`sectionRef`) joins the list, pointed at their collection.
-    const blocks = prepareBlocks(options.blocks ?? defaultBlocks(), listable, savedSections?.slug ?? null)
+    const prepared = prepareBlocks(options.blocks ?? defaultBlocks(), listable, savedSections?.slug ?? null)
+    // Forms on pages: the Form block gets the forms collection's settings, and its field blocks join the list.
+    const blocks = pageForms && forms ? withPageForms(prepared, { fields: forms.blocks, settings: forms.settingsFields, collection: forms.slug }) : prepared
     // Variants stay under their section (core/sections.ts): one library card, a switch on the canvas.
     const appSections = options.sections ?? []
     checkSectionVariants(appSections)
     // A section block without a className gets its type's default classes (JSON layouts only).
     const sections = sectionsWithDefaultClassNames(appSections, blocks)
-    const duplicate = blocks.find((b, i) => blocks.findIndex((other) => other.type === b.type) !== i)
+    // With forms on pages the field blocks are in `blocks` already.
+    const allTypes = [...blocks, ...(forms && !pageForms ? forms.blocks : [])]
+    const duplicate = allTypes.find((b, i) => allTypes.findIndex((other) => other.type === b.type) !== i)
     if (duplicate) {
       throw new Error(
         `[websiteBuilder] Two blocks have the type "${duplicate.type}". Every block type must be unique. For blocks made with fromPayloadBlocks(), set \`prefix\` (for example \`prefix: 'site'\` makes "${duplicate.type}" "site${duplicate.type.charAt(0).toUpperCase()}${duplicate.type.slice(1)}").`,
@@ -408,7 +435,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
     // The props' validate, hooks and access, read now: Payload's config sanitizing later adds its
     // default validators and editor hooks to the same field objects (core/fieldSemantics.ts).
     const fieldRegistry = captureFieldSemantics(blocks)
-    for (const [slug, o] of Object.entries(options.collections)) {
+    for (const [slug, o] of Object.entries(listedCollections)) {
       for (const name of o.legacyFields ?? []) {
         const source = sourceCollections.find((c) => c.slug === slug)
         if (name === (o.field ?? 'layout') || !source || !hasFieldNamed(source.fields, name)) {
@@ -420,7 +447,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
     }
 
     // A builder field that is the collection's own Payload blocks field stays the source of truth.
-    for (const [slug, o] of Object.entries(options.collections)) {
+    for (const [slug, o] of Object.entries(listedCollections)) {
       const source = sourceCollections.find((c) => c.slug === slug)
       const field = o.field ?? 'layout'
       const found = source ? takeField(source.fields, field).found : undefined
@@ -434,7 +461,9 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
         ...(found.blocks ?? []).map((b) => (typeof b === 'string' ? b : b.slug)),
         ...((found as { blockReferences?: Array<string | { slug: string }> }).blockReferences ?? []).map((b) => (typeof b === 'string' ? b : b.slug)),
       ]
-      blocksStorageOf[slug] = payloadBlocksStorage([...new Set(slugs)], blocks, `"${slug}.${field}"`)
+      // The form's field blocks are its own (first: the page versions go only inside a Form block).
+      const definitions = slug === forms?.slug ? [...forms.blocks, ...blocks] : blocks
+      blocksStorageOf[slug] = payloadBlocksStorage([...new Set(slugs)], definitions, `"${slug}.${field}"`)
     }
 
     if (savedSections) {
@@ -450,6 +479,16 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       // The full-screen builder edits saved sections like pages (no drafts: changes save at once).
       builderOptions[savedSections.slug] = { field: SECTION_LAYOUT_FIELD }
     }
+    // Forms on pages: a new submission to a form built on a page or a saved section needs that
+    // page or section to still show the form (formLiveCheck), before the app's own checks.
+    if (pageForms && forms?.submissions) {
+      const sourceField = (slug: string): SourceField | null =>
+        slug === savedSections?.slug ? { field: 'blocks', blocks: 'list' } : builderOptions[slug] && slug !== forms.slug ? { field: builderOptions[slug].field ?? 'layout', blocks: 'layout' } : null
+      const check = formLiveCheck({ forms: forms.slug, sourceField })
+      collections = collections.map((c) =>
+        c.slug === forms.submissions ? { ...c, hooks: { ...c.hooks, beforeValidate: [check, ...(c.hooks?.beforeValidate ?? [])] } } : c,
+      )
+    }
     // References: which media and documents each layout uses ("Used in", delete protection).
     const references = resolveReferences({
       options: options.references,
@@ -459,7 +498,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       ...(savedSections ? { shared: [savedSections.slug] } : {}),
       sources: {
         ...Object.fromEntries(
-          Object.entries(builderOptions).map(([slug, o]) => {
+          Object.entries(builderOptions).filter(([slug]) => slug !== forms?.slug).map(([slug, o]) => {
             const storage = blocksStorageOf[slug]
             if (!storage) return [slug, { layout: o.field ?? 'layout' }]
             // The references index follows the blocks field itself (no copy of the content).
@@ -475,7 +514,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
     })
     // Page regions: document fields outside the layout that the builder shows and edits.
     const regionsOf: Record<string, RegionConfig[]> = {}
-    for (const [slug, o] of Object.entries(options.collections)) {
+    for (const [slug, o] of Object.entries(listedCollections)) {
       if (!o.regions) continue
       if (!Array.isArray(o.regions)) throw new Error(`[websiteBuilder] \`regions\` of "${slug}" must be a list.`)
       if (o.regions.length === 0) continue
@@ -504,11 +543,17 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           ...(o.legacyFields?.length ? { legacyFields: o.legacyFields } : {}),
           localization: localizationOf(slug),
           ...(regionsOf[slug] ? { regions: regionsOf[slug] } : {}),
-          ...(blocksStorageOf[slug] ? { payloadBlocks: blocksStorageOf[slug] } : {}),
+          ...(blocksStorageOf[slug] ? { payloadBlocks: blocksStorageOf[slug] } : blocks.some((def) => def.upgrade) ? { blocks } : {}),
         },
       ]),
     )
-    const serverConfig: BuilderServerConfig = { collections: liveCollections, templates: targets.length > 0 ? templatesSlug : null }
+    const serverConfig: BuilderServerConfig = {
+      collections: liveCollections,
+      templates: targets.length > 0 ? templatesSlug : null,
+      // The block list the plugin checks against (with forms on pages completed), for the MCP tools.
+      blocks,
+      ...(pageForms && forms ? { pageForms: { collection: forms.slug, settings: forms.settings } } : {}),
+    }
     const views = config.admin?.components?.views
     if (views?.[BUILDER_VIEW_KEY]) {
       throw new Error(`[websiteBuilder] An admin view named "${BUILDER_VIEW_KEY}" already exists. The plugin needs this name for the builder view.`)
@@ -589,19 +634,23 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           field,
           // A Payload blocks field offers its own block types only.
           // Its blocks have no style controls there: a Payload block stores no classes or animations,
-          // also when the definition turns styles on for the builder's JSON layouts.
+          // also when the definition turns styles on for the builder's JSON layouts. Blocks with
+          // class keys (form fields) keep their classes.
           blocks: storage ? toJsonSafe(storage.blocks.map(withoutStyles)) : clientBlocks,
           canvasPath,
           cssEndpoint: `${apiRoute}${CANVAS_CSS_PATH}`,
           tokensEndpoint: `${apiRoute}${STYLE_TOKENS_PATH}`,
           // Only sections the field can store as they are.
-          sections: storage
-            ? sectionsThatFit(appSections, (list) => payloadBlocksProblems({ version: 1, blocks: list }, storage).length === 0)
-            : sections,
+          sections:
+            collectionOptions.sections === false
+              ? []
+              : storage
+                ? sectionsThatFit(appSections, (list) => payloadBlocksProblems({ version: 1, blocks: list }, storage).length === 0)
+                : sections,
           liveEndpoint: `${apiRoute}${LIVE_PATH}`,
           templates: clientTemplates,
           ai: options.ai ? aiClientConfig(options.ai, `${apiRoute}${AI_PATH}`) : null,
-          savedSections: savedSections ? { collection: savedSections.slug } : null,
+          savedSections: savedSections && collectionOptions.sections !== false ? { collection: savedSections.slug } : null,
           themeEndpoint: theme ? theme.endpoint : null,
           // A Payload blocks field stores no classes.
           classes: classes && !storage ? classes.client : null,
@@ -613,11 +662,16 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           },
           validateTypes: [...fieldRegistry.types('validate')],
           localization: localizationOf(collection.slug),
-          ...(regionsOf[collection.slug] ? { regions: toJsonSafe(regionsOf[collection.slug]) } : {}),
+          // Simple `admin.condition` functions become JSON rules, so the inspector can show and hide panel fields.
+          ...(regionsOf[collection.slug]
+            ? { regions: toJsonSafe(regionsOf[collection.slug].map((r) => ({ ...r, fields: r.fields.map((f) => ({ ...f, field: withBuilderConditions(f.field) })) }))) }
+            : {}),
           ...(storage ? { storage: 'payload-blocks' as const, payloadRootTypes: [...storage.rootTypes] } : {}),
           ...(Object.keys(relations).length > 0 ? { relations } : {}),
+          ...(forms ? { forms: { collection: forms.slug, submissions: forms.submissions } } : {}),
         }
         const isSections = collection.slug === savedSections?.slug
+        const formSync = pageForms && forms && !storage ? pageFormSync({ collection: collection.slug, layoutField: field, forms: forms.slug, settings: forms.settings }) : null
         const built = addBuilder(collection, {
           field,
           clientConfig,
@@ -633,10 +687,15 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           localization: localizationOf(collection.slug),
           writeGate,
           payloadBlocks: storage,
+          // Forms on pages are written to the forms collection on publish. Saved sections write theirs
+          // from their `blocks`, after those are set (sectionFormSync, below).
+          ...(formSync && !isSections ? { formSync } : {}),
         })
+        // A new document has no id in the save hook: its forms are written after the create.
+        const withForms = formSync ? withFormSyncHooks(built, { collection: collection.slug, field, isSections, formSync }) : built
         // After the layout hook, so the references follow the layout the session guard put in.
         // Publishing a page publishes the classes it uses that have unpublished changes.
-        const withClasses = classes && !storage ? classes.withPublish(built, field) : built
+        const withClasses = classes && !storage ? classes.withPublish(withForms, field) : withForms
         return references ? addReferences(withClasses, references) : withClasses
       })
         .concat(classes ? [withDesignAccess(classes.collection)] : [])
@@ -684,6 +743,8 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
         }),
         // The template a document renders through, for the editor's empty page.
         ...(targets.length > 0 ? [templateEndpoint({ collections: liveCollections, templatesSlug, targets })] : []),
+        // "Move into this page": the Form block takes over a saved form that no other page uses.
+        ...(pageForms && forms ? [formClaimEndpoint({ forms: forms.slug, settings: forms.settings, collections: liveCollections, runtime: live })] : []),
         ...(classes ? classes.endpoints : []),
         ...(options.ai
           ? aiEndpoints({
@@ -696,6 +757,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
               savedSections,
               getTokens: (req) => (req ? themeStyleTokens(req.payload, css) : getStyleTokens(css)),
               templates: templates ? { slug: templatesSlug, sources: templates.sources } : null,
+              forms: forms ? { slug: forms.slug, blocks: forms.blocks } : null,
             })
           : []),
         {
@@ -762,6 +824,25 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
   }
 }
 
+/**
+ * Forms on pages: the form sync after a create (`formSyncAfterCreate`), and for saved sections the
+ * sync of their `blocks` after `syncSectionBlocks` (`sectionFormSync`).
+ */
+function withFormSyncHooks(collection: CollectionConfig, args: { collection: string; field: string; isSections: boolean; formSync: FormSync }): CollectionConfig {
+  const source: SourceField = args.isSections ? { field: 'blocks', blocks: 'list' } : { field: args.field, blocks: 'layout' }
+  return {
+    ...collection,
+    hooks: {
+      ...collection.hooks,
+      beforeChange: [
+        ...(collection.hooks?.beforeChange ?? []),
+        ...(args.isSections ? [sectionFormSync({ collection: args.collection, layoutField: args.field, formSync: args.formSync })] : []),
+      ],
+      afterChange: [...(collection.hooks?.afterChange ?? []), formSyncAfterCreate({ collection: args.collection, source, formSync: args.formSync })],
+    },
+  }
+}
+
 type EditViews = Extract<
   NonNullable<
     NonNullable<NonNullable<NonNullable<CollectionConfig['admin']>['components']>['views']>['edit']
@@ -788,11 +869,13 @@ type AddBuilderArgs = {
   writeGate: WriteGate
   /** The builder field is the collection's own Payload blocks field: its block types. */
   payloadBlocks?: PayloadBlocksStorage
+  /** Forms on pages: writes the page's Form blocks to the forms collection (`pageFormSync`). */
+  formSync?: FormSync
 }
 
 function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): CollectionConfig {
   if (args.payloadBlocks) return addPayloadBlocksBuilder(collection, args, args.payloadBlocks)
-  const { field, clientConfig, blocks, css, sessions, bindings, afterLayout = [], ownFields, fieldRegistry, localization } = args
+  const { field, clientConfig, blocks, css, sessions, bindings, afterLayout = [], ownFields, fieldRegistry, localization, formSync } = args
   const cssField = cssFieldName(field)
   const gate = args.writeGate.hooks(collection.slug)
 
@@ -873,7 +956,7 @@ function addBuilder(collection: CollectionConfig, args: AddBuilderArgs): Collect
       afterError: [...(collection.hooks?.afterError ?? []), gate.afterError],
       beforeChange: [
         ...(collection.hooks?.beforeChange ?? []),
-        layoutBeforeChange({ collection: collection.slug, field, cssField, blocks, css, sessions, bindings, ownFields, fieldRegistry, localization }),
+        layoutBeforeChange({ collection: collection.slug, field, cssField, blocks, css, sessions, bindings, ownFields, fieldRegistry, localization, formSync }),
         ...afterLayout,
       ],
       afterChange: [
@@ -979,10 +1062,19 @@ function openInBuilderView(edit: Record<string, unknown> | undefined, clientConf
   return { default: { Component: DOCUMENT_EDIT_VIEW_COMPONENT } }
 }
 
-/** A block definition without style controls (classes, parts, animations, default classes). */
+/**
+ * A block definition without the style controls a Payload blocks field cannot store. A block with
+ * class keys (a form field's `cssClass` and `partClasses`) keeps the classes those keys store.
+ */
 function withoutStyles(def: BlockDefinition): BlockDefinition {
-  const { defaultClassName: _defaultClassName, parts: _parts, ...rest } = def
-  return { ...rest, styles: false }
+  const keys = def.payload?.classKeys
+  const { defaultClassName: _defaultClassName, parts, ...rest } = def
+  return {
+    ...rest,
+    ...(keys?.partClassName && parts ? { parts } : {}),
+    ...(keys?.className && def.defaultClassName ? { defaultClassName: def.defaultClassName } : {}),
+    styles: Boolean(keys?.className),
+  }
 }
 
 /** Name of the hidden virtual field that carries the builder's config for a Payload blocks field. */

@@ -1,10 +1,10 @@
 'use client'
 
-// Images on the canvas, admin side: a "Replace" chip on the image under the pointer, and a media
-// popover (double-click or a click on the chip) with Choose from library, Upload, Generate, Remove
-// and the alt text. The chip and the image box live in the overlay (iframe coordinates); the
-// popover renders into the editor root, like the insert picker, because the overlay takes no
-// pointer events.
+// Images on the canvas, admin side: a "Replace" chip in the top right corner of the image under
+// the pointer, and a media popover (double-click or a click on the chip) with Choose from
+// library, Upload, Generate, Remove and the alt text. The chip and the image box live in the
+// overlay (iframe coordinates); the popover renders into the editor root, like the insert picker,
+// because the overlay takes no pointer events.
 
 import { useListDrawer } from '@payloadcms/ui'
 import type { CollectionSlug } from 'payload'
@@ -35,7 +35,7 @@ import {
   updateImageEditor,
   uploadImage,
 } from './actions'
-import { altPropPath, mediaRef, propAt } from './model'
+import { altPropPath, chipPlace, mediaRef, propAt } from './model'
 import './media.scss'
 
 const noSubscription = () => () => {}
@@ -57,8 +57,11 @@ function visiblePart(rect: Rect, viewport: Size | null): Rect {
   return { x, y, width: Math.max(0, right - x), height: Math.max(0, bottom - y) }
 }
 
-/** The chip, the image box and the media popover. Mounted once, in the overlay. */
-export const ImageEditor = memo(function ImageEditor() {
+/**
+ * The chip, the image box and the media popover. Mounted once, in the overlay. `barRight` and
+ * `barTop`: the selected block's top right corner while its action bar sits inside it, else null.
+ */
+export const ImageEditor = memo(function ImageEditor({ barRight, barTop }: { barRight: number | null; barTop: number | null }) {
   const runtime = useRuntime()
   const store = imageEditor(runtime)
   const state = useValue(store)
@@ -73,6 +76,7 @@ export const ImageEditor = memo(function ImageEditor() {
   const [library, setLibrary] = useState<{ collection: string; owner: CanvasOwner; path: string; at: number } | null>(null)
   const host = useSyncExternalStore(noSubscription, editorRoot, noRoot)
   const viewport = useValueSelector(runtime.measurement, (m) => m?.viewport ?? null, sameSize)
+  const { zoom } = useValue(runtime.frame)
 
   const open = state.open
   const target = open?.target ?? held ?? state.hover
@@ -105,7 +109,9 @@ export const ImageEditor = memo(function ImageEditor() {
   // The part of the image inside the canvas view: a cover image is often larger than its section.
   const rect = spot ? visiblePart(spot.rect, viewport) : null
   const box: CSSProperties | undefined = rect ? { left: rect.x, top: rect.y, width: rect.width, height: rect.height } : undefined
-  const chip: CSSProperties | undefined = rect ? { left: rect.x, top: rect.y } : undefined
+  // The chip's anchor is the image's top right corner; CSS moves it inside, under the bar or above.
+  const chip: CSSProperties | undefined = rect ? { left: rect.x + rect.width, top: rect.y } : undefined
+  const place = rect ? chipPlace(rect, zoom, barRight !== null && barTop !== null ? { right: barRight, top: barTop } : null) : 'inside'
   const chipLabel = busy ? 'Uploading…' : state.dropping ? 'Drop to replace' : 'Replace'
 
   return (
@@ -117,6 +123,7 @@ export const ImageEditor = memo(function ImageEditor() {
             ref={chipRef}
             type="button"
             className="builder-media__chip"
+            data-place={place}
             style={chip}
             aria-haspopup="dialog"
             aria-expanded={popover.open}

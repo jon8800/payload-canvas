@@ -3,7 +3,7 @@ import { describe, it } from 'node:test'
 
 import { defaultBlocks } from '../blocks/defaults'
 import { linkField } from '../blocks/link'
-import { collectReferences, readReferences, referenceTargets, sameReferences } from './references'
+import { collectReferences, fieldReferences, readReferences, referenceTargets, sameReferences } from './references'
 import type { BlockDefinition, Layout } from './types'
 
 const custom: BlockDefinition[] = [
@@ -136,4 +136,30 @@ describe('readReferences and sameReferences', () => {
     assert.equal(sameReferences(stored, [{ relationTo: 'pages', value: 2 }, { relationTo: 'media', value: 1 }]), false)
     assert.deepEqual(readReferences(null), [])
   })
+})
+
+it('fieldReferences reads any document along its field config', () => {
+  const fields = [
+    { name: 'hero', type: 'upload', relationTo: 'media' },
+    { type: 'tabs', tabs: [{ name: 'meta', fields: [{ name: 'image', type: 'upload', relationTo: 'media' }] }] },
+    { name: 'refs', type: 'relationship', relationTo: ['media', 'pages'], hasMany: true },
+    { name: 'body', type: 'richText' },
+    { name: 'builder', type: 'json' },
+    { name: 'title', type: 'text' },
+  ]
+  const data = {
+    hero: 1,
+    meta: { image: { id: 2, url: '/x.jpg' } },
+    refs: [{ relationTo: 'pages', value: 7 }, { relationTo: 'media', value: 1 }],
+    body: { root: { children: [{ type: 'upload', relationTo: 'media', value: 3 }] } },
+    builder: { blocks: [{ props: { image: { relationTo: 'media', value: 4 } } }] },
+    title: 'Not a reference',
+  }
+  assert.deepEqual(fieldReferences(fields, data), [
+    { relationTo: 'media', value: 1 },
+    { relationTo: 'media', value: 2 },
+    { relationTo: 'pages', value: 7 },
+    { relationTo: 'media', value: 3 },
+    { relationTo: 'media', value: 4 },
+  ])
 })

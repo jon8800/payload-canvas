@@ -21,7 +21,9 @@ import { DragLayer } from './DragLayer'
 import { dropAt, endSmoothDrag, isSmoothDrag, MAKE_ROOM_EASING, SETTLE_EASING, startSmoothDrag } from './dnd/smooth'
 import { Inspector } from './Inspector'
 import { CommentsOrInspector } from './comments/CommentsPanel'
+import { useCommentFromURL } from './comments/useCommentFromURL'
 import { LeftPanel } from './layout/LeftPanel'
+import { selectLeftTab } from './layout/leftTabs'
 import { applySizes, readSizes } from './layout/panels'
 import { Splitter } from './layout/Splitter'
 import './layout/layout.scss'
@@ -86,6 +88,7 @@ export function Editor({ config, meta, icon, locale, canEditDesign }: EditorProp
   useFollow(runtime)
   useTemplateController(runtime)
   useComponentRefresh(runtime)
+  useCommentFromURL(runtime)
   useEffect(() => runtime.assistant?.setDocument(config.collection, docId), [runtime, config.collection, docId])
   useEffect(() => () => runtime.assistant?.stop(), [runtime])
   // The hidden thumbnail iframe goes with the editor.
@@ -147,6 +150,9 @@ export function Editor({ config, meta, icon, locale, canEditDesign }: EditorProp
       rect: initial ? { x: initial.left, y: initial.top, width: initial.width, height: initial.height } : null,
       fromOutline: String(active.id).startsWith('outline:'),
     })
+    // A block or section from the library: Layers opens at once (as in Webflow), so the drop can go
+    // in the tree or on the canvas. The library item stays mounted in its hidden panel, so the drag lives on.
+    if (data.source.kind === 'new') selectLeftTab(runtime, 'layers')
     stopAutoScroll.current = startAutoScroll(runtime)
   }
 
@@ -181,7 +187,7 @@ export function Editor({ config, meta, icon, locale, canEditDesign }: EditorProp
             const { source } = state
             if (section) return insertBlocks(runtime, section, target.to)
             if (source.kind === 'block') return runtime.store.apply({ type: 'move', id: source.id, to: target.to }, { select: source.id })
-            const block = runtime.createBlock(source.blockType)
+            const block = runtime.createBlock(source.blockType, target.to)
             if (!block || !runtime.store.apply({ type: 'insert', block, to: target.to }, { select: block.id, newContent: true })) return false
             runtime.focusRequest.set(block.id)
             return true

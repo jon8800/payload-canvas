@@ -18,6 +18,7 @@ export {
   backfillReferences,
   DEFAULT_REFERENCES_FIELD,
   findReferrers,
+  layoutReferences,
   FORCE_DELETE_CONTEXT,
   referencesConfigOf,
   REFERENCES_CONFIG_KEY,
@@ -27,6 +28,34 @@ export {
   type Referrer,
 } from './plugin/references'
 export { builderViewPath } from './plugin/links'
+export { formSubmissionConditions, applyFormConditions, type FormSubmissionConditionsOptions, type SubmissionRow } from './forms/submission'
+export { formEmails, type FormEmailsOptions } from './forms/emails'
+export { FORM_FILES_CONTEXT, formFileUploads, formFileUploadsCleanup, removeStoredFormFiles, type FormFileUploadsOptions } from './forms/uploads'
+export { FORM_FIELDS_FIELD, FORM_SETTINGS_REGION, type FormsOptions } from './plugin/forms'
+export {
+  formSpamProtection,
+  spamProtectionField,
+  checkSubmission,
+  clientIp,
+  filledTooFast,
+  FORM_NO_SCRIPT_CONTEXT,
+  honeypotFilled,
+  turnstileKeys,
+  TURNSTILE_NEEDS_SCRIPT_MESSAGE,
+  verifyTurnstile,
+  type FormSpamProtectionOptions,
+  type TrustedIpHeader,
+  type SpamProtectionFieldOptions,
+  type SpamReason,
+} from './forms/spam'
+export {
+  formSubmissionsAdmin,
+  SUBMISSION_ANSWERS_FIELD,
+  SUBMISSION_PAGE_FIELD,
+  SUBMISSION_READ_FIELD,
+  SUBMISSION_SUMMARY_FIELD,
+  type FormSubmissionsAdminOptions,
+} from './forms/submissionsAdmin'
 export {
   DEFAULT_TEMPLATES_SLUG,
   DOCUMENT_TEMPLATE_FIELD,
@@ -94,4 +123,4 @@ export {
   type ClassUsage,
 } from './classes'
 // Comments on the canvas: the collection's options and the comment shape.
-export { DEFAULT_COMMENTS_SLUG, type BuilderComment, type CommentsOptions } from './comments'
+export { COMMENT_PARAM, DEFAULT_COMMENTS_SLUG, type BuilderComment, type CommentsOptions } from './comments'

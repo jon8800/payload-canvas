@@ -22,7 +22,7 @@ import { PeerDots } from './live/PresenceUI'
 import { missingWords, useUntranslated } from './locale/locale'
 import { BLOCK_KEYS, keyText } from './menu/keys'
 import { openBlockMenu, renameRequest } from './menu/requests'
-import { blockPreview, blockSummary, childrenOf, customLabel, typeName } from './names'
+import { blockPreview, blockSummary, childrenOf, componentMark, customLabel, typeName } from './names'
 import { useContentMode } from './contentMode'
 import { OUTLINE_INDENT, useRuntime, type DragData, type Runtime } from './runtime'
 import { RegionRows } from './regions/RegionRows'
@@ -41,22 +41,28 @@ type Row = {
   childCount: number
   /** The preview text after the name. Empty when the parent row already shows the same text. */
   text: string
+  /** The name from the parent slot's `itemLabel` ("Slide 2"), for a child without a name of its own. */
+  itemName: string | null
 }
 
 /** Visible rows, depth first. Children of collapsed containers are left out. */
 function visibleRows(runtime: Runtime, layout: Layout, collapsed: ReadonlySet<string>): Row[] {
   const out: Row[] = []
-  const visit = (blocks: Block[], depth: number, parentText: string) => {
-    for (const block of blocks) {
-      const container = slotNames(getBlockDefinition(runtime.config.blocks, block.type)).length > 0
+  const visit = (blocks: Block[], depth: number, parentText: string, itemLabel?: string) => {
+    blocks.forEach((block, i) => {
+      const definition = getBlockDefinition(runtime.config.blocks, block.type)
+      const container = slotNames(definition).length > 0
       const children = childrenOf(block)
       const open = !collapsed.has(block.id)
       const preview = blockPreview(block)
       // "Section · Our services" > "Stack · Our services" says the same thing twice.
       const text = container && preview === parentText ? '' : preview
-      out.push({ block, depth, container, open, childCount: children.length, text })
-      if (open) visit(children, depth + 1, preview)
-    }
+      const itemName = itemLabel ? `${itemLabel} ${i + 1}` : null
+      out.push({ block, depth, container, open, childCount: children.length, text, itemName })
+      if (!open) return
+      // Slot by slot, in the order `childrenOf` counts them, so each slot numbers its own items.
+      for (const [slot, list] of Object.entries(block.slots ?? {})) visit(list, depth + 1, preview, definition?.slots?.[slot]?.itemLabel)
+    })
   }
   visit(layout.blocks, 0, '')
   return out
@@ -287,7 +293,7 @@ export function Outline() {
           <div className="builder-editor__empty">
             <Icon name="layers" size={20} />
             <p>The page is empty.</p>
-            <p className="builder-editor__hint">Add blocks from the Blocks or Sections tab: drag them onto the canvas, or click one.</p>
+            <p className="builder-editor__hint">Add blocks from the Blocks or Sections tab: drag them onto the canvas or here, or click one.</p>
           </div>
         </div>
       ) : (
@@ -302,6 +308,7 @@ export function Outline() {
               open={row.open}
               childCount={row.childCount}
               text={row.text}
+              itemName={row.itemName}
               issues={issues.get(row.block.id) ?? NO_ISSUES}
               untranslated={untranslated.get(row.block.id)?.length ?? 0}
               missing={missing}
@@ -351,6 +358,7 @@ const OutlineRow = memo(function OutlineRow({
   open,
   childCount,
   text,
+  itemName,
   issues,
   untranslated,
   missing,
@@ -371,7 +379,9 @@ const OutlineRow = memo(function OutlineRow({
   const contentMode = useContentMode(runtime)
   const { setNodeRef, listeners, attributes } = useDraggable({ id: `outline:${block.id}`, data, disabled: renaming || contentMode })
   const label = customLabel(block)
-  const name = label ?? typeName(block, typeLabel)
+  // A slide (or another slot item) without a name of its own: "Slide 2".
+  const slotItem = label ? null : itemName
+  const name = label ?? slotItem ?? typeName(block, typeLabel)
   const bindingCount = Object.keys(block.bindings ?? {}).length
   const tag = typeof block.props?.as === 'string' && block.props.as !== 'div' ? ` <${block.props.as}>` : ''
 
@@ -416,6 +426,7 @@ const OutlineRow = memo(function OutlineRow({
       ref={setNodeRef}
       data-outline-row={block.id}
       data-depth={depth}
+      {...componentMark(block)}
       className={className}
       onClick={() => runtime.store.select(block.id)}
       onDoubleClick={() => !contentMode && onRename(block.id)}
@@ -430,6 +441,7 @@ const OutlineRow = memo(function OutlineRow({
       aria-disabled={undefined}
       role="treeitem"
       aria-label={[
+        slotItem,
         blockSummary(block, typeLabel),
         block.hidden && 'hidden on the site',
         block.motion && 'animated',

@@ -16,7 +16,12 @@ const dirname = path.dirname(filename)
 
 export const Media: CollectionConfig = {
   slug: 'media',
-  folders: true,
+  admin: {
+    // The list is a grid (payload-media-gallery, in payload.config.ts). These columns are for the
+    // table in upload pickers; the File Name column shows a thumbnail next to the name.
+    defaultColumns: ['filename', 'alt', 'updatedAt'],
+    useAsTitle: 'filename',
+  },
   access: {
     create: authenticated,
     delete: authenticated,

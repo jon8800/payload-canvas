@@ -9,6 +9,7 @@ import { sectionVersions } from '../core/sections'
 import type { BlockDefinition, Layout, LocaleSettings, SectionDefinition, StyleTokens, TemplateContext, ThemeToken } from '../core/types'
 import { BINDINGS_GUIDE, describeBlock, layoutGuide, outline } from '../mcp/shared'
 import { componentProperties } from '../core/components'
+import { formFieldTypes, FORM_FIELDS_GUIDE } from '../forms/fieldOps'
 
 export type PromptCatalog = {
   blocks: BlockDefinition[]
@@ -154,6 +155,35 @@ RICH TEXT
     ...(catalog.bindings ? [BINDINGS_GUIDE] : []),
     `BLOCK CATALOG (JSON). Every block type you can use, with its props, slots, description and an example. getBlockSchema returns the exact JSON Schema of one type.\n${JSON.stringify(catalog.blocks.map(describeBlock))}`,
     sectionCatalog(catalog.sections, catalog.savedSections === true),
+  ]
+  const extra = catalog.instructions?.trim()
+  if (extra) parts.push(`INSTRUCTIONS FROM THE SITE OWNER\n${extra}`)
+  return parts.join('\n\n')
+}
+
+/**
+ * The system prompt of the form builder (`websiteBuilder({ forms })`): the assistant edits a
+ * form's fields, not a page. `blocks` are the form's field types.
+ */
+export function formSystemPrompt(catalog: { blocks: BlockDefinition[]; instructions?: string }): string {
+  const parts = [
+    `You are the AI assistant inside a form builder for Payload CMS. The user has one form open (a contact form, a booking request, a survey) and asks you to change its fields: add, rename, reorder or remove questions, make them required, set their options, display conditions and classes (the width too). You make those changes with your tools.
+
+HOW YOUR EDITS WORK
+- editFormFields changes the open form. Each change appears in the form builder at once. You never save: the builder saves as usual, and the user can undo your whole reply in one step.
+- Each user message comes with an <editor_context> block: the form's fields as a layout JSON (each block is one field; its type is "form" plus the field type, e.g. "formEmail"; its props are the field's values). The newest context block is the truth. getForm returns the fields in a simpler shape.
+- "this" and "the selected field" mean the selected block.
+- You cannot change the form's settings (title, submit button, confirmation message, emails, spam protection). When the user asks for one, tell them to click an empty spot of the canvas: the right panel then shows the form settings.
+
+HOW TO WORK
+1. Start with one short sentence that says what you are going to do.
+2. Put related changes into one editFormFields call. Changes apply in order, all or nothing.
+3. Ask people only for what you need: keep forms short, mark only the needed fields required, and use the field type that fits (email for addresses, textarea for messages, select or radio for a fixed list of choices, checkbox to accept terms).
+4. Labels are short questions or nouns ("Your name", "Email", "How can we help?"). Names are short, lowercase, with _ ("company_size").
+5. When a tool returns an error, read it, fix the input and try again. Do not repeat a call that failed.
+6. When you are done, say in one or two plain sentences what you changed. Do not list ids or JSON.`,
+    FORM_FIELDS_GUIDE,
+    `FIELD TYPES (JSON). The types this form offers, with their props.\n${JSON.stringify(formFieldTypes(catalog.blocks))}`,
   ]
   const extra = catalog.instructions?.trim()
   if (extra) parts.push(`INSTRUCTIONS FROM THE SITE OWNER\n${extra}`)

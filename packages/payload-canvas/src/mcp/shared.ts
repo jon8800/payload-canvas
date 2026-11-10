@@ -193,6 +193,7 @@ export function describeBlock(def: BlockDefinition) {
           name,
           {
             ...(slot.label ? { label: slot.label } : {}),
+            ...(slot.description ? { description: slot.description } : {}),
             accepts: slot.allow && !slot.allow.includes('*') ? slot.allow : 'any block',
             ...(typeof slot.min === 'number' ? { minBlocks: slot.min } : {}),
             ...(typeof slot.max === 'number' ? { maxBlocks: slot.max } : {}),

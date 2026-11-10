@@ -5,7 +5,8 @@ import { useDeferredValue, useEffect, useState, type ChangeEvent } from 'react'
 
 import { blockParts, findBlock, getBlockDefinition, htmlIdProblem, htmlIdsOf } from '../../core'
 import type { Block, BlockDefinition, Operation } from '../../core/types'
-import { BlockIcon, Icon, type IconName } from './icons'
+import { BlockIcon, Icon } from './icons'
+import { Tabs } from './ui/Tabs'
 import { useContentMode } from './contentMode'
 import { blockMenuEntries } from './menu/blockMenu'
 import { MenuButton } from './menu/Menu'
@@ -20,7 +21,7 @@ import { useAccessRefresh } from './fields/access'
 import { InputError } from './fields/CheckedInputs'
 import { BlockContentFields } from './renderField'
 import { useRuntime, type InspectorTab } from './runtime'
-import { storesBuilderData } from './actions'
+import { storesBuilderData, storesClasses } from './actions'
 import { shortcutList } from './shortcuts'
 import { useEditor } from './store'
 import { StylesPanel } from './styles/StylesPanel'
@@ -30,33 +31,6 @@ import { useOptionalValue, useValue, useValueSelector } from './valueStore'
 import { RegionPane } from './regions/RegionPane'
 import { SECTION_REF_BLOCK } from '../../blocks/builtins/sectionRef'
 import { ComponentBanner, ComponentValuesPanel } from './sections/ComponentFields'
-
-type TabsProps<T extends string> = {
-  value: T
-  options: { id: T; label: string; icon?: IconName }[]
-  onChange: (id: T) => void
-  variant?: 'segmented' | 'underline'
-}
-
-function Tabs<T extends string>({ value, options, onChange, variant = 'underline' }: TabsProps<T>) {
-  return (
-    <div className={variant === 'segmented' ? 'builder-editor__segmented builder-editor__segmented--full' : 'builder-editor__tabs'} role="tablist">
-      {options.map((option) => (
-        <button
-          key={option.id}
-          type="button"
-          role="tab"
-          aria-selected={value === option.id}
-          className={variant === 'segmented' ? 'builder-editor__segment' : 'builder-editor__tab'}
-          onClick={() => onChange(option.id)}
-        >
-          {option.icon && <Icon name={option.icon} size={13} />}
-          {option.label}
-        </button>
-      ))}
-    </div>
-  )
-}
 
 export function Inspector() {
   const runtime = useRuntime()
@@ -158,8 +132,9 @@ function saveTabChoice(tab: BlockTab) {
 }
 
 /** The tab a block opens on: the chosen tab, unless the block has nothing to show there. */
-function tabFor(chosen: BlockTab, def: BlockDefinition | undefined, justAdded: boolean): BlockTab {
+function tabFor(chosen: BlockTab, def: BlockDefinition | undefined, justAdded: boolean, allTabs: boolean): BlockTab {
   const hasFields = (def?.fields.length ?? 0) > 0
+  if (!allTabs && chosen !== 'content' && chosen !== 'styles') return 'content'
   // A block that was just added opens on its content, so typing starts at once.
   if (justAdded && hasFields) return 'content'
   if (chosen !== 'content' && def?.styles === false) return 'content'
@@ -188,7 +163,9 @@ function BlockPane() {
   const def = block ? getBlockDefinition(runtime.config.blocks, block.type) : undefined
   // Content mode edits content only: no Styles, Motion or Advanced tab.
   const contentMode = useContentMode(runtime)
-  const tab = storesBuilderData(runtime) && !contentMode ? tabFor(chosen, def, block !== null && block.id === addedId) : 'content'
+  // A Payload blocks field keeps only the classes of blocks with class keys: Content and Styles.
+  const styled = block !== null && storesClasses(runtime, block.type)
+  const tab = styled && !contentMode ? tabFor(chosen, def, block !== null && block.id === addedId, storesBuilderData(runtime)) : 'content'
   const setTab = (next: BlockTab) => {
     setAddedId(null)
     setChosen(next)
@@ -210,7 +187,11 @@ function BlockPane() {
     return () => cancelAnimationFrame(frame)
   }, [block, focusRequest, runtime])
 
-  if (!block) return region && runtime.regions ? <RegionPane key={region} regions={runtime.regions} name={region} /> : <EmptyState />
+  if (!block) {
+    // A selected region shows its pane. Without a selection, a panel region (a form's settings) shows its fields.
+    const shownRegion = region ?? runtime.regions?.config.find((r) => r.panel)?.name ?? null
+    return shownRegion && runtime.regions ? <RegionPane key={shownRegion} regions={runtime.regions} name={shownRegion} /> : <EmptyState />
+  }
 
   return (
     // `key` remounts the inputs per block, so input state (loaded documents) never leaks between blocks.
@@ -219,26 +200,26 @@ function BlockPane() {
       <BlockProblems blockId={block.id} />
       <EditingBanner blockId={block.id} />
       <LocaleNote blockId={block.id} tab={tab} />
-      {!contentMode && (
+      {/* A Payload blocks field holds the blocks' own fields only: no tabs, the content shows; blocks with class keys add Styles. */}
+      {!contentMode && styled && (
         <Tabs
           value={tab}
           onChange={setTab}
-          options={
-            storesBuilderData(runtime)
+          options={[
+            { id: 'content', label: 'Content' },
+            { id: 'styles', label: 'Styles' },
+            ...(storesBuilderData(runtime)
               ? [
-                  { id: 'content', label: 'Content' },
-                  { id: 'styles', label: 'Styles' },
-                  { id: 'motion', label: 'Motion' },
-                  { id: 'advanced', label: 'Advanced' },
+                  { id: 'motion' as const, label: 'Motion' },
+                  { id: 'advanced' as const, label: 'Advanced' },
                 ]
-              : // A Payload blocks field holds the blocks' own fields only.
-                [{ id: 'content', label: 'Content' }]
-          }
+              : []),
+          ]}
         />
       )}
       {tab === 'content' && <BlockContentFields block={block} />}
       {tab === 'content' && block.type === SECTION_REF_BLOCK && <ComponentValuesPanel block={block} />}
-      {tab === 'styles' && storesBuilderData(runtime) && <StyleFields block={block} />}
+      {tab === 'styles' && styled && <StyleFields block={block} />}
       {tab === 'motion' && storesBuilderData(runtime) && <MotionPanel blockId={block.id} blockType={block.type} motion={block.motion} />}
       {tab === 'advanced' && storesBuilderData(runtime) && <AdvancedFields block={block} />}
     </div>

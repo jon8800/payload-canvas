@@ -6,7 +6,9 @@
 //   'payload-canvas/client#PublishButton' — Payload's Publish button, hidden in the builder's settings drawer
 //   'payload-canvas/client#TemplateConditionsField' — a template's conditions as condition rows
 //   'payload-canvas/client#AiKeyField' — an API key in the AI settings global ("Set, ends in …4f2a", Replace, Clear)
+//   'payload-canvas/client#ArrayRowLabel' — a row label for any array field, from the row's own values (core `rowLabel`)
 export { AiKeyField } from './AiKeyField'
+export { ArrayRowLabel } from './ArrayRowLabel'
 export { BuilderTab } from './BuilderTab'
 export { DocumentEditView } from './DocumentEditView'
 export { PublishButton } from './editor/topbar/settingsDrawer'

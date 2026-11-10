@@ -1,7 +1,9 @@
 import { getTranslation } from '@payloadcms/translations'
-import type { CollectionSlug, PayloadRequest, SanitizedPermissions, WidgetServerProps } from 'payload'
+import type { CollectionSlug, PayloadRequest, SanitizedPermissions, Where, WidgetServerProps } from 'payload'
+import { builderViewPath, referencesConfigOf } from 'payload-canvas'
 
-import { CONTENT_COLLECTIONS, docTitle, docURL, relativeTime } from './lib'
+import { REFERENCE_INDEX, referenceIndexReady, USES_FIELD } from '@/admin/references'
+import { CONTENT_COLLECTIONS, docTitle, docURL, MEDIA_COLLECTION, relativeTime } from './lib'
 import type { ListRow } from './WidgetCard'
 
 export type WidgetProps = WidgetServerProps
@@ -78,4 +80,85 @@ export function settingNumber(value: unknown, fallback: number, min = 1, max = 2
   const parsed = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(parsed)) return fallback
   return Math.min(max, Math.max(min, Math.round(parsed)))
+}
+
+export type BrokenLink = {
+  key: string
+  /** The builder URL of the document with the link. */
+  href: string
+  title: string
+  /** "Links to the deleted page #12". */
+  detail: string
+  problem: 'deleted' | 'unpublished'
+}
+
+type IndexRow = { id: string | number; sourceCollection: string; sourceId: string; sourceTitle?: string | null; relationTo: string; value: string; problem: string; targetTitle?: string | null }
+
+/**
+ * Links in builder layouts (the latest version, what the builder shows) to documents that were
+ * deleted or are not published: one query on the reference index, at most `limit` rows plus the
+ * total. Only layouts of collections the user can read. `null` until the index is built.
+ * Images are left out: the plugin refuses to delete an image a layout uses.
+ */
+export async function brokenLinks(
+  req: PayloadRequest,
+  permissions: SanitizedPermissions | undefined,
+  limit: number,
+): Promise<{ links: BrokenLink[]; total: number } | null> {
+  const { payload } = req
+  if (!(await referenceIndexReady(payload))) return null
+  const sources = Object.keys(referencesConfigOf(payload)?.sources ?? {}).filter((slug) => can(req, permissions, slug))
+  if (!sources.length) return { links: [], total: 0 }
+  const result = await payload.find({
+    collection: REFERENCE_INDEX as CollectionSlug,
+    depth: 0,
+    limit,
+    overrideAccess: true,
+    req,
+    sort: 'sourceTitle',
+    where: { and: [{ problem: { exists: true } }, { latest: { equals: true } }, { layout: { equals: true } }, { sourceCollection: { in: sources } }] },
+  })
+  const adminRoute = payload.config.routes.admin
+  const links = (result.docs as unknown as IndexRow[]).map((row): BrokenLink => {
+    const target = payload.collections[row.relationTo as CollectionSlug]?.config
+    const label = target ? getTranslation(target.labels.singular, req.i18n).toLowerCase() : row.relationTo
+    const problem = row.problem === 'deleted' ? 'deleted' : 'unpublished'
+    return {
+      key: String(row.id),
+      href: builderViewPath(adminRoute, row.sourceCollection, row.sourceId),
+      title: row.sourceTitle || `Untitled (${row.sourceId})`,
+      detail: problem === 'deleted' ? `Links to a deleted ${label} (#${row.value})` : `Links to the unpublished ${label} “${row.targetTitle ?? row.value}”`,
+      problem,
+    }
+  })
+  return { links, total: result.totalDocs }
+}
+
+export type MediaDoc = { id: string | number; filename?: string | null; alt?: string | null; createdAt: string; url?: unknown; thumbnailURL?: unknown; mimeType?: unknown; sizes?: unknown }
+
+/** Media no row of the reference index points at: no document or global uses them. */
+const UNUSED_WHERE: Where = { [`${USES_FIELD}.id`]: { exists: false } }
+
+/** The admin path of the full list of unused media (UnusedMediaView.tsx). */
+export const UNUSED_MEDIA_PATH = '/unused-media'
+
+/**
+ * The newest `limit` files that nothing uses, and how many there are: one query (a join on the
+ * reference index). Counts the published and the latest version of every document and global.
+ * `null` until the index is built.
+ */
+export async function unusedMedia(req: PayloadRequest, limit: number, page = 1): Promise<{ docs: MediaDoc[]; total: number; pages: number } | null> {
+  if (!(await referenceIndexReady(req.payload))) return null
+  const result = await req.payload.find({
+    collection: MEDIA_COLLECTION as CollectionSlug,
+    depth: 0,
+    limit,
+    page,
+    // The widget checks that the user can read media; the index itself is server-only.
+    overrideAccess: true,
+    req,
+    sort: '-createdAt',
+    where: UNUSED_WHERE,
+  })
+  return { docs: result.docs as unknown as MediaDoc[], total: result.totalDocs, pages: result.totalPages }
 }

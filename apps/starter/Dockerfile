@@ -69,9 +69,11 @@ COPY --from=build --chown=nextjs:nodejs /repo/apps/starter/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /repo/apps/starter/.next/static ./apps/starter/.next/static
 COPY --from=build --chown=nextjs:nodejs /repo/apps/starter/public ./apps/starter/public
 
-# Uploaded media. Mount a volume here so uploads survive a new container.
-RUN mkdir -p /app/apps/starter/public/media && chown -R nextjs:nodejs /app/apps/starter/public/media
-VOLUME ["/app/apps/starter/public/media"]
+# Uploaded media (public) and files sent with forms (private, uploads/form-files). Mount volumes
+# here so uploads survive a new container.
+RUN mkdir -p /app/apps/starter/public/media /app/apps/starter/uploads/form-files \
+  && chown -R nextjs:nodejs /app/apps/starter/public/media /app/apps/starter/uploads
+VOLUME ["/app/apps/starter/public/media", "/app/apps/starter/uploads"]
 
 USER nextjs
 # The builder resolves the CSS entry relative to the working directory.

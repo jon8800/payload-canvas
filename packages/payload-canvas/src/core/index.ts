@@ -4,11 +4,13 @@
 export * from './types'
 export { checkAttrs, htmlAttributes, htmlIdClash, htmlIdProblem, htmlIdsOf, patchAttrs, withoutTakenHtmlIds } from './attrs'
 export { createId } from './ids'
+export { duplicateOperation, freeValue, uniquePropClashes, uniquePropValues, uniquePropValuesAt, uniqueScopeOf, withUniqueProps, type UniquePropClash } from './uniqueProps'
+export { newBlockOf } from './starter'
 export { findBlock, findLocation, walkBlocks, isSelfOrDescendant, normalizeLayout, type BlockLocation } from './tree'
 export { applyOperation, applyOperations, type ApplyOptions } from './operations'
 export { layerAt, reachableAt } from './layers'
 export { acceptingSlots, type AcceptingSlot, deepestBlockAt, canvasDropTarget, outlineDropTarget } from './dropTarget'
-export { blockParts, type BlockPart, collectClasses, defaultPartClassNames } from './classes'
+export { blockParts, type BlockPart, collectClasses, defaultPartClassNames, partClassNameOf } from './classes'
 export { headingId, richTextHeadings, type RichTextHeading } from './headings'
 export { blockJsonSchema, layoutJsonSchema } from './schema'
 export { validateLayout, isBlockingError, isLayoutWarning, PUBLISH_ONLY_CODES, type LayoutError, type LayoutErrorCode, type ValidateOptions } from './validate'
@@ -41,7 +43,7 @@ export * from './bindings'
 export * from './visibility'
 export * from './components'
 export { TEXT_LIST_BLOCK, TEXT_LIST_ITEM_BLOCK, TEXT_LIST_SLOT, joinListItem, splitListItem, type ListItemEdit } from './textList'
-export { blockName, defineBlock, defineSection, type SectionBlockInput, type SectionInput, fitsParent, getBlockDefinition, placementError, checkSectionVariants, sectionsWithDefaultClassNames, sectionsWithVariants, slotAccepts, slotAcceptsAt, slotNames, starterSlots, withDefaultClasses, withDefaultClassNames, withInlineBlocks } from './blocks'
+export { ancestorsError, blockName, defineBlock, defineSection, type SectionBlockInput, type SectionInput, fitsParent, getBlockDefinition, placementError, upgradeLayout, checkSectionVariants, sectionsWithDefaultClassNames, sectionsWithVariants, slotAccepts, slotAcceptsAt, slotNames, starterSlots, withDefaultClasses, withDefaultClassNames, withInlineBlocks } from './blocks'
 export {
   carryContent,
   DEFAULT_VARIANT_LABEL,
@@ -85,6 +87,7 @@ export {
   type PayloadBlocksStorage,
 } from './payloadBlocks'
 export { dataFields, fieldAtPropPath, type DataField } from './fields'
+export { rowLabel } from './rowLabel'
 export {
   pathWithoutIndexes,
   regionAccessAt,
@@ -99,4 +102,4 @@ export {
   valueAtDocPath,
   type RegionOption,
 } from './regions'
-export { collectReferences, readReferences, referenceKey, referenceTargets, sameReferences, type Reference, type ReferenceTargets } from './references'
+export { collectReferences, fieldReferences, readReferences, referenceKey, referenceTargets, sameReferences, type Reference, type ReferenceTargets } from './references'

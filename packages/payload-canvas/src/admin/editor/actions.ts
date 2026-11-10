@@ -5,8 +5,21 @@
 
 import { SECTION_REF_BLOCK, sectionDetachOps, sectionRefId } from '../../blocks/builtins/sectionRef'
 import { applyComponentValues, componentValuesOf } from '../../core/components'
-import { createId, findBlock, findLocation, getBlockDefinition, htmlIdsOf, slotAcceptsAt, slotNames, withoutTakenHtmlIds } from '../../core'
-import type { Block, CanvasMeasurement, Layout, Operation, Position, SectionDefinition } from '../../core/types'
+import {
+  createId,
+  duplicateOperation,
+  findBlock,
+  findLocation,
+  getBlockDefinition,
+  placementError,
+  htmlIdsOf,
+  slotAcceptsAt,
+  slotNames,
+  uniquePropValuesAt,
+  withoutTakenHtmlIds,
+  withUniqueProps,
+} from '../../core'
+import type { Block, CanvasMeasurement, Layout, Operation, Position, SectionDefinition, SlotDefinition } from '../../core/types'
 import { normalizeClasses, parseStyles, setStylesOps, stylesText, type CopiedStyles } from './menu/styleClipboard'
 import type { Runtime } from './runtime'
 import { countText } from './counts'
@@ -75,13 +88,30 @@ export function insertNewBlock(runtime: Runtime, type: string): boolean {
 }
 
 /** Adds a new block of `type` at `to`, selects it and asks the inspector to focus its first field. */
-export function insertNewBlockAt(runtime: Runtime, type: string, to: Position): boolean {
-  const block = runtime.createBlock(type)
-  if (!block) return false
+export function insertNewBlockAt(runtime: Runtime, type: string, to: Position, template?: SlotDefinition['newBlock']): boolean {
+  const created = runtime.createBlock(type, to)
+  if (!created) return false
+  // A block with placement rules (a form field goes only inside a Form block) says why, in words.
+  const refused = placementError(runtime.config.blocks, runtime.store.getState().layout, to.parentId, to.slot ?? 'children', created)
+  if (refused) {
+    const needs = getBlockDefinition(runtime.config.blocks, type)?.ancestors
+    const where = needs?.map((t) => runtime.blockLabel(t)).join(' or ')
+    runtime.warn(where ? `${refused}. Select a ${where} first, or drag it into one.` : refused)
+    return false
+  }
+  // A slot's `newBlock` (a carousel's "Slide"): its name, classes and props over the defaults.
+  const block: Block = template
+    ? {
+        ...created,
+        ...(template.label ? { label: template.label } : {}),
+        ...(template.className ? { className: template.className } : {}),
+        ...(template.props ? { props: { ...created.props, ...template.props } } : {}),
+      }
+    : created
   if (!runtime.store.apply({ type: 'insert', block, to }, { select: block.id, newContent: true })) return false
   runtime.focusRequest.set(block.id)
   const parent = to.parentId ? findBlock(runtime.store.getState().layout, to.parentId) : null
-  const label = runtime.blockLabel(type)
+  const label = template?.label ?? runtime.blockLabel(type)
   runtime.notify(parent ? `Added ${label} in ${parent.label?.trim() || runtime.blockLabel(parent.type)}` : `Added ${label}`)
   return true
 }
@@ -102,18 +132,23 @@ export function currentPosition(layout: Layout, to: Position): Position | null {
  * out the HTML ids (`attrs.id`) the page already uses, so a paste or a second section stays valid.
  */
 export function insertBlocks(runtime: Runtime, blocks: Block[], to: Position): boolean {
-  const fresh = freshCopies(runtime, blocks)
+  const fresh = freshCopies(runtime, blocks, to.parentId)
   const first = fresh[0]
   if (!first) return false
   const ops: Operation[] = fresh.map((block, i) => ({ type: 'insert', block, to: { ...to, index: to.index + i } }))
   return runtime.store.apply(ops, { select: first.id })
 }
 
-/** Copies with new ids, without the HTML ids the page already uses. */
-function freshCopies(runtime: Runtime, blocks: readonly Block[]): Block[] {
-  const taken = htmlIdsOf(runtime.store.getState().layout.blocks)
+/**
+ * Copies with new ids, without the HTML ids the page already uses, and with free unique props in
+ * the scope of `parentId` (see `uniqueProps`: inside a form, its own fields).
+ */
+function freshCopies(runtime: Runtime, blocks: readonly Block[], parentId: string | null): Block[] {
+  const { layout } = runtime.store.getState()
+  const taken = htmlIdsOf(layout.blocks)
+  const values = uniquePropValuesAt(layout, parentId, runtime.config.blocks)
   return blocks.map((block) => {
-    const copy = withoutTakenHtmlIds(withNewIds(block), taken)
+    const copy = withUniqueProps(withoutTakenHtmlIds(withNewIds(block), taken), runtime.config.blocks, values)
     htmlIdsOf([copy], taken)
     return copy
   })
@@ -148,15 +183,18 @@ export async function detachSection(runtime: Runtime, id: string): Promise<void>
     runtime.notify('This saved section cannot be loaded. It may be deleted.')
     return
   }
-  const copies = freshCopies(runtime, applyComponentValues(section.blocks, componentValuesOf(ref?.props), runtime.config.blocks))
+  const copies = freshCopies(runtime, applyComponentValues(section.blocks, componentValuesOf(ref?.props), runtime.config.blocks), findLocation(runtime.store.getState().layout, id)?.parentId ?? null)
   const ops = sectionDetachOps(runtime.store.getState().layout, id, copies)
   if (ops && runtime.store.apply(ops, { select: copies[0]!.id })) runtime.notify(`Detached "${section.label}": this page now has its own copy`)
   else runtime.notify("The section's blocks cannot go here.")
 }
 
 export function duplicateBlock(runtime: Runtime, id: string) {
+  // One insert of a ready copy (one undo step): its blocks get free values for their unique props
+  // (form field names) in its scope, also inside a Stack or Grid of form fields.
   const newId = createId()
-  if (runtime.store.apply({ type: 'duplicate', id, newId }, { select: newId })) runtime.notify('Duplicated')
+  const op = duplicateOperation(runtime.store.getState().layout, id, newId, runtime.config.blocks)
+  if (op && runtime.store.apply(op, { select: newId })) runtime.notify('Duplicated')
 }
 
 export function removeBlock(runtime: Runtime, id: string) {
@@ -182,6 +220,14 @@ export function toggleHidden(runtime: Runtime, id: string) {
  */
 export function storesBuilderData(runtime: Pick<Runtime, 'config'>): boolean {
   return runtime.config.storage !== 'payload-blocks'
+}
+
+/**
+ * True when blocks of `type` keep Tailwind classes here: always in the builder's JSON layout; in a
+ * Payload blocks field only when the block has a class key (a form field's `cssClass`).
+ */
+export function storesClasses(runtime: Pick<Runtime, 'config'>, type: string): boolean {
+  return storesBuilderData(runtime) || Boolean(getBlockDefinition(runtime.config.blocks, type)?.payload?.classKeys?.className)
 }
 
 /** Gives a block its own name in the outline and the breadcrumbs. An empty name removes it. */

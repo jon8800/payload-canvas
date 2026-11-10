@@ -8,10 +8,10 @@ import {
   EMPTY_LAYOUT,
   findBlock,
   getBlockDefinition,
+  newBlockOf,
   outlineDropTarget,
-  starterSlots,
-  withDefaultClasses,
-  withFieldDefaults,
+  uniquePropValuesAt,
+  withUniqueProps,
 } from '../../core'
 import type {
   Block,
@@ -21,6 +21,7 @@ import type {
   DropTarget,
   OutlineRow,
   Point,
+  Position,
   Rect,
 } from '../../core/types'
 import type { BuilderDocMeta } from '../../live/types'
@@ -158,7 +159,8 @@ export type Runtime = {
   blockLabel: (type: string) => string
   /** Icon name of a block type: the definition's `icon`, else the type itself. */
   blockIcon: (type: string) => string
-  createBlock: (type: string) => Block | null
+  /** A new block of `type` as the editor adds it. `to`: where it goes, for the scope of its unique props. */
+  createBlock: (type: string, to?: Pick<Position, 'parentId'>) => Block | null
 }
 
 const COLLAPSED_KEY = 'payload-builder:collapsed'
@@ -326,20 +328,15 @@ export function createRuntime(
     warn: (text) => notice.set({ text, at: Date.now(), tone: 'warning' }),
     blockLabel,
     blockIcon: (type) => getBlockDefinition(config.blocks, type)?.icon ?? type,
-    createBlock(type) {
-      const def = getBlockDefinition(config.blocks, type)
-      if (!def) return null
-      // A Payload blocks field stores no classes: a new block there starts without them.
-      const block: Block = config.storage === 'payload-blocks' ? { id: createId(), type } : withDefaultClasses({ id: createId(), type }, def)
-      // Field defaults that are plain data, inside groups, rows and tabs too (function defaults
-      // were stripped from the client config). From now on the block stores its own values.
-      const props = withFieldDefaults({}, def.fields)
-      if (Object.keys(props).length > 0) block.props = props
-      // A new list starts with one list item (see `starterSlots`).
-      const slots = starterSlots(config.blocks, type, createId)
-      if (slots) block.slots = slots
+    createBlock(type, to) {
+      // A Payload blocks field stores classes only for blocks that have class keys (form fields).
+      const classes = config.storage !== 'payload-blocks' || Boolean(getBlockDefinition(config.blocks, type)?.payload?.classKeys?.className)
+      const block = newBlockOf(config.blocks, type, createId, { classes })
+      if (!block) return null
       // No empty slot arrays: layouts are canonical. The canvas still shows placeholders for declared slots.
-      return block
+      // Props that must stay unique (a form field name) get a free value in the scope they go to: `text2` next to `text`.
+      const { layout } = store.getState()
+      return withUniqueProps(block, config.blocks, uniquePropValuesAt(layout, to?.parentId ?? null, config.blocks))
     },
   }
   store.onWarning((text) => runtime.warn(text))
@@ -452,13 +449,14 @@ export function computeDrop(runtime: Runtime, p: Point, source: DragSource): Pic
   const { blocks } = runtime.config
 
   const outline = runtime.outlineRef.current
-  if (outline && rectContains(toRect(outline.getBoundingClientRect()), p.x, p.y)) {
+  const area = outline ? toRect(outline.getBoundingClientRect()) : null
+  if (outline && area && rectContains(area, p.x, p.y)) {
     const rows: OutlineRow[] = Array.from(outline.querySelectorAll<HTMLElement>('[data-outline-row]'), (el) => ({
       id: el.dataset.outlineRow ?? '',
       rect: toRect(el.getBoundingClientRect()),
       depth: Number(el.dataset.depth ?? 0),
     }))
-    return { zone: 'outline', target: outlineDropTarget(layout, blocks, rows, p, source, OUTLINE_INDENT) }
+    return { zone: 'outline', target: outlineDropTarget(layout, blocks, rows, p, source, OUTLINE_INDENT, area) }
   }
 
   const iframe = runtime.iframeRef.current

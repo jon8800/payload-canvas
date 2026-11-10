@@ -104,3 +104,29 @@ describe('pickerItems and section variants', () => {
     assert.deepEqual(found.map((i) => i.id), ['section:hero'])
   })
 })
+
+describe('pickerItems and a slot new block', () => {
+  const withSlides: BlockDefinition[] = [
+    ...blocks,
+    {
+      type: 'carousel',
+      label: 'Carousel',
+      fields: [],
+      slots: { slides: { itemLabel: 'Slide', newBlock: { type: 'stack', label: 'Slide', className: 'basis-full' } } },
+    },
+  ]
+  const carousel: Layout = { version: 1, blocks: [{ id: 'c', type: 'carousel' }] }
+  it('lists the slot new block first, named by the slot', () => {
+    const items = pickerItems({ blocks: withSlides, sections: [], layout: carousel, parentId: 'c', slot: 'slides', query: '' })
+    const [first] = items
+    assert.ok(first?.kind === 'block')
+    assert.equal(first.label, 'Slide')
+    assert.equal(first.hint, 'Stack')
+    assert.deepEqual(first.template, { type: 'stack', label: 'Slide', className: 'basis-full' })
+    assert.ok(items.some((i) => i.id === 'block:stack'))
+  })
+  it('finds it by its name and leaves it out elsewhere', () => {
+    assert.equal(pickerItems({ blocks: withSlides, sections: [], layout: carousel, parentId: 'c', slot: 'slides', query: 'slide' })[0]?.label, 'Slide')
+    assert.ok(!pickerItems({ blocks: withSlides, sections: [], layout: carousel, parentId: null, slot: 'children', query: '' }).some((i) => i.label === 'Slide'))
+  })
+})

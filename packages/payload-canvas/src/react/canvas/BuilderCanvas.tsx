@@ -88,13 +88,24 @@ const EDITOR_CSS = `
   border-radius: 4px;
   background: repeating-linear-gradient(45deg, rgb(0 0 0 / 0.03) 0 6px, transparent 6px 12px);
 }
+/* An empty slot with a description: the description, centered. */
+[data-slot-empty][data-slot-hint] { display: grid; place-items: center; padding: 8px; }
+[data-slot-empty][data-slot-hint]::before {
+  content: attr(data-slot-hint);
+  font: 12px/1.4 system-ui, sans-serif;
+  color: rgb(0 0 0 / 0.55);
+  text-align: center;
+  pointer-events: none;
+}
 [data-builder-hidden] { opacity: 0.35; }
-/* Repeated collection list items (2nd, 3rd, …): shown dimmed, never selectable. */
+/* Repeated collection list items (2nd, 3rd, …): shown dimmed, never selectable. A component's
+   blocks are not selectable either (the component is), but they show as on the site. */
 [data-builder-repeat] { pointer-events: none; }
-[data-builder-repeat]:not([data-builder-repeat] [data-builder-repeat]) { opacity: 0.6; }
+[data-builder-repeat]:not([data-builder-component]):not([data-builder-repeat] [data-builder-repeat]) { opacity: 0.6; }
 [data-builder-empty-page] { min-height: 240px; }
-/* The layout inside the page frame: the same box the canvas root gives a layout without a frame. */
-[data-builder-layout] { display: flow-root; }
+/* The layout inside the page frame: the same box the canvas root gives a layout without a frame.
+   A frame that gives the box its own classes (\`<LayoutOutlet className>\`) styles it itself. */
+[data-builder-layout]:not([class]) { display: flow-root; }
 /* Fixed regions of the page frame: text and images edit in place, but they never drag. */
 [data-builder-region] { user-select: none; }
 /* Inline text editing. The admin overlay draws the editing outline. */
@@ -149,6 +160,15 @@ const SCROLL_MARGIN = 48
  * unless a double-click (which edits the text) follows. Other summary clicks act at once.
  */
 const SUMMARY_TOGGLE_DELAY_MS = 260
+
+/** The app's definitions plus the admin's for types the app lacks. `own` alone when nothing is missing. */
+export function withAdminDefinitions(own: BlockDefinition[] | undefined, admin: BlockDefinition[] | undefined): BlockDefinition[] | undefined {
+  if (!own) return admin
+  if (!admin) return own
+  const types = new Set(own.map((d) => d.type))
+  const missing = admin.filter((d) => !types.has(d.type))
+  return missing.length > 0 ? [...own, ...missing] : own
+}
 
 function send(message: CanvasToAdmin) {
   post(window.parent, message)
@@ -935,7 +955,9 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
   // Bind the template to the sample document, load collection lists, then replace upload and
   // relationship IDs with documents. The newest layout wins.
   const resolveRun = useRef(0)
-  const definitions = ownBlocks ?? init?.blocks
+  // The app's definitions, plus the admin's for types the app does not list (a collection's own
+  // blocks, such as the form builder's field blocks). The same list object while both stay.
+  const definitions = useMemo(() => withAdminDefinitions(ownBlocks, init?.blocks), [ownBlocks, init?.blocks])
   const [linkResolver] = useState(() => resolveLink ?? defaultResolveLink)
   useEffect(() => {
     if (!layout || !init || !definitions) return
@@ -1145,7 +1167,7 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
       )
     } else if (frame.status === 'ready' && frame.node) {
       page = (
-        <LayoutOutletContext.Provider value={outlet}>
+        <LayoutOutletContext.Provider value={layoutContent}>
           <LayoutOutletPresence.Provider value={registerOutlet}>
             <FrameBoundary
               resetKey={frame.node}

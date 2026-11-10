@@ -27,7 +27,7 @@ The CLI asks for the project name, your Postgres details, which starter features
 5. Sets the package name, removes the repo-only scripts and the dev dependencies they needed, and points `payload-canvas` at a source (see below).
 6. Writes `.env` from `.env.example` with your `DATABASE_URL` and a new random `PAYLOAD_SECRET`.
 7. Creates the database.
-8. Installs dependencies with pnpm (npm if pnpm is missing).
+8. Installs dependencies with pnpm (npm if pnpm is missing), then writes `src/payload-types.ts` again for the kept features.
 9. Runs `seed:demo` if you chose to seed. On a fresh database the seed creates the tables. Without the demo seed, it runs `seed:classes`, which adds the editable classes that the ready-made sections use.
 10. Prints a summary with the exact next commands.
 
@@ -35,17 +35,20 @@ It never runs `payload migrate`. Local development uses `push: true`, so the sch
 
 ## Features
 
-The starter has a few parts you can leave out. All of them are kept by default. Without `--yes`, the CLI shows a list with all of them checked. Uncheck the ones you do not want. A `--no-<feature>` flag leaves a feature out without asking.
+The starter has a few optional parts. Google reviews is off by default; all the others are on. Without `--yes`, the CLI shows a list with the default ones checked. Check or uncheck the ones you want. A `--<feature>` flag adds a feature and a `--no-<feature>` flag leaves it out, without asking.
 
-| Feature | Flag | What you lose |
+| Feature | Flag | What it changes |
 |---|---|---|
-| Admin look | `--no-look` | Neutral colors and finer details in the admin (`src/admin/look`). |
+| Admin look | `--no-look` | Neutral colors and finer details in the admin (`src/admin/look`), status badges and list cells by field type (`src/admin/list`), and array rows named by their content (`src/admin/fields`). |
 | Sidebar navigation | `--no-nav` | The grouped sidebar with icons (`src/admin/nav`). The admin uses Payload's default sidebar. |
-| Dashboard widgets | `--no-dashboard` | Quick actions, recent edits, drafts, form messages, site checks, scheduled publishes and analytics (`src/admin/dashboard`). The admin shows Payload's collection cards. |
+| Dashboard widgets | `--no-dashboard` | Quick actions, recent edits, open comments, form messages, site checks, broken links (404s and links to missing pages), unused media (with a full list at `/admin/unused-media`), scheduled publishes and analytics; "Waiting to publish" can be added (`src/admin/dashboard`). The reference index behind unused media and broken links (`src/admin/references`, `pnpm references:rebuild`). The admin shows Payload's collection cards. |
 | Demo content | `--no-demo` | The demo pages, posts and images seed (`scripts/seed-demo.ts` and the `seed:demo` script). This also turns off seeding. |
 | AI assistant | `--no-ai` | The chat panel in the page builder, and its settings in `.env`. |
+| Media gallery | `--no-gallery` | Media as a grid of thumbnails with a lightbox and drag-and-drop upload ([`payload-media-gallery`](https://www.npmjs.com/package/payload-media-gallery)). Without it, Media uses Payload's table. |
+| Workflows | `--no-workflows` | The visual workflow builder (Automation → Workflows), the Run tab on jobs, and the starter tasks in `src/jobs` ([`payload-workflows`](https://www.npmjs.com/package/payload-workflows)). |
+| Google reviews | `--reviews` (off by default) | Adds a Reviews collection and Review Settings that sync a Google place's reviews ([`payload-google-reviews`](https://www.npmjs.com/package/payload-google-reviews), with the optional scraper). You set the place in the admin after setup. |
 
-The CLI deletes the feature's files and removes its lines from `src/payload.config.ts`, `src/app/(payload)/custom.scss`, `.env.example` and the admin import map. The project type-checks with any mix of features.
+For each feature that is off, the CLI deletes its files and its npm packages from `package.json`, and removes its lines from `src/payload.config.ts`, `next.config.ts`, `src/app/(payload)/custom.scss`, `.env.example`, `README.md` and the admin import map. After the install it runs `generate:types`, so `src/payload-types.ts` matches the kept features. The project type-checks with any mix of features.
 
 ## Flags
 
@@ -63,7 +66,8 @@ The CLI deletes the feature's files and removes its lines from `src/payload.conf
 | `--skip-db` | Do not connect to Postgres. Writes `.env` only. This also skips seeding. |
 | `--seed` / `--no-seed` | Seed demo content, or not. |
 | `--no-install` | Do not install. This also skips seeding. |
-| `--no-look`, `--no-nav`, `--no-dashboard`, `--no-demo`, `--no-ai` | Leave out a starter feature. See [Features](#features). `--no-demo` also turns off seeding. |
+| `--no-look`, `--no-nav`, `--no-dashboard`, `--no-demo`, `--no-ai`, `--no-gallery`, `--no-workflows` | Leave out a starter feature. See [Features](#features). `--no-demo` also turns off seeding. |
+| `--reviews` | Add Google reviews, which is off by default. Every feature also takes `--<feature>` and `--no-<feature>`. |
 | `--github` | Download the starter from GitHub, even when the CLI runs inside a checkout. |
 | `--ref <name>` | Branch or tag to download. Default `main`. |
 | `--packages <path>` | Path to a checkout of the repo. The CLI packs the `payload-canvas` package from there. |
@@ -92,6 +96,9 @@ npx create-payload-canvas my-website --yes --no-install --skip-db
 
 # Without the AI assistant and the demo content
 npx create-payload-canvas my-website --yes --no-ai --no-demo
+
+# With Google reviews, without the media gallery and workflows
+npx create-payload-canvas my-website --yes --reviews --no-gallery --no-workflows
 
 # From GitHub, with the package from a local checkout (before it is published)
 npx create-payload-canvas my-website --yes --github --packages C:\code\payload-canvas
@@ -130,7 +137,7 @@ If the copy or pack step fails, the CLI deletes the half-made folder. If the ins
 ## Maintainers
 
 - The GitHub owner is `GITHUB_OWNER` in `src/config.ts`. The list of files the CLI leaves out is `SKIP_NAMES` and `SKIP_PATHS` in the same file.
-- The starter's `starter-features.json` lists each feature's files and scripts. In code, a line with `@feature:<id>` starts a part that belongs to a feature, and a line with `@end:<id>` ends it. The prompt and the flags come from `FEATURES` in `src/config.ts`. Add a new feature in both places.
+- The starter's `starter-features.json` lists each feature's files, scripts and npm `dependencies`. In code, a line with `@feature:<id>` starts a part that belongs to a feature, and a line with `@end:<id>` ends it (in Markdown, inside an HTML comment). The prompt, the flags and the default (`on`) come from `FEATURES` in `src/config.ts`. Add a new feature in both places.
 - `pnpm check:features` copies the starter for every mix of features, applies it, and runs the starter's TypeScript check. Run it after you change a feature. `pnpm test` runs the unit tests.
 - After copying, the CLI checks the new project for leftovers (`workspace:` links, paths into `packages/`, `baseUrl`, Docker files) and prints a warning for each one it finds.
 - Build with `pnpm build`. Run from the repo with `node dist/index.js`. `pnpm pack` builds first (`prepack`).

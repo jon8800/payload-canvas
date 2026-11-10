@@ -12,7 +12,7 @@
 // map lookup per pass. DOM-only changes map at most once a second per block. A block being edited
 // inline is skipped until editing ends.
 
-import type { Block, BlockDefinition, Layout } from '../../../core'
+import type { Block, BlockDefinition, Layout, Rect } from '../../../core'
 import type { CanvasImageKind, CanvasImageTarget } from '../../../protocol'
 
 import { EDITABLE_IMAGE_ATTRIBUTE, EDITABLE_TEXT_ATTRIBUTE } from '../../render/editable'
@@ -37,6 +37,36 @@ export type MapOwner =
   | { kind: 'region'; name: string; key: string; element: HTMLElement }
 
 /** The block or region element `el` belongs to: its own or the nearest one above it. */
+/**
+ * The part of an element's box that shows: its box cut by every ancestor up to `root` that clips
+ * its overflow (a carousel's viewport, a card with `overflow: hidden`).
+ */
+export function shownRect(element: Element, root: Element): Rect {
+  const box = element.getBoundingClientRect()
+  let left = box.left
+  let top = box.top
+  let right = box.right
+  let bottom = box.bottom
+  const view = element.ownerDocument.defaultView
+  if (!view) return { x: left, y: top, width: box.width, height: box.height }
+  for (let el = element.parentElement; el && el !== root; el = el.parentElement) {
+    const style = view.getComputedStyle(el)
+    const clipX = style.overflowX !== 'visible'
+    const clipY = style.overflowY !== 'visible'
+    if (!clipX && !clipY) continue
+    const clip = el.getBoundingClientRect()
+    if (clipX) {
+      left = Math.max(left, clip.left)
+      right = Math.min(right, clip.right)
+    }
+    if (clipY) {
+      top = Math.max(top, clip.top)
+      bottom = Math.min(bottom, clip.bottom)
+    }
+  }
+  return { x: left, y: top, width: Math.max(0, right - left), height: Math.max(0, bottom - top) }
+}
+
 export function ownerOf(el: Element | null | undefined): MapOwner | null {
   const element = el?.closest<HTMLElement>(OWNER_SELECTOR)
   if (!element) return null
@@ -454,11 +484,12 @@ export function createCanvasMapper(options: MapperOptions): CanvasMapper {
       ensure(blockEl)
       const entry = entries.get(owner.key)
       if (!entry || entry.element !== blockEl) return null
-      const hits: Array<ImageEntry & { rect: DOMRect }> = []
+      const hits: Array<ImageEntry & { rect: Rect }> = []
       for (const image of entry.images) {
-        const rect = image.element.getBoundingClientRect()
+        // The part of the image that shows: a carousel or a card may cut the rest off.
+        const rect = shownRect(image.element, root)
         if (rect.width < 1 || rect.height < 1) continue
-        if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) continue
+        if (x < rect.x || x > rect.x + rect.width || y < rect.y || y > rect.y + rect.height) continue
         hits.push({ ...image, rect })
       }
       if (hits.length === 0) return null
@@ -474,8 +505,7 @@ export function createCanvasMapper(options: MapperOptions): CanvasMapper {
         const key = `${hit.path}\u0000${hit.kind}`
         if (seen.has(key)) return []
         seen.add(key)
-        const { left, top: y0, width, height } = hit.rect
-        return [{ path: hit.path, kind: hit.kind, rect: { x: left, y: y0, width, height } }]
+        return [{ path: hit.path, kind: hit.kind, rect: hit.rect }]
       })
       return owner.kind === 'region' ? { id: '', region: owner.name, spots } : { id: owner.id, spots }
     },
