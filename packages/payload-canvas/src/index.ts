@@ -38,10 +38,13 @@ export {
   checkSubmission,
   clientIp,
   filledTooFast,
+  FORM_NO_SCRIPT_CONTEXT,
   honeypotFilled,
   turnstileKeys,
+  TURNSTILE_NEEDS_SCRIPT_MESSAGE,
   verifyTurnstile,
   type FormSpamProtectionOptions,
+  type TrustedIpHeader,
   type SpamProtectionFieldOptions,
   type SpamReason,
 } from './forms/spam'
