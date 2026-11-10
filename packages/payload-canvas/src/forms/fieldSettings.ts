@@ -1,12 +1,14 @@
-// Gravity Forms style settings for the field blocks of `@payloadcms/plugin-form-builder`: label
-// visibility, description, placeholder, default value, the width presets, the display of radio
-// buttons, and several files for a file field, plus the hidden fields that store the field's
-// classes (the builder's Styles panel). `withFormFieldSettings` adds the settings a block lacks;
-// the builder sorts them into its Field / Appearance / Validation tabs. Client-safe and pure: the
-// site's form renderer reads the same helpers.
+// Gravity Forms style settings for the field blocks of `@payloadcms/plugin-form-builder`:
+// description, placeholder, default value, label visibility, the display of radio buttons, and
+// several files for a file field, plus the hidden fields that store the field's classes (the
+// builder's Styles panel). Only settings that change the content, the markup or the behaviour:
+// looks, the width too, are classes. `withFormFieldSettings` adds the settings a block lacks and
+// hides the plugin's `width`; the builder sorts them into its Field / Validation tabs. Client-safe
+// and pure: the site's form renderer reads the same helpers.
 
 import type { Field } from 'payload'
 
+import type { Block } from '../core/types'
 import { BLOCK_KEY_MARKER } from '../blocks/payload'
 import { FORM_CONDITIONS_FIELD } from './conditions'
 
@@ -16,33 +18,69 @@ export const FORM_FIELD_CLASS_KEY = 'cssClass'
 /** The row key of a field's part classes (label, input, help text, error, options). */
 export const FORM_FIELD_PARTS_KEY = 'partClasses'
 
-/** `admin.custom.builderWidthPicker`: the builder edits the number as width buttons (full, 3/4, …). */
-export const WIDTH_PICKER_MARKER = 'builderWidthPicker'
-
-/** The widths the builder offers, in percent of the row. `width` stays a number, as the plugin stores it. */
-export const FORM_FIELD_WIDTHS = [
-  { value: 100, label: 'Full', title: 'Full width' },
-  { value: 75, label: '3/4', title: 'Three quarters' },
-  { value: 67, label: '2/3', title: 'Two thirds' },
-  { value: 50, label: '1/2', title: 'Half' },
-  { value: 33, label: '1/3', title: 'One third' },
-  { value: 25, label: '1/4', title: 'One quarter' },
-] as const
-
-export type FormFieldWidth = (typeof FORM_FIELD_WIDTHS)[number]['value']
+/** The plugin's `width` setting: a percentage of the row. The builder sets a field's width with classes instead. */
+export const FORM_FIELD_WIDTH_KEY = 'width'
 
 /**
- * The width the site draws for a stored width: the smallest preset that holds it (40 -> 50).
- * No width, 0 or above 75 -> 100 (full).
+ * The classes of the old width presets (percent of the row -> the field's width from the `sm`
+ * breakpoint, less its share of the 1rem gap between fields, so the fields of one row fit). Full
+ * width has no class. The site drew these before the field's width moved to the Styles panel.
  */
-export function formFieldWidth(width: unknown): FormFieldWidth {
+export const FORM_FIELD_WIDTH_CLASSES = {
+  75: 'sm:w-[calc(75%-0.25rem)]',
+  67: 'sm:w-[calc(66.667%-0.333rem)]',
+  50: 'sm:w-[calc(50%-0.5rem)]',
+  33: 'sm:w-[calc(33.333%-0.667rem)]',
+  25: 'sm:w-[calc(25%-0.75rem)]',
+} as const
+
+/**
+ * The class of a stored width: the smallest preset that holds it (40 -> the 50% class). No width,
+ * 0, above 75 or not a number: '' (full width).
+ */
+export function formFieldWidthClass(width: unknown): string {
   const percent = typeof width === 'number' ? width : typeof width === 'string' && width.trim() ? Number(width) : Number.NaN
-  if (!Number.isFinite(percent) || percent <= 0 || percent > 75) return 100
-  if (percent <= 25) return 25
-  if (percent <= 34) return 33
-  if (percent <= 50) return 50
-  if (percent <= 67) return 67
-  return 75
+  if (!Number.isFinite(percent) || percent <= 0 || percent > 75) return ''
+  if (percent <= 25) return FORM_FIELD_WIDTH_CLASSES[25]
+  if (percent <= 34) return FORM_FIELD_WIDTH_CLASSES[33]
+  if (percent <= 50) return FORM_FIELD_WIDTH_CLASSES[50]
+  if (percent <= 67) return FORM_FIELD_WIDTH_CLASSES[67]
+  return FORM_FIELD_WIDTH_CLASSES[75]
+}
+
+/** A class that sizes the box in a row or grid: width, size, flex basis, flex, grow, column span. */
+const SIZING_CLASS = /^!?-?(w-|size-|basis-|col-span-|flex-(\d|auto|initial|\[)|grow(-|$))/
+
+/** True when the classes set the box's width (at any breakpoint or state). */
+export function setsWidth(className: string | null | undefined): boolean {
+  return (className ?? '').split(/\s+/).some((name) => SIZING_CLASS.test(name.slice(name.lastIndexOf(':') + 1)))
+}
+
+/**
+ * The field's classes with the class of its stored `width` added, unless they set a width
+ * themselves. The same classes when there is nothing to add. The site renders old fields with it,
+ * and `withWidthClass` stores it.
+ */
+export function withStoredWidth(className: string | null | undefined, width: unknown): string {
+  const own = className?.trim() ?? ''
+  const widthClass = formFieldWidthClass(width)
+  if (!widthClass || setsWidth(own)) return own
+  return own ? `${own} ${widthClass}` : widthClass
+}
+
+/**
+ * A form field block of the time before widths were classes: its stored `width` becomes classes
+ * (see `withStoredWidth`) and `width` becomes `null`, so the next save clears the plugin's value
+ * and only the classes decide the width. The same block when it has no width. The builder runs it
+ * when it opens a layout (`BlockDefinition.upgrade`).
+ */
+export function withWidthClass(block: Block): Block {
+  const width = block.props?.[FORM_FIELD_WIDTH_KEY]
+  if (width === undefined || width === null) return block
+  const next: Block = { ...block, props: { ...block.props, [FORM_FIELD_WIDTH_KEY]: null } }
+  const className = withStoredWidth(block.className, width)
+  if (className) next.className = className
+  return next
 }
 
 /** How radio buttons show: one per line, on one line, as joined buttons, or as cards. */
@@ -74,9 +112,9 @@ export const isLabelShown = (field: { labelVisibility?: string | null }) => fiel
 /** The settings and the field types each one is for. */
 const SETTING_TYPES = {
   description: ['text', 'email', 'textarea', 'number', 'phone', 'url', 'select', 'radio', 'checkbox', 'consent', 'country', 'state', 'date', 'file'],
-  labelVisibility: ['text', 'email', 'textarea', 'number', 'phone', 'url', 'select', 'radio', 'country', 'state', 'date', 'file'],
   placeholder: ['text', 'email', 'textarea', 'number', 'phone', 'url', 'select', 'country', 'state'],
   defaultValue: ['email', 'country', 'state'],
+  labelVisibility: ['text', 'email', 'textarea', 'number', 'phone', 'url', 'select', 'radio', 'country', 'state', 'date', 'file'],
   display: ['radio'],
   multiple: ['file'],
   classes: ['text', 'email', 'textarea', 'number', 'phone', 'url', 'select', 'radio', 'checkbox', 'consent', 'country', 'state', 'date', 'file', 'message'],
@@ -120,7 +158,7 @@ const SETTINGS: Record<keyof typeof SETTING_TYPES, Field[]> = {
       defaultValue: 'visible',
       options: [
         { label: 'Visible', value: 'visible' },
-        { label: 'Hidden (screen readers still read it)', value: 'hidden' },
+        { label: 'Hidden, read by screen readers', value: 'hidden' },
       ],
     },
   ],
@@ -151,6 +189,31 @@ const SETTINGS: Record<keyof typeof SETTING_TYPES, Field[]> = {
 
 type BlockLike = { slug: string; fields: Field[] }
 
+type LooseField = Record<string, unknown> & { name?: unknown; type?: unknown; fields?: unknown; admin?: unknown }
+
+/**
+ * The fields with the plugin's `width` number (also inside rows) hidden: a field's width is its
+ * classes now (Styles panel). The stored value stays readable (`withWidthClass`). The same list
+ * when there is no visible width.
+ */
+export function withHiddenWidth<T>(fields: T[]): T[] {
+  let changed = false
+  const out = fields.map((raw) => {
+    const field = raw as unknown as LooseField
+    if (Array.isArray(field.fields) && !field.name) {
+      const inner = withHiddenWidth(field.fields)
+      if (inner === field.fields) return raw
+      changed = true
+      return { ...field, fields: inner } as T
+    }
+    const admin = (field.admin ?? {}) as { hidden?: boolean }
+    if (field.name !== FORM_FIELD_WIDTH_KEY || field.type !== 'number' || admin.hidden) return raw
+    changed = true
+    return { ...field, admin: { ...admin, hidden: true } } as T
+  })
+  return changed ? out : fields
+}
+
 /** The names of the data fields of a list, also inside rows, collapsibles and unnamed tabs. */
 function fieldNames(fields: readonly Field[]): Set<string> {
   const out = new Set<string>()
@@ -163,11 +226,12 @@ function fieldNames(fields: readonly Field[]): Set<string> {
 }
 
 /**
- * The block with the settings it lacks for its type: description, label visibility, placeholder,
- * default value, radio display, several files, and the hidden class fields (the field's classes
- * and part classes, edited in the builder's Styles panel; the old "CSS class" values stay). The description goes right after the
- * label; the other settings go before the display conditions. Known types only; a setting the block
- * has already stays as it is. For the form-builder plugin's `fields` option:
+ * The block with the settings it lacks for its type: description, placeholder, default value,
+ * label visibility, radio display, several files, and the hidden class fields (the field's classes
+ * and part classes, edited in the builder's Styles panel; the old "CSS class" values stay). The
+ * description goes right after the label; the other settings go before the display conditions.
+ * The plugin's `width` is hidden (`withHiddenWidth`): the width is classes. Known types only; a
+ * setting the block has already stays as it is. For the form-builder plugin's `fields` option:
  * `withFormFieldSettings(fields.text)`. The plugin stores form fields as JSON, so no migration is needed.
  */
 export function withFormFieldSettings<T extends BlockLike>(block: T): T {
@@ -176,9 +240,10 @@ export function withFormFieldSettings<T extends BlockLike>(block: T): T {
     (SETTING_TYPES[key] as readonly string[]).includes(block.slug) ? SETTINGS[key].filter((field) => 'name' in field && !have.has(field.name)) : []
   const description = missing('description')
   const rest = (Object.keys(SETTING_TYPES) as Array<keyof typeof SETTING_TYPES>).filter((key) => key !== 'description').flatMap(missing)
-  if (description.length === 0 && rest.length === 0) return block
-  const labelAt = block.fields.findIndex((field) => fieldNames([field]).has('label'))
-  const fields = [...block.fields]
+  const hidden = withHiddenWidth(block.fields)
+  if (description.length === 0 && rest.length === 0) return hidden === block.fields ? block : { ...block, fields: hidden }
+  const labelAt = hidden.findIndex((field) => fieldNames([field]).has('label'))
+  const fields = [...hidden]
   if (labelAt !== -1) fields.splice(labelAt + 1, 0, ...description)
   const conditionsAt = fields.findIndex((field) => 'name' in field && field.name === FORM_CONDITIONS_FIELD)
   fields.splice(conditionsAt === -1 ? fields.length : conditionsAt, 0, ...(labelAt === -1 ? description : []), ...rest)

@@ -12,14 +12,16 @@ import { isPlainObject } from '../core/tree'
 import type { Block, BlockDefinition, Layout, Operation } from '../core/types'
 import { describeConditions, FORM_CONDITION_OPERATORS, FORM_CONDITIONS_FIELD, type FormConditionOperator, type FormFieldConditions } from './conditions'
 import { formFieldSlug, formFieldType } from './blocks'
+import { FORM_FIELD_CLASS_KEY, FORM_FIELD_WIDTH_CLASSES, FORM_FIELD_WIDTH_KEY } from './fieldSettings'
 
 /** The format guide for agents: field types, props and display conditions. */
 export const FORM_FIELDS_GUIDE = [
   'FORM FIELDS. A form is a list of fields, shown in order. Each field has a `type` and props:',
   '- name (text, required): the key of the answer in a submission. Letters, digits and _ only, unique in the form (e.g. "email", "company_size").',
   '- label (text): the question people see. required (boolean): the form refuses to send without an answer.',
-  '- width (number, percent of the row: 100, 75, 67, 50, 33 or 25; e.g. 50 puts two fields side by side; empty = 100). placeholder (text, where the type has it).',
-  '- Where the site has them (see `fieldTypes`): description (help text under the field), labelVisibility ("visible" or "hidden": screen readers still read a hidden label), cssClass (classes for the box around the field), display for radio ("list", "inline", "buttons", "cards"), multiple and maxFiles for file (several files, at most maxFiles).',
+  '- placeholder (text, where the type has it).',
+  '- Where the site has them (see `fieldTypes`): description (help text under the field), labelVisibility ("visible" or "hidden": screen readers still read a hidden label), display for radio ("list", "inline", "buttons", "cards"), multiple and maxFiles for file (several files, at most maxFiles).',
+  `- className (Tailwind classes of the box around the field; null clears them). Looks are classes, the width too: there is no width setting. The fields wrap in a row with a 1rem gap, so "${FORM_FIELD_WIDTH_CLASSES[50]}" is half a row from the sm breakpoint (two fields side by side), "${FORM_FIELD_WIDTH_CLASSES[33]}" a third, "${FORM_FIELD_WIDTH_CLASSES[67]}" two thirds. No width class: full width. update replaces all of the field's classes, so send the ones to keep too.`,
   '- defaultValue: text for text-like fields, a number for "number", true/false for "checkbox".',
   '- options (select, radio): [{ label, value }]. You may send plain strings; each becomes { label, value } with a value made from the label.',
   '- message ("message" type only): text shown between the fields. Send plain text (one paragraph per line); it is stored as rich text. A message has no name and collects no answer.',
@@ -35,8 +37,9 @@ export type FormFieldView = {
   name?: string
   label?: string
   required?: boolean
-  width?: number
   placeholder?: string
+  /** The field's own classes (its box), width included. */
+  className?: string
   defaultValue?: unknown
   options?: unknown
   /** "message" fields: the text. */
@@ -66,8 +69,9 @@ export function formFieldsOf(layout: Layout): FormFieldView[] {
 function formFieldView(block: Block, all: readonly Block[]): FormFieldView {
   const props = (block.props ?? {}) as Record<string, unknown>
   const out: FormFieldView = { id: block.id, type: formFieldSlug(block.type) ?? block.type }
+  if (block.className) out.className = block.className
   for (const [key, value] of Object.entries(props)) {
-    if (KNOWN_KEYS.has(key) || value === null || value === undefined || value === '') continue
+    if (KNOWN_KEYS.has(key) || key === FORM_FIELD_WIDTH_KEY || value === null || value === undefined || value === '') continue
     if (key === 'message') {
       out.message = isRichText(value) ? richTextToPlain(value) : String(value)
       continue
@@ -110,8 +114,9 @@ export function formFieldTypes(definitions: readonly BlockDefinition[]) {
   return definitions.flatMap((def) => {
     const slug = formFieldSlug(def.type)
     if (!slug) return []
+    // Hidden fields (the plugin's old `width`) are no setting to offer.
     const props = dataFields(def.fields as unknown[])
-      .filter((f) => f.name !== FORM_CONDITIONS_FIELD)
+      .filter((f) => f.name !== FORM_CONDITIONS_FIELD && !(f.admin as { hidden?: boolean } | undefined)?.hidden)
       .map((f) => ({ name: f.name, type: f.type, ...(f.required ? { required: true } : {}) }))
     return [{ type: slug, label: def.label, ...(def.description ? { description: def.description } : {}), props }]
   })
@@ -149,11 +154,22 @@ function freeName(base: string, taken: ReadonlySet<string>): string {
 /** An option value made from its label: "Not sure" -> "not-sure", "5k to 20k" -> "5k-to-20k". */
 const optionValue = (label: string) => slugOf(label, '-') || 'option'
 
+/** Why a field change may not set `width`. */
+const WIDTH_PROBLEM = `fields have no \`width\` setting: set the width with classes, e.g. { "className": "${FORM_FIELD_WIDTH_CLASSES[50]}" } for half a row.`
+
+/** The classes a change sets: `className` (or `cssClass`, the plugin's name). Undefined: no change. */
+function classNameOf(values: Record<string, unknown>): string | null | undefined {
+  const value = values.className !== undefined ? values.className : values[FORM_FIELD_CLASS_KEY]
+  if (value === undefined) return undefined
+  return typeof value === 'string' && value.trim() ? value.trim().replace(/\s+/g, ' ') : null
+}
+
 /** The values with the shapes agents send fixed: options as strings, a message as plain text, conditions. */
 function normalizeValues(values: Record<string, unknown>): Record<string, unknown> | string {
   const out: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(values)) {
-    if (key === 'id' || key === 'blockType' || key === 'type') continue
+    if (key === 'id' || key === 'blockType' || key === 'type' || key === 'className' || key === FORM_FIELD_CLASS_KEY) continue
+    if (key === FORM_FIELD_WIDTH_KEY) return WIDTH_PROBLEM
     if (key === 'options' && Array.isArray(value)) {
       out.options = value.map((option) => {
         if (typeof option === 'string') return { label: option, value: optionValue(option) }
@@ -172,10 +188,6 @@ function normalizeValues(values: Record<string, unknown>): Record<string, unknow
       const conditions = conditionsValue(value)
       if (typeof conditions === 'string') return conditions
       out[key] = conditions
-      continue
-    }
-    if (key === 'width' && typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value))) {
-      out.width = Number(value)
       continue
     }
     out[key] = value
@@ -270,7 +282,8 @@ export function formFieldOps(layout: Layout, changes: readonly FormFieldChange[]
         ids.add(id)
         const index = typeof change.index === 'number' && Number.isInteger(change.index) ? Math.max(0, Math.min(change.index, fields.length)) : fields.length
         const clean = Object.fromEntries(Object.entries(props).filter(([, v]) => v !== null && v !== undefined))
-        ops.push({ type: 'insert', block: { id, type: def.type, props: clean }, to: { parentId: null, slot: 'children', index } })
+        const className = classNameOf(isPlainObject(change.values) ? change.values : {})
+        ops.push({ type: 'insert', block: { id, type: def.type, props: clean, ...(className ? { className } : {}) }, to: { parentId: null, slot: 'children', index } })
         fields = [...fields.slice(0, index), { id, type: def.type, props: clean }, ...fields.slice(index)]
         if (!named) break
         notes.push(`Added "${String(clean.name)}" (${formFieldSlug(def.type)}) with id ${id}.`)
@@ -293,8 +306,15 @@ export function formFieldOps(layout: Layout, changes: readonly FormFieldChange[]
           if (problem) return { ok: false, error: problem }
         }
         const props = Object.fromEntries(Object.entries(values).filter(([, v]) => v !== undefined))
-        if (Object.keys(props).length === 0 && unset.length === 0) return { ok: false, error: `Change ${i + 1}: \`values\` or \`unset\` is needed.` }
-        ops.push({ type: 'update', id: field.id, ...(Object.keys(props).length > 0 ? { props } : {}), ...(unset.length > 0 ? { unsetProps: unset } : {}) })
+        const className = classNameOf(isPlainObject(change.values) ? change.values : {})
+        if (Object.keys(props).length === 0 && unset.length === 0 && className === undefined) return { ok: false, error: `Change ${i + 1}: \`values\` or \`unset\` is needed.` }
+        ops.push({
+          type: 'update',
+          id: field.id,
+          ...(Object.keys(props).length > 0 ? { props } : {}),
+          ...(unset.length > 0 ? { unsetProps: unset } : {}),
+          ...(className !== undefined ? { className } : {}),
+        })
         field.props = { ...field.props, ...props }
         for (const key of unset) delete field.props[key]
         // A rename: rules that read the old name now read the new one.

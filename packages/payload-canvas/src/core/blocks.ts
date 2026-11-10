@@ -212,6 +212,34 @@ export function withInlineBlocks(blocks: BlockDefinition[]): BlockDefinition[] {
   })
 }
 
+/**
+ * The layout with `BlockDefinition.upgrade` run on every block (slots too, children first). The
+ * same layout when no block changes, or when no definition has an upgrade.
+ */
+export function upgradeLayout(layout: Layout, blocks: readonly BlockDefinition[]): Layout {
+  const upgrades = new Map(blocks.flatMap((def) => (def.upgrade ? [[def.type, def.upgrade] as const] : [])))
+  if (upgrades.size === 0) return layout
+  const visitList = (list: Block[]): Block[] => {
+    let changed = false
+    const out = list.map((block) => {
+      const next = visit(block)
+      if (next !== block) changed = true
+      return next
+    })
+    return changed ? out : list
+  }
+  const visit = (block: Block): Block => {
+    let next = block
+    if (block.slots) {
+      const slots = Object.fromEntries(Object.entries(block.slots).map(([name, children]) => [name, visitList(children)]))
+      if (Object.keys(slots).some((name) => slots[name] !== block.slots?.[name])) next = { ...block, slots }
+    }
+    return upgrades.get(block.type)?.(next) ?? next
+  }
+  const list = visitList(layout.blocks)
+  return list === layout.blocks ? layout : { ...layout, blocks: list }
+}
+
 export function getBlockDefinition(blocks: readonly BlockDefinition[], type: string): BlockDefinition | undefined {
   return blocks.find((b) => b.type === type)
 }

@@ -6,7 +6,7 @@ import type { Block as PayloadBlockConfig } from 'payload'
 import { fromPayloadBlocks } from '../blocks/payload'
 import type { BlockDefinition, PartDefinition } from '../core/types'
 import { FORM_CONDITIONS_FIELD } from './conditions'
-import { WIDTH_PICKER_MARKER } from './fieldSettings'
+import { FORM_FIELD_WIDTH_CLASSES, withHiddenWidth, withWidthClass } from './fieldSettings'
 
 /** `admin.custom.builderFieldName` on a field's `name`: the builder warns when a form with submissions renames it. */
 export const FIELD_NAME_MARKER = 'builderFieldName'
@@ -85,12 +85,11 @@ export function formFieldParts(slug: string): Record<string, PartDefinition> | u
   )
 }
 
-/** The tab of a form field's settings, by field name. Other fields stay on the Field tab. */
-const TAB_OF: Record<string, 'Appearance' | 'Validation' | 'Conditions'> = {
-  width: 'Appearance',
-  labelVisibility: 'Appearance',
-  placeholder: 'Appearance',
-  display: 'Appearance',
+/**
+ * The tab of a form field's settings, by field name. Other fields stay on the Field tab (content,
+ * label visibility, radio display). Looks are no setting: the Styles panel sets them, the width too.
+ */
+const TAB_OF: Record<string, 'Validation' | 'Conditions'> = {
   required: 'Validation',
   accept: 'Validation',
   maxSize: 'Validation',
@@ -102,7 +101,10 @@ const TAB_OF: Record<string, 'Appearance' | 'Validation' | 'Conditions'> = {
   [FORM_CONDITIONS_FIELD]: 'Conditions',
 }
 
-const TAB_ORDER = ['Appearance', 'Validation', 'Conditions'] as const
+const TAB_ORDER = ['Validation', 'Conditions'] as const
+
+/** The classes of the old width presets: the generated CSS has them wherever form fields are. */
+export const FORM_FIELD_CLASSES: string[] = Object.values(FORM_FIELD_WIDTH_CLASSES)
 
 /**
  * One definition per block of the form's `fields` blocks field. Types get the `form` prefix
@@ -130,11 +132,21 @@ export function formFieldBlocks(blocks: readonly PayloadBlockConfig[]): BlockDef
     const known = KNOWN[slug]
     // A new field starts with a name and a label, so the form saves at once (the plugin requires
     // a name). Only the builder's insert uses these defaults; the stored data is unchanged.
-    const fields = inTabs(withWidthPicker(withNameMarker(withStartValues(def.fields, { name: slug, label: known?.label ?? def.label }))))
+    const fields = inTabs(withHiddenWidth(withNameMarker(withStartValues(def.fields, { name: slug, label: known?.label ?? def.label }))))
     // Two fields with one name would overwrite each other's answers: a new or copied field gets `text2`.
     // Parts: the label, input, help text, error and options take classes of their own (Styles panel).
+    // A stored `width` (the plugin's setting) becomes classes when the builder opens the form; until
+    // then the site draws it with the same classes, so the generated CSS lists them.
     const parts = formFieldParts(slug)
-    return { ...def, fields, uniqueProps: ['name'], ...(parts ? { parts } : {}), ...(known ? { description: known.description } : {}) }
+    return {
+      ...def,
+      fields,
+      uniqueProps: ['name'],
+      classes: [...(def.classes ?? []), ...FORM_FIELD_CLASSES],
+      upgrade: withWidthClass,
+      ...(parts ? { parts } : {}),
+      ...(known ? { description: known.description } : {}),
+    }
   })
 }
 
@@ -162,24 +174,13 @@ function withNameMarker<T>(fields: T[]): T[] {
   })
 }
 
-/** The fields with the top-level `width` number (also inside rows) edited as width buttons. */
-function withWidthPicker<T>(fields: T[]): T[] {
-  return fields.map((raw) => {
-    const field = raw as unknown as LooseField
-    if (Array.isArray(field.fields) && !field.name) return { ...field, fields: withWidthPicker(field.fields) } as T
-    if (field.name !== 'width' || field.type !== 'number') return raw
-    const admin = (field.admin ?? {}) as { custom?: Record<string, unknown> }
-    return { ...field, label: 'Width', admin: { ...admin, custom: { ...admin.custom, [WIDTH_PICKER_MARKER]: true } } } as T
-  })
-}
-
 /**
- * The fields split over the tabs Field, Appearance, Validation and Conditions (unnamed tabs: the
+ * The fields split over the tabs Field, Validation and Conditions (unnamed tabs: the
  * data stays as it is). Fields leave their rows; an empty row goes. A tab without fields is left
  * out; with only the Field tab the list stays as it is.
  */
 function inTabs<T>(fields: T[]): T[] {
-  const moved: Record<(typeof TAB_ORDER)[number], T[]> = { Appearance: [], Validation: [], Conditions: [] }
+  const moved: Record<(typeof TAB_ORDER)[number], T[]> = { Validation: [], Conditions: [] }
   const pull = (list: T[]): T[] =>
     list.flatMap((raw) => {
       const field = raw as unknown as LooseField

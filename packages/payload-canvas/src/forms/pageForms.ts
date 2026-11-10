@@ -11,7 +11,8 @@ import type { Field } from 'payload'
 
 import { getBlockDefinition } from '../core/blocks'
 import type { Block, BlockDefinition, StarterBlock } from '../core/types'
-import { FORM_FIELD_CATEGORY, formFieldParts, formFieldSlug, formFieldType } from './blocks'
+import { FORM_FIELD_CATEGORY, FORM_FIELD_CLASSES, formFieldParts, formFieldSlug, formFieldType } from './blocks'
+import { FORM_FIELD_WIDTH_CLASSES } from './fieldSettings'
 
 export { FORM_FIELD_PARTS, formFieldParts, type FormFieldPartName } from './blocks'
 
@@ -32,6 +33,9 @@ export const PANEL_SECTION_MARKER = 'builderPanelSection'
 
 /** `admin.custom` key of a group drawn without its own heading: the section around it already names it. */
 export const PLAIN_GROUP_MARKER = 'builderPlainGroup'
+
+/** The classes of a field that takes half a row of a wrapping form (the Form block's default layout). */
+const HALF_ROW = FORM_FIELD_WIDTH_CLASSES[50]
 
 /** Layout blocks a Form block takes next to its fields, when the site has them. */
 export const FORM_LAYOUT_TYPES = ['stack', 'grid', 'heading', 'text', 'richText', 'divider', 'image'] as const
@@ -105,8 +109,8 @@ export function formSubmitBlocks(form: Block): Block[] {
 
 /** The new Form block's content: a ready contact form. */
 const STARTER_CHILDREN: StarterBlock[] = [
-  { type: formFieldType('text'), props: { name: 'name', label: 'Name', required: true, width: 50 } },
-  { type: formFieldType('email'), props: { name: 'email', label: 'Email', required: true, width: 50 } },
+  { type: formFieldType('text'), props: { name: 'name', label: 'Name', required: true }, className: HALF_ROW },
+  { type: formFieldType('email'), props: { name: 'email', label: 'Email', required: true }, className: HALF_ROW },
   { type: formFieldType('textarea'), props: { name: 'message', label: 'Message', required: true } },
   { type: FORM_SUBMIT_BLOCK, props: { label: 'Send message' } },
 ]
@@ -126,7 +130,8 @@ const FORM_AI = [
   '"saved": shows the form in `form` (an id of the forms collection) as it is, and children are not used.',
   'In "build" mode put form field blocks (formText, formEmail, formTextarea, formSelect, formRadio, formCheckbox, …), one formSubmit block,',
   'and layout blocks (stack, grid, heading, text, richText, divider, image) in "children"; fields may sit inside a stack or grid of the form.',
-  'Every field needs a `name` (letters, digits, "_"), unique in this form, and usually a `label`. `width` is 100, 75, 67, 50, 33 or 25.',
+  'Every field needs a `name` (letters, digits, "_"), unique in this form, and usually a `label`.',
+  `Fields have no width setting: set it with classes. The Form block's own classes lay out its children (e.g. "flex flex-wrap gap-x-4 gap-y-5"); a field with className "${HALF_ROW}" takes half a row from the sm breakpoint (full width without a width class). Or put fields in a grid block.`,
   'Form field blocks and formSubmit go only inside a Form block. Settings (title, submitButtonLabel, confirmationType, confirmationMessage, redirect, emails, spamProtection) are props of the Form block.',
   'The form is saved to the forms collection when the page is published; do not set `form` in "build" mode.',
 ].join(' ')
@@ -151,6 +156,8 @@ export function formBlocks(options: FormBlocksOptions = {}): BlockDefinition[] {
     slots: { [FORM_SLOT]: { label: 'Fields', disallow: [FORM_BLOCK], description: 'Form fields, the submit button and layout blocks go here.' } },
     uniqueScope: true,
     parts,
+    // A saved form's fields on the canvas: their stored widths draw with these (see FORM_FIELD_CLASSES).
+    classes: FORM_FIELD_CLASSES,
     ...(options.defaultClassName ? { defaultClassName: options.defaultClassName } : {}),
     starter: { props: { mode: 'build' }, slots: { [FORM_SLOT]: STARTER_CHILDREN } },
     ai: {
@@ -161,8 +168,8 @@ export function formBlocks(options: FormBlocksOptions = {}): BlockDefinition[] {
         className: 'flex flex-wrap gap-x-4 gap-y-5',
         slots: {
           [FORM_SLOT]: [
-            { id: 'f1', type: formFieldType('text'), props: { name: 'name', label: 'Name', required: true, width: 50 } },
-            { id: 'f2', type: formFieldType('email'), props: { name: 'email', label: 'Email', required: true, width: 50 } },
+            { id: 'f1', type: formFieldType('text'), props: { name: 'name', label: 'Name', required: true }, className: HALF_ROW },
+            { id: 'f2', type: formFieldType('email'), props: { name: 'email', label: 'Email', required: true }, className: HALF_ROW },
             { id: 'f3', type: FORM_SUBMIT_BLOCK, props: { label: 'Send' } },
           ],
         },
