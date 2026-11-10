@@ -1,10 +1,10 @@
 import configPromise from '@payload-config'
 import { headers } from 'next/headers'
 import { after } from 'next/server'
-import { getPayload, type CollectionSlug } from 'payload'
+import { getPayload, type CollectionSlug, type Payload } from 'payload'
 import { cache } from 'react'
 
-import { NOT_FOUND_LOG, nextNotFoundEntry, notFoundPath, notFoundReferrer } from './notFoundLog'
+import { MAX_NOT_FOUND_ENTRIES, NOT_FOUND_LOG, NOT_FOUND_PRUNE_BATCH, nextNotFoundEntry, notFoundPath, notFoundReferrer } from './notFoundLog'
 
 /**
  * Counts a 404 in the `not-found-log` collection, after the response is sent (`after`), so the 404
@@ -24,6 +24,18 @@ const countOnce = cache((path: string, referrer: string | null): void => {
   after(() => writeHit(path, referrer))
 })
 
+/**
+ * Keeps the log under MAX_NOT_FOUND_ENTRIES: at the limit, removes the entries with the fewest hits,
+ * oldest first. Runs only before a new path is added.
+ */
+async function makeRoom(payload: Payload, collection: CollectionSlug): Promise<void> {
+  const { totalDocs } = await payload.count({ collection, overrideAccess: true })
+  if (totalDocs < MAX_NOT_FOUND_ENTRIES) return
+  const { docs } = await payload.find({ collection, sort: ['hits', 'lastSeen'], limit: NOT_FOUND_PRUNE_BATCH, depth: 0, pagination: false, overrideAccess: true })
+  const ids = docs.map((doc) => doc.id)
+  if (ids.length > 0) await payload.delete({ collection, where: { id: { in: ids } }, depth: 0, overrideAccess: true })
+}
+
 async function writeHit(path: string, referrer: string | null): Promise<void> {
   const payload = await getPayload({ config: configPromise })
   const collection = NOT_FOUND_LOG as CollectionSlug
@@ -37,6 +49,7 @@ async function writeHit(path: string, referrer: string | null): Promise<void> {
         await payload.update({ collection, id: existing.id, data: data as never, depth: 0, overrideAccess: true })
         return
       }
+      await makeRoom(payload, collection)
       try {
         await payload.create({ collection, data: data as never, depth: 0, overrideAccess: true })
         return
