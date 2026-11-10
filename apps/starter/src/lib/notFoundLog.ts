@@ -6,6 +6,16 @@ export const NOT_FOUND_LOG = 'not-found-log'
 /** Longest path the log keeps. Longer ones are scanner noise. */
 const MAX_PATH = 300
 
+/**
+ * Most entries the log keeps. A bot asking for thousands of made-up paths cannot grow the table past
+ * this: each new path over the limit first removes the entries with the fewest hits, oldest first,
+ * so the paths people really ask for stay.
+ */
+export const MAX_NOT_FOUND_ENTRIES = 2000
+
+/** How many entries one prune removes, so the log is not pruned on every new path. */
+export const NOT_FOUND_PRUNE_BATCH = 100
+
 /** Longest referrer the log keeps. */
 const MAX_REFERRER = 500
 
