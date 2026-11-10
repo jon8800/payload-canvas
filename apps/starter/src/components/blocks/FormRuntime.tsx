@@ -14,11 +14,24 @@
 //
 // Validation runs on submit, then on every change of a field that has an error. Errors show under
 // their field (aria-invalid + aria-describedby) and focus moves to the first invalid field.
-// Without JavaScript the browser's own required checks still apply (noValidate is set on hydration).
+// Without JavaScript the browser's own required checks still apply (noValidate is set on hydration),
+// and the form posts natively to /forms/submit, which redirects back with the result
+// (FormResult.tsx): the server render then shows the confirmation or the problems.
 import { createContext, use, useEffect, useId, useRef, useState, useSyncExternalStore, type FormEvent, type ReactNode } from 'react'
-import { FORM_SPAM_KEY, HONEYPOT_NAME, hiddenFormFields, type FormPartClasses, type FormSpamValues } from 'payload-canvas/forms'
+import { usePathname } from 'next/navigation'
+import {
+  FORM_SPAM_KEY,
+  formResultAnchor,
+  HONEYPOT_NAME,
+  hiddenFormFields,
+  NO_SCRIPT_FORM_INPUT,
+  NO_SCRIPT_RETURN_INPUT,
+  type FormPartClasses,
+  type FormSpamValues,
+} from 'payload-canvas/forms'
 import { answerText, initialValues, isEmptyAnswer, lexicalToText, validateField, type FormField, type FormSettings, type NamedField, type Value, type Values } from './FormParts'
 import { formClasses } from './formClasses'
+import { useFormResult } from './FormResult'
 
 type Errors = Record<string, string>
 type Status = 'idle' | 'submitting' | 'success' | 'error'
@@ -99,10 +112,16 @@ export function FormRoot({ formId, fields, settings, preview, parts, className, 
   const idPrefix = useId()
   const hydrated = useHydrated()
   const formRef = useRef<HTMLFormElement>(null)
+  // A post without JavaScript came back with its result (never on the canvas).
+  const result = useFormResult(formId)
+  const posted = preview ? null : result
+  const pathname = usePathname()
   const [values, setValues] = useState<Values>(() => initialValues(fields))
   const [errors, setErrors] = useState<Errors>({})
-  const [status, setStatus] = useState<Status>('idle')
-  const [failure, setFailure] = useState<FormRuntime['failure']>(null)
+  const [status, setStatus] = useState<Status>(posted?.status === 'sent' ? 'success' : posted ? 'error' : 'idle')
+  const [failure, setFailure] = useState<FormRuntime['failure']>(posted?.status === 'error' ? { problems: posted.problems ?? [], message: posted.message ?? '' } : null)
+  // The result's anchor, so the redirect scrolls to it.
+  const anchor = posted && !attributes?.id ? { id: formResultAnchor(posted.form) } : {}
   // When the form showed (performance.now()), for the minimum fill time.
   const shownAt = useRef<number | null>(null)
   const [token, setToken] = useState<string | null>(null)
@@ -121,6 +140,7 @@ export function FormRoot({ formId, fields, settings, preview, parts, className, 
     return (
       <div
         {...attributes}
+        {...anchor}
         className={formClasses.success}
         aria-live="polite"
         tabIndex={-1}
@@ -245,13 +265,22 @@ export function FormRoot({ formId, fields, settings, preview, parts, className, 
     <FormRuntimeContext value={runtime}>
       <form
         {...attributes}
+        {...anchor}
         ref={formRef}
         className={className ?? formClasses.fields}
+        // Without JavaScript: a native post to the site's route (with JavaScript, handleSubmit sends it).
+        {...(preview ? {} : { method: 'post', action: '/forms/submit', encType: 'multipart/form-data' })}
         onSubmit={handleSubmit}
         noValidate={hydrated}
         aria-busy={status === 'submitting' || undefined}
       >
         {children}
+        {preview ? null : (
+          <>
+            <input type="hidden" name={NO_SCRIPT_FORM_INPUT} value={formId === null ? '' : String(formId)} />
+            <input type="hidden" name={NO_SCRIPT_RETURN_INPUT} value={pathname ?? '/'} />
+          </>
+        )}
         {/* The honeypot: off screen and out of the tab order, so only bots fill it in. */}
         {preview ? null : (
           <div className={formClasses.honeypot} aria-hidden="true">

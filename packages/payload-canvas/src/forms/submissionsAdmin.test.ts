@@ -40,5 +40,8 @@ describe('formSubmissionsAdmin', () => {
     assert.equal(await hook({ operation: 'create', value: '/pricing', req: { headers } }), '/pricing')
     assert.equal(await hook({ operation: 'create', value: 'javascript:alert(1)', req: { headers: new Headers() } }), null)
     assert.equal(await hook({ operation: 'update', value: 'kept', req: { headers } }), 'kept')
+    // Sent again from a no-JavaScript result view: the page itself.
+    const result = new Headers({ referer: 'https://example.com/contact?ref=x&form-result=error&form-id=16&form-message=No#form-16' })
+    assert.equal(await hook({ operation: 'create', value: undefined, req: { headers: result } }), 'https://example.com/contact?ref=x')
   })
 })
