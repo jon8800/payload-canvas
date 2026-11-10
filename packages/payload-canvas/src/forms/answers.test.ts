@@ -49,7 +49,28 @@ describe('file checks', () => {
     assert.equal(fileTypeAllowed({ name: 'a.png', mimetype: 'image/png' }, 'image/*'), true)
     assert.equal(fileTypeAllowed({ name: 'cv.PDF', mimetype: 'application/octet-stream' }, '.pdf'), true)
     assert.equal(fileTypeAllowed({ name: 'a.exe', mimetype: 'application/x-msdownload' }, 'image/*, application/pdf'), false)
-    assert.equal(fileTypeAllowed({ name: 'a.exe', mimetype: 'application/x-msdownload' }, ''), true)
+    // Empty: the safe default list, never any type.
+    assert.equal(fileTypeAllowed({ name: 'a.exe', mimetype: 'application/x-msdownload' }, ''), false)
+    assert.equal(fileTypeAllowed({ name: 'cv.pdf', mimetype: 'application/pdf' }, ''), true)
+    assert.equal(fileTypeAllowed({ name: 'photo.JPG', mimetype: 'image/jpeg' }, null), true)
+  })
+
+  it('never takes HTML, SVG, scripts or XML, by ending or by MIME type', () => {
+    for (const accept of ['', 'image/*', '.svg, .html, text/html, image/svg+xml', 'text/*']) {
+      assert.equal(fileTypeAllowed({ name: 'logo.svg', mimetype: 'image/svg+xml' }, accept), false, accept)
+      assert.equal(fileTypeAllowed({ name: 'page.html', mimetype: 'text/html' }, accept), false, accept)
+      assert.equal(fileTypeAllowed({ name: 'a.png', mimetype: 'image/svg+xml' }, accept), false, accept)
+      assert.equal(fileTypeAllowed({ name: 'x.mjs', mimetype: 'text/plain' }, accept), false, accept)
+      assert.equal(fileTypeAllowed({ name: 'feed.xml', mimetype: 'application/octet-stream' }, accept), false, accept)
+    }
+  })
+
+  it('checks the file ending against MIME patterns, not only the type the browser claims', () => {
+    // A script sent as "image/png" under another ending does not pass as an image.
+    assert.equal(fileTypeAllowed({ name: 'page.php', mimetype: 'image/png' }, 'image/*'), false)
+    assert.equal(fileTypeAllowed({ name: 'noending', mimetype: 'application/pdf' }, 'application/pdf'), false)
+    assert.equal(fileTypeAllowed({ name: 'cv.pdf', mimetype: 'application/pdf' }, 'application/pdf'), true)
+    assert.equal(fileTypeAllowed({ name: 'cv.pdf', mimetype: 'image/png' }, 'image/*'), false)
   })
 
   it('limits the size to the field, at most the upper limit', () => {

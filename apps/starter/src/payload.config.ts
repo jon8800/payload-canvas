@@ -24,6 +24,7 @@ import { googleReviewsPlugin } from 'payload-google-reviews'
 import {
   formEmails,
   formFileUploads,
+  formFileUploadsCleanup,
   formSpamProtection,
   formSubmissionConditions,
   formSubmissionsAdmin,
@@ -324,6 +325,8 @@ export default buildConfig({
           // Files of file fields go to the private Form files collection and are linked in `attachments`.
           // Not Media: anyone can read Media, and its files are public under public/media.
           beforeChange: [formFileUploads({ collection: 'form-files', field: 'attachments' })],
+          // A submission that fails after its files were stored removes them again.
+          afterError: [formFileUploadsCleanup()],
         },
         fields: ({ defaultFields }) =>
           submissionsAdmin.fields([

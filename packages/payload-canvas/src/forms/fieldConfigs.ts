@@ -67,7 +67,7 @@ export const consentFormField: Block = {
 /** Default and upper limit of a file field's size, in MB. */
 export const FILE_FIELD_MAX_MB = 10
 
-/** Files the visitor uploads: one, or several when "Allow several files" is on. `formFileUploads` stores them in the media collection. */
+/** Files the visitor uploads: one, or several when "Allow several files" is on. `formFileUploads` stores them in a private upload collection. */
 export const fileFormField: Block = {
   slug: 'file',
   labels: { singular: 'File upload', plural: 'File uploads' },
@@ -80,7 +80,7 @@ export const fileFormField: Block = {
       type: 'text',
       label: 'Allowed file types',
       defaultValue: 'image/*, application/pdf',
-      admin: { description: 'File types or endings, separated by commas, for example "image/*, application/pdf, .docx". Empty: any type.' },
+      admin: { description: 'File types or endings, separated by commas, for example "image/*, application/pdf, .docx". Empty: images, PDF, office documents, text and CSV. HTML, SVG, scripts and XML are never taken.' },
     },
     {
       name: 'maxSize',
