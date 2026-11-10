@@ -55,7 +55,7 @@ function savedFieldBlocks(doc: FormDoc): Block[] {
 /** Block component of the Form block. */
 export function FormBlock({ block, props, className, attributes, partAttributes, slots, mode }: BlockComponentProps) {
   const canvas = mode === 'canvas'
-  const formMode = formBlockMode(props)
+  const formMode = formBlockMode(props, block.slots)
   const doc = isFormDoc(props.form) ? props.form : null
   const children = block.slots?.[FORM_SLOT] ?? []
   // A saved form shows nothing until one is chosen; the canvas says so.
