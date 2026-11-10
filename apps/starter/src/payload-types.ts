@@ -767,10 +767,16 @@ export interface Form {
             width?: number | null;
             required?: boolean | null;
             defaultValue?: boolean | null;
-            /**
-             * Classes for the field’s box, separated by spaces, for example an editable class. The site’s CSS must have them.
-             */
             cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
             /**
              * Show this field only when other fields of the form have some values. Without rules it always shows.
              */
@@ -810,10 +816,16 @@ export interface Form {
              */
             placeholder?: string | null;
             defaultValue?: string | null;
-            /**
-             * Classes for the field’s box, separated by spaces, for example an editable class. The site’s CSS must have them.
-             */
             cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
             /**
              * Show this field only when other fields of the form have some values. Without rules it always shows.
              */
@@ -853,10 +865,16 @@ export interface Form {
              */
             placeholder?: string | null;
             defaultValue?: string | null;
-            /**
-             * Classes for the field’s box, separated by spaces, for example an editable class. The site’s CSS must have them.
-             */
             cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
             /**
              * Show this field only when other fields of the form have some values. Without rules it always shows.
              */
@@ -897,10 +915,16 @@ export interface Form {
               };
               [k: string]: unknown;
             } | null;
-            /**
-             * Classes for the field’s box, separated by spaces, for example an editable class. The site’s CSS must have them.
-             */
             cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
             /**
              * Show this field only when other fields of the form have some values. Without rules it always shows.
              */
@@ -940,10 +964,16 @@ export interface Form {
              * Grey text inside the empty field.
              */
             placeholder?: string | null;
-            /**
-             * Classes for the field’s box, separated by spaces, for example an editable class. The site’s CSS must have them.
-             */
             cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
             /**
              * Show this field only when other fields of the form have some values. Without rules it always shows.
              */
@@ -987,10 +1017,16 @@ export interface Form {
               | null;
             required?: boolean | null;
             labelVisibility?: ('visible' | 'hidden') | null;
-            /**
-             * Classes for the field’s box, separated by spaces, for example an editable class. The site’s CSS must have them.
-             */
             cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
             /**
              * Show this field only when other fields of the form have some values. Without rules it always shows.
              */
@@ -1030,10 +1066,16 @@ export interface Form {
              */
             placeholder?: string | null;
             defaultValue?: string | null;
-            /**
-             * Classes for the field’s box, separated by spaces, for example an editable class. The site’s CSS must have them.
-             */
             cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
             /**
              * Show this field only when other fields of the form have some values. Without rules it always shows.
              */
@@ -1073,10 +1115,16 @@ export interface Form {
              * Grey text inside the empty field.
              */
             placeholder?: string | null;
-            /**
-             * Classes for the field’s box, separated by spaces, for example an editable class. The site’s CSS must have them.
-             */
             cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
             /**
              * Show this field only when other fields of the form have some values. Without rules it always shows.
              */
@@ -1116,10 +1164,16 @@ export interface Form {
              * Grey text inside the empty field.
              */
             placeholder?: string | null;
-            /**
-             * Classes for the field’s box, separated by spaces, for example an editable class. The site’s CSS must have them.
-             */
             cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
             /**
              * Show this field only when other fields of the form have some values. Without rules it always shows.
              */
@@ -1166,10 +1220,16 @@ export interface Form {
              * List: one option per line. Inline: on one line. Buttons: joined buttons. Cards: a box per option.
              */
             display?: ('list' | 'inline' | 'buttons' | 'cards') | null;
-            /**
-             * Classes for the field’s box, separated by spaces, for example an editable class. The site’s CSS must have them.
-             */
             cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
             /**
              * Show this field only when other fields of the form have some values. Without rules it always shows.
              */
@@ -1205,10 +1265,16 @@ export interface Form {
             required?: boolean | null;
             defaultValue?: string | null;
             labelVisibility?: ('visible' | 'hidden') | null;
-            /**
-             * Classes for the field’s box, separated by spaces, for example an editable class. The site’s CSS must have them.
-             */
             cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
             /**
              * Show this field only when other fields of the form have some values. Without rules it always shows.
              */
@@ -1248,10 +1314,16 @@ export interface Form {
             placeholder?: string | null;
             required?: boolean | null;
             labelVisibility?: ('visible' | 'hidden') | null;
-            /**
-             * Classes for the field’s box, separated by spaces, for example an editable class. The site’s CSS must have them.
-             */
             cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
             /**
              * Show this field only when other fields of the form have some values. Without rules it always shows.
              */
@@ -1291,10 +1363,16 @@ export interface Form {
             placeholder?: string | null;
             required?: boolean | null;
             labelVisibility?: ('visible' | 'hidden') | null;
-            /**
-             * Classes for the field’s box, separated by spaces, for example an editable class. The site’s CSS must have them.
-             */
             cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
             /**
              * Show this field only when other fields of the form have some values. Without rules it always shows.
              */
@@ -1389,10 +1467,16 @@ export interface Form {
             } | null;
             width?: number | null;
             required?: boolean | null;
-            /**
-             * Classes for the field’s box, separated by spaces, for example an editable class. The site’s CSS must have them.
-             */
             cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
             /**
              * Show this field only when other fields of the form have some values. Without rules it always shows.
              */
@@ -1443,10 +1527,16 @@ export interface Form {
              */
             maxFiles?: number | null;
             labelVisibility?: ('visible' | 'hidden') | null;
-            /**
-             * Classes for the field’s box, separated by spaces, for example an editable class. The site’s CSS must have them.
-             */
             cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
             /**
              * Show this field only when other fields of the form have some values. Without rules it always shows.
              */
@@ -1566,6 +1656,12 @@ export interface Form {
       windowMinutes?: number | null;
     };
     turnstileSiteKey?: string | null;
+  };
+  source?: {
+    collection?: string | null;
+    document?: string | null;
+    block?: string | null;
+    hash?: string | null;
   };
   fieldsBuilder?:
     | {
@@ -2899,6 +2995,7 @@ export interface FormsSelect<T extends boolean = true> {
               required?: T;
               defaultValue?: T;
               cssClass?: T;
+              partClasses?: T;
               conditions?:
                 | T
                 | {
@@ -2927,6 +3024,7 @@ export interface FormsSelect<T extends boolean = true> {
               placeholder?: T;
               defaultValue?: T;
               cssClass?: T;
+              partClasses?: T;
               conditions?:
                 | T
                 | {
@@ -2955,6 +3053,7 @@ export interface FormsSelect<T extends boolean = true> {
               placeholder?: T;
               defaultValue?: T;
               cssClass?: T;
+              partClasses?: T;
               conditions?:
                 | T
                 | {
@@ -2976,6 +3075,7 @@ export interface FormsSelect<T extends boolean = true> {
           | {
               message?: T;
               cssClass?: T;
+              partClasses?: T;
               conditions?:
                 | T
                 | {
@@ -3004,6 +3104,7 @@ export interface FormsSelect<T extends boolean = true> {
               labelVisibility?: T;
               placeholder?: T;
               cssClass?: T;
+              partClasses?: T;
               conditions?:
                 | T
                 | {
@@ -3039,6 +3140,7 @@ export interface FormsSelect<T extends boolean = true> {
               required?: T;
               labelVisibility?: T;
               cssClass?: T;
+              partClasses?: T;
               conditions?:
                 | T
                 | {
@@ -3067,6 +3169,7 @@ export interface FormsSelect<T extends boolean = true> {
               placeholder?: T;
               defaultValue?: T;
               cssClass?: T;
+              partClasses?: T;
               conditions?:
                 | T
                 | {
@@ -3095,6 +3198,7 @@ export interface FormsSelect<T extends boolean = true> {
               labelVisibility?: T;
               placeholder?: T;
               cssClass?: T;
+              partClasses?: T;
               conditions?:
                 | T
                 | {
@@ -3123,6 +3227,7 @@ export interface FormsSelect<T extends boolean = true> {
               labelVisibility?: T;
               placeholder?: T;
               cssClass?: T;
+              partClasses?: T;
               conditions?:
                 | T
                 | {
@@ -3158,6 +3263,7 @@ export interface FormsSelect<T extends boolean = true> {
               labelVisibility?: T;
               display?: T;
               cssClass?: T;
+              partClasses?: T;
               conditions?:
                 | T
                 | {
@@ -3185,6 +3291,7 @@ export interface FormsSelect<T extends boolean = true> {
               defaultValue?: T;
               labelVisibility?: T;
               cssClass?: T;
+              partClasses?: T;
               conditions?:
                 | T
                 | {
@@ -3213,6 +3320,7 @@ export interface FormsSelect<T extends boolean = true> {
               required?: T;
               labelVisibility?: T;
               cssClass?: T;
+              partClasses?: T;
               conditions?:
                 | T
                 | {
@@ -3241,6 +3349,7 @@ export interface FormsSelect<T extends boolean = true> {
               required?: T;
               labelVisibility?: T;
               cssClass?: T;
+              partClasses?: T;
               conditions?:
                 | T
                 | {
@@ -3289,6 +3398,7 @@ export interface FormsSelect<T extends boolean = true> {
               width?: T;
               required?: T;
               cssClass?: T;
+              partClasses?: T;
               conditions?:
                 | T
                 | {
@@ -3319,6 +3429,7 @@ export interface FormsSelect<T extends boolean = true> {
               maxFiles?: T;
               labelVisibility?: T;
               cssClass?: T;
+              partClasses?: T;
               conditions?:
                 | T
                 | {
@@ -3374,6 +3485,14 @@ export interface FormsSelect<T extends boolean = true> {
               windowMinutes?: T;
             };
         turnstileSiteKey?: T;
+      };
+  source?:
+    | T
+    | {
+        collection?: T;
+        document?: T;
+        block?: T;
+        hash?: T;
       };
   fieldsBuilder?: T;
   fieldsRichText?: T;

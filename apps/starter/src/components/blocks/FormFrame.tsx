@@ -1,5 +1,5 @@
 // The form builder's page frame (server component): the form around its fields, as the site's
-// FormView renders it. The canvas puts the live fields in `LayoutOutlet`; the submit button is the
+// Form block renders it. The canvas puts the live fields in `LayoutOutlet`; the submit button is the
 // form settings region, so a click on it opens the form's settings.
 import { LayoutOutlet } from 'payload-canvas/react'
 import type { CanvasFrameArgs } from 'payload-canvas/react/server'
