@@ -1,7 +1,8 @@
 // Spam protection for the forms of `@payloadcms/plugin-form-builder`, set per form:
 // - `spamProtectionField()`: the `spamProtection` group for the forms collection (`formOverrides`).
 // - `formSpamProtection()`: a submissions `beforeValidate` hook that checks every submission on the
-//   server (honeypot, minimum fill time, Cloudflare Turnstile, a rate limit per IP and form). A
+//   server (honeypot, minimum fill time, Cloudflare Turnstile, a rate limit per IP and form; the IP
+//   comes from a proxy header only when `trustedIpHeader` names it). A
 //   blocked submission is logged and refused with one generic message, so nothing is stored.
 // Server only. The client-safe settings and constants are in `spamSettings.ts`.
 
@@ -112,7 +113,11 @@ export function honeypotFilled(values: FormSpamValues | null | undefined): boole
   return typeof values?.honeypot === 'string' && values.honeypot.trim() !== ''
 }
 
-/** True when the form was sent faster than the form allows. A missing time counts as too fast. */
+/**
+ * True when the form was sent faster than the form allows. A missing time counts as too fast. A
+ * heuristic only: the visitor's browser measures the time, so a bot can send any value. The real
+ * checks are the honeypot, the rate limit and Turnstile.
+ */
 export function filledTooFast(values: FormSpamValues | null | undefined, settings: FormSpamSettings): boolean {
   if (settings.minFillSeconds <= 0) return false
   const elapsed = values?.elapsedMs
@@ -121,17 +126,25 @@ export function filledTooFast(values: FormSpamValues | null | undefined, setting
 }
 
 /**
- * The visitor's IP from the proxy headers: `cf-connecting-ip` (Cloudflare), `x-real-ip` (nginx),
- * then the first entry of `x-forwarded-for`. Null when none is set.
+ * The request header that holds the visitor's IP, set by a proxy the server trusts:
+ * - `x-forwarded-for`: behind one reverse proxy (nginx, Caddy, Traefik) that appends the address it
+ *   sees. The rightmost entry is used: the visitor can write the entries before it.
+ * - `x-real-ip`: a proxy that sets this header to the address it sees.
+ * - `cf-connecting-ip`: behind Cloudflare, when only Cloudflare can reach the server.
  */
-export function clientIp(headers: Pick<Headers, 'get'> | null | undefined): string | null {
-  if (!headers) return null
-  for (const name of ['cf-connecting-ip', 'x-real-ip']) {
-    const value = headers.get(name)?.trim()
-    if (value) return value
-  }
-  const first = headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-  return first || null
+export type TrustedIpHeader = 'x-forwarded-for' | 'x-real-ip' | 'cf-connecting-ip'
+
+/**
+ * The visitor's IP from the trusted header, or null. No header is trusted by default: any visitor
+ * can send these headers, and a proxy that the server does not sit behind does not fix them.
+ */
+export function clientIp(headers: Pick<Headers, 'get'> | null | undefined, trusted: TrustedIpHeader | null | undefined): string | null {
+  if (!headers || !trusted) return null
+  const value = headers.get(trusted)
+  if (!value) return null
+  if (trusted !== 'x-forwarded-for') return value.trim() || null
+  const entries = value.split(',').map((entry) => entry.trim()).filter(Boolean)
+  return entries.at(-1) ?? null
 }
 
 /** Asks Cloudflare whether a Turnstile token is valid. A network error or a bad answer counts as invalid. */
@@ -168,9 +181,24 @@ export type FormSpamProtectionOptions = {
   fetch?: typeof fetch
   now?: () => number
   store?: CountStore
-  /** The visitor's IP. Default: `clientIp(req.headers)`. Without an IP the rate limit does not apply. */
+  /**
+   * The header that holds the visitor's IP (see `TrustedIpHeader`). Default: none, so the rate
+   * limit is off. Set it to what the proxy in front of the server sets.
+   */
+  trustedIpHeader?: TrustedIpHeader
+  /** The visitor's IP, for other setups. Wins over `trustedIpHeader`. Without an IP the rate limit does not apply. */
   ipOf?: (req: PayloadRequest) => string | null
 }
+
+/**
+ * `context` flag of a submission the site's no-JavaScript route sends (a native form post). The
+ * fill time cannot be measured without JavaScript: that check passes. A form that uses Turnstile
+ * is refused (the check needs the widget). Only server code can set `context`.
+ */
+export const FORM_NO_SCRIPT_CONTEXT = 'builderFormNoScript'
+
+/** The message for a form with Turnstile sent without JavaScript. */
+export const TURNSTILE_NEEDS_SCRIPT_MESSAGE = 'This form needs JavaScript for its spam check. Turn on JavaScript and send it again.'
 
 const idOf = (value: unknown): string | number | null => {
   if (typeof value === 'string' || typeof value === 'number') return value
@@ -217,10 +245,11 @@ export function formSpamProtection(options: FormSpamProtectionOptions = {}): Col
   const formsSlug = options.forms ?? 'forms'
   const counter = new WindowCounter(options.now)
   const memory = memoryStore()
-  return async ({ data, operation, req }) => {
+  return async ({ context, data, operation, req }) => {
     if (operation !== 'create' || !data) return data
     const { [FORM_SPAM_KEY]: raw, ...rest } = data as Record<string, unknown>
-    if (req.payloadAPI === 'local') return rest
+    // Server code (Local API) that sends no spam values is not checked. The site's no-JavaScript route sends them.
+    if (req.payloadAPI === 'local' && raw === undefined) return rest
     const adminUser = req.user && req.user.collection === req.payload.config.admin?.user
     if (adminUser && raw === undefined) return rest
 
@@ -230,8 +259,12 @@ export function formSpamProtection(options: FormSpamProtectionOptions = {}): Col
       formId === null
         ? null
         : ((await req.payload.findByID({ collection: formsSlug as never, id: formId, depth: 0, req, overrideAccess: true }).catch(() => null)) as Record<string, unknown> | null)
-    const settings = spamSettings(form?.[FORM_SPAM_FIELD] as FormSpamSettingsInput | undefined)
-    const ip = options.ipOf ? options.ipOf(req) : clientIp(req.headers)
+    const stored = spamSettings(form?.[FORM_SPAM_FIELD] as FormSpamSettingsInput | undefined)
+    const noScript = context?.[FORM_NO_SCRIPT_CONTEXT] === true
+    if (noScript && stored.turnstile && turnstileKeys(options.env ?? process.env)) throw new APIError(TURNSTILE_NEEDS_SCRIPT_MESSAGE, 400, null, true)
+    // Without JavaScript the fill time is not measured: that check passes. The honeypot and the rate limit stay.
+    const settings = noScript ? { ...stored, minFillSeconds: 0 } : stored
+    const ip = options.ipOf ? options.ipOf(req) : clientIp(req.headers, options.trustedIpHeader)
     const result = await checkSubmission({
       values,
       settings,

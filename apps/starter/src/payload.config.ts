@@ -24,6 +24,7 @@ import { googleReviewsPlugin } from 'payload-google-reviews'
 import {
   formEmails,
   formFileUploads,
+  formFileUploadsCleanup,
   formSpamProtection,
   formSubmissionConditions,
   formSubmissionsAdmin,
@@ -316,10 +317,16 @@ export default buildConfig({
           // Spam checks first (a blocked submission is refused, logged and not stored). Then display
           // conditions: hidden fields are never required, and their answers are dropped. Answers in
           // the wrong format are refused.
-          beforeValidate: [formSpamProtection(), formSubmissionConditions()],
+          // The rate limit reads the visitor's IP from the last X-Forwarded-For entry: the starter deploys
+          // behind one reverse proxy (Coolify's Traefik, nginx, Caddy) that appends the address it sees.
+          // Behind Cloudflare only, use 'cf-connecting-ip'. With no proxy, remove it: the rate limit is
+          // then off, because a visitor can send any of these headers.
+          beforeValidate: [formSpamProtection({ trustedIpHeader: 'x-forwarded-for' }), formSubmissionConditions()],
           // Files of file fields go to the private Form files collection and are linked in `attachments`.
           // Not Media: anyone can read Media, and its files are public under public/media.
           beforeChange: [formFileUploads({ collection: 'form-files', field: 'attachments' })],
+          // A submission that fails after its files were stored removes them again.
+          afterError: [formFileUploadsCleanup()],
         },
         fields: ({ defaultFields }) =>
           submissionsAdmin.fields([

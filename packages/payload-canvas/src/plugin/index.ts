@@ -94,7 +94,7 @@ import { CLASSES_CONFIG_KEY, resolveClasses, type ClassesOptions } from '../clas
 import { resolveComments, type CommentsOptions } from '../comments'
 import { withBuilderConditions } from '../core/conditions'
 import { resolveForms, type FormsOptions } from './forms'
-import { formClaimEndpoint, formSourceField, pageFormSync } from './formsSync'
+import { formClaimEndpoint, formLiveCheck, formSourceField, formSyncAfterCreate, pageFormSync, sectionFormSync, type SourceField } from './formsSync'
 import { FORM_BLOCK, FORM_SLOT, withPageForms } from '../forms/pageForms'
 
 export type { GeneratedCss } from './hook'
@@ -479,6 +479,16 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
       // The full-screen builder edits saved sections like pages (no drafts: changes save at once).
       builderOptions[savedSections.slug] = { field: SECTION_LAYOUT_FIELD }
     }
+    // Forms on pages: a new submission to a form built on a page or a saved section needs that
+    // page or section to still show the form (formLiveCheck), before the app's own checks.
+    if (pageForms && forms?.submissions) {
+      const sourceField = (slug: string): SourceField | null =>
+        slug === savedSections?.slug ? { field: 'blocks', blocks: 'list' } : builderOptions[slug] && slug !== forms.slug ? { field: builderOptions[slug].field ?? 'layout', blocks: 'layout' } : null
+      const check = formLiveCheck({ forms: forms.slug, sourceField })
+      collections = collections.map((c) =>
+        c.slug === forms.submissions ? { ...c, hooks: { ...c.hooks, beforeValidate: [check, ...(c.hooks?.beforeValidate ?? [])] } } : c,
+      )
+    }
     // References: which media and documents each layout uses ("Used in", delete protection).
     const references = resolveReferences({
       options: options.references,
@@ -661,6 +671,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           ...(forms ? { forms: { collection: forms.slug, submissions: forms.submissions } } : {}),
         }
         const isSections = collection.slug === savedSections?.slug
+        const formSync = pageForms && forms && !storage ? pageFormSync({ collection: collection.slug, layoutField: field, forms: forms.slug, settings: forms.settings }) : null
         const built = addBuilder(collection, {
           field,
           clientConfig,
@@ -676,14 +687,15 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           localization: localizationOf(collection.slug),
           writeGate,
           payloadBlocks: storage,
-          // Forms on pages are written to the forms collection on publish (saved sections hold none).
-          ...(pageForms && forms && !storage && !isSections
-            ? { formSync: pageFormSync({ collection: collection.slug, layoutField: field, forms: forms.slug, settings: forms.settings }) }
-            : {}),
+          // Forms on pages are written to the forms collection on publish. Saved sections write theirs
+          // from their `blocks`, after those are set (sectionFormSync, below).
+          ...(formSync && !isSections ? { formSync } : {}),
         })
+        // A new document has no id in the save hook: its forms are written after the create.
+        const withForms = formSync ? withFormSyncHooks(built, { collection: collection.slug, field, isSections, formSync }) : built
         // After the layout hook, so the references follow the layout the session guard put in.
         // Publishing a page publishes the classes it uses that have unpublished changes.
-        const withClasses = classes && !storage ? classes.withPublish(built, field) : built
+        const withClasses = classes && !storage ? classes.withPublish(withForms, field) : withForms
         return references ? addReferences(withClasses, references) : withClasses
       })
         .concat(classes ? [withDesignAccess(classes.collection)] : [])
@@ -809,6 +821,25 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
         }
       },
     }
+  }
+}
+
+/**
+ * Forms on pages: the form sync after a create (`formSyncAfterCreate`), and for saved sections the
+ * sync of their `blocks` after `syncSectionBlocks` (`sectionFormSync`).
+ */
+function withFormSyncHooks(collection: CollectionConfig, args: { collection: string; field: string; isSections: boolean; formSync: FormSync }): CollectionConfig {
+  const source: SourceField = args.isSections ? { field: 'blocks', blocks: 'list' } : { field: args.field, blocks: 'layout' }
+  return {
+    ...collection,
+    hooks: {
+      ...collection.hooks,
+      beforeChange: [
+        ...(collection.hooks?.beforeChange ?? []),
+        ...(args.isSections ? [sectionFormSync({ collection: args.collection, layoutField: args.field, formSync: args.formSync })] : []),
+      ],
+      afterChange: [...(collection.hooks?.afterChange ?? []), formSyncAfterCreate({ collection: args.collection, source, formSync: args.formSync })],
+    },
   }
 }
 
