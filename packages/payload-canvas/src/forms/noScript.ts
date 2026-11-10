@@ -66,12 +66,15 @@ export function readFormResult(query: URLSearchParams | Record<string, string | 
   return { form, status, ...(message ? { message } : {}), ...(problems.length > 0 ? { problems } : {}) }
 }
 
+/** True when the text holds a control character (a line break someone put in an address). */
+const hasControlCharacter = (text: string) => [...text].some((char) => char.charCodeAt(0) < 0x20)
+
 /**
  * A path on this site to come back to: starts with one "/", no scheme or host, no backslashes.
  * Anything else (an outside address someone put in the post) becomes "/".
  */
 export function safeReturnPath(value: unknown): string {
-  if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//') || value.includes('\\') || /[\u0000-\u001f]/.test(value)) return '/'
+  if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//') || value.includes('\\') || hasControlCharacter(value)) return '/'
   return value.split('#')[0]!.split('?')[0] || '/'
 }
 

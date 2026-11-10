@@ -57,7 +57,7 @@ describe('formFileUploads', () => {
 
   it('refuses an SVG, and stores nothing', async () => {
     const { req, created } = fakeReq({ cv: { name: 'logo.svg', data: Buffer.from('<svg/>'), mimetype: 'image/svg+xml', size: 6 } })
-    await assert.rejects(run(req, { form: 1, submissionData: [] }), (error: { data?: { errors?: Array<{ message: string }> } }) => /^CV: This file type is not allowed/.test(error.data?.errors?.[0]?.message ?? ''))
+    await assert.rejects(run(req, { form: 1, submissionData: [] }), (error: { data?: { errors?: Array<{ message: string }> } }) => (error.data?.errors?.[0]?.message ?? '').startsWith('CV: This file type is not allowed'))
     assert.equal(created.length, 0)
   })
 })
