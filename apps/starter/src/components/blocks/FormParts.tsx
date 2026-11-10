@@ -1,13 +1,17 @@
 // The parts of a form-builder form: one field (label, input, description, error) and the submit
-// button. The site's FormView and the form builder's canvas preview (FormFieldBlock, FormFrame)
+// button. The site's Form block and the form builder's canvas preview (FormFieldBlock, FormFrame)
 // render with these, so the builder shows exactly what the site shows. No hooks and no 'use
 // client': server and client components can both use them (the dropdown and the file drop zone
 // are client components of their own).
 //
 // Field settings (payload-canvas `withFormFieldSettings`): `labelVisibility: 'hidden'` keeps the
-// label for screen readers only, `description` shows under the input, `cssClass` goes on the
-// field's box, `width` is one of the width presets, radio `display` is list, inline, buttons or
-// cards, and a file field takes several files when `multiple` is on.
+// label for screen readers only, `description` shows under the input, `width` is one of the width
+// presets, radio `display` is list, inline, buttons or cards, and a file field takes several files
+// when `multiple` is on.
+//
+// Looks come from the builder's Styles panel: `classes` holds the field's own classes (its box) and
+// the classes of its parts (label, input, help text, error, options). A part without classes uses
+// the form's classes for it, else the defaults in formClasses.ts.
 import type { ReactNode } from 'react'
 import { renderRichText } from 'payload-canvas/react'
 import { filesProblem, formAnswerProblem, formFieldWidth, isLabelShown, radioDisplay, type FormFieldConditions } from 'payload-canvas/forms'
@@ -35,8 +39,6 @@ export type FormField = {
   description?: string | null
   /** "hidden": the label is for screen readers only. */
   labelVisibility?: string | null
-  /** Classes for the field's box. */
-  cssClass?: string | null
   /** Radio: list, inline, buttons or cards. */
   display?: string | null
   /** File: allowed types (as in `<input accept>`), the largest size in MB, several files and their most. */
@@ -47,9 +49,8 @@ export type FormField = {
   conditions?: FormFieldConditions | null
 }
 
-export type FormDoc = {
-  id: string | number
-  fields?: FormField[] | null
+/** The form's settings the site reads: from the Form block (built on the page) or the saved form. */
+export type FormSettings = {
   submitButtonLabel?: string | null
   confirmationType?: 'message' | 'redirect' | null
   confirmationMessage?: unknown
@@ -57,6 +58,12 @@ export type FormDoc = {
   /** Spam protection settings. `turnstileSiteKey` is set on read when the form shows Turnstile. */
   spamProtection?: { turnstileSiteKey?: string | null } | null
 }
+
+/** A saved form as the site loads it. */
+export type FormDoc = FormSettings & { id: string | number; fields?: FormField[] | null }
+
+/** Classes of a field: its box (the block's own classes) and its parts. Missing parts use the defaults. */
+export type FieldClasses = Partial<Record<'box' | 'label' | 'input' | 'help' | 'error' | 'options', string>>
 
 export type NamedField = FormField & { name: string }
 /** Text, a tick (checkbox, consent) or the chosen files. */
@@ -136,9 +143,10 @@ type InputProps = {
   preview?: boolean
   /** The id of the element that labels the input (a consent box's text). */
   labelledBy?: string
+  classes: FieldClasses
 }
 
-function FieldInput({ field, id, value, error, onChange, describedBy, preview, labelledBy }: InputProps): ReactNode {
+function FieldInput({ field, id, value, error, onChange, describedBy, preview, labelledBy, classes }: InputProps): ReactNode {
   const common = {
     id,
     // The builder's preview sends nothing, so its inputs need no name. With a name, the canvas
@@ -153,6 +161,7 @@ function FieldInput({ field, id, value, error, onChange, describedBy, preview, l
   const previewClass = preview ? formClasses.previewInput : ''
   const text = typeof value === 'string' ? value : ''
   const placeholder = field.placeholder || undefined
+  const inputClass = classes.input ?? formClasses.input
   switch (field.blockType) {
     case 'textarea':
       return (
@@ -160,7 +169,7 @@ function FieldInput({ field, id, value, error, onChange, describedBy, preview, l
           {...common}
           rows={5}
           placeholder={placeholder}
-          className={join(formClasses.input, formClasses.textarea, previewClass)}
+          className={join(inputClass, formClasses.textarea, previewClass)}
           value={text}
           onChange={(e) => onChange(e.target.value)}
         />
@@ -177,6 +186,7 @@ function FieldInput({ field, id, value, error, onChange, describedBy, preview, l
           invalid={Boolean(error)}
           describedBy={describedBy}
           preview={preview}
+          className={inputClass}
           onChange={preview ? undefined : onChange}
         />
       )
@@ -196,7 +206,7 @@ function FieldInput({ field, id, value, error, onChange, describedBy, preview, l
       return (
         <div className={layout.box}>
           {field.options?.map((option, index) => (
-            <label key={option.value} className={join(layout.option, previewClass)}>
+            <label key={option.value} className={join(classes.options ?? layout.option, previewClass)}>
               <input
                 {...common}
                 // The first button has the field's id, so an error moves the focus to it.
@@ -241,7 +251,7 @@ function FieldInput({ field, id, value, error, onChange, describedBy, preview, l
           autoComplete={kind.autoComplete}
           inputMode={kind.inputMode}
           placeholder={placeholder}
-          className={join(formClasses.input, previewClass)}
+          className={join(inputClass, previewClass)}
           value={text}
           onChange={(e) => onChange(e.target.value)}
         />
@@ -261,9 +271,13 @@ type FieldViewProps = {
   preview?: boolean
   /** Shown under the field in the builder's preview, e.g. its display conditions. */
   note?: ReactNode
+  /** The field's own classes and its parts' classes (the Styles panel). */
+  classes?: FieldClasses
 }
 
 const ignore = () => {}
+
+const NO_CLASSES: FieldClasses = {}
 
 /** The label text with "(optional)" for a field that is not required. */
 function LabelText({ field }: { field: FormField }) {
@@ -276,9 +290,9 @@ function LabelText({ field }: { field: FormField }) {
 }
 
 /** One field of the form: a message, or a label with its input, description and error. */
-export function FormFieldView({ field, id, value, error = '', onChange = ignore, attributes, preview, note }: FieldViewProps) {
+export function FormFieldView({ field, id, value, error = '', onChange = ignore, attributes, preview, note, classes = NO_CLASSES }: FieldViewProps) {
   // The field's box: its width preset and its own classes.
-  const box = (className: string) => join(className, widthClasses[formFieldWidth(field.width)], field.cssClass?.trim())
+  const box = (className: string) => join(className, widthClasses[formFieldWidth(field.width)], classes.box)
   const noteText = note ? <p className={formClasses.note}>{note}</p> : null
   if (field.blockType === 'message') {
     return (
@@ -296,19 +310,19 @@ export function FormFieldView({ field, id, value, error = '', onChange = ignore,
   const errorId = `${inputId}-error`
   const describedBy = join(description && descriptionId, error && errorId) || undefined
   const descriptionText = description ? (
-    <p id={descriptionId} className={formClasses.hint}>
+    <p id={descriptionId} className={classes.help ?? formClasses.hint}>
       {description}
     </p>
   ) : null
   const errorText = error ? (
-    <p id={errorId} className={formClasses.fieldError}>
+    <p id={errorId} className={classes.error ?? formClasses.fieldError}>
       {error}
     </p>
   ) : null
-  const labelClass = isLabelShown(field) ? undefined : formClasses.srOnly
+  const hiddenLabel = isLabelShown(field) ? undefined : formClasses.srOnly
   if (field.blockType === 'hidden') {
     // Visitors never see it; the builder's preview shows what it sends.
-    if (!preview) return <FieldInput field={named} id={inputId} value={value} error="" onChange={onChange} />
+    if (!preview) return <FieldInput field={named} id={inputId} value={value} error="" onChange={onChange} classes={classes} />
     return (
       <div {...attributes} className={formClasses.field}>
         <p className={formClasses.hiddenPreview}>
@@ -325,8 +339,8 @@ export function FormFieldView({ field, id, value, error = '', onChange = ignore,
     return (
       <div {...attributes} className={box(formClasses.field)}>
         <div className={formClasses.checkboxRow}>
-          <FieldInput field={named} id={inputId} value={value} error={error} onChange={onChange} describedBy={describedBy} preview={preview} labelledBy={textId} />
-          <div id={textId} className={formClasses.consentText}>
+          <FieldInput field={named} id={inputId} value={value} error={error} onChange={onChange} describedBy={describedBy} preview={preview} labelledBy={textId} classes={classes} />
+          <div id={textId} className={join(formClasses.consentText, classes.label)}>
             {field.text ? renderRichText(field.text, resolveLink) : field.label}
           </div>
         </div>
@@ -336,12 +350,12 @@ export function FormFieldView({ field, id, value, error = '', onChange = ignore,
       </div>
     )
   }
-  const input = <FieldInput field={named} id={inputId} value={value} error={error} onChange={onChange} describedBy={describedBy} preview={preview} />
+  const input = <FieldInput field={named} id={inputId} value={value} error={error} onChange={onChange} describedBy={describedBy} preview={preview} classes={classes} />
   if (field.blockType === 'radio') {
     return (
       <fieldset {...attributes} className={box(formClasses.radioGroup)}>
         {field.label ? (
-          <legend className={join(formClasses.legend, labelClass)}>
+          <legend className={join(classes.label ?? formClasses.legend, hiddenLabel)}>
             <LabelText field={field} />
           </legend>
         ) : null}
@@ -357,7 +371,7 @@ export function FormFieldView({ field, id, value, error = '', onChange = ignore,
       <div {...attributes} className={box(formClasses.field)}>
         <label className={formClasses.checkboxRow}>
           {input}
-          <span>{field.label}</span>
+          <span className={classes.label}>{field.label}</span>
         </label>
         {descriptionText}
         {errorText}
@@ -368,7 +382,7 @@ export function FormFieldView({ field, id, value, error = '', onChange = ignore,
   return (
     <div {...attributes} className={box(formClasses.field)}>
       {field.label ? (
-        <label htmlFor={inputId} className={join(formClasses.label, labelClass)}>
+        <label htmlFor={inputId} className={join(classes.label ?? formClasses.label, hiddenLabel)}>
           <LabelText field={field} />
         </label>
       ) : null}
@@ -389,10 +403,20 @@ function Spinner() {
   )
 }
 
-/** The form's submit button. */
-export function SubmitButton({ label, submitting = false, preview }: { label?: string | null; submitting?: boolean; preview?: boolean }) {
+/** The form's submit button. `className`: its classes (the Styles panel), else the default look. */
+export function SubmitButton({
+  label,
+  submitting = false,
+  preview,
+  className,
+}: {
+  label?: string | null
+  submitting?: boolean
+  preview?: boolean
+  className?: string
+}) {
   return (
-    <button type={preview ? 'button' : 'submit'} className={formClasses.submit} disabled={submitting} tabIndex={preview ? -1 : undefined}>
+    <button type={preview ? 'button' : 'submit'} className={className ?? formClasses.submit} disabled={submitting} tabIndex={preview ? -1 : undefined}>
       {submitting ? <Spinner /> : null}
       {submitting ? 'Sending…' : label || 'Submit'}
     </button>

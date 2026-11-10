@@ -1,8 +1,8 @@
-// Tailwind classes of the form block's inner elements. `formBlock.classes` in src/builder.ts lists
-// them, so the plugin adds them to the generated CSS (on save and in the canvas). Colors use the
-// theme tokens.
+// Tailwind classes of the form blocks' inner elements. The app's own CSS has them (Tailwind scans
+// this file). The classes people can change are the Form block's parts (`formPartClasses`): a new
+// Form block starts with them, so the Styles panel shows and edits them. Colors use the theme tokens.
 
-import type { FormFieldWidth } from 'payload-canvas/forms'
+import type { FormFieldWidth, FormPartClasses } from 'payload-canvas/forms'
 
 export const formClasses = {
   form: 'flex flex-col gap-5',
@@ -104,8 +104,14 @@ export const widthClasses: Record<FormFieldWidth, string> = {
   25: 'sm:w-[calc(25%-0.75rem)]',
 }
 
-/** Every class above, for `BlockDefinition.classes`. */
-export const formClassList: string[] = [
-  ...Object.values(formClasses).flatMap((value) => value.split(' ')),
-  ...Object.values(widthClasses).filter(Boolean),
-]
+/**
+ * The Form block's default part classes (payload-canvas `formBlocks({ partClassNames })`): every
+ * field inside uses them unless it sets its own. The default look of a form.
+ */
+export const formPartClasses: FormPartClasses = {
+  label: formClasses.label,
+  input: formClasses.input,
+  help: formClasses.hint,
+  error: formClasses.fieldError,
+  button: formClasses.submit,
+}
