@@ -293,7 +293,7 @@ export function Outline() {
           <div className="builder-editor__empty">
             <Icon name="layers" size={20} />
             <p>The page is empty.</p>
-            <p className="builder-editor__hint">Add blocks from the Blocks or Sections tab: drag them onto the canvas, or click one.</p>
+            <p className="builder-editor__hint">Add blocks from the Blocks or Sections tab: drag them onto the canvas or here, or click one.</p>
           </div>
         </div>
       ) : (

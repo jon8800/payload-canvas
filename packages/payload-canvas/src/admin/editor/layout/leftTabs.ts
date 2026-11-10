@@ -44,6 +44,16 @@ export function leftTabForDigit(digit: string): LeftTab | null {
 export const leftPanelId = (tab: LeftTab) => `builder-left-${tab}`
 
 /**
+ * After a click added blocks from the library: Layers opens with the new block selected and in view
+ * (as in Webflow). `focus` moves the focus to its row (the clicked item hides with its panel).
+ * Returns `added`.
+ */
+export function showAddedInLayers(runtime: Runtime, added: boolean, { focus = false }: { focus?: boolean } = {}): boolean {
+  if (added) selectLeftTab(runtime, 'layers', { focus })
+  return added
+}
+
+/**
  * Opens a tab and keeps the choice. `focus` moves the focus into the panel: the search field of
  * Blocks and Sections, the focusable row of Layers.
  */
