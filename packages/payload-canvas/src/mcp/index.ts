@@ -8,6 +8,7 @@
 // `overrideAccess: false`. Writes are commits to the document's live session, the same path as
 // the editor's own edits, so AI changes merge with people's edits as they happen.
 
+import { FORM_BLOCK, FORM_SLOT, FORM_SUBMIT_BLOCK } from '../forms/pageForms'
 import type { PayloadRequest, SanitizedCollectionConfig } from 'payload'
 import { z, type ZodTypeAny } from 'zod'
 
@@ -58,6 +59,8 @@ import { IMAGE_ASPECT_RATIOS } from '../ai/images/ratios'
 import { SECTION_REF_BLOCK } from '../blocks/builtins/sectionRef'
 import { classesConfigOf, loadClasses, mergeSiteClasses } from '../classes'
 import { classMcpTools } from '../classes/mcp'
+import { FORM_FIELDS_FIELD } from '../plugin/forms'
+import { formMcpTools } from './forms'
 import {
   BINDINGS_GUIDE,
   changeSummary,
@@ -120,6 +123,11 @@ export type BuilderMcpToolsOptions = {
    * `classes.slug` there.
    */
   classes?: { slug?: string } | false
+  /**
+   * The form tools (listForms, getForm, createForm, editFormFields, updateFormSettings) for the
+   * forms of `websiteBuilder({ forms })`. Set the same value as there: `true`, or `{ collection }`.
+   */
+  forms?: { collection?: string } | boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -344,17 +352,24 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
   const listable = listableCollections(options.collections, options.listCollections)
   // The same block list the plugin validates against (collection list: the collections with a url
   // and `listCollections`; the live saved section block, which the plugin adds when saved sections are on).
-  const blocks = prepareBlocks(options.blocks, listable, DEFAULT_SAVED_SECTIONS_SLUG)
+  const appBlocks = prepareBlocks(options.blocks, listable, DEFAULT_SAVED_SECTIONS_SLUG)
+  /**
+   * The block list of a request: the plugin's own (forms on pages completed: the Form block's
+   * settings and the field blocks of the forms collection), else the app's list.
+   */
+  const blocksOf = (req: PayloadRequest | undefined): BlockDefinition[] => (req?.payload?.config ? builderConfigOf(req.payload)?.blocks : undefined) ?? appBlocks
   // A section block without a className gets its type's default classes, as in the plugin.
   // Variants stay under their section (core/sections.ts); insertSection takes `variant`.
   checkSectionVariants(options.sections ?? [])
-  const sections = sectionsWithDefaultClassNames(options.sections ?? [], blocks)
+  const sections = sectionsWithDefaultClassNames(options.sections ?? [], appBlocks)
   const collections: Record<string, BuilderMcpCollection> = templatesSlug
     ? { ...options.collections, [templatesSlug]: { field: TEMPLATE_LAYOUT_FIELD } }
     : options.collections
   const slugs = Object.keys(collections)
   if (slugs.length === 0) throw new Error('[builderMcpTools] `collections` is empty.')
-  const fieldOf = (collection: string) => collections[collection]?.field ?? 'layout'
+  // Forms have their own tools; their builder field is the form-builder plugin's `fields` blocks field.
+  const formsSlug = options.forms ? ((options.forms === true ? undefined : options.forms.collection) ?? 'forms') : null
+  const fieldOf = (collection: string) => (collection === formsSlug ? FORM_FIELDS_FIELD : (collections[collection]?.field ?? 'layout'))
   const apiKeyCollection = options.apiKeyCollection ?? 'payload-mcp-api-keys'
   const keyNames = new Map<string, { name: string | null; at: number }>()
 
@@ -411,6 +426,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     id: string,
     ops: unknown[] | ((layout: Layout) => Operation[] | string),
   ): Promise<CommitResult> => {
+    const blocks = blocksOf(req)
     const runtime = liveRuntimeOf(req.payload)
     const drafts = collectionConfig(req, collection)?.versions?.drafts
     if (!(await runtime.canUpdate(req, collection, id))) {
@@ -520,12 +536,13 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       'Lists every block type you can use in page layouts: label, description, props, slots (which child types they accept), parts and an example, plus the site\'s own classes and design variables (named colors, sizes and fonts). Call it once before you build or edit a layout: its `guide` is the layout format (block keys, ids, positions, classes, motion presets, HTML attrs, canonical form) and `bindings` the binding and VISIBILITY format.',
       'For whole page parts (hero, features, pricing, call to action, footer), PREFER ready-made sections: listSections, then insertSection. Use single blocks for small additions and edits.',
       `Dynamic blocks: "${FIELD_BLOCK}" shows one field of the current document (templates), "${COLLECTION_LIST_BLOCK}" lists documents of a collection and repeats its "item" slot per document, "${REPEAT_BLOCK}" repeats its "item" slot per row of an array or hasMany field of the current document.`,
+      `Forms on pages (when the list has a "${FORM_BLOCK}" block): build a form right on the page. A "${FORM_BLOCK}" block in mode "build" holds its own field blocks (formText, formEmail, formTextarea, formSelect, formRadio, formCheckbox, …), one "${FORM_SUBMIT_BLOCK}" block and layout blocks in its "${FORM_SLOT}" slot. Field blocks and "${FORM_SUBMIT_BLOCK}" go only inside a Form block (at any depth). Each field's \`name\` is unique in its form. The form's settings (title, submitButtonLabel, confirmationType, confirmationMessage, redirect, emails, spamProtection) are props of the Form block. Publishing the page saves the form to the forms collection. Mode "saved" shows an existing form instead (\`form\`: its id).`,
     ].join('\n\n'),
     parameters: { collection: collectionArg },
     handler: async (_args, req) =>
       text({
         guide: LAYOUT_GUIDE,
-        blocks: blocks.map(describeBlock),
+        blocks: blocksOf(req).map(describeBlock),
         ...(await siteClassesOf(req)),
         ...(await variablesOf(req)),
         sections: sections.length,
@@ -543,7 +560,8 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     description:
       'Returns the JSON Schema (draft 2020-12) of one block type: its props, className, slots and motion (animations, under $defs.$motion), with nested child block schemas under $defs. Use it to write valid props.',
     parameters: { collection: collectionArg, type: z.string().min(1).describe('Block type from listBlocks.') },
-    handler: async (args) => {
+    handler: async (args, req) => {
+      const blocks = blocksOf(req)
       const def = blocks.find((b) => b.type === args.type)
       if (!def) return fail(`Unknown block type "${String(args.type)}". Known types: ${blocks.map((b) => b.type).join(', ')}.`)
       return text(blockJsonSchema(def, blocks))
@@ -565,6 +583,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       full: z.boolean().optional().describe('Include the full block JSON. Default false.'),
     },
     handler: async (args, req) => {
+      const blocks = blocksOf(req)
       const all = await allSections(req)
       const list = all.filter((s) => !args.category || s.category === args.category)
       return text({
@@ -613,6 +632,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
         .describe('Saved sections only. true: a copy that stays in sync with the saved section (default for components). false: plain blocks.'),
     },
     handler: async (args, req) => {
+      const blocks = blocksOf(req)
       const all = await allSections(req)
       const found = findSectionVersion(all, String(args.sectionId), typeof args.variant === 'string' ? args.variant : undefined)
       if (typeof found === 'string') return fail(found)
@@ -659,6 +679,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     ].join('\n\n'),
     parameters: { collection: collectionArg, id: idArg, locale: localeArg },
     handler: async (args, req) => {
+      const blocks = blocksOf(req)
       const collection = String(args.collection)
       const at = localeArgOf(req, collection, args.locale)
       if (typeof at === 'string') return fail(at)
@@ -761,6 +782,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       layout: z.unknown().optional().describe('A layout { version: 1, blocks: [...] }. Leave out to check the saved draft.'),
     },
     handler: async (args, req) => {
+      const blocks = blocksOf(req)
       let layout: unknown = args.layout
       if (typeof layout === 'string') {
         try {
@@ -814,6 +836,10 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     },
   }
 
+  /** The site's absolute origin, for links. */
+  const siteOf = (req: PayloadRequest) =>
+    (options.siteUrl || req.payload.config.serverURL || process.env.NEXT_PUBLIC_SERVER_URL || (req.url ? new URL(req.url).origin : '')).replace(/\/$/, '')
+
   const getPreviewUrl: BuilderMcpTool = {
     name: 'getPreviewUrl',
     routing: { kind: 'collection', action: 'read' },
@@ -828,12 +854,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       } catch (error) {
         return fail(errorMessage(error))
       }
-      const site = (
-        options.siteUrl ||
-        req.payload.config.serverURL ||
-        process.env.NEXT_PUBLIC_SERVER_URL ||
-        (req.url ? new URL(req.url).origin : '')
-      ).replace(/\/$/, '')
+      const site = siteOf(req)
       const absolute = (path: string | null | undefined) =>
         !path ? undefined : /^https?:\/\//.test(path) ? path : `${site}${path.startsWith('/') ? '' : '/'}${path}`
 
@@ -894,7 +915,10 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
 
   // Editable classes: listClasses, getClass, upsertClass, deleteClass.
   const classTools = options.classes === false ? [] : classMcpTools(options.classes)
-  const tools = [listBlocks, getBlockSchema, listSections, insertSection, getLayout, applyOperationsTool, validateLayoutTool, getPreviewUrl, generateImage, ...classTools]
+  const formTools = formsSlug
+    ? formMcpTools({ slug: formsSlug, apply, currentLayout, loadDraft, warnings: touchedWarnings, siteOf, text, fail })
+    : []
+  const tools = [listBlocks, getBlockSchema, listSections, insertSection, getLayout, applyOperationsTool, validateLayoutTool, getPreviewUrl, generateImage, ...classTools, ...formTools]
   if (!templatesSlug) return tools
 
   const listTemplates: BuilderMcpTool = {

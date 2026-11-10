@@ -12,6 +12,15 @@ export const LEFT_TABS: readonly { id: LeftTab; label: string; icon: IconName; d
   { id: 'sections', label: 'Sections', icon: 'section', digit: '3' },
 ]
 
+/**
+ * The tabs this editor offers: Sections only when there are sections to insert or a place to save
+ * them (the form builder has neither: `sections: false`).
+ */
+export function offeredLeftTabs<T extends { id: LeftTab }>(config: Pick<Runtime['config'], 'sections' | 'savedSections'>, tabs: readonly T[]): readonly T[] {
+  const sections = (config.sections?.length ?? 0) > 0 || Boolean(config.savedSections)
+  return sections ? tabs : tabs.filter((tab) => tab.id !== 'sections')
+}
+
 const STORAGE_KEY = 'payload-builder:left-tab'
 
 const isLeftTab = (value: unknown): value is LeftTab => LEFT_TABS.some((tab) => tab.id === value)
@@ -33,6 +42,16 @@ export function leftTabForDigit(digit: string): LeftTab | null {
 
 /** The DOM id of a tab's panel. */
 export const leftPanelId = (tab: LeftTab) => `builder-left-${tab}`
+
+/**
+ * After a click added blocks from the library: Layers opens with the new block selected and in view
+ * (as in Webflow). `focus` moves the focus to its row (the clicked item hides with its panel).
+ * Returns `added`.
+ */
+export function showAddedInLayers(runtime: Runtime, added: boolean, { focus = false }: { focus?: boolean } = {}): boolean {
+  if (added) selectLeftTab(runtime, 'layers', { focus })
+  return added
+}
 
 /**
  * Opens a tab and keeps the choice. `focus` moves the focus into the panel: the search field of

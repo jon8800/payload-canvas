@@ -1,12 +1,12 @@
 // What the canvas insert picker offers at a spot: the block types and sections that fit there
 // (slot `allow` / `disallow` / `max` rules), filtered by the search text. Pure: no DOM, no React.
 
-import { slotAcceptsAt, slotRoom } from '../../../core/blocks'
+import { getBlockDefinition, slotAcceptsAt, slotDefinitionAt, slotRoom } from '../../../core/blocks'
 import { sectionVersion, sectionVersions } from '../../../core/sections'
-import type { BlockDefinition, Layout, SectionDefinition } from '../../../core/types'
+import type { BlockDefinition, Layout, SectionDefinition, SlotDefinition } from '../../../core/types'
 
 export type PickerItem =
-  | { kind: 'block'; id: string; label: string; hint?: string; icon: string; type: string }
+  | { kind: 'block'; id: string; label: string; hint?: string; icon: string; type: string; template?: SlotDefinition['newBlock'] }
   | { kind: 'section'; id: string; label: string; hint?: string; icon: string; section: SectionDefinition }
 
 /** Block categories in library order. Others follow A–Z. */
@@ -36,7 +36,7 @@ const rank = (category: string | undefined) => {
  * each of its top-level blocks, with everything inside, may go into the slot, and the slot has room
  * for all of them (`max`). A section with variants is one item: it inserts the section's own
  * version (its root block remembers the section, so the canvas offers the other versions), and
- * its hint counts the versions.
+ * its hint counts the versions. A slot with a `newBlock` (a carousel's "Slide") lists it first.
  */
 export function pickerItems(args: {
   blocks: BlockDefinition[]
@@ -73,5 +73,12 @@ export function pickerItems(args: {
         section: sectionVersion(s) ?? s,
       }
     })
-  return [...blockItems, ...sectionItems]
+  // The slot's own new block (a carousel's "Slide") comes first.
+  const template = slotDefinitionAt(blocks, layout, parentId, slot)?.newBlock
+  const templateDef = template ? getBlockDefinition(blocks, template.type) : undefined
+  const own: PickerItem[] =
+    template && templateDef && slotAcceptsAt(blocks, layout, parentId, slot, template.type) && matchScore(query, template.label ?? templateDef.label, templateDef.label) !== null
+      ? [{ kind: 'block', id: `new:${slot}`, label: template.label ?? templateDef.label, hint: templateDef.label, icon: templateDef.icon ?? templateDef.type, type: template.type, template }]
+      : []
+  return [...own, ...blockItems, ...sectionItems]
 }

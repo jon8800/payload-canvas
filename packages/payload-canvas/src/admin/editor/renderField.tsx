@@ -20,7 +20,7 @@ import type { Block } from '../../core/types'
 import { ArrayField } from './fields/ArrayField'
 import { isStructuralChange } from './fields/arrayState'
 import { CheckedTextField, NumberField } from './fields/CheckedInputs'
-import { FieldSection, GroupField } from './fields/GroupField'
+import { FieldSection, FieldTabs, GroupField, PanelSection } from './fields/GroupField'
 import { JsonField } from './fields/JsonField'
 import { QueryFiltersField } from './fields/QueryFiltersField'
 import { ListWhereField } from './fields/ListWhereField'
@@ -28,6 +28,11 @@ import { ManyValuesField } from './fields/ManyValuesField'
 import { PointField } from './fields/PointField'
 import { RelatedField } from './fields/RelatedField'
 import { RichTextField } from './fields/RichTextField'
+import { FormFieldNameField } from './fields/FormFieldName'
+import { MergeTagsFrame } from './fields/MergeTags'
+import { FIELD_NAME_MARKER, FieldNameNote, FormBlockActions } from './fields/FormBlock'
+import { FORM_ACTIONS_MARKER, PANEL_SECTION_MARKER, PLAIN_GROUP_MARKER } from '../../forms/pageForms'
+import { MERGE_TAGS_MARKER } from '../../forms/fieldConfigs'
 import { SortField } from './fields/SortField'
 import { fieldMergeKey } from './fields/undoPath'
 import { asId, formatProblem, fromRelationshipInput, isFieldVisible, isRecord, toRelationshipInput, type FieldShape } from './fields/values'
@@ -81,8 +86,15 @@ function fieldDescription(field: Field): string | undefined {
   return text((field.admin as { description?: unknown } | undefined)?.description)
 }
 
+/** Words from an option value, for options whose label was a function (it does not reach the admin). */
+const valueWords = (value: string) => value.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').replace(/^./, (c) => c.toUpperCase())
+
 function toOptions(options: unknown[]): OptionObject[] {
-  return options.map((o) => (typeof o === 'string' ? { label: o, value: o } : (o as OptionObject)))
+  return options.map((o) => {
+    if (typeof o === 'string') return { label: o, value: o }
+    const option = o as OptionObject
+    return option.label === undefined || option.label === null ? { ...option, label: valueWords(String(option.value)) } : option
+  })
 }
 
 function asString(value: unknown): string {
@@ -124,6 +136,10 @@ export function RenderBlockField({ field, onChange, path, value, siblings, onSib
   switch (field.type) {
     case 'text':
     case 'email': {
+      // `admin.custom.builderFormField`: the name of another field of the same form (display conditions).
+      if (field.admin?.custom?.builderFormField) {
+        return <FormFieldNameField description={description} label={label} onChange={onChange} path={path} required={required} value={value} />
+      }
       if (field.type === 'text' && field.hasMany) {
         return <ManyValuesField description={description} kind="text" label={label} onChange={onChange} path={path} required={required} value={value} />
       }
@@ -362,7 +378,17 @@ export function RenderBlockField({ field, onChange, path, value, siblings, onSib
       return <RichTextField label={label} onChange={onChange} path={path} value={value} />
 
     case 'group':
-      return <GroupField fields={field.fields} label={label} description={description} onChange={onChange} path={path} value={value} />
+      return (
+        <GroupField
+          fields={field.fields}
+          label={label}
+          description={description}
+          plain={field.admin?.custom?.[PLAIN_GROUP_MARKER] === true}
+          onChange={onChange}
+          path={path}
+          value={value}
+        />
+      )
 
     case 'array':
       return (
@@ -400,8 +426,8 @@ type FieldsProps = {
 /**
  * Renders a list of fields against one object. Handles `admin.custom.builderCondition`, hidden
  * fields, and layout-only fields (row, collapsible, unnamed group, unnamed tabs) that share
- * the parent's data. Collapsibles, and unnamed tabs when there are several, get a small heading.
- * Named tabs render as groups.
+ * the parent's data. Collapsibles get a small heading; a tabs field with several tabs gets a tab
+ * strip (`FieldTabs`). Named tabs render as groups.
  */
 export function RenderBlockFields({ fields, data, path, onChange, scope = fields }: FieldsProps) {
   const record = isRecord(data) ? data : {}
@@ -428,14 +454,31 @@ export function RenderBlockFields({ fields, data, path, onChange, scope = fields
   }
 
   const out: ReactNode[] = []
+  // Indexes in `out` of settings panel sections: neighbours share one box (see the end).
+  const panelSections = new Set<number>()
   fields.forEach((field, index) => {
     if (!isFieldVisible(field as FieldShape, record, scope)) return
+    // `admin.custom.builderFormActions`: the Form block's "Edit form" and "Move into this page".
+    if (field.type === 'ui' && field.admin?.custom?.[FORM_ACTIONS_MARKER]) {
+      out.push(<FormBlockActions key={`ui-${index}`} path={`${path}.${field.name}`} />)
+      return
+    }
     if (field.type === 'ui' || field.type === 'join') return
 
     if (field.type === 'collapsible') {
       const shared = <RenderBlockFields fields={field.fields} data={record} path={path} onChange={onChange} scope={scope} />
       const title = text(field.label)
       const folded = field.admin?.initCollapsed === true
+      // A settings panel section (the Form block's General, Mail, …): the form builder's look.
+      if (title && field.admin?.custom?.[PANEL_SECTION_MARKER]) {
+        panelSections.add(out.length)
+        out.push(
+          <PanelSection key={`layout-${index}`} label={title} open={!folded}>
+            {shared}
+          </PanelSection>,
+        )
+        return
+      }
       out.push(
         title ? (
           <FieldSection key={`layout-${index}`} label={title} description={folded ? text(field.admin?.description) : undefined} collapsed={folded ? true : undefined}>
@@ -452,31 +495,27 @@ export function RenderBlockFields({ fields, data, path, onChange, scope = fields
       return
     }
     if (field.type === 'tabs') {
-      // Several tabs get their labels as headings; a single tab shows its fields as they are.
-      const headed = field.tabs.length > 1
-      field.tabs.forEach((tab, tabIndex) => {
-        const key = `tab-${index}-${tabIndex}`
+      // One tab shows its fields as they are; several get a tab strip.
+      const renderTab = (tabIndex: number, key: string): ReactNode => {
+        const tab = field.tabs[tabIndex]
         if ('name' in tab && tab.name) {
           const name = tab.name
           const tabAccess = accessOf(`${path}.${name}`)
-          if (!tabAccess.read) return
-          out.push(
+          if (!tabAccess.read) return null
+          return (
             <FieldAccessFrame key={key} locked={!tabAccess.update}>
-              <GroupField
-                fields={tab.fields}
-                label={text(tab.label) ?? name}
-                onChange={(value) => setField(name, value)}
-                path={`${path}.${name}`}
-                value={record[name]}
-              />
-            </FieldAccessFrame>,
+              <GroupField fields={tab.fields} label={text(tab.label) ?? name} onChange={(value) => setField(name, value)} path={`${path}.${name}`} value={record[name]} />
+            </FieldAccessFrame>
           )
-          return
         }
-        const shared = <RenderBlockFields fields={tab.fields} data={record} path={path} onChange={onChange} scope={scope} />
-        const title = headed ? text(tab.label) : undefined
-        out.push(title ? <FieldSection key={key} label={title}>{shared}</FieldSection> : <Fragment key={key}>{shared}</Fragment>)
-      })
+        return <RenderBlockFields key={key} fields={tab.fields} data={record} path={path} onChange={onChange} scope={scope} />
+      }
+      if (field.tabs.length === 1) {
+        out.push(renderTab(0, `tab-${index}-0`))
+        return
+      }
+      const labels = field.tabs.map((tab, tabIndex) => text(tab.label) ?? ('name' in tab && tab.name ? tab.name : `Tab ${tabIndex + 1}`))
+      out.push(<FieldTabs key={`tabs-${index}`} labels={labels} path={`${path}.tabs-${index}`} render={(tabIndex) => renderTab(tabIndex, `tab-${index}-${tabIndex}`)} />)
       return
     }
     if (!('name' in field) || !field.name) return
@@ -502,7 +541,19 @@ export function RenderBlockFields({ fields, data, path, onChange, scope = fields
           <LocaleFieldFrame path={fieldPath} name={name}>
             {/* The slot adds binding controls (templates, collection lists) around the normal input. */}
             <FieldSlot field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} label={fieldLabel(field)}>
-              <RenderBlockField field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} siblings={record} onSiblingsChange={setFields} />
+              {field.admin?.custom?.[FIELD_NAME_MARKER] ? (
+                // A form field's name: renaming it in a form with submissions shows a warning.
+                <FieldNameNote path={fieldPath} value={record[name]}>
+                  <RenderBlockField field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} siblings={record} onSiblingsChange={setFields} />
+                </FieldNameNote>
+              ) : field.admin?.custom?.[MERGE_TAGS_MARKER] ? (
+                // `admin.custom.builderMergeTags`: an "Insert field" menu with the form's merge tags.
+                <MergeTagsFrame value={record[name]} onChange={onFieldChange}>
+                  <RenderBlockField field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} siblings={record} onSiblingsChange={setFields} />
+                </MergeTagsFrame>
+              ) : (
+                <RenderBlockField field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} siblings={record} onSiblingsChange={setFields} />
+              )}
             </FieldSlot>
           </LocaleFieldFrame>
         </FieldAccessFrame>
@@ -512,7 +563,24 @@ export function RenderBlockFields({ fields, data, path, onChange, scope = fields
       </div>,
     )
   })
-  return <>{out}</>
+  if (panelSections.size === 0) return <>{out}</>
+  // One box per run of panel sections, so they touch: one border between rows, no gap.
+  const grouped: ReactNode[] = []
+  out.forEach((node, i) => {
+    if (!panelSections.has(i)) {
+      grouped.push(node)
+      return
+    }
+    if (panelSections.has(i - 1)) return
+    const run: ReactNode[] = []
+    for (let j = i; panelSections.has(j); j++) run.push(out[j])
+    grouped.push(
+      <div key={`panel-sections-${i}`} className="builder-panel-sections">
+        {run}
+      </div>,
+    )
+  })
+  return <>{grouped}</>
 }
 
 /** The inspector field path (`data-builder-field`) of the field around `node`, or null. */
@@ -521,6 +589,23 @@ const fieldAt = (node: EventTarget | null) =>
 
 /** Text inputs whose native undo the editor replaces with its own (see `onUndoKeys`). */
 const TEXT_INPUT = 'textarea, input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="url"], input[type="number"], input[type="tel"]'
+
+/**
+ * Ctrl+Z / Ctrl+Shift+Z (Cmd on a Mac) and Ctrl+Y in an inspector text input run the editor's undo
+ * and redo, not the browser's text undo. Put it on the element around the inputs (`onKeyDown`).
+ */
+export function undoKeysHandler(runtime: ReturnType<typeof useRuntime>) {
+  return (e: KeyboardEvent<HTMLDivElement>) => {
+    const mod = e.ctrlKey || e.metaKey
+    if (!mod || e.altKey || !(e.target instanceof Element) || !e.target.matches(TEXT_INPUT)) return
+    const key = e.key.toLowerCase()
+    const action = key === 'z' ? (e.shiftKey ? 'redo' : 'undo') : key === 'y' && !e.shiftKey ? 'redo' : null
+    if (!action) return
+    e.preventDefault()
+    if (action === 'undo') runtime.store.undo()
+    else runtime.store.redo()
+  }
+}
 
 /**
  * The Content tab of the block inspector: every field of the selected block, with conditions.
@@ -577,16 +662,7 @@ export function BlockContentFields({ block }: { readonly block: Block }) {
     runtime.store.endMerge()
     if (!(e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget))) field.set(null)
   }
-  const onUndoKeys = (e: KeyboardEvent<HTMLDivElement>) => {
-    const mod = e.ctrlKey || e.metaKey
-    if (!mod || e.altKey || !(e.target instanceof Element) || !e.target.matches(TEXT_INPUT)) return
-    const key = e.key.toLowerCase()
-    const action = key === 'z' ? (e.shiftKey ? 'redo' : 'undo') : key === 'y' && !e.shiftKey ? 'redo' : null
-    if (!action) return
-    e.preventDefault()
-    if (action === 'undo') runtime.store.undo()
-    else runtime.store.redo()
-  }
+  const onUndoKeys = undoKeysHandler(runtime)
 
   const fieldList = (
     <FieldProblemsProvider block={block}>

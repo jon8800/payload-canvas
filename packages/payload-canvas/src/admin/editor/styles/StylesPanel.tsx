@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { bareClass, classTokens, mergeSiteClasses, type BuilderClass } from '../../../classes/shared'
-import { STYLE_PROPERTIES } from '../../../core'
+import { partClassNameOf, STYLE_PROPERTIES } from '../../../core'
 import type { Block, StyleTokens } from '../../../core/types'
 import { ClassManager } from '../classes/ClassManager'
 import { useRuntime } from '../runtime'
@@ -55,7 +55,9 @@ export function StylesPanel({ block, part = null }: { block: Block; part?: strin
   const frame = useValue(runtime.frame)
   const widths = useMemo(() => breakpointWidths(tokens), [tokens])
   const canvasBreakpoint = frame.width > 0 ? breakpointAt(widths, frame.width) : 'base'
-  const blockClassName = (part ? block.partClassName?.[part] : block.className) ?? ''
+  // A part without classes of its own shows the classes it inherits (a field's input: its form's inputs).
+  const inherited = useEditor(runtime.store, (s) => (part && !block.partClassName?.[part] ? partClassNameOf(s.layout, block.id, part, runtime.config.blocks) : ''))
+  const blockClassName = (part ? block.partClassName?.[part] || inherited : block.className) ?? ''
   const own = useMemo(() => classesOn(blockClassName, classList), [blockClassName, classList])
   // The class the controls edit: only one this block (or part) uses.
   const editing = targetId === null ? null : (own.find((c) => String(c.id) === String(targetId)) ?? null)

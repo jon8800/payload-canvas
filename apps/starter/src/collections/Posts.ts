@@ -15,7 +15,8 @@ export const Posts: CollectionConfig = {
     update: authenticated,
   },
   admin: {
-    defaultColumns: ['title', 'slug', '_status', 'updatedAt'],
+    // The Featured Image column shows the image as a thumbnail (styled in src/admin/look/admin.scss).
+    defaultColumns: ['title', 'featuredImage', 'categories', '_status', 'publishedAt', 'updatedAt'],
     useAsTitle: 'title',
     livePreview: {
       url: ({ data, req }) =>

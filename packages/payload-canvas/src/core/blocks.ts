@@ -212,6 +212,34 @@ export function withInlineBlocks(blocks: BlockDefinition[]): BlockDefinition[] {
   })
 }
 
+/**
+ * The layout with `BlockDefinition.upgrade` run on every block (slots too, children first). The
+ * same layout when no block changes, or when no definition has an upgrade.
+ */
+export function upgradeLayout(layout: Layout, blocks: readonly BlockDefinition[]): Layout {
+  const upgrades = new Map(blocks.flatMap((def) => (def.upgrade ? [[def.type, def.upgrade] as const] : [])))
+  if (upgrades.size === 0) return layout
+  const visitList = (list: Block[]): Block[] => {
+    let changed = false
+    const out = list.map((block) => {
+      const next = visit(block)
+      if (next !== block) changed = true
+      return next
+    })
+    return changed ? out : list
+  }
+  const visit = (block: Block): Block => {
+    let next = block
+    if (block.slots) {
+      const slots = Object.fromEntries(Object.entries(block.slots).map(([name, children]) => [name, visitList(children)]))
+      if (Object.keys(slots).some((name) => slots[name] !== block.slots?.[name])) next = { ...block, slots }
+    }
+    return upgrades.get(block.type)?.(next) ?? next
+  }
+  const list = visitList(layout.blocks)
+  return list === layout.blocks ? layout : { ...layout, blocks: list }
+}
+
 export function getBlockDefinition(blocks: readonly BlockDefinition[], type: string): BlockDefinition | undefined {
   return blocks.find((b) => b.type === type)
 }
@@ -233,13 +261,60 @@ function subtreeTypes(block: Block, out = new Set<string>()): Set<string> {
   return out
 }
 
+/** "Email can only go inside Form", or "… inside Form or Survey". */
+function ancestorsMessage(blocks: readonly BlockDefinition[], type: string): string {
+  const label = (t: string) => getBlockDefinition(blocks, t)?.label ?? t
+  const ancestors = getBlockDefinition(blocks, type)?.ancestors ?? []
+  return `${label(type)} can only go inside ${ancestors.map(label).join(' or ')}`
+}
+
+/**
+ * Why a block (a type, or a whole block with its children) cannot sit below blocks of the types
+ * `above` (outermost first; empty for the root list) by the `ancestors` rules of its types, or
+ * `null`. Inside the placed subtree, a block's own ancestors in the subtree count too.
+ */
+export function ancestorsError(blocks: readonly BlockDefinition[], block: string | Block, above: readonly string[]): string | null {
+  const rootType = typeof block === 'string' ? block : block.type
+  const label = (t: string) => getBlockDefinition(blocks, t)?.label ?? t
+  const visit = (current: string | Block, path: readonly string[]): string | null => {
+    const type = typeof current === 'string' ? current : current.type
+    const rule = getBlockDefinition(blocks, type)?.ancestors
+    if (rule && !rule.some((t) => path.includes(t))) {
+      return type === rootType && current === block ? ancestorsMessage(blocks, type) : `${label(rootType)} contains ${ancestorsMessage(blocks, type).replace(' can only', ', which can only')}`
+    }
+    if (typeof current === 'string') return null
+    const inner = [...path, type]
+    for (const children of Object.values(current.slots ?? {})) {
+      for (const child of children) {
+        const error = visit(child, inner)
+        if (error) return error
+      }
+    }
+    return null
+  }
+  return visit(block, above)
+}
+
+/** The types of `parentId` and its ancestors, outermost first. Empty for the root list. */
+function typesAbove(index: Map<string, IndexedBlock>, parentId: string | null): string[] {
+  const out: string[] = []
+  for (let id = parentId; id !== null; ) {
+    const entry = index.get(id)
+    if (!entry) break
+    out.unshift(entry.block.type)
+    id = entry.parentId
+  }
+  return out
+}
+
 /**
  * Why `block` (a type, or a whole block with its children) cannot go into `slot` of `parentId`,
  * or `null` when it can. Checks the direct slot's `allow` and `disallow`, and the `disallow` of
  * every ancestor slot up to the root, against every type in the placed subtree, the placed
- * block's own `parents` rule, and the direct slot's `max` (a block already in that slot, being
- * moved within it, does not count as one more). The root list accepts every type without a `parents` rule. The
- * message is readable, e.g. `Button cannot go inside Link`.
+ * block's own `parents` rule, the `ancestors` rules of every type in the subtree, and the direct
+ * slot's `max` (a block already in that slot, being moved within it, does not count as one more).
+ * The root list accepts every type without a `parents` or `ancestors` rule. The message is
+ * readable, e.g. `Button cannot go inside Link`.
  */
 export function placementError(
   blocks: readonly BlockDefinition[],
@@ -250,7 +325,7 @@ export function placementError(
   index: Map<string, IndexedBlock> = indexLayout(layout),
 ): string | null {
   const rootType = typeof block === 'string' ? block : block.type
-  if (parentId === null) return fitsParent(blocks, rootType, null) ? null : parentsMessage(blocks, rootType)
+  if (parentId === null) return fitsParent(blocks, rootType, null) ? ancestorsError(blocks, block, []) : parentsMessage(blocks, rootType)
   const types = typeof block === 'string' ? new Set([block]) : subtreeTypes(block)
   const label = (type: string) => getBlockDefinition(blocks, type)?.label ?? type
   const skip = typeof block === 'string' ? new Set<string>() : new Set(subtreeIds(block))
@@ -290,7 +365,7 @@ export function placementError(
     slotName = owner.slot
     ownerId = owner.parentId
   }
-  return null
+  return ancestorsError(blocks, block, typesAbove(index, parentId))
 }
 
 /** The slot's name for people: its `label`, else its name. */
@@ -320,11 +395,22 @@ export function slotFullError(blocks: readonly BlockDefinition[], owner: Block, 
  * a slot without a limit, or an unknown parent.
  */
 export function slotRoom(blocks: readonly BlockDefinition[], layout: Layout, parentId: string | null, slot: string): number {
-  if (parentId === null) return Infinity
+  const max = slotDefinitionAt(blocks, layout, parentId, slot)?.max
+  if (typeof max !== 'number') return Infinity
+  const owner = parentId === null ? null : indexLayout(layout).get(parentId)?.block
+  return Math.max(0, max - (owner?.slots?.[slot]?.length ?? 0))
+}
+
+/** The definition of `slot` of block `parentId`. Undefined for the root list and undeclared slots. */
+export function slotDefinitionAt(
+  blocks: readonly BlockDefinition[],
+  layout: Layout,
+  parentId: string | null,
+  slot: string,
+): SlotDefinition | undefined {
+  if (parentId === null) return undefined
   const owner = indexLayout(layout).get(parentId)?.block
-  const max = owner ? getBlockDefinition(blocks, owner.type)?.slots?.[slot]?.max : undefined
-  if (!owner || typeof max !== 'number') return Infinity
-  return Math.max(0, max - (owner.slots?.[slot]?.length ?? 0))
+  return owner ? getBlockDefinition(blocks, owner.type)?.slots?.[slot] : undefined
 }
 
 /** True when `block` (a type or a whole block) may go into `slot` of `parentId`. See `placementError`. */

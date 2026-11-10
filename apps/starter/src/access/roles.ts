@@ -1,4 +1,4 @@
-import type { FieldAccess } from 'payload'
+import type { Access, FieldAccess } from 'payload'
 
 /** The starter's two roles. Editors get the builder's content mode: text, images and links only. */
 export const ROLES = [
@@ -16,3 +16,6 @@ export function isDesigner(user: unknown): boolean {
 
 /** Only admins may give or change a role. */
 export const rolesAccess: FieldAccess = ({ req }) => isDesigner(req.user)
+
+/** Collection access for admins only (users without a role count as admins, see `isDesigner`). */
+export const adminOnly: Access = ({ req }) => isDesigner(req.user)

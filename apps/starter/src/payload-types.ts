@@ -75,9 +75,13 @@ export interface Config {
     categories: Category;
     tags: Tag;
     'template-parts': TemplatePart;
+    'not-found-log': NotFoundLog;
+    'form-files': FormFile;
     redirects: Redirect;
     forms: Form;
     'form-submissions': FormSubmission;
+    workflows: Workflow;
+    reviews: Review;
     exports: Export;
     imports: Import;
     'payload-mcp-api-keys': PayloadMcpApiKey;
@@ -87,9 +91,9 @@ export interface Config {
     'builder-sections': BuilderSection;
     'builder-classes': BuilderClass;
     'builder-comments': BuilderComment;
+    'reference-index': ReferenceIndex;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
-    'payload-folders': FolderInterface;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
     'payload-migrations': PayloadMigration;
@@ -102,6 +106,16 @@ export interface Config {
       usedInTemplateParts: 'template-parts';
       usedInBuilderTemplates: 'builder-templates';
       usedInBuilderSections: 'builder-sections';
+      indexedUses: 'reference-index';
+    };
+    'form-files': {
+      indexedUses: 'reference-index';
+    };
+    exports: {
+      indexedUses: 'reference-index';
+    };
+    imports: {
+      indexedUses: 'reference-index';
     };
     'builder-sections': {
       usedInPages: 'pages';
@@ -109,9 +123,6 @@ export interface Config {
       usedInTemplateParts: 'template-parts';
       usedInBuilderTemplates: 'builder-templates';
       usedInBuilderSections: 'builder-sections';
-    };
-    'payload-folders': {
-      documentsAndFolders: 'payload-folders' | 'media';
     };
   };
   collectionsSelect: {
@@ -122,9 +133,13 @@ export interface Config {
     categories: CategoriesSelect<false> | CategoriesSelect<true>;
     tags: TagsSelect<false> | TagsSelect<true>;
     'template-parts': TemplatePartsSelect<false> | TemplatePartsSelect<true>;
+    'not-found-log': NotFoundLogSelect<false> | NotFoundLogSelect<true>;
+    'form-files': FormFilesSelect<false> | FormFilesSelect<true>;
     redirects: RedirectsSelect<false> | RedirectsSelect<true>;
     forms: FormsSelect<false> | FormsSelect<true>;
     'form-submissions': FormSubmissionsSelect<false> | FormSubmissionsSelect<true>;
+    workflows: WorkflowsSelect<false> | WorkflowsSelect<true>;
+    reviews: ReviewsSelect<false> | ReviewsSelect<true>;
     exports: ExportsSelect<false> | ExportsSelect<true>;
     imports: ImportsSelect<false> | ImportsSelect<true>;
     'payload-mcp-api-keys': PayloadMcpApiKeysSelect<false> | PayloadMcpApiKeysSelect<true>;
@@ -134,9 +149,9 @@ export interface Config {
     'builder-sections': BuilderSectionsSelect<false> | BuilderSectionsSelect<true>;
     'builder-classes': BuilderClassesSelect<false> | BuilderClassesSelect<true>;
     'builder-comments': BuilderCommentsSelect<false> | BuilderCommentsSelect<true>;
+    'reference-index': ReferenceIndexSelect<false> | ReferenceIndexSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
-    'payload-folders': PayloadFoldersSelect<false> | PayloadFoldersSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
     'payload-migrations': PayloadMigrationsSelect<false> | PayloadMigrationsSelect<true>;
@@ -148,15 +163,19 @@ export interface Config {
   fallbackLocale: null;
   globals: {
     'site-settings': SiteSetting;
+    'review-settings': ReviewSetting;
     'theme-settings': ThemeSetting;
     'builder-classes-sheet': BuilderClassesSheet;
     'builder-ai-settings': BuilderAiSetting;
+    'payload-jobs-stats': PayloadJobsStat;
   };
   globalsSelect: {
     'site-settings': SiteSettingsSelect<false> | SiteSettingsSelect<true>;
+    'review-settings': ReviewSettingsSelect<false> | ReviewSettingsSelect<true>;
     'theme-settings': ThemeSettingsSelect<false> | ThemeSettingsSelect<true>;
     'builder-classes-sheet': BuilderClassesSheetSelect<false> | BuilderClassesSheetSelect<true>;
     'builder-ai-settings': BuilderAiSettingsSelect<false> | BuilderAiSettingsSelect<true>;
+    'payload-jobs-stats': PayloadJobsStatsSelect<false> | PayloadJobsStatsSelect<true>;
   };
   locale: null;
   widgets: {
@@ -167,11 +186,21 @@ export interface Config {
     'site-checks': SiteChecksWidget;
     scheduled: ScheduledWidget;
     analytics: AnalyticsWidget;
+    'open-comments': OpenCommentsWidget;
+    'unused-media': UnusedMediaWidget;
+    'broken-links': BrokenLinksWidget;
     collections: CollectionsWidget;
   };
   user: User | PayloadMcpApiKey;
   jobs: {
     tasks: {
+      sendEmail: TaskSendEmail;
+      createDocument: TaskCreateDocument;
+      updateDocument: TaskUpdateDocument;
+      callWebhook: TaskCallWebhook;
+      revalidatePath: TaskRevalidatePath;
+      payloadWorkflowsSchedule: TaskPayloadWorkflowsSchedule;
+      'reviews-sync': TaskReviewsSync;
       createCollectionExport: TaskCreateCollectionExport;
       createCollectionImport: TaskCreateCollectionImport;
       schedulePublish: TaskSchedulePublish;
@@ -180,7 +209,9 @@ export interface Config {
         output: unknown;
       };
     };
-    workflows: unknown;
+    workflows: {
+      payloadWorkflowsRun: WorkflowPayloadWorkflowsRun;
+    };
   };
 }
 export interface UserAuthOperations {
@@ -297,9 +328,13 @@ export interface Media {
     hasNextPage?: boolean;
     totalDocs?: number;
   };
-  folder?: (number | null) | FolderInterface;
   updatedAt: string;
   createdAt: string;
+  indexedUses?: {
+    docs?: (number | ReferenceIndex)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
   url?: string | null;
   thumbnailURL?: string | null;
   filename?: string | null;
@@ -444,6 +479,10 @@ export interface Page {
             value: number | BuilderSection;
           }
         | {
+            relationTo: 'form-files';
+            value: number | FormFile;
+          }
+        | {
             relationTo: 'exports';
             value: number | Export;
           }
@@ -559,6 +598,10 @@ export interface Post {
         | {
             relationTo: 'builder-sections';
             value: number | BuilderSection;
+          }
+        | {
+            relationTo: 'form-files';
+            value: number | FormFile;
           }
         | {
             relationTo: 'exports';
@@ -705,6 +748,10 @@ export interface BuilderTemplate {
             value: number | BuilderSection;
           }
         | {
+            relationTo: 'form-files';
+            value: number | FormFile;
+          }
+        | {
             relationTo: 'exports';
             value: number | Export;
           }
@@ -730,9 +777,43 @@ export interface Form {
         | {
             name: string;
             label?: string | null;
+            /**
+             * Help text under the field, for example what to write or why you ask.
+             */
+            description?: string | null;
             width?: number | null;
             required?: boolean | null;
             defaultValue?: boolean | null;
+            cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
             id?: string | null;
             blockName?: string | null;
             blockType: 'checkbox';
@@ -740,8 +821,48 @@ export interface Form {
         | {
             name: string;
             label?: string | null;
+            /**
+             * Help text under the field, for example what to write or why you ask.
+             */
+            description?: string | null;
             width?: number | null;
             required?: boolean | null;
+            /**
+             * Grey text inside the empty field.
+             */
+            placeholder?: string | null;
+            defaultValue?: string | null;
+            labelVisibility?: ('visible' | 'hidden') | null;
+            cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
             id?: string | null;
             blockName?: string | null;
             blockType: 'country';
@@ -749,8 +870,48 @@ export interface Form {
         | {
             name: string;
             label?: string | null;
+            /**
+             * Help text under the field, for example what to write or why you ask.
+             */
+            description?: string | null;
             width?: number | null;
             required?: boolean | null;
+            /**
+             * Grey text inside the empty field.
+             */
+            placeholder?: string | null;
+            defaultValue?: string | null;
+            labelVisibility?: ('visible' | 'hidden') | null;
+            cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
             id?: string | null;
             blockName?: string | null;
             blockType: 'email';
@@ -771,6 +932,36 @@ export interface Form {
               };
               [k: string]: unknown;
             } | null;
+            cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
             id?: string | null;
             blockName?: string | null;
             blockType: 'message';
@@ -778,9 +969,48 @@ export interface Form {
         | {
             name: string;
             label?: string | null;
+            /**
+             * Help text under the field, for example what to write or why you ask.
+             */
+            description?: string | null;
             width?: number | null;
             defaultValue?: number | null;
             required?: boolean | null;
+            /**
+             * Grey text inside the empty field.
+             */
+            placeholder?: string | null;
+            labelVisibility?: ('visible' | 'hidden') | null;
+            cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
             id?: string | null;
             blockName?: string | null;
             blockType: 'number';
@@ -788,6 +1018,10 @@ export interface Form {
         | {
             name: string;
             label?: string | null;
+            /**
+             * Help text under the field, for example what to write or why you ask.
+             */
+            description?: string | null;
             width?: number | null;
             defaultValue?: string | null;
             placeholder?: string | null;
@@ -799,6 +1033,37 @@ export interface Form {
                 }[]
               | null;
             required?: boolean | null;
+            labelVisibility?: ('visible' | 'hidden') | null;
+            cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
             id?: string | null;
             blockName?: string | null;
             blockType: 'select';
@@ -806,8 +1071,48 @@ export interface Form {
         | {
             name: string;
             label?: string | null;
+            /**
+             * Help text under the field, for example what to write or why you ask.
+             */
+            description?: string | null;
             width?: number | null;
             required?: boolean | null;
+            /**
+             * Grey text inside the empty field.
+             */
+            placeholder?: string | null;
+            defaultValue?: string | null;
+            labelVisibility?: ('visible' | 'hidden') | null;
+            cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
             id?: string | null;
             blockName?: string | null;
             blockType: 'state';
@@ -815,9 +1120,48 @@ export interface Form {
         | {
             name: string;
             label?: string | null;
+            /**
+             * Help text under the field, for example what to write or why you ask.
+             */
+            description?: string | null;
             width?: number | null;
             defaultValue?: string | null;
             required?: boolean | null;
+            /**
+             * Grey text inside the empty field.
+             */
+            placeholder?: string | null;
+            labelVisibility?: ('visible' | 'hidden') | null;
+            cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
             id?: string | null;
             blockName?: string | null;
             blockType: 'text';
@@ -825,12 +1169,414 @@ export interface Form {
         | {
             name: string;
             label?: string | null;
+            /**
+             * Help text under the field, for example what to write or why you ask.
+             */
+            description?: string | null;
             width?: number | null;
             defaultValue?: string | null;
             required?: boolean | null;
+            /**
+             * Grey text inside the empty field.
+             */
+            placeholder?: string | null;
+            labelVisibility?: ('visible' | 'hidden') | null;
+            cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
             id?: string | null;
             blockName?: string | null;
             blockType: 'textarea';
+          }
+        | {
+            name: string;
+            label?: string | null;
+            /**
+             * Help text under the field, for example what to write or why you ask.
+             */
+            description?: string | null;
+            width?: number | null;
+            defaultValue?: string | null;
+            options?:
+              | {
+                  label: string;
+                  value: string;
+                  id?: string | null;
+                }[]
+              | null;
+            required?: boolean | null;
+            labelVisibility?: ('visible' | 'hidden') | null;
+            /**
+             * List: one option per line. Inline: on one line. Buttons: joined buttons. Cards: a box per option.
+             */
+            display?: ('list' | 'inline' | 'buttons' | 'cards') | null;
+            cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'radio';
+          }
+        | {
+            name: string;
+            label?: string | null;
+            /**
+             * Help text under the field, for example what to write or why you ask.
+             */
+            description?: string | null;
+            width?: number | null;
+            required?: boolean | null;
+            defaultValue?: string | null;
+            labelVisibility?: ('visible' | 'hidden') | null;
+            cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'date';
+          }
+        | {
+            /**
+             * Lowercase, no spaces. Emails show the answer with {{name}}.
+             */
+            name: string;
+            label?: string | null;
+            /**
+             * Help text under the field, for example what to write or why you ask.
+             */
+            description?: string | null;
+            width?: number | null;
+            defaultValue?: string | null;
+            placeholder?: string | null;
+            required?: boolean | null;
+            labelVisibility?: ('visible' | 'hidden') | null;
+            cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'phone';
+          }
+        | {
+            /**
+             * Lowercase, no spaces. Emails show the answer with {{name}}.
+             */
+            name: string;
+            label?: string | null;
+            /**
+             * Help text under the field, for example what to write or why you ask.
+             */
+            description?: string | null;
+            width?: number | null;
+            defaultValue?: string | null;
+            placeholder?: string | null;
+            required?: boolean | null;
+            labelVisibility?: ('visible' | 'hidden') | null;
+            cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'url';
+          }
+        | {
+            /**
+             * Lowercase, no spaces. Emails show the answer with {{name}}.
+             */
+            name: string;
+            /**
+             * For emails and submissions only. Visitors do not see it.
+             */
+            label?: string | null;
+            /**
+             * Sent with every answer.
+             */
+            defaultValue?: string | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'hidden';
+          }
+        | {
+            /**
+             * Lowercase, no spaces. Emails show the answer with {{name}}.
+             */
+            name: string;
+            /**
+             * A short name for emails and submissions.
+             */
+            label?: string | null;
+            /**
+             * Help text under the field, for example what to write or why you ask.
+             */
+            description?: string | null;
+            /**
+             * The text next to the box. Select words and add a link, for example to the privacy policy.
+             */
+            text?: {
+              root: {
+                type: string;
+                children: {
+                  type: any;
+                  version: number;
+                  [k: string]: unknown;
+                }[];
+                direction: ('ltr' | 'rtl') | null;
+                format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+                indent: number;
+                version: number;
+              };
+              [k: string]: unknown;
+            } | null;
+            width?: number | null;
+            required?: boolean | null;
+            cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'consent';
+          }
+        | {
+            /**
+             * Lowercase, no spaces. Emails show the answer with {{name}}.
+             */
+            name: string;
+            label?: string | null;
+            /**
+             * Help text under the field, for example what to write or why you ask.
+             */
+            description?: string | null;
+            width?: number | null;
+            required?: boolean | null;
+            /**
+             * File types or endings, separated by commas, for example "image/*, application/pdf, .docx". Empty: images, PDF, office documents, text and CSV. HTML, SVG, scripts and XML are never taken.
+             */
+            accept?: string | null;
+            /**
+             * For each file. At most 10 MB.
+             */
+            maxSize?: number | null;
+            multiple?: boolean | null;
+            /**
+             * Empty: 5. At most 20.
+             */
+            maxFiles?: number | null;
+            labelVisibility?: ('visible' | 'hidden') | null;
+            cssClass?: string | null;
+            partClasses?:
+              | {
+                  [k: string]: unknown;
+                }
+              | unknown[]
+              | string
+              | number
+              | boolean
+              | null;
+            /**
+             * Show this field only when other fields of the form have some values. Without rules it always shows.
+             */
+            conditions?: {
+              match?: ('all' | 'any') | null;
+              rules?:
+                | {
+                    /**
+                     * The name of another field of this form.
+                     */
+                    field?: string | null;
+                    operator?: ('equals' | 'notEquals' | 'contains' | 'isEmpty' | 'isNotEmpty') | null;
+                    /**
+                     * For a checkbox: "true" when ticked, "false" when not.
+                     */
+                    value?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+            };
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'file';
           }
       )[]
     | null;
@@ -861,12 +1607,23 @@ export interface Form {
   };
   emails?:
     | {
+        /**
+         * Addresses separated by commas. {{email}} sends to the visitor. Type {{name}} for a field’s answer, or use Insert field.
+         */
         emailTo?: string | null;
+        fromName?: string | null;
+        /**
+         * Empty: the site’s address.
+         */
+        emailFrom?: string | null;
+        replyTo?: string | null;
         cc?: string | null;
         bcc?: string | null;
-        replyTo?: string | null;
-        emailFrom?: string | null;
         subject: string;
+        bodyType?: ('richText' | 'html') | null;
+        /**
+         * Type {{name}} for a field’s answer, or use Insert field. {{*}} adds every answer as a table.
+         */
         message?: {
           root: {
             type: string;
@@ -882,9 +1639,71 @@ export interface Form {
           };
           [k: string]: unknown;
         } | null;
+        /**
+         * Your own HTML. Type {{name}} for a field’s answer, or use Insert field. {{*}} adds every answer as a table. Answers are escaped.
+         */
+        html?: string | null;
         id?: string | null;
       }[]
     | null;
+  /**
+   * Checks that run on the server for every submission. Blocked submissions are not stored.
+   */
+  spamProtection?: {
+    /**
+     * A hidden input that people never see. Bots that fill it in are blocked.
+     */
+    honeypot?: boolean | null;
+    /**
+     * Submissions sent faster than this after the form shows are blocked. 0 turns it off.
+     */
+    minFillSeconds?: number | null;
+    /**
+     * Shows a Turnstile check. Needs TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY on the server; without them it stays off.
+     */
+    turnstile?: boolean | null;
+    /**
+     * At most this many submissions per visitor (IP address) in the time window.
+     */
+    rateLimit?: {
+      /**
+       * 0 turns the limit off.
+       */
+      max?: number | null;
+      windowMinutes?: number | null;
+    };
+    turnstileSiteKey?: string | null;
+  };
+  source?: {
+    collection?: string | null;
+    document?: string | null;
+    block?: string | null;
+    hash?: string | null;
+  };
+  fieldsBuilder?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  fieldsRichText?: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  } | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -972,6 +1791,10 @@ export interface BuilderSection {
             value: number | BuilderSection;
           }
         | {
+            relationTo: 'form-files';
+            value: number | FormFile;
+          }
+        | {
             relationTo: 'exports';
             value: number | Export;
           }
@@ -1010,6 +1833,54 @@ export interface BuilderSection {
   createdAt: string;
 }
 /**
+ * Files visitors sent with a form. Only signed-in users can open them.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "form-files".
+ */
+export interface FormFile {
+  id: number;
+  alt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+  indexedUses?: {
+    docs?: (number | ReferenceIndex)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
+  url?: string | null;
+  thumbnailURL?: string | null;
+  filename?: string | null;
+  mimeType?: string | null;
+  filesize?: number | null;
+  width?: number | null;
+  height?: number | null;
+  focalX?: number | null;
+  focalY?: number | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "reference-index".
+ */
+export interface ReferenceIndex {
+  id: number;
+  source: string;
+  sourceCollection?: string | null;
+  sourceId?: string | null;
+  sourceTitle?: string | null;
+  relationTo: string;
+  value: string;
+  published?: boolean | null;
+  latest?: boolean | null;
+  layout?: boolean | null;
+  problem?: string | null;
+  targetTitle?: string | null;
+  mediaUpload?: (number | null) | Media;
+  formFilesUpload?: (number | null) | FormFile;
+  exportsUpload?: (number | null) | Export;
+  importsUpload?: (number | null) | Import;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "exports".
  */
@@ -1036,6 +1907,11 @@ export interface Export {
     | null;
   updatedAt: string;
   createdAt: string;
+  indexedUses?: {
+    docs?: (number | ReferenceIndex)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
   url?: string | null;
   thumbnailURL?: string | null;
   filename?: string | null;
@@ -1073,6 +1949,11 @@ export interface Import {
   };
   updatedAt: string;
   createdAt: string;
+  indexedUses?: {
+    docs?: (number | ReferenceIndex)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
   url?: string | null;
   thumbnailURL?: string | null;
   filename?: string | null;
@@ -1155,6 +2036,10 @@ export interface TemplatePart {
             value: number | BuilderSection;
           }
         | {
+            relationTo: 'form-files';
+            value: number | FormFile;
+          }
+        | {
             relationTo: 'exports';
             value: number | Export;
           }
@@ -1170,28 +2055,17 @@ export interface TemplatePart {
   _status?: ('draft' | 'published') | null;
 }
 /**
+ * Addresses visitors opened that do not exist. Add a redirect for the ones that matter, then delete them here.
+ *
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "payload-folders".
+ * via the `definition` "not-found-log".
  */
-export interface FolderInterface {
+export interface NotFoundLog {
   id: number;
-  name: string;
-  folder?: (number | null) | FolderInterface;
-  documentsAndFolders?: {
-    docs?: (
-      | {
-          relationTo?: 'payload-folders';
-          value: number | FolderInterface;
-        }
-      | {
-          relationTo?: 'media';
-          value: number | Media;
-        }
-    )[];
-    hasNextPage?: boolean;
-    totalDocs?: number;
-  };
-  folderType?: 'media'[] | null;
+  path: string;
+  hits: number;
+  lastSeen?: string | null;
+  lastReferrer?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -1236,7 +2110,64 @@ export interface FormSubmission {
   /**
    * Files uploaded with this submission
    */
-  attachments?: (number | Media)[] | null;
+  attachments?: (number | FormFile)[] | null;
+  /**
+   * When someone first opened this message. Empty: the list shows "New".
+   */
+  readAt?: string | null;
+  /**
+   * The page the form was sent from.
+   */
+  sourceUrl?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Automations that run tasks when something happens. Drag tasks onto the canvas and connect them.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "workflows".
+ */
+export interface Workflow {
+  id: number;
+  title: string;
+  /**
+   * Starts on its schedule or collection event. "Run now" works either way.
+   */
+  enabled?: boolean | null;
+  triggerKind?: ('manual' | 'schedule' | 'collection') | null;
+  nextRunAt?: string | null;
+  graph?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  triggerCollection?: string | null;
+  cron?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "reviews".
+ */
+export interface Review {
+  id: number;
+  googleReviewId: string;
+  authorName: string;
+  authorPhotoUrl?: string | null;
+  rating: number;
+  reviewText?: string | null;
+  publishedAt?: string | null;
+  /**
+   * Photos attached to this review, uploaded from Google
+   */
+  photos?: (number | Media)[] | null;
+  source?: ('places' | 'scraper') | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -1311,6 +2242,11 @@ export interface PayloadMcpApiKey {
         | 'getClass'
         | 'upsertClass'
         | 'deleteClass'
+        | 'listForms'
+        | 'getForm'
+        | 'createForm'
+        | 'editFormFields'
+        | 'updateFormSettings'
         | 'listTemplates'
         | 'getBindingSources'
       )[]
@@ -1348,6 +2284,11 @@ export interface PayloadMcpApiKey {
         | 'getClass'
         | 'upsertClass'
         | 'deleteClass'
+        | 'listForms'
+        | 'getForm'
+        | 'createForm'
+        | 'editFormFields'
+        | 'updateFormSettings'
         | 'listTemplates'
         | 'getBindingSources'
       )[]
@@ -1560,7 +2501,18 @@ export interface PayloadJob {
     | {
         executedAt: string;
         completedAt: string;
-        taskSlug: 'inline' | 'createCollectionExport' | 'createCollectionImport' | 'schedulePublish';
+        taskSlug:
+          | 'inline'
+          | 'sendEmail'
+          | 'createDocument'
+          | 'updateDocument'
+          | 'callWebhook'
+          | 'revalidatePath'
+          | 'payloadWorkflowsSchedule'
+          | 'reviews-sync'
+          | 'createCollectionExport'
+          | 'createCollectionImport'
+          | 'schedulePublish';
         taskID: string;
         input?:
           | {
@@ -1593,10 +2545,34 @@ export interface PayloadJob {
         id?: string | null;
       }[]
     | null;
-  taskSlug?: ('inline' | 'createCollectionExport' | 'createCollectionImport' | 'schedulePublish') | null;
+  workflowSlug?: 'payloadWorkflowsRun' | null;
+  taskSlug?:
+    | (
+        | 'inline'
+        | 'sendEmail'
+        | 'createDocument'
+        | 'updateDocument'
+        | 'callWebhook'
+        | 'revalidatePath'
+        | 'payloadWorkflowsSchedule'
+        | 'reviews-sync'
+        | 'createCollectionExport'
+        | 'createCollectionImport'
+        | 'schedulePublish'
+      )
+    | null;
   queue?: string | null;
   waitUntil?: string | null;
   processing?: boolean | null;
+  meta?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -1636,6 +2612,14 @@ export interface PayloadLockedDocument {
         value: number | TemplatePart;
       } | null)
     | ({
+        relationTo: 'not-found-log';
+        value: number | NotFoundLog;
+      } | null)
+    | ({
+        relationTo: 'form-files';
+        value: number | FormFile;
+      } | null)
+    | ({
         relationTo: 'redirects';
         value: number | Redirect;
       } | null)
@@ -1646,6 +2630,14 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'form-submissions';
         value: number | FormSubmission;
+      } | null)
+    | ({
+        relationTo: 'workflows';
+        value: number | Workflow;
+      } | null)
+    | ({
+        relationTo: 'reviews';
+        value: number | Review;
       } | null)
     | ({
         relationTo: 'payload-mcp-api-keys';
@@ -1676,8 +2668,8 @@ export interface PayloadLockedDocument {
         value: number | BuilderComment;
       } | null)
     | ({
-        relationTo: 'payload-folders';
-        value: number | FolderInterface;
+        relationTo: 'reference-index';
+        value: number | ReferenceIndex;
       } | null);
   globalSlug?: string | null;
   user:
@@ -1817,9 +2809,9 @@ export interface MediaSelect<T extends boolean = true> {
   usedInTemplateParts?: T;
   usedInBuilderTemplates?: T;
   usedInBuilderSections?: T;
-  folder?: T;
   updatedAt?: T;
   createdAt?: T;
+  indexedUses?: T;
   url?: T;
   thumbnailURL?: T;
   filename?: T;
@@ -2013,6 +3005,37 @@ export interface TemplatePartsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "not-found-log_select".
+ */
+export interface NotFoundLogSelect<T extends boolean = true> {
+  path?: T;
+  hits?: T;
+  lastSeen?: T;
+  lastReferrer?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "form-files_select".
+ */
+export interface FormFilesSelect<T extends boolean = true> {
+  alt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  indexedUses?: T;
+  url?: T;
+  thumbnailURL?: T;
+  filename?: T;
+  mimeType?: T;
+  filesize?: T;
+  width?: T;
+  height?: T;
+  focalX?: T;
+  focalY?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "redirects_select".
  */
 export interface RedirectsSelect<T extends boolean = true> {
@@ -2042,9 +3065,25 @@ export interface FormsSelect<T extends boolean = true> {
           | {
               name?: T;
               label?: T;
+              description?: T;
               width?: T;
               required?: T;
               defaultValue?: T;
+              cssClass?: T;
+              partClasses?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
               id?: T;
               blockName?: T;
             };
@@ -2053,8 +3092,27 @@ export interface FormsSelect<T extends boolean = true> {
           | {
               name?: T;
               label?: T;
+              description?: T;
               width?: T;
               required?: T;
+              placeholder?: T;
+              defaultValue?: T;
+              labelVisibility?: T;
+              cssClass?: T;
+              partClasses?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
               id?: T;
               blockName?: T;
             };
@@ -2063,8 +3121,27 @@ export interface FormsSelect<T extends boolean = true> {
           | {
               name?: T;
               label?: T;
+              description?: T;
               width?: T;
               required?: T;
+              placeholder?: T;
+              defaultValue?: T;
+              labelVisibility?: T;
+              cssClass?: T;
+              partClasses?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
               id?: T;
               blockName?: T;
             };
@@ -2072,6 +3149,21 @@ export interface FormsSelect<T extends boolean = true> {
           | T
           | {
               message?: T;
+              cssClass?: T;
+              partClasses?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
               id?: T;
               blockName?: T;
             };
@@ -2080,9 +3172,27 @@ export interface FormsSelect<T extends boolean = true> {
           | {
               name?: T;
               label?: T;
+              description?: T;
               width?: T;
               defaultValue?: T;
               required?: T;
+              placeholder?: T;
+              labelVisibility?: T;
+              cssClass?: T;
+              partClasses?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
               id?: T;
               blockName?: T;
             };
@@ -2091,6 +3201,7 @@ export interface FormsSelect<T extends boolean = true> {
           | {
               name?: T;
               label?: T;
+              description?: T;
               width?: T;
               defaultValue?: T;
               placeholder?: T;
@@ -2102,6 +3213,22 @@ export interface FormsSelect<T extends boolean = true> {
                     id?: T;
                   };
               required?: T;
+              labelVisibility?: T;
+              cssClass?: T;
+              partClasses?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
               id?: T;
               blockName?: T;
             };
@@ -2110,8 +3237,27 @@ export interface FormsSelect<T extends boolean = true> {
           | {
               name?: T;
               label?: T;
+              description?: T;
               width?: T;
               required?: T;
+              placeholder?: T;
+              defaultValue?: T;
+              labelVisibility?: T;
+              cssClass?: T;
+              partClasses?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
               id?: T;
               blockName?: T;
             };
@@ -2120,9 +3266,27 @@ export interface FormsSelect<T extends boolean = true> {
           | {
               name?: T;
               label?: T;
+              description?: T;
               width?: T;
               defaultValue?: T;
               required?: T;
+              placeholder?: T;
+              labelVisibility?: T;
+              cssClass?: T;
+              partClasses?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
               id?: T;
               blockName?: T;
             };
@@ -2131,9 +3295,229 @@ export interface FormsSelect<T extends boolean = true> {
           | {
               name?: T;
               label?: T;
+              description?: T;
               width?: T;
               defaultValue?: T;
               required?: T;
+              placeholder?: T;
+              labelVisibility?: T;
+              cssClass?: T;
+              partClasses?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
+              id?: T;
+              blockName?: T;
+            };
+        radio?:
+          | T
+          | {
+              name?: T;
+              label?: T;
+              description?: T;
+              width?: T;
+              defaultValue?: T;
+              options?:
+                | T
+                | {
+                    label?: T;
+                    value?: T;
+                    id?: T;
+                  };
+              required?: T;
+              labelVisibility?: T;
+              display?: T;
+              cssClass?: T;
+              partClasses?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
+              id?: T;
+              blockName?: T;
+            };
+        date?:
+          | T
+          | {
+              name?: T;
+              label?: T;
+              description?: T;
+              width?: T;
+              required?: T;
+              defaultValue?: T;
+              labelVisibility?: T;
+              cssClass?: T;
+              partClasses?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
+              id?: T;
+              blockName?: T;
+            };
+        phone?:
+          | T
+          | {
+              name?: T;
+              label?: T;
+              description?: T;
+              width?: T;
+              defaultValue?: T;
+              placeholder?: T;
+              required?: T;
+              labelVisibility?: T;
+              cssClass?: T;
+              partClasses?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
+              id?: T;
+              blockName?: T;
+            };
+        url?:
+          | T
+          | {
+              name?: T;
+              label?: T;
+              description?: T;
+              width?: T;
+              defaultValue?: T;
+              placeholder?: T;
+              required?: T;
+              labelVisibility?: T;
+              cssClass?: T;
+              partClasses?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
+              id?: T;
+              blockName?: T;
+            };
+        hidden?:
+          | T
+          | {
+              name?: T;
+              label?: T;
+              defaultValue?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
+              id?: T;
+              blockName?: T;
+            };
+        consent?:
+          | T
+          | {
+              name?: T;
+              label?: T;
+              description?: T;
+              text?: T;
+              width?: T;
+              required?: T;
+              cssClass?: T;
+              partClasses?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
+              id?: T;
+              blockName?: T;
+            };
+        file?:
+          | T
+          | {
+              name?: T;
+              label?: T;
+              description?: T;
+              width?: T;
+              required?: T;
+              accept?: T;
+              maxSize?: T;
+              multiple?: T;
+              maxFiles?: T;
+              labelVisibility?: T;
+              cssClass?: T;
+              partClasses?: T;
+              conditions?:
+                | T
+                | {
+                    match?: T;
+                    rules?:
+                      | T
+                      | {
+                          field?: T;
+                          operator?: T;
+                          value?: T;
+                          id?: T;
+                        };
+                  };
               id?: T;
               blockName?: T;
             };
@@ -2152,14 +3536,41 @@ export interface FormsSelect<T extends boolean = true> {
     | T
     | {
         emailTo?: T;
+        fromName?: T;
+        emailFrom?: T;
+        replyTo?: T;
         cc?: T;
         bcc?: T;
-        replyTo?: T;
-        emailFrom?: T;
         subject?: T;
+        bodyType?: T;
         message?: T;
+        html?: T;
         id?: T;
       };
+  spamProtection?:
+    | T
+    | {
+        honeypot?: T;
+        minFillSeconds?: T;
+        turnstile?: T;
+        rateLimit?:
+          | T
+          | {
+              max?: T;
+              windowMinutes?: T;
+            };
+        turnstileSiteKey?: T;
+      };
+  source?:
+    | T
+    | {
+        collection?: T;
+        document?: T;
+        block?: T;
+        hash?: T;
+      };
+  fieldsBuilder?: T;
+  fieldsRichText?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -2177,6 +3588,39 @@ export interface FormSubmissionsSelect<T extends boolean = true> {
         id?: T;
       };
   attachments?: T;
+  readAt?: T;
+  sourceUrl?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "workflows_select".
+ */
+export interface WorkflowsSelect<T extends boolean = true> {
+  title?: T;
+  enabled?: T;
+  triggerKind?: T;
+  nextRunAt?: T;
+  graph?: T;
+  triggerCollection?: T;
+  cron?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "reviews_select".
+ */
+export interface ReviewsSelect<T extends boolean = true> {
+  googleReviewId?: T;
+  authorName?: T;
+  authorPhotoUrl?: T;
+  rating?: T;
+  reviewText?: T;
+  publishedAt?: T;
+  photos?: T;
+  source?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -2198,6 +3642,7 @@ export interface ExportsSelect<T extends boolean = true> {
   where?: T;
   updatedAt?: T;
   createdAt?: T;
+  indexedUses?: T;
   url?: T;
   thumbnailURL?: T;
   filename?: T;
@@ -2228,6 +3673,7 @@ export interface ImportsSelect<T extends boolean = true> {
       };
   updatedAt?: T;
   createdAt?: T;
+  indexedUses?: T;
   url?: T;
   thumbnailURL?: T;
   filename?: T;
@@ -2366,6 +3812,27 @@ export interface BuilderCommentsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "reference-index_select".
+ */
+export interface ReferenceIndexSelect<T extends boolean = true> {
+  source?: T;
+  sourceCollection?: T;
+  sourceId?: T;
+  sourceTitle?: T;
+  relationTo?: T;
+  value?: T;
+  published?: T;
+  latest?: T;
+  layout?: T;
+  problem?: T;
+  targetTitle?: T;
+  mediaUpload?: T;
+  formFilesUpload?: T;
+  exportsUpload?: T;
+  importsUpload?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv_select".
  */
 export interface PayloadKvSelect<T extends boolean = true> {
@@ -2396,22 +3863,12 @@ export interface PayloadJobsSelect<T extends boolean = true> {
         error?: T;
         id?: T;
       };
+  workflowSlug?: T;
   taskSlug?: T;
   queue?: T;
   waitUntil?: T;
   processing?: T;
-  updatedAt?: T;
-  createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "payload-folders_select".
- */
-export interface PayloadFoldersSelect<T extends boolean = true> {
-  name?: T;
-  folder?: T;
-  documentsAndFolders?: T;
-  folderType?: T;
+  meta?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -2502,6 +3959,39 @@ export interface SiteSetting {
    * Select the page to display at the root URL (/)
    */
   homePage?: (number | null) | Page;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "review-settings".
+ */
+export interface ReviewSetting {
+  id: number;
+  /**
+   * Places API returns up to 5 reviews and needs the GOOGLE_PLACES_API_KEY environment variable. Scraper fetches all public reviews and needs the google-maps-review-scraper package installed on the site.
+   */
+  reviewSource?: ('places' | 'scraper') | null;
+  /**
+   * The Place ID for this business (used by Places API). Find it at https://developers.google.com/maps/documentation/places/web-service/place-id
+   */
+  googlePlaceId?: string | null;
+  /**
+   * The full Google Maps URL for this business (used by Scraper). Copy it from your browser address bar when viewing the business on Google Maps.
+   */
+  googleMapsUrl?: string | null;
+  /**
+   * Auto-synced from Google
+   */
+  averageRating?: number | null;
+  /**
+   * Auto-synced from Google
+   */
+  totalReviewCount?: number | null;
+  /**
+   * Last successful sync timestamp
+   */
+  lastSyncedAt?: string | null;
   updatedAt?: string | null;
   createdAt?: string | null;
 }
@@ -2652,12 +4142,45 @@ export interface BuilderAiSetting {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payload-jobs-stats".
+ */
+export interface PayloadJobsStat {
+  id: number;
+  stats?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "site-settings_select".
  */
 export interface SiteSettingsSelect<T extends boolean = true> {
   siteName?: T;
   siteDescription?: T;
   homePage?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  globalType?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "review-settings_select".
+ */
+export interface ReviewSettingsSelect<T extends boolean = true> {
+  reviewSource?: T;
+  googlePlaceId?: T;
+  googleMapsUrl?: T;
+  averageRating?: T;
+  totalReviewCount?: T;
+  lastSyncedAt?: T;
   updatedAt?: T;
   createdAt?: T;
   globalType?: T;
@@ -2727,6 +4250,16 @@ export interface BuilderAiSettingsSelect<T extends boolean = true> {
   chatApiKey?: T;
   imageApiKey?: T;
   keyStatus?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  globalType?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payload-jobs-stats_select".
+ */
+export interface PayloadJobsStatsSelect<T extends boolean = true> {
+  stats?: T;
   updatedAt?: T;
   createdAt?: T;
   globalType?: T;
@@ -2803,6 +4336,36 @@ export interface AnalyticsWidget {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "open-comments_widget".
+ */
+export interface OpenCommentsWidget {
+  data?: {
+    limit?: number | null;
+  };
+  width: 'small' | 'medium' | 'large' | 'x-large' | 'full';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "unused-media_widget".
+ */
+export interface UnusedMediaWidget {
+  data?: {
+    limit?: number | null;
+  };
+  width: 'small' | 'medium' | 'large' | 'x-large' | 'full';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "broken-links_widget".
+ */
+export interface BrokenLinksWidget {
+  data?: {
+    limit?: number | null;
+  };
+  width: 'small' | 'medium' | 'large' | 'x-large' | 'full';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "collections_widget".
  */
 export interface CollectionsWidget {
@@ -2810,6 +4373,163 @@ export interface CollectionsWidget {
     [k: string]: unknown;
   };
   width: 'full';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskSendEmail".
+ */
+export interface TaskSendEmail {
+  input: {
+    to: string;
+    subject: string;
+    /**
+     * Plain text.
+     */
+    body: string;
+    replyTo?: string | null;
+  };
+  output: {
+    messageId?: string | null;
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskCreateDocument".
+ */
+export interface TaskCreateDocument {
+  input: {
+    /**
+     * Collection slug, for example "posts".
+     */
+    collection: string;
+    /**
+     * The fields, for example { "title": "Hello" }.
+     */
+    data:
+      | {
+          [k: string]: unknown;
+        }
+      | unknown[]
+      | string
+      | number
+      | boolean
+      | null;
+    /**
+     * Save as a draft when the collection has drafts.
+     */
+    draft?: boolean | null;
+  };
+  output: {
+    id?: string | null;
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskUpdateDocument".
+ */
+export interface TaskUpdateDocument {
+  input: {
+    /**
+     * Collection slug, for example "posts".
+     */
+    collection: string;
+    /**
+     * For example {{trigger.doc.id}}.
+     */
+    id: string;
+    /**
+     * Only the fields to change.
+     */
+    data:
+      | {
+          [k: string]: unknown;
+        }
+      | unknown[]
+      | string
+      | number
+      | boolean
+      | null;
+  };
+  output: {
+    id?: string | null;
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskCallWebhook".
+ */
+export interface TaskCallWebhook {
+  input: {
+    /**
+     * An http or https address.
+     */
+    url: string;
+    method?: ('POST' | 'PUT' | 'PATCH' | 'GET' | 'DELETE') | null;
+    /**
+     * Sent as JSON. Not sent with GET.
+     */
+    body?:
+      | {
+          [k: string]: unknown;
+        }
+      | unknown[]
+      | string
+      | number
+      | boolean
+      | null;
+    /**
+     * For example { "Authorization": "Bearer ..." }.
+     */
+    headers?:
+      | {
+          [k: string]: unknown;
+        }
+      | unknown[]
+      | string
+      | number
+      | boolean
+      | null;
+  };
+  output: {
+    status?: number | null;
+    response?: string | null;
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskRevalidatePath".
+ */
+export interface TaskRevalidatePath {
+  input: {
+    /**
+     * A site path, for example /about or /blog.
+     */
+    path: string;
+  };
+  output: {
+    path?: string | null;
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskPayloadWorkflowsSchedule".
+ */
+export interface TaskPayloadWorkflowsSchedule {
+  input?: unknown;
+  output: {
+    queued?: number | null;
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskReviews-sync".
+ */
+export interface TaskReviewsSync {
+  input?: unknown;
+  output: {
+    created: number;
+    updated: number;
+  };
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -2828,9 +4548,13 @@ export interface TaskCreateCollectionExport {
       | 'categories'
       | 'tags'
       | 'template-parts'
+      | 'not-found-log'
+      | 'form-files'
       | 'redirects'
       | 'forms'
       | 'form-submissions'
+      | 'workflows'
+      | 'reviews'
       | 'exports'
       | 'imports';
     drafts?: ('yes' | 'no') | null;
@@ -2902,6 +4626,44 @@ export interface TaskSchedulePublish {
         } | null);
   };
   output?: unknown;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "WorkflowPayloadWorkflowsRun".
+ */
+export interface WorkflowPayloadWorkflowsRun {
+  input: {
+    workflowId: string;
+    workflowTitle?: string | null;
+    graph:
+      | {
+          [k: string]: unknown;
+        }
+      | unknown[]
+      | string
+      | number
+      | boolean
+      | null;
+    trigger?:
+      | {
+          [k: string]: unknown;
+        }
+      | unknown[]
+      | string
+      | number
+      | boolean
+      | null;
+    resume?:
+      | {
+          [k: string]: unknown;
+        }
+      | unknown[]
+      | string
+      | number
+      | boolean
+      | null;
+    depth?: number | null;
+  };
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

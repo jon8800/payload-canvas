@@ -124,6 +124,33 @@ function visitFields(fields: readonly unknown[] | undefined, props: Record<strin
   }
 }
 
+/** A reference collector that skips empty IDs and duplicates. */
+function collector(): { add: Add; list: () => Reference[] } {
+  const found = new Map<string, Reference>()
+  return {
+    add: (relationTo, value) => {
+      const id = idOf(value)
+      if (id === null) return
+      const ref = { relationTo, value: id }
+      const key = referenceKey(ref)
+      if (!found.has(key)) found.set(key, ref)
+    },
+    list: () => [...found.values()],
+  }
+}
+
+/**
+ * Every document one document's data references, read along its Payload field config: upload and
+ * relationship fields (also inside groups, tabs, arrays and blocks fields), rich text nodes, and
+ * `{ relationTo, value }` pairs inside JSON fields (a builder layout). In field order, without
+ * duplicates. Use it for any collection, not only builder layouts: "is this image used anywhere?".
+ */
+export function fieldReferences(fields: readonly unknown[] | undefined, data: Record<string, unknown>): Reference[] {
+  const refs = collector()
+  visitFields(fields, data, refs.add)
+  return refs.list()
+}
+
 /**
  * Every document a layout references, in layout order, without duplicates: upload and
  * relationship props (also inside groups, arrays and blocks fields), link groups that point at a
@@ -134,14 +161,7 @@ function visitFields(fields: readonly unknown[] | undefined, props: Record<strin
  */
 export function collectReferences(layout: Layout, blocks: readonly BlockDefinition[]): Reference[] {
   const definitions = new Map(blocks.map((definition) => [definition.type, definition]))
-  const found = new Map<string, Reference>()
-  const add: Add = (relationTo, value) => {
-    const id = idOf(value)
-    if (id === null) return
-    const ref = { relationTo, value: id }
-    const key = referenceKey(ref)
-    if (!found.has(key)) found.set(key, ref)
-  }
+  const { add, list } = collector()
   walkBlocks(layout, (block) => {
     const definition = definitions.get(block.type)
     if (!definition) return
@@ -149,7 +169,7 @@ export function collectReferences(layout: Layout, blocks: readonly BlockDefiniti
     // Translations hold their own documents (a German image, a German link target).
     for (const values of Object.values(block.locales ?? {})) visitFields(definition.fields, values, add)
   })
-  return [...found.values()]
+  return list()
 }
 
 /**

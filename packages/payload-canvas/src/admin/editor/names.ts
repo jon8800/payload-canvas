@@ -1,7 +1,9 @@
 // Names for blocks in the outline, the breadcrumbs, the inspector and the publish problems.
 // Pure functions: the type label comes from the caller (the block definition's `label`).
 
+import { FORM_BLOCK, isFormFieldType } from '../../forms/pageForms'
 import { iconLabel } from '../../blocks/builtins/icon'
+import { SECTION_REF_BLOCK } from '../../blocks/builtins/sectionRef'
 import { readsComponent } from '../../core/components'
 import type { Block } from '../../core/types'
 import { FIELD_BLOCK, LIST_BLOCK } from './templates/binding'
@@ -25,6 +27,19 @@ const TAG_NAMES: Record<string, string> = {
 
 export function childrenOf(block: Block): Block[] {
   return Object.values(block.slots ?? {}).flat()
+}
+
+/**
+ * The `data-component` attribute for a component (a live saved section copy). The editor draws
+ * components in their own color (`--be-component`) on the canvas and in Layers.
+ */
+export function componentMark(block: Block | null | undefined): { 'data-component'?: '' } {
+  return isComponent(block) ? { 'data-component': '' } : {}
+}
+
+/** True for a component: a live saved section copy (`sectionRef`). */
+export function isComponent(block: Block | null | undefined): boolean {
+  return block?.type === SECTION_REF_BLOCK
 }
 
 /** The name the user gave the block, or null. */
@@ -124,6 +139,9 @@ function ownPreview(block: Block): string {
       // The label for screen readers, else the icon's name ("arrowRight" -> "arrow right").
       return clip(str('label') || iconLabel(str('name')))
     default:
+      // A form field shows its label (else its name, the key its answers are stored under). A form shows its title.
+      if (isFormFieldType(block.type)) return clip(str('label') || str('name'))
+      if (block.type === FORM_BLOCK) return clip(str('title'))
       if (childrenOf(block).length > 0) return innerTitle(block)
       return clip(str('text') || str('label') || str('quote') || str('title') || str('alt'))
   }

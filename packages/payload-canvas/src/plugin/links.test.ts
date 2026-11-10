@@ -4,7 +4,7 @@ import type { CollectionConfig, Config } from 'payload'
 
 import type { BuilderClientConfig } from '../core/types'
 import { websiteBuilder } from './index'
-import { builderOpening, editViewPath, listViewPath, opensInBuilder } from './links'
+import { builderOpening, builderViewPath, editViewPath, listViewPath, opensInBuilder } from './links'
 
 describe('admin paths', () => {
   it('builds the edit view path, with the form flag on request', () => {
@@ -93,5 +93,14 @@ describe('websiteBuilder editor.openInBuilder', () => {
 
   it('keeps a default edit view the collection sets itself', () => {
     assert.deepEqual(editView(build(true), 'posts'), { Component: './MyEdit#MyEdit' })
+  })
+})
+
+describe('builderViewPath', () => {
+  it('builds the builder URL, optionally with a thread to open', () => {
+    assert.equal(builderViewPath('/admin', 'pages', 12), '/admin/builder/pages/12')
+    assert.equal(builderViewPath('/', 'pages', 'a b'), '/builder/pages/a%20b')
+    assert.equal(builderViewPath('/admin', 'pages', 12, { comment: 34 }), '/admin/builder/pages/12?comment=34')
+    assert.equal(builderViewPath('/admin', 'pages', 12, { comment: '' }), '/admin/builder/pages/12')
   })
 })

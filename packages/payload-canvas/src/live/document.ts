@@ -61,6 +61,11 @@ export type BuilderCollectionServer = {
    * Left out: the builder's JSON layout field.
    */
   payloadBlocks?: PayloadBlocksStorage
+  /**
+   * The JSON layout's block types, when one of them has an `upgrade`: it runs when the builder
+   * reads a stored layout (`codecOf`). A Payload blocks field uses its own block types.
+   */
+  blocks?: readonly BlockDefinition[]
 }
 
 /** The builder collections and the templates collection. Stored on `config.custom` for the admin view. */
@@ -68,6 +73,10 @@ export type BuilderServerConfig = {
   collections: Record<string, BuilderCollectionServer>
   /** Slug of the templates collection, when templates are on. */
   templates: string | null
+  /** The block list the plugin checks layouts against (forms on pages completed). */
+  blocks?: BlockDefinition[]
+  /** Forms on pages: the forms collection and its setting names. */
+  pageForms?: { collection: string; settings: string[] }
 }
 
 /** Key under `config.custom` where the plugin stores the `BuilderServerConfig`. */
@@ -75,7 +84,13 @@ export const BUILDER_CONFIG_KEY = 'websiteBuilder'
 
 export function builderConfigOf(payload: { config: { custom?: Record<string, unknown> } }): BuilderServerConfig | null {
   const stored = payload.config.custom?.[BUILDER_CONFIG_KEY] as Partial<BuilderServerConfig> | undefined
-  return stored?.collections ? { collections: stored.collections, templates: stored.templates ?? null } : null
+  if (!stored?.collections) return null
+  return {
+    collections: stored.collections,
+    templates: stored.templates ?? null,
+    ...(stored.blocks ? { blocks: stored.blocks } : {}),
+    ...(stored.pageForms ? { pageForms: stored.pageForms } : {}),
+  }
 }
 
 /** The part of the Payload Local API this module uses. Tests pass a fake. */

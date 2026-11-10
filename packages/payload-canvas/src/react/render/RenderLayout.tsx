@@ -49,6 +49,12 @@ type Context = {
    */
   repeat: boolean
   /**
+   * Canvas only: the blocks of a component (a live saved section). They render like repeats (the
+   * component is what the editor selects) and also get `data-builder-component`, so the canvas
+   * shows them at full strength, as on the site.
+   */
+  component: boolean
+  /**
    * A collection list item or repeat row after the first, on the site and the canvas. Its blocks
    * leave out their HTML `id`, so an id stays unique on the page.
    */
@@ -109,11 +115,14 @@ function renderSlot(block: Block, slot: string, ctx: Context): ReactNode {
   const children = block.slots?.[slot] ?? []
   if (children.length > 0) return renderBlocks(children, ctx, staggersChildren(block.motion))
   if (!isEditor(ctx)) return null
+  // The slot's description ("Each block here is one slide") shows inside the empty slot.
+  const hint = ctx.definitions.get(block.type)?.slots?.[slot]?.description
   return (
     <div
       data-slot-empty=""
       data-slot-owner={block.id}
       data-slot={slot}
+      data-slot-hint={hint}
       style={PLACEHOLDER_STYLE}
     />
   )
@@ -213,7 +222,7 @@ function renderBlock(stored: Block, ctx: Context, preview = false, item = false)
     : editor
     ? { 'data-block-id': block.id, 'data-block-type': block.type }
     : canvas
-      ? { 'data-builder-repeat': '' }
+      ? { 'data-builder-repeat': '', ...(ctx.component ? { 'data-builder-component': '' } : {}) }
       : {}
   if (editor && !preview && block.hidden) attributes['data-builder-hidden'] = 'true'
   // The block's own HTML attributes (id, aria-label, aria-hidden). Copies of a list row leave out the id.
@@ -248,7 +257,7 @@ function renderBlock(stored: Block, ctx: Context, preview = false, item = false)
     if (slot === SECTION_REF_SLOT) {
       // A live saved section: its blocks render as repeats on the canvas (the ref is what the
       // editor selects), and its runtime slot is never a drop target.
-      slots[slot] = renderBlocks(block.slots?.[slot] ?? [], { ...ctx, repeat: ctx.repeat || canvas })
+      slots[slot] = renderBlocks(block.slots?.[slot] ?? [], { ...ctx, repeat: ctx.repeat || canvas, component: canvas })
       partAttributes[slot] = {}
       continue
     }
@@ -262,10 +271,13 @@ function renderBlock(stored: Block, ctx: Context, preview = false, item = false)
     slots[LIST_ITEM_SLOT] = renderListItems(block, ctx)
     partAttributes[LIST_ITEM_SLOT] = {}
   }
-  // Parts (styled slots and `parts`) carry their own classes, with the marker class.
-  for (const part of blockParts(definition)) {
-    const own = (partAttributes[part.name] ??= {})
-    const partClass = withBuilderCssClass(stored.partClassName?.[part.name])
+  // Parts (styled slots and `parts`) carry their own classes, with the marker class. A block whose
+  // definition this list lacks (form fields the plugin adds from the forms collection) keeps the
+  // parts it stores.
+  const partNames = definition ? blockParts(definition).map((part) => part.name) : Object.keys(stored.partClassName ?? {})
+  for (const name of partNames) {
+    const own = (partAttributes[name] ??= {})
+    const partClass = withBuilderCssClass(stored.partClassName?.[name])
     if (partClass) own.className = partClass
   }
 
@@ -308,6 +320,7 @@ function createContext(
     binding: { url: urlResolver(resolveLink), ...(relations ? { relations } : {}) },
     context,
     repeat: false,
+    component: false,
     copy: false,
     pageData,
     // The editor keeps plain links: a client-side router link would navigate the canvas.

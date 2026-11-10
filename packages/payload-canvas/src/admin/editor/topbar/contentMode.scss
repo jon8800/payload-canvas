@@ -23,13 +23,4 @@
       color: var(--theme-elevation-600);
     }
   }
-
-  .builder-bar__client-toggle[aria-pressed='true'] {
-    border-color: var(--theme-elevation-400);
-    background: var(--theme-elevation-100);
-
-    svg {
-      color: var(--theme-text);
-    }
-  }
 }

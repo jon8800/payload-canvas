@@ -2,7 +2,19 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import { analyticsProvider } from './analytics'
-import { docTitle, docURL, emptyField, listURL, relativeTime, submissionSummary, whereToQuery } from './lib'
+import {
+  docTitle,
+  docURL,
+  emptyField,
+  linkProblem,
+  listURL,
+  redirectCreateURL,
+  relativeTime,
+  shortText,
+  submissionRows,
+  thumbnailOf,
+  whereToQuery,
+} from './lib'
 import { settingNumber } from './server'
 
 describe('whereToQuery', () => {
@@ -53,27 +65,37 @@ describe('docTitle', () => {
   })
 })
 
-describe('submissionSummary', () => {
-  it('shows the name and the message', () => {
-    const summary = submissionSummary([
-      { field: 'email', value: 'ada@example.com' },
-      { field: 'name', value: 'Ada' },
-      { field: 'message', value: 'Hello there' },
-    ])
-    assert.deepEqual(summary, { from: 'Ada', text: 'Hello there' })
+describe('submissionRows', () => {
+  const now = new Date('2026-11-09T12:00:00Z')
+  const form = { title: 'Contact', fields: [{ blockType: 'text', name: 'fullName', label: 'Name' }, { blockType: 'email', name: 'contact' }, { blockType: 'textarea', name: 'message' }] }
+
+  it('shows the message, who sent it, the form and "New" until opened', () => {
+    const [row] = submissionRows(
+      [{ id: 7, createdAt: '2026-11-09T11:00:00Z', form, submissionData: [{ field: 'contact', value: 'ada@example.com' }, { field: 'fullName', value: 'Ada' }, { field: 'message', value: 'Hello there' }] }],
+      '/admin',
+      'en',
+      now,
+    )
+    assert.equal(row?.href, '/admin/collections/form-submissions/7')
+    assert.equal(row?.title, 'Hello there')
+    assert.equal(row?.meta, 'Ada · Contact · 1 hour ago')
+    assert.deepEqual(row?.badge, { label: 'New', tone: 'new' })
   })
 
-  it('falls back to the email and the first other value', () => {
-    const summary = submissionSummary([
-      { field: 'contact', value: 'ada@example.com' },
-      { field: 'budget', value: '5000' },
-    ])
-    assert.deepEqual(summary, { from: 'ada@example.com', text: '5000' })
-  })
-
-  it('handles empty data', () => {
-    assert.deepEqual(submissionSummary(null), { from: null, text: null })
-    assert.deepEqual(submissionSummary([{ field: 'message', value: '  ' }]), { from: null, text: null })
+  it('falls back to the sender, then to "Empty message", and drops the badge once read', () => {
+    const rows = submissionRows(
+      [
+        { id: 1, createdAt: '2026-11-09T11:00:00Z', readAt: '2026-11-09T11:30:00Z', form: 3, submissionData: [{ field: 'email', value: 'ada@example.com' }] },
+        { id: 2, createdAt: '2026-11-09T11:00:00Z', submissionData: [] },
+      ],
+      '/admin',
+      'en',
+      now,
+    )
+    assert.equal(rows[0]?.title, 'ada@example.com')
+    assert.equal(rows[0]?.meta, 'Form · 1 hour ago')
+    assert.equal('badge' in (rows[0] ?? {}), false)
+    assert.equal(rows[1]?.title, 'Empty message')
   })
 })
 
@@ -110,5 +132,38 @@ describe('analyticsProvider', () => {
       apiKey: 'key',
       websiteId: 'id',
     })
+  })
+})
+
+describe('redirectCreateURL', () => {
+  it('opens the redirects create view with the path filled in', () => {
+    assert.equal(redirectCreateURL('/admin', '/old page'), '/admin/collections/redirects/create?from=%2Fold%20page')
+    assert.equal(redirectCreateURL('/', '/x'), '/collections/redirects/create?from=%2Fx')
+  })
+})
+
+describe('shortText', () => {
+  it('keeps one line and cuts long text', () => {
+    assert.equal(shortText('  Hello\n  world  '), 'Hello world')
+    assert.equal(shortText('abcdefghij', 6), 'abcde…')
+    assert.equal(shortText(null), '')
+  })
+})
+
+describe('linkProblem', () => {
+  it('reports deleted and unpublished targets', () => {
+    assert.equal(linkProblem({ found: false, drafts: true }), 'deleted')
+    assert.equal(linkProblem({ found: true, drafts: true, status: 'draft' }), 'unpublished')
+    assert.equal(linkProblem({ found: true, drafts: true, status: 'published' }), null)
+    assert.equal(linkProblem({ found: true, drafts: false }), null)
+  })
+})
+
+describe('thumbnailOf', () => {
+  it('prefers the thumbnail size, then the admin thumbnail, then the image itself', () => {
+    assert.equal(thumbnailOf({ sizes: { thumbnail: { url: '/t.jpg' } }, thumbnailURL: '/a.jpg', url: '/x.jpg' }), '/t.jpg')
+    assert.equal(thumbnailOf({ thumbnailURL: '/a.jpg', url: '/x.jpg' }), '/a.jpg')
+    assert.equal(thumbnailOf({ mimeType: 'image/png', url: '/x.png' }), '/x.png')
+    assert.equal(thumbnailOf({ mimeType: 'application/pdf', url: '/x.pdf' }), null)
   })
 })

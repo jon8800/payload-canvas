@@ -5,7 +5,7 @@
 export { defaultBlocks, FIELD_CLASS_MAP, MENU_CLASS_MAP, MENU_LABELS, type DefaultBlocksOptions } from './defaults'
 export * from './builtins'
 export { isLinkField, linkField, type BuilderCondition, type LinkFieldOptions } from './link'
-export { fromPayloadBlocks, type FromPayloadBlocksOptions, type PayloadBlockOverride } from './payload'
+export { BLOCK_KEY_MARKER, fromPayloadBlocks, type FromPayloadBlocksOptions, type PayloadBlockOverride } from './payload'
 export { defineBlock, defineSection, type SectionBlockInput, type SectionInput, sectionsWithVariants, withDefaultClassNames, withInlineBlocks } from '../core/blocks'
 export { BUILDER_CSS_CLASS, withBuilderCssClass } from '../css/marker'
 // Public since 0.4.0. 0.5.0 dropped this line by mistake; `exports.test.ts` keeps it.

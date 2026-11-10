@@ -34,6 +34,11 @@ export type CommentsController = {
   open: ValueStore<string | null>
   /** Comment mode on or off (no argument: the other one). Off closes the composer and the thread. */
   toggle(on?: boolean): void
+  /**
+   * Comment mode with the thread open, and the filter set so the panel lists it. Returns the
+   * thread's block, or null when the thread is not in the list (or is a reply).
+   */
+  focus(threadId: string): { blockId: string | null } | null
   load(): Promise<void>
   handleEvent(event: LiveCommentsEvent): void
   /** Places a new pin (comment mode). */
@@ -129,6 +134,16 @@ export function createCommentsController(options: Options): CommentsController {
       if (next) return
       draft.set(null)
       open.set(null)
+    },
+    focus(threadId) {
+      const root = list.get().find((c) => c.id === threadId)
+      if (!root || root.parent) return null
+      const shown = filter.get()
+      if (shown !== 'all' && (shown === 'resolved') !== root.resolved) filter.set('all')
+      controller.toggle(true)
+      draft.set(null)
+      open.set(root.id)
+      return { blockId: root.blockId }
     },
     load() {
       if (loading) return loading

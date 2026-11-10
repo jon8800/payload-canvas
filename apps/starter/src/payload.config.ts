@@ -1,16 +1,38 @@
 import { sectionLibrary } from './data/sections/library'
 import { buildConfig } from 'payload'
-import type { EmailAdapter } from 'payload'
+import type { Block, EmailAdapter, Field } from 'payload'
 import { postgresAdapter } from '@payloadcms/db-postgres'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import { nestedDocsPlugin } from '@payloadcms/plugin-nested-docs'
 import { seoPlugin } from '@payloadcms/plugin-seo'
 import { redirectsPlugin } from '@payloadcms/plugin-redirects'
-import { formBuilderPlugin } from '@payloadcms/plugin-form-builder'
+import { fields as formFieldConfigs, formBuilderPlugin } from '@payloadcms/plugin-form-builder'
 import { importExportPlugin } from '@payloadcms/plugin-import-export'
 import { mcpToolkitPlugin } from 'payload-mcp-toolkit'
 import { searchPlugin } from '@payloadcms/plugin-search'
-import { websiteBuilder, type WebsiteBuilderOptions } from 'payload-canvas'
+// @feature:gallery
+import { mediaGalleryPlugin } from 'payload-media-gallery'
+// @end:gallery
+// @feature:workflows
+import { workflowsPlugin } from 'payload-workflows'
+import { workflowTasks } from '@/jobs/tasks'
+import { revalidatePathEndpoint } from '@/jobs/revalidate'
+// @end:workflows
+// @feature:reviews
+import { googleReviewsPlugin } from 'payload-google-reviews'
+// @end:reviews
+import {
+  formEmails,
+  formFileUploads,
+  formFileUploadsCleanup,
+  formSpamProtection,
+  formSubmissionConditions,
+  formSubmissionsAdmin,
+  spamProtectionField,
+  websiteBuilder,
+  type WebsiteBuilderOptions,
+} from 'payload-canvas'
+import { moreFormFields, withFormConditions, withFormEmailFields, withFormFieldSettings } from 'payload-canvas/forms'
 // @feature:ai
 import { fakeAdapter } from 'payload-canvas/ai/fake'
 import { openRouterAdapter } from 'payload-canvas/ai/openrouter'
@@ -34,6 +56,8 @@ import { Posts } from '@/collections/Posts'
 import { Categories } from '@/collections/Categories'
 import { Tags } from '@/collections/Tags'
 import { TemplateParts } from '@/collections/TemplateParts'
+import { NotFoundLog } from '@/collections/NotFoundLog'
+import { FormFiles } from '@/collections/FormFiles'
 import { SiteSettings } from '@/globals/SiteSettings'
 import { LegacyPages } from '@/legacy-fixture/collection'
 import { SharedBlocksPages } from '@/legacy-fixture/sharedCollection'
@@ -43,8 +67,15 @@ import { i18nDemo } from '@/lib/locales'
 import { demoLocalization, withoutFieldLocalization } from '@/lib/localizationDemo'
 // @feature:dashboard
 import { dashboard } from '@/admin/dashboard'
+import { referenceIndex } from '@/admin/references'
 // @end:dashboard
 import { isDesigner } from '@/access/roles'
+// @feature:look
+import { statusBadges } from '@/admin/list/statusBadges'
+import { listCells } from '@/admin/list/listCells'
+import { rowLabels } from '@/admin/fields/rowLabels'
+// @end:look
+import { MORE_FORM_FIELD_SLUGS, PLUGIN_FORM_FIELD_SLUGS } from '@/forms/fields'
 
 /** Collections with the page builder. Shared by the builder plugin and its MCP tools. */
 const builderCollections: WebsiteBuilderOptions['collections'] = {
@@ -63,6 +94,9 @@ const builderCollections: WebsiteBuilderOptions['collections'] = {
       }
     : {}),
 }
+
+// Form submissions admin: answers as a table, a "New" badge until opened, reply by email.
+const submissionsAdmin = formSubmissionsAdmin()
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -94,6 +128,21 @@ const devAutoLogin =
   process.env.NODE_ENV === 'development' && process.env.DEV_AUTOLOGIN_EMAIL
     ? { email: process.env.DEV_AUTOLOGIN_EMAIL }
     : false
+
+/** Development without SMTP: every email goes to the server console, with its headers and text. */
+const consoleEmailAdapter: EmailAdapter = ({ payload }) => ({
+  defaultFromAddress: 'noreply@example.com',
+  defaultFromName: 'Payload Starter',
+  name: 'console',
+  sendEmail: async (message) => {
+    const lines = ['from', 'to', 'replyTo', 'cc', 'bcc', 'subject'].flatMap((key) => {
+      const value = (message as Record<string, unknown>)[key]
+      return value ? [`${key}: ${String(value)}`] : []
+    })
+    payload.logger.info(['Email (not sent, no SMTP):', ...lines, '---', String(message.text ?? ''), '---', `html: ${String(message.html ?? '')}`].join('\n'))
+    return { accepted: [message.to] }
+  },
+})
 
 const smtpAdapter: EmailAdapter = ({ payload }) => {
   const transport = createTransport({
@@ -128,12 +177,26 @@ export default buildConfig({
     },
     user: Users.slug,
     autoLogin: devAutoLogin,
-    // @feature:nav
-    // The sidebar: grouped collections and globals with icons (src/admin/nav).
     components: {
+      // @feature:nav
+      // The sidebar: grouped collections and globals with icons (src/admin/nav).
       Nav: '/admin/nav/Nav#Nav',
+      // @end:nav
+      // @feature:look
+      // The brand on the login page and in the header. Change it in src/admin/brand (brand.ts, Mark.tsx).
+      graphics: {
+        Logo: '/admin/brand/Logo#Logo',
+        Icon: '/admin/brand/Icon#Icon',
+      },
+      beforeLogin: ['/admin/brand/Welcome#Welcome'],
+      // @end:look
+      // @feature:dashboard
+      views: {
+        // "View all" in the Unused media widget: every file nothing uses, 50 a page.
+        unusedMedia: { Component: '/admin/dashboard/UnusedMediaView#UnusedMediaView', path: '/unused-media' },
+      },
+      // @end:dashboard
     },
-    // @end:nav
     // @feature:dashboard
     // Dashboard widgets (src/admin/dashboard). Each user can rearrange them with "Edit dashboard".
     dashboard,
@@ -151,7 +214,8 @@ export default buildConfig({
     blocksAsJSON: true,
   }),
   editor: lexicalEditor(),
-  email: process.env.SMTP_HOST ? smtpAdapter : undefined,
+  // Without SMTP, development writes each email to the console (Payload's own fallback shows only To and Subject).
+  email: process.env.SMTP_HOST ? smtpAdapter : process.env.NODE_ENV === 'development' ? consoleEmailAdapter : undefined,
   collections: [
     Users,
     Media,
@@ -160,6 +224,8 @@ export default buildConfig({
     Categories,
     Tags,
     TemplateParts,
+    NotFoundLog,
+    FormFiles,
     ...(legacyDemo ? [LegacyPages, SharedBlocksPages] : []),
   ],
   // Dev fixture: the legacy pages' blocks, referenced by slug (`blockReferences`).
@@ -167,8 +233,19 @@ export default buildConfig({
   globals: [SiteSettings],
   // Dev demo of translated pages (BUILDER_I18N_DEMO=1): English and German, /de on the site.
   ...(i18nDemo ? { localization: demoLocalization } : {}),
+  // @feature:workflows
+  // POST /api/revalidate-path: the "Revalidate page path" task calls it from timer-run jobs (src/jobs/revalidate.ts).
+  endpoints: [revalidatePathEndpoint],
+  // @end:workflows
   jobs: {
+    // The `default` queue: scheduled publishing and the Google reviews sync. payload-workflows adds its
+    // own entry for the `workflows` queue (every minute). Runs in `next dev` and `next start`, not on serverless.
     autoRun: [{ cron: '*/5 * * * *', queue: 'default' }],
+    shouldAutoRun: () => process.env.NEXT_PHASE !== 'phase-production-build',
+    // @feature:workflows
+    // Tasks for the visual workflow builder (src/jobs/tasks.ts).
+    tasks: workflowTasks,
+    // @end:workflows
   },
   plugins: [
     nestedDocsPlugin({
@@ -197,8 +274,14 @@ export default buildConfig({
     redirectsPlugin({
       collections: ['pages', 'posts'],
       overrides: {
+        admin: { useAsTitle: 'from', defaultColumns: ['from', 'to', 'isRegex', 'updatedAt'] },
         fields: ({ defaultFields }) => [
-          ...defaultFields,
+          // "Create redirect" on the dashboard opens the create view with `?from=/old-path`.
+          ...defaultFields.map((field): Field =>
+            field.type === 'text' && field.name === 'from'
+              ? { ...field, admin: { ...field.admin, components: { ...field.admin?.components, Field: '/admin/redirects/FromField#FromField' } } }
+              : field,
+          ),
           {
             name: 'isRegex',
             type: 'checkbox',
@@ -210,39 +293,79 @@ export default buildConfig({
     }),
 
     formBuilderPlugin({
+      // The plugin's own field blocks, each with display conditions ("show when field X equals Y")
+      // and Gravity Forms style settings (description, label visibility, placeholder, default value,
+      // CSS class, radio display). The site's form renderer and the submissions hook below apply them.
+      // The extra types (phone, web address, hidden, consent, file) come from payload-canvas.
       fields: {
-        text: true,
-        email: true,
-        textarea: true,
-        select: true,
-        checkbox: true,
-        number: true,
-        message: true,
-        country: true,
-        state: true,
+        ...Object.fromEntries(PLUGIN_FORM_FIELD_SLUGS.map((slug) => [slug, withFormFieldSettings(withFormConditions(formFieldConfigs[slug] as Block))])),
+        ...Object.fromEntries(MORE_FORM_FIELD_SLUGS.map((slug) => [slug, withFormFieldSettings(withFormConditions(moreFormFields[slug]))])),
       },
       redirectRelationships: ['pages'],
+      // Each email of a form: To, From name, From email, Reply-To, CC, BCC, Subject, and a rich text
+      // or HTML body, all with merge tags ({{email}}, {{*}} for every answer).
+      beforeEmail: formEmails(),
       formOverrides: {
-        admin: { group: 'Forms' },
+        admin: { group: 'Forms', defaultColumns: ['title', 'fields', 'confirmationType', 'updatedAt'] },
+        // Spam protection per form (honeypot, minimum fill time, optional Turnstile, rate limit per IP).
+        // Turnstile needs TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY. The hook below checks it all.
+        fields: ({ defaultFields }) => [...withFormEmailFields(defaultFields), spamProtectionField()],
       },
       formSubmissionOverrides: {
-        admin: { group: 'Forms' },
-        fields: ({ defaultFields }) => [
-          ...defaultFields,
-          {
-            name: 'attachments',
-            type: 'upload',
-            relationTo: 'media',
-            hasMany: true,
-            label: 'File Attachments',
-            admin: {
-              description: 'Files uploaded with this submission',
+        admin: { group: 'Forms', ...submissionsAdmin.admin },
+        hooks: {
+          // Spam checks first (a blocked submission is refused, logged and not stored). Then display
+          // conditions: hidden fields are never required, and their answers are dropped. Answers in
+          // the wrong format are refused.
+          // The rate limit reads the visitor's IP from the last X-Forwarded-For entry: the starter deploys
+          // behind one reverse proxy (Coolify's Traefik, nginx, Caddy) that appends the address it sees.
+          // Behind Cloudflare only, use 'cf-connecting-ip'. With no proxy, remove it: the rate limit is
+          // then off, because a visitor can send any of these headers.
+          beforeValidate: [formSpamProtection({ trustedIpHeader: 'x-forwarded-for' }), formSubmissionConditions()],
+          // Files of file fields go to the private Form files collection and are linked in `attachments`.
+          // Not Media: anyone can read Media, and its files are public under public/media.
+          beforeChange: [formFileUploads({ collection: 'form-files', field: 'attachments' })],
+          // A submission that fails after its files were stored removes them again.
+          afterError: [formFileUploadsCleanup()],
+        },
+        fields: ({ defaultFields }) =>
+          submissionsAdmin.fields([
+            ...defaultFields,
+            {
+              name: 'attachments',
+              type: 'upload',
+              relationTo: 'form-files',
+              hasMany: true,
+              label: 'File Attachments',
+              admin: {
+                description: 'Files uploaded with this submission',
+              },
             },
-          },
-        ],
+          ]),
       },
     }),
 
+    // @feature:workflows
+    // Visual workflows (Automation → Workflows) and a Run tab on every job (Automation → Payload Jobs).
+    // After formBuilderPlugin: the trigger collections must exist. Collection triggers fire on drafts
+    // and autosaves too; add a rule such as {{trigger.doc._status}} equals published for live changes only.
+    workflowsPlugin({ collections: ['pages', 'posts', 'form-submissions'] }),
+
+    // @end:workflows
+    // @feature:reviews
+    // Google reviews (Content → Reviews, Settings → Review Settings). Set the Place ID or Maps URL in
+    // Review Settings; the Places API source needs GOOGLE_PLACES_API_KEY. Syncs weekly on the `default` queue.
+    googleReviewsPlugin({
+      reviews: { admin: { group: 'Content' } },
+      settings: { admin: { group: 'Settings' } },
+    }),
+
+    // @end:reviews
+    // @feature:gallery
+    // Media as a visual grid with a lightbox and drag-and-drop upload. Upload pickers use it too.
+    mediaGalleryPlugin({ collectionSlug: 'media' }),
+
+    // @end:gallery
     importExportPlugin({
       collections: [
         { slug: 'pages' },
@@ -268,7 +391,8 @@ export default buildConfig({
         collections: ['users', 'form-submissions', 'exports', 'imports', 'search'],
         globals: ['theme-settings'],
       },
-      customTools: builderMcpTools({ blocks: builderBlocks, sections: sectionLibrary, collections: builderCollections }),
+      // `forms: true` adds the form tools (listForms, getForm, createForm, editFormFields, updateFormSettings).
+      customTools: builderMcpTools({ blocks: builderBlocks, sections: sectionLibrary, collections: builderCollections, forms: true }),
     }),
 
     searchPlugin({
@@ -300,6 +424,8 @@ export default buildConfig({
       // Opening a saved page or post goes straight to the visual builder. "All fields" in the builder's menu opens the form.
       // Users with the Editor role get content mode: they change text, images and links, not the design.
       editor: { openInBuilder: true, canEditDesign: ({ user }) => isDesigner(user) },
+      // The form builder: forms open in the same full-screen builder (fields left, preview, settings right).
+      forms: true,
       // @feature:ai
       // AI assistant in the editor. BUILDER_AI_FAKE=1 (dev only) plays a scripted model. Else OpenRouter:
       // the key comes from OPENROUTER_API_KEY, or an admin pastes one in the "AI settings" global
@@ -342,6 +468,25 @@ export default buildConfig({
         },
       },
     }),
+
+    // @feature:look
+    // List views: the Status column as a coloured badge. After websiteBuilder, so its Templates and
+    // Classes get the badge too. It only adds a list cell (src/admin/list/statusBadges.ts).
+    statusBadges(),
+    // Better list cells by field type: check marks, option chips, short dates, row counts,
+    // JSON summaries and rich text excerpts (src/admin/list/listCells.ts). After statusBadges.
+    listCells(),
+    // @end:look
+    // @feature:dashboard
+    // Which document points at which (src/admin/references): hooks keep it current, so "Unused
+    // media" and "Broken links" on the dashboard run small queries instead of reading every page.
+    referenceIndex(),
+    // @end:dashboard
+    // @feature:look
+    // Array rows named by their content ("Sales team (sales)") in every collection, global and
+    // block, as in the builder's inspector (src/admin/fields/rowLabels.ts).
+    rowLabels(),
+    // @end:look
   ],
   queryPresets: {
     access: {

@@ -1,5 +1,6 @@
 // Replaces upload/relationship IDs in block props with documents.
 
+import { withSavedFormFields } from '../../forms/pageSync'
 import type { Payload, Where } from 'payload'
 import { resolveBindings, type Block, type BlockDefinition, type Layout, type TemplateContext } from '../../core'
 import { isRecord, mapFieldValues, type FieldLike, type VisitField } from './fields'
@@ -186,6 +187,7 @@ export type LoadLayoutOptions = RenderLocale & {
  * 2. Loads every collection list's documents (`depth: 1` or the list's `depth`; published only unless `draft`), with the
  *    access of `options.user` (anonymous without it).
  * 3. Replaces upload/relationship IDs in block props with documents (one batched `find` per collection).
+ * 4. Gives each Form block that shows a saved form that form's fields as its children (`withSavedFormFields`).
  */
 export async function loadLayoutData(
   layout: Layout,
@@ -240,7 +242,9 @@ export async function loadLayoutData(
   const withItems = withPageParams(attachListItems(bound, items, pages), queries)
 
   // List items and repeat rows resolve their bindings in `RenderLayout`: they take the relations along.
-  return resolveLayoutData(withRelations(withItems, relations), blocks, fetchDocs)
+  const loaded = await resolveLayoutData(withRelations(withItems, relations), blocks, fetchDocs)
+  // A Form block that shows a saved form renders that form's fields as its own blocks.
+  return withSavedFormFields(loaded)
 }
 
 /**

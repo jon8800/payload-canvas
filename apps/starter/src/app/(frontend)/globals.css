@@ -1,6 +1,7 @@
 /* source(none): Tailwind scans only the files below, not the whole app. The site's own components
    need their classes here. Builder layouts (and the seed sections in src/data) get their classes
-   from the generated page CSS instead, and the shadcn files in components/ui are not on the site. */
+   from the generated page CSS instead. Of the shadcn files in components/ui only the select is on
+   the site (the form block's dropdown, FormSelect). */
 @import "tailwindcss" source(none);
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -8,6 +9,7 @@
 @source "../**/*.tsx";
 @source "../../components/*.tsx";
 @source "../../components/blocks/*.{ts,tsx}";
+@source "../../components/ui/select.tsx";
 @source "../../legacy-fixture/*.{ts,tsx}";
 @source "../../lib/**/*.ts";
 

@@ -3,7 +3,9 @@
 // The left sidebar: three tabs at the top (Layers, Blocks, Sections), each panel full height.
 // Panels stay mounted once opened and hide with the `hidden` attribute: a library item that is
 // being dragged must stay mounted (dnd-kit tracks its node) when the tab changes mid-drag.
-// While a drag hovers the Layers tab for a moment, the tab opens, so the drop can go in the tree.
+// A drag from the library opens Layers when it starts (Editor.tsx), and a click that adds a block
+// opens it after the insert (`showAddedInLayers`). Any other drag that hovers the Layers tab for a
+// moment opens it, so the drop can go in the tree.
 
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 
@@ -15,7 +17,7 @@ import { Outline } from '../Outline'
 import { leftTabsFor, useContentMode } from '../contentMode'
 import { useRuntime } from '../runtime'
 import { useValue } from '../valueStore'
-import { LEFT_TABS, leftPanelId, selectLeftTab, type LeftTab } from './leftTabs'
+import { LEFT_TABS, leftPanelId, offeredLeftTabs, selectLeftTab, type LeftTab } from './leftTabs'
 
 /** How long a drag must rest on the Layers tab before it opens. */
 const DRAG_OPEN_MS = 350
@@ -29,7 +31,7 @@ export function LeftPanel() {
   const [fallback] = useState<LeftTab>(() => (runtime.store.getState().layout.blocks.length === 0 ? 'blocks' : 'layers'))
   // Content mode adds no blocks or sections: Layers only.
   const contentMode = useContentMode(runtime)
-  const tabs = leftTabsFor(contentMode, LEFT_TABS)
+  const tabs = leftTabsFor(contentMode, offeredLeftTabs(runtime.config, LEFT_TABS))
   const wanted = stored ?? fallback
   const tab = tabs.some(({ id }) => id === wanted) ? wanted : 'layers'
   // Panels render the first time they open, then stay mounted.
