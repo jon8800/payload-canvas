@@ -83,7 +83,8 @@ function CellContent({ cellData, field }: { readonly cellData: unknown; readonly
       return count ? <span className="field-cell-count">{rowCount(field, count, i18n.language)}</span> : <Empty />
     }
     case 'blocks': {
-      const rows = Array.isArray(cellData) ? (cellData as Array<{ blockType?: string }>) : []
+      // Only object rows: a damaged value such as `[null]` must not crash the list.
+      const rows = Array.isArray(cellData) ? (cellData as unknown[]).filter((row): row is { blockType?: string } => typeof row === 'object' && row !== null) : []
       if (!rows.length) return <Empty />
       const shared = config.blocksMap as Record<string, ClientBlock | undefined> | undefined
       const blocks = [...(field.blocks ?? []), ...(field.blockReferences ?? []).map((slug) => (typeof slug === 'string' ? shared?.[slug] : slug))]

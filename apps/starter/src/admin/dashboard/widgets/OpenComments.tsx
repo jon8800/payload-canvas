@@ -2,7 +2,7 @@ import { MessageSquare } from 'lucide-react'
 import type { CollectionSlug, Where } from 'payload'
 import { builderViewPath, DEFAULT_COMMENTS_SLUG } from 'payload-canvas'
 
-import { docTitle, listURL, relativeTime, replyCounts, shortText } from '../lib'
+import { docTitle, listURL, relativeTime, shortText } from '../lib'
 import { can, settingNumber, type WidgetProps } from '../server'
 import { WidgetCard, WidgetEmpty, WidgetList, type ListRow } from '../WidgetCard'
 
@@ -31,11 +31,12 @@ export async function OpenComments({ req, permissions, widgetData }: WidgetProps
   const docs = threads.docs as unknown as Thread[]
 
   const [replies, titles] = await Promise.all([
-    docs.length
-      ? req.payload
-          .find({ collection: slug, depth: 0, overrideAccess: false, pagination: false, req, select: { parent: true }, where: { parent: { in: docs.map((doc) => doc.id) } } })
-          .then((result) => replyCounts(result.docs as unknown as Array<{ parent?: unknown }>))
-      : new Map<string, number>(),
+    // One count per shown thread (at most limit × 2): a thread with thousands of replies loads none of them.
+    Promise.all(
+      docs.map((doc) =>
+        req.payload.count({ collection: slug, overrideAccess: false, req, where: { parent: { equals: doc.id } } }).then(({ totalDocs }) => [String(doc.id), totalDocs] as const),
+      ),
+    ).then((counts) => new Map<string, number>(counts)),
     pageTitles(req, permissions, docs),
   ])
 
