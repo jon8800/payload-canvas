@@ -27,6 +27,12 @@ export const FORM_SLOT = 'children'
 /** `admin.custom.builderFormActions`: the inspector shows "Edit form" and "Move into this page" here. */
 export const FORM_ACTIONS_MARKER = 'builderFormActions'
 
+/** `admin.custom` key of a collapsible the inspector draws as a settings panel section, like the form builder's. */
+export const PANEL_SECTION_MARKER = 'builderPanelSection'
+
+/** `admin.custom` key of a group drawn without its own heading: the section around it already names it. */
+export const PLAIN_GROUP_MARKER = 'builderPlainGroup'
+
 /** Layout blocks a Form block takes next to its fields, when the site has them. */
 export const FORM_LAYOUT_TYPES = ['stack', 'grid', 'heading', 'text', 'richText', 'divider', 'image'] as const
 
@@ -253,7 +259,7 @@ function asBlockSetting(field: Field): Field {
  */
 export function formSettingsFields(fields: readonly Field[]): Field[] {
   const byName = new Map(fields.flatMap((f) => ('name' in f && typeof f.name === 'string' ? [[f.name, f] as const] : [])))
-  const shown = { builderCondition: { field: 'mode', notEquals: 'saved' } }
+  const shown = { builderCondition: { field: 'mode', notEquals: 'saved' }, [PANEL_SECTION_MARKER]: true }
   const sections: Field[] = FORM_SETTINGS_SECTIONS.flatMap((section, index) => {
     const list = section.fields.flatMap((name) => (byName.has(name) ? [asBlockSetting(byName.get(name)!)] : []))
     if (list.length === 0) return []
@@ -264,9 +270,16 @@ export function formSettingsFields(fields: readonly Field[]): Field[] {
   for (const name of groups) {
     const group = byName.get(name) as LooseField
     const label = typeof group.label === 'string' ? group.label : name.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase())
-    sections.push({ type: 'collapsible', label, fields: [asBlockSetting(group as unknown as Field)], admin: { initCollapsed: true, custom: shown } } as Field)
+    sections.push({ type: 'collapsible', label, fields: [plainGroup(asBlockSetting(group as unknown as Field))], admin: { initCollapsed: true, custom: shown } } as Field)
   }
   return sections
+}
+
+/** The group without its own heading (the section names it). */
+function plainGroup(field: Field): Field {
+  const loose = field as LooseField
+  const admin = (loose.admin ?? {}) as { custom?: Record<string, unknown> }
+  return { ...loose, admin: { ...admin, custom: { ...admin.custom, [PLAIN_GROUP_MARKER]: true } } } as unknown as Field
 }
 
 /** The parts of a field definition for pages and the form builder, with its type's parts. */

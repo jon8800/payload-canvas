@@ -139,8 +139,8 @@ function ownPreview(block: Block): string {
       // The label for screen readers, else the icon's name ("arrowRight" -> "arrow right").
       return clip(str('label') || iconLabel(str('name')))
     default:
-      // A form field shows its name: the key its answers are stored under. A form shows its title.
-      if (isFormFieldType(block.type)) return clip(str('name') || str('label'))
+      // A form field shows its label (else its name, the key its answers are stored under). A form shows its title.
+      if (isFormFieldType(block.type)) return clip(str('label') || str('name'))
       if (block.type === FORM_BLOCK) return clip(str('title'))
       if (childrenOf(block).length > 0) return innerTitle(block)
       return clip(str('text') || str('label') || str('quote') || str('title') || str('alt'))

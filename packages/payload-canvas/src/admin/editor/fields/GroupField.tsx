@@ -11,6 +11,8 @@ type Props = {
   readonly fields: Field[]
   readonly label: string
   readonly description?: string
+  /** No heading and no indent: a section around the group already names it. */
+  readonly plain?: boolean
   readonly path: string
   readonly value: unknown
   /** The whole group object, or `undefined` when every sub-field is empty. */
@@ -51,7 +53,17 @@ export function FieldSection({
 }
 
 /** A named group: a small heading over its sub-fields, which edit one nested object. */
-export function GroupField({ fields, label, description, path, value, onChange }: Props) {
+export function GroupField({ fields, label, description, plain, path, value, onChange }: Props) {
+  if (plain) {
+    return (
+      <div className="builder-field-group builder-field-group--plain">
+        {description && <p className="builder-field-group__description">{description}</p>}
+        <div className="builder-field-group__fields">
+          <RenderBlockFields fields={fields} data={value} path={path} onChange={onChange} />
+        </div>
+      </div>
+    )
+  }
   return (
     <fieldset className="builder-field-group">
       <legend className="builder-field-group__label">{label}</legend>

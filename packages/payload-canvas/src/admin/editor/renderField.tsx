@@ -20,7 +20,7 @@ import type { Block } from '../../core/types'
 import { ArrayField } from './fields/ArrayField'
 import { isStructuralChange } from './fields/arrayState'
 import { CheckedTextField, NumberField } from './fields/CheckedInputs'
-import { FieldSection, FieldTabs, GroupField } from './fields/GroupField'
+import { FieldSection, FieldTabs, GroupField, PanelSection } from './fields/GroupField'
 import { JsonField } from './fields/JsonField'
 import { QueryFiltersField } from './fields/QueryFiltersField'
 import { ListWhereField } from './fields/ListWhereField'
@@ -31,7 +31,7 @@ import { RichTextField } from './fields/RichTextField'
 import { FormFieldNameField } from './fields/FormFieldName'
 import { MergeTagsFrame } from './fields/MergeTags'
 import { FIELD_NAME_MARKER, FieldNameNote, FormBlockActions } from './fields/FormBlock'
-import { FORM_ACTIONS_MARKER } from '../../forms/pageForms'
+import { FORM_ACTIONS_MARKER, PANEL_SECTION_MARKER, PLAIN_GROUP_MARKER } from '../../forms/pageForms'
 import { MERGE_TAGS_MARKER } from '../../forms/fieldConfigs'
 import { WIDTH_PICKER_MARKER } from '../../forms/fieldSettings'
 import { WidthPickerField } from './fields/WidthPicker'
@@ -384,7 +384,17 @@ export function RenderBlockField({ field, onChange, path, value, siblings, onSib
       return <RichTextField label={label} onChange={onChange} path={path} value={value} />
 
     case 'group':
-      return <GroupField fields={field.fields} label={label} description={description} onChange={onChange} path={path} value={value} />
+      return (
+        <GroupField
+          fields={field.fields}
+          label={label}
+          description={description}
+          plain={field.admin?.custom?.[PLAIN_GROUP_MARKER] === true}
+          onChange={onChange}
+          path={path}
+          value={value}
+        />
+      )
 
     case 'array':
       return (
@@ -450,6 +460,8 @@ export function RenderBlockFields({ fields, data, path, onChange, scope = fields
   }
 
   const out: ReactNode[] = []
+  // Indexes in `out` of settings panel sections: neighbours share one box (see the end).
+  const panelSections = new Set<number>()
   fields.forEach((field, index) => {
     if (!isFieldVisible(field as FieldShape, record, scope)) return
     // `admin.custom.builderFormActions`: the Form block's "Edit form" and "Move into this page".
@@ -463,6 +475,16 @@ export function RenderBlockFields({ fields, data, path, onChange, scope = fields
       const shared = <RenderBlockFields fields={field.fields} data={record} path={path} onChange={onChange} scope={scope} />
       const title = text(field.label)
       const folded = field.admin?.initCollapsed === true
+      // A settings panel section (the Form block's General, Mail, …): the form builder's look.
+      if (title && field.admin?.custom?.[PANEL_SECTION_MARKER]) {
+        panelSections.add(out.length)
+        out.push(
+          <PanelSection key={`layout-${index}`} label={title} open={!folded}>
+            {shared}
+          </PanelSection>,
+        )
+        return
+      }
       out.push(
         title ? (
           <FieldSection key={`layout-${index}`} label={title} description={folded ? text(field.admin?.description) : undefined} collapsed={folded ? true : undefined}>
@@ -547,7 +569,24 @@ export function RenderBlockFields({ fields, data, path, onChange, scope = fields
       </div>,
     )
   })
-  return <>{out}</>
+  if (panelSections.size === 0) return <>{out}</>
+  // One box per run of panel sections, so they touch: one border between rows, no gap.
+  const grouped: ReactNode[] = []
+  out.forEach((node, i) => {
+    if (!panelSections.has(i)) {
+      grouped.push(node)
+      return
+    }
+    if (panelSections.has(i - 1)) return
+    const run: ReactNode[] = []
+    for (let j = i; panelSections.has(j); j++) run.push(out[j])
+    grouped.push(
+      <div key={`panel-sections-${i}`} className="builder-panel-sections">
+        {run}
+      </div>,
+    )
+  })
+  return <>{grouped}</>
 }
 
 /** The inspector field path (`data-builder-field`) of the field around `node`, or null. */

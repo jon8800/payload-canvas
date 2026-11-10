@@ -22,6 +22,12 @@
     border-left: 2px solid var(--theme-elevation-100);
   }
 
+  // A group whose section already names it (the Form block's Spam protection): no heading, no indent.
+  .builder-field-group--plain {
+    padding: 0;
+    border-left: 0;
+  }
+
   .builder-field-group__label {
     margin: 0 0 calc(var(--base) * 0.25);
     padding: 0;
