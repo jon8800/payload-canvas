@@ -62,6 +62,17 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 - The canvas uses the definitions the admin sends for block types that the app's `blocks` list lacks.
 - Live commits to a Payload blocks field check against that field's own block types.
 - The starter's form renders through `FormParts.tsx` (one field, the submit button), shared by the site and the builder preview, and now shows each field's placeholder. Its form posts only shown fields.
+## [0.5.2] - 2026-11-08
+
+### Fixed
+
+- Opening a document's edit URL with a full page load (a typed or pasted URL, a new tab, a reload) with `editor.openInBuilder` on no longer locks the admin in a render loop in development. The console logged "Maximum update depth exceeded" many times, the CPU stayed busy, and the loop went on after leaving the builder. The cause: the edit view opened the builder with a client navigation while the page was still starting. With React Strict Mode, Payload's `CloseModalOnRouteChange` closes all modals once at idle priority on mount. The navigation kept React busy, and the second close at the route change then made every render create a new `modalState`. The effects that read it set state again, so the idle close never ran. Now an edit view that is the page the browser loaded opens the builder with a full page load (`window.location.replace`). An edit view that Next's router opened still opens it with a client navigation. Production builds were not affected.
+
+## [0.5.1] - 2026-11-08
+
+### Fixed
+
+- `prepareBlocks` and `listCollectionsOf` are exported from `payload-canvas/blocks` again, with the same signatures as in 0.4.0. 0.5.0 dropped them by mistake and did not list it in the upgrade notes, so `import { prepareBlocks } from 'payload-canvas/blocks'` failed. A new test checks the entry's documented exports. `defaultBlocks({ listCollections })` stays the simplest way for a list built with `defaultBlocks`.
 
 ## [0.5.0] - 2026-11-08
 
