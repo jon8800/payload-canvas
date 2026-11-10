@@ -47,7 +47,19 @@ export {
   urlFormField,
   withFormEmailFields,
 } from './fieldConfigs'
-export { acceptPatterns, fileProblem, filesProblem, fileTypeAllowed, maxFileBytes, type FileCountRules, type FileRules } from './files'
+export {
+  acceptPatterns,
+  BLOCKED_FILE_ENDINGS,
+  BLOCKED_MIME_TYPES,
+  DEFAULT_FILE_ACCEPT,
+  fileProblem,
+  filesProblem,
+  fileTypeAllowed,
+  fileTypeBlocked,
+  maxFileBytes,
+  type FileCountRules,
+  type FileRules,
+} from './files'
 export {
   DEFAULT_MAX_FILES,
   fileCountFields,
