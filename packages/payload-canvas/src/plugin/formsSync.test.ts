@@ -103,15 +103,28 @@ describe('pageFormSync', () => {
   })
 })
 
-describe('pageFormSync: taking over a moved form', () => {
-  const moved = (formId: number): Layout => ({ version: 1, blocks: [{ ...form('f1', [field('a', 'name')]), props: { mode: 'build', form: formId } }] })
+/** A Form block that names a form, as "Move into this page" leaves it. */
+const moved = (formId: number): Layout => ({ version: 1, blocks: [{ ...form('f1', [field('a', 'name')]), props: { mode: 'build', form: formId } }] })
 
+/** A Form block with German values. */
+const translated = (): Layout => ({
+  version: 1,
+  blocks: [
+    {
+      ...form('f1', [{ ...field('a', 'name'), props: { name: 'name', label: 'Name' }, locales: { de: { label: 'Vorname' } } }]),
+      props: { mode: 'build', title: 'Contact' },
+      locales: { de: { title: 'Kontakt' } },
+    },
+  ],
+})
+
+describe('pageFormSync: taking over a moved form', () => {
   it('takes over the form "Move into this page" named, on publish: the id and its submissions stay', async () => {
     const { req, docs, calls } = fakeRequest([{ id: 15, title: 'Contact form' }])
     const out = await sync(moved(15), { req, id: 12, data: {}, originalDoc: undefined })
     assert.deepEqual(calls, ['update 15'])
     assert.equal(out.blocks[0]?.props?.form, 15)
-    assert.equal((docs.get(15)?.source as { block?: string }).block, 'f1')
+    assert.equal((docs.get(15)?.source as { block?: string } | undefined)?.block, 'f1')
   })
 
   it('copies a form another page uses, another block owns, or whose usage is unknown, and never takes one over on create', async () => {
@@ -130,16 +143,6 @@ describe('pageFormSync: taking over a moved form', () => {
 
 describe('pageFormSync: locales', () => {
   const localization = { locales: ['en', 'de'], defaultLocale: 'en', fallback: true }
-  const translated = (): Layout => ({
-    version: 1,
-    blocks: [
-      {
-        ...form('f1', [{ ...field('a', 'name'), props: { name: 'name', label: 'Name' }, locales: { de: { label: 'Vorname' } } }]),
-        props: { mode: 'build', title: 'Contact' },
-        locales: { de: { title: 'Kontakt' } },
-      },
-    ],
-  })
 
   it('writes the default locale explicitly when the forms collection is not localized', async () => {
     const { req, docs, calls } = fakeRequest([], { localization })

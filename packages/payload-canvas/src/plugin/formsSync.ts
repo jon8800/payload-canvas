@@ -109,6 +109,9 @@ export type FormSyncOptions = {
   usage?: FormUsage
 }
 
+/** The Local API `locale` of a write: none without localization. */
+const inLocale = (locale: string) => (locale ? { locale } : {})
+
 /** The data each locale writes, and the hash over all of them. One entry without localized forms. */
 function formWrites(block: Block, options: { settings: readonly string[]; fallbackTitle: string; locales: readonly string[] }) {
   const writes = options.locales.map((locale, i) => {
@@ -155,7 +158,6 @@ export function pageFormSync(options: FormSyncOptions): FormSync {
       const source: FormSource = { collection: options.collection, document, block: block.id, hash }
       const stored = byBlock.get(block.id) ?? (create ? null : await adoptable(req, block, { forms: options.forms, collection: options.collection, document, usage }))
       const common = { collection: options.forms, depth: 0, overrideAccess: true, req, context: { [FORM_SYNC_CONTEXT]: true } }
-      const inLocale = (locale: string) => (locale ? { locale } : {})
       try {
         let formId: string | number
         if (stored) {
