@@ -15,6 +15,7 @@
     "setup": "tsx scripts/setup.ts",
     "seed:demo": "payload run ./scripts/seed-demo.ts",
     "seed:classes": "payload run ./scripts/seed-classes.ts",
+    "seed:submissions": "payload run ./scripts/seed-submissions.ts",
     "references:rebuild": "payload run ./scripts/rebuild-references.ts",
     "create:admin": "payload run ./scripts/create-admin.ts",
     "start": "next start",
