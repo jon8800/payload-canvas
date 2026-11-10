@@ -38,7 +38,8 @@ export const SKIP_NAMES = new Set([
   'docker-compose.yml',
 ])
 // Paths relative to the starter folder.
-export const SKIP_PATHS = ['scripts/setup.ts', 'scripts/lib/create-database.ts', 'scripts/lib/generate-env.ts', 'docs/qa']
+// `uploads`: files visitors sent with forms (private, never part of a new project).
+export const SKIP_PATHS = ['scripts/setup.ts', 'scripts/lib/create-database.ts', 'scripts/lib/generate-env.ts', 'docs/qa', 'uploads']
 
 // Starter features the user can turn on or off. The CLI asks about these and has a `--<id>` and a
 // `--no-<id>` flag for each. `on: false` features are off unless the user picks them.

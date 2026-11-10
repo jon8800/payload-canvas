@@ -56,6 +56,7 @@ import { Categories } from '@/collections/Categories'
 import { Tags } from '@/collections/Tags'
 import { TemplateParts } from '@/collections/TemplateParts'
 import { NotFoundLog } from '@/collections/NotFoundLog'
+import { FormFiles } from '@/collections/FormFiles'
 import { SiteSettings } from '@/globals/SiteSettings'
 import { LegacyPages } from '@/legacy-fixture/collection'
 import { SharedBlocksPages } from '@/legacy-fixture/sharedCollection'
@@ -223,6 +224,7 @@ export default buildConfig({
     Tags,
     TemplateParts,
     NotFoundLog,
+    FormFiles,
     ...(legacyDemo ? [LegacyPages, SharedBlocksPages] : []),
   ],
   // Dev fixture: the legacy pages' blocks, referenced by slug (`blockReferences`).
@@ -315,8 +317,9 @@ export default buildConfig({
           // conditions: hidden fields are never required, and their answers are dropped. Answers in
           // the wrong format are refused.
           beforeValidate: [formSpamProtection(), formSubmissionConditions()],
-          // Files of file fields go to Media and are linked in `attachments`.
-          beforeChange: [formFileUploads({ collection: 'media', field: 'attachments' })],
+          // Files of file fields go to the private Form files collection and are linked in `attachments`.
+          // Not Media: anyone can read Media, and its files are public under public/media.
+          beforeChange: [formFileUploads({ collection: 'form-files', field: 'attachments' })],
         },
         fields: ({ defaultFields }) =>
           submissionsAdmin.fields([
@@ -324,7 +327,7 @@ export default buildConfig({
             {
               name: 'attachments',
               type: 'upload',
-              relationTo: 'media',
+              relationTo: 'form-files',
               hasMany: true,
               label: 'File Attachments',
               admin: {

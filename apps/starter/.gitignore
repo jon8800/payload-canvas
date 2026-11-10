@@ -5,6 +5,8 @@ dist/
 *.tsbuildinfo
 public/media/*
 !public/media/.gitkeep
+# Files visitors send with forms (private, see src/collections/FormFiles.ts)
+uploads/
 
 # Managed by Next.js (see Next docs: config/typescript)
 next-env.d.ts
