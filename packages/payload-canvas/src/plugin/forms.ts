@@ -7,11 +7,13 @@
 // protection settings) joins the region and folds on its own. Form fields are not page sections:
 // the builder offers no sections there.
 
-import type { Block as PayloadBlockConfig, CollectionConfig } from 'payload'
+import type { Block as PayloadBlockConfig, CollectionConfig, Field } from 'payload'
 
+import { fromPayloadBlocks } from '../blocks/payload'
 import type { BlockDefinition } from '../core/types'
 import type { RegionOption } from '../core/regions'
 import { FORM_SETTINGS_REGION, formFieldBlocks } from '../forms/blocks'
+import { FORM_SETTINGS_SECTIONS, formSettingNames, formSettingsFields } from '../forms/pageForms'
 
 export { FORM_SETTINGS_REGION }
 
@@ -23,19 +25,18 @@ export type FormsOptions = {
 /** The blocks field of a form: the form-builder plugin names it `fields`. */
 export const FORM_FIELDS_FIELD = 'fields'
 
-/** The settings panel's sections and the plugin's form fields in each, shown when the collection has them. */
-const SETTINGS_SECTIONS = [
-  { label: 'General', fields: ['title', 'submitButtonLabel'] },
-  { label: 'After submit', fields: ['confirmationType', 'confirmationMessage', 'redirect'] },
-  { label: 'Mail', fields: ['emails'] },
-]
-
 export type ResolvedForms = {
   slug: string
   /** The builder definitions of the form's field blocks (`formText`, `formEmail`, …). */
   blocks: BlockDefinition[]
   /** The collection's builder options. */
   collection: { field: string; regions: RegionOption[]; sections: false }
+  /** The form's settings (title, submit button, confirmation, emails, other groups), in panel order. */
+  settings: string[]
+  /** The Form block's settings fields for pages: the same fields, in folding sections (`formSettingsFields`). */
+  settingsFields: Field[]
+  /** Slug of the form submissions collection (the collection with `submissionData`), or null. */
+  submissions: string | null
 }
 
 /** Checks the `forms` option against the config. Null when it is off. */
@@ -57,11 +58,12 @@ export function resolveForms(option: FormsOptions | boolean | undefined, collect
   }
   const configs = (field.blocks ?? []).filter((b): b is PayloadBlockConfig => typeof b === 'object' && b !== null)
   const names = new Set(source.fields.flatMap((f) => ('name' in f && typeof f.name === 'string' ? [f.name] : [])))
-  const sections = SETTINGS_SECTIONS.map((section) => ({ ...section, fields: section.fields.filter((name) => names.has(name)) })).filter((s) => s.fields.length > 0)
-  const known = new Set(SETTINGS_SECTIONS.flatMap((section) => section.fields))
+  const sections = FORM_SETTINGS_SECTIONS.map((section) => ({ label: section.label, fields: section.fields.filter((name) => names.has(name)) })).filter((s) => s.fields.length > 0)
   // Other top-level groups (spam protection, …) fold on their own after the sections.
-  const groups = source.fields.flatMap((f) => (f.type === 'group' && 'name' in f && typeof f.name === 'string' && f.name && !known.has(f.name) && !f.admin?.hidden ? [f.name] : []))
-  const settings = [...sections.flatMap((section) => section.fields), ...groups]
+  const settings = formSettingNames(source.fields)
+  // The same setting fields as Form block props: simple `admin.condition` functions become builder conditions.
+  const chosen = source.fields.filter((f) => 'name' in f && settings.includes(f.name))
+  const converted = fromPayloadBlocks([{ slug: 'formSettings', fields: chosen } as PayloadBlockConfig], { onWarning: false })[0]?.fields ?? []
   return {
     slug,
     blocks: formFieldBlocks(configs),
@@ -70,5 +72,18 @@ export function resolveForms(option: FormsOptions | boolean | undefined, collect
       regions: settings.length > 0 ? [{ name: FORM_SETTINGS_REGION, label: 'Form settings', fields: settings, panel: true, sections }] : [],
       sections: false,
     },
+    settings,
+    settingsFields: formSettingsFields(converted),
+    submissions: collections.find((c) => hasFieldNamed(c.fields, 'submissionData') && hasFieldNamed(c.fields, 'form'))?.slug ?? null,
   }
+}
+
+/** True when a data field of this name is in the list, also inside rows, collapsibles and unnamed tabs. */
+function hasFieldNamed(fields: readonly Field[], name: string): boolean {
+  return fields.some((f) => {
+    if ('name' in f && f.name === name) return true
+    if (!('name' in f && f.name) && 'fields' in f && Array.isArray(f.fields)) return hasFieldNamed(f.fields, name)
+    if (f.type === 'tabs') return f.tabs.some((tab) => !('name' in tab && tab.name) && hasFieldNamed(tab.fields, name))
+    return false
+  })
 }

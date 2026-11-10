@@ -271,10 +271,13 @@ function renderBlock(stored: Block, ctx: Context, preview = false, item = false)
     slots[LIST_ITEM_SLOT] = renderListItems(block, ctx)
     partAttributes[LIST_ITEM_SLOT] = {}
   }
-  // Parts (styled slots and `parts`) carry their own classes, with the marker class.
-  for (const part of blockParts(definition)) {
-    const own = (partAttributes[part.name] ??= {})
-    const partClass = withBuilderCssClass(stored.partClassName?.[part.name])
+  // Parts (styled slots and `parts`) carry their own classes, with the marker class. A block whose
+  // definition this list lacks (form fields the plugin adds from the forms collection) keeps the
+  // parts it stores.
+  const partNames = definition ? blockParts(definition).map((part) => part.name) : Object.keys(stored.partClassName ?? {})
+  for (const name of partNames) {
+    const own = (partAttributes[name] ??= {})
+    const partClass = withBuilderCssClass(stored.partClassName?.[name])
     if (partClass) own.className = partClass
   }
 

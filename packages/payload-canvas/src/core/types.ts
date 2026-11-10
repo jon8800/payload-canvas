@@ -166,6 +166,13 @@ export type PartDefinition = {
   label: string
   /** Classes a newly inserted block starts with on this part (like `defaultClassName`). */
   defaultClassName?: string
+  /**
+   * Until the block sets classes of its own for this part, the part uses the classes of `part`
+   * (default: the same name) of the nearest block above it of type `ancestor`. A form field's label
+   * uses its Form block's label classes. The Styles panel starts from those classes, so the first
+   * edit copies them and changes only what was edited. Clearing the part's classes inherits again.
+   */
+  inherits?: { ancestor: string; part?: string }
 }
 
 export type BlockDefinition = {
@@ -179,6 +186,25 @@ export type BlockDefinition = {
    * the root list included. Example: a list item goes only inside a list.
    */
   parents?: string[]
+  /**
+   * Block types this block must sit inside, at any depth (not only directly). Undefined means
+   * anywhere. Example: a form field goes anywhere inside a Form block (also in a grid inside it),
+   * never outside one. Checked with `parents` by `placementError` and `validateLayout`.
+   */
+  ancestors?: string[]
+  /**
+   * The block is a scope for `uniqueProps`: the unique props of the blocks inside it must differ
+   * from each other only, not from blocks outside it. A Form block is one: two forms may each have
+   * a field named `email`. Default false (the whole layout is one scope).
+   */
+  uniqueScope?: boolean
+  /**
+   * What a new block of this type starts with when the editor adds it (the library, drag and drop,
+   * the "+" picker): props over the field defaults, and child blocks per slot (ids are made at
+   * insert; children get their own default classes and field defaults). A new Form block starts
+   * as a ready contact form. Not used by operations from MCP or the assistant: they send whole blocks.
+   */
+  starter?: { props?: Record<string, unknown>; slots?: Record<string, StarterBlock[]> }
   /** Adds `className` and the style controls. Default true. */
   styles?: boolean
   /**
@@ -216,8 +242,19 @@ export type BlockDefinition = {
    * `slug` is the `blockType` in Payload data. The content conversion and the component adapter
    * use it, so a block may get another `type` (for example to avoid a clash with `heading`).
    */
-  payload?: { slug: string }
+  payload?: {
+    slug: string
+    /**
+     * Set by `fromPayloadBlocks` from fields marked `admin.custom.builderBlockKey`: the row keys
+     * that store the block's `className` (a text field) and `partClassName` (a json field). A Payload
+     * blocks field can then keep a block's classes, and the editor offers its Styles tab.
+     */
+    classKeys?: { className?: string; partClassName?: string }
+  }
 }
+
+/** A child of `BlockDefinition.starter`: a block without an id, with children of the same shape. */
+export type StarterBlock = Omit<Block, 'id' | 'slots'> & { slots?: Record<string, StarterBlock[]> }
 
 // ---------------------------------------------------------------------------
 // Ready-made sections (inserted as a whole; the main unit for AI tools)
@@ -391,6 +428,11 @@ export type BuilderClientConfig = {
   storage?: 'payload-blocks'
   /** With `storage: 'payload-blocks'`: the block types the field allows at its top level. */
   payloadRootTypes?: string[]
+  /**
+   * The form builder is on (`websiteBuilder({ forms })`): the forms collection and the form
+   * submissions collection (null when not found), for the Form block's actions and the rename warning.
+   */
+  forms?: { collection: string; submissions: string | null }
   /**
    * Collection -> relationship field path -> related collection (`bindingRelations`), so the
    * canvas resolves `<path>.$url` bindings as the site does.

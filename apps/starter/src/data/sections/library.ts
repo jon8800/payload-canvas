@@ -6,7 +6,8 @@
 import type { Block, SectionDefinition } from 'payload-canvas'
 import { cardGrid } from './cardGrid'
 import { url } from './build'
-import { contact } from './contact'
+import { contact, contactForm } from './contact'
+import { newsletter, quoteRequest } from './forms'
 import { content } from './content'
 import { cta } from './cta'
 import { faq } from './faq'
@@ -285,7 +286,7 @@ export const sectionLibrary: SectionDefinition[] = [
         contact.create({
           title: 'Get in touch',
           text: 'Fill in the form, or reach us directly.',
-          formId: NO_ID,
+          form: contactForm(),
           details: [
             { label: 'Email', value: 'hello@northwind.example', href: 'mailto:hello@northwind.example' },
             { label: 'Phone', value: '+1 555 0100', href: 'tel:+15550100' },
@@ -294,6 +295,20 @@ export const sectionLibrary: SectionDefinition[] = [
         }),
       ),
     ],
+  },
+  {
+    id: 'newsletter-signup',
+    label: 'Newsletter signup',
+    description: 'A title and text beside an email field and a Subscribe button.',
+    category: 'Contact',
+    blocks: [newsletter.create({ title: 'Stay in the loop', text: 'One short email a month with new work and notes. No spam, unsubscribe any time.' })],
+  },
+  {
+    id: 'quote-request',
+    label: 'Quote request',
+    description: 'A project form: contact details, the service as buttons, budget, start date, details and a file.',
+    category: 'Contact',
+    blocks: [quoteRequest.create({ title: 'Request a quote', text: 'Tell us about your project. We reply with a first estimate within two working days.' })],
   },
   {
     id: 'latest-posts',

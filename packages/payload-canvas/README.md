@@ -673,7 +673,7 @@ It also adds these endpoints (signed-in users only):
 | Import | Use it in | Holds |
 |---|---|---|
 | `payload-canvas` | `payload.config.ts` (server) | `websiteBuilder`, `defineBlock`, `defaultBlocks`, `fromPayloadBlocks`, `migrateBlocksField`, `formSubmissionConditions`, types |
-| `payload-canvas/forms` | anywhere | form display conditions (`withFormConditions`, `hiddenFormFields`, `describeConditions`), field settings (`withFormFieldSettings`, `formFieldWidth`), answer checks (`formAnswerProblem`, `fileProblem`, `filesProblem`), the extra field types (`moreFormFields`), the email fields (`withFormEmailFields`) and merge tags (`mergeTags`, `formEmailMessage`), `formFieldType`, `formFieldSlug`, `FORM_SETTINGS_REGION`. See [Form builder](#form-builder). |
+| `payload-canvas/forms` | anywhere | form display conditions (`withFormConditions`, `hiddenFormFields`, `describeConditions`), field settings (`withFormFieldSettings`, `formFieldWidth`), answer checks (`formAnswerProblem`, `fileProblem`, `filesProblem`), the extra field types (`moreFormFields`), the email fields (`withFormEmailFields`) and merge tags (`mergeTags`, `formEmailMessage`), `formFieldType`, `formFieldSlug`, `FORM_SETTINGS_REGION`, forms on pages (`formBlocks`, `formBlockMode`, `formBlockFields`, `formDataFromBlock`, `formBlockFromDoc`, `withSavedFormFields`). See [Form builder](#form-builder). |
 | `payload-canvas/blocks` | anywhere | `defaultBlocks`, `defineBlock`, `linkField`, `fromPayloadBlocks`, `BUILDER_CSS_CLASS`, `withBuilderCssClass` |
 | `payload-canvas/core` | anywhere | layout types, `normalizeLayout`, `validateLayout`, `applyOperations`, tree helpers, `convertPayloadBlocksLayout`, `toPayloadBlock`, `fieldReferences`, `rowLabel` |
 | `payload-canvas/css` | server | `compileClasses`, `getStyleTokens`, `tracingIncludes` |
@@ -1582,9 +1582,10 @@ Edit the forms of the official [`@payloadcms/plugin-form-builder`](https://paylo
 
 - **Left:** the form's fields in Layers. Drag to reorder. The Blocks tab adds a field of any type the form-builder plugin offers. Duplicate and delete work as for blocks.
 - **Centre:** a live preview of the form alone, rendered by your app's own form component, so it matches the site. A click on a field selects it.
-- **Right:** the selected field's settings with Payload's own inputs, on up to four tabs: **Field** (name, label, description, default value, options), **Appearance** (width, label visibility, placeholder, radio display, CSS class), **Validation** (required, file types, size and number of files) and **Conditions** (display conditions). **Width** is a row of buttons (full, 3/4, 2/3, 1/2, 1/3, 1/4); it stores the plugin's own `width` percentage. With no field selected, the panel shows the form's settings in sections that fold: **General** (title, submit button label), **After submit** (confirmation type, message, redirect) and **Mail** (the emails). Any other top-level `group` field of the forms collection (for example spam protection settings) gets a section of its own.
+- **Right:** the selected field's settings with Payload's own inputs, on up to four tabs: **Field** (name, label, description, default value, options), **Appearance** (width, label visibility, placeholder, radio display), **Validation** (required, file types, size and number of files) and **Conditions** (display conditions). **Width** is a row of buttons (full, 3/4, 2/3, 1/2, 1/3, 1/4); it stores the plugin's own `width` percentage. With no field selected, the panel shows the form's settings in sections that fold: **General** (title, submit button label), **After submit** (confirmation type, message, redirect) and **Mail** (the emails). Any other top-level `group` field of the forms collection (for example spam protection settings) gets a section of its own.
 - **No sections:** form fields are not page sections, so the form builder has no Sections tab and no "Save as section…".
 - **Top bar:** title, save state, undo and redo, and **All fields** for Payload's own edit screen. Each change saves at once (forms have no drafts).
+- **Styles:** a field's looks (its box, label, input, help text, error, options) are edited in the Styles panel, as on pages. They are stored in the field's hidden `cssClass` and `partClasses`.
 
 The form's `fields` stay a Payload `blocks` field: the builder edits it in place, as in [Using existing Payload blocks](#using-existing-payload-blocks). Nothing is copied and nothing needs a migration.
 
@@ -1648,6 +1649,41 @@ The form's `fields` stay a Payload `blocks` field: the builder edits it in place
 
    `LayoutOutlet` (from `payload-canvas/react`) is where the fields go. Its `className` styles their box, so fields with a width share a line as on the site. The submit button is the form settings region: a click on it selects the settings. In the preview, inputs should take no clicks (`pointer-events: none`), so a click selects the field. The starter's `FormParts.tsx`, `FormFieldBlock.tsx` and `FormFrame.tsx` are a complete example: the site's `FormView` and the preview render the same field component.
 
+### Forms on pages
+
+Build a form right on a page, like in Webflow: the fields are blocks inside a **Form** block, in Layers, the Blocks tab, the inspector and the Styles panel. There is no trip to the Forms collection.
+
+1. List the Form block and the Submit button block in your blocks, next to `forms: true`:
+
+   ```ts
+   import { formBlocks } from 'payload-canvas/forms'
+
+   export const blocks = [
+     ...defaultBlocks(),
+     // Default classes of the form-wide parts: labels, inputs, help texts, errors and the button.
+     ...formBlocks({ partClassNames: { label: 'text-sm font-medium', input: 'w-full rounded-md border px-3 py-2' } }),
+   ]
+   ```
+
+   The plugin completes the Form block with the forms collection's own settings fields and adds one block per field type of the collection (`formText`, `formEmail`, …), so each field and each setting has one definition. Your site renders them with your components: `form`, `formSubmit` and every field type (the starter's `Form.tsx`, `FormFieldBlock.tsx`, `FormSubmitBlock.tsx` and `FormRuntime.tsx` are a complete renderer).
+
+2. In the editor, **Form** in the Blocks tab adds a ready contact form: Name, Email, Message and a Submit button. The field blocks are in the **Fields** category. They go only inside a Form block, at any depth (in a grid or a stack inside it too); a drop or a click elsewhere is refused with the reason. Layers shows each field's name.
+
+| On the Form block | |
+|---|---|
+| **Form fields** | **Build here**: the blocks inside are the form. **Use a saved form**: shows a form of the Forms collection, read only, with **Edit form** (the form builder) and **Move into this page** (its fields become blocks here). Layouts from before keep showing their saved form. |
+| **General, After submit, Mail, Spam protection** | The same settings as in the form builder, folding. |
+| **Styles** | The Form block is the `<form>` element. Its parts **Labels**, **Inputs**, **Help texts**, **Error messages** and **Submit button** style every field inside. |
+
+- **Field names** are unique within one Form block: two forms may each have an `email`. A copied, pasted or duplicated field gets a free name (`email2`). Renaming a field of a form with submissions shows a warning: old submissions keep the old name.
+- **A field's own looks:** each field block has its own classes (its box) and parts (Label, Input, Help text, Error message, Options). A part without classes uses the Form block's classes; the Styles panel starts from them, so changing one value copies the rest. Clearing a part's classes goes back to the form's.
+- **Publishing** the page (or saving it, for collections without drafts) writes each "Build here" Form block to a document of the Forms collection: its fields in tree order (the plugin's own field rows) and its settings. Emails, spam protection and submissions keep working through the plugin. Drafts and the canvas use the block's own data, so a draft never changes the live form. A form without a title gets the page title ("Contact form"); without a confirmation message, "Thank you. We will reply soon."
+- **Copies:** each form remembers the block it was made from (a hidden `source` group: collection, document id, block id). A copied page or a duplicated Form block gets its own new form when it is published, never the original's. Deleting a Form block keeps its form, with its submissions.
+- **Move into this page** keeps the form's id (and its submissions) when no other page uses it; otherwise this page gets its own copy on publish. The form builder shows a note on forms built on a page, with a link to the page: a publish that changes the form there replaces changes made in the form builder.
+- **AI:** MCP tools and the assistant use the same blocks. `listBlocks` explains the Form block, its modes and that fields go inside it.
+
+The `source` group is a new set of columns on the forms table: production needs a migration (`pnpm payload migrate:create`).
+
 ### Display conditions
 
 `withFormConditions(block)` adds a **Display conditions** group to a field block. **Show when** is "all rules match" or "any rule matches". Each rule is *field*, *test*, *value*. Tests: equals, does not equal, contains, is empty, is not empty. Text compares without case; a ticked checkbox equals `true`. In the builder, the rule's field is a list of the form's other fields, and the preview notes each field's conditions under it ("Shows when topic equals “website”"). The preview always shows every field.
@@ -1667,7 +1703,7 @@ The form's `fields` stay a Payload `blocks` field: the builder edits it in place
 | **Placeholder** (`placeholder`) | text, email, long text, number, phone, web address, dropdown, country, state | grey text in the empty input; a dropdown's empty choice |
 | **Default value** (`defaultValue`) | email, country and state (the others have it already) | the starting answer |
 | **Display** (`display`: `list`, `inline`, `buttons`, `cards`) | radio | one option per line, on one line, joined buttons, or a box per option. Real radio inputs underneath, so arrow keys and screen readers work |
-| **CSS class** (`cssClass`) | all but hidden | classes on the field's box, for example an editable class |
+| **Classes** (hidden `cssClass` and `partClasses`) | all but hidden | the field's box and its parts, edited in the builder's Styles panel. Older "CSS class" values show there as the field's classes |
 
 `formFieldWidth(width)` gives the width preset the site draws for a stored width (40 gives 50). `radioDisplay`, `isLabelShown` and `maxFileCount` read the other settings. The starter's `FormParts.tsx` renders every setting; its dropdown is the project's shadcn Select (Base UI, with a hidden input that submits the value).
 
@@ -1782,7 +1818,9 @@ formBuilderPlugin({
 
 ### Limits
 
-- A new field starts with its type as its name (`text`, `checkbox`). A second one gets `text2`, and a duplicated or pasted field gets a free name too (`uniqueProps`). Payload itself does not check that names are unique, so a field renamed by hand can still clash.
+- A new field starts with its type as its name (`text`, `checkbox`). A second one gets `text2`, and a duplicated or pasted field gets a free name too (`uniqueProps`, scoped to the Form block on pages). Payload itself does not check that names are unique, so a field renamed by hand can still clash; on pages, Publish reports it.
+- Forms on pages use the default locale's values of their props.
+- A Form block in "Use a saved form" mode shows the saved form's own field classes on the site; the canvas preview of it shows only classes the site's CSS has.
 - A setting that needs another field (choosing **Redirect** needs a page or a URL) waits until that field has a value, then both save together.
 - Labels that the form-builder plugin writes as translation functions show as words from the field name in the builder ("Submit Button Label").
 - The AI assistant edits a form's fields, not its settings. It tells people where the settings are.

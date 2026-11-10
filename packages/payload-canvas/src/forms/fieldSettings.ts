@@ -1,12 +1,20 @@
 // Gravity Forms style settings for the field blocks of `@payloadcms/plugin-form-builder`: label
-// visibility, description, placeholder, default value, CSS class, the width presets, the display
-// of radio buttons, and several files for a file field. `withFormFieldSettings` adds the settings a
-// block lacks; the builder sorts them into its Field / Appearance / Validation tabs. Client-safe and
-// pure: the site's form renderer reads the same helpers.
+// visibility, description, placeholder, default value, the width presets, the display of radio
+// buttons, and several files for a file field, plus the hidden fields that store the field's
+// classes (the builder's Styles panel). `withFormFieldSettings` adds the settings a block lacks;
+// the builder sorts them into its Field / Appearance / Validation tabs. Client-safe and pure: the
+// site's form renderer reads the same helpers.
 
 import type { Field } from 'payload'
 
+import { BLOCK_KEY_MARKER } from '../blocks/payload'
 import { FORM_CONDITIONS_FIELD } from './conditions'
+
+/** The row key of a field's own classes (the box around label and input). Older forms typed them as "CSS class". */
+export const FORM_FIELD_CLASS_KEY = 'cssClass'
+
+/** The row key of a field's part classes (label, input, help text, error, options). */
+export const FORM_FIELD_PARTS_KEY = 'partClasses'
 
 /** `admin.custom.builderWidthPicker`: the builder edits the number as width buttons (full, 3/4, …). */
 export const WIDTH_PICKER_MARKER = 'builderWidthPicker'
@@ -71,7 +79,7 @@ const SETTING_TYPES = {
   defaultValue: ['email', 'country', 'state'],
   display: ['radio'],
   multiple: ['file'],
-  cssClass: ['text', 'email', 'textarea', 'number', 'phone', 'url', 'select', 'radio', 'checkbox', 'consent', 'country', 'state', 'date', 'file', 'message'],
+  classes: ['text', 'email', 'textarea', 'number', 'phone', 'url', 'select', 'radio', 'checkbox', 'consent', 'country', 'state', 'date', 'file', 'message'],
 } as const satisfies Record<string, readonly string[]>
 
 /** A file field's "Allow several files" box and its "Most files" number. */
@@ -134,13 +142,10 @@ const SETTINGS: Record<keyof typeof SETTING_TYPES, Field[]> = {
     },
   ],
   multiple: fileCountFields(),
-  cssClass: [
-    {
-      name: 'cssClass',
-      type: 'text',
-      label: 'CSS class',
-      admin: { description: 'Classes for the field’s box, separated by spaces, for example an editable class. The site’s CSS must have them.' },
-    },
+  // Edited in the builder's Styles panel (`payload.classKeys`), hidden in Payload's own form.
+  classes: [
+    { name: FORM_FIELD_CLASS_KEY, type: 'text', label: 'CSS class', admin: { hidden: true, custom: { [BLOCK_KEY_MARKER]: 'className' } } },
+    { name: FORM_FIELD_PARTS_KEY, type: 'json', label: 'Part classes', admin: { hidden: true, custom: { [BLOCK_KEY_MARKER]: 'partClassName' } } },
   ],
 } as Record<keyof typeof SETTING_TYPES, Field[]>
 
@@ -159,7 +164,8 @@ function fieldNames(fields: readonly Field[]): Set<string> {
 
 /**
  * The block with the settings it lacks for its type: description, label visibility, placeholder,
- * default value, CSS class, radio display, several files. The description goes right after the
+ * default value, radio display, several files, and the hidden class fields (the field's classes
+ * and part classes, edited in the builder's Styles panel; the old "CSS class" values stay). The description goes right after the
  * label; the other settings go before the display conditions. Known types only; a setting the block
  * has already stays as it is. For the form-builder plugin's `fields` option:
  * `withFormFieldSettings(fields.text)`. The plugin stores form fields as JSON, so no migration is needed.

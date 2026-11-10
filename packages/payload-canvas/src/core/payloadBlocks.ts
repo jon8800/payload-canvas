@@ -78,9 +78,10 @@ export function decodePayloadBlocks(value: unknown, storage: PayloadBlocksStorag
     }
     seen.add(id)
     const slotNames = Object.keys(def.slots ?? {})
+    const classKeys = def.payload?.classKeys ?? {}
     const props: Record<string, unknown> = {}
     for (const [key, raw] of Object.entries(row)) {
-      if (ROW_KEYS.has(key) || raw === undefined || slotNames.includes(key)) continue
+      if (ROW_KEYS.has(key) || raw === undefined || slotNames.includes(key) || key === classKeys.className || key === classKeys.partClassName) continue
       props[key] = raw
     }
     const slots: Record<string, Block[]> = {}
@@ -94,6 +95,14 @@ export function decodePayloadBlocks(value: unknown, storage: PayloadBlocksStorag
     if (Object.keys(props).length > 0) block.props = props
     if (Object.keys(slots).length > 0) block.slots = slots
     if (typeof row.blockName === 'string' && row.blockName !== '') block.label = row.blockName
+    // Classes the block's class keys store (a form field's `cssClass`). Empty values mean none.
+    const className = classKeys.className ? row[classKeys.className] : undefined
+    if (typeof className === 'string' && className.trim()) block.className = className
+    const parts = classKeys.partClassName ? row[classKeys.partClassName] : undefined
+    if (isPlainObject(parts)) {
+      const kept = Object.fromEntries(Object.entries(parts).filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1].trim() !== ''))
+      if (Object.keys(kept).length > 0) block.partClassName = kept
+    }
     return block
   }
 
@@ -117,7 +126,8 @@ export function payloadBlocksProblems(layout: Layout, storage: PayloadBlocksStor
         continue
       }
       if (allowed && !allowed.includes(block.type)) problems.push(`${name} blocks are not allowed here.`)
-      if (block.className || block.partClassName) problems.push(`${name}: this field cannot store Tailwind classes.`)
+      const classKeys = def.payload?.classKeys
+      if ((block.className && !classKeys?.className) || (block.partClassName && !classKeys?.partClassName)) problems.push(`${name}: this field cannot store Tailwind classes.`)
       if (block.motion) problems.push(`${name}: this field cannot store animations.`)
       if (block.attrs) problems.push(`${name}: this field cannot store HTML attributes (id, aria-label, aria-hidden).`)
       if (block.bindings) problems.push(`${name}: this field cannot store bindings.`)
@@ -153,9 +163,12 @@ export function encodePayloadBlocks(layout: Layout, storage: PayloadBlocksStorag
     const def = getBlockDefinition(storage.blocks as BlockDefinition[], block.type)
     const row: Record<string, unknown> = { id: block.id, blockType: def ? slugOf(def) : block.type }
     if (block.label) row.blockName = block.label
+    const classKeys = def?.payload?.classKeys ?? {}
     for (const [key, value] of Object.entries(block.props ?? {})) {
-      if (!ROW_KEYS.has(key)) row[key] = value
+      if (!ROW_KEYS.has(key) && key !== classKeys.className && key !== classKeys.partClassName) row[key] = value
     }
+    if (classKeys.className && block.className) row[classKeys.className] = block.className
+    if (classKeys.partClassName && block.partClassName && Object.keys(block.partClassName).length > 0) row[classKeys.partClassName] = block.partClassName
     for (const slot of Object.keys(def?.slots ?? {})) row[slot] = writeList(block.slots?.[slot] ?? [])
     return row
   }
@@ -188,6 +201,10 @@ function clearRemoved(rows: readonly Record<string, unknown>[], previous: readon
       if (old && old.blockType === row.blockType) {
         if (!('blockName' in row) && old.blockName !== undefined && old.blockName !== null) row.blockName = null
         if (def) clearFields(def.fields as RowField[], old, row, storage)
+        // Cleared classes: the class keys are not in the definition's fields.
+        for (const key of Object.values(def?.payload?.classKeys ?? {})) {
+          if (!(key in row) && old[key] !== undefined && old[key] !== null) row[key] = null
+        }
       }
       for (const slot of Object.keys(def?.slots ?? {})) {
         const children = row[slot]

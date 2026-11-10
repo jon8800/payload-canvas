@@ -18,10 +18,12 @@ type Props = {
   describedBy?: string
   /** The builder's preview: shows the select, takes no clicks or focus. */
   preview?: boolean
+  /** The input classes (the form's or the field's), else the default look. */
+  className?: string
   onChange?: (value: string) => void
 }
 
-export function FormSelect({ id, name, value, options, placeholder, required, invalid, describedBy, preview, onChange }: Props) {
+export function FormSelect({ id, name, value, options, placeholder, required, invalid, describedBy, preview, className, onChange }: Props) {
   // A value no option has (an old default) shows as empty.
   const current = options.some((option) => option.value === value) ? value : null
   return (
@@ -38,7 +40,7 @@ export function FormSelect({ id, name, value, options, placeholder, required, in
         aria-invalid={invalid || undefined}
         aria-describedby={describedBy}
         tabIndex={preview ? -1 : undefined}
-        className={join(formClasses.input, formClasses.selectTrigger, preview && formClasses.previewInput)}
+        className={join(className ?? formClasses.input, formClasses.selectTrigger, preview && formClasses.previewInput)}
       >
         <SelectValue placeholder={placeholder || 'Choose one'} />
       </SelectTrigger>
