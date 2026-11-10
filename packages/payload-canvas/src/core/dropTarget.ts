@@ -258,6 +258,7 @@ export function canvasDropTarget(
  * bottom 30% first child (or after the row when the container is empty).
  * When the preferred option is not allowed, the next one is tried; `null` when none fits.
  * Below the last row: appended to the root list.
+ * No rows (an empty page): `area`, the tree's box, takes the drop as the root list's first block.
  */
 export function outlineDropTarget(
   layout: Layout,
@@ -266,9 +267,14 @@ export function outlineDropTarget(
   p: Point,
   source: DragSource,
   indent: number,
+  area?: Rect,
 ): DropTarget | null {
   const { index, type, excluded, slotsOf, accepts } = context(layout, blocks, source)
   if (type === null) return null
+  if (rows.length === 0) {
+    if (!area || !rectContains(area, p) || !accepts(null, DEFAULT_SLOT)) return null
+    return finalize(index, source, null, DEFAULT_SLOT, 0, { kind: 'box', rect: area })
+  }
   const line = (r: OutlineRow, side: 'before' | 'after', depth: number): DropIndicator => {
     const y = side === 'before' ? r.rect.y : r.rect.y + r.rect.height
     return {

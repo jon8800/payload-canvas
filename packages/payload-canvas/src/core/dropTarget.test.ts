@@ -186,6 +186,23 @@ describe('outlineDropTarget', () => {
   it('a leaf inside a rejecting slot is not a target', () => {
     assert.equal(outlineDropTarget(layout, blocks, rows, { x: 50, y: 125 }, newHeading, 12), null)
   })
+
+  describe('an empty page (no rows)', () => {
+    const empty: Layout = { version: 1, blocks: [] }
+    const area = { x: 0, y: 0, width: 200, height: 400 }
+
+    it('the tree\'s area takes the drop as the first root block, with a box indicator', () => {
+      const t = outlineDropTarget(empty, blocks, [], { x: 50, y: 200 }, newHeading, 12, area)
+      assert.deepEqual(t?.to, { parentId: null, slot: 'children', index: 0 })
+      assert.deepEqual(t?.indicator, { kind: 'box', rect: area })
+      assert.equal(t?.noop, false)
+    })
+
+    it('outside the area, or without one, is not a target', () => {
+      assert.equal(outlineDropTarget(empty, blocks, [], { x: 50, y: 500 }, newHeading, 12, area), null)
+      assert.equal(outlineDropTarget(empty, blocks, [], { x: 50, y: 200 }, newHeading, 12), null)
+    })
+  })
 })
 
 const key = (list: ReturnType<typeof acceptingSlots>) => list.map((s) => `${s.ownerId ?? 'root'}:${s.slot}`)
