@@ -2,6 +2,8 @@
 // them, so the plugin adds them to the generated CSS (on save and in the canvas). Colors use the
 // theme tokens.
 
+import type { FormFieldWidth } from 'payload-canvas/forms'
+
 export const formClasses = {
   form: 'flex flex-col gap-5',
   // The fields' box: a wrapping row, so fields with a width share a line.
@@ -14,9 +16,14 @@ export const formClasses = {
     'outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground ' +
     'focus-visible:border-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 ' +
     'aria-invalid:border-destructive aria-invalid:focus-visible:ring-destructive/30 disabled:opacity-60',
-  selectWrap: 'relative',
-  select: 'cursor-pointer appearance-none pr-11',
-  selectIcon: 'pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-muted-foreground',
+  // The label of a field whose label is hidden: screen readers still read it.
+  srOnly: 'sr-only',
+  // A dropdown (FormSelect, the project's Base UI select): drawn like the inputs, its list matches the form.
+  selectTrigger:
+    'flex cursor-pointer items-center justify-between gap-2 text-left data-placeholder:text-muted-foreground data-[size=default]:h-auto ' +
+    'data-popup-open:border-foreground [&_svg]:size-4 [&_svg]:text-muted-foreground',
+  selectPopup: 'rounded-md bg-background text-foreground',
+  selectItem: 'min-h-10 cursor-pointer py-2 pl-3 text-base',
   textarea: 'min-h-32 resize-y',
   fieldError: 'm-0 text-sm text-destructive',
   checkboxRow: 'flex w-full items-start gap-3 text-base',
@@ -26,12 +33,37 @@ export const formClasses = {
   // Radio buttons: a fieldset with the label as its legend.
   radioGroup: 'm-0 flex w-full min-w-0 flex-col gap-2 border-0 p-0',
   legend: 'mb-2 p-0 text-sm font-medium text-foreground',
+  // Radio displays (`display`): list, inline, buttons (joined pills) and cards. Real radio inputs
+  // underneath, so arrow keys and screen readers work as usual.
   radioList: 'flex flex-col gap-2',
-  radioRow: 'flex items-center gap-3 text-base',
+  radioInline: 'flex flex-wrap gap-x-6 gap-y-2',
+  radioRow: 'flex cursor-pointer items-center gap-3 text-base',
   radio: 'size-5 shrink-0 accent-primary',
-  file:
-    'block w-full text-base text-foreground file:mr-4 file:cursor-pointer file:rounded-full file:border-0 file:bg-muted ' +
-    'file:px-4 file:py-2 file:text-sm file:font-medium file:text-foreground hover:file:bg-[color-mix(in_oklch,var(--color-muted),black_6%)]',
+  radioButtons: 'inline-flex max-w-full flex-wrap gap-1 self-start rounded-3xl border border-input bg-background p-1 has-aria-invalid:border-destructive',
+  radioButton:
+    'inline-flex min-h-10 cursor-pointer items-center rounded-full px-4 text-sm font-medium text-muted-foreground transition-colors ' +
+    'hover:text-foreground has-checked:bg-primary has-checked:text-primary-foreground has-focus-visible:ring-[3px] has-focus-visible:ring-ring/40',
+  radioCards: 'grid gap-3 sm:grid-cols-2',
+  radioCard:
+    'flex cursor-pointer items-center gap-3 rounded-lg border border-input bg-background px-4 py-3.5 text-base transition-colors ' +
+    'hover:border-foreground/40 has-checked:border-primary has-checked:bg-primary/5 has-focus-visible:ring-[3px] has-focus-visible:ring-ring/40 ' +
+    'has-aria-invalid:border-destructive',
+  // File drop zone (FileDropZone): drag files in or click to browse; the chosen files below.
+  dropZone:
+    'flex w-full cursor-pointer flex-col items-center gap-1.5 rounded-lg border-2 border-dashed border-input bg-background px-6 py-8 text-center ' +
+    'transition-colors hover:border-foreground/40 has-focus-visible:border-foreground has-focus-visible:ring-[3px] has-focus-visible:ring-ring/40 ' +
+    'has-aria-invalid:border-destructive data-[dragging=true]:border-primary data-[dragging=true]:bg-primary/5',
+  dropIcon: 'size-6 text-muted-foreground',
+  dropTitle: 'm-0 text-base text-foreground',
+  dropBrowse: 'font-medium underline underline-offset-4',
+  fileList: 'm-0 flex list-none flex-col gap-2 p-0',
+  fileItem: 'flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2 text-sm',
+  fileName: 'min-w-0 flex-1 truncate text-foreground',
+  fileSize: 'shrink-0 text-muted-foreground tabular-nums',
+  fileRemove:
+    'inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors ' +
+    'hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40',
+  fileRemoveIcon: 'size-4',
   hint: 'm-0 text-sm text-muted-foreground',
   // A hidden field in the builder's preview: visitors never see it.
   hiddenPreview: 'w-full rounded-md border border-dashed border-border px-3.5 py-2 text-sm text-muted-foreground',
@@ -59,17 +91,21 @@ export const formClasses = {
   placeholder: 'm-0 rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground',
 } as const
 
-/** Width classes for form-builder field widths (percent). Full width on phones. */
-export const widthClasses: Array<[max: number, className: string]> = [
-  [25, 'sm:w-[calc(25%-0.75rem)]'],
-  [34, 'sm:w-[calc(33.333%-0.667rem)]'],
-  [50, 'sm:w-[calc(50%-0.5rem)]'],
-  [67, 'sm:w-[calc(66.667%-0.333rem)]'],
-  [75, 'sm:w-[calc(75%-0.25rem)]'],
-]
+/** Class names without the empty ones, joined by spaces. */
+export const join = (...names: Array<string | false | null | undefined>) => names.filter(Boolean).join(' ')
+
+/** Width classes of the field width presets (`formFieldWidth`). Full width on phones. */
+export const widthClasses: Record<FormFieldWidth, string> = {
+  100: '',
+  75: 'sm:w-[calc(75%-0.25rem)]',
+  67: 'sm:w-[calc(66.667%-0.333rem)]',
+  50: 'sm:w-[calc(50%-0.5rem)]',
+  33: 'sm:w-[calc(33.333%-0.667rem)]',
+  25: 'sm:w-[calc(25%-0.75rem)]',
+}
 
 /** Every class above, for `BlockDefinition.classes`. */
 export const formClassList: string[] = [
   ...Object.values(formClasses).flatMap((value) => value.split(' ')),
-  ...widthClasses.map(([, className]) => className),
+  ...Object.values(widthClasses).filter(Boolean),
 ]

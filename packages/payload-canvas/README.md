@@ -673,7 +673,7 @@ It also adds these endpoints (signed-in users only):
 | Import | Use it in | Holds |
 |---|---|---|
 | `payload-canvas` | `payload.config.ts` (server) | `websiteBuilder`, `defineBlock`, `defaultBlocks`, `fromPayloadBlocks`, `migrateBlocksField`, `formSubmissionConditions`, types |
-| `payload-canvas/forms` | anywhere | form display conditions (`withFormConditions`, `hiddenFormFields`, `describeConditions`), answer checks (`formAnswerProblem`, `fileProblem`), the extra field types (`moreFormFields`), the email fields (`withFormEmailFields`) and merge tags (`mergeTags`, `formEmailMessage`), `formFieldType`, `formFieldSlug`, `FORM_SETTINGS_REGION`. See [Form builder](#form-builder). |
+| `payload-canvas/forms` | anywhere | form display conditions (`withFormConditions`, `hiddenFormFields`, `describeConditions`), field settings (`withFormFieldSettings`, `formFieldWidth`), answer checks (`formAnswerProblem`, `fileProblem`, `filesProblem`), the extra field types (`moreFormFields`), the email fields (`withFormEmailFields`) and merge tags (`mergeTags`, `formEmailMessage`), `formFieldType`, `formFieldSlug`, `FORM_SETTINGS_REGION`. See [Form builder](#form-builder). |
 | `payload-canvas/blocks` | anywhere | `defaultBlocks`, `defineBlock`, `linkField`, `fromPayloadBlocks`, `BUILDER_CSS_CLASS`, `withBuilderCssClass` |
 | `payload-canvas/core` | anywhere | layout types, `normalizeLayout`, `validateLayout`, `applyOperations`, tree helpers, `convertPayloadBlocksLayout`, `toPayloadBlock`, `fieldReferences`, `rowLabel` |
 | `payload-canvas/css` | server | `compileClasses`, `getStyleTokens`, `tracingIncludes` |
@@ -1582,7 +1582,7 @@ Edit the forms of the official [`@payloadcms/plugin-form-builder`](https://paylo
 
 - **Left:** the form's fields in Layers. Drag to reorder. The Blocks tab adds a field of any type the form-builder plugin offers. Duplicate and delete work as for blocks.
 - **Centre:** a live preview of the form alone, rendered by your app's own form component, so it matches the site. A click on a field selects it.
-- **Right:** the selected field's settings with Payload's own inputs, on three tabs: **Field** (name, label, width, default value, placeholder, options), **Validation** (required, file types and size) and **Conditions** (display conditions). With no field selected, the panel shows the form's settings in sections that fold: **General** (title, submit button label), **After submit** (confirmation type, message, redirect) and **Mail** (the emails). Any other top-level `group` field of the forms collection (for example spam protection settings) gets a section of its own.
+- **Right:** the selected field's settings with Payload's own inputs, on up to four tabs: **Field** (name, label, description, default value, options), **Appearance** (width, label visibility, placeholder, radio display, CSS class), **Validation** (required, file types, size and number of files) and **Conditions** (display conditions). **Width** is a row of buttons (full, 3/4, 2/3, 1/2, 1/3, 1/4); it stores the plugin's own `width` percentage. With no field selected, the panel shows the form's settings in sections that fold: **General** (title, submit button label), **After submit** (confirmation type, message, redirect) and **Mail** (the emails). Any other top-level `group` field of the forms collection (for example spam protection settings) gets a section of its own.
 - **No sections:** form fields are not page sections, so the form builder has no Sections tab and no "Save as section…".
 - **Top bar:** title, save state, undo and redo, and **All fields** for Payload's own edit screen. Each change saves at once (forms have no drafts).
 
@@ -1595,12 +1595,12 @@ The form's `fields` stay a Payload `blocks` field: the builder edits it in place
    ```ts
    import { fields as formFields, formBuilderPlugin } from '@payloadcms/plugin-form-builder'
    import { formEmails, formFileUploads, formSubmissionConditions, websiteBuilder } from 'payload-canvas'
-   import { withFormConditions, withFormEmailFields } from 'payload-canvas/forms'
+   import { withFormConditions, withFormEmailFields, withFormFieldSettings } from 'payload-canvas/forms'
 
    plugins: [
      formBuilderPlugin({
-       // The plugin's own field blocks, each with a `conditions` field (optional, see below).
-       fields: { text: withFormConditions(formFields.text), email: withFormConditions(formFields.email) /* … */ },
+       // The plugin's own field blocks, each with a `conditions` field and more settings (both optional, see below).
+       fields: { text: withFormFieldSettings(withFormConditions(formFields.text)), email: withFormFieldSettings(withFormConditions(formFields.email)) /* … */ },
        // Each email: To, From name, From email, Reply-To, CC, BCC, Subject, rich text or HTML body (see "Emails").
        beforeEmail: formEmails(),
        formOverrides: { fields: ({ defaultFields }) => withFormEmailFields(defaultFields) },
@@ -1656,6 +1656,21 @@ The form's `fields` stay a Payload `blocks` field: the builder edits it in place
 - **On submission:** `formSubmissionConditions()` (a `beforeValidate` hook for the submissions collection) reads the form and drops the answers of hidden fields. It refuses a submission that leaves a shown required field empty (400, "Company is required.") or gives an answer in the wrong format (400, "Web address: Enter a web address like https://example.com."). The form-builder plugin has no server checks of its own; this hook adds them. `formAnswerProblem(field, value)` in `payload-canvas/forms` is the same check for the site's form, so both show the same messages.
 - `applyFormConditions(fields, submissionData)` (pure, in `payload-canvas`) is the same rule without Payload, for your own handlers.
 
+### Field settings
+
+`withFormFieldSettings(block)` adds the Gravity Forms style settings a field block lacks. It keeps the settings a block has already. The form-builder plugin stores form fields as JSON, so no migration is needed.
+
+| Setting | Field types | On the site |
+|---|---|---|
+| **Description** (`description`) | all but hidden and message | help text under the input, linked with `aria-describedby` |
+| **Label visibility** (`labelVisibility`: `visible`, `hidden`) | all but hidden, message, checkbox and consent | `hidden` keeps the label for screen readers only |
+| **Placeholder** (`placeholder`) | text, email, long text, number, phone, web address, dropdown, country, state | grey text in the empty input; a dropdown's empty choice |
+| **Default value** (`defaultValue`) | email, country and state (the others have it already) | the starting answer |
+| **Display** (`display`: `list`, `inline`, `buttons`, `cards`) | radio | one option per line, on one line, joined buttons, or a box per option. Real radio inputs underneath, so arrow keys and screen readers work |
+| **CSS class** (`cssClass`) | all but hidden | classes on the field's box, for example an editable class |
+
+`formFieldWidth(width)` gives the width preset the site draws for a stored width (40 gives 50). `radioDisplay`, `isLabelShown` and `maxFileCount` read the other settings. The starter's `FormParts.tsx` renders every setting; its dropdown is the project's shadcn Select (Base UI, with a hidden input that submits the value).
+
 ### More field types
 
 `moreFormFields` from `payload-canvas/forms` adds five field types to the plugin's `fields` option. Each has a label, an icon and a tooltip in the Blocks tab, and display conditions work with all of them.
@@ -1666,24 +1681,24 @@ The form's `fields` stay a Payload `blocks` field: the builder edits it in place
 | `url` | text | an http or https address; `example.com` counts |
 | `hidden` | its **Value**, sent with every answer | none. The preview shows it as a dashed note |
 | `consent` | `true` or `false` | must be ticked when required (the default). Its **Text** is rich text, so it can link to the privacy policy |
-| `file` | the file, in an upload collection | **Allowed file types** (`image/*, application/pdf, .docx`) and **Largest file (MB)**, at most 10 MB |
+| `file` | the files, in an upload collection | **Allowed file types** (`image/*, application/pdf, .docx`), **Largest file (MB)** for each file (at most 10 MB), and **Allow several files** with **Most files** (default 5, at most 20) |
 
 The plugin's own `radio` and `date` types need nothing extra. `formAnswerProblem` checks that a radio or select answer is one of the options, and that a date is a real date.
 
 ```ts
 import { fields as formFields } from '@payloadcms/plugin-form-builder'
-import { moreFormFields, withFormConditions } from 'payload-canvas/forms'
+import { moreFormFields, withFormConditions, withFormFieldSettings } from 'payload-canvas/forms'
 
 formBuilderPlugin({
   fields: {
     radio: withFormConditions(formFields.radio),
     date: withFormConditions(formFields.date),
-    ...Object.fromEntries(Object.entries(moreFormFields).map(([slug, block]) => [slug, withFormConditions(block)])),
+    ...Object.fromEntries(Object.entries(moreFormFields).map(([slug, block]) => [slug, withFormFieldSettings(withFormConditions(block))])),
   },
 })
 ```
 
-Your form renders them (the starter's `FormParts.tsx` is an example). For a `file` field, send the submission as multipart form data: the JSON in `_payload`, and each file as a part named after its field, with the file name as the field's answer in `submissionData`. `formFileUploads({ collection, field })` (a submissions `beforeChange` hook) checks type and size again, stores each file in `collection` (default `media`), and links it on `field` (default `attachments`: a `hasMany` relationship or upload field you add to the submissions). It replaces the answer with the file name and address, so emails show it. A file field that the visitor's answers hide is skipped. Links a visitor sends in `attachments` are ignored. The plugin's own `upload` type cannot take display conditions (the plugin ignores a config for it), so use `file`.
+Your form renders them (the starter's `FormParts.tsx` is an example). For a `file` field, send the submission as multipart form data: the JSON in `_payload`, and each file as a part named after its field (several files: several parts with the same name), with the file names as the field's answer in `submissionData`. `filesProblem(files, field)` checks the number of files, their type and size; the starter's drop zone (`FileDropZone.tsx`) shows its message at once. `formFileUploads({ collection, field })` (a submissions `beforeChange` hook) runs the same check again, stores each file in `collection` (default `media`), and links them on `field` (default `attachments`: a `hasMany` relationship or upload field you add to the submissions). It replaces the answer with the file names and addresses, so emails show them. A file field that the visitor's answers hide is skipped. Links a visitor sends in `attachments` are ignored. The plugin's own `upload` type cannot take display conditions (the plugin ignores a config for it), so use `file`.
 
 ### Emails
 
@@ -1763,6 +1778,7 @@ formBuilderPlugin({
 - `sourceUrl` stores the page on create: the value the form sends, else the `Referer` header. Only site paths and http(s) URLs are kept.
 - `submissionSummary(submissionData, formFields)` and `submissionAnswers(formFields, submissionData)` from `payload-canvas/forms` give the same summary and table to your own views (the starter's dashboard widget uses them).
 - The new fields need a migration in production: run `pnpm payload migrate:create` when you prepare the release.
+- Example submissions for a demo: the starter's `pnpm seed:submissions` adds 12 to the Contact form and 4 to every other form, over the past 3 weeks, some new and some read, one with a file from the media library. It runs once (it looks for its `@example.net` answers) and sends no emails.
 
 ### Limits
 

@@ -47,7 +47,22 @@ export {
   urlFormField,
   withFormEmailFields,
 } from './fieldConfigs'
-export { acceptPatterns, fileProblem, fileTypeAllowed, maxFileBytes, type FileRules } from './files'
+export { acceptPatterns, fileProblem, filesProblem, fileTypeAllowed, maxFileBytes, type FileCountRules, type FileRules } from './files'
+export {
+  DEFAULT_MAX_FILES,
+  fileCountFields,
+  FORM_FIELD_WIDTHS,
+  formFieldWidth,
+  isLabelShown,
+  MAX_FILES_LIMIT,
+  maxFileCount,
+  RADIO_DISPLAYS,
+  radioDisplay,
+  WIDTH_PICKER_MARKER,
+  withFormFieldSettings,
+  type FormFieldWidth,
+  type RadioDisplay,
+} from './fieldSettings'
 export {
   FORM_SPAM_FIELD,
   FORM_SPAM_KEY,

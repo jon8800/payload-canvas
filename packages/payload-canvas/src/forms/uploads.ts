@@ -1,14 +1,16 @@
 // Files of the `file` form field (`fileFormField`): checks and storage. The site's form sends
-// the submission as multipart form data (`_payload` with the JSON, one part per file field, by
-// field name). `formFileUploads` is a `beforeChange` hook of the submissions collection: it checks
-// type and size, stores each file in an upload collection (media), links it on a relationship
-// field of the submission (`attachments`) and puts the file name and address in the answers, so
-// emails show them. Hidden file fields are skipped, as their other answers are.
+// the submission as multipart form data (`_payload` with the JSON, one part per file, named after
+// its field; a field with several files sends several parts with one name). `formFileUploads` is a
+// `beforeChange` hook of the submissions collection: it checks the number of files (one, or the
+// field's `maxFiles` when it allows several), their type and size, stores each file in an upload
+// collection (media), links them on a relationship field of the submission (`attachments`) and
+// puts the file names and addresses in the answers, so emails show them. Hidden file fields are
+// skipped, as their other answers are.
 
 import { ValidationError, type CollectionBeforeChangeHook } from 'payload'
 
 import { FILE_FIELD_MAX_MB } from './fieldConfigs'
-import { fileProblem, type FileRules } from './files'
+import { filesProblem, type FileCountRules } from './files'
 import { applyFormConditions, type SubmissionRow } from './submission'
 
 /** A file of the request, as Payload parses multipart data (`req.files`). */
@@ -27,7 +29,7 @@ export type FormFileUploadsOptions = {
   data?: (file: { name: string; mimetype: string; size: number }) => Record<string, unknown>
 }
 
-type FileField = { blockType?: string; name?: string | null; label?: string | null; required?: boolean | null } & FileRules
+type FileField = { blockType?: string; name?: string | null; label?: string | null } & FileCountRules
 
 const idOf = (value: unknown): string | number | null => {
   if (typeof value === 'string' || typeof value === 'number') return value
@@ -59,41 +61,36 @@ export function formFileUploads(options: FormFileUploadsOptions = {}): Collectio
     const { hidden } = applyFormConditions(form.fields, rows)
     const files = (req.files ?? {}) as Record<string, RequestFile | RequestFile[] | undefined>
     const errors: { path: string; message: string }[] = []
-    const accepted: Array<{ field: FileField & { name: string }; file: RequestFile }> = []
+    const accepted: Array<{ field: FileField & { name: string }; files: RequestFile[] }> = []
     for (const field of fileFields) {
       if (hidden.has(field.name)) continue
       const raw = files[field.name]
       const list = raw ? (Array.isArray(raw) ? raw : [raw]) : []
-      const label = field.label || field.name
-      if (list.length === 0) {
-        if (field.required) errors.push({ path: 'submissionData', message: `${label}: choose a file.` })
-        continue
-      }
-      if (list.length > 1) {
-        errors.push({ path: 'submissionData', message: `${label}: send one file only.` })
-        continue
-      }
-      const problem = fileProblem(list[0], field, limitMb)
-      if (problem) errors.push({ path: 'submissionData', message: `${label}: ${problem}` })
-      else accepted.push({ field, file: list[0] })
+      const problem = filesProblem(list, field, limitMb)
+      if (problem) errors.push({ path: 'submissionData', message: `${field.label || field.name}: ${problem}` })
+      else if (list.length > 0) accepted.push({ field, files: list })
     }
     if (errors.length > 0) throw new ValidationError({ collection: collection.slug, req, errors })
     if (accepted.length === 0) return data
 
     const base = req.payload.config.serverURL || req.headers.get('origin') || ''
     const ids: Array<string | number> = []
-    for (const { field, file } of accepted) {
-      const meta = { name: file.name, mimetype: file.mimetype, size: file.size }
-      const doc = (await req.payload.create({
-        collection: target as never,
-        data: (options.data?.(meta) ?? { alt: file.name }) as never,
-        file: { name: file.name, data: file.data, mimetype: file.mimetype, size: file.size },
-        req,
-        overrideAccess: true,
-      })) as { id: string | number; url?: string | null; filename?: string | null }
-      ids.push(doc.id)
-      const url = doc.url ? (/^https?:/i.test(doc.url) || !base ? doc.url : new URL(doc.url, base).href) : ''
-      const value = url ? `${doc.filename ?? file.name} (${url})` : (doc.filename ?? file.name)
+    for (const { field, files: list } of accepted) {
+      const values: string[] = []
+      for (const file of list) {
+        const meta = { name: file.name, mimetype: file.mimetype, size: file.size }
+        const doc = (await req.payload.create({
+          collection: target as never,
+          data: (options.data?.(meta) ?? { alt: file.name }) as never,
+          file: { name: file.name, data: file.data, mimetype: file.mimetype, size: file.size },
+          req,
+          overrideAccess: true,
+        })) as { id: string | number; url?: string | null; filename?: string | null }
+        ids.push(doc.id)
+        const url = doc.url ? (/^https?:/i.test(doc.url) || !base ? doc.url : new URL(doc.url, base).href) : ''
+        values.push(url ? `${doc.filename ?? file.name} (${url})` : (doc.filename ?? file.name))
+      }
+      const value = values.join(', ')
       const at = rows.findIndex((row) => row.field === field.name)
       if (at === -1) rows.push({ field: field.name, value })
       else rows[at] = { ...rows[at], value }

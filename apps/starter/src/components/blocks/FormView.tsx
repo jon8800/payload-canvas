@@ -17,7 +17,7 @@
 // Without JavaScript the browser's own required checks still apply (noValidate is set on hydration).
 import { useEffect, useId, useRef, useState, useSyncExternalStore, type FormEvent } from 'react'
 import { FORM_SPAM_KEY, HONEYPOT_NAME, hiddenFormFields, isFormFieldShown, type FormSpamValues } from 'payload-canvas/forms'
-import { answerText, FormFieldView, initialValues, lexicalToText, SubmitButton, validateField, type FormDoc, type NamedField, type Value, type Values } from './FormParts'
+import { answerText, FormFieldView, initialValues, isEmptyAnswer, lexicalToText, SubmitButton, validateField, type FormDoc, type NamedField, type Value, type Values } from './FormParts'
 import { formClasses } from './formClasses'
 import { Turnstile } from './Turnstile'
 
@@ -70,7 +70,7 @@ export function FormView({ form, disabled }: { form: FormDoc; disabled: boolean 
   }, [status])
   const fieldId = (name: string) => `${idPrefix}-${name}`
   // The fields the current answers hide. They update as the visitor types.
-  const hidden = hiddenFormFields(fields, Object.fromEntries(Object.entries(values).map(([name, value]) => [name, value instanceof File ? value.name : value])))
+  const hidden = hiddenFormFields(fields, Object.fromEntries(Object.entries(values).map(([name, value]) => [name, Array.isArray(value) ? answerText(value) : value])))
   const shown = fields.filter((field) => isFormFieldShown(field, hidden))
   const named = shown.filter(isNamed)
 
@@ -105,8 +105,9 @@ export function FormView({ form, disabled }: { form: FormDoc; disabled: boolean 
 
   function change(field: NamedField, value: Value) {
     setValues((prev) => ({ ...prev, [field.name]: value }))
-    // Re-check only a field that already shows an error, so typing never raises a new one.
-    if (errors[field.name]) setErrors((prev) => ({ ...prev, [field.name]: validateField(field, value) }))
+    // Re-check only a field that already shows an error, so typing never raises a new one. Files
+    // are checked as soon as they are chosen: a wrong type or size shows at once.
+    if (errors[field.name] || field.blockType === 'file') setErrors((prev) => ({ ...prev, [field.name]: validateField(field, value) }))
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -133,16 +134,17 @@ export function FormView({ form, disabled }: { form: FormDoc; disabled: boolean 
     setStatus('submitting')
     setServerErrors([])
     // Hidden fields send nothing, also when the visitor typed in them before they hid.
-    const sent = Object.entries(values).filter(([field, value]) => !hidden.has(field) && value !== '')
+    const sent = Object.entries(values).filter(([field, value]) => !hidden.has(field) && !isEmptyAnswer(value))
     const submissionData = sent.map(([field, value]) => ({ field, value: answerText(value) }))
-    const files = sent.filter((entry): entry is [string, File] => entry[1] instanceof File)
+    // One part per file, named after its field (a field with several files sends several parts).
+    const files = sent.flatMap(([field, value]) => (Array.isArray(value) ? value.map((file) => [field, file] as const) : []))
     const honeypot = formRef.current?.elements.namedItem(HONEYPOT_NAME)
     const spam: FormSpamValues = {
       honeypot: honeypot instanceof HTMLInputElement ? honeypot.value : '',
       elapsedMs: elapsedSince(shownAt.current),
       ...(token ? { token } : {}),
     }
-    // With files: multipart form data, the JSON in `_payload` and one part per file field.
+    // With files: multipart form data, the JSON in `_payload` and one part per file.
     let body: BodyInit = JSON.stringify({ form: form.id, submissionData, [FORM_SPAM_KEY]: spam })
     if (files.length > 0) {
       const data = new FormData()

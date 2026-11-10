@@ -144,12 +144,15 @@ export function RegionFields({ regions, region }: { regions: RegionsController; 
         <output className="builder-editor__hint">Not saved yet. Fill in {waiting.join(', ')} to save.</output>
       )}
       {loose.filter((field) => field.field.type !== 'group').map((field) => renderField(field))}
-      {region.sections?.map((section, index) => (
-        <PanelSection key={section.label} label={section.label} open={index === 0}>
-          {region.fields.filter((field) => section.fields.includes(field.path)).map((field) => renderField(field))}
-        </PanelSection>
-      ))}
-      {loose.filter((field) => field.field.type === 'group').map((field) => renderField(field, true))}
+      {/* One box, so the folding sections touch: one border between rows, no gap. */}
+      <div className="builder-panel-sections">
+        {region.sections?.map((section, index) => (
+          <PanelSection key={section.label} label={section.label} open={index === 0}>
+            {region.fields.filter((field) => section.fields.includes(field.path)).map((field) => renderField(field))}
+          </PanelSection>
+        ))}
+        {loose.filter((field) => field.field.type === 'group').map((field) => renderField(field, true))}
+      </div>
     </div>
   )
 }

@@ -1,12 +1,22 @@
-// The parts of a form-builder form: one field (label, input, error) and the submit button.
-// The site's FormView and the form builder's canvas preview (FormFieldBlock, FormFrame) render
-// with these, so the builder shows exactly what the site shows. No hooks and no 'use client':
-// server and client components can both use them.
+// The parts of a form-builder form: one field (label, input, description, error) and the submit
+// button. The site's FormView and the form builder's canvas preview (FormFieldBlock, FormFrame)
+// render with these, so the builder shows exactly what the site shows. No hooks and no 'use
+// client': server and client components can both use them (the dropdown and the file drop zone
+// are client components of their own).
+//
+// Field settings (payload-canvas `withFormFieldSettings`): `labelVisibility: 'hidden'` keeps the
+// label for screen readers only, `description` shows under the input, `cssClass` goes on the
+// field's box, `width` is one of the width presets, radio `display` is list, inline, buttons or
+// cards, and a file field takes several files when `multiple` is on.
 import type { ReactNode } from 'react'
 import { renderRichText } from 'payload-canvas/react'
-import { fileProblem, formAnswerProblem, type FormFieldConditions } from 'payload-canvas/forms'
+import { filesProblem, formAnswerProblem, formFieldWidth, isLabelShown, radioDisplay, type FormFieldConditions } from 'payload-canvas/forms'
 import { resolveLink } from '@/lib/links'
-import { formClasses, widthClasses } from './formClasses'
+import { FileDropZone } from './FileDropZone'
+import { FormSelect } from './FormSelect'
+import { formClasses, join, widthClasses } from './formClasses'
+
+export { join } from './formClasses'
 
 export type FormField = {
   id?: string | null
@@ -21,9 +31,19 @@ export type FormField = {
   message?: unknown
   /** Consent: the rich text next to the box. */
   text?: unknown
-  /** File: allowed types (as in `<input accept>`) and the largest size in MB. */
+  /** Help text under the field. */
+  description?: string | null
+  /** "hidden": the label is for screen readers only. */
+  labelVisibility?: string | null
+  /** Classes for the field's box. */
+  cssClass?: string | null
+  /** Radio: list, inline, buttons or cards. */
+  display?: string | null
+  /** File: allowed types (as in `<input accept>`), the largest size in MB, several files and their most. */
   accept?: string | null
   maxSize?: number | null
+  multiple?: boolean | null
+  maxFiles?: number | null
   conditions?: FormFieldConditions | null
 }
 
@@ -39,8 +59,8 @@ export type FormDoc = {
 }
 
 export type NamedField = FormField & { name: string }
-/** Text, a tick (checkbox, consent) or a chosen file. */
-export type Value = string | boolean | File
+/** Text, a tick (checkbox, consent) or the chosen files. */
+export type Value = string | boolean | File[]
 export type Values = Record<string, Value>
 
 function nodeText(node: unknown): string {
@@ -61,33 +81,30 @@ export function lexicalToText(value: unknown): string {
 export function initialValues(fields: FormField[]): Values {
   const values: Values = {}
   for (const field of fields) {
-    if (!field.name || field.defaultValue === undefined || field.defaultValue === null) continue
+    if (!field.name || field.blockType === 'file' || field.defaultValue === undefined || field.defaultValue === null) continue
     if (typeof field.defaultValue === 'boolean') values[field.name] = field.defaultValue
     else values[field.name] = field.blockType === 'date' ? String(field.defaultValue).slice(0, 10) : String(field.defaultValue)
   }
   return values
 }
 
-/** The text an answer sends: a chosen file sends its name (the file goes in its own part). */
-export const answerText = (value: Value) => (typeof File !== 'undefined' && value instanceof File ? value.name : String(value))
+/** The text an answer sends: chosen files send their names (the files go in their own parts). */
+export const answerText = (value: Value) => (Array.isArray(value) ? value.map((file) => file.name).join(', ') : String(value))
 
-const isFile = (value: unknown): value is File => typeof File !== 'undefined' && value instanceof File
+/** True for an answer that sends nothing: no text, or no files. */
+export const isEmptyAnswer = (value: Value | undefined) => value === undefined || value === '' || (Array.isArray(value) && value.length === 0)
 
 /**
  * The error text for one field, or '' when the value is fine. The same checks run on the server
  * (`formSubmissionConditions` and `formFileUploads` from payload-canvas).
  */
 export function validateField(field: NamedField, value: Value | undefined): string {
-  if (isFile(value)) return fileProblem({ name: value.name, mimetype: value.type, size: value.size }, field)
-  return formAnswerProblem(field, value)
+  if (!Array.isArray(value) || value.length === 0) return formAnswerProblem(field, Array.isArray(value) ? '' : value)
+  return filesProblem(
+    value.map((file) => ({ name: file.name, mimetype: file.type, size: file.size })),
+    field,
+  )
 }
-
-function widthClass(width: number | null | undefined): string {
-  if (!width || width >= 100) return ''
-  return widthClasses.find(([max]) => width <= max)?.[1] ?? ''
-}
-
-export const join = (...names: Array<string | false | null | undefined>) => names.filter(Boolean).join(' ')
 
 /** Input types of the one-line fields. */
 const TEXT_TYPES: Record<string, { type: string; autoComplete?: string; inputMode?: 'decimal' | 'tel' | 'url' | 'email' }> = {
@@ -98,25 +115,38 @@ const TEXT_TYPES: Record<string, { type: string; autoComplete?: string; inputMod
   date: { type: 'date' },
 }
 
+/** The box, the option label and the radio input of each radio display. */
+const RADIO_LAYOUTS = {
+  list: { box: formClasses.radioList, option: formClasses.radioRow, input: formClasses.radio },
+  inline: { box: formClasses.radioInline, option: formClasses.radioRow, input: formClasses.radio },
+  // The input stays in the page for the keyboard and screen readers; the pill shows its state.
+  buttons: { box: formClasses.radioButtons, option: formClasses.radioButton, input: formClasses.srOnly },
+  cards: { box: formClasses.radioCards, option: formClasses.radioCard, input: formClasses.radio },
+} as const
+
 type InputProps = {
   field: NamedField
   id: string
   value: Value | undefined
   error: string
   onChange: (value: Value) => void
+  /** The ids of the description and the error, for `aria-describedby`. */
+  describedBy?: string
   /** The builder's preview: the input shows but takes no clicks or focus, so a click selects the field. */
   preview?: boolean
   /** The id of the element that labels the input (a consent box's text). */
   labelledBy?: string
 }
 
-function FieldInput({ field, id, value, error, onChange, preview, labelledBy }: InputProps): ReactNode {
+function FieldInput({ field, id, value, error, onChange, describedBy, preview, labelledBy }: InputProps): ReactNode {
   const common = {
     id,
-    name: field.name,
+    // The builder's preview sends nothing, so its inputs need no name. With a name, the canvas
+    // showed a radio field's default as not ticked.
+    name: preview ? undefined : field.name,
     required: field.required ?? undefined,
     'aria-invalid': error ? true : undefined,
-    'aria-describedby': error ? `${id}-error` : undefined,
+    'aria-describedby': describedBy,
     'aria-labelledby': labelledBy,
     ...(preview ? { tabIndex: -1, readOnly: true } : {}),
   }
@@ -137,25 +167,18 @@ function FieldInput({ field, id, value, error, onChange, preview, labelledBy }: 
       )
     case 'select':
       return (
-        // A native select (keyboard, screen readers and phone pickers work as usual), drawn like the inputs.
-        <div className={formClasses.selectWrap}>
-          <select
-            {...common}
-            className={join(formClasses.input, formClasses.select, previewClass)}
-            value={text}
-            onChange={(e) => onChange(e.target.value)}
-          >
-            <option value="">{placeholder ?? 'Choose one'}</option>
-            {field.options?.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <svg className={formClasses.selectIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M4 6l4 4 4-4" />
-          </svg>
-        </div>
+        <FormSelect
+          id={id}
+          name={field.name}
+          value={text}
+          options={field.options ?? []}
+          placeholder={placeholder}
+          required={field.required ?? undefined}
+          invalid={Boolean(error)}
+          describedBy={describedBy}
+          preview={preview}
+          onChange={preview ? undefined : onChange}
+        />
       )
     case 'checkbox':
     case 'consent':
@@ -168,18 +191,19 @@ function FieldInput({ field, id, value, error, onChange, preview, labelledBy }: 
           onChange={(e) => onChange(e.target.checked)}
         />
       )
-    case 'radio':
+    case 'radio': {
+      const layout = RADIO_LAYOUTS[radioDisplay(field.display)]
       return (
-        <div className={formClasses.radioList}>
+        <div className={layout.box}>
           {field.options?.map((option, index) => (
-            <label key={option.value} className={formClasses.radioRow}>
+            <label key={option.value} className={join(layout.option, previewClass)}>
               <input
                 {...common}
                 // The first button has the field's id, so an error moves the focus to it.
                 id={index === 0 ? id : `${id}-${index}`}
                 type="radio"
                 value={option.value}
-                className={join(formClasses.radio, previewClass)}
+                className={layout.input}
                 checked={text === option.value}
                 onChange={() => onChange(option.value)}
               />
@@ -188,15 +212,22 @@ function FieldInput({ field, id, value, error, onChange, preview, labelledBy }: 
           ))}
         </div>
       )
+    }
     case 'file':
       return (
-        <input
-          {...common}
-          type="file"
-          accept={field.accept || undefined}
-          className={join(formClasses.file, previewClass)}
-          // The browser keeps the chosen file; clearing the choice gives ''.
-          onChange={(e) => onChange(e.target.files?.[0] ?? '')}
+        <FileDropZone
+          id={id}
+          name={field.name}
+          files={Array.isArray(value) ? value : []}
+          accept={field.accept}
+          maxSize={field.maxSize}
+          multiple={field.multiple}
+          maxFiles={field.maxFiles}
+          required={field.required ?? undefined}
+          invalid={Boolean(error)}
+          describedBy={describedBy}
+          preview={preview}
+          onChange={preview ? undefined : onChange}
         />
       )
     case 'hidden':
@@ -244,23 +275,14 @@ function LabelText({ field }: { field: FormField }) {
   )
 }
 
-/** Under a file input: the allowed types and the size limit. */
-function FileHint({ field }: { field: FormField }) {
-  const types = (field.accept ?? '')
-    .split(',')
-    .map((t) => t.trim())
-    .filter(Boolean)
-  const parts = [types.length > 0 ? types.join(', ') : null, field.maxSize ? `up to ${field.maxSize} MB` : null].filter(Boolean)
-  return parts.length > 0 ? <p className={formClasses.hint}>{parts.join(', ')}</p> : null
-}
-
-/** One field of the form: a message, or a label with its input and error. */
+/** One field of the form: a message, or a label with its input, description and error. */
 export function FormFieldView({ field, id, value, error = '', onChange = ignore, attributes, preview, note }: FieldViewProps) {
-  const width = widthClass(field.width)
+  // The field's box: its width preset and its own classes.
+  const box = (className: string) => join(className, widthClasses[formFieldWidth(field.width)], field.cssClass?.trim())
   const noteText = note ? <p className={formClasses.note}>{note}</p> : null
   if (field.blockType === 'message') {
     return (
-      <div {...attributes} className={join(formClasses.message, width)}>
+      <div {...attributes} className={box(formClasses.message)}>
         <p className={formClasses.messageText}>{lexicalToText(field.message)}</p>
         {noteText}
       </div>
@@ -269,11 +291,21 @@ export function FormFieldView({ field, id, value, error = '', onChange = ignore,
   const name = field.name || ''
   const inputId = id ?? `form-field-${name}`
   const named = { ...field, name } as NamedField
+  const description = field.description?.trim()
+  const descriptionId = `${inputId}-description`
+  const errorId = `${inputId}-error`
+  const describedBy = join(description && descriptionId, error && errorId) || undefined
+  const descriptionText = description ? (
+    <p id={descriptionId} className={formClasses.hint}>
+      {description}
+    </p>
+  ) : null
   const errorText = error ? (
-    <p id={`${inputId}-error`} className={formClasses.fieldError}>
+    <p id={errorId} className={formClasses.fieldError}>
       {error}
     </p>
   ) : null
+  const labelClass = isLabelShown(field) ? undefined : formClasses.srOnly
   if (field.blockType === 'hidden') {
     // Visitors never see it; the builder's preview shows what it sends.
     if (!preview) return <FieldInput field={named} id={inputId} value={value} error="" onChange={onChange} />
@@ -291,28 +323,30 @@ export function FormFieldView({ field, id, value, error = '', onChange = ignore,
     // The text may hold links, so it labels the box instead of wrapping it.
     const textId = `${inputId}-text`
     return (
-      <div {...attributes} className={join(formClasses.field, width)}>
+      <div {...attributes} className={box(formClasses.field)}>
         <div className={formClasses.checkboxRow}>
-          <FieldInput field={named} id={inputId} value={value} error={error} onChange={onChange} preview={preview} labelledBy={textId} />
+          <FieldInput field={named} id={inputId} value={value} error={error} onChange={onChange} describedBy={describedBy} preview={preview} labelledBy={textId} />
           <div id={textId} className={formClasses.consentText}>
             {field.text ? renderRichText(field.text, resolveLink) : field.label}
           </div>
         </div>
+        {descriptionText}
         {errorText}
         {noteText}
       </div>
     )
   }
-  const input = <FieldInput field={named} id={inputId} value={value} error={error} onChange={onChange} preview={preview} />
+  const input = <FieldInput field={named} id={inputId} value={value} error={error} onChange={onChange} describedBy={describedBy} preview={preview} />
   if (field.blockType === 'radio') {
     return (
-      <fieldset {...attributes} className={join(formClasses.radioGroup, width)}>
+      <fieldset {...attributes} className={box(formClasses.radioGroup)}>
         {field.label ? (
-          <legend className={formClasses.legend}>
+          <legend className={join(formClasses.legend, labelClass)}>
             <LabelText field={field} />
           </legend>
         ) : null}
         {input}
+        {descriptionText}
         {errorText}
         {noteText}
       </fieldset>
@@ -320,25 +354,26 @@ export function FormFieldView({ field, id, value, error = '', onChange = ignore,
   }
   if (field.blockType === 'checkbox') {
     return (
-      <div {...attributes} className={join(formClasses.field, width)}>
+      <div {...attributes} className={box(formClasses.field)}>
         <label className={formClasses.checkboxRow}>
           {input}
           <span>{field.label}</span>
         </label>
+        {descriptionText}
         {errorText}
         {noteText}
       </div>
     )
   }
   return (
-    <div {...attributes} className={join(formClasses.field, width)}>
+    <div {...attributes} className={box(formClasses.field)}>
       {field.label ? (
-        <label htmlFor={inputId} className={formClasses.label}>
+        <label htmlFor={inputId} className={join(formClasses.label, labelClass)}>
           <LabelText field={field} />
         </label>
       ) : null}
       {input}
-      {field.blockType === 'file' ? <FileHint field={field} /> : null}
+      {descriptionText}
       {errorText}
       {noteText}
     </div>
