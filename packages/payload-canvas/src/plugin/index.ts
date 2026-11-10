@@ -533,7 +533,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           ...(o.legacyFields?.length ? { legacyFields: o.legacyFields } : {}),
           localization: localizationOf(slug),
           ...(regionsOf[slug] ? { regions: regionsOf[slug] } : {}),
-          ...(blocksStorageOf[slug] ? { payloadBlocks: blocksStorageOf[slug] } : {}),
+          ...(blocksStorageOf[slug] ? { payloadBlocks: blocksStorageOf[slug] } : blocks.some((def) => def.upgrade) ? { blocks } : {}),
         },
       ]),
     )

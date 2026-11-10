@@ -6,6 +6,8 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ### Added
 
+- **`BlockDefinition.upgrade(block)`:** turns a block stored in an older shape into the current one when the builder opens a layout (editor, MCP tools). `upgradeLayout(layout, blocks)` in `payload-canvas/core` runs it on a whole layout.
+
 - **Slot hints for editors:** a slot definition can set `description` (shown inside the empty slot on the canvas, and in MCP), `itemLabel` (Layers names unnamed direct children "Slide 1", "Slide 2", …) and `newBlock` (the block the "+" picker offers first in that slot). The carousel's Slides slot uses all three: "Each block here is one slide", and a Stack named "Slide".
 - **Open a comment thread from a URL:** `/admin/builder/pages/12?comment=34` opens the builder in comment mode with that thread open and its block selected. `builderViewPath(admin, collection, id, { comment })` builds the URL; `COMMENT_PARAM` is the parameter name.
 - **`fieldReferences(fields, data)`** in `payload-canvas/core`: every document one document's data points at, read along its Payload field config (uploads, relationships, rich text, `{ relationTo, value }` pairs in JSON). **`layoutReferences(config, slug, doc)`**: every document a builder document's stored layout points at, also documents deleted since.
@@ -26,6 +28,8 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 - **Starter 404 log:** the new `not-found-log` collection (Site group, admins only) counts each missing path the site serves, with the last time and referrer. It writes after the response is sent, skips prefetches and paths only bots ask for (`/wp-admin`, `.php`, dot files). Needs a migration in production (`pnpm payload migrate:create`).
 
 ### Changed
+
+- **Form field width is classes.** The width buttons and the Appearance tab are gone: a field's width is set in the Styles panel like any block's, and fields sit side by side through the form's layout. Label visibility and radio display moved to the Field tab. A stored `width` becomes the same classes when the builder opens the form (`withWidthClass`), and the next save clears it; until then the site draws it with those classes (`withStoredWidth`), so no form changes its look. `formFieldWidth`, `FORM_FIELD_WIDTHS` and `WIDTH_PICKER_MARKER` are gone; `formFieldWidthClass` and `FORM_FIELD_WIDTH_CLASSES` give the classes. MCP and the assistant set the width with `className` and get an error for `width`.
 
 - **Editor top bar:** Preview, Page settings and Preview as client are icon buttons with a tooltip and an `aria-label` at every width. Publish keeps its label.
 - **Components look like components:** on the canvas and in Layers a live saved section copy (`sectionRef`) uses its own colour (purple) for hover, selection, its name tag, action bar and Layers row, and its content is no longer faded. The colour is the `--be-component` CSS variable (with `--be-component-solid` and `--be-component-text`).

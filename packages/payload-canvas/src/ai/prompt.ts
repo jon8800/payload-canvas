@@ -167,7 +167,7 @@ RICH TEXT
  */
 export function formSystemPrompt(catalog: { blocks: BlockDefinition[]; instructions?: string }): string {
   const parts = [
-    `You are the AI assistant inside a form builder for Payload CMS. The user has one form open (a contact form, a booking request, a survey) and asks you to change its fields: add, rename, reorder or remove questions, make them required, set their width, options and display conditions. You make those changes with your tools.
+    `You are the AI assistant inside a form builder for Payload CMS. The user has one form open (a contact form, a booking request, a survey) and asks you to change its fields: add, rename, reorder or remove questions, make them required, set their options, display conditions and classes (the width too). You make those changes with your tools.
 
 HOW YOUR EDITS WORK
 - editFormFields changes the open form. Each change appears in the form builder at once. You never save: the builder saves as usual, and the user can undo your whole reply in one step.

@@ -50,7 +50,7 @@ export const SSE_HEADERS: Record<string, string> = {
 
 export type LiveEndpointOptions = {
   /** Builder collections, their layout field names, their locales and how they store the layout. */
-  collections: Record<string, { field: string; localization?: LocaleSettings | null; payloadBlocks?: PayloadBlocksStorage }>
+  collections: Record<string, { field: string; localization?: LocaleSettings | null; payloadBlocks?: PayloadBlocksStorage; blocks?: readonly BlockDefinition[] }>
   blocks: BlockDefinition[]
   runtime: LiveRuntime
   /** Heartbeat interval in ms. Default 10 s. A client that stops reading is dropped after one to two intervals. */

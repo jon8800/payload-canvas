@@ -2,6 +2,8 @@
 // layout the live session, the canvas and the tools work on.
 //
 // - `json` (the builder's own JSON layout field): the stored value is the layout.
+// Both run the block definitions' `upgrade` on the layout they read, so an open layout is in the
+// current shape and the next save stores it.
 // - `payload-blocks` (the collection's own Payload `blocks` field): the stored value is Payload's
 //   block rows, read and written with the lossless codec of core/payloadBlocks.ts. The field stays
 //   the one source of truth; the layout is a view of it while a page is open.
@@ -9,6 +11,7 @@
 import { APIError, docAccessOperation, type PayloadRequest } from 'payload'
 
 import { decodePayloadBlocks, encodePayloadBlocks, payloadBlocksProblems, payloadRowIds, withUniqueRowIds, type PayloadBlocksStorage } from '../core/payloadBlocks'
+import { upgradeLayout } from '../core/blocks'
 import { normalizeLayout } from '../core/tree'
 import { applyOperation } from '../core/operations'
 import type { BlockDefinition, Layout, Operation } from '../core/types'
@@ -46,15 +49,21 @@ export const JSON_CODEC: LayoutCodec = {
   problems: () => [],
 }
 
+/** The codec of the builder's JSON layout that upgrades old blocks (`BlockDefinition.upgrade`) on read. */
+export function jsonCodec(blocks: readonly BlockDefinition[]): LayoutCodec {
+  return { ...JSON_CODEC, decode: (value) => upgradeLayout(normalizeLayout(value), blocks) }
+}
+
 /** The codec of a Payload blocks field. */
 export function payloadBlocksCodec(storage: PayloadBlocksStorage): LayoutCodec {
+  const blocks = storage.blocks as BlockDefinition[]
   return {
     kind: 'payload-blocks',
-    blocks: storage.blocks as BlockDefinition[],
+    blocks,
     decode(value) {
       const result = decodePayloadBlocks(value, storage)
       if (!result.ok) throw new APIError(`The builder cannot open these blocks without changing them: ${result.error}`, 422, undefined, true)
-      return result.layout
+      return upgradeLayout(result.layout, blocks)
     },
     encode: (layout, previous) => encodePayloadBlocks(layout, storage, previous),
     problems: (layout) => payloadBlocksProblems(layout, storage),
@@ -65,14 +74,16 @@ export function payloadBlocksCodec(storage: PayloadBlocksStorage): LayoutCodec {
 
 const codecs = new WeakMap<object, LayoutCodec>()
 
-/** The codec of a builder collection's server config. JSON when it stores no Payload blocks. */
-export function codecOf(collection: { payloadBlocks?: PayloadBlocksStorage } | undefined): LayoutCodec {
-  const storage = collection?.payloadBlocks
-  if (!storage) return JSON_CODEC
-  let codec = codecs.get(storage)
+/**
+ * The codec of a builder collection's server config. JSON when it stores no Payload blocks; with
+ * `blocks`, the JSON codec upgrades old blocks on read.
+ */
+export function codecOf(collection: { payloadBlocks?: PayloadBlocksStorage; blocks?: readonly BlockDefinition[] } | undefined): LayoutCodec {
+  if (!collection) return JSON_CODEC
+  let codec = codecs.get(collection)
   if (!codec) {
-    codec = payloadBlocksCodec(storage)
-    codecs.set(storage, codec)
+    codec = collection.payloadBlocks ? payloadBlocksCodec(collection.payloadBlocks) : collection.blocks ? jsonCodec(collection.blocks) : JSON_CODEC
+    codecs.set(collection, codec)
   }
   return codec
 }

@@ -229,6 +229,14 @@ export type BlockDefinition = {
    * CSS (save hook and canvas) whenever the block type appears in a layout.
    */
   classes?: string[]
+  /**
+   * Turns a block stored in an older shape into the current one (for example a setting that became
+   * classes). The builder runs it when it opens a stored layout (editor, MCP tools), so the next
+   * save stores the new shape; until then the block's component must still read the old shape.
+   * Pure; returns the same block when there is nothing to change. Server only: the client config
+   * leaves functions out.
+   */
+  upgrade?: (block: Block) => Block
   /** Icon name from the editor's built-in icon set (e.g. "heading", "image"). Falls back to a generic icon. */
   icon?: string
   /** Group in the block library, e.g. "Layout", "Content", "Media", "Interactive". */

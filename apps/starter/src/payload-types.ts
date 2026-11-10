@@ -827,12 +827,12 @@ export interface Form {
             description?: string | null;
             width?: number | null;
             required?: boolean | null;
-            labelVisibility?: ('visible' | 'hidden') | null;
             /**
              * Grey text inside the empty field.
              */
             placeholder?: string | null;
             defaultValue?: string | null;
+            labelVisibility?: ('visible' | 'hidden') | null;
             cssClass?: string | null;
             partClasses?:
               | {
@@ -876,12 +876,12 @@ export interface Form {
             description?: string | null;
             width?: number | null;
             required?: boolean | null;
-            labelVisibility?: ('visible' | 'hidden') | null;
             /**
              * Grey text inside the empty field.
              */
             placeholder?: string | null;
             defaultValue?: string | null;
+            labelVisibility?: ('visible' | 'hidden') | null;
             cssClass?: string | null;
             partClasses?:
               | {
@@ -976,11 +976,11 @@ export interface Form {
             width?: number | null;
             defaultValue?: number | null;
             required?: boolean | null;
-            labelVisibility?: ('visible' | 'hidden') | null;
             /**
              * Grey text inside the empty field.
              */
             placeholder?: string | null;
+            labelVisibility?: ('visible' | 'hidden') | null;
             cssClass?: string | null;
             partClasses?:
               | {
@@ -1077,12 +1077,12 @@ export interface Form {
             description?: string | null;
             width?: number | null;
             required?: boolean | null;
-            labelVisibility?: ('visible' | 'hidden') | null;
             /**
              * Grey text inside the empty field.
              */
             placeholder?: string | null;
             defaultValue?: string | null;
+            labelVisibility?: ('visible' | 'hidden') | null;
             cssClass?: string | null;
             partClasses?:
               | {
@@ -1127,11 +1127,11 @@ export interface Form {
             width?: number | null;
             defaultValue?: string | null;
             required?: boolean | null;
-            labelVisibility?: ('visible' | 'hidden') | null;
             /**
              * Grey text inside the empty field.
              */
             placeholder?: string | null;
+            labelVisibility?: ('visible' | 'hidden') | null;
             cssClass?: string | null;
             partClasses?:
               | {
@@ -1176,11 +1176,11 @@ export interface Form {
             width?: number | null;
             defaultValue?: string | null;
             required?: boolean | null;
-            labelVisibility?: ('visible' | 'hidden') | null;
             /**
              * Grey text inside the empty field.
              */
             placeholder?: string | null;
+            labelVisibility?: ('visible' | 'hidden') | null;
             cssClass?: string | null;
             partClasses?:
               | {
@@ -3095,9 +3095,9 @@ export interface FormsSelect<T extends boolean = true> {
               description?: T;
               width?: T;
               required?: T;
-              labelVisibility?: T;
               placeholder?: T;
               defaultValue?: T;
+              labelVisibility?: T;
               cssClass?: T;
               partClasses?: T;
               conditions?:
@@ -3124,9 +3124,9 @@ export interface FormsSelect<T extends boolean = true> {
               description?: T;
               width?: T;
               required?: T;
-              labelVisibility?: T;
               placeholder?: T;
               defaultValue?: T;
+              labelVisibility?: T;
               cssClass?: T;
               partClasses?: T;
               conditions?:
@@ -3176,8 +3176,8 @@ export interface FormsSelect<T extends boolean = true> {
               width?: T;
               defaultValue?: T;
               required?: T;
-              labelVisibility?: T;
               placeholder?: T;
+              labelVisibility?: T;
               cssClass?: T;
               partClasses?: T;
               conditions?:
@@ -3240,9 +3240,9 @@ export interface FormsSelect<T extends boolean = true> {
               description?: T;
               width?: T;
               required?: T;
-              labelVisibility?: T;
               placeholder?: T;
               defaultValue?: T;
+              labelVisibility?: T;
               cssClass?: T;
               partClasses?: T;
               conditions?:
@@ -3270,8 +3270,8 @@ export interface FormsSelect<T extends boolean = true> {
               width?: T;
               defaultValue?: T;
               required?: T;
-              labelVisibility?: T;
               placeholder?: T;
+              labelVisibility?: T;
               cssClass?: T;
               partClasses?: T;
               conditions?:
@@ -3299,8 +3299,8 @@ export interface FormsSelect<T extends boolean = true> {
               width?: T;
               defaultValue?: T;
               required?: T;
-              labelVisibility?: T;
               placeholder?: T;
+              labelVisibility?: T;
               cssClass?: T;
               partClasses?: T;
               conditions?:
