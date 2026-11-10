@@ -6,6 +6,7 @@ import type { Block as PayloadBlockConfig } from 'payload'
 import { fromPayloadBlocks } from '../blocks/payload'
 import type { BlockDefinition } from '../core/types'
 import { FORM_CONDITIONS_FIELD } from './conditions'
+import { WIDTH_PICKER_MARKER } from './fieldSettings'
 
 /** Prefix of the builder types: the form-builder block `text` is the builder type `formText`. */
 export const FORM_FIELD_PREFIX = 'form'
@@ -50,8 +51,25 @@ const KNOWN: Record<string, { label: string; icon: string; description: string }
   payment: { label: 'Payment', icon: 'block', description: 'A payment field.' },
 }
 
-/** Fields that go on the Validation tab of a form field. The rest stays on the Field tab. */
-const VALIDATION_FIELDS = new Set(['required', 'accept', 'maxSize', 'uploadCollection', 'mimeTypes', 'maxFileSize', 'multiple'])
+/** The tab of a form field's settings, by field name. Other fields stay on the Field tab. */
+const TAB_OF: Record<string, 'Appearance' | 'Validation' | 'Conditions'> = {
+  width: 'Appearance',
+  labelVisibility: 'Appearance',
+  placeholder: 'Appearance',
+  display: 'Appearance',
+  cssClass: 'Appearance',
+  required: 'Validation',
+  accept: 'Validation',
+  maxSize: 'Validation',
+  multiple: 'Validation',
+  maxFiles: 'Validation',
+  uploadCollection: 'Validation',
+  mimeTypes: 'Validation',
+  maxFileSize: 'Validation',
+  [FORM_CONDITIONS_FIELD]: 'Conditions',
+}
+
+const TAB_ORDER = ['Appearance', 'Validation', 'Conditions'] as const
 
 /**
  * One definition per block of the form's `fields` blocks field. Types get the `form` prefix
@@ -77,13 +95,13 @@ export function formFieldBlocks(blocks: readonly PayloadBlockConfig[]): BlockDef
     const known = KNOWN[slug]
     // A new field starts with a name and a label, so the form saves at once (the plugin requires
     // a name). Only the builder's insert uses these defaults; the stored data is unchanged.
-    const fields = inTabs(withStartValues(def.fields, { name: slug, label: known?.label ?? def.label }))
+    const fields = inTabs(withWidthPicker(withStartValues(def.fields, { name: slug, label: known?.label ?? def.label })))
     // Two fields with one name would overwrite each other's answers: a new or copied field gets `text2`.
     return { ...def, fields, uniqueProps: ['name'], ...(known ? { description: known.description } : {}) }
   })
 }
 
-type LooseField = Record<string, unknown> & { name?: unknown; fields?: unknown; defaultValue?: unknown }
+type LooseField = Record<string, unknown> & { name?: unknown; type?: unknown; fields?: unknown; defaultValue?: unknown; admin?: unknown }
 
 /** The fields with `defaultValue` set on the top-level `name` and `label` fields (also inside rows) that have none. */
 function withStartValues<T>(fields: T[], values: Record<string, string>): T[] {
@@ -96,14 +114,24 @@ function withStartValues<T>(fields: T[], values: Record<string, string>): T[] {
   })
 }
 
+/** The fields with the top-level `width` number (also inside rows) edited as width buttons. */
+function withWidthPicker<T>(fields: T[]): T[] {
+  return fields.map((raw) => {
+    const field = raw as unknown as LooseField
+    if (Array.isArray(field.fields) && !field.name) return { ...field, fields: withWidthPicker(field.fields) } as T
+    if (field.name !== 'width' || field.type !== 'number') return raw
+    const admin = (field.admin ?? {}) as { custom?: Record<string, unknown> }
+    return { ...field, label: 'Width', admin: { ...admin, custom: { ...admin.custom, [WIDTH_PICKER_MARKER]: true } } } as T
+  })
+}
+
 /**
- * The fields split over the tabs Field, Validation and Conditions (unnamed tabs: the data stays
- * as it is). Fields leave their rows; an empty row goes. Without validation or condition fields
- * the list stays as it is.
+ * The fields split over the tabs Field, Appearance, Validation and Conditions (unnamed tabs: the
+ * data stays as it is). Fields leave their rows; an empty row goes. A tab without fields is left
+ * out; with only the Field tab the list stays as it is.
  */
 function inTabs<T>(fields: T[]): T[] {
-  const validation: T[] = []
-  const conditions: T[] = []
+  const moved: Record<(typeof TAB_ORDER)[number], T[]> = { Appearance: [], Validation: [], Conditions: [] }
   const pull = (list: T[]): T[] =>
     list.flatMap((raw) => {
       const field = raw as unknown as LooseField
@@ -111,17 +139,13 @@ function inTabs<T>(fields: T[]): T[] {
         const kept = pull(field.fields as T[])
         return kept.length > 0 ? [{ ...field, fields: kept } as T] : []
       }
-      if (field.name === FORM_CONDITIONS_FIELD) conditions.push(raw)
-      else if (typeof field.name === 'string' && VALIDATION_FIELDS.has(field.name)) validation.push(raw)
-      else return [raw]
+      const tab = typeof field.name === 'string' ? TAB_OF[field.name] : undefined
+      if (!tab) return [raw]
+      moved[tab].push(raw)
       return []
     })
   const main = pull(fields)
-  if (validation.length === 0 && conditions.length === 0) return fields
-  const tabs = [
-    { label: 'Field', fields: main },
-    ...(validation.length > 0 ? [{ label: 'Validation', fields: validation }] : []),
-    ...(conditions.length > 0 ? [{ label: 'Conditions', fields: conditions }] : []),
-  ]
-  return [{ type: 'tabs', tabs } as T]
+  const others = TAB_ORDER.filter((label) => moved[label].length > 0)
+  if (others.length === 0) return fields
+  return [{ type: 'tabs', tabs: [{ label: 'Field', fields: main }, ...others.map((label) => ({ label, fields: moved[label] }))] } as T]
 }
