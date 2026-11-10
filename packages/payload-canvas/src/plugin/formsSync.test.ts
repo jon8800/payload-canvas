@@ -6,7 +6,8 @@ import type { PayloadRequest } from 'payload'
 import { formFieldType } from '../forms/blocks'
 import { FORM_BLOCK, FORM_SLOT, FORM_SUBMIT_BLOCK } from '../forms/pageForms'
 import type { Block, Layout } from '../core/types'
-import { claimForm, FORM_GONE_MESSAGE, formLiveCheck, formSourceLive, hasLocalizedField, pageFormSync, withoutVirtualFields, type FormUsage } from './formsSync'
+import { withoutVirtualFields } from '../forms/pageSync'
+import { claimForm, FORM_GONE_MESSAGE, formLiveCheck, formSourceLive, hasLocalizedField, pageFormSync, type FormUsage } from './formsSync'
 
 type Doc = Record<string, unknown> & { id: number }
 

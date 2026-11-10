@@ -278,9 +278,8 @@ export function formClaimEndpoint(args: { forms: string; settings: readonly stri
       if (findBlock(layout ?? { version: 1, blocks: [] }, block)?.type !== FORM_BLOCK) return json({ ok: false, error: 'This Form block is not on the page. Reload the editor and try again.' }, 400)
       const result = await claimForm(req, { forms: args.forms, formId: form, source: { collection: target.collection, document: String(target.id), block }, usage: formUsage(args.forms) })
       if (!result.ok) return json({ ok: false, error: result.error }, result.status)
-      // Virtual fields (the spam settings' Turnstile site key) are read-only values, never block props.
       const fields = collectionOf(req, args.forms)?.config.fields ?? []
-      const { props, children } = formBlockFromDoc(withoutVirtualFields(result.doc, fields), args.settings)
+      const { props, children } = formBlockFromDoc(result.doc, fields, args.settings)
       if (!result.kept) delete props.form
       return json({ ok: true, kept: result.kept, props, children })
     },
@@ -402,22 +401,3 @@ export function formLiveCheck(args: { forms: string; sourceField: (collection: s
   }
 }
 
-/** The document without the values of virtual fields, also inside named groups (read-only values Payload computes on read). */
-export function withoutVirtualFields(doc: Record<string, unknown>, fields: readonly Field[]): Record<string, unknown> {
-  const out = { ...doc }
-  for (const field of fields) {
-    if (!('name' in field) || !field.name) {
-      if ('fields' in field && Array.isArray(field.fields)) Object.assign(out, withoutVirtualFields(out, field.fields))
-      continue
-    }
-    if ('virtual' in field && field.virtual) {
-      delete out[field.name]
-      continue
-    }
-    const value = out[field.name]
-    if (field.type === 'group' && value && typeof value === 'object' && !Array.isArray(value)) {
-      out[field.name] = withoutVirtualFields(value as Record<string, unknown>, field.fields)
-    }
-  }
-  return out
-}

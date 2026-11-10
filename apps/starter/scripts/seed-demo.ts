@@ -5,7 +5,7 @@ import { getPayload, type Payload } from 'payload'
 import config from '@payload-config'
 import { FORCE_DELETE_CONTEXT, siteCssConfigOf } from 'payload-canvas'
 import { createId, validateLayout, withDefaultClassNames, withoutBoundRequired, type Block, type Layout } from 'payload-canvas/core'
-import { FORM_BLOCK, FORM_FIELD_WIDTH_CLASSES, FORM_SLOT, FORM_SOURCE_FIELD, formBlockFromDoc, formSettingNames } from 'payload-canvas/forms'
+import { FORM_BLOCK, FORM_FIELD_WIDTH_CLASSES, FORM_SLOT, FORM_SOURCE_FIELD, formBlockFromDoc } from 'payload-canvas/forms'
 
 import { builderBlocks } from '@/builder'
 import { HOME_SLUG } from '@/lib/links'
@@ -164,8 +164,7 @@ async function seedForm(payload: Payload): Promise<Id> {
  */
 async function contactFormBlock(payload: Payload, formId: Id): Promise<Block> {
   const doc = await payload.findByID({ collection: 'forms', id: formId, depth: 0 })
-  const settings = formSettingNames(payload.collections.forms.config.fields)
-  const { props, children } = formBlockFromDoc(doc as unknown as Record<string, unknown>, settings)
+  const { props, children } = formBlockFromDoc(doc as unknown as Record<string, unknown>, payload.collections.forms.config.fields)
   const [block] = withDefaultClassNames([{ id: createId(), type: FORM_BLOCK, props, slots: { [FORM_SLOT]: children } }], pluginBlocks)
   return block!
 }
