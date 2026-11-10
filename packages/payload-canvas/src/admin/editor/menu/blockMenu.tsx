@@ -23,6 +23,7 @@ import {
   storedClipboard,
   storedStyles,
   storesBuilderData,
+  storesClasses,
   toggleHidden,
 } from '../actions'
 import { contentModeAllows } from '../contentMode'
@@ -65,8 +66,8 @@ export function blockMenuEntries(runtime: Runtime, id: string, origin: MenuOrigi
   const parentId = location?.parentId ?? null
   const siblings = location ? siblingCount(layout, location.parentId, location.slot) : 0
   const row = inRow(layout, runtime.measurement.get(), id)
-  // A Payload blocks field stores no styles (storesBuilderData), whatever the definition says.
-  const styled = storesBuilderData(runtime) && hasStyles(runtime.config.blocks, block.type)
+  // A Payload blocks field stores classes only for blocks with class keys, whatever the definition says.
+  const styled = storesClasses(runtime, block.type) && hasStyles(runtime.config.blocks, block.type)
   const selectParent: MenuEntry = { icon: 'parent', label: 'Select parent', keys: keys('parent'), disabled: !parentId, run: () => parentId && runtime.store.select(parentId) }
   const moveUp: MenuEntry = {
     icon: row ? 'left' : 'up',

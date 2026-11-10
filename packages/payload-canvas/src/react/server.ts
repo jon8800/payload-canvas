@@ -7,6 +7,8 @@ import { collectClasses, type Layout } from '../core'
 import { compileClasses } from '../css'
 import { withThemeVariables } from '../theme/server'
 import { loadClassesSheet } from './classes/ClassesStyle'
+import { builderConfigOf } from '../live/document'
+import { savedFormIds, savedFormsClasses } from '../forms/pageSync'
 
 export { loadLayoutData, type LoadLayoutOptions } from './render/resolve'
 export { loadTemplate, type LoadedTemplate, type LoadTemplateArgs } from './render/templates'
@@ -40,6 +42,8 @@ export async function compilePageCss(payload: Payload, parts: readonly PageCssPa
   if (!config) return stored()
   const classes = new Set<string>()
   for (const part of present) for (const name of collectClasses(part.layout, config.blocks)) classes.add(name)
+  // A Form block that shows a saved form renders that form's fields: their classes count too.
+  for (const name of await savedFormClasses(payload, present.map((part) => part.layout))) classes.add(name)
   if (classes.size === 0) return null
   try {
     // Editable classes come from their own stylesheet (`ClassesStyle`): the page leaves them out.
@@ -48,5 +52,18 @@ export async function compilePageCss(payload: Payload, parts: readonly PageCssPa
   } catch (error) {
     payload.logger.error({ err: error, msg: '[builder] Page CSS compile failed. Using the stored CSS of each layout.' })
     return stored()
+  }
+}
+
+/** The classes of the fields of the saved forms the layouts show ("Use a saved form"). One query. */
+async function savedFormClasses(payload: Payload, layouts: readonly Layout[]): Promise<string[]> {
+  const forms = builderConfigOf(payload)?.pageForms?.collection
+  const ids = savedFormIds(layouts)
+  if (!forms || ids.length === 0) return []
+  try {
+    const { docs } = await payload.find({ collection: forms as never, where: { id: { in: ids } }, depth: 0, limit: ids.length, pagination: false, select: { fields: true } as never })
+    return savedFormsClasses(docs as unknown as Array<Record<string, unknown>>)
+  } catch {
+    return []
   }
 }

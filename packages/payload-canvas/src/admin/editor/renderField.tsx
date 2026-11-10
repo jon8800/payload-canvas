@@ -30,6 +30,8 @@ import { RelatedField } from './fields/RelatedField'
 import { RichTextField } from './fields/RichTextField'
 import { FormFieldNameField } from './fields/FormFieldName'
 import { MergeTagsFrame } from './fields/MergeTags'
+import { FIELD_NAME_MARKER, FieldNameNote, FormBlockActions } from './fields/FormBlock'
+import { FORM_ACTIONS_MARKER } from '../../forms/pageForms'
 import { MERGE_TAGS_MARKER } from '../../forms/fieldConfigs'
 import { WIDTH_PICKER_MARKER } from '../../forms/fieldSettings'
 import { WidthPickerField } from './fields/WidthPicker'
@@ -450,6 +452,11 @@ export function RenderBlockFields({ fields, data, path, onChange, scope = fields
   const out: ReactNode[] = []
   fields.forEach((field, index) => {
     if (!isFieldVisible(field as FieldShape, record, scope)) return
+    // `admin.custom.builderFormActions`: the Form block's "Edit form" and "Move into this page".
+    if (field.type === 'ui' && field.admin?.custom?.[FORM_ACTIONS_MARKER]) {
+      out.push(<FormBlockActions key={`ui-${index}`} path={`${path}.${field.name}`} />)
+      return
+    }
     if (field.type === 'ui' || field.type === 'join') return
 
     if (field.type === 'collapsible') {
@@ -518,7 +525,12 @@ export function RenderBlockFields({ fields, data, path, onChange, scope = fields
           <LocaleFieldFrame path={fieldPath} name={name}>
             {/* The slot adds binding controls (templates, collection lists) around the normal input. */}
             <FieldSlot field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} label={fieldLabel(field)}>
-              {field.admin?.custom?.[MERGE_TAGS_MARKER] ? (
+              {field.admin?.custom?.[FIELD_NAME_MARKER] ? (
+                // A form field's name: renaming it in a form with submissions shows a warning.
+                <FieldNameNote path={fieldPath} value={record[name]}>
+                  <RenderBlockField field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} siblings={record} onSiblingsChange={setFields} />
+                </FieldNameNote>
+              ) : field.admin?.custom?.[MERGE_TAGS_MARKER] ? (
                 // `admin.custom.builderMergeTags`: an "Insert field" menu with the form's merge tags.
                 <MergeTagsFrame value={record[name]} onChange={onFieldChange}>
                   <RenderBlockField field={field} path={fieldPath} value={record[name]} onChange={onFieldChange} siblings={record} onSiblingsChange={setFields} />

@@ -1,4 +1,4 @@
-import { walkBlocks } from './tree'
+import { indexLayout, walkBlocks } from './tree'
 import type { BlockDefinition, Layout } from './types'
 
 /** One inner element of a block that takes classes of its own (`block.partClassName[name]`). */
@@ -67,4 +67,25 @@ export function collectClasses(layout: Layout, blocks?: readonly BlockDefinition
     }
   }
   return [...classes].toSorted()
+}
+
+/**
+ * The classes a block's part shows: its own (`partClassName`), else, for a part that `inherits`,
+ * the classes of that part of the nearest ancestor block of the named type. '' when it has none.
+ */
+export function partClassNameOf(layout: Layout, blockId: string, part: string, definitions: readonly BlockDefinition[]): string {
+  const index = indexLayout(layout)
+  const entry = index.get(blockId)
+  if (!entry) return ''
+  const own = entry.block.partClassName?.[part]
+  if (own) return own
+  const rule = definitions.find((d) => d.type === entry.block.type)?.parts?.[part]?.inherits
+  if (!rule) return ''
+  for (let id = entry.parentId; id !== null; ) {
+    const above = index.get(id)
+    if (!above) return ''
+    if (above.block.type === rule.ancestor) return above.block.partClassName?.[rule.part ?? part] ?? ''
+    id = above.parentId
+  }
+  return ''
 }

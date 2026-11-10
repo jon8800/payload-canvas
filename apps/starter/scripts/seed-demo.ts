@@ -3,8 +3,9 @@
 // Run with `pnpm seed:demo`.
 import { getPayload, type Payload } from 'payload'
 import config from '@payload-config'
-import { FORCE_DELETE_CONTEXT } from 'payload-canvas'
-import { validateLayout, withDefaultClassNames, withoutBoundRequired, type Block, type Layout } from 'payload-canvas/core'
+import { FORCE_DELETE_CONTEXT, siteCssConfigOf } from 'payload-canvas'
+import { createId, validateLayout, withDefaultClassNames, withoutBoundRequired, type Block, type Layout } from 'payload-canvas/core'
+import { FORM_BLOCK, FORM_SLOT, FORM_SOURCE_FIELD, formBlockFromDoc, formSettingNames } from 'payload-canvas/forms'
 
 import { builderBlocks } from '@/builder'
 import { HOME_SLUG } from '@/lib/links'
@@ -52,10 +53,13 @@ const context = { disableRevalidate: true }
 
 type Id = number
 
+/** The plugin's block list: the app's blocks plus the form field blocks it adds (forms on pages). */
+let pluginBlocks = builderBlocks
+
 function layoutOf(blocks: Block[], where: string): Layout {
   const layout: Layout = { version: 1, blocks }
   // Bound props may stay empty: the document fills them at render time.
-  const errors = withoutBoundRequired(validateLayout(layout, builderBlocks), layout)
+  const errors = withoutBoundRequired(validateLayout(layout, pluginBlocks), layout)
   if (errors.length > 0) {
     const lines = errors.map((e) => `  ${e.code} ${e.path}: ${e.message}`).join('\n')
     throw new Error(`Invalid layout for ${where}:\n${lines}`)
@@ -153,15 +157,30 @@ async function seedForm(payload: Payload): Promise<Id> {
   return form.id
 }
 
+/**
+ * The Contact page's Form block, built on the page from the seeded form ("Move into this page"):
+ * its fields and settings as the block's own, and the form's id kept. The form's `source` then
+ * names this block, so publishing the page writes into the same form and its submissions stay.
+ */
+async function contactFormBlock(payload: Payload, formId: Id): Promise<Block> {
+  const doc = await payload.findByID({ collection: 'forms', id: formId, depth: 0 })
+  const settings = formSettingNames(payload.collections.forms.config.fields)
+  const { props, children } = formBlockFromDoc(doc as unknown as Record<string, unknown>, settings)
+  const [block] = withDefaultClassNames([{ id: createId(), type: FORM_BLOCK, props, slots: { [FORM_SLOT]: children } }], pluginBlocks)
+  return block!
+}
+
 async function seed() {
   const payload = await getPayload({ config })
   payload.logger.info('Seeding demo content…')
+  pluginBlocks = siteCssConfigOf(payload)?.blocks ?? builderBlocks
 
   await clear(payload)
   await seedTheme(payload)
   await seedClasses(payload, context)
   const media = await seedMedia(payload)
   const formId = await seedForm(payload)
+  const contactForm = await contactFormBlock(payload, formId)
 
   const categoryIds: Id[] = []
   for (const category of CATEGORIES) {
@@ -176,6 +195,12 @@ async function seed() {
     const doc = await payload.create({ collection: 'pages', data: { title, slug, _status: 'published' }, context })
     pages[slug] = doc.id
   }
+  // The Contact page's Form block owns the seeded form: publishing the page keeps its id.
+  await payload.update({
+    collection: 'forms',
+    id: formId,
+    data: { [FORM_SOURCE_FIELD]: { collection: 'pages', document: String(pages.contact), block: contactForm.id } } as never,
+  })
   const toContact = { label: 'Start a project', link: pageLink(pages.contact) }
   const toServices = { label: 'See our services', link: pageLink(pages.services) }
 
@@ -348,7 +373,7 @@ async function seed() {
       contact.create({
         title: 'Get in touch',
         text: 'Fill in the form, or reach us directly. We reply within one working day.',
-        formId,
+        form: contactForm,
         details: [
           { label: 'Email', value: EMAIL, href: `mailto:${EMAIL}` },
           { label: 'Phone', value: PHONE, href: `tel:${PHONE.replace(/[^+\d]/g, '')}` },

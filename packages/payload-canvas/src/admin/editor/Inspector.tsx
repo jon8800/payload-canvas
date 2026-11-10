@@ -21,7 +21,7 @@ import { useAccessRefresh } from './fields/access'
 import { InputError } from './fields/CheckedInputs'
 import { BlockContentFields } from './renderField'
 import { useRuntime, type InspectorTab } from './runtime'
-import { storesBuilderData } from './actions'
+import { storesBuilderData, storesClasses } from './actions'
 import { shortcutList } from './shortcuts'
 import { useEditor } from './store'
 import { StylesPanel } from './styles/StylesPanel'
@@ -132,8 +132,9 @@ function saveTabChoice(tab: BlockTab) {
 }
 
 /** The tab a block opens on: the chosen tab, unless the block has nothing to show there. */
-function tabFor(chosen: BlockTab, def: BlockDefinition | undefined, justAdded: boolean): BlockTab {
+function tabFor(chosen: BlockTab, def: BlockDefinition | undefined, justAdded: boolean, allTabs: boolean): BlockTab {
   const hasFields = (def?.fields.length ?? 0) > 0
+  if (!allTabs && chosen !== 'content' && chosen !== 'styles') return 'content'
   // A block that was just added opens on its content, so typing starts at once.
   if (justAdded && hasFields) return 'content'
   if (chosen !== 'content' && def?.styles === false) return 'content'
@@ -162,7 +163,9 @@ function BlockPane() {
   const def = block ? getBlockDefinition(runtime.config.blocks, block.type) : undefined
   // Content mode edits content only: no Styles, Motion or Advanced tab.
   const contentMode = useContentMode(runtime)
-  const tab = storesBuilderData(runtime) && !contentMode ? tabFor(chosen, def, block !== null && block.id === addedId) : 'content'
+  // A Payload blocks field keeps only the classes of blocks with class keys: Content and Styles.
+  const styled = block !== null && storesClasses(runtime, block.type)
+  const tab = styled && !contentMode ? tabFor(chosen, def, block !== null && block.id === addedId, storesBuilderData(runtime)) : 'content'
   const setTab = (next: BlockTab) => {
     setAddedId(null)
     setChosen(next)
@@ -197,22 +200,26 @@ function BlockPane() {
       <BlockProblems blockId={block.id} />
       <EditingBanner blockId={block.id} />
       <LocaleNote blockId={block.id} tab={tab} />
-      {/* A Payload blocks field holds the blocks' own fields only: no tabs, the content shows. */}
-      {!contentMode && storesBuilderData(runtime) && (
+      {/* A Payload blocks field holds the blocks' own fields only: no tabs, the content shows; blocks with class keys add Styles. */}
+      {!contentMode && styled && (
         <Tabs
           value={tab}
           onChange={setTab}
           options={[
             { id: 'content', label: 'Content' },
             { id: 'styles', label: 'Styles' },
-            { id: 'motion', label: 'Motion' },
-            { id: 'advanced', label: 'Advanced' },
+            ...(storesBuilderData(runtime)
+              ? [
+                  { id: 'motion' as const, label: 'Motion' },
+                  { id: 'advanced' as const, label: 'Advanced' },
+                ]
+              : []),
           ]}
         />
       )}
       {tab === 'content' && <BlockContentFields block={block} />}
       {tab === 'content' && block.type === SECTION_REF_BLOCK && <ComponentValuesPanel block={block} />}
-      {tab === 'styles' && storesBuilderData(runtime) && <StyleFields block={block} />}
+      {tab === 'styles' && styled && <StyleFields block={block} />}
       {tab === 'motion' && storesBuilderData(runtime) && <MotionPanel blockId={block.id} blockType={block.type} motion={block.motion} />}
       {tab === 'advanced' && storesBuilderData(runtime) && <AdvancedFields block={block} />}
     </div>

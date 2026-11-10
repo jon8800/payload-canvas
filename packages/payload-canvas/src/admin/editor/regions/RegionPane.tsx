@@ -4,6 +4,7 @@
 // The fields are edited with Payload's own form in the settings drawer (every field type, with
 // Payload's validation and access) and, for text and images, on the canvas.
 
+import { FormSourceNote } from '../fields/FormBlock'
 import { Button } from '@payloadcms/ui'
 
 import { regionAccessAt, regionFieldOf } from '../../../core/regions'
@@ -34,6 +35,8 @@ export function RegionPane({ regions, name }: { regions: RegionsController; name
           <span className="builder-editor__block-sub">{region.panel ? (drafts ? 'Changes save as a draft' : 'Changes save as you type') : 'Fixed part of the page'}</span>
         </span>
       </div>
+      {/* The form builder: a form built on a page links to that page. */}
+      {region.panel ? <FormSourceNote /> : null}
       {problems.length > 0 && (
         <div className="builder-editor__block-problems" role="alert">
           <Icon name="warning" size={14} />

@@ -51,14 +51,14 @@ describe('withFormFieldSettings', () => {
   it('adds the settings a block lacks, before its display conditions', () => {
     const text = withFormConditions({ slug: 'text', fields: [{ type: 'row', fields: [{ name: 'name', type: 'text' }, { name: 'defaultValue', type: 'text' }] }] } as never)
     const out = withFormFieldSettings(text as { slug: string; fields: never[] })
-    assert.deepEqual(names(out.fields as Loose[]), ['name', 'defaultValue', 'description', 'labelVisibility', 'placeholder', 'cssClass', 'conditions'])
+    assert.deepEqual(names(out.fields as Loose[]), ['name', 'defaultValue', 'description', 'labelVisibility', 'placeholder', 'cssClass', 'partClasses', 'conditions'])
   })
 
   it('keeps settings a block has and adds only what its type uses', () => {
     const select = withFormFieldSettings({ slug: 'select', fields: [{ name: 'placeholder', type: 'text' }] } as never) as { fields: Loose[] }
-    assert.deepEqual(names(select.fields), ['placeholder', 'description', 'labelVisibility', 'cssClass'])
+    assert.deepEqual(names(select.fields), ['placeholder', 'description', 'labelVisibility', 'cssClass', 'partClasses'])
     const labelled = withFormFieldSettings({ slug: 'radio', fields: [{ type: 'row', fields: [{ name: 'name', type: 'text' }, { name: 'label', type: 'text' }] }, { name: 'options', type: 'array' }] } as never) as { fields: Loose[] }
-    assert.deepEqual(names(labelled.fields), ['name', 'label', 'description', 'options', 'labelVisibility', 'display', 'cssClass'])
+    assert.deepEqual(names(labelled.fields), ['name', 'label', 'description', 'options', 'labelVisibility', 'display', 'cssClass', 'partClasses'])
     const radio = withFormFieldSettings({ slug: 'radio', fields: [] } as never) as { fields: Loose[] }
     assert.ok(names(radio.fields).includes('display'))
     assert.ok(!names(radio.fields).includes('placeholder'))
@@ -95,7 +95,7 @@ describe('formFieldBlocks tabs', () => {
       tabs.tabs?.map((t) => [t.label, names(t.fields)]),
       [
         ['Field', ['name', 'label', 'description', 'defaultValue']],
-        ['Appearance', ['width', 'labelVisibility', 'placeholder', 'cssClass']],
+        ['Appearance', ['width', 'labelVisibility', 'placeholder']],
         ['Validation', ['required']],
         ['Conditions', ['conditions']],
       ],
@@ -103,6 +103,12 @@ describe('formFieldBlocks tabs', () => {
     const width = tabs.tabs?.[1].fields[0]
     assert.equal(width?.label, 'Width')
     assert.equal(width?.admin?.custom?.builderWidthPicker, true)
+    // The hidden class fields store the field's classes and part classes: block data, not props.
+    assert.deepEqual(def.payload, { slug: 'text', classKeys: { className: 'cssClass', partClassName: 'partClasses' } })
+    assert.equal(def.styles, true)
+    assert.deepEqual(Object.keys(def.parts ?? {}), ['label', 'input', 'help', 'error'])
+    // The name field warns about renames in a form with submissions.
+    assert.equal(tabs.tabs?.[0].fields[0]?.fields?.[0]?.admin?.custom?.builderFieldName, true)
   })
 })
 

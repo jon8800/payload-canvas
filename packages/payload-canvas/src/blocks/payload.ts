@@ -52,6 +52,14 @@ export type FromPayloadBlocksOptions = {
 }
 
 type Config = PayloadBlockConfig
+
+/**
+ * `admin.custom.builderBlockKey` on a top-level field of a Payload block: the field stores the
+ * block's `className` (a text field) or `partClassName` (a json field). `fromPayloadBlocks` leaves
+ * the field out of the props and records it in `payload.classKeys`, so a Payload blocks field keeps
+ * the block's classes and the editor offers its Styles tab. Hide the field in Payload's admin.
+ */
+export const BLOCK_KEY_MARKER = 'builderBlockKey'
 type LooseField = Record<string, unknown> & { type?: string; name?: string }
 
 const ICONS: Array<[RegExp, string]> = [
@@ -131,6 +139,7 @@ export function fromPayloadBlocks(blocks: readonly Config[], options: FromPayloa
   function definitionOf(block: Config): BlockDefinition {
     const notes: string[] = []
     const slots: Record<string, SlotDefinition> = {}
+    const classKeys: NonNullable<NonNullable<BlockDefinition['payload']>['classKeys']> = {}
     const fields = adaptFields(block.fields as Field[], true, '')
     const override = options.overrides?.[block.slug] ?? {}
     const label = override.label ?? textOf(block.labels?.singular) ?? words(block.slug)
@@ -147,11 +156,11 @@ export function fromPayloadBlocks(blocks: readonly Config[], options: FromPayloa
       label,
       fields,
       ...(hasSlots ? { slots } : {}),
-      styles: override.styles ?? options.styles ?? false,
+      styles: override.styles ?? options.styles ?? Boolean(classKeys.className),
       icon: override.icon ?? (hasSlots ? 'section' : (ICONS.find(([test]) => test.test(block.slug))?.[1] ?? 'block')),
       category: override.category ?? textOf((block.admin as { group?: unknown } | undefined)?.group) ?? options.category ?? (hasSlots ? 'Site sections' : 'Site blocks'),
       ai: override.ai ?? { description: `${label}: a block of the site's own design.${slotText}` },
-      payload: { slug: block.slug },
+      payload: { slug: block.slug, ...(Object.keys(classKeys).length > 0 ? { classKeys } : {}) },
     }
     if (override.defaultClassName) def.defaultClassName = override.defaultClassName
     if (override.classes) def.classes = override.classes
@@ -174,6 +183,12 @@ export function fromPayloadBlocks(blocks: readonly Config[], options: FromPayloa
       const name = typeof field.name === 'string' ? field.name : ''
       const at = name ? `${path}${name}` : path
       readAdmin(field, at)
+      // A field that stores the block's classes is block data, not a prop.
+      const blockKey = isPlainObject(field.admin) && isPlainObject(field.admin.custom) ? field.admin.custom[BLOCK_KEY_MARKER] : undefined
+      if (top && name && (blockKey === 'className' || blockKey === 'partClassName')) {
+        classKeys[blockKey] = name
+        return null
+      }
 
       switch (field.type) {
         case 'blocks': {

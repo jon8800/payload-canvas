@@ -163,6 +163,33 @@
     font-size: var(--be-text-m);
   }
 
+  // A note that needs attention: renaming a field of a form with submissions.
+  .builder-field-note--warning {
+    color: var(--theme-warning-800);
+  }
+
+  // The Form block's actions: where its answers go, "Edit form", "Move into this page".
+  .builder-form-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: calc(var(--base) * 0.5);
+
+    .builder-field-note {
+      margin: 0;
+    }
+  }
+
+  .builder-form-actions--source {
+    margin-bottom: calc(var(--base) * 0.75);
+  }
+
+  .builder-form-actions__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--base) * 0.25);
+  }
+
   // The list's sort (SortField) and "Related to this page" (RelatedField): a label over selects.
   .builder-sort,
   .builder-related {
