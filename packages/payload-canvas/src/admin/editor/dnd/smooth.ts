@@ -277,7 +277,7 @@ export function dropAt(runtime: Runtime, p: Point, source: DragSource): Pick<Dra
       depth: r.depth,
       rect: { x: outline.rowX, y: outline.rect.y + r.top - outline.scrollTop, width: outline.rowWidth, height: r.height },
     }))
-    const target = outlineDropTarget(layout, blocks, rows, p, source, OUTLINE_INDENT)
+    const target = outlineDropTarget(layout, blocks, rows, p, source, OUTLINE_INDENT, outline.rect)
     if (target || source.kind !== 'block') return { zone: 'outline', target }
     // Over its own row: the block stays where it is.
     const own = rows.find((r) => r.id === source.id)

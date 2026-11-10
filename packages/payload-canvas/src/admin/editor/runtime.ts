@@ -455,13 +455,14 @@ export function computeDrop(runtime: Runtime, p: Point, source: DragSource): Pic
   const { blocks } = runtime.config
 
   const outline = runtime.outlineRef.current
-  if (outline && rectContains(toRect(outline.getBoundingClientRect()), p.x, p.y)) {
+  const area = outline ? toRect(outline.getBoundingClientRect()) : null
+  if (outline && area && rectContains(area, p.x, p.y)) {
     const rows: OutlineRow[] = Array.from(outline.querySelectorAll<HTMLElement>('[data-outline-row]'), (el) => ({
       id: el.dataset.outlineRow ?? '',
       rect: toRect(el.getBoundingClientRect()),
       depth: Number(el.dataset.depth ?? 0),
     }))
-    return { zone: 'outline', target: outlineDropTarget(layout, blocks, rows, p, source, OUTLINE_INDENT) }
+    return { zone: 'outline', target: outlineDropTarget(layout, blocks, rows, p, source, OUTLINE_INDENT, area) }
   }
 
   const iframe = runtime.iframeRef.current
