@@ -13,3 +13,4 @@ docs
 dist-packages
 apps/starter/public/media/*
 !apps/starter/public/media/.gitkeep
+apps/starter/uploads

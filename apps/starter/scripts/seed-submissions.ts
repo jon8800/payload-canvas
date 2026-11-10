@@ -1,13 +1,17 @@
 // Adds example form submissions for the demo: 12 for the Contact form, 4 for every other form.
 // Dates spread over the past 3 weeks, some read and some new, each with the page it came from,
-// short and long messages, and one with a file from the media library. The answers follow each
+// short and long messages, and one with a file (a copy of a media library file in Form files). The answers follow each
 // form's own fields. Runs once: when example submissions exist (answers at @example.net), it stops.
 // No emails go out. Run with `pnpm seed:submissions`.
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
 import { getPayload, type Payload } from 'payload'
 import config from '@payload-config'
 
 /** Example answers use this email domain, so the seed finds its own submissions. */
 const EXAMPLE_DOMAIN = '@example.net'
+const dirname = path.dirname(fileURLToPath(import.meta.url))
 const CONTACT_FORM_TITLE = 'Contact form'
 const DAY = 24 * 60 * 60 * 1000
 
@@ -94,11 +98,20 @@ function answer(field: FormField, person: Person, index: number, createdAt: Date
   }
 }
 
-/** A file from the media library for the example with an attachment: a PDF if there is one, else an image. */
-async function exampleFile(payload: Payload): Promise<{ id: number | string; filename?: string | null; url?: string | null } | null> {
+/**
+ * A file for the example with an attachment: a copy of a media library file (a PDF if there is one,
+ * else an image) in the private Form files collection, where visitors' files go.
+ */
+async function exampleFile(payload: Payload): Promise<{ id: number | string; filename?: string | null } | null> {
   for (const mimeType of ['application/pdf', 'image/']) {
     const found = await payload.find({ collection: 'media', where: { mimeType: { like: mimeType } }, limit: 1, depth: 0, sort: '-createdAt' })
-    if (found.docs[0]) return found.docs[0] as { id: number | string; filename?: string | null; url?: string | null }
+    const media = found.docs[0] as { filename?: string | null; mimeType?: string | null } | undefined
+    if (!media?.filename) continue
+    const source = path.resolve(dirname, '../public/media', media.filename)
+    if (!fs.existsSync(source)) continue
+    const data = fs.readFileSync(source)
+    const file = { name: media.filename, data, mimetype: media.mimeType ?? 'application/octet-stream', size: data.length }
+    return (await payload.create({ collection: 'form-files', data: { alt: media.filename }, file, overrideAccess: true })) as { id: number | string; filename?: string | null }
   }
   return null
 }

@@ -76,6 +76,7 @@ export interface Config {
     tags: Tag;
     'template-parts': TemplatePart;
     'not-found-log': NotFoundLog;
+    'form-files': FormFile;
     redirects: Redirect;
     forms: Form;
     'form-submissions': FormSubmission;
@@ -107,6 +108,9 @@ export interface Config {
       usedInBuilderSections: 'builder-sections';
       indexedUses: 'reference-index';
     };
+    'form-files': {
+      indexedUses: 'reference-index';
+    };
     exports: {
       indexedUses: 'reference-index';
     };
@@ -130,6 +134,7 @@ export interface Config {
     tags: TagsSelect<false> | TagsSelect<true>;
     'template-parts': TemplatePartsSelect<false> | TemplatePartsSelect<true>;
     'not-found-log': NotFoundLogSelect<false> | NotFoundLogSelect<true>;
+    'form-files': FormFilesSelect<false> | FormFilesSelect<true>;
     redirects: RedirectsSelect<false> | RedirectsSelect<true>;
     forms: FormsSelect<false> | FormsSelect<true>;
     'form-submissions': FormSubmissionsSelect<false> | FormSubmissionsSelect<true>;
@@ -474,6 +479,10 @@ export interface Page {
             value: number | BuilderSection;
           }
         | {
+            relationTo: 'form-files';
+            value: number | FormFile;
+          }
+        | {
             relationTo: 'exports';
             value: number | Export;
           }
@@ -589,6 +598,10 @@ export interface Post {
         | {
             relationTo: 'builder-sections';
             value: number | BuilderSection;
+          }
+        | {
+            relationTo: 'form-files';
+            value: number | FormFile;
           }
         | {
             relationTo: 'exports';
@@ -733,6 +746,10 @@ export interface BuilderTemplate {
         | {
             relationTo: 'builder-sections';
             value: number | BuilderSection;
+          }
+        | {
+            relationTo: 'form-files';
+            value: number | FormFile;
           }
         | {
             relationTo: 'exports';
@@ -1774,6 +1791,10 @@ export interface BuilderSection {
             value: number | BuilderSection;
           }
         | {
+            relationTo: 'form-files';
+            value: number | FormFile;
+          }
+        | {
             relationTo: 'exports';
             value: number | Export;
           }
@@ -1810,6 +1831,54 @@ export interface BuilderSection {
   };
   updatedAt: string;
   createdAt: string;
+}
+/**
+ * Files visitors sent with a form. Only signed-in users can open them.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "form-files".
+ */
+export interface FormFile {
+  id: number;
+  alt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+  indexedUses?: {
+    docs?: (number | ReferenceIndex)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
+  url?: string | null;
+  thumbnailURL?: string | null;
+  filename?: string | null;
+  mimeType?: string | null;
+  filesize?: number | null;
+  width?: number | null;
+  height?: number | null;
+  focalX?: number | null;
+  focalY?: number | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "reference-index".
+ */
+export interface ReferenceIndex {
+  id: number;
+  source: string;
+  sourceCollection?: string | null;
+  sourceId?: string | null;
+  sourceTitle?: string | null;
+  relationTo: string;
+  value: string;
+  published?: boolean | null;
+  latest?: boolean | null;
+  layout?: boolean | null;
+  problem?: string | null;
+  targetTitle?: string | null;
+  mediaUpload?: (number | null) | Media;
+  formFilesUpload?: (number | null) | FormFile;
+  exportsUpload?: (number | null) | Export;
+  importsUpload?: (number | null) | Import;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1852,27 +1921,6 @@ export interface Export {
   height?: number | null;
   focalX?: number | null;
   focalY?: number | null;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "reference-index".
- */
-export interface ReferenceIndex {
-  id: number;
-  source: string;
-  sourceCollection?: string | null;
-  sourceId?: string | null;
-  sourceTitle?: string | null;
-  relationTo: string;
-  value: string;
-  published?: boolean | null;
-  latest?: boolean | null;
-  layout?: boolean | null;
-  problem?: string | null;
-  targetTitle?: string | null;
-  mediaUpload?: (number | null) | Media;
-  exportsUpload?: (number | null) | Export;
-  importsUpload?: (number | null) | Import;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1988,6 +2036,10 @@ export interface TemplatePart {
             value: number | BuilderSection;
           }
         | {
+            relationTo: 'form-files';
+            value: number | FormFile;
+          }
+        | {
             relationTo: 'exports';
             value: number | Export;
           }
@@ -2058,7 +2110,7 @@ export interface FormSubmission {
   /**
    * Files uploaded with this submission
    */
-  attachments?: (number | Media)[] | null;
+  attachments?: (number | FormFile)[] | null;
   /**
    * When someone first opened this message. Empty: the list shows "New".
    */
@@ -2564,6 +2616,10 @@ export interface PayloadLockedDocument {
         value: number | NotFoundLog;
       } | null)
     | ({
+        relationTo: 'form-files';
+        value: number | FormFile;
+      } | null)
+    | ({
         relationTo: 'redirects';
         value: number | Redirect;
       } | null)
@@ -2958,6 +3014,25 @@ export interface NotFoundLogSelect<T extends boolean = true> {
   lastReferrer?: T;
   updatedAt?: T;
   createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "form-files_select".
+ */
+export interface FormFilesSelect<T extends boolean = true> {
+  alt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  indexedUses?: T;
+  url?: T;
+  thumbnailURL?: T;
+  filename?: T;
+  mimeType?: T;
+  filesize?: T;
+  width?: T;
+  height?: T;
+  focalX?: T;
+  focalY?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -3752,6 +3827,7 @@ export interface ReferenceIndexSelect<T extends boolean = true> {
   problem?: T;
   targetTitle?: T;
   mediaUpload?: T;
+  formFilesUpload?: T;
   exportsUpload?: T;
   importsUpload?: T;
 }
@@ -4473,6 +4549,7 @@ export interface TaskCreateCollectionExport {
       | 'tags'
       | 'template-parts'
       | 'not-found-log'
+      | 'form-files'
       | 'redirects'
       | 'forms'
       | 'form-submissions'

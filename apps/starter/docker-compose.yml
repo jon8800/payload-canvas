@@ -60,6 +60,7 @@ services:
       PREVIEW_SECRET: ${PREVIEW_SECRET:-change-me}
     volumes:
       - media:/app/apps/starter/public/media
+      - form-files:/app/apps/starter/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -68,3 +69,4 @@ services:
 volumes:
   pgdata:
   media:
+  form-files:

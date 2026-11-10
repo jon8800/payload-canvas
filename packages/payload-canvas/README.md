@@ -1609,8 +1609,8 @@ The form's `fields` stay a Payload `blocks` field: the builder edits it in place
          hooks: {
            // Hidden fields are never required, and their answers are dropped. Wrong formats are refused.
            beforeValidate: [formSubmissionConditions()],
-           // Files of `file` fields go to Media and are linked on the submission (see "More field types").
-           beforeChange: [formFileUploads({ collection: 'media', field: 'attachments' })],
+           // Files of `file` fields go to a private upload collection and are linked on the submission (see "More field types").
+           beforeChange: [formFileUploads({ collection: 'form-files', field: 'attachments' })],
          },
        },
      }),
@@ -1734,7 +1734,7 @@ formBuilderPlugin({
 })
 ```
 
-Your form renders them (the starter's `FormParts.tsx` is an example). For a `file` field, send the submission as multipart form data: the JSON in `_payload`, and each file as a part named after its field (several files: several parts with the same name), with the file names as the field's answer in `submissionData`. `filesProblem(files, field)` checks the number of files, their type and size; the starter's drop zone (`FileDropZone.tsx`) shows its message at once. `formFileUploads({ collection, field })` (a submissions `beforeChange` hook) runs the same check again, stores each file in `collection` (default `media`), and links them on `field` (default `attachments`: a `hasMany` relationship or upload field you add to the submissions). It replaces the answer with the file names and addresses, so emails show them. A file field that the visitor's answers hide is skipped. Links a visitor sends in `attachments` are ignored. The plugin's own `upload` type cannot take display conditions (the plugin ignores a config for it), so use `file`.
+Your form renders them (the starter's `FormParts.tsx` is an example). For a `file` field, send the submission as multipart form data: the JSON in `_payload`, and each file as a part named after its field (several files: several parts with the same name), with the file names as the field's answer in `submissionData`. `filesProblem(files, field)` checks the number of files, their type and size; the starter's drop zone (`FileDropZone.tsx`) shows its message at once. `formFileUploads({ collection, field })` (a submissions `beforeChange` hook) runs the same check again, stores each file in `collection` (required), and links them on `field` (default `attachments`: a `hasMany` relationship or upload field you add to the submissions). It replaces the answer with the file names and addresses, so emails show them. Keep `collection` private: visitors send CVs and other private files. Give it `read` access for signed-in users only and a `staticDir` outside `public/` (the starter's `src/collections/FormFiles.ts`); never use a public collection such as Media. A file field that the visitor's answers hide is skipped. Links a visitor sends in `attachments` are ignored. The plugin's own `upload` type cannot take display conditions (the plugin ignores a config for it), so use `file`.
 
 ### Emails
 

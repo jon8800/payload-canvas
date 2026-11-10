@@ -2,8 +2,8 @@
 // the submission as multipart form data (`_payload` with the JSON, one part per file, named after
 // its field; a field with several files sends several parts with one name). `formFileUploads` is a
 // `beforeChange` hook of the submissions collection: it checks the number of files (one, or the
-// field's `maxFiles` when it allows several), their type and size, stores each file in an upload
-// collection (media), links them on a relationship field of the submission (`attachments`) and
+// field's `maxFiles` when it allows several), their type and size, stores each file in a private
+// upload collection (not a public one like Media: visitors send CVs and other private files), links them on a relationship field of the submission (`attachments`) and
 // puts the file names and addresses in the answers, so emails show them. Hidden file fields are
 // skipped, as their other answers are.
 
@@ -19,8 +19,11 @@ type RequestFile = { name: string; data: Buffer; mimetype: string; size: number 
 export type FormFileUploadsOptions = {
   /** Slug of the forms collection. Default "forms". */
   forms?: string
-  /** The upload collection the files go to. Default "media". */
-  collection?: string
+  /**
+   * The upload collection the files go to. Required, and keep it private: read access for signed-in
+   * users only, files outside `public/` (a public collection such as Media would publish every file).
+   */
+  collection: string
   /** The submission's relationship (or upload) field with `hasMany` that links the files. Default "attachments". */
   field?: string
   /** Upper limit for every file field, in MB. Default 10. */
@@ -39,11 +42,11 @@ const idOf = (value: unknown): string | number | null => {
 
 /**
  * The submissions hook for file fields:
- * `formSubmissionOverrides: { hooks: { beforeChange: [formFileUploads()] } }`. Runs on create.
+ * `formSubmissionOverrides: { hooks: { beforeChange: [formFileUploads({ collection: 'form-files' })] } }`. Runs on create.
  */
-export function formFileUploads(options: FormFileUploadsOptions = {}): CollectionBeforeChangeHook {
+export function formFileUploads(options: FormFileUploadsOptions): CollectionBeforeChangeHook {
   const formsSlug = options.forms ?? 'forms'
-  const target = options.collection ?? 'media'
+  const target = options.collection
   const linkField = options.field ?? 'attachments'
   const limitMb = options.maxSizeMb ?? FILE_FIELD_MAX_MB
   return async ({ collection, data: incoming, operation, req }) => {
