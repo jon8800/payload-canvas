@@ -1,5 +1,5 @@
 import type { Block } from 'payload-canvas/core'
-import { FORM_ROW, formField, form, heading, link, stack, styles, submit, text, url, defineSection } from './build'
+import { FIELD_WIDTH, FORM_ROW, formField, form, heading, link, stack, styles, submit, text, url, defineSection } from './build'
 
 export type ContactInput = {
   title: string
@@ -44,8 +44,8 @@ export const contact = defineSection<ContactInput>({
 /** The contact form: name and email side by side, a topic, a message and the Submit button. */
 export function contactForm(settings: Record<string, unknown> = {}): Block {
   return form({ title: 'Contact form', submitButtonLabel: 'Send message', confirmationType: 'message', ...settings }, [
-    formField('text', { name: 'name', label: 'Name', required: true, width: 50 }),
-    formField('email', { name: 'email', label: 'Email', required: true, width: 50 }),
+    formField('text', { name: 'name', label: 'Name', required: true }, FIELD_WIDTH.half),
+    formField('email', { name: 'email', label: 'Email', required: true }, FIELD_WIDTH.half),
     formField('select', {
       name: 'topic',
       label: 'Topic',

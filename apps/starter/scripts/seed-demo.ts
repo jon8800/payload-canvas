@@ -5,7 +5,7 @@ import { getPayload, type Payload } from 'payload'
 import config from '@payload-config'
 import { FORCE_DELETE_CONTEXT, siteCssConfigOf } from 'payload-canvas'
 import { createId, validateLayout, withDefaultClassNames, withoutBoundRequired, type Block, type Layout } from 'payload-canvas/core'
-import { FORM_BLOCK, FORM_SLOT, FORM_SOURCE_FIELD, formBlockFromDoc, formSettingNames } from 'payload-canvas/forms'
+import { FORM_BLOCK, FORM_FIELD_WIDTH_CLASSES, FORM_SLOT, FORM_SOURCE_FIELD, formBlockFromDoc, formSettingNames } from 'payload-canvas/forms'
 
 import { builderBlocks } from '@/builder'
 import { HOME_SLUG } from '@/lib/links'
@@ -137,8 +137,8 @@ async function seedForm(payload: Payload): Promise<Id> {
       confirmationType: 'message',
       confirmationMessage: lexical(['Thanks for your message. We will reply within one working day.']),
       fields: [
-        { blockType: 'text', name: 'name', label: 'Name', required: true, width: 50 },
-        { blockType: 'email', name: 'email', label: 'Email', required: true, width: 50 },
+        { blockType: 'text', name: 'name', label: 'Name', required: true, cssClass: FORM_FIELD_WIDTH_CLASSES[50] },
+        { blockType: 'email', name: 'email', label: 'Email', required: true, cssClass: FORM_FIELD_WIDTH_CLASSES[50] },
         {
           blockType: 'select',
           name: 'topic',

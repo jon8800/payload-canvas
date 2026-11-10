@@ -2,11 +2,11 @@
 // this file). The classes people can change are the Form block's parts (`formPartClasses`): a new
 // Form block starts with them, so the Styles panel shows and edits them. Colors use the theme tokens.
 
-import type { FormFieldWidth, FormPartClasses } from 'payload-canvas/forms'
+import type { FormPartClasses } from 'payload-canvas/forms'
 
 export const formClasses = {
   form: 'flex flex-col gap-5',
-  // The fields' box: a wrapping row, so fields with a width share a line.
+  // The fields' box: a wrapping row, so fields with a width class share a line.
   fields: 'flex flex-wrap gap-x-4 gap-y-5',
   field: 'flex w-full min-w-0 flex-col gap-2',
   label: 'text-sm font-medium text-foreground',
@@ -93,16 +93,6 @@ export const formClasses = {
 
 /** Class names without the empty ones, joined by spaces. */
 export const join = (...names: Array<string | false | null | undefined>) => names.filter(Boolean).join(' ')
-
-/** Width classes of the field width presets (`formFieldWidth`). Full width on phones. */
-export const widthClasses: Record<FormFieldWidth, string> = {
-  100: '',
-  75: 'sm:w-[calc(75%-0.25rem)]',
-  67: 'sm:w-[calc(66.667%-0.333rem)]',
-  50: 'sm:w-[calc(50%-0.5rem)]',
-  33: 'sm:w-[calc(33.333%-0.667rem)]',
-  25: 'sm:w-[calc(25%-0.75rem)]',
-}
 
 /**
  * The Form block's default part classes (payload-canvas `formBlocks({ partClassNames })`): every

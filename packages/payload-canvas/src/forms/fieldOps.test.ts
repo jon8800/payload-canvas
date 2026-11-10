@@ -65,11 +65,17 @@ describe('formFieldsOf', () => {
 
 describe('formFieldOps', () => {
   it('adds a field with a name made from its label, at an index', () => {
-    const result = run([{ action: 'add', type: 'email', values: { label: 'Work email', required: true, width: '50' }, index: 1 }])
+    const result = run([{ action: 'add', type: 'email', values: { label: 'Work email', required: true, className: 'sm:w-[calc(50%-0.5rem)]' }, index: 1 }])
     assert.ok(result.ok)
     const added = (result as { layout: Layout }).layout.blocks[1]!
     assert.equal(added.type, 'formEmail')
-    assert.deepEqual(added.props, { name: 'work_email', label: 'Work email', required: true, width: 50 })
+    assert.deepEqual(added.props, { name: 'work_email', label: 'Work email', required: true })
+    assert.equal(added.className, 'sm:w-[calc(50%-0.5rem)]')
+  })
+
+  it('refuses a width: the width is classes', () => {
+    assert.match((formFieldOps(form, [{ action: 'add', type: 'text', values: { label: 'Name', width: 50 } }], definitions) as { error: string }).error, /no `width` setting.*className/)
+    assert.match((formFieldOps(form, [{ action: 'update', field: 'name', values: { width: 50 } }], definitions) as { error: string }).error, /no `width` setting/)
   })
 
   it('gives a new field a free name and accepts the builder type too', () => {
@@ -98,13 +104,21 @@ describe('formFieldOps', () => {
 
   it('updates by name or id and merges values', () => {
     const result = run([
-      { action: 'update', field: 'name', values: { label: 'Full name', width: 50 } },
+      { action: 'update', field: 'name', values: { label: 'Full name', className: 'sm:w-[calc(50%-0.5rem)]' } },
       { action: 'update', field: 'f2', unset: ['label'] },
+      { action: 'update', field: 'company', values: { cssClass: 'p-2' } },
     ])
     assert.ok(result.ok)
     const blocks = (result as { layout: Layout }).layout.blocks
-    assert.deepEqual(blocks[0]!.props, { name: 'name', label: 'Full name', required: true, width: 50 })
+    assert.deepEqual(blocks[0]!.props, { name: 'name', label: 'Full name', required: true })
+    assert.equal(blocks[0]!.className, 'sm:w-[calc(50%-0.5rem)]')
+    assert.equal(formFieldsOf((result as { layout: Layout }).layout)[0]!.className, 'sm:w-[calc(50%-0.5rem)]')
     assert.equal(blocks[1]!.props?.label, undefined)
+    assert.equal(blocks[2]!.className, 'p-2')
+    // null clears the classes.
+    const cleared = formFieldOps((result as { layout: Layout }).layout, [{ action: 'update', field: 'name', values: { className: null } }], definitions)
+    assert.ok(cleared.ok)
+    assert.deepEqual(cleared.ops, [{ type: 'update', id: blocks[0]!.id, className: null }])
   })
 
   it('renames a field in the rules of other fields', () => {
@@ -156,10 +170,10 @@ describe('formFieldOps', () => {
 })
 
 describe('formFieldTypes and nameFromLabel', () => {
-  it('lists the types with their props, without conditions', () => {
+  it('lists the types with their props, without conditions and the hidden width', () => {
     const types = formFieldTypes(definitions)
     assert.deepEqual(types.map((t) => t.type), ['text', 'email', 'select', 'checkbox', 'message'])
-    assert.deepEqual(types[1]!.props.map((p) => p.name), ['name', 'label', 'width', 'required'])
+    assert.deepEqual(types[1]!.props.map((p) => p.name), ['name', 'label', 'required'])
   })
 
   it('makes safe names', () => {

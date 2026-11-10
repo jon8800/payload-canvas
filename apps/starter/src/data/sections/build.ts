@@ -1,7 +1,7 @@
 // Small helpers that build canonical layout blocks (new ids, no empty props or slots).
 // The ready-made sections in this folder use them.
 import { createId, type Block, type BlockMotion } from 'payload-canvas/core'
-import { FORM_BLOCK, FORM_SLOT, FORM_SUBMIT_BLOCK, formFieldType } from 'payload-canvas/forms'
+import { FORM_BLOCK, FORM_FIELD_WIDTH_CLASSES, FORM_SLOT, FORM_SUBMIT_BLOCK, formFieldType } from 'payload-canvas/forms'
 import { PRIMARY_HOVER } from '../classes'
 
 export { PRIMARY_HOVER }
@@ -120,8 +120,10 @@ export const quote = (value: string, cite: string, classNames: { figure?: string
   ])
 export const icon = (name: string, className?: string) => block('icon', { name }, className)
 export const divider = (className?: string) => block('divider', undefined, className)
-/** The fields' row of a Form block: fields with a width share a line (as `formClasses.fields`). */
+/** The fields' row of a Form block: fields with a width class share a line (as `formClasses.fields`). */
 export const FORM_ROW = 'flex flex-wrap gap-x-4 gap-y-5'
+/** A field's width in a `FORM_ROW` from the sm breakpoint: half, a third or two thirds of the row. */
+export const FIELD_WIDTH = { half: FORM_FIELD_WIDTH_CLASSES[50], third: FORM_FIELD_WIDTH_CLASSES[33], twoThirds: FORM_FIELD_WIDTH_CLASSES[67] } as const
 /**
  * A Form block built on the page ("Build here"): `settings` are the form's settings (title, submit
  * button label, confirmation, emails), `children` its fields, layout blocks and Submit button.
