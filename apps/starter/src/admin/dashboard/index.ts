@@ -18,18 +18,41 @@ const limitField: Field = {
   admin: { placeholder: 'Default' },
 }
 
-const widgets: Widget[] = [
-  { slug: 'quick-actions', label: 'Quick actions', Component: `${W}/QuickActions#QuickActions`, minWidth: 'medium' },
-  { slug: 'recent-edits', label: 'Recent edits', Component: `${W}/RecentEdits#RecentEdits`, fields: [limitField], minWidth: 'small' },
-  { slug: 'drafts', label: 'Waiting to publish', Component: `${W}/RecentEdits#Drafts`, fields: [limitField], minWidth: 'small' },
-  { slug: 'form-messages', label: 'Form messages', Component: `${W}/FormMessages#FormMessages`, fields: [limitField], minWidth: 'small' },
-  { slug: 'site-checks', label: 'Site checks', Component: `${W}/SiteChecks#SiteChecks`, minWidth: 'small' },
-  { slug: 'scheduled', label: 'Scheduled', Component: `${W}/Scheduled#Scheduled`, minWidth: 'small' },
-  { slug: 'analytics', label: 'Analytics', Component: `${W}/Analytics#Analytics`, minWidth: 'small' },
-  { slug: 'open-comments', label: 'Open comments', Component: `${W}/OpenComments#OpenComments`, fields: [limitField], minWidth: 'small' },
-  { slug: 'unused-media', label: 'Unused media', Component: `${W}/UnusedMedia#UnusedMedia`, fields: [limitField], minWidth: 'small' },
-  { slug: 'broken-links', label: 'Broken links', Component: `${W}/BrokenLinks#BrokenLinks`, fields: [limitField], minWidth: 'small' },
-]
+/** Where the preview images live (`public/admin/widget-previews/`, made by `pnpm previews:widgets`). */
+export const WIDGET_PREVIEW_PATH = '/admin/widget-previews'
+
+export type WidgetPreviewTheme = 'light' | 'dark'
+
+/** The address of a widget's preview image in one theme. */
+export function widgetPreviewURL(slug: string, theme: WidgetPreviewTheme): string {
+  return `${WIDGET_PREVIEW_PATH}/${slug}-${theme}.webp`
+}
+
+/**
+ * A widget with a preview image for the "Add widget" drawer. Payload's drawer shows an item's
+ * `imageURL` (the same drawer shows block thumbnails), and the dashboard passes every widget key
+ * through to it, but the `Widget` type does not list the key. The URL is the light image;
+ * widget-previews.scss shows the dark one in the dark theme.
+ */
+function withPreview(widget: Widget & { label: string }): Widget {
+  const preview = { imageURL: widgetPreviewURL(widget.slug, 'light'), imageAltText: `${widget.label} widget` }
+  return { ...widget, ...preview }
+}
+
+export const widgets: Widget[] = (
+  [
+    { slug: 'quick-actions', label: 'Quick actions', Component: `${W}/QuickActions#QuickActions`, minWidth: 'medium' },
+    { slug: 'recent-edits', label: 'Recent edits', Component: `${W}/RecentEdits#RecentEdits`, fields: [limitField], minWidth: 'small' },
+    { slug: 'drafts', label: 'Waiting to publish', Component: `${W}/RecentEdits#Drafts`, fields: [limitField], minWidth: 'small' },
+    { slug: 'form-messages', label: 'Form messages', Component: `${W}/FormMessages#FormMessages`, fields: [limitField], minWidth: 'small' },
+    { slug: 'site-checks', label: 'Site checks', Component: `${W}/SiteChecks#SiteChecks`, minWidth: 'small' },
+    { slug: 'scheduled', label: 'Scheduled', Component: `${W}/Scheduled#Scheduled`, minWidth: 'small' },
+    { slug: 'analytics', label: 'Analytics', Component: `${W}/Analytics#Analytics`, minWidth: 'small' },
+    { slug: 'open-comments', label: 'Open comments', Component: `${W}/OpenComments#OpenComments`, fields: [limitField], minWidth: 'small' },
+    { slug: 'unused-media', label: 'Unused media', Component: `${W}/UnusedMedia#UnusedMedia`, fields: [limitField], minWidth: 'small' },
+    { slug: 'broken-links', label: 'Broken links', Component: `${W}/BrokenLinks#BrokenLinks`, fields: [limitField], minWidth: 'small' },
+  ] satisfies Array<Widget & { label: string }>
+).map(withPreview)
 
 const defaultLayout: WidgetInstance[] = [
   { widgetSlug: 'quick-actions', width: 'full' },
