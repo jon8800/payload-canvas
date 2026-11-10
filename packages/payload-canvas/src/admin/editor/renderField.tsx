@@ -33,8 +33,6 @@ import { MergeTagsFrame } from './fields/MergeTags'
 import { FIELD_NAME_MARKER, FieldNameNote, FormBlockActions } from './fields/FormBlock'
 import { FORM_ACTIONS_MARKER, PANEL_SECTION_MARKER, PLAIN_GROUP_MARKER } from '../../forms/pageForms'
 import { MERGE_TAGS_MARKER } from '../../forms/fieldConfigs'
-import { WIDTH_PICKER_MARKER } from '../../forms/fieldSettings'
-import { WidthPickerField } from './fields/WidthPicker'
 import { SortField } from './fields/SortField'
 import { fieldMergeKey } from './fields/undoPath'
 import { asId, formatProblem, fromRelationshipInput, isFieldVisible, isRecord, toRelationshipInput, type FieldShape } from './fields/values'
@@ -192,10 +190,6 @@ export function RenderBlockField({ field, onChange, path, value, siblings, onSib
     }
 
     case 'number': {
-      // `admin.custom.builderWidthPicker`: a form field's width as width buttons.
-      if (field.admin?.custom?.[WIDTH_PICKER_MARKER]) {
-        return <WidthPickerField description={description} label={label} onChange={onChange} value={value} />
-      }
       if (field.hasMany) {
         return <ManyValuesField description={description} kind="number" label={label} onChange={onChange} path={path} required={required} value={value} />
       }

@@ -317,7 +317,7 @@ function formToolDefinitions(env: ToolEnv): AiToolDefinition[] {
     {
       name: 'getForm',
       description:
-        'Returns the fields of the open form in order (id, type, name, label, required, width, options, message text, conditions and `shows`, the conditions in words), including your changes so far in this reply.',
+        'Returns the fields of the open form in order (id, type, name, label, required, className (its classes, width included), options, message text, conditions and `shows`, the conditions in words), including your changes so far in this reply.',
       inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       strict: true,
     },
@@ -352,7 +352,7 @@ function formToolDefinitions(env: ToolEnv): AiToolDefinition[] {
                 action: { type: 'string', enum: ['add', 'update', 'move', 'remove', 'setConditions'] },
                 type: { type: 'string', enum: types, description: 'add: the field type.' },
                 field: { type: 'string', description: "The field's name or id." },
-                values: { type: 'object', description: 'add, update: props, e.g. { "label": "Email", "required": true, "width": 50 }.' },
+                values: { type: 'object', description: 'add, update: props, e.g. { "label": "Email", "required": true, "className": "sm:w-[calc(50%-0.5rem)]" }. Width is classes (className), never a prop.' },
                 unset: { type: 'array', items: { type: 'string' } },
                 index: { type: 'integer', minimum: 0 },
                 conditions: { type: ['object', 'null'], description: '{ match?: "all" | "any", rules: [{ field, operator, value? }] }' },

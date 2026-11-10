@@ -49,7 +49,7 @@ const changeSchema = z
     values: z
       .record(z.string(), z.unknown())
       .optional()
-      .describe('add, update: props to set, e.g. { "label": "Your email", "required": true, "width": 50 }. update merges them; other props stay.'),
+      .describe('add, update: props to set, e.g. { "label": "Your email", "required": true, "className": "sm:w-[calc(50%-0.5rem)]" }. update merges them; other props stay. Width is classes (className), never a prop.'),
     unset: z.array(z.string()).optional().describe('update: prop names to clear.'),
     index: z.number().int().min(0).optional().describe('add: position (default: the end). move: the final position. 0 is the first field.'),
     conditions: z
@@ -121,7 +121,7 @@ export function formMcpTools(ctx: FormToolsContext): BuilderMcpTool[] {
     name: 'getForm',
     routing: { kind: 'collection', action: 'read' },
     description:
-      'Reads one form: its fields in order (id, type, name, label, required, width, placeholder, defaultValue, options, message text, display conditions and `shows`, the conditions in words), the field types this site offers (`fieldTypes`, with their props), the settings (title, submit button, confirmation, redirect, emails, spam protection) and `editorUrl`, the form builder where a person sees your changes live. Includes unsaved edits of people who have the form open. The result\'s `guide` explains fields, conditions and settings.',
+      'Reads one form: its fields in order (id, type, name, label, required, className (its classes, width included), placeholder, defaultValue, options, message text, display conditions and `shows`, the conditions in words), the field types this site offers (`fieldTypes`, with their props), the settings (title, submit button, confirmation, redirect, emails, spam protection) and `editorUrl`, the form builder where a person sees your changes live. Includes unsaved edits of people who have the form open. The result\'s `guide` explains fields, conditions and settings.',
     parameters: { collection: collectionArg, id: idArg },
     handler: async (args, req) => {
       const config = formsConfig(req)
@@ -237,7 +237,7 @@ export function formMcpTools(ctx: FormToolsContext): BuilderMcpTool[] {
     parameters: {
       collection: collectionArg,
       title: z.string().min(1).describe('The form\'s name, e.g. "Contact".'),
-      fields: z.array(z.record(z.string(), z.unknown())).min(1).describe('The fields, in order: { type, name?, label, required?, width?, options?, conditions?, … }.'),
+      fields: z.array(z.record(z.string(), z.unknown())).min(1).describe('The fields, in order: { type, name?, label, required?, className?, options?, conditions?, … }. Width is classes (className).'),
       settings: z.record(z.string(), z.unknown()).optional().describe('Optional settings: submitButtonLabel, confirmationType, confirmationMessage, redirect, emails, …'),
     },
     handler: async (args, req) => {

@@ -61,6 +61,11 @@ export type BuilderCollectionServer = {
    * Left out: the builder's JSON layout field.
    */
   payloadBlocks?: PayloadBlocksStorage
+  /**
+   * The JSON layout's block types, when one of them has an `upgrade`: it runs when the builder
+   * reads a stored layout (`codecOf`). A Payload blocks field uses its own block types.
+   */
+  blocks?: readonly BlockDefinition[]
 }
 
 /** The builder collections and the templates collection. Stored on `config.custom` for the admin view. */

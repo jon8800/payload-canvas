@@ -673,7 +673,7 @@ It also adds these endpoints (signed-in users only):
 | Import | Use it in | Holds |
 |---|---|---|
 | `payload-canvas` | `payload.config.ts` (server) | `websiteBuilder`, `defineBlock`, `defaultBlocks`, `fromPayloadBlocks`, `migrateBlocksField`, `formSubmissionConditions`, types |
-| `payload-canvas/forms` | anywhere | form display conditions (`withFormConditions`, `hiddenFormFields`, `describeConditions`), field settings (`withFormFieldSettings`, `formFieldWidth`), answer checks (`formAnswerProblem`, `fileProblem`, `filesProblem`), the extra field types (`moreFormFields`), the email fields (`withFormEmailFields`) and merge tags (`mergeTags`, `formEmailMessage`), `formFieldType`, `formFieldSlug`, `FORM_SETTINGS_REGION`, forms on pages (`formBlocks`, `formBlockMode`, `formBlockFields`, `formDataFromBlock`, `formBlockFromDoc`, `withSavedFormFields`). See [Form builder](#form-builder). |
+| `payload-canvas/forms` | anywhere | form display conditions (`withFormConditions`, `hiddenFormFields`, `describeConditions`), field settings (`withFormFieldSettings`, `withStoredWidth`), answer checks (`formAnswerProblem`, `fileProblem`, `filesProblem`), the extra field types (`moreFormFields`), the email fields (`withFormEmailFields`) and merge tags (`mergeTags`, `formEmailMessage`), `formFieldType`, `formFieldSlug`, `FORM_SETTINGS_REGION`, forms on pages (`formBlocks`, `formBlockMode`, `formBlockFields`, `formDataFromBlock`, `formBlockFromDoc`, `withSavedFormFields`). See [Form builder](#form-builder). |
 | `payload-canvas/blocks` | anywhere | `defaultBlocks`, `defineBlock`, `linkField`, `fromPayloadBlocks`, `BUILDER_CSS_CLASS`, `withBuilderCssClass` |
 | `payload-canvas/core` | anywhere | layout types, `normalizeLayout`, `validateLayout`, `applyOperations`, tree helpers, `convertPayloadBlocksLayout`, `toPayloadBlock`, `fieldReferences`, `rowLabel` |
 | `payload-canvas/css` | server | `compileClasses`, `getStyleTokens`, `tracingIncludes` |
@@ -1054,6 +1054,7 @@ export const blocks = [...defaultBlocks({ linkCollections: ['pages'] }), pricing
 - `slots` declares where child blocks go. `allow` lists the accepted block types, or `['*']`. `max` caps the number of direct children: a full slot refuses insert, move, paste and duplicate (also from MCP and the assistant), and the canvas offers no drop target or "+" there. `min` is the fewest children: fewer block **Publish** but not draft saves. Three optional keys explain a slot to editors: `description` (one short sentence, shown inside the slot while it is empty, and given to MCP), `itemLabel` (Layers names each direct child without a name of its own "<itemLabel> 1", "<itemLabel> 2", …) and `newBlock` (`{ type, label?, className?, props? }`: the block the canvas "+" picker offers first in this slot). The carousel's `slides` slot sets all three: "Each block here is one slide", `Slide`, and a Stack named "Slide".
 - `inline: true` says the block renders no link, button or other control of its own (an icon, a badge, a rating). Such a block may go directly inside a `link` block, whose content slot sets `allowInline: true`. A slot of your own can set `allowInline: true` too. `websiteBuilder` and `builderMcpTools` add the inline types to those slots' `allow` lists (`withInlineBlocks`); a slot's `disallow` still wins. Blocks without `inline` stay out of links. `validateLayout` applies the same rule itself, so a seed or a test can check a layout against your own block list. To check a collection list's picked `ids` as a relationship, give that list `defaultBlocks({ listCollections })`, as the plugin does with the collections that have a `url`.
 - `parents` limits where a block may go: only directly inside the listed block types (never in the root list). The `listItem` block uses `parents: ['list']`. A new block whose slot accepts exactly one such type starts with children of it: the slot's `min`, or one. So a new list starts with one item, and new tabs start with two tabs.
+- `upgrade(block)` turns a block stored in an older shape into the current one. The builder runs it when it opens a stored layout (the editor, the MCP tools), so the next save stores the new shape. Until then the component must still read the old shape. Return the same block when nothing changes. The form field blocks use it to turn the plugin's old `width` into classes ([Field width](#field-width)).
 - `classes`: classes your component uses itself that your site's CSS does not have. Components in your app need no list: Tailwind finds their classes in your files, and the site's CSS has them on the site and on the canvas. List classes only for a component in a package that your CSS entry does not scan (no `@source` for it). The generated CSS styles only elements with the class `builder-css` (`BUILDER_CSS_CLASS` from `payload-canvas/blocks`), so add that class to each element that uses the listed classes. The built-in Menu block does this for its toggle, panel and links.
 - Block fields keep Payload's `validate`, `hooks` and `access`. See [Validation, hooks and access on block fields](#validation-hooks-and-access-on-block-fields).
 - `parts` names inner elements that take classes of their own, for example a carousel's arrows. See [Classes on inner elements](#classes-on-inner-elements).
@@ -1582,7 +1583,7 @@ Edit the forms of the official [`@payloadcms/plugin-form-builder`](https://paylo
 
 - **Left:** the form's fields in Layers. Drag to reorder. The Blocks tab adds a field of any type the form-builder plugin offers. Duplicate and delete work as for blocks.
 - **Centre:** a live preview of the form alone, rendered by your app's own form component, so it matches the site. A click on a field selects it.
-- **Right:** the selected field's settings with Payload's own inputs, on up to four tabs: **Field** (name, label, description, default value, options), **Appearance** (width, label visibility, placeholder, radio display), **Validation** (required, file types, size and number of files) and **Conditions** (display conditions). **Width** is a row of buttons (full, 3/4, 2/3, 1/2, 1/3, 1/4); it stores the plugin's own `width` percentage. With no field selected, the panel shows the form's settings in sections that fold: **General** (title, submit button label), **After submit** (confirmation type, message, redirect) and **Mail** (the emails). Any other top-level `group` field of the forms collection (for example spam protection settings) gets a section of its own.
+- **Right:** the selected field's settings with Payload's own inputs, on up to three tabs: **Field** (name, label, description, placeholder, default value, options, label visibility, radio display), **Validation** (required, file types, size and number of files) and **Conditions** (display conditions). The settings hold only content and behaviour. Looks, the width too, are the field's classes in the **Styles** panel, as for any block: see [Field width](#field-width). With no field selected, the panel shows the form's settings in sections that fold: **General** (title, submit button label), **After submit** (confirmation type, message, redirect) and **Mail** (the emails). Any other top-level `group` field of the forms collection (for example spam protection settings) gets a section of its own.
 - **No sections:** form fields are not page sections, so the form builder has no Sections tab and no "Save as section…".
 - **Top bar:** title, save state, undo and redo, and **All fields** for Payload's own edit screen. Each change saves at once (forms have no drafts).
 - **Styles:** a field's looks (its box, label, input, help text, error, options) are edited in the Styles panel, as on pages. They are stored in the field's hidden `cssClass` and `partClasses`.
@@ -1705,7 +1706,26 @@ The `source` group is a new set of columns on the forms table: production needs 
 | **Display** (`display`: `list`, `inline`, `buttons`, `cards`) | radio | one option per line, on one line, joined buttons, or a box per option. Real radio inputs underneath, so arrow keys and screen readers work |
 | **Classes** (hidden `cssClass` and `partClasses`) | all but hidden | the field's box and its parts, edited in the builder's Styles panel. Older "CSS class" values show there as the field's classes |
 
-`formFieldWidth(width)` gives the width preset the site draws for a stored width (40 gives 50). `radioDisplay`, `isLabelShown` and `maxFileCount` read the other settings. The starter's `FormParts.tsx` renders every setting; its dropdown is the project's shadcn Select (Base UI, with a hidden input that submits the value).
+`withFormFieldSettings` also hides the plugin's `width` (see [Field width](#field-width)). `radioDisplay`, `isLabelShown` and `maxFileCount` read the settings. The starter's `FormParts.tsx` renders every setting; its dropdown is the project's shadcn Select (Base UI, with a hidden input that submits the value).
+
+### Field width
+
+A field's width is classes on the field, set in the Styles panel like any block's: **Width**, or **Flex basis** and **Col span** under "As a child". The settings have no width. Fields sit side by side through the form's own layout: the fields area wraps (`flex flex-wrap gap-x-4 gap-y-5`, the Form block's default), or put fields in a Grid or Stack block inside the form. In a wrapping row with a 1rem gap, half a row from the `sm` breakpoint is `sm:w-[calc(50%-0.5rem)]`: the field's share of the row less its share of the gap. A plain `w-1/2` leaves no room for the gap, so the next field wraps.
+
+Forms from before keep their look. The plugin's `width` (a percentage) becomes classes:
+
+| Stored `width` | Classes |
+|---|---|
+| empty, 0, above 75 | none (full width) |
+| 68 to 75 | `sm:w-[calc(75%-0.25rem)]` |
+| 51 to 67 | `sm:w-[calc(66.667%-0.333rem)]` |
+| 35 to 50 | `sm:w-[calc(50%-0.5rem)]` |
+| 26 to 34 | `sm:w-[calc(33.333%-0.667rem)]` |
+| 1 to 25 | `sm:w-[calc(25%-0.75rem)]` |
+
+- **When the builder opens** a form or a page (editor, MCP tools), each field with a stored `width` gets these classes (`withWidthClass`, the field blocks' `upgrade`), unless its classes set a width already. Its `width` becomes `null`, so the next save stores the classes and clears the plugin's value. Clearing it means the classes alone decide the width: remove the width class and the field is full width. A number kept next to the classes could not hold a grid span or a different width per breakpoint, and it would bring the old width back.
+- **Until that save** the site draws a stored `width` with the same classes (`withStoredWidth(className, width)`, in the starter's `FormParts.tsx`), so nothing moves. The generated CSS has these classes wherever there are form fields or a Form block (their definitions' `classes`). The field's box needs the `builder-css` class for them.
+- `withFormFieldSettings` and `formFieldBlocks` hide the plugin's `width` field, in Payload's own form too. MCP and the assistant set the width with `className`, never `width`.
 
 ### More field types
 
@@ -1755,7 +1775,7 @@ In the builder, each of these inputs has an **Insert field** menu with the form'
 | Tool | Does |
 |---|---|
 | `listForms` | The forms with their field names and the form builder link. |
-| `getForm` | One form: its fields in order (type, name, label, required, width, options, message text, display conditions and `shows`, the conditions in words), the field types this site offers, the settings and a guide. Includes unsaved edits of people who have the form open. |
+| `getForm` | One form: its fields in order (type, name, label, required, className (its classes, width included), options, message text, display conditions and `shows`, the conditions in words), the field types this site offers, the settings and a guide. Includes unsaved edits of people who have the form open. |
 | `createForm` | A new form with its fields and settings. |
 | `editFormFields` | Changes the fields, in order, all or nothing: `add { type, values, index? }`, `update { field, values, unset? }`, `move { field, index }`, `remove { field }`, `setConditions { field, conditions }`. `field` is the name or the id. |
 | `updateFormSettings` | Title, submit button, confirmation, redirect, emails and other settings groups (spam protection). |

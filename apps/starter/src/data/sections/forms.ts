@@ -1,6 +1,6 @@
 // Ready-made form sections: a newsletter signup and a quote request, built on the page with the
 // form field blocks (forms on pages). Publishing the page saves each form to the Forms collection.
-import { FORM_ROW, formField, form, heading, stack, styles, submit, text, defineSection } from './build'
+import { FIELD_WIDTH, FORM_ROW, formField, form, heading, stack, styles, submit, text, defineSection } from './build'
 
 export type NewsletterInput = { title: string; text: string }
 
@@ -14,8 +14,8 @@ export const newsletter = defineSection<NewsletterInput>({
         form(
           { title: 'Newsletter signup', submitButtonLabel: 'Subscribe', confirmationType: 'message' },
           [
-            formField('email', { name: 'email', label: 'Email', required: true, placeholder: 'you@example.com', labelVisibility: 'hidden', width: 67 }),
-            submit('Subscribe', 'pt-0 sm:w-[calc(33.333%-0.667rem)]'),
+            formField('email', { name: 'email', label: 'Email', required: true, placeholder: 'you@example.com', labelVisibility: 'hidden' }, FIELD_WIDTH.twoThirds),
+            submit('Subscribe', `pt-0 ${FIELD_WIDTH.third}`),
             formField('consent', { name: 'consent', label: 'I agree to receive the newsletter.', required: true }),
           ],
           `${FORM_ROW} items-start`,
@@ -37,10 +37,10 @@ export const quoteRequest = defineSection<QuoteInput>({
         form(
           { title: 'Quote request', submitButtonLabel: 'Request a quote', confirmationType: 'message' },
           [
-            formField('text', { name: 'name', label: 'Name', required: true, width: 50 }),
-            formField('email', { name: 'email', label: 'Email', required: true, width: 50 }),
-            formField('text', { name: 'company', label: 'Company', width: 50 }),
-            formField('phone', { name: 'phone', label: 'Phone', width: 50 }),
+            formField('text', { name: 'name', label: 'Name', required: true }, FIELD_WIDTH.half),
+            formField('email', { name: 'email', label: 'Email', required: true }, FIELD_WIDTH.half),
+            formField('text', { name: 'company', label: 'Company' }, FIELD_WIDTH.half),
+            formField('phone', { name: 'phone', label: 'Phone' }, FIELD_WIDTH.half),
             formField('radio', {
               name: 'service',
               label: 'What do you need?',
@@ -61,14 +61,13 @@ export const quoteRequest = defineSection<QuoteInput>({
             formField('select', {
               name: 'budget',
               label: 'Budget',
-              width: 50,
               options: [
                 { label: 'Under 5,000', value: 'small' },
                 { label: '5,000 to 15,000', value: 'medium' },
                 { label: 'Over 15,000', value: 'large' },
               ],
-            }),
-            formField('date', { name: 'start', label: 'Start date', width: 50 }),
+            }, FIELD_WIDTH.half),
+            formField('date', { name: 'start', label: 'Start date' }, FIELD_WIDTH.half),
             formField('textarea', { name: 'details', label: 'Project details', required: true, description: 'Goals, pages, deadlines: anything that helps us plan.' }),
             formField('file', { name: 'brief', label: 'Brief or sketches', accept: 'image/*, application/pdf', maxSize: 5 }),
             submit('Request a quote'),

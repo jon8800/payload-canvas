@@ -43,7 +43,7 @@ export * from './bindings'
 export * from './visibility'
 export * from './components'
 export { TEXT_LIST_BLOCK, TEXT_LIST_ITEM_BLOCK, TEXT_LIST_SLOT, joinListItem, splitListItem, type ListItemEdit } from './textList'
-export { ancestorsError, blockName, defineBlock, defineSection, type SectionBlockInput, type SectionInput, fitsParent, getBlockDefinition, placementError, checkSectionVariants, sectionsWithDefaultClassNames, sectionsWithVariants, slotAccepts, slotAcceptsAt, slotNames, starterSlots, withDefaultClasses, withDefaultClassNames, withInlineBlocks } from './blocks'
+export { ancestorsError, blockName, defineBlock, defineSection, type SectionBlockInput, type SectionInput, fitsParent, getBlockDefinition, placementError, upgradeLayout, checkSectionVariants, sectionsWithDefaultClassNames, sectionsWithVariants, slotAccepts, slotAcceptsAt, slotNames, starterSlots, withDefaultClasses, withDefaultClassNames, withInlineBlocks } from './blocks'
 export {
   carryContent,
   DEFAULT_VARIANT_LABEL,

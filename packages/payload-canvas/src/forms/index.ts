@@ -51,16 +51,19 @@ export { acceptPatterns, fileProblem, filesProblem, fileTypeAllowed, maxFileByte
 export {
   DEFAULT_MAX_FILES,
   fileCountFields,
-  FORM_FIELD_WIDTHS,
-  formFieldWidth,
+  FORM_FIELD_WIDTH_CLASSES,
+  FORM_FIELD_WIDTH_KEY,
+  formFieldWidthClass,
   isLabelShown,
   MAX_FILES_LIMIT,
   maxFileCount,
   RADIO_DISPLAYS,
   radioDisplay,
-  WIDTH_PICKER_MARKER,
+  setsWidth,
   withFormFieldSettings,
-  type FormFieldWidth,
+  withHiddenWidth,
+  withStoredWidth,
+  withWidthClass,
   type RadioDisplay,
 } from './fieldSettings'
 export {

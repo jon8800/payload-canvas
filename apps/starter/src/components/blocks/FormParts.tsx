@@ -5,20 +5,22 @@
 // are client components of their own).
 //
 // Field settings (payload-canvas `withFormFieldSettings`): `labelVisibility: 'hidden'` keeps the
-// label for screen readers only, `description` shows under the input, `width` is one of the width
-// presets, radio `display` is list, inline, buttons or cards, and a file field takes several files
-// when `multiple` is on.
+// label for screen readers only, `description` shows under the input, radio `display` is list,
+// inline, buttons or cards, and a file field takes several files when `multiple` is on.
 //
-// Looks come from the builder's Styles panel: `classes` holds the field's own classes (its box) and
-// the classes of its parts (label, input, help text, error, options). A part without classes uses
-// the form's classes for it, else the defaults in formClasses.ts.
+// Looks come from the builder's Styles panel: `classes` holds the field's own classes (its box, its
+// width too) and the classes of its parts (label, input, help text, error, options). A part without
+// classes uses the form's classes for it, else the defaults in formClasses.ts. A field saved before
+// widths were classes still has the plugin's `width`: it draws with the same width classes until
+// the builder saves the field again (`withStoredWidth`).
 import type { ReactNode } from 'react'
 import { renderRichText } from 'payload-canvas/react'
-import { filesProblem, formAnswerProblem, formFieldWidth, isLabelShown, radioDisplay, type FormFieldConditions } from 'payload-canvas/forms'
+import { BUILDER_CSS_CLASS } from 'payload-canvas/blocks'
+import { filesProblem, formAnswerProblem, isLabelShown, radioDisplay, withStoredWidth, type FormFieldConditions } from 'payload-canvas/forms'
 import { resolveLink } from '@/lib/links'
 import { FileDropZone } from './FileDropZone'
 import { FormSelect } from './FormSelect'
-import { formClasses, join, widthClasses } from './formClasses'
+import { formClasses, join } from './formClasses'
 
 export { join } from './formClasses'
 
@@ -30,6 +32,7 @@ export type FormField = {
   required?: boolean | null
   defaultValue?: string | number | boolean | null
   placeholder?: string | null
+  /** The plugin's width in percent, from before widths were classes (see `withStoredWidth`). */
   width?: number | null
   options?: Array<{ label: string; value: string }> | null
   message?: unknown
@@ -291,8 +294,10 @@ function LabelText({ field }: { field: FormField }) {
 
 /** One field of the form: a message, or a label with its input, description and error. */
 export function FormFieldView({ field, id, value, error = '', onChange = ignore, attributes, preview, note, classes = NO_CLASSES }: FieldViewProps) {
-  // The field's box: its width preset and its own classes.
-  const box = (className: string) => join(className, widthClasses[formFieldWidth(field.width)], classes.box)
+  // The field's box: its own classes, with an old stored width as classes (marked for the
+  // generated CSS, which has the width classes wherever form fields are).
+  const own = withStoredWidth(classes.box, field.width)
+  const box = (className: string) => join(className, own, own !== (classes.box?.trim() ?? '') && BUILDER_CSS_CLASS)
   const noteText = note ? <p className={formClasses.note}>{note}</p> : null
   if (field.blockType === 'message') {
     return (
