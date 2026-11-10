@@ -100,6 +100,7 @@ Run from `apps/starter/`:
 - `pnpm lint` — Oxlint (must report 0 problems)
 - `pnpm generate:types` / `pnpm generate:importmap` — run after changing collections, blocks, or admin components
 - `pnpm seed:demo` — seed demo content
+- `pnpm previews:widgets` — re-take the dashboard widget previews ("Edit dashboard" → "Add") from the running dev server; setup in `scripts/capture-widget-previews.ts`
 
 Local DB: Postgres on `localhost:5432`, database `payload_toolkit_dev` (see `apps/starter/.env`).
 
