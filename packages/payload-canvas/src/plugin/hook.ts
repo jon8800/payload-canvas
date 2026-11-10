@@ -89,7 +89,11 @@ type HookOptions = {
 }
 
 /** See `HookOptions.formSync`. Returns the same layout when nothing changed. */
-export type FormSync = (layout: Layout, args: { req: PayloadRequest; id: string | number; data: Record<string, unknown>; originalDoc: Record<string, unknown> | undefined }) => Promise<Layout>
+export type FormSync = (
+  layout: Layout,
+  /** `create`: the document was just created (`formSyncAfterCreate`): no block takes over an existing form. */
+  args: { req: PayloadRequest; id: string | number; data: Record<string, unknown>; originalDoc: Record<string, unknown> | undefined; create?: boolean },
+) => Promise<Layout>
 
 /** `context` flag of the session's own draft saves. */
 export const SESSION_SAVE_CONTEXT = 'builderSession'
@@ -124,7 +128,7 @@ export function docEntry(context: Record<string, unknown> | undefined, name: str
  * Sets (or with `undefined`, removes) the entry of `collection`/`id`. A new object each time: the
  * copies of the context that nested saves made keep their own entries.
  */
-function setDocEntry(context: Record<string, unknown> | undefined, name: string, collection: string, id: string | number, value: unknown) {
+export function setDocEntry(context: Record<string, unknown> | undefined, name: string, collection: string, id: string | number, value: unknown) {
   if (!context) return
   const entries = isPlainObject(context[name]) ? (context[name] as Record<string, unknown>) : {}
   const key = writeKey(collection, id)
