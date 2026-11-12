@@ -46,7 +46,7 @@ The starter has a few optional parts. Google reviews is off by default; all the 
 | Dashboard widgets | `--no-dashboard` | Quick actions, recent edits, open comments, form messages, site checks, broken links (404s and links to missing pages), unused media (with a full list at `/admin/unused-media`), scheduled publishes and analytics; "Waiting to publish" can be added (`src/admin/dashboard`). The reference index behind unused media and broken links (`src/admin/references`, `pnpm references:rebuild`). The admin shows Payload's collection cards. |
 | Demo content | `--no-demo` | The demo pages, posts and images seed (`scripts/seed-demo.ts` and the `seed:demo` script). This also turns off seeding. |
 | AI assistant | `--no-ai` | The chat panel in the page builder, and its settings in `.env`. |
-| Media gallery | `--no-gallery` | Media as a grid of thumbnails with a lightbox and drag-and-drop upload ([`payload-media-gallery`](https://www.npmjs.com/package/payload-media-gallery)). Without it, Media uses Payload's table. |
+| Media gallery | `--gallery` (off by default) | A lightbox, drag-and-drop upload and the grid in upload pickers ([`payload-media-gallery`](https://www.npmjs.com/package/payload-media-gallery)). Without it, Media uses Payload 4's own table and grid views. |
 | Workflows | `--no-workflows` | The visual workflow builder (Automation → Workflows), the Run tab on jobs, and the starter tasks in `src/jobs` ([`payload-workflows`](https://www.npmjs.com/package/payload-workflows)). |
 | Google reviews | `--reviews` (off by default) | Adds a Reviews collection and Review Settings that sync a Google place's reviews ([`payload-google-reviews`](https://www.npmjs.com/package/payload-google-reviews), with the optional scraper). You set the place in the admin after setup. |
 
@@ -68,8 +68,8 @@ For each feature that is off, the CLI deletes its files and its npm packages fro
 | `--skip-db` | Do not connect to Postgres. Writes `.env` only. This also skips seeding. |
 | `--seed` / `--no-seed` | Seed demo content, or not. |
 | `--no-install` | Do not install. This also skips seeding. |
-| `--no-look`, `--no-nav`, `--no-dashboard`, `--no-demo`, `--no-ai`, `--no-gallery`, `--no-workflows` | Leave out a starter feature. See [Features](#features). `--no-demo` also turns off seeding. |
-| `--reviews` | Add Google reviews, which is off by default. Every feature also takes `--<feature>` and `--no-<feature>`. |
+| `--no-look`, `--no-nav`, `--no-dashboard`, `--no-demo`, `--no-ai`, `--no-workflows` | Leave out a starter feature. See [Features](#features). `--no-demo` also turns off seeding. |
+| `--gallery`, `--reviews` | Add the media gallery or Google reviews, which are off by default. Every feature also takes `--<feature>` and `--no-<feature>`. |
 | `--github` | Download the starter from GitHub, even when the CLI runs inside a checkout. |
 | `--ref <name>` | Branch or tag to download. Default: the release tag of this CLI version (`v0.7.0-next.0` on the Payload 4 next line, `main` on the Payload 3 line). |
 | `--packages <path>` | Path to a checkout of the repo. The CLI packs the `payload-canvas` package from there. |
@@ -99,8 +99,8 @@ npx create-payload-canvas my-website --yes --no-install --skip-db
 # Without the AI assistant and the demo content
 npx create-payload-canvas my-website --yes --no-ai --no-demo
 
-# With Google reviews, without the media gallery and workflows
-npx create-payload-canvas my-website --yes --reviews --no-gallery --no-workflows
+# With the media gallery and Google reviews, without workflows
+npx create-payload-canvas my-website --yes --gallery --reviews --no-workflows
 
 # From GitHub, with the package from a local checkout (before it is published)
 npx create-payload-canvas my-website --yes --github --packages C:\code\payload-canvas

@@ -1,10 +1,11 @@
 import { getTranslation } from '@payloadcms/translations'
-import { NavSidebarToggle, NavWrapper, SettingsMenuButton, UserMenu } from '@payloadcms/ui'
+import { AlignJustifiedIcon, NavSidebarToggle, NavWrapper, SettingsMenuButton, SidebarTabsClient, UserMenu } from '@payloadcms/ui'
 import { RenderServerComponent } from '@payloadcms/ui/elements/RenderServerComponent'
+import { getNavPrefs } from '@payloadcms/ui/rsc'
 import { groupNavItems } from '@payloadcms/ui/shared'
 import { LayoutDashboard } from 'lucide-react'
 import type { PayloadRequest, ServerProps, VisibleEntities } from 'payload'
-import { formatAdminURL, PREFERENCE_KEYS, EntityType } from 'payload/shared'
+import { formatAdminURL, EntityType } from 'payload/shared'
 import type { ComponentProps, ReactNode } from 'react'
 
 import { FALLBACK_ICON, NAV_GROUPS, NAV_ICONS } from './config'
@@ -19,34 +20,18 @@ type NavProps = ServerProps & {
   CustomLogoutButton?: ReactNode
   settingsItemGroups?: ComponentProps<typeof UserMenu>['settingsItemGroups']
 }
-type NavPreferences = { groups?: Record<string, { open?: boolean }> }
 
 const ICON_SIZE = 16
-
-async function navPreferences(req: PayloadRequest | undefined): Promise<NavPreferences | null> {
-  if (!req?.user?.collection) return null
-  const result = await req.payload.find({
-    collection: 'payload-preferences',
-    depth: 0,
-    limit: 1,
-    pagination: false,
-    req,
-    where: {
-      and: [
-        { key: { equals: PREFERENCE_KEYS.NAV } },
-        { 'user.relationTo': { equals: req.user.collection } },
-        { 'user.value': { equals: req.user.id } },
-      ],
-    },
-    overrideAccess: true,
-  })
-  return (result.docs[0]?.value as NavPreferences | undefined) ?? null
-}
+/** Payload's slug for the sidebar tab with the collection links. */
+const NAV_TAB = 'nav'
 
 /**
- * The admin sidebar: a Dashboard link, then the collections and globals in groups with icons
- * (see `config.ts`). It keeps Payload 4's nav frame (the user menu, the sidebar toggle and the
- * settings menu) and its classes, so collapse, the mobile sheet and the plugins' nav slots work as before.
+ * The admin sidebar. Payload 4's default nav with one change: its links tab (`nav`) shows the
+ * collections and globals in our groups with icons (see `config.ts`), after a Dashboard link.
+ * Everything else is Payload's: the user menu, the sidebar toggle, the settings menu, the nav
+ * slots (`beforeNav`, `beforeNavLinks`, `afterNavLinks`, `afterNav`) and the extra sidebar tabs in
+ * `admin.components.sidebar.tabs`, which Payload loads on demand. Payload 4.0 beta cannot replace
+ * only its links tab yet, so this replaces `Nav` and builds the same frame from Payload's parts.
  */
 export async function Nav(props: NavProps) {
   const { i18n, locale, params, payload, permissions, req, searchParams, user, visibleEntities } = props
@@ -89,9 +74,45 @@ export async function Nav(props: NavProps) {
     }),
   }))
 
-  const serverProps = { i18n, locale, params, payload, permissions, searchParams, user }
+  const preferences = req ? await getNavPrefs(req) : null
+  const serverProps = { i18n, locale, params, payload, permissions, req, searchParams, user }
   const render = (Component: Parameters<typeof RenderServerComponent>[0]['Component'], key?: string) =>
     RenderServerComponent({ Component, importMap: payload.importMap, key, serverProps })
+
+  // One box for the links tab, so its rows keep their spacing inside Payload's tab panel too.
+  const linksTab = (
+    <div className="admin-nav__links">
+      {render(beforeNavLinks)}
+      <NavClient
+        dashboard={{
+          href: formatAdminURL({ adminRoute: routes.admin, path: '' }),
+          icon: <LayoutDashboard aria-hidden size={ICON_SIZE} strokeWidth={1.75} />,
+          label: i18n.t('general:dashboard'),
+        }}
+        preferences={preferences?.groups ?? {}}
+        sections={sections}
+      />
+      {render(afterNavLinks)}
+    </div>
+  )
+
+  // Other tabs come from the config, the same way Payload's default nav adds them. Payload loads a
+  // tab's content when it is opened (the `render-tab` server function); only the open tab renders here.
+  const extraTabs = (admin.components.sidebar?.tabs ?? []).filter((tab) => !tab.disabled && tab.slug !== NAV_TAB)
+  const openSlug = [NAV_TAB, ...extraTabs.map((tab) => tab.slug)].includes(preferences?.activeTab ?? '') ? preferences!.activeTab! : NAV_TAB
+  const tabContents: Record<string, ReactNode> = { [NAV_TAB]: linksTab }
+  const openTab = extraTabs.find((tab) => tab.slug === openSlug)
+  if (openTab) tabContents[openTab.slug] = render(openTab.components.Content)
+  const tabs = [
+    { slug: NAV_TAB, icon: <AlignJustifiedIcon size={24} />, isDefaultActive: true, label: i18n.t('general:collections'), lazyLoadable: false },
+    ...extraTabs.map((tab) => ({
+      slug: tab.slug,
+      icon: render(tab.components.Icon),
+      isDefaultActive: tab.isDefaultActive,
+      label: tab.label ? getTranslation(tab.label, i18n) : tab.slug,
+      lazyLoadable: true,
+    })),
+  ]
 
   return (
     <NavWrapper
@@ -105,17 +126,7 @@ export async function Nav(props: NavProps) {
     >
       {render(beforeNav)}
       <nav className="nav__wrap admin-nav">
-        {render(beforeNavLinks)}
-        <NavClient
-          dashboard={{
-            href: formatAdminURL({ adminRoute: routes.admin, path: '' }),
-            icon: <LayoutDashboard aria-hidden size={ICON_SIZE} strokeWidth={1.75} />,
-            label: i18n.t('general:dashboard'),
-          }}
-          preferences={(await navPreferences(req))?.groups ?? {}}
-          sections={sections}
-        />
-        {render(afterNavLinks)}
+        <SidebarTabsClient baseClass="sidebar-tabs" initialActiveTabID={openSlug} initialTabContents={tabContents} tabs={tabs} />
         <div className="nav__controls">
           <SettingsMenuButton settingsMenu={(Array.isArray(settingsMenu) ? settingsMenu : []).map((item, index) => render(item, `settings-menu-item-${index}`))} />
         </div>

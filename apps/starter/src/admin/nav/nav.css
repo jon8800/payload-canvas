@@ -3,8 +3,17 @@
  * add the icons and turn each link into a full-width row with a hover and an active background.
  */
 @layer payload-default {
-  .nav__wrap.admin-nav {
+  .admin-nav__links {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
     gap: 2px;
+    width: 100%;
+  }
+
+  /* With extra sidebar tabs, the links sit under Payload's tab strip: the same gap as the strip's margin. */
+  .sidebar-tabs .admin-nav__links {
+    padding-top: var(--spacer-2-5);
   }
 
   .admin-nav .nav-group {
