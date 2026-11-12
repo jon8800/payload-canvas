@@ -59,10 +59,7 @@
     border-color: var(--bc-border);
   }
 
-  .builder-select {
-    /* Nothing chosen: the placeholder or the inherited value, dimmed. */
-  }
-
+  /* Nothing chosen: the placeholder or the inherited value, dimmed. */
   .builder-select[data-placeholder] .builder-select__value {
     color: var(--bc-subtle);
   }
@@ -288,10 +285,7 @@
     scale: 1.12;
   }
 
-  .builder-slider__thumb {
-    /* Focus sits on the hidden range input inside the thumb. */
-  }
-
+  /* Focus sits on the hidden range input inside the thumb. */
   .builder-slider__thumb:has(:focus-visible) {
     box-shadow: 0 0 0 1px var(--color-border-control-strong), 0 1px 3px rgba(0, 0, 0, 0.22), 0 0 0 3px color-mix(in srgb, var(--bc-accent) 45%, transparent);
   }

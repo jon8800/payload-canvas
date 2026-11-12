@@ -134,7 +134,7 @@ export async function brokenLinks(
   return { links, total: result.totalDocs }
 }
 
-export type MediaDoc = { id: string | number; filename?: string | null; alt?: string | null; createdAt: string; url?: unknown; thumbnailURL?: unknown; mimeType?: unknown; sizes?: unknown }
+export type MediaDoc = { id: string | number; filename?: string | null; alt?: string | null; createdAt: string; url?: unknown; thumbnailURL?: unknown; mimeType?: unknown; variants?: unknown }
 
 /** Media no row of the reference index points at: no document or global uses them. */
 const UNUSED_WHERE: Where = { [`${USES_FIELD}.id`]: { exists: false } }

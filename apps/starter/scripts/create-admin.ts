@@ -27,6 +27,7 @@ async function main() {
   const existing = await payload.find({
     collection: 'users',
     limit: 1,
+    overrideAccess: true,
   })
 
   if (existing.totalDocs > 0) {
@@ -41,6 +42,7 @@ async function main() {
       password,
       role: 'admin',
     },
+    overrideAccess: true,
   })
 
   console.log(`Admin user created: ${email}`)

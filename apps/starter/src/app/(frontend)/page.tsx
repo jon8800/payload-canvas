@@ -14,7 +14,7 @@ import { requestLocale } from '@/lib/i18n'
  */
 const findHomePage = cache(async (draft: boolean) => {
   const payload = await getPayload({ config: configPromise })
-  const siteSettings = await payload.findGlobal({ slug: 'site-settings', depth: 0 })
+  const siteSettings = await payload.findGlobal({ slug: 'site-settings', depth: 0, overrideAccess: true })
   const ref = siteSettings.homePage
   if (!ref) return null
   const id = typeof ref === 'object' ? ref.id : ref

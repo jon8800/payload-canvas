@@ -29,7 +29,7 @@ function timestampFields(collection: CollectionConfig): Field[] {
     .map((name): Field => ({
       name,
       type: 'date',
-      admin: { disableBulkEdit: true, hidden: true, components: { Cell: FIELD_CELL } },
+      admin: { hidden: true, disabled: { bulkEdit: true }, components: { Cell: FIELD_CELL } },
       index: true,
       label: ({ t }) => t(`general:${name}`),
     }))

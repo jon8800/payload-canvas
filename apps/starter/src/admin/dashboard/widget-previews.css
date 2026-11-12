@@ -1,0 +1,92 @@
+/*
+ * Dark previews in "Edit dashboard" → "Add widget".
+ *
+ * Each widget's `imageURL` (index.ts) is its light preview, and Payload's drawer shows it as an
+ * <img> inside `.items-drawer__default-image`. The drawer has no setting for a second image, so in
+ * the dark theme this file hides that <img> and shows the dark preview as the box's background.
+ * It depends on Payload 3's drawer markup (`.items-drawer__default-image > img`); check it after
+ * moving to Payload 4.
+ *
+ * Keep one rule pair per widget slug in index.ts (index.test.ts checks it).
+ */
+@layer payload-default {
+  html[data-theme=dark] .items-drawer__default-image:has(> img[src$="/quick-actions-light.webp"]) {
+    background: url("/admin/widget-previews/quick-actions-dark.webp") center/cover no-repeat;
+  }
+
+  html[data-theme=dark] .items-drawer__default-image:has(> img[src$="/quick-actions-light.webp"]) > img {
+    visibility: hidden;
+  }
+
+  html[data-theme=dark] .items-drawer__default-image:has(> img[src$="/recent-edits-light.webp"]) {
+    background: url("/admin/widget-previews/recent-edits-dark.webp") center/cover no-repeat;
+  }
+
+  html[data-theme=dark] .items-drawer__default-image:has(> img[src$="/recent-edits-light.webp"]) > img {
+    visibility: hidden;
+  }
+
+  html[data-theme=dark] .items-drawer__default-image:has(> img[src$="/drafts-light.webp"]) {
+    background: url("/admin/widget-previews/drafts-dark.webp") center/cover no-repeat;
+  }
+
+  html[data-theme=dark] .items-drawer__default-image:has(> img[src$="/drafts-light.webp"]) > img {
+    visibility: hidden;
+  }
+
+  html[data-theme=dark] .items-drawer__default-image:has(> img[src$="/form-messages-light.webp"]) {
+    background: url("/admin/widget-previews/form-messages-dark.webp") center/cover no-repeat;
+  }
+
+  html[data-theme=dark] .items-drawer__default-image:has(> img[src$="/form-messages-light.webp"]) > img {
+    visibility: hidden;
+  }
+
+  html[data-theme=dark] .items-drawer__default-image:has(> img[src$="/site-checks-light.webp"]) {
+    background: url("/admin/widget-previews/site-checks-dark.webp") center/cover no-repeat;
+  }
+
+  html[data-theme=dark] .items-drawer__default-image:has(> img[src$="/site-checks-light.webp"]) > img {
+    visibility: hidden;
+  }
+
+  html[data-theme=dark] .items-drawer__default-image:has(> img[src$="/scheduled-light.webp"]) {
+    background: url("/admin/widget-previews/scheduled-dark.webp") center/cover no-repeat;
+  }
+
+  html[data-theme=dark] .items-drawer__default-image:has(> img[src$="/scheduled-light.webp"]) > img {
+    visibility: hidden;
+  }
+
+  html[data-theme=dark] .items-drawer__default-image:has(> img[src$="/analytics-light.webp"]) {
+    background: url("/admin/widget-previews/analytics-dark.webp") center/cover no-repeat;
+  }
+
+  html[data-theme=dark] .items-drawer__default-image:has(> img[src$="/analytics-light.webp"]) > img {
+    visibility: hidden;
+  }
+
+  html[data-theme=dark] .items-drawer__default-image:has(> img[src$="/open-comments-light.webp"]) {
+    background: url("/admin/widget-previews/open-comments-dark.webp") center/cover no-repeat;
+  }
+
+  html[data-theme=dark] .items-drawer__default-image:has(> img[src$="/open-comments-light.webp"]) > img {
+    visibility: hidden;
+  }
+
+  html[data-theme=dark] .items-drawer__default-image:has(> img[src$="/unused-media-light.webp"]) {
+    background: url("/admin/widget-previews/unused-media-dark.webp") center/cover no-repeat;
+  }
+
+  html[data-theme=dark] .items-drawer__default-image:has(> img[src$="/unused-media-light.webp"]) > img {
+    visibility: hidden;
+  }
+
+  html[data-theme=dark] .items-drawer__default-image:has(> img[src$="/broken-links-light.webp"]) {
+    background: url("/admin/widget-previews/broken-links-dark.webp") center/cover no-repeat;
+  }
+
+  html[data-theme=dark] .items-drawer__default-image:has(> img[src$="/broken-links-light.webp"]) > img {
+    visibility: hidden;
+  }
+}

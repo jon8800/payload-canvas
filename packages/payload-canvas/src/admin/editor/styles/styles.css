@@ -591,10 +591,7 @@
     color: var(--color-text);
   }
 
-  .builder-styles__segment {
-    /* Active only because of an inherited value: lighter, so it reads as "not set here". */
-  }
-
+  /* Active only because of an inherited value: lighter, so it reads as "not set here". */
   .builder-styles__segment[aria-pressed=true][data-source=inherited], .builder-styles__segment[aria-pressed=true][data-source=shorthand] {
     background: var(--color-bg-secondary);
     color: var(--color-text-warning, #b7791f);
@@ -689,10 +686,7 @@
     white-space: nowrap;
   }
 
-  .builder-styles__mini-caption {
-    /* Right after its caption, so it never reads as part of the next field's caption. */
-  }
-
+  /* Right after its caption, so it never reads as part of the next field's caption. */
   .builder-styles__mini-caption .builder-styles__reset {
     width: 14px;
     height: 14px;

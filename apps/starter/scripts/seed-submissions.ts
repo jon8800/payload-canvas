@@ -104,7 +104,7 @@ function answer(field: FormField, person: Person, index: number, createdAt: Date
  */
 async function exampleFile(payload: Payload): Promise<{ id: number | string; filename?: string | null } | null> {
   for (const mimeType of ['application/pdf', 'image/']) {
-    const found = await payload.find({ collection: 'media', where: { mimeType: { like: mimeType } }, limit: 1, depth: 0, sort: '-createdAt' })
+    const found = await payload.find({ collection: 'media', where: { mimeType: { like: mimeType } }, limit: 1, depth: 0, sort: '-createdAt', overrideAccess: true })
     const media = found.docs[0] as { filename?: string | null; mimeType?: string | null } | undefined
     if (!media?.filename) continue
     const source = path.resolve(dirname, '../public/media', media.filename)
@@ -118,7 +118,7 @@ async function exampleFile(payload: Payload): Promise<{ id: number | string; fil
 
 try {
   const payload = await getPayload({ config })
-  const existing = await payload.find({ collection: 'form-submissions', where: { 'submissionData.value': { like: EXAMPLE_DOMAIN } }, limit: 1, depth: 0 })
+  const existing = await payload.find({ collection: 'form-submissions', where: { 'submissionData.value': { like: EXAMPLE_DOMAIN } }, limit: 1, depth: 0, overrideAccess: true })
   if (existing.totalDocs > 0) {
     payload.logger.info('Example submissions exist already. Nothing to do.')
     process.exit(0)
@@ -126,7 +126,7 @@ try {
   // The form-builder plugin emails every new submission. Examples send nothing.
   payload.sendEmail = async () => undefined
 
-  const forms = await payload.find({ collection: 'forms', limit: 100, depth: 0, sort: 'id' })
+  const forms = await payload.find({ collection: 'forms', limit: 100, depth: 0, sort: 'id', overrideAccess: true })
   const file = await exampleFile(payload)
   const base = (payload.config.serverURL || 'http://localhost:3000').replace(/\/$/, '')
   const now = Date.now()
@@ -151,10 +151,11 @@ try {
           sourceUrl: `${base}${PAGES[index % PAGES.length]}`,
           ...(UNREAD.has(index) ? {} : { readAt: new Date(createdAt.getTime() + (2 + (index % 5)) * 60 * 60 * 1000).toISOString() }),
         } as never,
+        overrideAccess: true,
       })
       // Jonas sends the brief: the one example with a file. `formFileUploads` drops links on create
       // (visitors never link existing files), so the file is linked after.
-      if (index === 5 && file) await payload.update({ collection: 'form-submissions', id: doc.id, data: { attachments: [file.id] } as never })
+      if (index === 5 && file) await payload.update({ collection: 'form-submissions', id: doc.id, data: { attachments: [file.id] } as never, overrideAccess: true })
       created++
     }
   }

@@ -40,4 +40,6 @@ export const FormFiles: CollectionConfig = {
       return headers
     },
   },
+  versions: false,
+  authorship: false,
 }

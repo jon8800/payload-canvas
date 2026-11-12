@@ -28,4 +28,6 @@ export const Categories: CollectionConfig = {
       unique: true,
     },
   ],
+  versions: false,
+  authorship: false,
 }

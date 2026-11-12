@@ -28,4 +28,6 @@ export const Tags: CollectionConfig = {
       unique: true,
     },
   ],
+  versions: false,
+  authorship: false,
 }

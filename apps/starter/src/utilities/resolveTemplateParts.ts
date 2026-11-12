@@ -28,6 +28,8 @@ async function resolve(
     // Depth 1 loads the display condition pages (their slugs). The layout data loads separately.
     depth: 1,
     draft: draft || false,
+    // A trusted server read, as in Payload 3: the site renders the header and footer for everyone.
+    overrideAccess: true,
     ...(locale ? { locale: locale as never } : {}),
   })
 

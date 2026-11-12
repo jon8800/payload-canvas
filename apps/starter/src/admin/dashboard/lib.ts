@@ -121,9 +121,9 @@ export function linkProblem(target: { found: boolean; drafts: boolean; status?: 
   return null
 }
 
-/** The URL of a media document's small preview: the thumbnail size, the admin thumbnail, or the image. */
-export function thumbnailOf(doc: { url?: unknown; thumbnailURL?: unknown; mimeType?: unknown; sizes?: unknown }): string | null {
-  const sizes = doc.sizes as Record<string, { url?: unknown } | undefined> | undefined
+/** The URL of a media document's small preview: the thumbnail variant, the admin thumbnail, or the image. */
+export function thumbnailOf(doc: { url?: unknown; thumbnailURL?: unknown; mimeType?: unknown; variants?: unknown }): string | null {
+  const sizes = doc.variants as Record<string, { url?: unknown } | undefined> | undefined
   for (const candidate of [sizes?.thumbnail?.url, doc.thumbnailURL]) {
     if (typeof candidate === 'string' && candidate) return candidate
   }

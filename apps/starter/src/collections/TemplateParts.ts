@@ -99,4 +99,5 @@ export const TemplateParts: CollectionConfig = {
       ],
     },
   ],
+  authorship: false,
 }

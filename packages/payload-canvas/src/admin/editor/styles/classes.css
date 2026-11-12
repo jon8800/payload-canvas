@@ -179,10 +179,7 @@
     color: var(--color-text);
   }
 
-  .builder-classfield__chip--raw {
-    /* Not in the theme's class list: probably a typo. */
-  }
-
+  /* Not in the theme's class list: probably a typo. */
   .builder-classfield__chip--raw[data-unknown] {
     background: color-mix(in srgb, var(--color-bg-warning, #b7791f) 10%, transparent);
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-border-warning-strong, #b7791f) 60%, transparent);

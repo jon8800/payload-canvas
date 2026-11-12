@@ -1,0 +1,4 @@
+/* @feature:look */
+/* The admin look: finer details on top of Payload's styles (src/admin/look). */
+@import "../../admin/look/admin.css";
+/* @end:look */

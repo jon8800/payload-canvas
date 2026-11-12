@@ -21,3 +21,6 @@ apps/starter/scripts/_*.ts
 
 # QA screenshots
 docs/qa/screens/
+
+# Plugin tarballs for the Payload 4 next line, until they are on npm (see docs/payload-v4-next.md)
+apps/starter/.tarballs/

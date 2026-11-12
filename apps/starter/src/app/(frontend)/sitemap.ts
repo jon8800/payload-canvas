@@ -18,12 +18,14 @@ const getCachedSitemap = unstable_cache(
         where: { _status: { equals: 'published' } },
         limit: 1000,
         select: { slug: true, updatedAt: true },
+        overrideAccess: true,
       }),
       payload.find({
         collection: 'posts',
         where: { _status: { equals: 'published' } },
         limit: 1000,
         select: { slug: true, updatedAt: true },
+        overrideAccess: true,
       }),
     ])
 

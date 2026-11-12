@@ -68,21 +68,21 @@ function layoutOf(blocks: Block[], where: string): Layout {
 }
 
 async function clear(payload: Payload) {
-  const forms = await payload.find({ collection: 'forms', where: { title: { equals: FORM_TITLE } }, limit: 100, depth: 0 })
+  const forms = await payload.find({ collection: 'forms', where: { title: { equals: FORM_TITLE } }, limit: 100, depth: 0, overrideAccess: true })
   const formIds = forms.docs.map((f) => f.id)
   if (formIds.length > 0) {
-    await payload.delete({ collection: 'form-submissions', where: { form: { in: formIds } } })
-    await payload.delete({ collection: 'forms', where: { id: { in: formIds } } })
+    await payload.delete({ collection: 'form-submissions', where: { form: { in: formIds } }, overrideAccess: true })
+    await payload.delete({ collection: 'forms', where: { id: { in: formIds } }, overrideAccess: true })
   }
-  await payload.delete({ collection: 'builder-templates', where: { name: { equals: TEMPLATE_NAME } }, context })
-  await payload.delete({ collection: 'template-parts', where: { title: { in: PART_TITLES } }, trash: true, context })
-  await payload.delete({ collection: 'posts', where: { slug: { in: POST_SLUGS } }, trash: true, context })
-  await payload.delete({ collection: 'pages', where: { slug: { in: PAGE_SLUGS } }, trash: true, context })
-  await payload.delete({ collection: 'categories', where: { slug: { in: CATEGORIES.map((c) => c.slug) } } })
+  await payload.delete({ collection: 'builder-templates', where: { name: { equals: TEMPLATE_NAME } }, context, overrideAccess: true })
+  await payload.delete({ collection: 'template-parts', where: { title: { in: PART_TITLES } }, trash: true, context, overrideAccess: true })
+  await payload.delete({ collection: 'posts', where: { slug: { in: POST_SLUGS } }, trash: true, context, overrideAccess: true })
+  await payload.delete({ collection: 'pages', where: { slug: { in: PAGE_SLUGS } }, trash: true, context, overrideAccess: true })
+  await payload.delete({ collection: 'categories', where: { slug: { in: CATEGORIES.map((c) => c.slug) } }, overrideAccess: true })
   const names = [...DEMO_IMAGES.map((i) => i.name), ...OLD_IMAGE_NAMES]
   // Other pages may still use the demo images. The seed replaces them anyway, so it skips the
   // builder's "still used" check.
-  await payload.delete({ collection: 'media', where: { filename: { in: names } }, context: { [FORCE_DELETE_CONTEXT]: true } })
+  await payload.delete({ collection: 'media', where: { filename: { in: names } }, context: { [FORCE_DELETE_CONTEXT]: true }, overrideAccess: true })
 }
 
 /**
@@ -107,6 +107,7 @@ async function seedTheme(payload: Payload) {
       borderRadius: '0.5',
     },
     context,
+    overrideAccess: true,
   })
 }
 
@@ -121,6 +122,7 @@ async function seedMedia(payload: Payload): Promise<Record<string, Media>> {
       collection: 'media',
       data: { alt: img.alt },
       file: { data, mimetype: 'image/jpeg', name: img.name, size: data.length },
+      overrideAccess: true,
     })
     result[img.name.replace(/^demo-|\.jpg$/g, '')] = { id: doc.id, alt: img.alt }
   }
@@ -153,6 +155,7 @@ async function seedForm(payload: Payload): Promise<Id> {
         { blockType: 'textarea', name: 'message', label: 'Message', required: true },
       ],
     },
+    overrideAccess: true,
   })
   return form.id
 }
@@ -163,7 +166,7 @@ async function seedForm(payload: Payload): Promise<Id> {
  * names this block, so publishing the page writes into the same form and its submissions stay.
  */
 async function contactFormBlock(payload: Payload, formId: Id): Promise<Block> {
-  const doc = await payload.findByID({ collection: 'forms', id: formId, depth: 0 })
+  const doc = await payload.findByID({ collection: 'forms', id: formId, depth: 0, overrideAccess: true })
   const { props, children } = formBlockFromDoc(doc as unknown as Record<string, unknown>, payload.collections.forms.config.fields)
   const [block] = withDefaultClassNames([{ id: createId(), type: FORM_BLOCK, props, slots: { [FORM_SLOT]: children } }], pluginBlocks)
   return block!
@@ -183,7 +186,7 @@ async function seed() {
 
   const categoryIds: Id[] = []
   for (const category of CATEGORIES) {
-    const doc = await payload.create({ collection: 'categories', data: category })
+    const doc = await payload.create({ collection: 'categories', data: category, overrideAccess: true })
     categoryIds.push(doc.id)
   }
 
@@ -191,7 +194,7 @@ async function seed() {
   const pages: Record<string, Id> = {}
   for (const slug of PAGE_SLUGS) {
     const title = slug === HOME_SLUG ? 'Home' : slug[0].toUpperCase() + slug.slice(1)
-    const doc = await payload.create({ collection: 'pages', data: { title, slug, _status: 'published' }, context })
+    const doc = await payload.create({ collection: 'pages', data: { title, slug, _status: 'published' }, context, overrideAccess: true })
     pages[slug] = doc.id
   }
   // The Contact page's Form block owns the seeded form: publishing the page keeps its id.
@@ -199,6 +202,7 @@ async function seed() {
     collection: 'forms',
     id: formId,
     data: { [FORM_SOURCE_FIELD]: { collection: 'pages', document: String(pages.contact), block: contactForm.id } } as never,
+    overrideAccess: true,
   })
   const toContact = { label: 'Start a project', link: pageLink(pages.contact) }
   const toServices = { label: 'See our services', link: pageLink(pages.services) }
@@ -259,6 +263,7 @@ async function seed() {
         content: body,
       },
       context,
+      overrideAccess: true,
     })
     posts.push(doc.id)
   }
@@ -387,6 +392,7 @@ async function seed() {
       id: pages[slug],
       data: { _status: 'published', builder: layoutOf(pageLayouts[slug], `page "${slug}"`) },
       context,
+      overrideAccess: true,
     })
   }
 
@@ -402,6 +408,7 @@ async function seed() {
       layout: layoutOf(postTemplate(), 'post template'),
     },
     context,
+    overrideAccess: true,
   })
 
   // Template parts.
@@ -421,6 +428,7 @@ async function seed() {
       builder: layoutOf([header.create({ siteName: SITE_NAME, home: pageLink(pages[HOME_SLUG]), nav, cta: toContact })], 'header'),
     },
     context,
+    overrideAccess: true,
   })
   await payload.create({
     collection: 'template-parts',
@@ -443,6 +451,7 @@ async function seed() {
       ),
     },
     context,
+    overrideAccess: true,
   })
 
   await payload.updateGlobal({
@@ -453,6 +462,7 @@ async function seed() {
       siteDescription: 'A small design and development studio that builds fast websites on Payload CMS, which your team edits with blocks.',
     },
     context,
+    overrideAccess: true,
   })
 
   payload.logger.info(

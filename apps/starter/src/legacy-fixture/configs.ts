@@ -214,7 +214,7 @@ export const FullWidthSection: Block = {
     {
       type: 'tabs',
       tabs: [
-        { label: 'Content', fields: [{ name: 'content', type: 'blocks', blockReferences: leafSlugs, blocks: [] }] },
+        { label: 'Content', fields: [{ name: 'content', type: 'blocks', blocks: leafSlugs }] },
         {
           label: 'Design',
           fields: [
@@ -249,8 +249,8 @@ export const TwoColumnSection: Block = {
         {
           label: 'Content',
           fields: [
-            { name: 'leftColumn', type: 'blocks', blockReferences: leafSlugs, blocks: [] },
-            { name: 'rightColumn', type: 'blocks', blockReferences: leafSlugs, blocks: [] },
+            { name: 'leftColumn', type: 'blocks', blocks: leafSlugs },
+            { name: 'rightColumn', type: 'blocks', blocks: leafSlugs },
           ],
         },
         {
@@ -284,7 +284,7 @@ export const PostsSection: Block = {
   admin: { disableBlockName: true },
   fields: [
     { name: 'title', type: 'text', defaultValue: 'From the blog' },
-    { name: 'content', type: 'blocks', blockReferences: leafSlugs, blocks: [] },
+    { name: 'content', type: 'blocks', blocks: leafSlugs },
   ],
 }
 

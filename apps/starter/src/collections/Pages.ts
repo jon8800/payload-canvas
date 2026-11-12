@@ -64,4 +64,5 @@ export const Pages: CollectionConfig = {
       admin: { position: 'sidebar' },
     },
   ],
+  authorship: false,
 }

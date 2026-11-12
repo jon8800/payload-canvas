@@ -492,10 +492,7 @@
     border-bottom-right-radius: var(--radius-medium, 4px);
   }
 
-  .builder-field-array .builder-field-array__collapsible {
-    /* The toggle button covers the whole header. The handle sits above it, so a drag starts there. */
-  }
-
+  /* The toggle button covers the whole header. The handle sits above it, so a drag starts there. */
   .builder-field-array .builder-field-array__collapsible .collapsible__drag {
     position: relative;
     /* Payload sets `top` for its own layout; with `position: relative` it would push the handle down. */
@@ -566,10 +563,7 @@
     background: var(--color-bg);
   }
 
-  .builder-field-array .builder-field-array__menu-button {
-    /* Near the inspector's right edge: the tooltip opens to the left. */
-  }
-
+  /* Near the inspector's right edge: the tooltip opens to the left. */
   .builder-field-array .builder-field-array__menu-button[data-tooltip]:hover::after {
     left: auto;
     right: 0;
@@ -599,14 +593,11 @@
     padding-left: 0;
   }
 
-  .builder-field-richtext {
-    /*
-     * The inline toolbar is wider than the inspector. Its groups wrap onto more lines, so every
-     * button (link included) stays inside the column. Lexical moves a toolbar that reaches the
-     * right edge 32 px further left, so the toolbar stays 40 px narrower than the editor.
-     */
-  }
-
+  /*
+   * The inline toolbar is wider than the inspector. Its groups wrap onto more lines, so every
+   * button (link included) stays inside the column. Lexical moves a toolbar that reaches the
+   * right edge 32 px further left, so the toolbar stays 40 px narrower than the editor.
+   */
   .builder-field-richtext .inline-toolbar-popup {
     flex-wrap: wrap;
     row-gap: 2px;

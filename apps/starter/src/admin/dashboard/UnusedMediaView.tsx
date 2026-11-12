@@ -1,4 +1,4 @@
-import { DefaultTemplate } from '@payloadcms/next/templates'
+import { DefaultTemplate } from '@payloadcms/ui/rsc'
 import { Gutter } from '@payloadcms/ui'
 import Link from 'next/link'
 import type { AdminViewServerProps } from 'payload'

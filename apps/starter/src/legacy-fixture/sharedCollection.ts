@@ -16,7 +16,8 @@ export const SharedBlocksPages: CollectionConfig = {
   versions: { drafts: { autosave: { interval: 375 } }, maxPerDoc: 25 },
   fields: [
     { name: 'title', type: 'text', required: true },
-    { name: 'layout', type: 'blocks', blockReferences: rootSlugs as never[], blocks: [] },
+    { name: 'layout', type: 'blocks', blocks: rootSlugs as never[] },
     { name: 'slug', type: 'text', required: true, unique: true, index: true, admin: { position: 'sidebar' } },
   ],
+  authorship: false,
 }

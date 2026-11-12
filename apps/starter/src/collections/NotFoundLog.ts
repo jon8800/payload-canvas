@@ -29,4 +29,6 @@ export const NotFoundLog: CollectionConfig = {
     { name: 'lastSeen', label: 'Last seen', type: 'date', index: true, admin: { readOnly: true, date: { pickerAppearance: 'dayAndTime' } } },
     { name: 'lastReferrer', label: 'Last referrer', type: 'text', admin: { readOnly: true } },
   ],
+  versions: false,
+  authorship: false,
 }

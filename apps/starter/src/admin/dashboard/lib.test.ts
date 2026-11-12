@@ -161,7 +161,7 @@ describe('linkProblem', () => {
 
 describe('thumbnailOf', () => {
   it('prefers the thumbnail size, then the admin thumbnail, then the image itself', () => {
-    assert.equal(thumbnailOf({ sizes: { thumbnail: { url: '/t.jpg' } }, thumbnailURL: '/a.jpg', url: '/x.jpg' }), '/t.jpg')
+    assert.equal(thumbnailOf({ variants: { thumbnail: { url: '/t.jpg' } }, thumbnailURL: '/a.jpg', url: '/x.jpg' }), '/t.jpg')
     assert.equal(thumbnailOf({ thumbnailURL: '/a.jpg', url: '/x.jpg' }), '/a.jpg')
     assert.equal(thumbnailOf({ mimeType: 'image/png', url: '/x.png' }), '/x.png')
     assert.equal(thumbnailOf({ mimeType: 'application/pdf', url: '/x.pdf' }), null)

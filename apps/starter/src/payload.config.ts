@@ -50,7 +50,7 @@ import { builderBlocks } from '@/builder'
 import { documentPath } from '@/lib/links'
 import { revalidateTemplate } from '@/hooks/revalidateTemplate'
 import { Users } from '@/collections/Users'
-import { Media } from '@/collections/Media'
+import { Media, mediaSharp } from '@/collections/Media'
 import { Pages } from '@/collections/Pages'
 import { Posts } from '@/collections/Posts'
 import { Categories } from '@/collections/Categories'
@@ -76,6 +76,7 @@ import { listCells } from '@/admin/list/listCells'
 import { rowLabels } from '@/admin/fields/rowLabels'
 // @end:look
 import { MORE_FORM_FIELD_SLUGS, PLUGIN_FORM_FIELD_SLUGS } from '@/forms/fields'
+import { sharpTransformer } from '@payloadcms/transformer-sharp'
 
 /** Collections with the page builder. Shared by the builder plugin and its MCP tools. */
 const builderCollections: WebsiteBuilderOptions['collections'] = {
@@ -260,7 +261,7 @@ export default buildConfig({
       tabbedUI: true,
       // "Title | Site name" with the site name from Site Settings; the title alone without one.
       generateTitle: async ({ doc, req }) => {
-        const settings = await req.payload.findGlobal({ slug: 'site-settings', depth: 0, req }).catch(() => null)
+        const settings = await req.payload.findGlobal({ slug: 'site-settings', depth: 0, req, overrideAccess: true }).catch(() => null)
         const siteName = settings?.siteName?.trim()
         return siteName ? `${doc.title} | ${siteName}` : String(doc.title ?? '')
       },
@@ -498,8 +499,8 @@ export default buildConfig({
     constraints: {},
   },
   secret: process.env.PAYLOAD_SECRET,
-  sharp,
   typescript: {
     outputFile: path.resolve(dirname, 'payload-types.ts'),
   },
+  upload: { transformers: [sharpTransformer({ sharp, collections: { media: mediaSharp } })] },
 })
