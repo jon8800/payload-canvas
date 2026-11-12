@@ -6,6 +6,24 @@ Pushing a version tag publishes `payload-canvas` and `create-payload-canvas` to 
 
 Only pnpm applies `publishConfig.exports`. So the packages are always packed with pnpm, and the script publishes the `package.json` from inside the tarball, where `exports` points at `dist/`.
 
+## The Payload 4 line (`next`)
+
+The branch `release/payload-v4-next` publishes both packages with the `next` dist-tag. The workflow is `.github/workflows/publish-next.yml`. It runs on tags like `v0.7.0-next.0`; `publish.yml` ignores those tags, and refuses prerelease versions when you start it by hand. See [payload-v4-next.md](payload-v4-next.md).
+
+1. Set the same `x.y.z-next.N` version in both `package.json` files, and in `packages/create-payload-canvas/src/config.ts` set `PUBLISHED_VERSION = '^x.y.z-next.N'` and `DEFAULT_REF = 'vx.y.z-next.N'`.
+2. Add a section to `CHANGELOG.md`.
+3. Run `node scripts/check-next-release.mjs` and `pnpm release:dry`. The dry run shows `dist-tag: next` for both tarballs.
+4. Commit and push `release/payload-v4-next`, then tag that commit and push the tag:
+
+   ```sh
+   git tag v0.7.0-next.0
+   git push origin v0.7.0-next.0
+   ```
+
+   The scaffolder downloads the starter from this tag, so tag the commit whose starter matches the published packages.
+
+The rest (token, staging, re-runs) works as for the Payload 3 line below.
+
 ## One-time setup (the owner does this)
 
 1. On npmjs.com, go to **Access Tokens** > **Generate New Token** > **Granular Access Token**.

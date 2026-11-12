@@ -6,7 +6,9 @@
 
 Creates a new Payload CMS website builder project from the Payload Canvas starter.
 
-Requirements: Node.js 20.9 or later, a running PostgreSQL server, and pnpm (npm works too). The starter itself is downloaded from GitHub, so the first run needs network access.
+This is the Payload 4 line (`create-payload-canvas@next`): projects get Payload 4 beta and `payload-canvas@next`. For Payload 3, use `create-payload-canvas@latest`.
+
+Requirements: Node.js 24.22.1 or later, a running PostgreSQL server, and pnpm (npm works too). The starter itself is downloaded from GitHub, so the first run needs network access.
 
 ```bash
 pnpm create payload-canvas my-website
@@ -69,7 +71,7 @@ For each feature that is off, the CLI deletes its files and its npm packages fro
 | `--no-look`, `--no-nav`, `--no-dashboard`, `--no-demo`, `--no-ai`, `--no-gallery`, `--no-workflows` | Leave out a starter feature. See [Features](#features). `--no-demo` also turns off seeding. |
 | `--reviews` | Add Google reviews, which is off by default. Every feature also takes `--<feature>` and `--no-<feature>`. |
 | `--github` | Download the starter from GitHub, even when the CLI runs inside a checkout. |
-| `--ref <name>` | Branch or tag to download. Default `main`. |
+| `--ref <name>` | Branch or tag to download. Default: the release tag of this CLI version (`v0.7.0-next.0` on the Payload 4 next line, `main` on the Payload 3 line). |
 | `--packages <path>` | Path to a checkout of the repo. The CLI packs the `payload-canvas` package from there. |
 | `-h`, `--help` | Show help. |
 

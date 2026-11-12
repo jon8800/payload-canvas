@@ -15,11 +15,11 @@
   </tr>
 </table>
 
-A visual page builder for Payload CMS 3. It adds a full-screen builder to the collections you choose. Editors drag blocks onto a live canvas, nest them without limit, and style them with Tailwind classes. AI agents can build and edit the same pages over MCP, and an open editor shows each AI change as it happens.
+A visual page builder for Payload CMS 4. This is the Payload 4 line, published as `payload-canvas@next`; `payload-canvas@latest` (0.6.x) is for Payload 3. It adds a full-screen builder to the collections you choose. Editors drag blocks onto a live canvas, nest them without limit, and style them with Tailwind classes. AI agents can build and edit the same pages over MCP, and an open editor shows each AI change as it happens.
 
 The npm package is `payload-canvas`.
 
-- Works in any Payload 3.90+ app on Next.js 16 and React 19.
+- Works in any Payload 4 app (`^4.0.0-beta.8`) on Next.js 16.4.1+ and React 19.3.1+.
 - The layout is one JSON field per document. Nothing changes in your other fields.
 - The site renders the layout with `payload-canvas/react` (React Server Components), or with your own renderer.
 - Save, drafts, autosave, versions and access control stay Payload's own.
@@ -30,7 +30,7 @@ One package holds everything: the Payload plugin and admin editor (`payload-canv
 **Quick start.** Add the builder to an existing Payload app with the [install guide](#install) (about ten minutes). Or create a new project from the starter app:
 
 ```bash
-npx create-payload-canvas my-website
+npx create-payload-canvas@next my-website
 ```
 
 The starter also has a calmer Payload admin: a sidebar in groups with icons, a neutral look in light and dark mode, list cells that show values by field type (a check mark, option chips, short dates, "3 links", a rich text excerpt) instead of raw code, array rows named by their content, and a dashboard with quick actions, recent edits, open comments, form messages, site checks, broken links (a 404 log and links to missing pages), unused media, scheduled publishes and optional Plausible or Umami numbers. Each part is plain code in `src/admin/` of the starter. The CLI asks which parts to keep (see [Features](../create-payload-canvas/README.md#features)).
@@ -74,10 +74,10 @@ The starter also has a calmer Payload admin: a sidebar in groups with icons, a n
 
 ## Requirements
 
-- `payload`, `@payloadcms/ui`, `@payloadcms/richtext-lexical` 3.90 or later (Payload 3 only, not the Payload 4 canary)
-- `next` 16.3 or later, `react` and `react-dom` 19.2 or later
+- `payload`, `@payloadcms/ui`, `@payloadcms/richtext-lexical` 4.0.0-beta.8 or a later 4.x (for Payload 3, use `payload-canvas@latest`)
+- `next` 16.4.1 or later, `react` and `react-dom` 19.3.1 or later
 - `tailwindcss` 4.3 or later (the plugin compiles your Tailwind entry CSS)
-- Node.js 20.9 or later
+- Node.js 24.22.1 or later
 - Any Payload database adapter. Postgres and SQLite store the layout as `jsonb`/JSON.
 
 You do not need `transpilePackages` or a `sass` install. The package ships compiled JavaScript and plain CSS. The admin styles use Payload 4's CSS variables (`--color-*`, `--radius-*`, `--text-*`), so they follow Payload's light and dark theme.
@@ -86,12 +86,12 @@ Peer dependencies:
 
 | Package | Range | Needed for |
 |---|---|---|
-| `payload`, `@payloadcms/ui`, `@payloadcms/richtext-lexical` | `^3.90.0` | everything |
-| `next` | `^16.3.0` | everything |
-| `react`, `react-dom` | `^19.2.0` | everything |
+| `payload`, `@payloadcms/ui`, `@payloadcms/richtext-lexical` | `^4.0.0-beta.8` | everything |
+| `next` | `^16.4.1` | everything |
+| `react`, `react-dom` | `^19.3.1` | everything |
 | `tailwindcss` | `^4.3.0` | the CSS compile on save and in the canvas |
 | `@anthropic-ai/sdk` | `>=0.131.0`, optional | only the `/ai/anthropic` adapter |
-| `payload-mcp-toolkit` | `>=0.9.0`, optional | only `builderMcpTools()` (`/mcp`) |
+| `payload-mcp-toolkit` | `>=0.12.0-next.0`, optional | only `builderMcpTools()` (`/mcp`). Do not add `@payloadcms/plugin-mcp` next to it: both serve `/api/mcp`. |
 | `zod` | `^3.25 \|\| ^4`, optional | only `builderMcpTools()` (`/mcp`) |
 
 ## Install
@@ -99,18 +99,18 @@ Peer dependencies:
 These steps start from a blank Payload app with Postgres:
 
 ```bash
-npx create-payload-app@latest -n my-site -t blank --db postgres --use-pnpm
+npx create-payload-app@beta -n my-site -t blank --db postgres --use-pnpm
 ```
 
-They were tested step by step on such an app with Payload 3.90.2, Next.js 16.3.3, React 19.2.6, Tailwind 4.3.3, TypeScript 5.7 and pnpm 10, in `next dev` and in `next build` + `next start`. An existing Payload app works the same way: skip what you already have.
+They were written for Payload 3 and checked again on Payload 4.0.0-beta.8 with Next.js 16.4.6 and React 19.3.1 through the starter app. An existing Payload app works the same way: skip what you already have.
 
 ### 1. Add the package
 
 ```bash
-pnpm add payload-canvas tailwindcss @tailwindcss/postcss postcss
+pnpm add payload-canvas@next tailwindcss @tailwindcss/postcss postcss
 ```
 
-With npm: `npm install payload-canvas tailwindcss @tailwindcss/postcss postcss`.
+With npm: `npm install payload-canvas@next tailwindcss @tailwindcss/postcss postcss`.
 
 ### 2. Add a collection with pages
 
@@ -3213,7 +3213,7 @@ All entries must show one version. Pin `payload`, `@payloadcms/*` and `next` to 
 
 This is version 0.2. Before 1.0, a minor version can change the API. Known limits:
 
-- **Payload 3 only.** Payload 4 (canary today) changes the admin UI. The builder does not support it yet.
+- **Payload 4 beta.** This line follows Payload 4 betas (`^4.0.0-beta.8`). For Payload 3, use `payload-canvas@latest` (0.6.x).
 - **Next.js and React only.** The admin editor and the canvas need a Next.js app (Payload's own requirement). Other frontends can render the stored JSON with their own code.
 - **`RenderLayout` needs React Server Components.** `RenderLayout` and the `payload-canvas/react/server` helpers need the Next.js App Router (or another RSC framework).
 - **The canvas runtime runs only in the editor's iframe.** `payload-canvas/react/canvas` belongs on the canvas route and nowhere else.

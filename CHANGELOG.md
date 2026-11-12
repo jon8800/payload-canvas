@@ -4,6 +4,40 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ## [Unreleased]
 
+## [0.7.0-next.0] - 2026-11-12
+
+The Payload 4 line. It is published with the npm `next` dist-tag: `npm install payload-canvas@next`, `npx create-payload-canvas@next`. The `latest` tag stays on 0.6.x for Payload 3. Features match 0.6.0.
+
+### Upgrade notes
+
+Read these before you move a site from 0.6.x on Payload 3.
+
+- **Versions:** `payload` and every `@payloadcms/*` package `4.0.0-beta.8` or a later 4.x (the peer range is `^4.0.0-beta.8`), `next` 16.4.1 or later within 16.x, `react` and `react-dom` 19.3.1 or later, TypeScript 6.0.3 or later, **Node.js 24.22.1 or later**.
+- **Run Payload's codemod on your app first:** `npx @payloadcms/codemod@beta`. Then read Payload's 3 to 4 migration guide. Above all: the Local API now enforces access by default, so every `payload.find`, `findGlobal` and similar call in your site code that relied on the old bypass needs `overrideAccess: true` (or a `user`).
+- **Media `sizes` become `variants`:** Payload 4 moves image sizes to `sharpTransformer({ collections: { media: { variants } } })` from `@payloadcms/transformer-sharp`, and stores them under `variants` instead of `sizes`. Code that reads `doc.sizes` must read `doc.variants` (the plugin's Image block, image bindings, section thumbnails and form uploads already do). Keep a variant named `thumbnail` for the admin and the media gallery.
+- **Migrations for production.** Payload 4 changes the schema: auth sessions (`refreshCount`, `refreshedAt`), jobs (`processingUntil` replaces `processing`, `processingToken`, `concurrencyKey`, `meta`, the `payload-jobs-stats` global), upload files (`original`, `prefix`, `_objectKey`, `_transforms`, `_stored`), versions and authorship for your own collections unless you opt out, and `payload-mcp-toolkit`'s `apiKeyLast4` column. In this order:
+  1. Create Payload's ready-made media migration **first**: `pnpm payload migrate:create --file @payloadcms/db-postgres/sizes-to-variants` (SQLite: `@payloadcms/db-sqlite/sizes-to-variants`). It renames the `sizes_*` columns to `variants_*` and keeps the data. A plain generated migration would drop them.
+  2. Then `pnpm payload migrate:create` for the rest, check it, and deploy both.
+- **Local dev with `push: true`:** Drizzle asks "created or renamed" for some columns. For `payload_jobs.processing` → `processing_until` choose **create**. For `media.sizes_*` → `variants_*` choose **rename** (or rename the columns by hand, as the ready-made migration does), so existing images keep their sizes.
+- **The plugin's own collections and globals keep their Payload 3 shape:** saved sections, comments, the theme, the AI settings and the classes stylesheet set `versions: false`; templates, sections, classes, comments and the globals set `authorship: false`. Templates and classes keep their drafts.
+- **Admin styles are plain CSS:** the package ships `.css` on Payload 4's tokens (`--color-*`, `--radius-*`, `--text-*`). Your app needs no `sass`. Custom admin CSS that set Payload 3 variables (`--theme-*`, `--theme-elevation-*`, `--style-radius-*`, `--base`) for the builder has no effect now.
+- **MCP:** `builderMcpTools()` needs `payload-mcp-toolkit` 0.12.0-next.0 or later (optional peer). Do not register `@payloadcms/plugin-mcp` next to it: both serve `/api/mcp`.
+- **The owner's plugins on the next line:** `payload-media-gallery@next` (0.4.0-next.0), `payload-workflows@next` (0.2.0-next.1), `payload-mcp-toolkit@next` (0.12.0-next.0), `payload-google-reviews@next` (0.5.0-next.0). Cron schedules need `*` or a range before `/` (`*/10`, `5-59/15`).
+
+### Changed
+
+- **Payload 4:** the plugin runs on `4.0.0-beta.8`. Field components use the props types (`TextFieldClientProps`), the layout diff reads `valueFrom` / `valueTo`, list options use `disabled: { column, filter }`, Payload blocks fields use string slugs in `blocks` instead of `blockReferences`, and the image service passes the collection `slug` to access functions.
+- **Admin styles:** every `.scss` file is now plain `.css` with the same rules, on Payload 4's semantic tokens. Editor text follows Payload 4's scale (11, 12 and 14 px). The package's build copies `.css` only, and `sideEffects` lists `*.css`.
+- **Router:** the Versions and API screens in the builder's drawer get their router from Payload 4's public `RouterAdapterContext` instead of Next.js internals. Admin client code reads `useRouter`, `usePathname` and `useSearchParams` from `@payloadcms/ui`.
+- **Access:** trusted server reads (rendering layouts and templates, the theme, saved form classes, the default-template hook) set `overrideAccess: true`, as Payload 3 did by default. Reads for a user (MCP tools, live sessions, the dashboard) keep `overrideAccess: false` with the user.
+- **Live sessions:** when a user may read only the published version, Payload 4 refuses the draft read, and the builder's event stream answers 404 (was 403). The refusal itself is unchanged.
+- **Scaffolder:** `create-payload-canvas@next` installs `payload-canvas@^0.7.0-next.0` and downloads the starter from the tag `v0.7.0-next.0`. It needs Node.js 24.22.1.
+- **Starter:** Payload 4, Next.js 16.4.6, React 19.3.1. Sharp image variants in `mediaSharp` (`src/collections/Media.ts`). The grouped sidebar uses Payload 4's nav frame (user menu, sidebar toggle, settings menu). The admin look drops its Payload 3 palette (Payload 4's is already neutral) and keeps the detail rules, as plain CSS. Opens at `127.0.0.1` in dev (`allowedDevOrigins`), so its admin cookie stays apart from other local Payload apps.
+
+### Fixed
+
+- Rich text in inline editing: Lexical 0.53 can report a parse error and return a partial state. The canvas now refuses that state before it replaces existing text.
+
 ## [0.6.0] - 2026-11-11
 
 ### Upgrade notes

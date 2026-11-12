@@ -23,8 +23,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Node 20 is end-of-life, and its test runner does not expand the glob in `pnpm test`.
-        node: [22, 24]
+        # Payload 4 needs Node 24.22.1 or later.
+        node: ['24.22.3']
     steps:
       - uses: actions/checkout@v5
 
@@ -41,7 +41,7 @@ jobs:
       - run: pnpm exec turbo run test typecheck lint build --filter=./packages/*
 
   starter:
-    name: Starter app (Node 24)
+    name: Starter app (Node 24.22)
     runs-on: ubuntu-latest
     # `next build` prerenders pages that read from Payload, so the build needs a database with the
     # schema. This throwaway Postgres lives only for the job. The values are placeholders, not secrets.
@@ -70,7 +70,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: 24.22.3
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
