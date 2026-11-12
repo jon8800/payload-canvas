@@ -3,12 +3,12 @@
 // "Reply by email". Opening it sets `readAt` once, so the list's "New" badge goes away.
 
 import { Button } from '@payloadcms/ui'
-import type { Payload, SanitizedCollectionConfig, TypedUser, UIFieldServerProps } from 'payload'
+import type { Payload, SanitizedCollectionConfig, User, UIFieldServerProps } from 'payload'
 
 import { replyMailto, safePageUrl, submissionAnswers, submissionSummary, type SubmissionAnswer, type SubmissionDataRow } from '../../forms/summary'
 import { SUBMISSION_PAGE_FIELD, SUBMISSION_READ_FIELD, type SubmissionsAdminCustom } from '../../forms/submissionsAdmin'
 import { fileSize, formatDateTime, formOf, formsSlugOf, thumbnailOf, type MediaLike } from './submissionData'
-import './submissions.scss'
+import './submissions.css'
 
 type SubmissionDoc = Record<string, unknown> & {
   id: string | number
@@ -29,7 +29,7 @@ export const SUBMISSION_READ_CONTEXT = 'formSubmissionRead'
  * Sets the read date the first time a signed-in admin user opens the submission. The plugin's
  * submissions refuse updates, so this writes only that field, with access off.
  */
-async function markRead(payload: Payload, collection: string, doc: SubmissionDoc, user: TypedUser | null | undefined): Promise<string | null> {
+async function markRead(payload: Payload, collection: string, doc: SubmissionDoc, user: User | null | undefined): Promise<string | null> {
   if (doc[SUBMISSION_READ_FIELD] || !user || user.collection !== payload.config.admin.user) return null
   const config = collectionConfigOf(payload, collection)
   if (!config?.flattenedFields.some((field) => field.name === SUBMISSION_READ_FIELD)) return null
@@ -90,7 +90,7 @@ function pageLabel(url: string): string {
 export async function SubmissionView({ id, payload, collectionSlug, field, i18n, req, user }: UIFieldServerProps) {
   if (id === undefined || id === null || !collectionSlug) return null
   const custom = (field.admin?.custom ?? {}) as Partial<SubmissionsAdminCustom>
-  const viewer = (user ?? req?.user ?? null) as TypedUser | null
+  const viewer = (user ?? req?.user ?? null) as User | null
   const doc = (await payload
     .findByID({ collection: collectionSlug as never, id, depth: 1, overrideAccess: false, user: viewer })
     .catch(() => null)) as SubmissionDoc | null

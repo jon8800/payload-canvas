@@ -1,13 +1,12 @@
 'use client'
 
-import { DefaultEditView, useConfig, useDocumentDrawerContext, useDocumentInfo } from '@payloadcms/ui'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { DefaultEditView, useConfig, useDocumentDrawerContext, useDocumentInfo, useRouter, useSearchParams } from '@payloadcms/ui'
 import type { DocumentViewClientProps } from 'payload'
 import { useEffect } from 'react'
 
 import { builderOpening, builderViewPath, FORM_PARAM, opensInBuilder } from '../plugin/links'
 import { formChosen, rememberForm } from './formChoice'
-import './layoutField.scss'
+import './layoutField.css'
 
 /**
  * The default edit view of a builder collection with `editor.openInBuilder` on

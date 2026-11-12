@@ -8,7 +8,7 @@ import type { ReactNode } from 'react'
 
 import { shortAnswer, submissionSummary, type SubmissionDataRow } from '../../forms/summary'
 import { formatDateTime, formOf, formsSlugOf } from './submissionData'
-import './submissions.scss'
+import './submissions.css'
 
 /** The cell's content, linked to the document when it is the list's link column. */
 function Linked({ props, children }: { props: DefaultServerCellComponentProps; children: ReactNode }) {

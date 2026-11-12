@@ -1,0 +1,1127 @@
+/* Styles panel. Payload CSS variables only, no Tailwind (it would leak into the admin). */
+@layer payload-default {
+  .builder-styles {
+    --bs-accent: var(--be-accent, var(--color-bg-brand, #2f6fec));
+    --bs-border: var(--color-border);
+    --bs-muted: var(--color-text-secondary);
+    --bs-accent-text: var(--be-accent-text, var(--color-text-brand));
+    --bs-dim: var(--color-text-tertiary);
+    --bs-h: 26px;
+    /* One column grid for every row: label, control, reset button. */
+    --bs-label: 84px;
+    --bs-gutter: 18px;
+    --bs-gap: 6px;
+    --bs-override: var(--color-text-warning, #d97706);
+    display: flex;
+    flex-direction: column;
+    font-size: var(--be-text-m);
+    /* :where() keeps this reset weaker than the components' own borders (the segmented control). */
+  }
+
+  .builder-styles :where(fieldset) {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .builder-styles code {
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: var(--be-text-s);
+  }
+
+  .builder-styles__hint {
+    margin: 4px 0 8px;
+    color: var(--bs-muted);
+    font-size: var(--be-text-m);
+  }
+
+  .builder-styles__hint--error {
+    color: var(--color-text-danger);
+  }
+
+  .builder-styles__link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--bs-accent-text);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .builder-styles__button {
+    flex: none;
+    height: var(--bs-h);
+    padding: 0 10px;
+    border: 1px solid var(--bs-border);
+    border-radius: var(--radius-medium, 4px);
+    background: var(--color-bg-secondary);
+    color: var(--color-text);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .builder-styles__button:hover {
+    border-color: var(--color-border-control-strong);
+  }
+
+  .builder-styles__button--primary {
+    border-color: var(--color-border-strong);
+    background: var(--color-bg-inverse);
+    color: var(--color-text-oninverse);
+  }
+
+  .builder-styles__button--primary:hover {
+    border-color: var(--color-border-strong);
+    background: var(--color-bg-inverse);
+  }
+
+  /*
+   * -------------------------------------------------------------------------
+   * Variant bar
+   * -------------------------------------------------------------------------
+   */
+  .builder-styles__variants {
+    position: sticky;
+    z-index: 2;
+    top: -12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: -4px 0 4px;
+    padding: 4px 0 8px;
+    border-bottom: 1px solid var(--bs-border);
+    background: var(--color-bg);
+  }
+
+  .builder-styles__breakpoints {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 3px;
+  }
+
+  .builder-styles__chip {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-width: 0;
+    height: var(--bs-h);
+    padding: 0 4px;
+    border: 1px solid var(--bs-border);
+    border-radius: var(--radius-medium, 4px);
+    background: var(--color-bg);
+    color: var(--color-text);
+    font: inherit;
+    font-size: var(--be-text-m);
+    cursor: pointer;
+  }
+
+  .builder-styles__chip:hover {
+    border-color: var(--color-border-control-strong);
+  }
+
+  .builder-styles__chip[aria-pressed=true] {
+    border-color: var(--bs-accent);
+    background: color-mix(in srgb, var(--bs-accent) 10%, var(--color-bg));
+    color: var(--bs-accent-text);
+  }
+
+  .builder-styles__chip .builder-styles__dot {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+  }
+
+  .builder-styles__chip {
+    flex-direction: column;
+    gap: 0;
+    height: 34px;
+    line-height: 1.1;
+  }
+
+  .builder-styles__chip-name {
+    font-weight: var(--be-weight-strong);
+  }
+
+  .builder-styles__chip-width {
+    color: var(--bs-muted);
+    font-size: var(--be-text-s);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .builder-styles__state-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .builder-styles__state-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--bs-muted);
+    font-size: var(--be-text-s);
+    /* Fixed width: fits "While pressed" and a dot, so the row never moves when the state changes. */
+  }
+
+  .builder-styles__state-field .builder-select {
+    width: 118px;
+  }
+
+  .builder-styles__variant-hint {
+    margin: 0;
+    color: var(--bs-muted);
+    font-size: var(--be-text-s);
+  }
+
+  .builder-styles__variant-hint strong {
+    color: var(--color-text);
+    font-weight: var(--be-weight-strong);
+  }
+
+  .builder-styles__variant-hint code {
+    margin-left: 2px;
+    padding: 0 4px;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--bs-accent) 12%, transparent);
+    color: var(--bs-accent-text);
+  }
+
+  /* The canvas is narrower than the chosen breakpoint: these styles are not visible right now. */
+  .builder-styles__width-hint {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 0;
+    padding: 6px 6px 6px 10px;
+    border: 1px solid color-mix(in srgb, var(--color-border-warning-strong, #b07a00) 40%, transparent);
+    border-radius: var(--radius-medium, 4px);
+    background: color-mix(in srgb, var(--color-bg-warning, #b07a00) 10%, transparent);
+    color: var(--color-text);
+    font-size: var(--be-text-s);
+    line-height: 1.4;
+  }
+
+  .builder-styles__width-action {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
+    padding: 0 8px;
+    border: 1px solid var(--bs-border);
+    border-radius: var(--radius-medium, 4px);
+    background: var(--color-bg);
+    color: var(--color-text);
+    font: inherit;
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-medium);
+    cursor: pointer;
+  }
+
+  .builder-styles__width-action:hover {
+    border-color: var(--bs-accent);
+    color: var(--bs-accent-text);
+  }
+
+  .builder-styles__dot {
+    display: inline-block;
+    flex: none;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    /* Also in a select list, which renders outside the panel. */
+    background: var(--bs-accent, var(--be-accent, var(--color-bg-brand)));
+  }
+
+  /*
+   * -------------------------------------------------------------------------
+   * Sections
+   * -------------------------------------------------------------------------
+   */
+  .builder-styles__section {
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .builder-styles__section-head,
+  .builder-styles__sub-head {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    padding: 8px 0;
+    border: 0;
+    background: none;
+    color: var(--color-text);
+    font: inherit;
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-strong);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .builder-styles__section-head .builder-styles__dot,
+  .builder-styles__sub-head .builder-styles__dot {
+    margin-left: 4px;
+  }
+
+  .builder-styles__sub-head {
+    padding: 6px 0 4px;
+    color: var(--bs-muted);
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-medium);
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .builder-styles__chevron {
+    display: grid;
+    place-items: center;
+    color: var(--bs-muted);
+    transition: rotate 120ms ease;
+  }
+
+  [aria-expanded=true] > .builder-styles__chevron {
+    rotate: 90deg;
+  }
+
+  .builder-styles__section-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 0 0 10px;
+  }
+
+  /* Rows in a sub-section keep the panel's columns; only the label text steps in. */
+  .builder-styles__sub-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-bottom: 4px;
+  }
+
+  .builder-styles__sub-body .builder-styles__label-cell,
+  .builder-styles__sub-body .builder-styles__mini-row > .builder-styles__label {
+    padding-left: 18px;
+  }
+
+  /*
+   * -------------------------------------------------------------------------
+   * Rows and inputs
+   * -------------------------------------------------------------------------
+   */
+  .builder-styles__row {
+    display: grid;
+    grid-template-columns: var(--bs-label) minmax(0, 1fr) var(--bs-gutter);
+    align-items: center;
+    gap: var(--bs-gap);
+    min-height: 28px;
+  }
+
+  /* The label and, after it, the override dot. */
+  .builder-styles__label-cell {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .builder-styles__label {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--bs-muted);
+    font-size: var(--be-text-m);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /*
+   * A value set at exactly this variant: the label turns blue (like Webflow). From a smaller
+   * breakpoint or a shorthand: amber.
+   */
+  [data-source=set] > .builder-styles__label,
+  .builder-styles__mini-caption[data-source=set] > .builder-styles__mini-text {
+    color: var(--bs-accent-text);
+  }
+
+  [data-source=inherited] > .builder-styles__label,
+  [data-source=shorthand] > .builder-styles__label,
+  .builder-styles__mini-caption[data-source=inherited] > .builder-styles__mini-text,
+  .builder-styles__mini-caption[data-source=shorthand] > .builder-styles__mini-text {
+    color: var(--color-text-warning, #b7791f);
+  }
+
+  .builder-styles__control {
+    display: flex;
+    min-width: 0;
+  }
+
+  /*
+   * A larger breakpoint wins on the canvas: a 6px dot after the label. The button is 14px for
+   * the pointer; the dot is drawn inside it.
+   */
+  .builder-styles__override-mark {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 14px;
+    height: 14px;
+    margin: 0 -4px 0 -2px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    cursor: pointer;
+  }
+
+  .builder-styles__override-mark::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--bs-override);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--bs-override) 22%, transparent);
+  }
+
+  .builder-styles__override-mark:hover::before, .builder-styles__override-mark[aria-expanded=true]::before {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--bs-override) 32%, transparent);
+  }
+
+  .builder-styles__override-mark:focus-visible {
+    outline: 1px solid var(--bs-accent);
+  }
+
+  /* Only while open: `display` would otherwise beat the browser's rule that hides a closed popover. */
+  .builder-styles__popover--override:popover-open {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 248px;
+    padding: 10px;
+  }
+
+  .builder-styles__override-text {
+    margin: 0;
+    color: var(--color-text);
+    font-size: var(--be-text-m);
+    line-height: 1.45;
+  }
+
+  .builder-styles__override-text code {
+    padding: 0 3px;
+    border-radius: 3px;
+    background: var(--color-bg-hover);
+    color: var(--color-text);
+  }
+
+  .builder-styles__override-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .builder-styles__override-actions .builder-styles__button {
+    height: 24px;
+    padding: 0 8px;
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-medium);
+  }
+
+  /* A box model side the canvas does not show: a small amber dot in its top-right corner. */
+  .builder-styles__cell[data-overridden] {
+    background-image: radial-gradient(circle at calc(100% - 4px) 4px, var(--bs-override) 2px, transparent 2.5px);
+  }
+
+  .builder-styles__input,
+  .builder-styles__raw-input {
+    width: 100%;
+    min-width: 0;
+    height: var(--bs-h);
+    padding: 0 6px;
+    border: 1px solid var(--bs-border);
+    border-radius: var(--radius-medium, 4px);
+    background: var(--field-color-bg, var(--color-bg));
+    color: var(--color-text);
+    font: inherit;
+    font-size: var(--be-text-m);
+  }
+
+  .builder-styles__input:hover,
+  .builder-styles__raw-input:hover {
+    border-color: var(--color-border-control-strong);
+  }
+
+  .builder-styles__input:focus,
+  .builder-styles__raw-input:focus {
+    border-color: var(--bs-accent);
+    outline: 0;
+    box-shadow: 0 0 0 1px var(--bs-accent);
+  }
+
+  .builder-styles__input::placeholder,
+  .builder-styles__raw-input::placeholder {
+    color: var(--bs-dim);
+  }
+
+  /*
+   * The "…" list next to a segmented control (`Segmented` in controls.tsx). Highlighted like an
+   * active segment while one of its options is the value.
+   */
+  .builder-styles__more.builder-select {
+    flex: none;
+    width: var(--bs-h);
+    margin-left: 3px;
+  }
+
+  .builder-styles__more.builder-select[data-active] {
+    background: var(--color-bg-tertiary);
+    color: var(--color-text);
+  }
+
+  .builder-styles__more.builder-select[data-active][data-source=inherited], .builder-styles__more.builder-select[data-active][data-source=shorthand] {
+    background: var(--color-bg-secondary);
+    color: var(--color-text-warning, #b7791f);
+  }
+
+  .builder-styles__reset {
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: 0;
+    border-radius: 3px;
+    background: none;
+    color: var(--bs-muted);
+    cursor: pointer;
+  }
+
+  .builder-styles__reset[hidden] {
+    display: grid;
+    visibility: hidden;
+  }
+
+  .builder-styles__reset:hover {
+    background: var(--color-bg-hover);
+    color: var(--color-text-danger);
+  }
+
+  .builder-styles__reset svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .builder-styles__with-toggle {
+    display: flex;
+    flex: 1;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .builder-styles__icon-button {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: var(--bs-h);
+    height: var(--bs-h);
+    padding: 0;
+    border: 1px solid var(--bs-border);
+    border-radius: var(--radius-medium, 4px);
+    background: var(--color-bg);
+    color: var(--bs-muted);
+    cursor: pointer;
+  }
+
+  .builder-styles__icon-button[aria-pressed=true] {
+    border-color: var(--bs-accent);
+    color: var(--bs-accent-text);
+  }
+
+  /* Segmented icon buttons */
+  .builder-styles__segmented-wrap {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .builder-styles__segmented {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--bs-border);
+    border-radius: var(--radius-medium, 4px);
+    background: var(--field-color-bg, var(--color-bg));
+  }
+
+  .builder-styles__segment {
+    display: grid;
+    flex: 1;
+    place-items: center;
+    min-width: 0;
+    height: calc(var(--bs-h) - 2px);
+    padding: 0 2px;
+    border: 0;
+    border-left: 1px solid var(--color-border);
+    background: none;
+    color: var(--bs-muted);
+    font: inherit;
+    font-size: var(--be-text-m);
+    cursor: pointer;
+  }
+
+  .builder-styles__segment:first-child {
+    border-left: 0;
+  }
+
+  .builder-styles__segment:hover {
+    background: var(--color-bg-secondary);
+    color: var(--color-text);
+  }
+
+  .builder-styles__segment[aria-pressed=true] {
+    background: var(--color-bg-tertiary);
+    color: var(--color-text);
+  }
+
+  .builder-styles__segment {
+    /* Active only because of an inherited value: lighter, so it reads as "not set here". */
+  }
+
+  .builder-styles__segment[aria-pressed=true][data-source=inherited], .builder-styles__segment[aria-pressed=true][data-source=shorthand] {
+    background: var(--color-bg-secondary);
+    color: var(--color-text-warning, #b7791f);
+  }
+
+  .builder-styles__segment-icon {
+    display: grid;
+    place-items: center;
+    font-weight: var(--be-weight-strong);
+  }
+
+  .builder-styles__segment-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .builder-styles__line {
+    display: block;
+    width: 16px;
+    border-top: 2px solid currentColor;
+  }
+
+  .builder-styles__line[data-style=dashed] {
+    border-top-style: dashed;
+  }
+
+  .builder-styles__line[data-style=dotted] {
+    border-top-style: dotted;
+  }
+
+  /* Slider */
+  .builder-styles__slider,
+  .builder-styles__picker-row {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .builder-styles__slider-value {
+    min-width: 34px;
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  .builder-styles__slider-value[data-source=inherited], .builder-styles__slider-value[data-source=shorthand], .builder-styles__slider-value[data-source=none] {
+    color: var(--bs-dim);
+  }
+
+  /* Compact fields with a caption (gap, size, sides, corners) */
+  .builder-styles__mini-row {
+    display: grid;
+    grid-template-columns: var(--bs-label) minmax(0, 1fr) var(--bs-gutter);
+    align-items: end;
+    gap: var(--bs-gap);
+  }
+
+  .builder-styles__mini-row > .builder-styles__label {
+    padding-bottom: 5px;
+  }
+
+  .builder-styles__mini-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(52px, 1fr));
+    gap: 4px;
+  }
+
+  .builder-styles__mini {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .builder-styles__mini-caption {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 16px;
+    padding-left: 1px;
+    color: var(--bs-muted);
+    font-size: var(--be-text-s);
+  }
+
+  .builder-styles__mini-caption .builder-styles__mini-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .builder-styles__mini-caption {
+    /* Right after its caption, so it never reads as part of the next field's caption. */
+  }
+
+  .builder-styles__mini-caption .builder-styles__reset {
+    width: 14px;
+    height: 14px;
+  }
+
+  .builder-styles__mini-caption .builder-styles__reset svg {
+    width: 10px;
+    height: 10px;
+  }
+
+  /*
+   * -------------------------------------------------------------------------
+   * Box model
+   * -------------------------------------------------------------------------
+   */
+  .builder-styles__box-model {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .builder-styles__ring {
+    position: relative;
+    display: grid;
+    grid-template: ". top ." 24px "left inner right" minmax(24px, auto) ". bottom ." 24px/46px minmax(0, 1fr) 46px;
+    align-items: center;
+    justify-items: center;
+    border-radius: var(--radius-medium, 4px);
+  }
+
+  .builder-styles__ring--margin {
+    border: 1px dashed var(--color-border-control-strong);
+    background: var(--color-bg-secondary);
+  }
+
+  .builder-styles__ring--padding {
+    width: 100%;
+    border: 1px solid var(--color-border-control-strong);
+    background: var(--color-bg-hover);
+  }
+
+  .builder-styles__ring-label {
+    position: absolute;
+    top: 3px;
+    left: 6px;
+    color: var(--bs-muted);
+    font-size: var(--be-text-s);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    pointer-events: none;
+  }
+
+  .builder-styles__ring-top {
+    grid-area: top;
+  }
+
+  .builder-styles__ring-right {
+    grid-area: right;
+  }
+
+  .builder-styles__ring-bottom {
+    grid-area: bottom;
+  }
+
+  .builder-styles__ring-left {
+    grid-area: left;
+  }
+
+  .builder-styles__ring-inner {
+    display: flex;
+    grid-area: inner;
+    justify-content: center;
+    width: 100%;
+  }
+
+  /* The element itself: a shape, so it never reads as an input. */
+  .builder-styles__content-box {
+    width: 100%;
+    max-width: 96px;
+    height: 16px;
+    margin: 4px 0;
+    border: 1px dashed var(--color-border-control-strong);
+    border-radius: 2px;
+    background: var(--color-bg-secondary);
+  }
+
+  .builder-styles__cell {
+    width: 42px;
+    height: 20px;
+    padding: 0 2px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--color-text);
+    font: inherit;
+    font-size: var(--be-text-s);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+  }
+
+  .builder-styles__cell::placeholder {
+    color: var(--bs-dim);
+  }
+
+  .builder-styles__cell:hover {
+    border-color: var(--color-border-control-strong);
+    background: var(--color-bg);
+  }
+
+  .builder-styles__cell:focus {
+    border-color: var(--bs-accent);
+    outline: 0;
+    background: var(--field-color-bg, var(--color-bg));
+  }
+
+  .builder-styles__cell[data-source=set] {
+    color: var(--bs-accent-text);
+    font-weight: var(--be-weight-strong);
+  }
+
+  .builder-styles__cell--empty {
+    visibility: hidden;
+  }
+
+  /*
+   * -------------------------------------------------------------------------
+   * Popovers and suggestion lists
+   * -------------------------------------------------------------------------
+   */
+  .builder-styles__popover {
+    position: fixed;
+    inset: auto;
+    margin: 0;
+    padding: 0;
+    overflow: auto;
+    max-height: min(480px, 100vh - 16px);
+    border: 1px solid var(--bs-border);
+    border-radius: var(--radius-medium, 6px);
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-size: var(--be-text-m);
+    box-shadow: var(--be-shadow);
+  }
+
+  .builder-styles__popover--list {
+    max-height: 260px;
+  }
+
+  .builder-styles__suggest {
+    margin: 0;
+    padding: 3px;
+    list-style: none;
+  }
+
+  .builder-styles__suggest-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 3px 6px;
+    border-radius: 3px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .builder-styles__suggest-item[aria-selected=true] {
+    background: var(--color-bg-hover);
+  }
+
+  /* A heading over a run of site classes of one group. */
+  .builder-styles__suggest-group {
+    padding: 6px 6px 2px;
+    color: var(--bs-muted);
+    font-size: var(--be-text-s, 11px);
+  }
+
+  .builder-styles__suggest-group:not(:first-child) {
+    margin-top: 2px;
+    border-top: 1px solid var(--bs-border);
+  }
+
+  /* A site class: its label, with the class name small after it. */
+  .builder-styles__suggest-label {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .builder-styles__suggest-name {
+    color: var(--bs-muted);
+    font-size: var(--be-text-s, 11px);
+  }
+
+  .builder-styles__suggest-hint {
+    color: var(--bs-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .builder-styles__suggest-empty {
+    margin: 0;
+    padding: 6px 9px;
+    color: var(--bs-muted);
+  }
+
+  /*
+   * -------------------------------------------------------------------------
+   * Color field and picker
+   * -------------------------------------------------------------------------
+   */
+  .builder-styles__color {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    height: var(--bs-h);
+    padding: 0 6px;
+    border: 1px solid var(--bs-border);
+    border-radius: var(--radius-medium, 4px);
+    background: var(--field-color-bg, var(--color-bg));
+    color: var(--color-text);
+    font: inherit;
+    font-size: var(--be-text-m);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .builder-styles__color:hover {
+    border-color: var(--color-border-control-strong);
+  }
+
+  .builder-styles__color[data-source=inherited], .builder-styles__color[data-source=shorthand], .builder-styles__color[data-source=none] {
+    color: var(--bs-dim);
+  }
+
+  .builder-styles__color-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .builder-styles__swatch {
+    --checker: conic-gradient(var(--color-bg-tertiary) 25%, var(--color-bg) 0 50%, var(--color-bg-tertiary) 0 75%, var(--color-bg) 0) 0 0 / 8px 8px;
+    flex: none;
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--color-border-control-strong);
+    border-radius: 3px;
+    background: linear-gradient(color-mix(in srgb, var(--swatch) var(--swatch-alpha, 100%), transparent), color-mix(in srgb, var(--swatch) var(--swatch-alpha, 100%), transparent)), var(--checker);
+  }
+
+  .builder-styles__swatch[data-empty=true] {
+    background: linear-gradient(to top right, transparent 45%, var(--color-bg-danger) 45% 55%, transparent 55%), var(--color-bg);
+  }
+
+  .builder-styles__swatch--sm {
+    width: 14px;
+    height: 14px;
+  }
+
+  .builder-styles__picker {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 340px;
+    padding: 10px;
+  }
+
+  .builder-styles__picker section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .builder-styles__picker-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .builder-styles__picker-value {
+    flex: 1;
+    overflow: hidden;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: var(--be-text-s);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .builder-styles__picker-title {
+    margin: 0;
+    color: var(--bs-muted);
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-strong);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  /* Two columns. A name too long for its column wraps (see `.builder-styles__theme-color`). */
+  .builder-styles__theme-colors {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2px;
+  }
+
+  .builder-styles__more-colors {
+    margin-top: 4px;
+  }
+
+  .builder-styles__more-colors summary {
+    padding: 4px 2px;
+    color: var(--bs-muted);
+    font-size: var(--be-text-s);
+    cursor: pointer;
+  }
+
+  .builder-styles__theme-color {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding: 3px 4px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    background: none;
+    color: var(--color-text);
+    font: inherit;
+    font-size: var(--be-text-s);
+    text-align: left;
+    cursor: pointer;
+    /*
+     * Long names such as "secondary-foreground" or "sidebar-primary-foreground" wrap (after a
+     * hyphen first), so the full name stays readable. The title holds the value too.
+     */
+  }
+
+  .builder-styles__theme-color span:last-child {
+    min-width: 0;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+
+  .builder-styles__theme-color:hover {
+    background: var(--color-bg-hover);
+  }
+
+  .builder-styles__theme-color[aria-pressed=true] {
+    border-color: var(--bs-accent);
+  }
+
+  .builder-styles__palette {
+    display: grid;
+    grid-template-columns: repeat(var(--shades, 11), 1fr);
+    gap: 1px;
+  }
+
+  .builder-styles__palette-cell {
+    aspect-ratio: 1;
+    padding: 0;
+    border: 0;
+    border-radius: 2px;
+    cursor: pointer;
+  }
+
+  .builder-styles__palette-cell:hover {
+    position: relative;
+    z-index: 1;
+    outline: 1px solid var(--color-border-strong);
+  }
+
+  .builder-styles__palette-cell[aria-pressed=true] {
+    position: relative;
+    z-index: 2;
+    outline: 2px solid var(--bs-accent);
+    outline-offset: 1px;
+  }
+
+  .builder-styles__picker-row .builder-styles__label {
+    flex: none;
+    width: 52px;
+  }
+
+  .builder-styles__picker-row .builder-styles__input {
+    flex: 1;
+  }
+
+  .builder-styles__native-color {
+    flex: none;
+    width: var(--bs-h);
+    height: var(--bs-h);
+    padding: 1px;
+    border: 1px solid var(--bs-border);
+    border-radius: var(--radius-medium, 4px);
+    background: var(--color-bg);
+    cursor: pointer;
+  }
+
+  /*
+   * -------------------------------------------------------------------------
+   * Small labels, classes as text ("Edit as text") and the custom CSS box
+   * -------------------------------------------------------------------------
+   */
+  .builder-styles__raw-label {
+    color: var(--bs-muted);
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-strong);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .builder-styles__raw-input {
+    /* Grows with the class list (Chromium), so every class stays visible. */
+    field-sizing: content;
+    height: auto;
+    min-height: 64px;
+    max-height: 240px;
+    padding: 6px;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: var(--be-text-m);
+    line-height: 1.5;
+    resize: vertical;
+  }
+
+  .builder-styles__visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

@@ -15,7 +15,7 @@ import { formatSaveTime } from '../topbar/saveTime'
 import { useOptionalValue, useValue, useValueSelector } from '../valueStore'
 import type { CommentsController } from './controller'
 import { Avatar, Thread } from './Thread'
-import './comments.scss'
+import './comments.css'
 
 /** Top bar: comment mode on or off, with the number of open threads. */
 export function CommentsButton() {

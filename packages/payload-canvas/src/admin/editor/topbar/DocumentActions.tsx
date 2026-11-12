@@ -2,8 +2,7 @@
 
 // The right side of the top bar: the save state, the Preview and settings icon buttons, and Publish.
 
-import { ConfirmationModal, useConfig, useDocumentDrawer, useModal, useRouteTransition } from '@payloadcms/ui'
-import { useRouter } from 'next/navigation'
+import { ConfirmationModal, useConfig, useDocumentDrawer, useModal, useRouter, useRouteTransition } from '@payloadcms/ui'
 import type { DefaultDocumentIDType } from 'payload'
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
 

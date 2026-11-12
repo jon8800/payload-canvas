@@ -1,11 +1,11 @@
 'use client'
 
 import { Button, FieldDescription, FieldLabel, useDocumentInfo, useField, useFormFields, useFormModified } from '@payloadcms/ui'
-import type { StaticDescription, TextFieldClientComponent } from 'payload'
-import { useState } from 'react'
+import type { StaticDescription, TextFieldClientProps } from 'payload'
+import { useState, type FC } from 'react'
 
 import { KEY_STATUS_FIELD, type AiKeyFieldCustom, type AiKeyStatus } from '../ai/settings/shared'
-import './aiKeyField.scss'
+import './aiKeyField.css'
 
 function statusText(status: AiKeyStatus | undefined): string {
   if (status?.state === 'set') return status.last4 ? `Set, ends in …${status.last4}` : 'Set'
@@ -25,7 +25,7 @@ function fallbackText(custom: AiKeyFieldCustom | undefined): string | null {
  * only "Set, ends in …4f2a" (from the read-only `keyStatus`), and offers Replace and Clear.
  * The value it sends: a new key (string), `null` to clear, or nothing to keep the stored key.
  */
-export const AiKeyField: TextFieldClientComponent = function AiKeyField({ path, field, readOnly }) {
+export const AiKeyField: FC<TextFieldClientProps> = function AiKeyField({ path, field, readOnly }) {
   const { value, setValue, disabled } = useField<string | null>({ path })
   // The saved document's status (updated after each save), else the form's copy.
   const saved = (useDocumentInfo().data?.[KEY_STATUS_FIELD] as Record<string, AiKeyStatus> | undefined)?.[path]
@@ -72,7 +72,7 @@ export const AiKeyField: TextFieldClientComponent = function AiKeyField({ path, 
           />
           <Button
             buttonStyle="secondary"
-            size="small"
+            size="medium"
             margin={false}
             onClick={() => {
               setValue(undefined)
@@ -86,16 +86,16 @@ export const AiKeyField: TextFieldClientComponent = function AiKeyField({ path, 
         !locked && (
           <div className="ai-key-field__row">
             {clearing ? (
-              <Button buttonStyle="secondary" size="small" margin={false} onClick={() => setValue(undefined)}>
+              <Button buttonStyle="secondary" size="medium" margin={false} onClick={() => setValue(undefined)}>
                 Undo
               </Button>
             ) : (
               <>
-                <Button buttonStyle="secondary" size="small" margin={false} onClick={() => setEditing(true)}>
+                <Button buttonStyle="secondary" size="medium" margin={false} onClick={() => setEditing(true)}>
                   {stored ? 'Replace key' : 'Add key'}
                 </Button>
                 {stored && (
-                  <Button buttonStyle="secondary" size="small" margin={false} onClick={() => setValue(null)}>
+                  <Button buttonStyle="secondary" size="medium" margin={false} onClick={() => setValue(null)}>
                     Clear key
                   </Button>
                 )}

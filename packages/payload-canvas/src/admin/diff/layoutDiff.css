@@ -1,0 +1,180 @@
+/*
+ * The builder layout diff in Payload's Versions > compare view. Payload CSS variables only, no
+ * Tailwind. Colors come from Payload's own diff variables (`--diff-create-*`, `--diff-delete-*`),
+ * with theme fallbacks, so it matches the other fields' diffs in light and dark theme.
+ */
+@layer payload-default {
+  .layout-diff {
+    position: relative;
+  }
+
+  .layout-diff__content {
+    display: flex;
+    flex-direction: column;
+    gap: calc(1.0156rem * 0.5);
+    background: var(--color-bg-secondary);
+    padding: calc(1.0156rem * 0.5);
+  }
+
+  .layout-diff__summary {
+    margin: 0;
+    color: var(--color-text);
+    font-weight: 500;
+  }
+
+  .layout-diff__list, .layout-diff__details {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .layout-diff__list {
+    display: flex;
+    flex-direction: column;
+    gap: calc(1.0156rem * 0.25);
+  }
+
+  .layout-diff__change {
+    padding: calc(1.0156rem * 0.4) calc(1.0156rem * 0.5);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-medium);
+    background: var(--color-bg);
+  }
+
+  .layout-diff__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: calc(1.0156rem * 0.3);
+    min-width: 0;
+  }
+
+  .layout-diff__pill {
+    flex: none;
+    padding: 0 calc(1.0156rem * 0.25);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-medium);
+    background: var(--color-bg-hover);
+    color: var(--color-text);
+    font-size: calc(1.0156rem * 0.55);
+    font-weight: 600;
+    line-height: 1.6;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .layout-diff__pill--added {
+    border-color: var(--diff-create-pill-border, var(--color-border-brand));
+    background: var(--diff-create-pill-bg, var(--color-bg-selected-hover));
+    color: var(--diff-create-pill-color, var(--color-text-brand));
+  }
+
+  .layout-diff__pill--removed {
+    border-color: var(--diff-delete-pill-border, var(--color-border-danger));
+    background: var(--diff-delete-pill-bg, var(--color-bg-danger-tertiary-hover));
+    color: var(--diff-delete-pill-color, var(--color-text-danger));
+  }
+
+  .layout-diff__name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .layout-diff__where {
+    color: var(--color-text-secondary);
+  }
+
+  .layout-diff__details {
+    display: flex;
+    flex-direction: column;
+    gap: calc(1.0156rem * 0.2);
+    margin-top: calc(1.0156rem * 0.3);
+    padding-inline-start: calc(1.0156rem * 0.5);
+    border-inline-start: 2px solid var(--color-border);
+  }
+
+  .layout-diff__detail {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: calc(1.0156rem * 0.25);
+    min-width: 0;
+  }
+
+  .layout-diff__detail-label {
+    display: inline-flex;
+    align-items: baseline;
+    gap: calc(1.0156rem * 0.2);
+    color: var(--color-text-secondary);
+  }
+
+  .layout-diff__detail-label::after {
+    content: ":";
+  }
+
+  .layout-diff__detail-label .field-diff__locale-label {
+    margin: 0;
+  }
+
+  .layout-diff__value, .layout-diff__class {
+    padding: 0 calc(1.0156rem * 0.15);
+    border-radius: var(--radius-medium);
+    text-decoration: none;
+    overflow-wrap: anywhere;
+  }
+
+  .layout-diff__value--del {
+    background: var(--diff-delete-parent-bg, var(--color-bg-danger-tertiary));
+    color: var(--diff-delete-parent-color, var(--color-text-danger));
+    text-decoration: line-through;
+    text-decoration-color: var(--diff-delete-pill-border, var(--color-border-danger));
+  }
+
+  .layout-diff__value--ins {
+    background: var(--diff-create-parent-bg, var(--color-bg-selected));
+    color: var(--diff-create-parent-color, var(--color-text-brand));
+  }
+
+  .layout-diff__class {
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: calc(1.0156rem * 0.55);
+  }
+
+  .layout-diff__empty {
+    color: var(--color-text-tertiary);
+    font-style: italic;
+  }
+
+  .layout-diff__arrow {
+    color: var(--color-text-tertiary);
+  }
+
+  .layout-diff__json {
+    border-top: 1px solid var(--color-border);
+    padding-top: calc(1.0156rem * 0.4);
+  }
+
+  .layout-diff__json-summary {
+    cursor: pointer;
+    color: var(--color-text-secondary);
+    width: fit-content;
+  }
+
+  .layout-diff__json-summary:hover {
+    color: var(--color-text);
+  }
+
+  .layout-diff__json-content {
+    display: grid;
+    /* Same columns as Payload's field diffs: old on the left, new on the right. */
+    grid-template-columns: calc(50% - 1.0156rem * 0.5) calc(50% - 1.0156rem * 0.5);
+    gap: 1.0156rem;
+    margin-top: calc(1.0156rem * 0.5);
+    overflow-x: auto;
+  }
+
+  .layout-diff__json-content pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+}

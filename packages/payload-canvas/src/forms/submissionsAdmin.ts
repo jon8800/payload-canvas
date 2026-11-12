@@ -71,7 +71,7 @@ export function formSubmissionsAdmin(options: FormSubmissionsAdminOptions = {}):
         {
           name: SUBMISSION_ANSWERS_FIELD,
           type: 'ui',
-          admin: { components: { Field: 'payload-canvas/rsc#SubmissionView' }, disableListColumn: true, custom },
+          admin: { components: { Field: 'payload-canvas/rsc#SubmissionView' }, disabled: { column: true }, custom },
         },
         {
           name: SUBMISSION_SUMMARY_FIELD,

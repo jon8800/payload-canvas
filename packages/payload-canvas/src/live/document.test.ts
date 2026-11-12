@@ -145,7 +145,7 @@ describe('document meta', () => {
 
   it('shows "changed" for a newer draft over a published version, and "draft" when nothing is published', async () => {
     const changed = setup()
-    await changed.db.payload.update({ collection: 'pages', id: 'p1', data: { title: 'Home 2' }, draft: true })
+    await changed.db.payload.update({ collection: 'pages', id: 'p1', data: { title: 'Home 2' }, draft: true, overrideAccess: true })
     const meta = await loadDocMeta(changed.req() as never, { target: changed.target, isTemplate: false, canUpdate: true })
     assert.equal(meta.status, 'changed')
     assert.equal(meta.title, 'Home 2')

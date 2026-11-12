@@ -6,7 +6,10 @@ import type { BuilderClientConfig } from '../core/types'
 import { BUILDER_CONFIG_KEY, type BuilderServerConfig } from '../live/document'
 import { websiteBuilder } from './index'
 
-const media: CollectionConfig = { slug: 'media', upload: true, fields: [{ name: 'alt', type: 'text' }] }
+const media: CollectionConfig = { slug: 'media', upload: true, fields: [{ name: 'alt', type: 'text' }],
+  versions: false,
+  authorship: false,
+}
 const pages: CollectionConfig = {
   slug: 'pages',
   versions: { drafts: true },
@@ -18,8 +21,12 @@ const pages: CollectionConfig = {
     },
     { name: 'oldBlocks', type: 'json' },
   ],
+  authorship: false,
 }
-const posts: CollectionConfig = { slug: 'posts', fields: [{ name: 'title', type: 'text' }] }
+const posts: CollectionConfig = { slug: 'posts', fields: [{ name: 'title', type: 'text' }],
+  versions: false,
+  authorship: false,
+}
 const base: Config = { collections: [media, pages, posts], secret: 'x' } as Config
 
 const build = (regions?: unknown, extra: Record<string, unknown> = {}) =>

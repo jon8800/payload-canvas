@@ -137,6 +137,9 @@ const HOP_NOISE = new Set([
   'url',
   'thumbnailURL',
   'sizes',
+  'variants',
+  'original',
+  '_transforms',
   'email',
   '_status',
   'password',
@@ -268,7 +271,7 @@ function clip(text: string): string {
 
 /** The best URL to show an upload document small. */
 function uploadUrl(doc: Record<string, unknown>): string | null {
-  const sizes = isRecord(doc.sizes) ? doc.sizes : {}
+  const sizes = isRecord(doc.variants) ? doc.variants : {}
   for (const size of ['thumbnail', 'card', 'small']) {
     const entry = sizes[size]
     if (isRecord(entry) && typeof entry.url === 'string' && entry.url) return entry.url

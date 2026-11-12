@@ -5,15 +5,15 @@
 // classes that use a variable (as Webflow warns).
 
 import { FieldError, TextInput, useConfig, useDocumentInfo, useField, useFormFields, useRowLabel } from '@payloadcms/ui'
-import type { TextFieldClientComponent, TextFieldClientProps } from 'payload'
-import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
+import type { TextFieldClientProps } from 'payload'
+import { useEffect, useMemo, useState, type ChangeEvent, type FC } from 'react'
 
 import { builderViewPath } from '../../plugin/links'
 import { VARIABLE_TYPES, type ThemeVariable, type ThemeVariableType } from '../variables'
 import { ThemeColorField } from './ColorField'
 import { FieldShell } from './FieldShell'
 import { ThemeFontField } from './FontField'
-import './fields.scss'
+import './fields.css'
 
 /** `variables.2.value` → `variables.2`. */
 const rowPath = (path: string) => path.slice(0, path.lastIndexOf('.'))
@@ -21,7 +21,7 @@ const rowPath = (path: string) => path.slice(0, path.lastIndexOf('.'))
 const asType = (value: unknown): ThemeVariableType => (value === 'size' || value === 'font' ? value : 'color')
 
 /** A variable's value (or dark value): a color picker, a size input or a Google Font, from the row's type. */
-export const ThemeVariableValueField: TextFieldClientComponent = function ThemeVariableValueField(props) {
+export const ThemeVariableValueField: FC<TextFieldClientProps> = function ThemeVariableValueField(props) {
   const type = useFormFields(([fields]) => asType(fields[`${rowPath(props.path)}.type`]?.value))
   if (type === 'color') return <ThemeColorField {...props} />
   if (type === 'font') return <ThemeFontField {...props} />
@@ -112,7 +112,7 @@ export function ThemeVariablesWarning() {
       routes: { admin, api },
     },
   } = useConfig()
-  const { savedDocumentData } = useDocumentInfo()
+  const { data: savedDocumentData } = useDocumentInfo()
   const saved = useMemo(() => rowsOf((savedDocumentData as { variables?: unknown } | undefined)?.variables), [savedDocumentData])
   // The current rows as text, so the form's other edits do not render this again.
   const currentKey = useFormFields(([fields]) => {

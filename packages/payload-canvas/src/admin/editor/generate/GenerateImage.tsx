@@ -10,7 +10,7 @@ import type { AiImageAspectRatio, AiImagesClientConfig } from '../../../ai/types
 import { Icon } from '../icons'
 import { useRuntime } from '../runtime'
 
-import './generate.scss'
+import './generate.css'
 
 type Media = { id: string | number; collection: string; alt: string | null; url: string | null; thumbnailUrl: string | null; width: number | null; height: number | null }
 type Success = { media: Media; model: string; seconds: number; cost?: number }

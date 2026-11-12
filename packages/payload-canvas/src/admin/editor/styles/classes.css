@@ -1,0 +1,387 @@
+/*
+ * The classes field of the Styles panel, the class banner, the custom CSS box and the class
+ * dialogs. Payload CSS variables only, no Tailwind (it would leak into the admin).
+ */
+@layer payload-default {
+  .builder-classes {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0 0 10px;
+  }
+
+  .builder-classes .builder-styles__raw-input {
+    min-height: 52px;
+  }
+
+  .builder-classes__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 20px;
+  }
+
+  .builder-classes__menu {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 20px;
+    margin-right: -3px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-medium, 4px);
+    background: none;
+    color: var(--bs-muted);
+    cursor: pointer;
+  }
+
+  .builder-classes__menu:hover, .builder-classes__menu[data-popup-open] {
+    background: var(--color-bg-hover);
+    color: var(--color-text);
+  }
+
+  .builder-classes__menu:focus-visible {
+    outline: 2px solid var(--bs-accent);
+    outline-offset: 1px;
+  }
+
+  /*
+   * -------------------------------------------------------------------------
+   * The classes field: chips and an input in one box that looks like an input
+   * -------------------------------------------------------------------------
+   */
+  .builder-classfield {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    min-height: var(--bs-h);
+    padding: 2px;
+    border: 1px solid var(--bs-border);
+    border-radius: var(--radius-medium, 4px);
+    background: var(--field-color-bg, var(--color-bg));
+  }
+
+  .builder-classfield:hover {
+    border-color: var(--color-border-control-strong);
+  }
+
+  .builder-classfield:focus-within {
+    border-color: var(--bs-accent);
+    box-shadow: 0 0 0 1px var(--bs-accent);
+  }
+
+  .builder-classfield__chip {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    max-width: 100%;
+    height: 20px;
+    border-radius: 3px;
+    font-size: var(--be-text-s);
+    line-height: 1;
+  }
+
+  .builder-classfield__chip-main {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    height: 100%;
+    padding: 0 2px 0 6px;
+    border: 0;
+    border-radius: inherit;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .builder-classfield__chip-main:focus-visible {
+    outline: 2px solid var(--bs-accent);
+    outline-offset: 0;
+  }
+
+  .builder-classfield__chip-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .builder-classfield__chip-code {
+    color: var(--bs-muted);
+    font-family: var(--font-mono, ui-monospace, monospace);
+  }
+
+  .builder-classfield__remove {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 18px;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 0 3px 3px 0;
+    background: none;
+    color: inherit;
+    opacity: 0.55;
+    cursor: pointer;
+  }
+
+  .builder-classfield__remove svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .builder-classfield__remove:hover, .builder-classfield__remove:focus-visible {
+    opacity: 1;
+  }
+
+  .builder-classfield__remove:focus-visible {
+    outline: 2px solid var(--bs-accent);
+    outline-offset: -2px;
+  }
+
+  /* An editable class: a solid chip in the text font. Chosen (the controls edit it): the accent. */
+  .builder-classfield__chip--class {
+    background: var(--color-bg-tertiary);
+    color: var(--color-text);
+    font-weight: var(--be-weight-strong);
+  }
+
+  .builder-classfield__chip--class:hover {
+    background: var(--color-bg-pressed);
+  }
+
+  .builder-classfield__chip--class[data-selected] {
+    background: var(--bs-accent);
+    color: var(--color-text-oninverse);
+  }
+
+  .builder-classfield__draft-dot {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-bg-warning, #d97706);
+    box-shadow: 0 0 0 1.5px var(--color-bg);
+  }
+
+  /* A class no control shows: quiet, in monospace, as the code writes it. */
+  .builder-classfield__chip--raw {
+    box-shadow: inset 0 0 0 1px var(--bs-border);
+    color: var(--color-text-secondary, var(--bs-muted));
+    font-family: var(--font-mono, ui-monospace, monospace);
+  }
+
+  .builder-classfield__chip--raw:hover {
+    background: var(--color-bg-secondary);
+    color: var(--color-text);
+  }
+
+  .builder-classfield__chip--raw {
+    /* Not in the theme's class list: probably a typo. */
+  }
+
+  .builder-classfield__chip--raw[data-unknown] {
+    background: color-mix(in srgb, var(--color-bg-warning, #b7791f) 10%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-border-warning-strong, #b7791f) 60%, transparent);
+  }
+
+  .builder-classfield__chip--raw[data-unknown] .builder-classfield__chip-name {
+    text-decoration: wavy underline var(--color-border-warning-strong, #b7791f);
+    text-underline-offset: 3px;
+  }
+
+  .builder-classfield__input,
+  .builder-classfield__edit {
+    height: 20px;
+    padding: 0 4px;
+    border: 0;
+    background: none;
+    color: var(--color-text);
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: var(--be-text-s);
+    outline: 0;
+  }
+
+  .builder-classfield__input::placeholder,
+  .builder-classfield__edit::placeholder {
+    color: var(--bs-dim);
+    font-family: var(--font-body, inherit);
+  }
+
+  .builder-classfield__input {
+    flex: 1 0 56px;
+    min-width: 56px;
+  }
+
+  /* A quiet chip while it is edited in place. */
+  .builder-classfield__edit {
+    field-sizing: content;
+    min-width: 40px;
+    max-width: 100%;
+    border-radius: 3px;
+    box-shadow: inset 0 0 0 1px var(--bs-accent);
+  }
+
+  /* While a class is edited: the classes in it that no control shows. */
+  .builder-classes__extras {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 14px;
+  }
+
+  /*
+   * -------------------------------------------------------------------------
+   * The class being edited
+   * -------------------------------------------------------------------------
+   */
+  .builder-classes__banner {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 10px;
+    border: 1px solid color-mix(in srgb, var(--bs-accent) 45%, var(--bs-border));
+    border-radius: var(--radius-medium, 6px);
+    background: color-mix(in srgb, var(--bs-accent) 7%, var(--color-bg));
+  }
+
+  .builder-classes__banner-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
+
+  .builder-classes__title {
+    margin: 0;
+    font-weight: var(--be-weight-strong);
+  }
+
+  .builder-classes__title code {
+    color: var(--bs-accent-text);
+    font-size: var(--be-text-m);
+  }
+
+  .builder-classes__close {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    margin: -2px -4px -2px 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-medium, 4px);
+    background: none;
+    color: var(--bs-muted);
+    cursor: pointer;
+  }
+
+  .builder-classes__close svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .builder-classes__close:hover {
+    background: color-mix(in srgb, var(--bs-accent) 12%, transparent);
+    color: var(--color-text);
+  }
+
+  .builder-classes__close:focus-visible {
+    outline: 2px solid var(--bs-accent);
+    outline-offset: 1px;
+  }
+
+  .builder-classes__text {
+    margin: 0;
+    color: var(--color-text, var(--color-text));
+  }
+
+  .builder-classes__foot {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  .builder-classes__foot .builder-styles__button--primary:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  .builder-classes__state {
+    flex: 1;
+    min-width: 0;
+    color: var(--bs-muted);
+    font-size: var(--be-text-s);
+    line-height: 1.35;
+  }
+
+  .builder-classes__state[data-state=error] {
+    color: var(--color-text-danger);
+  }
+
+  .builder-classes__css {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 14px;
+  }
+
+  .builder-classes__css .builder-styles__hint {
+    margin: 0;
+    font-size: var(--be-text-s);
+  }
+
+  .builder-styles__raw-input.builder-classes__css-input {
+    height: auto;
+    min-height: 104px;
+    padding: 6px 8px;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: var(--be-text-s);
+    line-height: 1.5;
+    white-space: pre;
+    tab-size: 2;
+    resize: vertical;
+  }
+
+  .builder-styles__raw-input.builder-classes__css-input[aria-invalid=true] {
+    border-color: var(--color-border-danger-strong);
+  }
+
+  /*
+   * -------------------------------------------------------------------------
+   * Dialogs (Payload's modal: outside the editor root, so no editor variables)
+   * -------------------------------------------------------------------------
+   */
+  .builder-classes__dialog-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+    min-width: min(420px, 80vw);
+  }
+
+  .builder-classes__dialog-intro {
+    margin: 0;
+    color: var(--color-text-secondary);
+  }
+
+  .builder-classes__dialog-styles {
+    display: block;
+    padding: 6px 8px;
+    border-radius: var(--radius-medium, 4px);
+    background: var(--color-bg-secondary);
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+
+  .builder-classes__dialog-error {
+    margin: -8px 0 0;
+    color: var(--color-text-danger);
+  }
+}

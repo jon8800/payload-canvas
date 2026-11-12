@@ -20,7 +20,7 @@ export type LoadedTheme = ThemeOutput & {
 export const loadTheme = cache(async (payload: Payload): Promise<LoadedTheme | null> => {
   const config = themeConfigOf(payload)
   if (!config) return null
-  const data = (await payload.findGlobal({ slug: config.slug as never, depth: 0 })) as ThemeData
+  const data = (await payload.findGlobal({ slug: config.slug as never, depth: 0, overrideAccess: true })) as ThemeData
   return { data, ...themeOutput(data) }
 })
 

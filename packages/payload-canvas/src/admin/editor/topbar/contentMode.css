@@ -1,7 +1,6 @@
-// Content mode in the top bar (ContentModeToggle.tsx). Payload CSS variables only, no Tailwind.
-
+/* Content mode in the top bar (ContentModeToggle.tsx). Payload CSS variables only, no Tailwind. */
 @layer payload-default {
-  // A quiet pill next to the status: it says what this editor can change, not a warning.
+  /* A quiet pill next to the status: it says what this editor can change, not a warning. */
   .builder-bar__content-mode {
     display: inline-flex;
     flex: none;
@@ -12,15 +11,15 @@
     padding: 0 9px 0 8px;
     border: 1px solid var(--be-border);
     border-radius: 12px;
-    color: var(--theme-elevation-800);
+    color: var(--color-text);
     font-size: var(--be-text-s);
     font-weight: var(--be-weight-strong);
     white-space: nowrap;
     cursor: default;
+  }
 
-    svg {
-      flex: none;
-      color: var(--theme-elevation-600);
-    }
+  .builder-bar__content-mode svg {
+    flex: none;
+    color: var(--color-text-secondary);
   }
 }

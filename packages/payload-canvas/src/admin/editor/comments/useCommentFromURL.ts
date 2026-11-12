@@ -4,7 +4,7 @@
 // popover, and its block selected and scrolled into view. Waits until the comments loaded and the
 // canvas measured its blocks. The dashboard's "Open comments" widget links here.
 
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams } from '@payloadcms/ui'
 import { useEffect } from 'react'
 
 import { COMMENT_PARAM } from '../../../comments/shared'

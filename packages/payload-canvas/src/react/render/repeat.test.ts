@@ -200,7 +200,7 @@ const eager = (html: string) => (html.match(/<img[^>]*loading="eager"/g) ?? []).
 
 describe('small block props', () => {
   it('image: priority, sizes and the focal point', () => {
-    const doc = { ...image(7), width: 1200, height: 800, focalX: 30, focalY: 70, sizes: { card: { url: '/media/7-600.png', width: 600, height: 400 } } }
+    const doc = { ...image(7), width: 1200, height: 800, focalX: 30, focalY: 70, variants: { card: { url: '/media/7-600.png', width: 600, height: 400 } } }
     const html = render({ layout: layoutOf({ id: 'i', type: 'image', props: { image: doc, priority: true, sizes: '50vw' } }) })
     assert.match(html, /loading="eager"/)
     assert.match(html, /fetchPriority="high"|fetchpriority="high"/)

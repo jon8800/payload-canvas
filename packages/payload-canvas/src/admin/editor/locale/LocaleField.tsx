@@ -18,7 +18,7 @@ import { Icon } from '../icons'
 import { useRuntime } from '../runtime'
 import { useEditor } from '../store'
 import { clearTranslation, copyFromDefault, copyIntoDefault, defaultLocaleName, localeName } from './locale'
-import './locale.scss'
+import './locale.css'
 
 type FieldsLocale = {
   /** Path prefix of the block's top-level fields: `builder.<id>.` */

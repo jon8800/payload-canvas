@@ -71,7 +71,14 @@ export function registerCommands(editor: LexicalEditor): () => void {
 export function loadValue(editor: LexicalEditor, value: unknown): boolean {
   if (isRichValue(value)) {
     try {
-      editor.setEditorState(editor.parseEditorState(value))
+      // Lexical 0.53 reports some parse errors through onError and returns a partial state.
+      // The update function runs only when the parse completes.
+      let parsed = false
+      const state = editor.parseEditorState(value, () => {
+        parsed = true
+      })
+      if (!parsed) return false
+      editor.setEditorState(state)
     } catch {
       return false
     }

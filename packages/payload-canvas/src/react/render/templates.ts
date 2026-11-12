@@ -82,6 +82,7 @@ async function matchesConditions(
       limit: 1,
       pagination: false,
       select: { id: true } as never,
+      overrideAccess: true,
       ...locale,
     })
     return found.docs.length > 0
@@ -106,7 +107,7 @@ export async function findTemplate(payload: Payload, args: LoadTemplateArgs & { 
   const loadFull = async (id: unknown): Promise<LoadedTemplate | null> => {
     if (typeof id !== 'string' && typeof id !== 'number') return null
     try {
-      return usable((await payload.findByID({ collection: slug as never, id, depth: 0, draft, ...locale })) as Doc, collection, draft)
+      return usable((await payload.findByID({ collection: slug as never, id, depth: 0, draft, overrideAccess: true, ...locale })) as Doc, collection, draft)
     } catch {
       // A deleted template falls back to the next one.
       return null
@@ -134,6 +135,7 @@ export async function findTemplate(payload: Payload, args: LoadTemplateArgs & { 
         createdAt: true,
         updatedAt: true,
       } as never,
+      overrideAccess: true,
       ...locale,
     })
   ).docs as Doc[]

@@ -1,0 +1,139 @@
+/*
+ * Drawers over the builder: Payload's Versions and API screens, and the page settings drawer.
+ * They render in Payload's modal container, outside `.builder-editor`, so they use Payload's CSS
+ * variables only. No Tailwind.
+ */
+@layer payload-default {
+  /*
+   * The width applies from the first frame. Payload animates every drawer property, so a width
+   * that changes after the drawer opened would animate too.
+   */
+  .builder-screen-drawer > .drawer__content {
+    width: min(1280px, 100% - var(--gutter-h)) !important;
+  }
+
+  .builder-screen-drawer__header {
+    position: sticky;
+    z-index: 3;
+    top: 0;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-bg);
+  }
+
+  .builder-screen-drawer__bar {
+    display: flex;
+    align-items: center;
+    gap: calc(1.0156rem * 0.5);
+    min-height: calc(1.0156rem * 2.5);
+    padding: calc(1.0156rem * 1.5) 0 1.0156rem;
+  }
+
+  .builder-screen-drawer__title {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .builder-screen-drawer__icon-button {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-medium, 4px);
+    background: transparent;
+    color: var(--color-text);
+    cursor: pointer;
+  }
+
+  .builder-screen-drawer__icon-button:hover {
+    background: var(--color-bg-hover);
+    color: var(--color-text);
+  }
+
+  .builder-screen-drawer__icon-button:focus-visible {
+    outline: 2px solid var(--color-border-selected);
+    outline-offset: 0;
+  }
+
+  .builder-screen-drawer__restore {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: var(--radius-medium, 4px);
+    background: var(--color-bg-inverse);
+    color: var(--color-text-oninverse);
+    font: inherit;
+    font-size: var(--be-text-m);
+    font-weight: var(--be-weight-medium);
+    cursor: pointer;
+  }
+
+  .builder-screen-drawer__restore:hover:not(:disabled) {
+    background: var(--color-bg-inverse);
+  }
+
+  .builder-screen-drawer__restore:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .builder-screen-drawer__restore:focus-visible {
+    outline: 2px solid var(--color-border-selected);
+    outline-offset: 2px;
+  }
+
+  .builder-screen-drawer__body {
+    transition: opacity 150ms ease;
+    /* Loading the next screen: the current one stays, dimmed. */
+  }
+
+  .builder-screen-drawer__body[aria-busy=true] {
+    opacity: 0.55;
+    pointer-events: none;
+  }
+
+  /* Wraps the screen only to catch its link clicks: no box of its own. */
+  .builder-screen-drawer__screen {
+    display: contents;
+  }
+
+  .builder-screen-drawer__loading {
+    display: flex;
+    flex-direction: column;
+    gap: 1.0156rem;
+    padding-top: 1.0156rem;
+  }
+
+  .builder-screen-drawer__error {
+    margin: 1.0156rem 0;
+    color: var(--color-text);
+  }
+
+  .builder-screen-drawer__link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--color-text);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  /*
+   * Restore runs through the builder (the header button): Payload's own would leave the live
+   * session out.
+   */
+  .builder-screen-drawer .restore-version {
+    display: none;
+  }
+}

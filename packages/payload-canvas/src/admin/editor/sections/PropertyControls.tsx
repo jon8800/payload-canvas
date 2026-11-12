@@ -12,7 +12,7 @@ import { Icon } from '../icons'
 import { useRuntime } from '../runtime'
 import { Popover, stopEditorKeys, usePopover } from '../styles/popover'
 import { addProperty, editsSection, removeProperty } from './components'
-import './components.scss'
+import './components.css'
 
 /** The form in the property popover: a name, then Enter. */
 function PropertyForm({ initial, onSubmit }: { initial: string; onSubmit: (label: string) => string | null }) {

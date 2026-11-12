@@ -33,7 +33,7 @@ const media = (name: string) => ({
   id: name,
   url: `/api/media/file/${name}.jpg`,
   thumbnailURL: `/api/media/file/${name}-300x300.jpg`,
-  sizes: { card: { url: `http://localhost:3040/api/media/file/${name}-768x1024.jpg` }, empty: { url: null } },
+  variants: { card: { url: `http://localhost:3040/api/media/file/${name}-768x1024.jpg` }, empty: { url: null } },
 })
 
 const block = (props: Record<string, unknown>, extra: Partial<Block> = {}): Block => ({ id: 'b1', type: 'siteHero', props, ...extra })

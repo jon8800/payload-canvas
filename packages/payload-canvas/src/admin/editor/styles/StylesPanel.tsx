@@ -22,7 +22,7 @@ import { stopEditorKeys } from './popover'
 import { StyleSections } from './sections'
 import { BREAKPOINTS, breakpointAt, breakpointWidths, reloadStyleTokens, useStyleTokens, withFallback } from './tokens'
 import { VariantBar } from './VariantBar'
-import './styles.scss'
+import './styles.css'
 
 const NO_CLASSES = createValueStore<BuilderClass[]>([])
 const NO_TARGET = createValueStore<string | number | null>(null)

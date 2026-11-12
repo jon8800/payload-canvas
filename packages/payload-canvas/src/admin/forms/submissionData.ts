@@ -55,12 +55,12 @@ export type MediaLike = {
   mimeType?: string | null
   thumbnailURL?: string | null
   filesize?: number | null
-  sizes?: Record<string, { url?: string | null } | undefined> | null
+  variants?: Record<string, { url?: string | null } | undefined> | null
 }
 
 /** A small picture of an upload: its thumbnail size, the upload's thumbnail, or the image itself. */
 export function thumbnailOf(doc: MediaLike): string | null {
-  for (const candidate of [doc.sizes?.thumbnail?.url, doc.thumbnailURL]) {
+  for (const candidate of [doc.variants?.thumbnail?.url, doc.thumbnailURL]) {
     if (typeof candidate === 'string' && candidate) return candidate
   }
   return doc.mimeType?.startsWith('image/') && doc.url ? doc.url : null

@@ -359,7 +359,7 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
     /** The theme's font families for the Styles panel. Empty without a theme or when the read fails. */
     const themeFamilies = async (payload: Payload): Promise<FontFamilies> => {
       if (!theme) return {}
-      const doc = await payload.findGlobal({ slug: theme.slug as never, depth: 0 }).catch(() => null)
+      const doc = await payload.findGlobal({ slug: theme.slug as never, depth: 0, overrideAccess: true }).catch(() => null)
       return themeFontFamilies(doc as ThemeData | null)
     }
 
@@ -1016,7 +1016,7 @@ function addPayloadBlocksBuilder(collection: CollectionConfig, args: AddBuilderA
     name: builderConfigFieldName(field),
     type: 'json',
     virtual: true,
-    admin: { hidden: true, disableListColumn: true, disableListFilter: true, custom: { builder: clientConfig } },
+    admin: { hidden: true, disabled: { column: true, filter: true }, custom: { builder: clientConfig } },
   }
   const skip = [builderConfigFieldName(field), ...(richText ? [richText.name] : []), ...ownFields]
   return {

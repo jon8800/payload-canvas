@@ -2,12 +2,12 @@
 
 import { Popover } from '@base-ui/react/popover'
 import { useField } from '@payloadcms/ui'
-import type { TextFieldClientComponent } from 'payload'
-import { useState } from 'react'
+import type { TextFieldClientProps } from 'payload'
+import { useState, type FC } from 'react'
 import { HexColorPicker } from 'react-colorful'
 
 import { FieldShell, labelText } from './FieldShell'
-import './fields.scss'
+import './fields.css'
 
 const PRESETS = [
   '#000000', '#374151', '#6b7280', '#9ca3af', '#d1d5db', '#ffffff',
@@ -24,7 +24,7 @@ function normalizeHex(input: string): string | null {
 }
 
 /** A hex color: a swatch that opens a picker with presets, and a hex input. Empty means "not set". */
-export const ThemeColorField: TextFieldClientComponent = function ThemeColorField({ path, field, readOnly }) {
+export const ThemeColorField: FC<TextFieldClientProps> = function ThemeColorField({ path, field, readOnly }) {
   const { value, setValue, disabled } = useField<string>({ path })
   const locked = Boolean(readOnly || disabled)
   // The hex input's text while the user types. `null`: show the stored value.

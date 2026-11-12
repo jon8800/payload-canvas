@@ -174,7 +174,7 @@ test('previewValue renders text, rich text, uploads and empties', () => {
   }
   assert.deepEqual(previewValue(lexical, 'richText'), { kind: 'text', text: 'One Two' })
   assert.deepEqual(previewValue('', 'text'), { kind: 'empty' })
-  assert.deepEqual(previewValue({ id: 1, url: '/a.jpg', alt: 'A', sizes: { thumbnail: { url: '/a-thumb.jpg' } } }, 'upload'), {
+  assert.deepEqual(previewValue({ id: 1, url: '/a.jpg', alt: 'A', variants: { thumbnail: { url: '/a-thumb.jpg' } } }, 'upload'), {
     kind: 'image',
     url: '/a-thumb.jpg',
     alt: 'A',

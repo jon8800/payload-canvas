@@ -90,7 +90,7 @@ export function mediaUrls(doc: unknown): string[] {
   }
   add(doc.url)
   add(doc.thumbnailURL)
-  if (isObject(doc.sizes)) for (const size of Object.values(doc.sizes)) if (isObject(size)) add(size.url)
+  if (isObject(doc.variants)) for (const size of Object.values(doc.variants)) if (isObject(size)) add(size.url)
   return urls
 }
 

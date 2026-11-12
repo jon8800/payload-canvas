@@ -1,8 +1,7 @@
 'use client'
 
 import { useDraggable } from '@dnd-kit/core'
-import { useConfig, useRouteTransition } from '@payloadcms/ui'
-import { useRouter } from 'next/navigation'
+import { useConfig, useRouter, useRouteTransition } from '@payloadcms/ui'
 import { memo, useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 
 import { isComponent } from '../../core/components'

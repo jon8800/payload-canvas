@@ -1,0 +1,655 @@
+/*
+ * Templates and data binding in the editor: bind buttons, bound chips, the field picker and the
+ * toolbar's template control. Payload CSS variables only, inside Payload's own layer.
+ */
+@layer payload-default {
+  /*
+   * ---------------------------------------------------------------------------
+   * Inspector fields
+   * ---------------------------------------------------------------------------
+   */
+  .builder-bind {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .builder-bind__stack {
+    display: flex;
+    flex-direction: column;
+    gap: calc(1.0156rem * 0.5);
+  }
+
+  /* The bind button sits on the label row of the input it binds. (`[data-tooltip]` sets relative.) */
+  .builder-editor .builder-bind > .builder-bind__button {
+    position: absolute;
+  }
+
+  /* Bind and unbind buttons sit at the inspector's right edge: their tooltips open to the left. */
+  .builder-editor .builder-bind__button:hover::after,
+  .builder-editor .builder-bind__chip-x:hover::after {
+    left: auto;
+    right: 0;
+    transform: none;
+  }
+
+  .builder-bind__button {
+    top: -3px;
+    right: 0;
+    z-index: 1;
+    display: inline-grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--radius-medium, 4px);
+    background: transparent;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
+  }
+
+  .builder-bind__button:hover, .builder-bind__button[aria-expanded=true] {
+    border-color: color-mix(in srgb, var(--color-border-selected) 40%, transparent);
+    background: color-mix(in srgb, var(--color-bg-brand) 12%, transparent);
+    color: var(--color-text-brand);
+  }
+
+  .builder-bind:hover > .builder-bind__button {
+    color: var(--color-text-secondary);
+  }
+
+  .builder-bind--bound {
+    margin-bottom: 0;
+  }
+
+  .builder-bind__chip,
+  .builder-bind__select {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    min-height: 34px;
+    border: 1px solid color-mix(in srgb, var(--color-border-selected) 45%, transparent);
+    border-radius: var(--radius-medium, 4px);
+    background: color-mix(in srgb, var(--color-bg-brand) 10%, var(--field-color-bg, var(--color-bg)));
+    color: var(--color-text);
+  }
+
+  .builder-bind__chip--missing,
+  .builder-bind__select--missing {
+    border-color: color-mix(in srgb, var(--color-border-warning-strong, var(--color-border-danger-strong)) 55%, transparent);
+    background: color-mix(in srgb, var(--color-bg-warning, var(--color-bg-danger)) 10%, transparent);
+  }
+
+  .builder-bind__chip--missing svg:first-child,
+  .builder-bind__select--missing svg:first-child {
+    color: var(--color-text-warning, var(--color-text-danger));
+  }
+
+  .builder-bind__chip-main,
+  .builder-bind__select {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    padding: 6px 8px 6px 10px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: var(--be-text-m);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .builder-bind__chip-main > svg:first-child,
+  .builder-bind__select > svg:first-child {
+    flex: none;
+    color: var(--color-text-brand);
+  }
+
+  .builder-bind__chip-main:disabled,
+  .builder-bind__select:disabled {
+    cursor: default;
+  }
+
+  .builder-bind__select {
+    flex: none;
+    width: 100%;
+    border-color: var(--color-border);
+    background: var(--field-color-bg, var(--color-bg));
+  }
+
+  .builder-bind__select:hover, .builder-bind__select[aria-expanded=true] {
+    border-color: var(--color-border-control-strong);
+  }
+
+  .builder-bind__chip-main:hover:not(:disabled) .builder-bind__chip-label {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .builder-bind__chip-label {
+    min-width: 0;
+    overflow: hidden;
+    font-weight: var(--be-weight-medium);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .builder-bind__chip-path {
+    flex: none;
+    max-width: 45%;
+    margin-left: auto;
+    overflow: hidden;
+    padding: 1px 0;
+    color: var(--color-text-secondary);
+    font-family: var(--font-mono, monospace);
+    font-size: var(--be-text-s);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .builder-bind__placeholder {
+    flex: 1;
+    color: var(--color-text-secondary);
+  }
+
+  .builder-bind__select-caret {
+    flex: none;
+    margin-left: 4px;
+    color: var(--color-text-secondary);
+  }
+
+  .builder-bind__chip-x {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    margin-right: 4px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-medium, 4px);
+    background: none;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+  }
+
+  .builder-bind__chip-x:hover {
+    background: var(--color-bg-hover);
+    color: var(--color-text-danger);
+  }
+
+  .builder-bind__note {
+    margin: 0;
+    color: var(--color-text-secondary);
+    font-size: var(--be-text-m);
+    line-height: 1.45;
+  }
+
+  .builder-bind__note--warn {
+    color: var(--color-text-warning, var(--color-text-danger));
+  }
+
+  .builder-bind__preview {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding: 6px 8px;
+    /* The binding chip above already says the value is bound; the preview is a plain quiet box. */
+    background: var(--color-bg-secondary);
+    border-radius: var(--radius-medium, 4px);
+  }
+
+  .builder-bind__preview-from {
+    overflow: hidden;
+    color: var(--color-text-secondary);
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-strong);
+    letter-spacing: 0.04em;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .builder-bind__preview-text {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--color-text);
+    font-size: var(--be-text-m);
+    line-height: 1.45;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow-wrap: anywhere;
+  }
+
+  .builder-bind__preview-image {
+    display: block;
+    width: 100%;
+    max-height: 120px;
+    border-radius: var(--radius-medium, 4px);
+    object-fit: cover;
+    background: var(--color-bg-hover);
+  }
+
+  .builder-bind__preview-empty {
+    color: var(--color-text-secondary);
+    font-size: var(--be-text-m);
+    font-style: italic;
+  }
+
+  .builder-bind__fallback-toggle {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    gap: 4px;
+    padding: 2px 0;
+    border: 0;
+    background: none;
+    color: var(--color-text-secondary);
+    font: inherit;
+    font-size: var(--be-text-m);
+    cursor: pointer;
+  }
+
+  .builder-bind__fallback-toggle:hover {
+    color: var(--color-text);
+  }
+
+  .builder-bind__fallback {
+    padding: 8px 0 0 10px;
+    border-left: 2px solid var(--color-border);
+  }
+
+  /*
+   * ---------------------------------------------------------------------------
+   * Scope banner (top of the Content tab)
+   * ---------------------------------------------------------------------------
+   */
+  .builder-bind__banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: var(--radius-medium, 6px);
+    background: var(--color-bg-secondary);
+    color: var(--color-text-secondary);
+    font-size: var(--be-text-m);
+    line-height: 1.45;
+  }
+
+  .builder-bind__banner > svg {
+    flex: none;
+    margin-top: 1px;
+    color: var(--color-text-brand);
+  }
+
+  .builder-bind__banner p {
+    margin: 0;
+  }
+
+  .builder-bind__banner--warn {
+    background: color-mix(in srgb, var(--color-bg-warning, var(--color-bg-danger)) 12%, transparent);
+    color: var(--color-text);
+  }
+
+  .builder-bind__banner--warn > svg {
+    color: var(--color-text-warning, var(--color-text-danger));
+  }
+
+  .builder-bind__inline-icon {
+    display: inline;
+    vertical-align: -2px;
+  }
+
+  .builder-bind__link {
+    margin-top: 4px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--color-text);
+    font: inherit;
+    font-weight: var(--be-weight-strong);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+  }
+
+  /*
+   * ---------------------------------------------------------------------------
+   * Field picker and sample list (popovers)
+   * ---------------------------------------------------------------------------
+   */
+  .builder-bind__popover.builder-styles__popover,
+  .builder-template__popover.builder-styles__popover {
+    width: 340px;
+    max-height: min(460px, 100vh - 16px);
+    overflow: hidden;
+    border-color: var(--color-border);
+  }
+
+  .builder-bind__picker {
+    display: flex;
+    flex-direction: column;
+    max-height: inherit;
+  }
+
+  .builder-bind__picker-head {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px 6px;
+  }
+
+  .builder-bind__picker-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--color-text-secondary);
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-strong);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .builder-bind__picker-title svg {
+    color: var(--color-text-brand);
+  }
+
+  .builder-bind__picker-search {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    margin: 0 10px 6px;
+    padding: 0 8px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-medium, 6px);
+    background: var(--field-color-bg, var(--color-bg));
+    color: var(--color-text-tertiary);
+  }
+
+  .builder-bind__picker-search:focus-within {
+    border-color: var(--color-border-selected);
+    color: var(--color-text);
+  }
+
+  .builder-bind__picker-search input {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--color-text);
+    font: inherit;
+    font-size: var(--be-text-m);
+  }
+
+  .builder-bind__picker-empty {
+    margin: 0;
+    padding: 16px 14px 18px;
+    color: var(--color-text-secondary);
+    font-size: var(--be-text-m);
+    text-align: center;
+  }
+
+  .builder-bind__picker-foot {
+    margin: 0;
+    padding: 8px 12px;
+    border-top: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+    font-size: var(--be-text-s);
+  }
+
+  .builder-bind__rows {
+    flex: 1;
+    min-height: 0;
+    margin: 0;
+    padding: 2px 4px 6px;
+    overflow: hidden auto;
+    list-style: none;
+    scrollbar-width: thin;
+  }
+
+  .builder-bind__row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 34px;
+    padding: 4px 8px;
+    border-radius: var(--radius-medium, 4px);
+    color: var(--color-text);
+    cursor: pointer;
+  }
+
+  .builder-bind__row[data-active] {
+    background: var(--color-bg-hover);
+  }
+
+  .builder-bind__row[data-current] .builder-bind__row-label {
+    font-weight: var(--be-weight-strong);
+  }
+
+  .builder-bind__row--group {
+    min-height: 26px;
+    margin-top: 2px;
+    color: var(--color-text-secondary);
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-strong);
+    cursor: default;
+  }
+
+  .builder-bind__row--group .builder-bind__row-label {
+    font-weight: var(--be-weight-strong);
+  }
+
+  .builder-bind__row-hop {
+    padding: 0 5px;
+    border-radius: 8px;
+    background: var(--color-bg-hover);
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-medium);
+  }
+
+  .builder-bind__row-icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: var(--radius-medium, 4px);
+    background: var(--color-bg-hover);
+    color: var(--color-text-secondary);
+  }
+
+  .builder-bind__row-text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.25;
+  }
+
+  .builder-bind__row-label {
+    overflow: hidden;
+    font-size: var(--be-text-m);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .builder-bind__row-path {
+    overflow: hidden;
+    color: var(--color-text-secondary);
+    font-family: var(--font-mono, monospace);
+    font-size: var(--be-text-s);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .builder-bind__row-hint {
+    flex: none;
+    max-width: 40%;
+    overflow: hidden;
+    color: var(--color-text-secondary);
+    font-size: var(--be-text-s);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .builder-bind__row-check {
+    flex: none;
+    color: var(--color-text-brand);
+  }
+
+  /*
+   * ---------------------------------------------------------------------------
+   * Toolbar: template mode and the sample document
+   * ---------------------------------------------------------------------------
+   */
+  .builder-template__control {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    max-width: 100%;
+    height: 28px;
+    margin-left: 8px;
+    padding: 0 10px 0 8px;
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    background: var(--color-bg-secondary);
+    color: var(--color-text);
+    font-size: var(--be-text-m);
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease;
+  }
+
+  .builder-template__control > svg:first-child {
+    flex: none;
+    color: var(--color-text-brand);
+  }
+
+  .builder-template__control > svg:last-child {
+    flex: none;
+    color: var(--color-text-secondary);
+  }
+
+  .builder-template__control:hover, .builder-template__control[aria-expanded=true] {
+    border-color: var(--color-border-control-strong);
+    background: var(--color-bg-hover);
+  }
+
+  .builder-template__control--warn {
+    border-color: color-mix(in srgb, var(--color-border-warning-strong, var(--color-border-danger-strong)) 55%, transparent);
+    background: color-mix(in srgb, var(--color-bg-warning, var(--color-bg-danger)) 12%, transparent);
+  }
+
+  .builder-template__control--warn > svg:first-child {
+    color: var(--color-text-warning, var(--color-text-danger));
+  }
+
+  .builder-template__mode {
+    flex: none;
+    font-weight: var(--be-weight-strong);
+  }
+
+  .builder-template__sep {
+    flex: none;
+    color: var(--color-text-tertiary);
+  }
+
+  .builder-template__text {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--color-text-secondary);
+    text-overflow: ellipsis;
+  }
+
+  .builder-template__text strong {
+    color: var(--color-text);
+    font-weight: var(--be-weight-medium);
+  }
+
+  .builder-template__status {
+    flex: none;
+    padding: 0 6px;
+    border-radius: 8px;
+    background: var(--color-bg-hover);
+    color: var(--color-text-secondary);
+    font-size: var(--be-text-s);
+    line-height: 16px;
+  }
+
+  /*
+   * ---------------------------------------------------------------------------
+   * Outline and canvas hints
+   * ---------------------------------------------------------------------------
+   */
+  .builder-editor__row-bound {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    margin-left: auto;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--color-bg-brand) 14%, transparent);
+    color: var(--color-text-brand);
+  }
+
+  .builder-editor__row-bound--broken {
+    background: color-mix(in srgb, var(--color-bg-warning) 18%, transparent);
+    color: var(--color-text-warning, var(--color-text-warning));
+  }
+
+  .builder-editor__row:hover .builder-editor__row-bound {
+    display: none;
+  }
+
+  .builder-editor__tag-bound {
+    display: inline-grid;
+    place-items: center;
+    width: 15px;
+    height: 15px;
+    margin-left: 2px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.22);
+  }
+
+  /*
+   * ---------------------------------------------------------------------------
+   * Visibility conditions (Visibility.tsx); the rows use the where builder's styles
+   * ---------------------------------------------------------------------------
+   */
+  .builder-visibility {
+    padding-top: calc(1.0156rem * 0.75);
+    border-top: 1px solid var(--color-border);
+  }
+
+  /*
+   * ---------------------------------------------------------------------------
+   * Format picker of a bound prop and of the Field block (Bindable.tsx)
+   * ---------------------------------------------------------------------------
+   */
+  .builder-format {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 4px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .builder-format__name {
+    grid-column: 1/-1;
+  }
+}

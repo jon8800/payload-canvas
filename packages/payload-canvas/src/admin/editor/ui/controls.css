@@ -1,0 +1,307 @@
+/*
+ * Shared form controls: `Select.tsx` and `Slider.tsx`. Payload CSS variables only, no Tailwind.
+ * The editor variables (`--be-*`) have fallbacks, so the controls also look right outside the
+ * editor (the theme global's fields) and in a list rendered in `document.body`.
+ */
+@layer payload-default {
+  .builder-select,
+  .builder-select__popup,
+  .builder-slider {
+    --bc-accent: var(--be-accent, var(--color-bg-brand));
+    --bc-border: var(--be-border, var(--color-border));
+    --bc-muted: var(--be-muted, var(--color-text-secondary));
+    --bc-subtle: var(--be-subtle, var(--color-text-tertiary));
+    --bc-hover: var(--be-hover, var(--color-bg-hover));
+    --bc-radius: var(--radius-medium, 4px);
+    --bc-ease: var(--be-ease, cubic-bezier(0.2, 0.8, 0.2, 1));
+  }
+
+  /* Select trigger ------------------------------------------------------------------------------ */
+  .builder-select {
+    --bc-h: calc(1.0156rem * 2);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    height: var(--bc-h);
+    margin: 0;
+    padding: 0 8px 0 calc(1.0156rem * 0.5);
+    border: 1px solid var(--bc-border);
+    border-radius: var(--bc-radius);
+    background: var(--field-color-bg, var(--color-bg));
+    color: var(--color-text);
+    font: inherit;
+    font-size: var(--be-text-m);
+    line-height: 1;
+    text-align: left;
+    cursor: pointer;
+    user-select: none;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+  }
+
+  .builder-select:hover {
+    border-color: var(--color-border-control-strong);
+  }
+
+  .builder-select[data-popup-open] .builder-select__icon, .builder-select:hover .builder-select__icon {
+    color: var(--color-text);
+  }
+
+  .builder-select[data-disabled] {
+    background: var(--color-bg-secondary);
+    color: var(--color-text-secondary);
+    cursor: not-allowed;
+  }
+
+  .builder-select[data-disabled]:hover {
+    border-color: var(--bc-border);
+  }
+
+  .builder-select {
+    /* Nothing chosen: the placeholder or the inherited value, dimmed. */
+  }
+
+  .builder-select[data-placeholder] .builder-select__value {
+    color: var(--bc-subtle);
+  }
+
+  /* The editor's general focus ring is an outline; a select shows Payload's input ring instead. */
+  .builder-select:focus-visible,
+  .builder-select[data-popup-open],
+  .builder-editor .builder-select:focus-visible {
+    border-color: var(--bc-accent);
+    outline: 0;
+    box-shadow: 0 0 0 1px var(--bc-accent);
+  }
+
+  .builder-select--compact {
+    --bc-h: var(--bs-h, 26px);
+    padding: 0 4px 0 6px;
+    font-size: var(--be-text-m);
+  }
+
+  .builder-select__value {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .builder-select__icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    color: var(--bc-muted);
+    transition: color 120ms ease;
+  }
+
+  /* A trigger with its own content (an icon): centered, no chevron. */
+  .builder-select--custom {
+    justify-content: center;
+    padding: 0;
+    color: var(--bc-muted);
+  }
+
+  /* Select list --------------------------------------------------------------------------------- */
+  /* Above Payload's drawers and modals: the list may open from inside one. */
+  .builder-select__positioner {
+    z-index: 10000;
+    outline: 0;
+  }
+
+  .builder-select__popup {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    min-width: max(var(--anchor-width, 0px), 160px);
+    max-width: min(320px, var(--available-width, 320px));
+    max-height: min(360px, var(--available-height, 360px));
+    padding: 4px;
+    border: 1px solid var(--bc-border);
+    border-radius: var(--be-radius-m, var(--radius-medium, 6px));
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    font-size: var(--be-text-m);
+    line-height: 1.3;
+    box-shadow: var(--be-shadow);
+    outline: 0;
+    transform-origin: var(--transform-origin);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .builder-select__popup {
+      transition: opacity 100ms ease, transform 100ms var(--bc-ease);
+    }
+  }
+
+  .builder-select__popup[data-starting-style], .builder-select__popup[data-ending-style] {
+    opacity: 0;
+    transform: scale(0.98) translateY(-2px);
+  }
+
+  .builder-select__list {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scroll-padding-block: 4px;
+    outline: 0;
+  }
+
+  .builder-select__item {
+    display: grid;
+    grid-template-columns: 12px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px;
+    box-sizing: border-box;
+    min-height: 28px;
+    padding: 5px 8px 5px 6px;
+    border-radius: var(--bc-radius);
+    color: var(--color-text);
+    cursor: default;
+    outline: 0;
+    user-select: none;
+    scroll-margin-block: 4px;
+  }
+
+  .builder-select__item[data-highlighted] {
+    background: var(--bc-hover);
+  }
+
+  .builder-select__item[data-selected] {
+    font-weight: var(--be-weight-medium);
+  }
+
+  .builder-select__item[data-disabled] {
+    opacity: 0.4;
+  }
+
+  /* Long labels wrap in the list, so the full text is always readable there. */
+  .builder-select__item-text {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .builder-select__check {
+    display: grid;
+    place-items: center;
+    width: 12px;
+    color: var(--bc-accent);
+  }
+
+  .builder-select__popup--compact {
+    font-size: var(--be-text-m);
+  }
+
+  .builder-select__popup--compact .builder-select__item {
+    min-height: 26px;
+    padding-block: 4px;
+  }
+
+  .builder-select__group-label {
+    padding: 6px 8px 2px 24px;
+    color: var(--bc-muted);
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-medium);
+  }
+
+  .builder-select__separator {
+    height: 1px;
+    margin: 4px 0;
+    border: 0;
+    background: var(--be-border-soft, var(--color-bg-hover));
+  }
+
+  /* The highlight shows the keyboard position; no focus ring inside the list. */
+  .builder-editor .builder-select__popup:focus-visible,
+  .builder-editor .builder-select__item:focus-visible {
+    outline: 0;
+  }
+
+  /* Slider -------------------------------------------------------------------------------------- */
+  .builder-slider {
+    flex: 1;
+    min-width: 0;
+    touch-action: none;
+  }
+
+  .builder-slider[data-disabled] {
+    opacity: 0.45;
+  }
+
+  /* 20 px tall: the pointer target. The track inside is 3 px. */
+  .builder-slider__control {
+    display: flex;
+    align-items: center;
+    height: 20px;
+    cursor: pointer;
+  }
+
+  [data-disabled] > .builder-slider__control {
+    cursor: not-allowed;
+  }
+
+  .builder-slider__track {
+    position: relative;
+    width: 100%;
+    height: 3px;
+    border-radius: 999px;
+    background: var(--color-bg-tertiary);
+  }
+
+  .builder-slider__indicator {
+    height: 100%;
+    border-radius: inherit;
+    background: var(--bc-accent);
+  }
+
+  .builder-slider__thumb {
+    box-sizing: border-box;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    /* The page color with a visible ring, so a grey (unset) slider never reads as disabled on white. */
+    background: var(--color-bg);
+    box-shadow: 0 0 0 1px var(--color-border-control-strong), 0 1px 3px rgba(0, 0, 0, 0.22);
+    transition: box-shadow 120ms ease, scale 120ms var(--bc-ease);
+    /* A larger invisible hit area around the 12 px thumb. */
+  }
+
+  .builder-slider__thumb::before {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+  }
+
+  .builder-slider__control:hover .builder-slider__thumb, .builder-slider__thumb[data-dragging] {
+    box-shadow: 0 0 0 1px var(--color-border-control-strong), 0 1px 3px rgba(0, 0, 0, 0.22), 0 0 0 4px color-mix(in srgb, var(--bc-accent) 18%, transparent);
+  }
+
+  .builder-slider__thumb[data-dragging] {
+    scale: 1.12;
+  }
+
+  .builder-slider__thumb {
+    /* Focus sits on the hidden range input inside the thumb. */
+  }
+
+  .builder-slider__thumb:has(:focus-visible) {
+    box-shadow: 0 0 0 1px var(--color-border-control-strong), 0 1px 3px rgba(0, 0, 0, 0.22), 0 0 0 3px color-mix(in srgb, var(--bc-accent) 45%, transparent);
+  }
+
+  [data-disabled] .builder-slider__thumb {
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.14);
+  }
+
+  /* The value is a default or inherited: a grey fill, so it reads as "not set here". */
+  .builder-slider[data-muted] .builder-slider__indicator {
+    background: var(--color-bg-disabled);
+  }
+}

@@ -7,7 +7,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { before, describe, it } from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { buildConfig, createLocalReq, getPayload, type CollectionConfig, type Payload, type PayloadRequest } from 'payload'
+import { buildConfig, createPayloadRequest, getPayload, type CollectionConfig, type Payload, type PayloadRequest } from 'payload'
 
 import type { BlockDefinition, Layout } from '../core/types'
 import { liveRuntimeOf } from '../live/runtime'
@@ -34,13 +34,14 @@ const pages: CollectionConfig = {
   access: all,
   admin: { useAsTitle: 'title' },
   fields: [{ name: 'title', type: 'text' }],
+  authorship: false,
 }
 const heading: BlockDefinition = { type: 'heading', label: 'Heading', fields: [{ name: 'text', type: 'text' }] }
 const admin = { id: 1, collection: 'users', email: 'admin@example.test' }
 const SLUG = 'builder-classes'
 
 let payload: Payload
-const asAdmin = async () => (await createLocalReq({ user: admin as never }, payload)) as PayloadRequest
+const asAdmin = async () => (await createPayloadRequest({ user: admin as never, payload })) as PayloadRequest
 const flush = () => liveRuntimeOf(payload).sessions.flushAll()
 const layoutOf = (classes: string[]): Layout => ({ version: 1, blocks: classes.map((className, i) => ({ id: `b${i}`, type: 'heading', props: { text: `T${i}` }, ...(className ? { className } : {}) })) })
 const classNames = (doc: Record<string, unknown>) => ((doc.layout as Layout).blocks ?? []).map((b) => b.className ?? '')
@@ -67,7 +68,9 @@ before(async () => {
     telemetry: false,
     typescript: { autoGenerate: false },
     db: memoryAdapter().adapter,
-    collections: [{ slug: 'users', auth: true, fields: [] }, pages],
+    collections: [{ slug: 'users', auth: true, fields: [],
+      authorship: false,
+    }, pages],
     plugins: [websiteBuilder({ collections: { pages: {} }, blocks: [heading], css: { entry: path.join(dir, 'entry.css') }, theme: false })],
   })
   payload = await getPayload({ config })

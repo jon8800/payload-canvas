@@ -2,7 +2,7 @@
 
 // Presence UI: avatars in the toolbar, other editors' cursors and selections on the canvas,
 // colored dots in the outline, the "is editing this block" banner and the follow frame.
-// Admin code: Payload CSS variables and SCSS only (editor.scss, "Multiplayer" section).
+// Admin code: Payload CSS variables and plain CSS only (editor.css, "Multiplayer" section).
 
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 
@@ -16,7 +16,7 @@ import { sameItems, useValue, useValueSelector } from '../valueStore'
 import { propPathOf } from './field'
 import { cursorPoint, distinctInitials, shortName } from './presence'
 import type { Peer } from './useMultiplayer'
-import './presence.scss'
+import './presence.css'
 
 /** Cursors that have not moved for this long fade out. */
 const CURSOR_IDLE_MS = 10_000

@@ -27,14 +27,14 @@ export function focalStyle(doc: Record<string, unknown> | null | undefined): { o
 }
 
 /**
- * `srcset` from Payload's image sizes (`doc.sizes`) plus the original. Only sizes with the
+ * `srcset` from Payload's image variants (`doc.variants`) plus the original. Only sizes with the
  * original's aspect ratio count (a square crop would distort the image). Undefined when there
  * is nothing to choose from.
  */
 export function srcSetOf(doc: Record<string, unknown>): string | undefined {
   const width = asNumber(doc.width)
   const height = asNumber(doc.height)
-  const sizes = doc.sizes
+  const sizes = doc.variants
   if (!width || !height || typeof sizes !== 'object' || sizes === null) return undefined
   const ratio = width / height
   const found: Size[] = []

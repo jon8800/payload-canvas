@@ -80,7 +80,7 @@ The starter also has a calmer Payload admin: a sidebar in groups with icons, a n
 - Node.js 20.9 or later
 - Any Payload database adapter. Postgres and SQLite store the layout as `jsonb`/JSON.
 
-You do not need `transpilePackages` or a `sass` install. The package ships compiled JavaScript. The admin styles are `.scss` files, and Next compiles them with the `sass` that `@payloadcms/next` already installs, the same way it compiles Payload's own admin styles.
+You do not need `transpilePackages` or a `sass` install. The package ships compiled JavaScript and plain CSS. The admin styles use Payload 4's CSS variables (`--color-*`, `--radius-*`, `--text-*`), so they follow Payload's light and dark theme.
 
 Peer dependencies:
 
@@ -3207,7 +3207,7 @@ All entries must show one version. Pin `payload`, `@payloadcms/*` and `next` to 
 
 **After adding `payload-mcp-toolkit`, `user.email` fails to typecheck.** The toolkit adds an API-key auth strategy, so `req.user` and `payload.auth()` can return an API key. Check `'email' in user` before you read user fields.
 
-**Turbopack.** The package works with Turbopack (`next dev` and `next build`, the default in Next 16) and webpack. It ships `.scss` files for the admin, which Next compiles the same way it compiles Payload's own SCSS.
+**Turbopack.** The package works with Turbopack (`next dev` and `next build`, the default in Next 16) and webpack. It ships plain `.css` files for the admin, which Next loads the same way it loads Payload's own CSS.
 
 ## Limits
 

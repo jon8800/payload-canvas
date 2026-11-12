@@ -146,6 +146,7 @@ export function classesCollection(slug: string, options: ClassesOptions = {}): C
       ...options.admin,
     },
     versions: { maxPerDoc: 50, drafts: { autosave: { interval: 800 }, validate: true } },
+    authorship: false,
     hooks: {
       ...options.hooks,
       beforeChange: [beforeChange, ...(options.hooks?.beforeChange ?? [])],

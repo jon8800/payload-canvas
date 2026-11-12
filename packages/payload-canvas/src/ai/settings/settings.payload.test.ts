@@ -16,12 +16,20 @@ const SLUG = 'builder-ai-settings'
 const ADMIN_KEY = 'sk-or-v1-admin-0000000000004f2a'
 const NEXT_KEY = 'sk-or-v1-next-00000000000000c0de'
 
-const users: CollectionConfig = { slug: 'users', auth: true, fields: [] }
-const customers: CollectionConfig = { slug: 'customers', auth: true, fields: [] }
+const users: CollectionConfig = { slug: 'users', auth: true, fields: [],
+  versions: false,
+  authorship: false,
+}
+const customers: CollectionConfig = { slug: 'customers', auth: true, fields: [],
+  versions: false,
+  authorship: false,
+}
 const pages: CollectionConfig = {
   slug: 'pages',
   access: { read: () => true, create: () => true, update: ({ req }) => req.user?.collection === 'users', delete: () => true },
   fields: [{ name: 'title', type: 'text' }],
+  versions: false,
+  authorship: false,
 }
 
 const chatFetch = createFakeChatFetch(() => ({ sse: [sseFrame({ content: 'ok' }), sseFrame({}, 'stop'), DONE_FRAME] }))
@@ -67,8 +75,8 @@ before(async () => {
   payload = await getPayload({ config })
   await payload.create({ collection: 'users', data: { email: 'admin@example.test', password: 'pass-1234' } as never, overrideAccess: true })
   await payload.create({ collection: 'customers', data: { email: 'shopper@example.test', password: 'pass-1234' } as never, overrideAccess: true })
-  adminToken = (await payload.login({ collection: 'users', data: { email: 'admin@example.test', password: 'pass-1234' } })).token as string
-  customerToken = (await payload.login({ collection: 'customers', data: { email: 'shopper@example.test', password: 'pass-1234' } })).token as string
+  adminToken = (await payload.login({ collection: 'users', data: { email: 'admin@example.test', password: 'pass-1234' }, overrideAccess: true })).token as string
+  customerToken = (await payload.login({ collection: 'customers', data: { email: 'shopper@example.test', password: 'pass-1234' }, overrideAccess: true })).token as string
   pageId = (await payload.create({ collection: 'pages', data: { title: 'Home' } as never, overrideAccess: true })).id as number
 })
 
@@ -111,7 +119,7 @@ describe('AI settings global (Payload)', { timeout: 20_000 }, () => {
     assert.equal('chatApiKey' in doc, false)
     assert.deepEqual((doc[KEY_STATUS_FIELD] as Record<string, unknown>).chatApiKey, { state: 'set', last4: '4f2a' })
 
-    const local = (await payload.findGlobal({ slug: SLUG as never })) as Record<string, unknown>
+    const local = (await payload.findGlobal({ slug: SLUG as never, overrideAccess: true })) as Record<string, unknown>
     assert.equal('chatApiKey' in local, false)
     assert.ok(!JSON.stringify(local).includes(ADMIN_KEY))
   })
@@ -127,7 +135,7 @@ describe('AI settings global (Payload)', { timeout: 20_000 }, () => {
   it('the chat endpoint uses the admin key, and a new key on the next request', async () => {
     assert.equal((await chat()).status, 200)
     assert.equal(chatFetch.calls.at(-1)?.headers.Authorization, `Bearer ${ADMIN_KEY}`)
-    await payload.updateGlobal({ slug: SLUG as never, data: { chatApiKey: NEXT_KEY } as never })
+    await payload.updateGlobal({ slug: SLUG as never, data: { chatApiKey: NEXT_KEY } as never, overrideAccess: true })
     assert.equal((await chat()).status, 200)
     assert.equal(chatFetch.calls.at(-1)?.headers.Authorization, `Bearer ${NEXT_KEY}`)
   })

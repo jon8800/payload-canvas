@@ -46,7 +46,7 @@ import { contentModeFields, useContentMode } from './contentMode'
 import { useRuntime } from './runtime'
 import { BindingScopeProvider, FieldSlot } from './templates/Bindable'
 import { VisibilityField } from './templates/Visibility'
-import './fields/fields.scss'
+import './fields/fields.css'
 
 type Props = {
   readonly field: Field

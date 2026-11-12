@@ -4,7 +4,7 @@
 
 import assert from 'node:assert/strict'
 import { after, afterEach, before, describe, it } from 'node:test'
-import { buildConfig, createLocalReq, getPayload, handleEndpoints, type Block, type CollectionConfig, type Payload, type PayloadRequest, type Where } from 'payload'
+import { buildConfig, createPayloadRequest, getPayload, handleEndpoints, type Block, type CollectionConfig, type Payload, type PayloadRequest, type Where } from 'payload'
 
 import { autosaveAction } from '../admin/editor/topbar/closeSave'
 import { fromPayloadBlocks } from '../blocks/payload'
@@ -102,8 +102,14 @@ const readPages = ({ req }: { req: { user?: unknown } }) =>
 let viewerReadsDrafts = false
 /** While set, the live session's own saves fail (a hook refuses them). */
 let failSessionSaves = false
-const users: CollectionConfig = { slug: 'users', auth: true, fields: [{ name: 'role', type: 'text' }] }
-const media: CollectionConfig = { slug: 'media', access: { read: () => true }, fields: [{ name: 'name', type: 'text' }] }
+const users: CollectionConfig = { slug: 'users', auth: true, fields: [{ name: 'role', type: 'text' }],
+  versions: false,
+  authorship: false,
+}
+const media: CollectionConfig = { slug: 'media', access: { read: () => true }, fields: [{ name: 'name', type: 'text' }],
+  versions: false,
+  authorship: false,
+}
 const pages: CollectionConfig = {
   slug: 'pages',
   versions: { drafts: true },
@@ -146,6 +152,7 @@ const pages: CollectionConfig = {
       access: { update: ({ req }) => (req.user as { role?: string } | null)?.role !== 'reviewer' },
     },
   ],
+  authorship: false,
 }
 
 const admin = { id: 1, collection: 'users', email: 'admin@example.test', role: 'admin' }
@@ -174,6 +181,7 @@ const notes: CollectionConfig = {
     { name: 'tenant', type: 'text' },
     { name: 'author', type: 'text' },
   ],
+  authorship: false,
 }
 
 /** A collection with the builder's own JSON layout, for the JSON-mode regressions. */
@@ -194,6 +202,7 @@ const posts: CollectionConfig = {
     ],
   },
   fields: [{ name: 'title', type: 'text' }],
+  authorship: false,
 }
 
 const mem = memoryAdapter()
@@ -507,7 +516,7 @@ describe('Payload blocks field: one source of truth through the Local API', () =
 
 /** A request as `user`, for the live endpoint of page `id` when given. */
 const requestAs = async (user: unknown, id?: number) => {
-  const req = (await createLocalReq({ user: user as never }, payload)) as PayloadRequest
+  const req = (await createPayloadRequest({ user: user as never, payload })) as PayloadRequest
   if (id !== undefined) {
     req.routeParams = { collection: 'pages', id: String(id) }
     ;(req as { url?: string }).url = `http://localhost/api${LIVE_PATH}/pages/${id}/events?clientId=client-${String((user as { id: number }).id)}`
@@ -979,7 +988,7 @@ async function drawerAutosave(id: number, token: string, data: Record<string, un
 async function adminToken(name: string): Promise<string> {
   const email = `${name}@example.test`
   await payload.create({ collection: 'users', data: { email, password: 'drawer-pass-1', role: 'admin' } as never, overrideAccess: true })
-  return (await payload.login({ collection: 'users', data: { email, password: 'drawer-pass-1' } })).token as string
+  return (await payload.login({ collection: 'users', data: { email, password: 'drawer-pass-1' }, overrideAccess: true })).token as string
 }
 
 describe("Payload blocks field: the settings drawer's save before it closes", () => {
@@ -1094,9 +1103,9 @@ describe('independent review: restore, revert and access', () => {
       ;(req as { url?: string }).url = `http://localhost/api${LIVE_PATH}/posts/${id}/events?clientId=viewer-${id}`
       return req
     }
-    // Payload's draft read gives the viewer the published version: the builder refuses.
+    // Payload 4's draft read refuses the viewer (not found), so the builder refuses too.
     const events = await eventsEndpoint().handler(await asViewer())
-    assert.equal(events.status, 403)
+    assert.equal(events.status, 404)
     const operations = (payload.config.endpoints ?? []).find((e) => e.path === `${LIVE_PATH}/:collection/:id/operations` && e.method === 'post')!
     const opReq = await asViewer()
     opReq.data = { ops: [{ type: 'update', id: 'h1', props: { level: 'h3' } }] }
@@ -1356,7 +1365,7 @@ describe('live draft read access (second review)', () => {
     const { id, session } = await publishedPage()
     assert.equal((await session.commit([{ type: 'update', id: headingOf(session.layout()).id, props: { text: 'UNPUBLISHED_BLOCK_SECRET' } }])).ok, true)
     const stream = await streamAs(viewer, 'pages', id)
-    assert.equal(stream.status, 403)
+    assert.equal(stream.status, 404)
     const operations = await postLive('operations', viewer, 'pages', id, { ops: [{ type: 'update', id: headingOf(session.layout()).id, props: { level: 'h3' } }] })
     assert.equal(operations.status, 403)
     assert.ok(!(await operations.text()).includes('UNPUBLISHED_BLOCK_SECRET'))
@@ -1409,21 +1418,22 @@ describe('live draft read access (second review)', () => {
     const frames = a.frames('TENANT_B_DRAFT')
     assert.notEqual((await streamAs(tenantB, 'notes', note.id)).status, 200, 'tenant B does not')
     // A native draft save (the settings drawer, REST) moves the note to tenant B; the published
-    // version still says A, and Payload's draft read gives tenant A that older version.
+    // version still says A. Payload 4's draft read refuses tenant A (it no longer falls back).
     await payload.update({ collection: 'notes', id: note.id, draft: true, user: admin, overrideAccess: false, data: { tenant: 'b' } as never })
     const main = await payload.findByID({ collection: 'notes', id: note.id, draft: false, overrideAccess: true })
     assert.equal(main.tenant, 'a', 'the published document keeps tenant A')
-    const older = await payload.findByID({ collection: 'notes', id: note.id, draft: true, depth: 0, user: tenantA, overrideAccess: false })
-    assert.equal(older.tenant, 'a', "Payload's draft read falls back to the published version")
-    assert.equal((await streamAs(tenantA, 'notes', note.id)).status, 403, 'not from an older version that matches')
+    await assert.rejects(payload.findByID({ collection: 'notes', id: note.id, draft: true, depth: 0, user: tenantA, overrideAccess: false }), { status: 404 })
+    assert.equal((await streamAs(tenantA, 'notes', note.id)).status, 404, 'not from an older version that matches')
     assert.equal((await postLive('operations', tenantA, 'notes', note.id, { ops: [] })).status, 403)
     // Tenant A's open stream ends at its next event, before the draft goes out.
     assert.equal((await note.insert('TENANT_B_DRAFT')).ok, true)
     const sent = await frames
     assert.ok(!sentText(sent).includes('TENANT_B_DRAFT'))
     assert.ok(sent.some((f) => f.includes('event: error')))
-    // Tenant B: Payload's own read of the document refuses too (its published row is tenant A's).
-    assert.notEqual((await streamAs(tenantB, 'notes', note.id)).status, 200)
+    // Tenant B: Payload 4 reads the newest draft, which now belongs to B, so B may open it.
+    const b = await streamAs(tenantB, 'notes', note.id)
+    assert.equal(b.status, 200)
+    await b.close()
   })
 
   it('an "author or published" rule: the author may use the builder, another reader of the published version may not', { timeout: 10_000 }, async () => {
