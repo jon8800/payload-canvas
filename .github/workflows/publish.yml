@@ -28,7 +28,8 @@ jobs:
 
       # A manual run on the next branch must not publish prereleases as `latest`.
       - name: Refuse prerelease versions
-        run: node -e "for (const d of ['payload-canvas','create-payload-canvas']) { const p = require('./packages/' + d + '/package.json'); if (p.version.includes('-')) throw new Error(p.name + ' ' + p.version + ' is a prerelease: publish it with publish-next.yml') }"
+        run: |
+          node -e "for (const d of ['payload-canvas','create-payload-canvas']) { const p = require('./packages/' + d + '/package.json'); if (p.version.includes('-')) throw new Error(p.name + ' ' + p.version + ' is a prerelease: publish it with publish-next.yml') }"
 
       - uses: pnpm/action-setup@v6
 
