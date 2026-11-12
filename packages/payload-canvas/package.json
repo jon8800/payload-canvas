@@ -1,7 +1,7 @@
 {
   "name": "payload-canvas",
-  "version": "0.6.0",
-  "description": "Payload Canvas: a visual drag-and-drop website builder for Payload CMS 3. Nested layout blocks, Tailwind styling, sections, templates, live AI editing over MCP, and the React renderer for your site.",
+  "version": "0.7.0-next.0",
+  "description": "Payload Canvas: a visual drag-and-drop website builder for Payload CMS 4. Nested layout blocks, Tailwind styling, sections, templates, live AI editing over MCP, and the React renderer for your site.",
   "keywords": [
     "payload",
     "payloadcms",
@@ -178,7 +178,8 @@
         "types": "./dist/forms/index.d.ts",
         "default": "./dist/forms/index.js"
       }
-    }
+    },
+    "tag": "next"
   },
   "files": [
     "dist",
@@ -197,26 +198,26 @@
   "dependencies": {
     "@base-ui/react": "^1.8.0",
     "@dnd-kit/core": "6.3.1",
-    "@lexical/history": "0.50.0",
-    "@lexical/list": "0.50.0",
-    "@lexical/rich-text": "0.50.0",
-    "@lexical/selection": "0.50.0",
-    "@lexical/utils": "0.50.0",
+    "@lexical/history": "0.53.0",
+    "@lexical/list": "0.53.0",
+    "@lexical/rich-text": "0.53.0",
+    "@lexical/selection": "0.53.0",
+    "@lexical/utils": "0.53.0",
     "embla-carousel-fade": "^8.6.0",
     "embla-carousel-react": "^8.6.0",
-    "lexical": "0.50.0",
+    "lexical": "0.53.0",
     "motion": "^14.0.0",
     "react-colorful": "^5.8.1"
   },
   "peerDependencies": {
     "@anthropic-ai/sdk": ">=0.131.0",
-    "@payloadcms/richtext-lexical": "^3.90.0",
-    "@payloadcms/ui": "^3.90.0",
-    "next": "^16.3.0",
-    "payload": "^3.90.0",
+    "@payloadcms/richtext-lexical": "^4.0.0-beta.8",
+    "@payloadcms/ui": "^4.0.0-beta.8",
+    "next": "^16.4.1",
+    "payload": "^4.0.0-beta.8",
     "payload-mcp-toolkit": ">=0.9.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "tailwindcss": "^4.3.0",
     "zod": "^3.25 || ^4"
   },
@@ -233,23 +234,23 @@
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
-    "@payloadcms/richtext-lexical": "^3.90.2",
-    "@payloadcms/ui": "^3.90.2",
+    "@payloadcms/richtext-lexical": "4.0.0-beta.8",
+    "@payloadcms/ui": "4.0.0-beta.8",
     "@types/node": "^24",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "google-font-metadata": "^6.0.8",
-    "next": "16.3.8",
+    "next": "16.4.6",
     "oxlint": "^1.86.0",
-    "payload": "^3.90.2",
-    "react": "19.3.0",
-    "react-dom": "19.3.0",
+    "payload": "4.0.0-beta.8",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.15",
     "typescript": "7.0.2",
     "zod": "^3.25.76"
   },
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=24.22.1"
   }
 }

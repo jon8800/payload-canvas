@@ -2,6 +2,9 @@ packages:
   - "apps/*"
   - "packages/*"
 
+# Payload 4 needs Node 24.22.1 or later. pnpm downloads this version for scripts.
+useNodeVersion: 24.22.3
+
 onlyBuiltDependencies:
   - esbuild
   - msw
