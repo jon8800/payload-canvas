@@ -201,6 +201,8 @@ export function themeGlobal(options: ThemeOptions): GlobalConfig {
   return {
     slug,
     label: options.label ?? 'Theme',
+    versions: false,
+    authorship: false,
     access: {
       read: () => true,
       update: ({ req }) => Boolean(req.user),

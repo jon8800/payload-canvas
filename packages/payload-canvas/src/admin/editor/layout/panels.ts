@@ -1,6 +1,6 @@
 // Sizes of the editor's resizable panels: the left sidebar and the right sidebar. A size lives in a CSS variable on the editor root, so a
 // drag changes one style property and React does not render. Sizes are kept in local storage.
-// Without a stored size, the default comes from the stylesheet (layout.scss).
+// Without a stored size, the default comes from the stylesheet (layout.css).
 
 export type PanelId = 'left' | 'right'
 

@@ -1,6 +1,7 @@
-// The full-screen builder's top bar. Payload CSS variables only, no Tailwind. Light and dark theme.
-// Uses the editor's variables (`--be-*`, set on `.builder-editor` in editor.scss).
-
+/*
+ * The full-screen builder's top bar. Payload CSS variables only, no Tailwind. Light and dark theme.
+ * Uses the editor's variables (`--be-*`, set on `.builder-editor` in editor.scss).
+ */
 @layer payload-default {
   .builder-bar {
     display: grid;
@@ -11,7 +12,7 @@
     height: 48px;
     padding: 0 10px 0 8px;
     border-bottom: 1px solid var(--be-border);
-    background: var(--theme-bg);
+    background: var(--color-bg);
   }
 
   .builder-bar__start,
@@ -48,14 +49,13 @@
     background: var(--be-border);
   }
 
-  // Controls near the left edge open their tooltip to the right.
+  /* Controls near the left edge open their tooltip to the right. */
   .builder-bar__start [data-tooltip]:hover::after {
     left: 0;
     transform: none;
   }
 
-  // ---- Left: back, home, breadcrumb, status ------------------------------------------------
-
+  /* ---- Left: back, home, breadcrumb, status ------------------------------------------------ */
   .builder-bar__home {
     display: inline-grid;
     flex: none;
@@ -63,17 +63,17 @@
     width: 32px;
     height: 32px;
     border-radius: var(--be-radius);
-    color: var(--theme-text);
+    color: var(--color-text);
+  }
 
-    &:hover {
-      background: var(--be-hover);
-    }
+  .builder-bar__home:hover {
+    background: var(--be-hover);
+  }
 
-    svg,
-    img {
-      width: 20px;
-      height: 20px;
-    }
+  .builder-bar__home svg,
+  .builder-bar__home img {
+    width: 20px;
+    height: 20px;
   }
 
   .builder-bar__crumbs {
@@ -91,13 +91,13 @@
     border-radius: var(--be-radius);
     color: var(--be-muted);
     text-decoration: none;
-
-    &:hover {
-      color: var(--theme-text);
-    }
   }
 
-  // A saved section's category after its name ("· Hero"): plain muted text, editable in place.
+  .builder-bar__crumb:hover {
+    color: var(--color-text);
+  }
+
+  /* A saved section's category after its name ("· Hero"): plain muted text, editable in place. */
   .builder-bar__category {
     min-width: 0;
     max-width: 200px;
@@ -111,21 +111,21 @@
     font: inherit;
     font-size: var(--be-text-s);
     field-sizing: content;
+  }
 
-    &::placeholder {
-      color: var(--be-subtle);
-    }
+  .builder-bar__category::placeholder {
+    color: var(--be-subtle);
+  }
 
-    &:hover:not(:disabled) {
-      border-color: var(--be-border);
-    }
+  .builder-bar__category:hover:not(:disabled) {
+    border-color: var(--be-border);
+  }
 
-    &:focus {
-      border-color: var(--be-accent);
-      outline: 0;
-      color: var(--theme-text);
-      background: var(--theme-input-bg, var(--theme-elevation-0));
-    }
+  .builder-bar__category:focus {
+    border-color: var(--be-accent);
+    outline: 0;
+    color: var(--color-text);
+    background: var(--field-color-bg, var(--color-bg));
   }
 
   .builder-bar__category--static {
@@ -133,8 +133,10 @@
     align-items: center;
   }
 
-  // A saved section's info icon: its tooltip says that pages keep their own copy. The right
-  // margin keeps it clear of Undo.
+  /*
+   * A saved section's info icon: its tooltip says that pages keep their own copy. The right
+   * margin keeps it clear of Undo.
+   */
   .builder-bar__note {
     display: inline-grid;
     flex: none;
@@ -148,14 +150,13 @@
     background: none;
     color: var(--be-muted);
     cursor: help;
-
-    &:hover,
-    &:focus-visible {
-      color: var(--theme-text);
-    }
   }
 
-  // "Details" (dates, versions) of a document without a status, e.g. a saved section.
+  .builder-bar__note:hover, .builder-bar__note:focus-visible {
+    color: var(--color-text);
+  }
+
+  /* "Details" (dates, versions) of a document without a status, e.g. a saved section. */
   .builder-bar__details {
     position: relative;
     display: inline-flex;
@@ -163,7 +164,7 @@
     margin-left: 4px;
   }
 
-  // Always with its text: an icon alone does not say that it opens the dates.
+  /* Always with its text: an icon alone does not say that it opens the dates. */
   .builder-bar__details-button {
     display: inline-flex;
     align-items: center;
@@ -178,12 +179,11 @@
     font-size: var(--be-text-s);
     white-space: nowrap;
     cursor: pointer;
+  }
 
-    &:hover,
-    &[aria-expanded='true'] {
-      color: var(--theme-text);
-      background: var(--be-hover);
-    }
+  .builder-bar__details-button:hover, .builder-bar__details-button[aria-expanded=true] {
+    color: var(--color-text);
+    background: var(--be-hover);
   }
 
   .builder-bar__crumb-sep {
@@ -201,7 +201,7 @@
     border: 1px solid transparent;
     border-radius: var(--be-radius);
     background: transparent;
-    color: var(--theme-text);
+    color: var(--color-text);
     font: inherit;
     font-size: var(--be-text-l);
     font-weight: var(--be-weight-strong);
@@ -211,21 +211,21 @@
 
   input.builder-bar__title {
     field-sizing: content;
+  }
 
-    &:hover:not(:disabled) {
-      border-color: var(--be-border);
-    }
+  input.builder-bar__title:hover:not(:disabled) {
+    border-color: var(--be-border);
+  }
 
-    &:focus {
-      border-color: var(--be-accent);
-      outline: 0;
-      background: var(--theme-input-bg, var(--theme-elevation-0));
-      text-overflow: clip;
-    }
+  input.builder-bar__title:focus {
+    border-color: var(--be-accent);
+    outline: 0;
+    background: var(--field-color-bg, var(--color-bg));
+    text-overflow: clip;
+  }
 
-    &:disabled {
-      opacity: 0.6;
-    }
+  input.builder-bar__title:disabled {
+    opacity: 0.6;
   }
 
   .builder-bar__title--static {
@@ -234,8 +234,7 @@
   }
 
   .builder-bar__status {
-    --status: var(--theme-elevation-400);
-
+    --status: var(--color-bg-disabled);
     position: relative;
     display: inline-flex;
     flex: none;
@@ -246,18 +245,18 @@
     padding: 0 9px;
     border-radius: 12px;
     background: color-mix(in srgb, var(--status) 14%, transparent);
-    color: var(--theme-elevation-800);
+    color: var(--color-text);
     font-size: var(--be-text-s);
     font-weight: var(--be-weight-strong);
     cursor: default;
+  }
 
-    &[data-status='published'] {
-      --status: var(--theme-success-500);
-    }
+  .builder-bar__status[data-status=published] {
+    --status: var(--color-bg-brand);
+  }
 
-    &[data-status='changed'] {
-      --status: var(--theme-warning-500, #f59e0b);
-    }
+  .builder-bar__status[data-status=changed] {
+    --status: var(--color-bg-warning, #f59e0b);
   }
 
   .builder-bar__status-dot {
@@ -273,42 +272,42 @@
     top: 100%;
     left: 0;
     width: 270px;
-    // The padding bridges the gap, so the pointer can move into the card.
+    /* The padding bridges the gap, so the pointer can move into the card. */
     padding-top: 8px;
-    color: var(--theme-text);
+    color: var(--color-text);
     font-size: var(--be-text-m);
     font-weight: var(--be-weight-regular);
     cursor: auto;
     animation: builder-fade-in 140ms var(--be-ease);
+  }
 
-    dl {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      margin: 0;
-    }
+  .builder-bar__card dl {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+  }
 
-    dl > div {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-    }
+  .builder-bar__card dl > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
 
-    dt {
-      color: var(--be-muted);
-    }
+  .builder-bar__card dt {
+    color: var(--be-muted);
+  }
 
-    dd {
-      margin: 0;
-      font-variant-numeric: tabular-nums;
-      text-align: right;
-    }
+  .builder-bar__card dd {
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
 
-    a {
-      color: var(--theme-text);
-      text-decoration: underline;
-      text-underline-offset: 2px;
-    }
+  .builder-bar__card a {
+    color: var(--color-text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
 
   .builder-bar__card-box {
@@ -321,11 +320,11 @@
 
   .builder-bar__card-title {
     margin: 0 0 10px;
-    color: var(--theme-elevation-800);
+    color: var(--color-text);
     font-weight: var(--be-weight-strong);
   }
 
-  // Looks like a link; opens the Versions drawer.
+  /* Looks like a link; opens the Versions drawer. */
   .builder-bar__card-link {
     padding: 0;
     border: 0;
@@ -335,14 +334,13 @@
     text-decoration: underline;
     text-underline-offset: 2px;
     cursor: pointer;
-
-    &:hover {
-      color: var(--theme-text);
-    }
   }
 
-  // ---- Right: save state, buttons, publish ---------------------------------------------------
+  .builder-bar__card-link:hover {
+    color: var(--color-text);
+  }
 
+  /* ---- Right: save state, buttons, publish --------------------------------------------------- */
   .builder-bar__save-wrap {
     display: inline-flex;
     flex: 0 1 auto;
@@ -357,10 +355,12 @@
     align-items: center;
     justify-content: flex-start;
     gap: 6px;
-    // Wide enough for "Saved · 12:04 PM", so the bar does not move between the normal states.
-    // Error texts are longer: the box grows, then truncates (the tooltip has the full text).
-    // When the bar is narrow, the wrapper shrinks below 124px and the text truncates instead of
-    // running under the buttons next to it.
+    /*
+     * Wide enough for "Saved · 12:04 PM", so the bar does not move between the normal states.
+     * Error texts are longer: the box grows, then truncates (the tooltip has the full text).
+     * When the bar is narrow, the wrapper shrinks below 124px and the text truncates instead of
+     * running under the buttons next to it.
+     */
     min-width: min(124px, 100%);
     max-width: 300px;
     color: var(--be-muted);
@@ -380,70 +380,69 @@
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: var(--theme-success-500);
+    background: var(--color-bg-brand);
   }
 
-  .builder-bar__save[data-state='saving'] .builder-bar__save-dot,
-  .builder-bar__save[data-state='connecting'] .builder-bar__save-dot {
-    background: var(--theme-elevation-400);
+  .builder-bar__save[data-state=saving] .builder-bar__save-dot,
+  .builder-bar__save[data-state=connecting] .builder-bar__save-dot {
+    background: var(--color-bg-disabled);
     animation: builder-bar-pulse 1s ease-in-out infinite alternate;
   }
 
-  .builder-bar__save[data-state='offline'],
-  .builder-bar__save[data-state='reconnecting'] {
-    color: var(--theme-warning-600, #d97706);
-
-    .builder-bar__save-dot {
-      background: var(--theme-warning-500, #f59e0b);
-    }
+  .builder-bar__save[data-state=offline],
+  .builder-bar__save[data-state=reconnecting] {
+    color: var(--color-text-warning, #d97706);
   }
 
-  .builder-bar__save[data-state='failed'] {
-    color: var(--theme-error-600, #dc2626);
+  .builder-bar__save[data-state=offline] .builder-bar__save-dot,
+  .builder-bar__save[data-state=reconnecting] .builder-bar__save-dot {
+    background: var(--color-bg-warning, #f59e0b);
+  }
+
+  .builder-bar__save[data-state=failed] {
+    color: var(--color-text-danger, #dc2626);
     font-weight: var(--be-weight-medium);
-
-    .builder-bar__save-dot {
-      background: var(--theme-error-500, #ef4444);
-    }
   }
 
-  // The reasons can be long: wrap the tooltip, and keep its line breaks.
-  .builder-bar .builder-bar__save[data-state='failed'],
-  .builder-bar .builder-bar__save[data-state='offline'] {
-    &:hover::after {
-      width: max-content;
-      max-width: 320px;
-      white-space: pre-line;
-    }
+  .builder-bar__save[data-state=failed] .builder-bar__save-dot {
+    background: var(--color-bg-danger, #ef4444);
+  }
+
+  /* The reasons can be long: wrap the tooltip, and keep its line breaks. */
+  .builder-bar .builder-bar__save[data-state=failed]:hover::after,
+  .builder-bar .builder-bar__save[data-state=offline]:hover::after {
+    width: max-content;
+    max-width: 320px;
+    white-space: pre-line;
   }
 
   .builder-bar__save-retry {
     flex: none;
     height: 24px;
     padding: 0 8px;
-    border: 1px solid var(--theme-error-400, #f87171);
+    border: 1px solid var(--color-border-danger, #f87171);
     border-radius: var(--be-radius-m);
     background: transparent;
-    color: var(--theme-error-600, #dc2626);
+    color: var(--color-text-danger, #dc2626);
     font: inherit;
     font-size: var(--be-text-m);
     font-weight: var(--be-weight-medium);
     white-space: nowrap;
     cursor: pointer;
+  }
 
-    &:hover:not(:disabled) {
-      background: var(--theme-error-50, #fef2f2);
-    }
+  .builder-bar__save-retry:hover:not(:disabled) {
+    background: var(--color-bg-danger-tertiary, #fef2f2);
+  }
 
-    &:disabled {
-      opacity: 0.6;
-      cursor: default;
-    }
+  .builder-bar__save-retry:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
 
-    &:focus-visible {
-      outline: 2px solid var(--theme-error-500, #ef4444);
-      outline-offset: 1px;
-    }
+  .builder-bar__save-retry:focus-visible {
+    outline: 2px solid var(--color-border-danger-strong, #ef4444);
+    outline-offset: 1px;
   }
 
   @keyframes builder-bar-pulse {
@@ -452,9 +451,9 @@
     }
   }
 
-  // Laptop screens.
+  /* Laptop screens. */
   @media (max-width: 1700px) {
-    // The avatars already say who is here; the "is editing" chip would push the save state.
+    /* The avatars already say who is here; the "is editing" chip would push the save state. */
     .builder-editor__live-activity {
       display: none;
     }
@@ -467,7 +466,7 @@
     margin-left: 2px;
   }
 
-  // Payload's primary button colors.
+  /* Payload's primary button colors. */
   .builder-bar__publish-main,
   .builder-bar__publish-more {
     display: inline-flex;
@@ -475,24 +474,26 @@
     justify-content: center;
     height: 30px;
     border: 0;
-    background: var(--theme-elevation-800);
-    color: var(--theme-elevation-0);
+    background: var(--color-bg-inverse);
+    color: var(--color-text-oninverse);
     font: inherit;
     font-size: var(--be-text-m);
     font-weight: var(--be-weight-medium);
     white-space: nowrap;
     cursor: pointer;
     transition: background-color 120ms ease;
+  }
 
-    &:hover:not(:disabled) {
-      background: var(--theme-elevation-1000);
-    }
+  .builder-bar__publish-main:hover:not(:disabled),
+  .builder-bar__publish-more:hover:not(:disabled) {
+    background: var(--color-bg-inverse);
+  }
 
-    &:disabled {
-      background: var(--theme-elevation-200);
-      color: var(--theme-elevation-600);
-      cursor: default;
-    }
+  .builder-bar__publish-main:disabled,
+  .builder-bar__publish-more:disabled {
+    background: var(--color-bg-pressed);
+    color: var(--color-text-secondary);
+    cursor: default;
   }
 
   .builder-bar__publish-main {
@@ -503,16 +504,15 @@
 
   .builder-bar__publish-more {
     width: 28px;
-    border-left: 1px solid color-mix(in srgb, var(--theme-elevation-0) 30%, transparent);
+    border-left: 1px solid color-mix(in srgb, var(--color-bg) 30%, transparent);
     border-radius: 0 var(--be-radius-m) var(--be-radius-m) 0;
-
-    &[aria-expanded='true'] {
-      background: var(--theme-elevation-1000);
-    }
   }
 
-  // ---- Publish problems ---------------------------------------------------------------------------
+  .builder-bar__publish-more[aria-expanded=true] {
+    background: var(--color-bg-inverse);
+  }
 
+  /* ---- Publish problems --------------------------------------------------------------------------- */
   .builder-bar__problems {
     display: inline-flex;
     flex: none;
@@ -521,19 +521,19 @@
     height: 30px;
     margin-right: 6px;
     padding: 0 8px;
-    border: 1px solid color-mix(in srgb, var(--theme-error-500) 45%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-border-danger-strong) 45%, transparent);
     border-radius: var(--be-radius-m);
-    background: color-mix(in srgb, var(--theme-error-500) 10%, transparent);
-    color: var(--theme-error-500);
+    background: color-mix(in srgb, var(--color-bg-danger) 10%, transparent);
+    color: var(--color-text-danger);
     font: inherit;
     font-size: var(--be-text-m);
     font-weight: var(--be-weight-strong);
     font-variant-numeric: tabular-nums;
     cursor: pointer;
+  }
 
-    &:hover {
-      background: color-mix(in srgb, var(--theme-error-500) 16%, transparent);
-    }
+  .builder-bar__problems:hover {
+    background: color-mix(in srgb, var(--color-bg-danger) 16%, transparent);
   }
 
   .builder-styles__popover.builder-bar__problems-popover {
@@ -545,7 +545,7 @@
 
   .builder-bar__problems-title {
     margin: 2px 6px 6px;
-    color: var(--theme-text);
+    color: var(--color-text);
     font-size: var(--be-text-m);
     font-weight: var(--be-weight-strong);
   }
@@ -568,26 +568,25 @@
     border: 0;
     border-radius: var(--be-radius);
     background: none;
-    color: var(--theme-text);
+    color: var(--color-text);
     font: inherit;
     text-align: left;
     cursor: pointer;
+  }
 
-    &:hover,
-    &:focus-visible {
-      background: var(--be-hover);
-    }
+  .builder-bar__problem:hover, .builder-bar__problem:focus-visible {
+    background: var(--be-hover);
+  }
 
-    &:hover .builder-bar__problem-action {
-      color: var(--theme-text);
-    }
+  .builder-bar__problem:hover .builder-bar__problem-action {
+    color: var(--color-text);
   }
 
   .builder-bar__problem-icon {
     display: inline-flex;
     flex: none;
     padding-top: 1px;
-    color: var(--theme-error-500);
+    color: var(--color-text-danger);
   }
 
   .builder-bar__problem-text {
@@ -607,7 +606,7 @@
   }
 
   .builder-bar__problem-message {
-    color: var(--theme-elevation-650, var(--theme-elevation-600));
+    color: var(--color-text-secondary, var(--color-text-secondary));
     font-size: var(--be-text-m);
     line-height: 1.4;
   }
@@ -619,24 +618,23 @@
     font-size: var(--be-text-m);
   }
 
-  // ---- Loading skeleton below the bar ------------------------------------------------------------
-
-  .builder-editor__body--loading {
-    .builder-editor__left,
-    .builder-editor__right {
-      gap: 10px;
-      padding: 12px;
-    }
-
-    .builder-editor__stage {
-      padding: 24px;
-      background: var(--theme-elevation-50);
-    }
+  /* ---- Loading skeleton below the bar ------------------------------------------------------------ */
+  .builder-editor__body--loading .builder-editor__left,
+  .builder-editor__body--loading .builder-editor__right {
+    gap: 10px;
+    padding: 12px;
   }
 
-  // Payload opens its lock dialogs ("Document locked", "taken over", "modified by another user")
-  // with z-index var(--z-modal) = 30, but drawers get 100 + depth. Inside the settings drawer the
-  // dialog would open hidden behind the drawer. Lift it above any drawer.
+  .builder-editor__body--loading .builder-editor__stage {
+    padding: 24px;
+    background: var(--color-bg-secondary);
+  }
+
+  /*
+   * Payload opens its lock dialogs ("Document locked", "taken over", "modified by another user")
+   * with z-index var(--z-modal) = 30, but drawers get 100 + depth. Inside the settings drawer the
+   * dialog would open hidden behind the drawer. Lift it above any drawer.
+   */
   .payload__modal-item.document-locked,
   .payload__modal-item.document-take-over,
   .payload__modal-item.document-stale-data {

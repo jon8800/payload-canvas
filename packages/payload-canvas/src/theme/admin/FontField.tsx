@@ -2,13 +2,13 @@
 
 import { Combobox } from '@base-ui/react/combobox'
 import { useField } from '@payloadcms/ui'
-import type { TextFieldClientComponent } from 'payload'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import type { TextFieldClientProps } from 'payload'
+import { useEffect, useMemo, useRef, useState, type FC } from 'react'
 
 import { googleFontsHref } from '../css'
 import { FieldShell, labelText } from './FieldShell'
 import { GOOGLE_FONTS } from './googleFonts'
-import './fields.scss'
+import './fields.css'
 
 const MAX_VISIBLE = 50
 
@@ -27,7 +27,7 @@ function loadPreview(family: string) {
 }
 
 /** A Google Font family: a searchable list that previews each font in its own typeface. */
-export const ThemeFontField: TextFieldClientComponent = function ThemeFontField({ path, field, readOnly }) {
+export const ThemeFontField: FC<TextFieldClientProps> = function ThemeFontField({ path, field, readOnly }) {
   const { value, setValue, disabled } = useField<string>({ path })
   const locked = Boolean(readOnly || disabled)
   const [query, setQuery] = useState('')

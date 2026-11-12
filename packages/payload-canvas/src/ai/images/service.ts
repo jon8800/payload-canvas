@@ -2,7 +2,7 @@
 // the request's user. Shared by the assistant tool, the editor's Generate action (endpoint) and the
 // MCP tool, so they share one hourly limit per user, kept in Payload's KV store. Server only.
 
-import type { KVAdapter, Payload, PayloadRequest } from 'payload'
+import type { Access, KVAdapter, Payload, PayloadRequest } from 'payload'
 
 import { isPlainObject } from '../../core/tree'
 import { adapterReady, setupProblemOf } from '../config'
@@ -234,7 +234,7 @@ const failure = (code: GenerateImageErrorCode, status: number, message: string):
 type UploadConfig = {
   upload?: unknown
   fields: Array<{ name?: string; type?: string }>
-  access?: { create?: (args: { req: PayloadRequest; data?: unknown }) => unknown }
+  access?: { create?: Access }
 }
 
 const str = (value: unknown) => (typeof value === 'string' && value ? value : null)
@@ -311,7 +311,7 @@ export async function generateImageToMedia(req: PayloadRequest, service: ImageSe
   }
   try {
     const access = config.access?.create
-    const allowed = access ? await access({ req, data }) : Boolean(req.user)
+    const allowed = access ? await access({ req, data, slug }) : Boolean(req.user)
     if (!allowed) return failure('forbidden', 403, `You may not upload to "${slug}", so you cannot generate images there.`)
   } catch {
     return failure('forbidden', 403, `You may not upload to "${slug}", so you cannot generate images there.`)
@@ -387,7 +387,7 @@ export async function generateImageToMedia(req: PayloadRequest, service: ImageSe
     return failure('api_error', 500, `The image was generated but could not be saved in "${slug}": ${message}`)
   }
 
-  const sizes = isPlainObject(doc.sizes) ? doc.sizes : {}
+  const sizes = isPlainObject(doc.variants) ? doc.variants : {}
   const thumbnail = isPlainObject(sizes.thumbnail) ? str(sizes.thumbnail.url) : null
   const media: GeneratedMedia = {
     id: doc.id as string | number,

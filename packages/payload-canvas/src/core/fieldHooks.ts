@@ -15,7 +15,7 @@ export type FieldRunContext = {
   /** Payload's sanitized collection config, or null. */
   collection?: unknown
   context?: Record<string, unknown>
-  operation?: 'create' | 'update' | 'read' | 'delete'
+  operation?: 'create' | 'update' | 'validate' | 'read' | 'delete'
   overrideAccess?: boolean
   id?: string | number
   /** Payload's `data`: the incoming data in change hooks, the whole document in afterRead. */

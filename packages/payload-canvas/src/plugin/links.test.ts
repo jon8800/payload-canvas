@@ -66,11 +66,16 @@ const editorConfig = (config: Config) => {
 }
 
 describe('websiteBuilder editor.openInBuilder', () => {
-  const pages: CollectionConfig = { slug: 'pages', fields: [{ name: 'title', type: 'text' }] }
+  const pages: CollectionConfig = { slug: 'pages', fields: [{ name: 'title', type: 'text' }],
+    versions: false,
+    authorship: false,
+  }
   const custom: CollectionConfig = {
     slug: 'posts',
     fields: [{ name: 'title', type: 'text' }],
     admin: { components: { views: { edit: { default: { Component: './MyEdit#MyEdit' } } } } },
+    versions: false,
+    authorship: false,
   }
   const build = (openInBuilder?: boolean) =>
     websiteBuilder({

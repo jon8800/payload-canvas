@@ -26,8 +26,8 @@ import { Select, type SelectOption } from '../ui/Select'
 import { Slider } from '../ui/Slider'
 import { clamp, enterValues, fromPercent, hoverValue, loopValues, pressScale, scrollValue, toPercent, usesDistance, withPreset, withValue } from './model'
 import { previewMotion } from './play'
-import '../styles/styles.scss'
-import './motion.scss'
+import '../styles/styles.css'
+import './motion.css'
 
 const presetOptions = (kind: MotionKind): SelectOption[] => MOTION_PRESET_INFO[kind].map(({ value, label }) => ({ value, label }))
 const OPTIONS = {

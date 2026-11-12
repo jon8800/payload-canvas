@@ -10,20 +10,20 @@ const link = (href: string | null, target = '', download = false) => ({ href, ta
 const allContexts = () => Object.fromEntries(REQUIRED_CONTEXTS.map((name) => [name, createContext(null)]))
 
 describe('drawer router fallback', () => {
-  it('runs when every Next context is there', () => {
+  it('runs when the admin router context is there', () => {
     assert.deepEqual(routerSupport(allContexts()), { ok: true })
   })
 
   it('falls back when a context is missing', () => {
     const exports: Record<string, unknown> = allContexts()
-    delete exports.PathnameContext
+    delete exports.RouterAdapterContext
     const support = routerSupport(exports)
     assert.equal(support.ok, false)
-    assert.match(support.ok ? '' : support.reason, /PathnameContext/)
+    assert.match(support.ok ? '' : support.reason, /RouterAdapterContext/)
   })
 
   it('falls back when an export is no longer a React context', () => {
-    const support = routerSupport({ ...allContexts(), AppRouterContext: { Provider: () => null } })
+    const support = routerSupport({ ...allContexts(), RouterAdapterContext: { Provider: () => null } })
     assert.equal(support.ok, false)
   })
 
@@ -34,7 +34,7 @@ describe('drawer router fallback', () => {
   it('falls back when the hooks do not read the drawer values', () => {
     const expected = { pathname: '/admin/collections/pages/3/versions', search: '?page=2', push }
     assert.equal(hooksFollow(expected, { pathname: expected.pathname, search: 'page=2', push }), true)
-    // Next reads the page around the drawer.
+    // The hooks read the page around the drawer.
     assert.equal(hooksFollow(expected, { pathname: '/admin/builder/pages/3', search: '', push }), false)
     assert.equal(hooksFollow(expected, { pathname: expected.pathname, search: 'page=2', push: () => {} }), false)
   })

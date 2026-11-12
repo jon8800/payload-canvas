@@ -16,7 +16,7 @@ import { useValue } from '../valueStore'
 import { useStyles, writeClassName } from './context'
 import { ResetIcon } from './icons'
 import { ClassChips, ClassText } from './RawClasses'
-import './classes.scss'
+import './classes.css'
 
 const sentence = (text: string) => `${text.charAt(0).toUpperCase()}${text.slice(1)}.`
 

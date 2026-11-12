@@ -260,12 +260,12 @@ describe('write gate', () => {
     // A failing outer save whose hook saves another document with the same request: the nested save
     // succeeds, the outer one fails, and both documents are free afterwards.
     const req: Record<string, unknown> = {}
-    await assert.rejects(payload.update({ id: 1, data: { title: 'Bad' }, req, fail: true, nested: (r: object) => payload.update({ id: 2, data: { flag: false }, req: r }) }))
+    await assert.rejects(payload.update({ id: 1, data: { title: 'Bad' }, req, fail: true, nested: (r: object) => payload.update({ id: 2, data: { flag: false }, req: r, overrideAccess: true }), overrideAccess: true }))
     assert.equal(gate.size(), 0)
     // Without a request of its own, the call still gets one: the failure ends at once.
-    await assert.rejects(payload.update({ id: 1, data: { title: 'Bad' }, fail: true }))
+    await assert.rejects(payload.update({ id: 1, data: { title: 'Bad' }, fail: true, overrideAccess: true }))
     assert.equal(gate.size(), 0)
-    await payload.update({ id: 1, data: { title: 'Good' } })
+    await payload.update({ id: 1, data: { title: 'Good' }, overrideAccess: true })
     assert.equal(pages.doc.title, 'Good')
   })
 

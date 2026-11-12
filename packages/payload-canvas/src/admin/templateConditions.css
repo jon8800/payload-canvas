@@ -1,0 +1,25 @@
+/*
+ * The template conditions field in Payload's document form, outside the builder editor. The
+ * condition rows and their selects read the editor's color variables, which the editor sets on
+ * `.builder-editor`. Here they are set on the page body (the select lists render in a portal
+ * there) while the field is on the page. The values match editor.scss.
+ */
+@layer payload-default {
+  body:has(.builder-template-conditions) {
+    --be-accent: var(--color-bg-brand);
+    --be-border: var(--color-border);
+    --be-border-soft: var(--color-border);
+    --be-muted: var(--color-text-secondary);
+    --be-subtle: var(--color-text-tertiary);
+    --be-hover: var(--color-bg-hover);
+    --be-radius-m: var(--radius-medium, 6px);
+    --be-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --be-text-s: 0.6875rem;
+    --be-text-m: var(--text-body-medium-font-size);
+    --be-weight-strong: 600;
+  }
+
+  .builder-template-conditions {
+    margin-bottom: var(--spacing-field, calc(1.0156rem * 1.5));
+  }
+}

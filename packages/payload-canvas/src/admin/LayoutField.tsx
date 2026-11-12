@@ -10,7 +10,7 @@ import { builderViewPath } from '../plugin/links'
 import { blockSummary } from './editor/names'
 import { SettingsDrawerSlug } from './editor/topbar/settingsDrawer'
 import { forgetForm } from './formChoice'
-import './layoutField.scss'
+import './layoutField.css'
 
 /** Top-level blocks named in the summary. */
 const SUMMARY_SECTIONS = 5
@@ -73,7 +73,7 @@ function LayoutSummary(props: JSONFieldClientProps) {
             <Button
               buttonStyle="primary"
               el="link"
-              size="small"
+              size="medium"
               margin={false}
               url={builderViewPath(routes.admin, collection, id)}
               onClick={() => forgetForm(collection, id)}

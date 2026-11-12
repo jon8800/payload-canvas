@@ -61,7 +61,7 @@ async function savedFormClasses(payload: Payload, layouts: readonly Layout[]): P
   const ids = savedFormIds(layouts)
   if (!forms || ids.length === 0) return []
   try {
-    const { docs } = await payload.find({ collection: forms as never, where: { id: { in: ids } }, depth: 0, limit: ids.length, pagination: false, select: { fields: true } as never })
+    const { docs } = await payload.find({ collection: forms as never, where: { id: { in: ids } }, depth: 0, limit: ids.length, pagination: false, select: { fields: true } as never, overrideAccess: true })
     return savedFormsClasses(docs as unknown as Array<Record<string, unknown>>)
   } catch {
     return []

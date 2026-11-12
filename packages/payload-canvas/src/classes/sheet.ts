@@ -21,6 +21,8 @@ export function classesSheetGlobal(slug: string): GlobalConfig {
   return {
     slug,
     label: 'Classes stylesheet',
+    versions: false,
+    authorship: false,
     admin: { hidden: true },
     access: { read: () => false, update: () => false },
     fields: [

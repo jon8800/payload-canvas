@@ -57,7 +57,7 @@ import { editsSection, propertyTypeOf } from '../sections/components'
 import { PropertySlot, VisibleProperty } from '../sections/PropertyControls'
 import { FieldPicker, fieldIcon } from './FieldPicker'
 import { useCollectionLabel, useListSample, useTitleField } from './useTemplate'
-import './templates.scss'
+import './templates.css'
 
 /** Where the selected block's bindings read from: the template's document, each list item, or each repeat row. */
 export type BindingScope = {

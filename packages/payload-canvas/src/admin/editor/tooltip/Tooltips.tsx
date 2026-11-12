@@ -22,7 +22,7 @@
 import { useEffect } from 'react'
 
 import { installTooltips } from './controller'
-import './tooltip.scss'
+import './tooltip.css'
 
 export function Tooltips() {
   useEffect(() => installTooltips(document), [])

@@ -20,7 +20,7 @@ function fakeReq(options: { user?: Record<string, unknown> | null; canCreate?: b
   const user = options.user === undefined ? { id: 'u1', collection: 'users', email: 'a@b.c' } : options.user
   const payload = {
     collections: {
-      media: { config: { slug: 'media', upload: { mimeTypes: ['image/*'] }, fields: options.fields ?? [{ name: 'alt', type: 'text' }], access: { create: ({ req }: { req: PayloadRequest }) => Boolean(req.user) && options.canCreate !== false } } },
+      media: { config: { slug: 'media', upload: { mimeTypes: ['image/*'] }, fields: options.fields ?? [{ name: 'alt', type: 'text' }], access: { create: ({ req, slug }: { req: PayloadRequest; slug: string }) => Boolean(req.user) && slug === 'media' && options.canCreate !== false } } },
       docs: { config: { slug: 'docs', upload: { mimeTypes: ['application/pdf'] }, fields: [] } },
       pages: { config: { slug: 'pages', fields: [] } },
     },
@@ -32,7 +32,7 @@ function fakeReq(options: { user?: Record<string, unknown> | null; canCreate?: b
       if (options.createFails) throw new Error('The file is too large.')
       const file = args.file as { name: string; mimetype: string; size: number }
       const data = args.data as Record<string, unknown>
-      return { id: 42, alt: data.alt, filename: file.name, url: `/api/media/file/${file.name}`, mimeType: file.mimetype, width: 640, height: 360, filesize: file.size, sizes: { thumbnail: { url: '/api/media/file/thumb.png' } } }
+      return { id: 42, alt: data.alt, filename: file.name, url: `/api/media/file/${file.name}`, mimeType: file.mimetype, width: 640, height: 360, filesize: file.size, variants: { thumbnail: { url: '/api/media/file/thumb.png' } } }
     },
   }
   return { req: { user, payload } as unknown as PayloadRequest, created }

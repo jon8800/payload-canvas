@@ -228,7 +228,7 @@ describe('region field writes', () => {
   it('never loses a layout save that overlaps a region save', async () => {
     const gate = createWriteGate()
     const { db, write } = setup({ gate })
-    const layoutSave = db.payload.update({ id: 7, data: { layout: { version: 1, blocks: [{ id: 'b1', type: 'text' }] } }, req: {} })
+    const layoutSave = db.payload.update({ id: 7, data: { layout: { version: 1, blocks: [{ id: 'b1', type: 'text' }] } }, req: {}, overrideAccess: true })
     const regionSave = write([{ path: 'subtitle', value: 'Both', base: 'Sub' }])
     const [, region] = await Promise.all([layoutSave, regionSave])
     assert.ok(region.ok)

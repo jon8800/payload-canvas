@@ -1,0 +1,58 @@
+/* The API key field of the AI settings global. Payload CSS variables only, no Tailwind. */
+@layer payload-default {
+  .ai-key-field {
+    margin-bottom: var(--spacing-field, calc(1.0156rem * 1.5));
+  }
+
+  .ai-key-field__status {
+    margin: 0 0 calc(1.0156rem * 0.25);
+    color: var(--color-text);
+    font-size: var(--text-body-medium-font-size, 13px);
+  }
+
+  .ai-key-field__status--error {
+    color: var(--color-text-danger);
+  }
+
+  .ai-key-field__note {
+    margin: 0 0 calc(1.0156rem * 0.5);
+    color: var(--color-text-tertiary);
+    font-size: var(--text-body-small-font-size, 12px);
+  }
+
+  .ai-key-field__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(1.0156rem * 0.5);
+    margin-bottom: calc(1.0156rem * 0.5);
+  }
+
+  .ai-key-field__input {
+    flex: 1 1 calc(1.0156rem * 16);
+    min-width: 0;
+    height: calc(1.0156rem * 2);
+    padding: 0 calc(1.0156rem * 0.5);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-medium, var(--radius-medium));
+    background: var(--field-color-bg);
+    color: var(--color-text);
+    font: inherit;
+    font-size: var(--text-body-medium-font-size, 13px);
+    box-sizing: border-box;
+    outline: none;
+  }
+
+  .ai-key-field__input:hover {
+    border-color: var(--color-border-control-strong);
+  }
+
+  .ai-key-field__input:focus {
+    border-color: var(--color-border-control-strong);
+  }
+
+  .ai-key-field__link {
+    color: var(--color-text);
+    font-size: var(--text-body-small-font-size, 12px);
+  }
+}

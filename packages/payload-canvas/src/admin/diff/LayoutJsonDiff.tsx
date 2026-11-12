@@ -5,7 +5,7 @@
 import { escapeDiffHTML, getHTMLDiffComponents, unescapeDiffHTML } from '@payloadcms/ui'
 import { useMemo, useState } from 'react'
 
-import './layoutDiff.scss'
+import './layoutDiff.css'
 
 function jsonHTML(value: unknown): string {
   return `<p><pre>${escapeDiffHTML(JSON.stringify(value ?? null, null, 2))}</pre></p>`

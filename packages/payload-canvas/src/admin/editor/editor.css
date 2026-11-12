@@ -1,6 +1,7 @@
-// Builder editor. Payload CSS variables only, no Tailwind (it would leak into the admin).
-// Works in Payload's light and dark theme: every color comes from a theme variable.
-
+/*
+ * Builder editor. Payload CSS variables only, no Tailwind (it would leak into the admin).
+ * Works in Payload's light and dark theme: every color comes from a theme variable.
+ */
 @layer payload-default {
   @keyframes builder-fade-in {
     from {
@@ -15,106 +16,111 @@
     }
   }
 
-  // Type scale and the floating-surface shadow. Three sizes and three weights for all editor
-  // text, derived from Payload's base size (1rem: 13px, 12px on narrow screens). On :root,
-  // because Payload's drawers and modals render outside the editor element.
-  //   s: captions, counts, badges, keyboard keys, tooltips, small group titles
-  //   m: labels, inputs, tree rows, tabs, menu items, buttons, help text
-  //   l: the block name and panel titles
+  /*
+   * Type scale and the floating-surface shadow. Three sizes and three weights for all editor
+   * text, from Payload 4's type scale (11px, 12px and 14px). On :root,
+   * because Payload's drawers and modals render outside the editor element.
+   *   s: captions, counts, badges, keyboard keys, tooltips, small group titles
+   *   m: labels, inputs, tree rows, tabs, menu items, buttons, help text
+   *   l: the block name and panel titles
+   */
   :root {
-    --be-text-s: calc(1rem - 2px);
-    --be-text-m: 1rem;
-    --be-text-l: calc(1rem + 1px);
+    --be-text-s: 0.6875rem;
+    --be-text-m: var(--text-body-medium-font-size);
+    --be-text-l: var(--text-body-large-font-size);
     --be-weight-regular: 400;
     --be-weight-medium: 500;
     --be-weight-strong: 600;
-    // One shadow for every floating surface: menus, popovers, select lists, tooltips.
+    /* One shadow for every floating surface: menus, popovers, select lists, tooltips. */
     --be-shadow: 0 8px 24px rgb(0 0 0 / 0.18), 0 1px 3px rgb(0 0 0 / 0.12);
   }
 
   .builder-editor {
-    --be-accent: var(--theme-success-500);
-    --be-accent-strong: var(--theme-success-600);
-    --be-accent-soft: color-mix(in srgb, var(--theme-success-500) 14%, transparent);
-    --be-accent-fg: #fff;
-    --be-border: var(--theme-elevation-150);
-    --be-border-soft: var(--theme-elevation-100);
-    // Text colors that pass WCAG AA (4.5:1) on the panel, a selected row and a raised surface.
-    --be-muted: var(--theme-elevation-600);
-    --be-accent-text: var(--theme-success-600);
-    // The selection tag's fill: white text on it passes AA in both themes.
-    --be-accent-solid: var(--color-success-600);
-    --be-subtle: var(--theme-elevation-400);
-    --be-panel: var(--theme-bg);
-    --be-raised: var(--theme-elevation-50);
-    --be-hover: var(--theme-elevation-100);
-    --be-radius: var(--style-radius-s, 4px);
-    --be-radius-m: var(--style-radius-m, 6px);
+    --be-accent: var(--color-bg-brand);
+    --be-accent-strong: var(--color-bg-brand-hover);
+    --be-accent-soft: color-mix(in srgb, var(--color-bg-brand) 14%, transparent);
+    --be-accent-fg: var(--color-text-onbrand);
+    --be-border: var(--color-border);
+    --be-border-soft: var(--color-border);
+    /* Text colors that pass WCAG AA (4.5:1) on the panel, a selected row and a raised surface. */
+    --be-muted: var(--color-text-secondary);
+    --be-accent-text: var(--color-text-brand);
+    /* The selection tag's fill: white text on it passes AA in both themes. */
+    --be-accent-solid: var(--color-bg-brand-hover);
+    --be-subtle: var(--color-text-tertiary);
+    --be-panel: var(--color-bg);
+    --be-raised: var(--color-bg-secondary);
+    --be-hover: var(--color-bg-hover);
+    --be-radius: var(--radius-medium, 4px);
+    --be-radius-m: var(--radius-medium, 6px);
     --be-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-    // Components (live saved section copies) get their own color, as in Figma: the outline,
-    // the solid fill of the name tag and action bar (white text passes AA on it), and text.
+    /*
+     * Components (live saved section copies) get their own color, as in Figma: the outline,
+     * the solid fill of the name tag and action bar (white text passes AA on it), and text.
+     */
     --be-component: #8b5cf6;
     --be-component-solid: #7c3aed;
     --be-component-text: #6d28d9;
-
     display: flex;
     flex-direction: column;
-    // The full-screen view: the whole viewport, the top bar first.
+    /* The full-screen view: the whole viewport, the top bar first. */
     height: 100dvh;
     min-height: 520px;
     overflow: hidden;
-    color: var(--theme-text);
+    color: var(--color-text);
     font-family: var(--font-body);
     font-size: var(--be-text-m);
     background: var(--be-panel);
-
-    button {
-      font-family: inherit;
-    }
-
-    :focus-visible {
-      outline: 2px solid var(--be-accent);
-      outline-offset: -2px;
-    }
-
-    kbd {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 20px;
-      height: 20px;
-      padding: 0 5px;
-      border: 1px solid var(--be-border);
-      border-bottom-width: 2px;
-      border-radius: var(--be-radius);
-      background: var(--be-raised);
-      color: var(--theme-elevation-800);
-      font-family: inherit;
-      font-size: var(--be-text-s);
-      font-weight: var(--be-weight-medium);
-      line-height: 1;
-    }
-
-    code {
-      font-family: var(--font-mono, ui-monospace, monospace);
-      font-size: var(--be-text-s);
-    }
   }
 
-  // ---------------------------------------------------------------------------
-  // Tooltips: `data-tooltip="Text"` on any element. `tooltip/Tooltips.tsx` shows them in the
-  // top layer (never clipped) and documents the standard. No `title` attributes in the editor.
-  // ---------------------------------------------------------------------------
+  .builder-editor button {
+    font-family: inherit;
+  }
 
-  // Kept from the old CSS-only tooltips: some controls place badges and buttons against it.
+  .builder-editor :focus-visible {
+    outline: 2px solid var(--be-accent);
+    outline-offset: -2px;
+  }
+
+  .builder-editor kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border: 1px solid var(--be-border);
+    border-bottom-width: 2px;
+    border-radius: var(--be-radius);
+    background: var(--be-raised);
+    color: var(--color-text);
+    font-family: inherit;
+    font-size: var(--be-text-s);
+    font-weight: var(--be-weight-medium);
+    line-height: 1;
+  }
+
+  .builder-editor code {
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: var(--be-text-s);
+  }
+
+  /*
+   * ---------------------------------------------------------------------------
+   * Tooltips: `data-tooltip="Text"` on any element. `tooltip/Tooltips.tsx` shows them in the
+   * top layer (never clipped) and documents the standard. No `title` attributes in the editor.
+   * ---------------------------------------------------------------------------
+   */
+  /* Kept from the old CSS-only tooltips: some controls place badges and buttons against it. */
   .builder-editor [data-tooltip] {
     position: relative;
   }
 
-  // ---------------------------------------------------------------------------
-  // Shared controls
-  // ---------------------------------------------------------------------------
-
+  /*
+   * ---------------------------------------------------------------------------
+   * Shared controls
+   * ---------------------------------------------------------------------------
+   */
   .builder-editor__icon-button {
     display: inline-grid;
     flex: none;
@@ -125,28 +131,28 @@
     border: 0;
     border-radius: var(--be-radius);
     background: transparent;
-    color: var(--theme-elevation-800);
+    color: var(--color-text);
     cursor: pointer;
     transition: background-color 120ms ease, color 120ms ease;
+  }
 
-    &:hover:not(:disabled) {
-      background: var(--be-hover);
-      color: var(--theme-text);
-    }
+  .builder-editor__icon-button:hover:not(:disabled) {
+    background: var(--be-hover);
+    color: var(--color-text);
+  }
 
-    &:disabled {
-      opacity: 0.35;
-      cursor: default;
-    }
+  .builder-editor__icon-button:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
 
-    &[aria-expanded='true'] {
-      background: var(--be-hover);
-    }
+  .builder-editor__icon-button[aria-expanded=true] {
+    background: var(--be-hover);
+  }
 
-    &[aria-pressed='true'] {
-      background: color-mix(in srgb, var(--be-accent) 14%, transparent);
-      color: var(--be-accent);
-    }
+  .builder-editor__icon-button[aria-pressed=true] {
+    background: color-mix(in srgb, var(--be-accent) 14%, transparent);
+    color: var(--be-accent);
   }
 
   .builder-editor__icon-button--small {
@@ -162,16 +168,16 @@
     padding: 2px;
     border: 0;
     border-radius: var(--be-radius-m);
-    background: var(--theme-elevation-100);
+    background: var(--color-bg-hover);
   }
 
   .builder-editor__segmented--full {
     display: flex;
     width: 100%;
+  }
 
-    .builder-editor__segment {
-      flex: 1;
-    }
+  .builder-editor__segmented--full .builder-editor__segment {
+    flex: 1;
   }
 
   .builder-editor__segment {
@@ -185,22 +191,21 @@
     border: 0;
     border-radius: var(--be-radius);
     background: transparent;
-    color: var(--theme-elevation-600);
+    color: var(--color-text-secondary);
     font-size: var(--be-text-m);
     font-weight: var(--be-weight-medium);
     cursor: pointer;
     transition: background-color 120ms ease, color 120ms ease;
+  }
 
-    &:hover {
-      color: var(--theme-text);
-    }
+  .builder-editor__segment:hover {
+    color: var(--color-text);
+  }
 
-    &[aria-pressed='true'],
-    &[aria-selected='true'] {
-      background: var(--theme-elevation-0);
-      color: var(--theme-text);
-      box-shadow: 0 1px 2px rgb(0 0 0 / 0.16), 0 0 0 1px var(--be-border);
-    }
+  .builder-editor__segment[aria-pressed=true], .builder-editor__segment[aria-selected=true] {
+    background: var(--color-bg);
+    color: var(--color-text);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16), 0 0 0 1px var(--be-border);
   }
 
   .builder-editor__segmented--small .builder-editor__segment {
@@ -235,17 +240,17 @@
     padding: 24px 16px;
     color: var(--be-subtle);
     text-align: center;
+  }
 
-    > p:not(.builder-editor__hint) {
-      margin: 4px 0 0;
-      color: var(--theme-text);
-      font-size: var(--be-text-m);
-      font-weight: var(--be-weight-strong);
-    }
+  .builder-editor__empty > p:not(.builder-editor__hint) {
+    margin: 4px 0 0;
+    color: var(--color-text);
+    font-size: var(--be-text-m);
+    font-weight: var(--be-weight-strong);
+  }
 
-    .builder-editor__hint {
-      max-width: 240px;
-    }
+  .builder-editor__empty .builder-editor__hint {
+    max-width: 240px;
   }
 
   .builder-editor__pill {
@@ -255,7 +260,7 @@
     height: 20px;
     padding: 0 7px;
     border-radius: 10px;
-    background: var(--theme-elevation-100);
+    background: var(--color-bg-hover);
     color: var(--be-muted);
     font-size: var(--be-text-s);
     font-weight: var(--be-weight-medium);
@@ -265,7 +270,7 @@
     min-width: 18px;
     padding: 1px 6px;
     border-radius: 9px;
-    background: var(--theme-elevation-100);
+    background: var(--color-bg-hover);
     color: var(--be-muted);
     font-size: var(--be-text-s);
     font-weight: var(--be-weight-strong);
@@ -273,10 +278,11 @@
     font-variant-numeric: tabular-nums;
   }
 
-  // ---------------------------------------------------------------------------
-  // Canvas width controls (in the top bar, see topbar/topbar.scss)
-  // ---------------------------------------------------------------------------
-
+  /*
+   * ---------------------------------------------------------------------------
+   * Canvas width controls (in the top bar, see topbar/topbar.scss)
+   * ---------------------------------------------------------------------------
+   */
   .builder-editor__width-input {
     display: inline-flex;
     align-items: center;
@@ -285,26 +291,26 @@
     padding: 0 8px;
     border: 1px solid var(--be-border);
     border-radius: var(--be-radius-m);
-    background: var(--theme-input-bg, var(--theme-elevation-0));
+    background: var(--field-color-bg, var(--color-bg));
     color: var(--be-muted);
     font-size: var(--be-text-m);
     cursor: text;
+  }
 
-    &:focus-within {
-      border-color: var(--be-accent);
-    }
+  .builder-editor__width-input:focus-within {
+    border-color: var(--be-accent);
+  }
 
-    input {
-      width: 40px;
-      padding: 0;
-      border: 0;
-      outline: 0;
-      background: transparent;
-      color: var(--theme-text);
-      font: inherit;
-      font-variant-numeric: tabular-nums;
-      text-align: right;
-    }
+  .builder-editor__width-input input {
+    width: 40px;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--color-text);
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
   }
 
   .builder-editor__bp-badge {
@@ -326,13 +332,14 @@
     min-width: 0;
     padding: 3px 4px 3px 10px;
     border-radius: var(--be-radius-m);
-    background: color-mix(in srgb, var(--theme-error-500) 12%, transparent);
-    color: var(--theme-error-500);
+    background: color-mix(in srgb, var(--color-bg-danger) 12%, transparent);
+    color: var(--color-text-danger);
     font-size: var(--be-text-m);
+  }
 
-    button {
-      color: inherit;
-    }
+  .builder-editor__error button,
+  .builder-editor__canvas-error button {
+    color: inherit;
   }
 
   .builder-editor__canvas-error {
@@ -341,15 +348,15 @@
     top: 8px;
     left: 50%;
     transform: translateX(-50%);
+  }
 
-    button {
-      padding: 2px 6px;
-      border: 0;
-      background: none;
-      font: inherit;
-      text-decoration: underline;
-      cursor: pointer;
-    }
+  .builder-editor__canvas-error button {
+    padding: 2px 6px;
+    border: 0;
+    background: none;
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
   }
 
   .builder-editor__help {
@@ -368,13 +375,13 @@
     background: var(--be-panel);
     box-shadow: var(--be-shadow);
     animation: builder-fade-in 140ms var(--be-ease);
+  }
 
-    dl {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      margin: 0;
-    }
+  .builder-editor__help-panel dl {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
   }
 
   .builder-editor__help-title {
@@ -388,24 +395,25 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-
-    dt {
-      color: var(--theme-elevation-700);
-      font-size: var(--be-text-m);
-    }
-
-    dd {
-      display: flex;
-      flex: none;
-      gap: 3px;
-      margin: 0;
-    }
   }
 
-  // ---------------------------------------------------------------------------
-  // Layout
-  // ---------------------------------------------------------------------------
+  .builder-editor__help-row dt {
+    color: var(--color-text-secondary);
+    font-size: var(--be-text-m);
+  }
 
+  .builder-editor__help-row dd {
+    display: flex;
+    flex: none;
+    gap: 3px;
+    margin: 0;
+  }
+
+  /*
+   * ---------------------------------------------------------------------------
+   * Layout
+   * ---------------------------------------------------------------------------
+   */
   .builder-editor__body {
     display: flex;
     flex: 1;
@@ -421,9 +429,11 @@
     background: var(--be-panel);
   }
 
-  // The sidebars are resizable (layout/Splitter.tsx). A stored size is a CSS variable on the
-  // editor root; without one, these defaults apply. A sidebar never takes more than a third of
-  // the window, so a size stored on a large screen still fits a laptop.
+  /*
+   * The sidebars are resizable (layout/Splitter.tsx). A stored size is a CSS variable on the
+   * editor root; without one, these defaults apply. A sidebar never takes more than a third of
+   * the window, so a size stored on a large screen still fits a laptop.
+   */
   .builder-editor__left {
     width: var(--be-left-width, 288px);
     max-width: 33vw;
@@ -436,7 +446,7 @@
     border-left: 1px solid var(--be-border);
   }
 
-  // Laptop screens: give the canvas more room.
+  /* Laptop screens: give the canvas more room. */
   @media (max-width: 1600px) {
     .builder-editor__left {
       width: var(--be-left-width, 252px);
@@ -475,14 +485,14 @@
     align-items: center;
     gap: 6px;
     margin: 0;
-    color: var(--theme-text);
+    color: var(--color-text);
     font-size: var(--be-text-m);
     font-weight: var(--be-weight-strong);
     letter-spacing: 0.01em;
+  }
 
-    svg {
-      color: var(--be-muted);
-    }
+  .builder-editor__panel-title svg {
+    color: var(--be-muted);
   }
 
   .builder-editor__panel-toggle {
@@ -499,10 +509,10 @@
     background: none;
     color: var(--be-muted);
     cursor: pointer;
+  }
 
-    &:hover {
-      color: var(--theme-text);
-    }
+  .builder-editor__panel-toggle:hover {
+    color: var(--color-text);
   }
 
   .builder-editor__panel-tools {
@@ -512,11 +522,12 @@
     color: var(--be-muted);
   }
 
-  // ---------------------------------------------------------------------------
-  // Insert panel (blocks and sections)
-  // ---------------------------------------------------------------------------
-
-  // The Blocks and Sections tabs of the left panel (layout/LeftPanel.tsx).
+  /*
+   * ---------------------------------------------------------------------------
+   * Insert panel (blocks and sections)
+   * ---------------------------------------------------------------------------
+   */
+  /* The Blocks and Sections tabs of the left panel (layout/LeftPanel.tsx). */
   .builder-editor__insert {
     display: flex;
     flex: 1;
@@ -534,30 +545,30 @@
     padding: 0 8px;
     border: 1px solid var(--be-border);
     border-radius: var(--be-radius-m);
-    background: var(--theme-input-bg, var(--theme-elevation-0));
+    background: var(--field-color-bg, var(--color-bg));
     color: var(--be-subtle);
     cursor: text;
+  }
 
-    &:focus-within {
-      border-color: var(--be-accent);
-      color: var(--theme-text);
-    }
+  .builder-editor__search:focus-within {
+    border-color: var(--be-accent);
+    color: var(--color-text);
+  }
 
-    input {
-      flex: 1;
-      min-width: 0;
-      padding: 0;
-      border: 0;
-      outline: 0;
-      background: transparent;
-      color: var(--theme-text);
-      font: inherit;
-      font-size: var(--be-text-m);
+  .builder-editor__search input {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--color-text);
+    font: inherit;
+    font-size: var(--be-text-m);
+  }
 
-      &::placeholder {
-        color: var(--be-subtle);
-      }
-    }
+  .builder-editor__search input::placeholder {
+    color: var(--be-subtle);
   }
 
   .builder-editor__insert-body {
@@ -599,34 +610,34 @@
     border: 1px solid var(--be-border-soft);
     border-radius: var(--be-radius-m);
     background: var(--be-raised);
-    color: var(--theme-elevation-800);
+    color: var(--color-text);
     cursor: grab;
     touch-action: none;
     transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease, transform 120ms ease;
+  }
 
-    &:hover {
-      border-color: var(--theme-elevation-250);
-      background: var(--be-hover);
-      color: var(--theme-text);
+  .builder-editor__tile:hover {
+    border-color: var(--color-border-control-strong);
+    background: var(--be-hover);
+    color: var(--color-text);
+  }
 
-      .builder-editor__tile-icon {
-        color: var(--be-accent);
-      }
-    }
+  .builder-editor__tile:hover .builder-editor__tile-icon {
+    color: var(--be-accent);
+  }
 
-    &:active {
-      transform: scale(0.97);
-    }
+  .builder-editor__tile:active {
+    transform: scale(0.97);
   }
 
   .builder-editor__tile-icon {
     display: grid;
     place-items: center;
-    color: var(--theme-elevation-600);
+    color: var(--color-text-secondary);
     transition: color 120ms ease;
   }
 
-  // Two lines at most, so a long name ("Collection list") wraps instead of "Collectio…".
+  /* Two lines at most, so a long name ("Collection list") wraps instead of "Collectio…". */
   .builder-editor__tile-label {
     display: -webkit-box;
     max-width: 100%;
@@ -656,20 +667,20 @@
     border: 1px solid var(--be-border-soft);
     border-radius: var(--be-radius-m);
     background: var(--be-raised);
-    color: var(--theme-text);
+    color: var(--color-text);
     text-align: left;
     cursor: grab;
     touch-action: none;
     transition: border-color 120ms ease, box-shadow 120ms ease;
+  }
 
-    &:hover {
-      border-color: var(--theme-elevation-250);
-      box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
+  .builder-editor__card:hover {
+    border-color: var(--color-border-control-strong);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
 
-      .builder-editor__thumb {
-        background: var(--theme-elevation-0);
-      }
-    }
+  .builder-editor__card:hover .builder-editor__thumb {
+    background: var(--color-bg);
   }
 
   .builder-editor__card-text {
@@ -695,16 +706,18 @@
     -webkit-line-clamp: 2;
   }
 
-  // The thumbnail of a section: the wireframe, then the picture, in one box of a fixed shape. The
-  // box keeps its size when the picture loads, so the list never jumps. 2:1 is the top 1280 x 640 px
-  // of a section at the width pictures are made at (sections/thumbnails.ts).
+  /*
+   * The thumbnail of a section: the wireframe, then the picture, in one box of a fixed shape. The
+   * box keeps its size when the picture loads, so the list never jumps. 2:1 is the top 1280 x 640 px
+   * of a section at the width pictures are made at (sections/thumbnails.ts).
+   */
   .builder-editor__thumb {
     position: relative;
     display: flex;
     flex-direction: column;
-    aspect-ratio: 2 / 1;
+    aspect-ratio: 2/1;
     overflow: hidden;
-    background: var(--theme-elevation-0);
+    background: var(--color-bg);
     transition: background-color 120ms ease;
     mask-image: linear-gradient(to bottom, #000 82%, transparent);
   }
@@ -718,208 +731,217 @@
     gap: 4px;
     min-height: 100%;
     padding: 6px;
-
-    // The section root fills the thumbnail, its content centered vertically.
-    > .wf-box {
-      flex: 1 0 auto;
-      justify-content: center;
-    }
-
-    --wf-ink: var(--theme-elevation-500);
-    --wf-line: var(--theme-elevation-250);
-    --wf-fill: var(--theme-elevation-150);
-
-    .wf-box {
-      display: flex;
-      gap: 4px;
-      min-width: 0;
-      border-radius: 2px;
-    }
-
-    .wf-col {
-      flex-direction: column;
-    }
-
-    .wf-row {
-      flex-flow: row wrap;
-      align-items: center;
-    }
-
-    .wf-grid {
-      display: grid;
-      gap: 5px;
-    }
-
-    [data-center] {
-      align-items: center;
-    }
-
-    [data-between] {
-      justify-content: space-between;
-    }
-
-    [data-pad] {
-      padding: 6px 8px;
-    }
-
-    [data-tone='muted'] {
-      background: var(--theme-elevation-100);
-    }
-
-    [data-tone='primary'] {
-      background: color-mix(in srgb, var(--be-accent) 30%, transparent);
-    }
-
-    // A heading with its real words, so sections are easy to tell apart.
-    .wf-heading-text {
-      display: -webkit-box;
-      max-width: 92%;
-      overflow: hidden;
-      color: var(--theme-elevation-800);
-      font-size: 8px;
-      font-weight: 700;
-      line-height: 1.15;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-
-      &[data-level='1'] {
-        font-size: 9.5px;
-      }
-
-      &[data-level='3'] {
-        font-size: 7px;
-        font-weight: 600;
-      }
-
-      &[data-center] {
-        text-align: center;
-      }
-    }
-
-    .wf-row > .wf-heading-text {
-      max-width: 45%;
-    }
-
-    .wf-heading {
-      display: block;
-      width: 58%;
-      height: 5px;
-      border-radius: 2px;
-      background: var(--wf-ink);
-
-      &[data-level='1'] {
-        width: 68%;
-        height: 7px;
-      }
-
-      &[data-level='3'] {
-        width: 44%;
-        height: 4px;
-      }
-    }
-
-    .wf-text {
-      display: block;
-      width: 82%;
-      height: 3px;
-      border-radius: 2px;
-      background: var(--wf-line);
-    }
-
-    .wf-text--short {
-      width: 50%;
-    }
-
-    .wf-lines {
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-      width: 100%;
-    }
-
-    .wf-button {
-      display: block;
-      flex: none;
-      width: 22px;
-      height: 7px;
-      border: 1px solid var(--wf-ink);
-      border-radius: 4px;
-
-      &[data-primary] {
-        border-color: var(--be-accent);
-        background: var(--be-accent);
-      }
-    }
-
-    .wf-media {
-      display: block;
-      width: 100%;
-      min-height: 18px;
-      aspect-ratio: 16 / 9;
-      border-radius: 2px;
-      background: var(--wf-fill);
-    }
-
-    .wf-divider {
-      display: block;
-      width: 100%;
-      height: 1px;
-      background: var(--wf-line);
-    }
-
-    .wf-spacer {
-      display: block;
-      height: 6px;
-    }
-
-    .wf-form {
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-      width: 100%;
-      padding: 4px;
-      border: 1px solid var(--wf-line);
-      border-radius: 2px;
-    }
-
-    .wf-card {
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-      width: 100%;
-      padding: 5px;
-      border-radius: 2px;
-      background: var(--theme-elevation-50);
-      box-shadow: inset 0 0 0 1px var(--wf-line);
-    }
-
-    .wf-field {
-      display: block;
-      height: 5px;
-      border: 1px solid var(--wf-line);
-      border-radius: 1px;
-    }
-
-    // Inside rows, bars get a fixed size instead of a share of the row.
-    .wf-row > .wf-text,
-    .wf-inline .wf-text {
-      width: 14px;
-    }
-
-    .wf-row > .wf-heading {
-      width: 30px;
-    }
-
-    .wf-inline {
-      display: flex;
-      gap: 3px;
-    }
+    /* The section root fills the thumbnail, its content centered vertically. */
   }
 
-  // ---------------------------------------------------------------------------
-  // Outline
-  // ---------------------------------------------------------------------------
+  .builder-editor__thumb-inner > .wf-box {
+    flex: 1 0 auto;
+    justify-content: center;
+  }
 
+  .builder-editor__thumb-inner {
+    --wf-ink: var(--color-text-tertiary);
+    --wf-line: var(--color-border-control-strong);
+    --wf-fill: var(--color-bg-tertiary);
+  }
+
+  .builder-editor__thumb-inner .wf-box {
+    display: flex;
+    gap: 4px;
+    min-width: 0;
+    border-radius: 2px;
+  }
+
+  .builder-editor__thumb-inner .wf-col {
+    flex-direction: column;
+  }
+
+  .builder-editor__thumb-inner .wf-row {
+    flex-flow: row wrap;
+    align-items: center;
+  }
+
+  .builder-editor__thumb-inner .wf-grid {
+    display: grid;
+    gap: 5px;
+  }
+
+  .builder-editor__thumb-inner [data-center] {
+    align-items: center;
+  }
+
+  .builder-editor__thumb-inner [data-between] {
+    justify-content: space-between;
+  }
+
+  .builder-editor__thumb-inner [data-pad] {
+    padding: 6px 8px;
+  }
+
+  .builder-editor__thumb-inner [data-tone=muted] {
+    background: var(--color-bg-hover);
+  }
+
+  .builder-editor__thumb-inner [data-tone=primary] {
+    background: color-mix(in srgb, var(--be-accent) 30%, transparent);
+  }
+
+  .builder-editor__thumb-inner {
+    /* A heading with its real words, so sections are easy to tell apart. */
+  }
+
+  .builder-editor__thumb-inner .wf-heading-text {
+    display: -webkit-box;
+    max-width: 92%;
+    overflow: hidden;
+    color: var(--color-text);
+    font-size: 8px;
+    font-weight: 700;
+    line-height: 1.15;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .builder-editor__thumb-inner .wf-heading-text[data-level="1"] {
+    font-size: 9.5px;
+  }
+
+  .builder-editor__thumb-inner .wf-heading-text[data-level="3"] {
+    font-size: 7px;
+    font-weight: 600;
+  }
+
+  .builder-editor__thumb-inner .wf-heading-text[data-center] {
+    text-align: center;
+  }
+
+  .builder-editor__thumb-inner .wf-row > .wf-heading-text {
+    max-width: 45%;
+  }
+
+  .builder-editor__thumb-inner .wf-heading {
+    display: block;
+    width: 58%;
+    height: 5px;
+    border-radius: 2px;
+    background: var(--wf-ink);
+  }
+
+  .builder-editor__thumb-inner .wf-heading[data-level="1"] {
+    width: 68%;
+    height: 7px;
+  }
+
+  .builder-editor__thumb-inner .wf-heading[data-level="3"] {
+    width: 44%;
+    height: 4px;
+  }
+
+  .builder-editor__thumb-inner .wf-text {
+    display: block;
+    width: 82%;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--wf-line);
+  }
+
+  .builder-editor__thumb-inner .wf-text--short {
+    width: 50%;
+  }
+
+  .builder-editor__thumb-inner .wf-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 100%;
+  }
+
+  .builder-editor__thumb-inner .wf-button {
+    display: block;
+    flex: none;
+    width: 22px;
+    height: 7px;
+    border: 1px solid var(--wf-ink);
+    border-radius: 4px;
+  }
+
+  .builder-editor__thumb-inner .wf-button[data-primary] {
+    border-color: var(--be-accent);
+    background: var(--be-accent);
+  }
+
+  .builder-editor__thumb-inner .wf-media {
+    display: block;
+    width: 100%;
+    min-height: 18px;
+    aspect-ratio: 16/9;
+    border-radius: 2px;
+    background: var(--wf-fill);
+  }
+
+  .builder-editor__thumb-inner .wf-divider {
+    display: block;
+    width: 100%;
+    height: 1px;
+    background: var(--wf-line);
+  }
+
+  .builder-editor__thumb-inner .wf-spacer {
+    display: block;
+    height: 6px;
+  }
+
+  .builder-editor__thumb-inner .wf-form {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 100%;
+    padding: 4px;
+    border: 1px solid var(--wf-line);
+    border-radius: 2px;
+  }
+
+  .builder-editor__thumb-inner .wf-card {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 100%;
+    padding: 5px;
+    border-radius: 2px;
+    background: var(--color-bg-secondary);
+    box-shadow: inset 0 0 0 1px var(--wf-line);
+  }
+
+  .builder-editor__thumb-inner .wf-field {
+    display: block;
+    height: 5px;
+    border: 1px solid var(--wf-line);
+    border-radius: 1px;
+  }
+
+  .builder-editor__thumb-inner {
+    /* Inside rows, bars get a fixed size instead of a share of the row. */
+  }
+
+  .builder-editor__thumb-inner .wf-row > .wf-text,
+  .builder-editor__thumb-inner .wf-inline .wf-text {
+    width: 14px;
+  }
+
+  .builder-editor__thumb-inner .wf-row > .wf-heading {
+    width: 30px;
+  }
+
+  .builder-editor__thumb-inner .wf-inline {
+    display: flex;
+    gap: 3px;
+  }
+
+  /*
+   * ---------------------------------------------------------------------------
+   * Outline
+   * ---------------------------------------------------------------------------
+   */
   .builder-editor__outline {
     flex: 1;
     padding: 0 6px 12px;
@@ -937,29 +959,31 @@
     margin: 0;
     padding: 0 6px 0 4px;
     border-radius: var(--be-radius);
-    color: var(--theme-elevation-800);
+    color: var(--color-text);
     font-size: var(--be-text-m);
     white-space: nowrap;
     cursor: pointer;
     user-select: none;
     touch-action: none;
-    // Rows off screen skip style and layout work. Payload's admin CSS has `body:has(.drag-overlay) *`,
-    // so every DOM change restyles the whole document, and a large page has thousands of row elements.
+    /*
+     * Rows off screen skip style and layout work. Payload's admin CSS has `body:has(.drag-overlay) *`,
+     * so every DOM change restyles the whole document, and a large page has thousands of row elements.
+     */
     content-visibility: auto;
     contain-intrinsic-block-size: 28px;
+  }
 
-    &:hover .builder-editor__row-actions {
-      display: flex;
-    }
+  .builder-editor__row:hover .builder-editor__row-actions {
+    display: flex;
+  }
 
-    &:hover .builder-editor__row-hidden {
-      display: none;
-    }
+  .builder-editor__row:hover .builder-editor__row-hidden {
+    display: none;
+  }
 
-    &:focus-visible {
-      outline: 2px solid var(--be-accent);
-      outline-offset: -2px;
-    }
+  .builder-editor__row:focus-visible {
+    outline: 2px solid var(--be-accent);
+    outline-offset: -2px;
   }
 
   .builder-editor__guide {
@@ -967,7 +991,7 @@
     top: 0;
     bottom: 0;
     width: 1px;
-    background: var(--theme-elevation-150);
+    background: var(--color-bg-tertiary);
     pointer-events: none;
   }
 
@@ -981,40 +1005,36 @@
 
   .builder-editor__row--selected {
     background: var(--be-accent-soft);
-    color: var(--theme-text);
-
-    .builder-editor__row-icon {
-      color: var(--be-accent);
-    }
-
-    .builder-editor__row-type {
-      font-weight: var(--be-weight-strong);
-    }
+    color: var(--color-text);
   }
 
-  // Dark admin theme: a lighter text color, so it passes AA on the dark panel.
-  html[data-theme='dark'] .builder-editor {
+  .builder-editor__row--selected .builder-editor__row-icon {
+    color: var(--be-accent);
+  }
+
+  .builder-editor__row--selected .builder-editor__row-type {
+    font-weight: var(--be-weight-strong);
+  }
+
+  /* Dark admin theme: a lighter text color, so it passes AA on the dark panel. */
+  html[data-theme=dark] .builder-editor {
     --be-component-text: #a78bfa;
   }
 
-  // A component's Layers row: its icon and name in the component color.
-  .builder-editor__row[data-component] {
-    .builder-editor__row-icon,
-    .builder-editor__row-type {
-      color: var(--be-component-text);
-    }
+  /* A component's Layers row: its icon and name in the component color. */
+  .builder-editor__row[data-component] .builder-editor__row-icon,
+  .builder-editor__row[data-component] .builder-editor__row-type {
+    color: var(--be-component-text);
   }
 
   .builder-editor__row--dragging {
     opacity: 0.4;
   }
 
-  .builder-editor__row--hidden {
-    .builder-editor__row-icon,
-    .builder-editor__row-type,
-    .builder-editor__row-text {
-      opacity: 0.45;
-    }
+  .builder-editor__row--hidden .builder-editor__row-icon,
+  .builder-editor__row--hidden .builder-editor__row-type,
+  .builder-editor__row--hidden .builder-editor__row-text {
+    opacity: 0.45;
   }
 
   .builder-editor__caret {
@@ -1029,11 +1049,11 @@
     background: none;
     color: var(--be-muted);
     cursor: pointer;
+  }
 
-    &:hover {
-      background: var(--theme-elevation-150);
-      color: var(--theme-text);
-    }
+  .builder-editor__caret:hover {
+    background: var(--color-bg-tertiary);
+    color: var(--color-text);
   }
 
   .builder-editor__caret--empty {
@@ -1065,7 +1085,7 @@
     margin-left: auto;
     padding: 0 5px;
     border-radius: 8px;
-    background: var(--theme-elevation-100);
+    background: var(--color-bg-hover);
     color: var(--be-muted);
     font-size: var(--be-text-s);
     line-height: 16px;
@@ -1090,11 +1110,11 @@
     background: none;
     color: var(--be-muted);
     cursor: pointer;
+  }
 
-    &:hover {
-      background: var(--theme-elevation-150);
-      color: var(--theme-text);
-    }
+  .builder-editor__row-action:hover {
+    background: var(--color-bg-tertiary);
+    color: var(--color-text);
   }
 
   .builder-editor__row-hidden {
@@ -1105,24 +1125,24 @@
     color: var(--be-subtle);
   }
 
-  // A block that stopped the last publish.
+  /* A block that stopped the last publish. */
   .builder-editor__row-problem {
     display: grid;
     flex: none;
     place-items: center;
     margin-left: auto;
-    color: var(--theme-error-500);
+    color: var(--color-text-danger);
   }
 
   .builder-editor__row--problem .builder-editor__row-type {
-    color: var(--theme-error-500);
+    color: var(--color-text-danger);
   }
 
   .builder-editor__row:hover .builder-editor__row-problem {
     display: none;
   }
 
-  // A block with animations (`block.motion`).
+  /* A block with animations (`block.motion`). */
   .builder-editor__row-motion {
     display: grid;
     flex: none;
@@ -1138,7 +1158,7 @@
     color: inherit;
   }
 
-  // Next to the motion icon, the other end-of-row marks sit close instead of splitting the space.
+  /* Next to the motion icon, the other end-of-row marks sit close instead of splitting the space. */
   .builder-editor__row-problem ~ .builder-editor__row-motion,
   .builder-editor__row-motion ~ .builder-editor__row-bound,
   .builder-editor__row:not(:hover) .builder-editor__row-motion ~ .builder-editor__row-count,
@@ -1150,7 +1170,7 @@
     display: none;
   }
 
-  // Inline rename in the outline and the inspector header.
+  /* Inline rename in the outline and the inspector header. */
   .builder-editor__rename {
     flex: 1;
     min-width: 0;
@@ -1159,20 +1179,21 @@
     border: 1px solid var(--be-accent);
     border-radius: var(--be-radius);
     outline: 0;
-    background: var(--theme-input-bg, var(--theme-bg));
-    color: var(--theme-text);
+    background: var(--field-color-bg, var(--color-bg));
+    color: var(--color-text);
     font: inherit;
     font-size: var(--be-text-m);
-
-    &::placeholder {
-      color: var(--be-subtle);
-    }
   }
 
-  // ---------------------------------------------------------------------------
-  // Inspector
-  // ---------------------------------------------------------------------------
+  .builder-editor__rename::placeholder {
+    color: var(--be-subtle);
+  }
 
+  /*
+   * ---------------------------------------------------------------------------
+   * Inspector
+   * ---------------------------------------------------------------------------
+   */
   .builder-editor__inspector {
     display: flex;
     flex-direction: column;
@@ -1190,13 +1211,13 @@
     flex: 1;
     min-height: 0;
     padding: 12px;
-    // Payload keeps hidden tooltips in the DOM past the right edge. Clip the x axis.
+    /* Payload keeps hidden tooltips in the DOM past the right edge. Clip the x axis. */
     overflow: hidden auto;
     scrollbar-width: thin;
+  }
 
-    &[hidden] {
-      display: none;
-    }
+  .builder-editor__inspector-body[hidden] {
+    display: none;
   }
 
   .builder-editor__block-head {
@@ -1224,7 +1245,7 @@
     min-width: 0;
   }
 
-  // The block's name. A click renames it, so it looks like text with a quiet hover box.
+  /* The block's name. A click renames it, so it looks like text with a quiet hover box. */
   .builder-editor__block-title {
     align-self: flex-start;
     max-width: 100%;
@@ -1234,7 +1255,7 @@
     border: 1px solid transparent;
     border-radius: var(--be-radius);
     background: none;
-    color: var(--theme-text);
+    color: var(--color-text);
     font: inherit;
     font-size: var(--be-text-l);
     font-weight: var(--be-weight-strong);
@@ -1243,10 +1264,10 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     cursor: text;
+  }
 
-    &:hover {
-      border-color: var(--be-border);
-    }
+  .builder-editor__block-title:hover {
+    border-color: var(--be-border);
   }
 
   .builder-editor__block-name .builder-editor__rename {
@@ -1260,23 +1281,23 @@
     gap: 8px;
     margin: 0 0 12px;
     padding: 8px 10px;
-    border: 1px solid color-mix(in srgb, var(--theme-error-500) 40%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-border-danger-strong) 40%, transparent);
     border-radius: var(--be-radius-m);
-    background: color-mix(in srgb, var(--theme-error-500) 8%, transparent);
-    color: var(--theme-text);
+    background: color-mix(in srgb, var(--color-bg-danger) 8%, transparent);
+    color: var(--color-text);
     font-size: var(--be-text-m);
+  }
 
-    > svg {
-      flex: none;
-      margin-top: 2px;
-      color: var(--theme-error-500);
-    }
+  .builder-editor__block-problems > svg {
+    flex: none;
+    margin-top: 2px;
+    color: var(--color-text-danger);
+  }
 
-    ul {
-      margin: 2px 0 0;
-      padding: 0;
-      list-style: none;
-    }
+  .builder-editor__block-problems ul {
+    margin: 2px 0 0;
+    padding: 0;
+    list-style: none;
   }
 
   .builder-editor__block-problems-title {
@@ -1307,37 +1328,37 @@
     font-size: var(--be-text-m);
     font-weight: var(--be-weight-medium);
     cursor: pointer;
+  }
 
-    &:hover {
-      color: var(--theme-text);
-    }
+  .builder-editor__tab:hover {
+    color: var(--color-text);
+  }
 
-    &[aria-selected='true'] {
-      border-bottom-color: var(--be-accent);
-      color: var(--theme-text);
-    }
+  .builder-editor__tab[aria-selected=true] {
+    border-bottom-color: var(--be-accent);
+    color: var(--color-text);
   }
 
   .builder-editor__fields {
     display: flex;
     flex-direction: column;
-    gap: calc(var(--base) * 0.75);
+    gap: calc(1.0156rem * 0.75);
   }
 
   .builder-editor__empty--inspector {
     padding-top: 48px;
+  }
 
-    > svg {
-      box-sizing: content-box;
-      padding: 10px;
-      border-radius: 50%;
-      background: var(--theme-elevation-100);
-      color: var(--be-muted);
-    }
+  .builder-editor__empty--inspector > svg {
+    box-sizing: content-box;
+    padding: 10px;
+    border-radius: 50%;
+    background: var(--color-bg-hover);
+    color: var(--be-muted);
+  }
 
-    .builder-editor__hint {
-      max-width: 260px;
-    }
+  .builder-editor__empty--inspector .builder-editor__hint {
+    max-width: 260px;
   }
 
   .builder-editor__tips {
@@ -1352,9 +1373,8 @@
   }
 
   .builder-editor__menu.builder-styles__popover {
-    // Menus outside the Styles panel do not inherit its border color.
-    --bs-border: var(--be-border, var(--theme-elevation-150));
-
+    /* Menus outside the Styles panel do not inherit its border color. */
+    --bs-border: var(--be-border, var(--color-border));
     min-width: 200px;
     padding: 4px;
   }
@@ -1369,33 +1389,33 @@
     border: 0;
     border-radius: var(--be-radius);
     background: none;
-    color: var(--theme-text);
+    color: var(--color-text);
     font: inherit;
     font-size: var(--be-text-m);
     text-align: left;
     cursor: pointer;
-
-    svg {
-      color: var(--be-muted);
-    }
-
-    &:hover:not(:disabled) {
-      background: var(--be-hover);
-    }
-
-    &:disabled {
-      opacity: 0.4;
-      cursor: default;
-    }
   }
 
-  // A disabled destructive item is neutral: red says "this acts", and it cannot act.
-  .builder-editor__menu-item--danger:not(:disabled) {
-    color: var(--theme-error-500);
+  .builder-editor__menu-item svg {
+    color: var(--be-muted);
+  }
 
-    svg {
-      color: currentColor;
-    }
+  .builder-editor__menu-item:hover:not(:disabled) {
+    background: var(--be-hover);
+  }
+
+  .builder-editor__menu-item:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  /* A disabled destructive item is neutral: red says "this acts", and it cannot act. */
+  .builder-editor__menu-item--danger:not(:disabled) {
+    color: var(--color-text-danger);
+  }
+
+  .builder-editor__menu-item--danger:not(:disabled) svg {
+    color: currentColor;
   }
 
   .builder-editor__menu-meta {
@@ -1406,18 +1426,19 @@
     font-size: var(--be-text-s);
   }
 
-  // ---------------------------------------------------------------------------
-  // Stage and frame
-  // ---------------------------------------------------------------------------
-
+  /*
+   * ---------------------------------------------------------------------------
+   * Stage and frame
+   * ---------------------------------------------------------------------------
+   */
   .builder-editor__stage {
     position: relative;
     display: flex;
     flex: 1;
     flex-direction: column;
     min-width: 0;
-    background-color: var(--theme-elevation-50);
-    background-image: radial-gradient(var(--theme-elevation-150) 1px, transparent 1px);
+    background-color: var(--color-bg-secondary);
+    background-image: radial-gradient(var(--color-bg-tertiary) 1px, transparent 1px);
     background-size: 16px 16px;
   }
 
@@ -1425,16 +1446,16 @@
     position: relative;
     display: flex;
     flex: 1;
-    // "safe": a frame wider than the stage (a fixed zoom) starts at the left edge and scrolls.
+    /* "safe": a frame wider than the stage (a fixed zoom) starts at the left edge and scrolls. */
     justify-content: safe center;
     align-items: flex-start;
     min-height: 0;
-    // Sideways scrolling only when the frame is wider than the stage (Canvas.tsx sets `data-scroll`).
+    /* Sideways scrolling only when the frame is wider than the stage (Canvas.tsx sets `data-scroll`). */
     overflow: hidden;
+  }
 
-    &[data-scroll] {
-      overflow-x: auto;
-    }
+  .builder-editor__viewport[data-scroll] {
+    overflow-x: auto;
   }
 
   .builder-editor__frame-wrap {
@@ -1449,10 +1470,7 @@
     overflow: hidden;
     border-radius: var(--be-radius-m);
     background: #fff;
-    box-shadow:
-      0 0 0 1px var(--be-border),
-      0 12px 40px rgb(0 0 0 / 0.14),
-      0 2px 6px rgb(0 0 0 / 0.08);
+    box-shadow: 0 0 0 1px var(--be-border), 0 12px 40px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.08);
     transform-origin: 0 0;
     transition: transform 280ms var(--be-ease);
   }
@@ -1474,8 +1492,8 @@
     gap: 6px;
     padding: 6px 12px;
     border-radius: 16px;
-    background: var(--theme-elevation-900);
-    color: var(--theme-elevation-0);
+    background: var(--color-bg-inverse);
+    color: var(--color-text-oninverse);
     font-size: var(--be-text-m);
     font-weight: var(--be-weight-medium);
     pointer-events: none;
@@ -1509,12 +1527,12 @@
     display: inline-flex;
     flex: none;
     align-items: center;
+    /* Long paths: earlier items shrink first. */
+  }
 
-    // Long paths: earlier items shrink first.
-    &:not(:last-child) {
-      flex-shrink: 1;
-      min-width: 0;
-    }
+  .builder-editor__crumb-item:not(:last-child) {
+    flex-shrink: 1;
+    min-width: 0;
   }
 
   .builder-editor__crumb-sep {
@@ -1538,20 +1556,20 @@
     font-size: var(--be-text-s);
     text-overflow: ellipsis;
     cursor: pointer;
+  }
 
-    &:hover {
-      background: var(--be-hover);
-      color: var(--theme-text);
-    }
+  .builder-editor__crumb:hover {
+    background: var(--be-hover);
+    color: var(--color-text);
+  }
 
-    &[aria-current='true'] {
-      color: var(--theme-text);
-      font-weight: var(--be-weight-strong);
+  .builder-editor__crumb[aria-current=true] {
+    color: var(--color-text);
+    font-weight: var(--be-weight-strong);
+  }
 
-      svg {
-        color: var(--be-accent);
-      }
-    }
+  .builder-editor__crumb[aria-current=true] svg {
+    color: var(--be-accent);
   }
 
   .builder-editor__crumb-empty {
@@ -1583,31 +1601,31 @@
     padding: 0 6px;
     border: 0;
     border-radius: var(--be-radius);
-    background: var(--theme-elevation-100);
-    color: var(--theme-elevation-800);
+    background: var(--color-bg-hover);
+    color: var(--color-text);
     font: inherit;
     font-size: var(--be-text-s);
     font-weight: var(--be-weight-strong);
     font-variant-numeric: tabular-nums;
     cursor: pointer;
-
-    &:hover {
-      background: var(--theme-elevation-150);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--be-accent);
-      outline-offset: 1px;
-    }
   }
 
-  // ---------------------------------------------------------------------------
-  // Overlay (iframe coordinates). `--be-inv` is 1 / zoom: lines and chips keep their screen size.
-  // ---------------------------------------------------------------------------
+  .builder-editor__zoom:hover {
+    background: var(--color-bg-tertiary);
+  }
 
+  .builder-editor__zoom:focus-visible {
+    outline: 2px solid var(--be-accent);
+    outline-offset: 1px;
+  }
+
+  /*
+   * ---------------------------------------------------------------------------
+   * Overlay (iframe coordinates). `--be-inv` is 1 / zoom: lines and chips keep their screen size.
+   * ---------------------------------------------------------------------------
+   */
   .builder-editor__overlay {
     --be-px: calc(1px * var(--be-inv, 1));
-
     position: absolute;
     inset: 0;
     overflow: hidden;
@@ -1628,8 +1646,10 @@
     box-shadow: inset 0 0 0 var(--be-px) var(--be-accent);
   }
 
-  // A component (`data-component`): its hover and selection outline, name tag, action bar and
-  // Layers row use the component color instead of the accent.
+  /*
+   * A component (`data-component`): its hover and selection outline, name tag, action bar and
+   * Layers row use the component color instead of the accent.
+   */
   :is(.builder-editor__hover, .builder-editor__selection, .builder-editor__actions, .builder-editor__row)[data-component] {
     --be-accent: var(--be-component);
     --be-accent-strong: var(--be-component-solid);
@@ -1654,15 +1674,13 @@
   }
 
   .builder-editor__source {
-    background: repeating-linear-gradient(
-      45deg,
-      color-mix(in srgb, var(--be-accent) 14%, transparent) 0 6px,
-      transparent 6px 12px
-    );
+    background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--be-accent) 14%, transparent) 0 6px, transparent 6px 12px);
   }
 
-  // The name tag and the action bar draw over the insert "+" and its line (z-index 3), so an
-  // insert spot on the selected block's edge never cuts through them.
+  /*
+   * The name tag and the action bar draw over the insert "+" and its line (z-index 3), so an
+   * insert spot on the selected block's edge never cuts through them.
+   */
   .builder-editor__tag {
     position: absolute;
     top: 0;
@@ -1694,8 +1712,10 @@
     transform: scale(var(--be-inv, 1));
   }
 
-  // Outside, under the block: used when there is no room above, so the tag does not cover the
-  // block's first line.
+  /*
+   * Outside, under the block: used when there is no room above, so the tag does not cover the
+   * block's first line.
+   */
   .builder-editor__tag--below {
     top: 100%;
     border-radius: 0 0 4px 4px;
@@ -1713,7 +1733,7 @@
     padding: 2px;
     border-radius: 6px;
     background: var(--be-accent);
-    box-shadow: 0 2px 8px rgb(0 0 0 / 0.2);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     pointer-events: auto;
     transform-origin: 0 0;
     transform: scale(var(--be-inv, 1)) translate(-100%, -100%);
@@ -1725,7 +1745,7 @@
     transform: scale(var(--be-inv, 1)) translate(-100%, 0);
   }
 
-  // Narrow blocks: under the block, at its left edge, so the bar never covers the name tag.
+  /* Narrow blocks: under the block, at its left edge, so the bar never covers the name tag. */
   .builder-editor__actions--below {
     margin-top: 4px;
     transform: scale(var(--be-inv, 1));
@@ -1740,13 +1760,13 @@
     font-size: var(--be-text-s);
   }
 
-  // Blocks that stopped the last publish.
+  /* Blocks that stopped the last publish. */
   .builder-editor__problem-box {
     position: absolute;
     pointer-events: none;
-    outline: calc(var(--be-px) * 2) dashed var(--theme-error-500);
+    outline: calc(var(--be-px) * 2) dashed var(--color-border-danger-strong);
     outline-offset: calc(var(--be-px) * -2);
-    background: color-mix(in srgb, var(--theme-error-500) 6%, transparent);
+    background: color-mix(in srgb, var(--color-bg-danger) 6%, transparent);
   }
 
   .builder-editor__problem-tag {
@@ -1761,7 +1781,7 @@
     padding: 0 7px 0 5px;
     overflow: hidden;
     border-radius: 4px 0 0;
-    background: var(--theme-error-500);
+    background: var(--color-bg-danger);
     color: #fff;
     font-size: var(--be-text-s);
     font-weight: var(--be-weight-strong);
@@ -1770,17 +1790,17 @@
     white-space: nowrap;
     transform-origin: 100% 100%;
     transform: scale(var(--be-inv, 1));
+  }
 
-    svg {
-      flex: none;
-    }
+  .builder-editor__problem-tag svg {
+    flex: none;
   }
 
   .builder-editor__actions-sep {
     width: 1px;
     height: 14px;
     margin: 0 2px;
-    background: rgb(255 255 255 / 0.3);
+    background: rgba(255, 255, 255, 0.3);
   }
 
   .builder-editor__action {
@@ -1794,22 +1814,22 @@
     background: transparent;
     color: var(--be-accent-fg);
     cursor: pointer;
+  }
 
-    &:hover:not(:disabled) {
-      background: rgb(255 255 255 / 0.2);
-    }
+  .builder-editor__action:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.2);
+  }
 
-    &:disabled {
-      opacity: 0.4;
-      cursor: default;
-    }
+  .builder-editor__action:disabled {
+    opacity: 0.4;
+    cursor: default;
   }
 
   .builder-editor__action--danger:hover:not(:disabled) {
-    background: var(--theme-error-500);
+    background: var(--color-bg-danger);
   }
 
-  // A button with a word next to its icon ("Edit fields" on a page region).
+  /* A button with a word next to its icon ("Edit fields" on a page region). */
   .builder-editor__action--text {
     display: inline-flex;
     gap: 4px;
@@ -1820,7 +1840,7 @@
     white-space: nowrap;
   }
 
-  // Page regions: fixed parts of the page frame, drawn dashed so they read as "not a block".
+  /* Page regions: fixed parts of the page frame, drawn dashed so they read as "not a block". */
   .builder-editor__hover--region {
     box-shadow: none;
     outline: var(--be-px) dashed var(--be-accent);
@@ -1843,7 +1863,7 @@
     display: grid;
     gap: 1px;
     padding: 4px 6px;
-    border-bottom: 1px solid var(--theme-elevation-100);
+    border-bottom: 1px solid var(--color-border);
   }
 
   .builder-region__row {
@@ -1867,11 +1887,9 @@
     touch-action: none;
   }
 
-  // Inline text editing on the canvas.
+  /* Inline text editing on the canvas. */
   .builder-editor__selection--editing {
-    box-shadow:
-      inset 0 0 0 calc(var(--be-px) * 2) var(--be-accent),
-      0 0 0 calc(var(--be-px) * 4) color-mix(in srgb, var(--be-accent) 22%, transparent);
+    box-shadow: inset 0 0 0 calc(var(--be-px) * 2) var(--be-accent), 0 0 0 calc(var(--be-px) * 4) color-mix(in srgb, var(--be-accent) 22%, transparent);
   }
 
   .builder-editor__tag--editing {
@@ -1889,7 +1907,7 @@
     transform: scale(var(--be-inv, 1));
   }
 
-  // InlineToolbar places it (placement.ts). Above the text, its bottom edge is the anchor.
+  /* InlineToolbar places it (placement.ts). Above the text, its bottom edge is the anchor. */
   .builder-editor__inline-toolbar--above {
     flex-direction: column-reverse;
     transform: scale(var(--be-inv, 1)) translateY(-100%);
@@ -1904,7 +1922,7 @@
     border-radius: 6px;
     background: var(--be-accent);
     color: var(--be-accent-fg);
-    box-shadow: 0 2px 10px rgb(0 0 0 / 0.22);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
     white-space: nowrap;
   }
 
@@ -1921,18 +1939,18 @@
     font-size: var(--be-text-m);
     line-height: 1;
     cursor: pointer;
+  }
 
-    &:hover {
-      background: rgb(255 255 255 / 0.18);
-    }
+  .builder-editor__inline-button:hover {
+    background: rgba(255, 255, 255, 0.18);
+  }
 
-    &[aria-pressed='true'] {
-      background: rgb(255 255 255 / 0.32);
-    }
+  .builder-editor__inline-button[aria-pressed=true] {
+    background: rgba(255, 255, 255, 0.32);
+  }
 
-    code {
-      font-size: var(--be-text-s);
-    }
+  .builder-editor__inline-button code {
+    font-size: var(--be-text-s);
   }
 
   .builder-editor__inline-glyph {
@@ -1946,11 +1964,11 @@
     gap: 8px;
     width: 300px;
     padding: 10px;
-    border: 1px solid var(--theme-elevation-150);
+    border: 1px solid var(--color-border);
     border-radius: 6px;
-    background: var(--theme-elevation-0);
-    color: var(--theme-text);
-    box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
+    background: var(--color-bg);
+    color: var(--color-text);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
     font-size: var(--be-text-m);
   }
 
@@ -1958,21 +1976,21 @@
     width: 100%;
     height: 32px;
     padding: 0 8px;
-    border: 1px solid var(--theme-elevation-150);
+    border: 1px solid var(--color-border);
     border-radius: 4px;
-    background: var(--theme-input-bg, var(--theme-elevation-0));
-    color: var(--theme-text);
+    background: var(--field-color-bg, var(--color-bg));
+    color: var(--color-text);
     font: inherit;
+  }
 
-    &:focus {
-      border-color: var(--be-accent);
-      outline: none;
-    }
+  .builder-editor__inline-url:focus {
+    border-color: var(--be-accent);
+    outline: none;
   }
 
   .builder-editor__inline-note {
     margin: 0;
-    color: var(--theme-elevation-600);
+    color: var(--color-text-secondary);
   }
 
   .builder-editor__inline-actions {
@@ -1984,26 +2002,26 @@
   .builder-editor__inline-text-button {
     height: 28px;
     padding: 0 10px;
-    border: 1px solid var(--theme-elevation-150);
+    border: 1px solid var(--color-border);
     border-radius: 4px;
-    background: var(--theme-elevation-0);
-    color: var(--theme-text);
+    background: var(--color-bg);
+    color: var(--color-text);
     font: inherit;
     cursor: pointer;
+  }
 
-    &:hover {
-      background: var(--theme-elevation-50);
-    }
+  .builder-editor__inline-text-button:hover {
+    background: var(--color-bg-secondary);
   }
 
   .builder-editor__inline-text-button--primary {
     border-color: var(--be-accent);
     background: var(--be-accent);
     color: var(--be-accent-fg);
+  }
 
-    &:hover {
-      background: color-mix(in srgb, var(--be-accent) 88%, #000);
-    }
+  .builder-editor__inline-text-button--primary:hover {
+    background: color-mix(in srgb, var(--be-accent) 88%, #000);
   }
 
   .builder-editor__drop--line {
@@ -2038,30 +2056,30 @@
     transform: scale(var(--be-inv, 1));
   }
 
-  // Outline drop indicator (admin client coordinates).
+  /* Outline drop indicator (admin client coordinates). */
   .builder-editor__drop--fixed {
     position: fixed;
     z-index: 1000;
     pointer-events: none;
+  }
 
-    &.builder-editor__drop--line::before {
-      content: '';
-      position: absolute;
-      top: 50%;
-      left: -3px;
-      width: 6px;
-      height: 6px;
-      border: 2px solid var(--be-accent);
-      border-radius: 50%;
-      background: var(--be-panel, var(--theme-bg));
-      transform: translateY(-50%);
-    }
+  .builder-editor__drop--fixed.builder-editor__drop--line::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: -3px;
+    width: 6px;
+    height: 6px;
+    border: 2px solid var(--be-accent);
+    border-radius: 50%;
+    background: var(--be-panel, var(--color-bg));
+    transform: translateY(-50%);
+  }
 
-    &.builder-editor__drop--box {
-      outline-width: 2px;
-      outline-offset: -2px;
-      border-radius: var(--style-radius-s, 4px);
-    }
+  .builder-editor__drop--fixed.builder-editor__drop--box {
+    outline-width: 2px;
+    outline-offset: -2px;
+    border-radius: var(--radius-medium, 4px);
   }
 
   .builder-editor__ghost {
@@ -2073,39 +2091,43 @@
     height: 28px;
     padding: 0 10px 0 8px;
     border-radius: 6px;
-    background: var(--theme-success-500);
+    background: var(--color-bg-brand);
     color: #fff;
     font-family: var(--font-body);
     font-size: var(--be-text-m);
     font-weight: var(--be-weight-strong);
     pointer-events: none;
-    box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
   }
 
   .builder-editor__ghost--refused {
-    background: var(--theme-elevation-600);
+    background: var(--color-icon-secondary);
   }
 
   .builder-editor__ghost-note {
     font-weight: var(--be-weight-regular);
     opacity: 0.85;
-
-    &::before {
-      content: '·';
-      margin-right: 6px;
-    }
   }
 
-  // The layout field in Payload's edit view: admin/layoutField.scss.
+  .builder-editor__ghost-note::before {
+    content: "·";
+    margin-right: 6px;
+  }
 
-  // Live editing: changes from AI agents and other editors.
+  /* The layout field in Payload's edit view: admin/layoutField.scss. */
+  /* Live editing: changes from AI agents and other editors. */
   .builder-editor {
     --be-remote: #8b5cf6;
   }
 
   @keyframes builder-editor-remote-flash {
-    from { background: color-mix(in srgb, var(--be-remote) 22%, transparent); }
-    to { background: transparent; }
+    from {
+      background: color-mix(in srgb, var(--be-remote) 22%, transparent);
+    }
+
+    to {
+      background: transparent;
+    }
   }
 
   .builder-editor__remote {
@@ -2141,7 +2163,7 @@
     padding: 2px 8px;
     border-radius: 999px;
     background: color-mix(in srgb, var(--be-peer, var(--be-remote)) 16%, transparent);
-    color: var(--theme-text);
+    color: var(--color-text);
     white-space: nowrap;
     animation: builder-fade-in 160ms var(--be-ease);
   }
@@ -2153,16 +2175,17 @@
   .builder-editor__live-error {
     max-width: 220px;
     overflow: hidden;
-    color: var(--theme-error-500);
+    color: var(--color-text-danger);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  // ---------------------------------------------------------------------------
-  // Multiplayer: avatars, cursors, others' selections, follow mode.
-  // `--be-peer` is the collaborator's color, set inline.
-  // ---------------------------------------------------------------------------
-
+  /*
+   * ---------------------------------------------------------------------------
+   * Multiplayer: avatars, cursors, others' selections, follow mode.
+   * `--be-peer` is the collaborator's color, set inline.
+   * ---------------------------------------------------------------------------
+   */
   .builder-presence {
     display: inline-flex;
     align-items: center;
@@ -2181,27 +2204,24 @@
     height: 26px;
     margin: 0 0 0 -6px;
     padding: 0;
-    border: 2px solid var(--theme-bg);
+    border: 2px solid var(--color-bg);
     border-radius: 50%;
-    background: var(--be-peer, var(--theme-elevation-300));
+    background: var(--be-peer, var(--color-bg-disabled));
     color: #fff;
     font: 700 10px/1 var(--font-body);
     letter-spacing: 0.02em;
     cursor: pointer;
-    transition:
-      transform 160ms var(--be-ease),
-      box-shadow 160ms var(--be-ease);
+    transition: transform 160ms var(--be-ease), box-shadow 160ms var(--be-ease);
+  }
 
-    &:hover,
-    &:focus-visible {
-      z-index: 2;
-      transform: translateY(-1px);
-    }
+  .builder-presence__avatar:hover, .builder-presence__avatar:focus-visible {
+    z-index: 2;
+    transform: translateY(-1px);
+  }
 
-    &[aria-pressed='true'] {
-      z-index: 1;
-      box-shadow: 0 0 0 2px var(--be-peer);
-    }
+  .builder-presence__avatar[aria-pressed=true] {
+    z-index: 1;
+    box-shadow: 0 0 0 2px var(--be-peer);
   }
 
   .builder-presence__avatar--ai {
@@ -2209,8 +2229,8 @@
   }
 
   .builder-presence__avatar--more {
-    background: var(--theme-elevation-200);
-    color: var(--theme-text);
+    background: var(--color-bg-pressed);
+    color: var(--color-text);
     cursor: default;
   }
 
@@ -2226,7 +2246,7 @@
     top: 0;
     left: 0;
     pointer-events: none;
-    // Updates arrive about 20 times a second: easing between them makes the motion smooth.
+    /* Updates arrive about 20 times a second: easing between them makes the motion smooth. */
     transition: transform 120ms linear;
     will-change: transform;
     animation: builder-cursor-in 200ms ease-out;
@@ -2242,17 +2262,17 @@
   .builder-cursor__arrow {
     display: block;
     overflow: visible;
-    // The tip of the arrowhead sits on the pointer position.
+    /* The tip of the arrowhead sits on the pointer position. */
     margin: -2px 0 0 -2px;
-    filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / 0.35));
+    filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.35));
+  }
 
-    path {
-      fill: var(--be-peer);
-      stroke: #fff;
-      stroke-width: 1.5;
-      stroke-linejoin: round;
-      paint-order: stroke;
-    }
+  .builder-cursor__arrow path {
+    fill: var(--be-peer);
+    stroke: #fff;
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+    paint-order: stroke;
   }
 
   .builder-cursor__name {
@@ -2268,7 +2288,7 @@
     color: #fff;
     font: 600 11px/1.2 var(--font-body);
     white-space: nowrap;
-    box-shadow: 0 2px 6px rgb(0 0 0 / 0.2);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
   }
 
   .builder-peer-selection {
@@ -2278,7 +2298,7 @@
     box-shadow: 0 0 0 calc(var(--be-px) * 2) var(--be-peer);
   }
 
-  // Name tags at the bottom left: the own selection uses the top edge.
+  /* Name tags at the bottom left: the own selection uses the top edge. */
   .builder-peer-selection__tags {
     position: absolute;
     top: 100%;
@@ -2316,7 +2336,7 @@
     height: 7px;
     border-radius: 50%;
     background: var(--be-peer);
-    box-shadow: 0 0 0 1.5px var(--theme-bg);
+    box-shadow: 0 0 0 1.5px var(--color-bg);
   }
 
   .builder-editing-banner {
@@ -2328,14 +2348,14 @@
     border: 1px solid color-mix(in srgb, var(--be-peer) 35%, transparent);
     border-radius: var(--be-radius-m);
     background: color-mix(in srgb, var(--be-peer) 10%, transparent);
-    color: var(--theme-text);
+    color: var(--color-text);
     font-size: var(--be-text-m);
     line-height: 1.35;
     animation: builder-fade-in 160ms var(--be-ease);
+  }
 
-    strong {
-      font-weight: var(--be-weight-strong);
-    }
+  .builder-editing-banner strong {
+    font-weight: var(--be-weight-strong);
   }
 
   .builder-editing-banner__avatars {
@@ -2349,16 +2369,16 @@
     width: 20px;
     height: 20px;
     margin-left: -4px;
-    border: 1.5px solid var(--theme-bg);
+    border: 1.5px solid var(--color-bg);
     border-radius: 50%;
     background: var(--be-peer);
     color: #fff;
     font-size: 9px;
     font-weight: 700;
+  }
 
-    &:first-child {
-      margin-left: 0;
-    }
+  .builder-editing-banner__avatar:first-child {
+    margin-left: 0;
   }
 
   .builder-follow {
@@ -2402,24 +2422,25 @@
     padding: 0;
     border: 0;
     border-radius: 50%;
-    background: rgb(255 255 255 / 0.2);
+    background: rgba(255, 255, 255, 0.2);
     color: inherit;
     cursor: pointer;
+  }
 
-    &:hover {
-      background: rgb(255 255 255 / 0.35);
-    }
+  .builder-follow__stop:hover {
+    background: rgba(255, 255, 255, 0.35);
   }
 
   .builder-editor__notice--warning svg {
-    color: var(--theme-warning-500, #f59e0b);
+    color: var(--color-text-warning, #f59e0b);
   }
 
-  // ---------------------------------------------------------------------------
-  // Canvas "+" between blocks (insert/InsertHandle.tsx). Overlay coordinates: the button keeps
-  // its screen size at any zoom (`--be-inv`).
-  // ---------------------------------------------------------------------------
-
+  /*
+   * ---------------------------------------------------------------------------
+   * Canvas "+" between blocks (insert/InsertHandle.tsx). Overlay coordinates: the button keeps
+   * its screen size at any zoom (`--be-inv`).
+   * ---------------------------------------------------------------------------
+   */
   .builder-editor__overlay .builder-editor__insert-plus {
     position: absolute;
     z-index: 3;
@@ -2428,31 +2449,30 @@
     width: 20px;
     height: 20px;
     padding: 0;
-    border: 2px solid var(--theme-bg);
+    border: 2px solid var(--color-bg);
     border-radius: 50%;
     background: var(--be-accent);
     color: var(--be-accent-fg);
-    box-shadow: 0 1px 4px rgb(0 0 0 / 0.3);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
     cursor: pointer;
     pointer-events: auto;
     transform: translate(-50%, -50%) scale(var(--be-inv, 1));
     animation: builder-plus-in 120ms var(--be-ease) both;
     transition: background-color 120ms ease, box-shadow 120ms ease;
+  }
 
-    &:hover,
-    &[aria-expanded='true'] {
-      background: var(--be-accent-strong);
-      box-shadow: 0 0 0 3px var(--be-accent-soft), 0 1px 4px rgb(0 0 0 / 0.3);
-    }
+  .builder-editor__overlay .builder-editor__insert-plus:hover, .builder-editor__overlay .builder-editor__insert-plus[aria-expanded=true] {
+    background: var(--be-accent-strong);
+    box-shadow: 0 0 0 3px var(--be-accent-soft), 0 1px 4px rgba(0, 0, 0, 0.3);
+  }
 
-    &:focus-visible {
-      outline: 2px solid var(--be-accent);
-      outline-offset: 2px;
-    }
+  .builder-editor__overlay .builder-editor__insert-plus:focus-visible {
+    outline: 2px solid var(--be-accent);
+    outline-offset: 2px;
+  }
 
-    svg {
-      stroke-width: 2.25;
-    }
+  .builder-editor__overlay .builder-editor__insert-plus svg {
+    stroke-width: 2.25;
   }
 
   @keyframes builder-plus-in {
@@ -2479,11 +2499,13 @@
     background: var(--be-accent-soft);
   }
 
-  // The insert picker: a search field over one list of blocks and sections.
-  // It renders into the editor root (not the overlay), so it takes the pointer and the wheel.
+  /*
+   * The insert picker: a search field over one list of blocks and sections.
+   * It renders into the editor root (not the overlay), so it takes the pointer and the wheel.
+   */
   .builder-editor__menu.builder-editor__picker {
     width: 280px;
-    max-height: min(420px, calc(100vh - 16px));
+    max-height: min(420px, 100vh - 16px);
     padding: 0;
     overflow: hidden;
     overscroll-behavior: contain;
@@ -2498,11 +2520,11 @@
 
   .builder-editor__search.builder-editor__picker-search {
     margin: 8px 8px 4px;
+    /* The field's border shows the focus. */
+  }
 
-    // The field's border shows the focus.
-    input:focus-visible {
-      outline: none;
-    }
+  .builder-editor__search.builder-editor__picker-search input:focus-visible {
+    outline: none;
   }
 
   .builder-editor__picker-list {
@@ -2531,17 +2553,17 @@
     height: 30px;
     padding: 0 8px;
     border-radius: var(--be-radius);
-    color: var(--theme-text);
+    color: var(--color-text);
     font-size: var(--be-text-m);
     cursor: pointer;
+  }
 
-    &[aria-selected='true'] {
-      background: var(--be-hover);
+  .builder-editor__picker-item[aria-selected=true] {
+    background: var(--be-hover);
+  }
 
-      .builder-editor__picker-icon {
-        color: var(--be-accent);
-      }
-    }
+  .builder-editor__picker-item[aria-selected=true] .builder-editor__picker-icon {
+    color: var(--be-accent);
   }
 
   .builder-editor__picker-icon {
@@ -2566,32 +2588,35 @@
     font-size: var(--be-text-s);
   }
 
-  // ---------------------------------------------------------------------------
-  // Section cards: real thumbnails and the saved section menu
-  // ---------------------------------------------------------------------------
-
+  /*
+   * ---------------------------------------------------------------------------
+   * Section cards: real thumbnails and the saved section menu
+   * ---------------------------------------------------------------------------
+   */
   .builder-editor__card-wrap {
     position: relative;
+  }
 
-    &:hover .builder-editor__card-more,
-    .builder-editor__card-more[aria-expanded='true'],
-    .builder-editor__card-more:focus-visible {
-      opacity: 1;
-    }
+  .builder-editor__card-wrap:hover .builder-editor__card-more,
+  .builder-editor__card-wrap .builder-editor__card-more[aria-expanded=true],
+  .builder-editor__card-wrap .builder-editor__card-more:focus-visible {
+    opacity: 1;
   }
 
   .builder-editor__card-wrap .builder-editor__card-more {
     position: absolute;
     top: 6px;
     right: 6px;
-    background: var(--theme-bg);
-    box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
+    background: var(--color-bg);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
     opacity: 0;
     transition: opacity 120ms ease, background-color 120ms ease;
   }
 
-  // A picture of the section, full width. A tall section shows its top part; a short one sits in
-  // the middle of the box.
+  /*
+   * A picture of the section, full width. A tall section shows its top part; a short one sits in
+   * the middle of the box.
+   */
   .builder-editor__thumb--picture {
     background: #fff;
     mask-image: none;
@@ -2602,13 +2627,13 @@
     flex: none;
     width: 100%;
     height: auto;
-    // Auto margins center a short picture. A tall one overflows at the bottom, so its top shows.
+    /* Auto margins center a short picture. A tall one overflows at the bottom, so its top shows. */
     margin-block: auto;
     animation: builder-fade-in 160ms ease both;
   }
 }
 
-// The saved section dialogs render in Payload's modal container, outside the editor.
+/* The saved section dialogs render in Payload's modal container, outside the editor. */
 @layer payload-default {
   .builder-section-dialog .confirmation-modal__content {
     gap: 4px;
@@ -2624,6 +2649,6 @@
 
   .builder-section-dialog__intro {
     margin: 0;
-    color: var(--theme-elevation-600);
+    color: var(--color-text-secondary);
   }
 }

@@ -121,7 +121,7 @@ export function FormBlockActions({ path }: { path: string }) {
             : `Publishing the page saves changes to this form (Forms #${String(formId)}). ${answers ?? ''}`}
         </Note>
         {submissionsLink && count ? (
-          <Button el="link" url={submissionsLink} newTab buttonStyle="secondary" size="small" margin={false}>
+          <Button el="link" url={submissionsLink} newTab buttonStyle="secondary" size="medium" margin={false}>
             View submissions
           </Button>
         ) : null}
@@ -133,12 +133,12 @@ export function FormBlockActions({ path }: { path: string }) {
     <div className="builder-form-actions">
       {answers ? <Note>{answers}</Note> : null}
       <div className="builder-form-actions__row">
-        <Button el="link" url={builderViewPath(config.routes.admin, forms.collection, formId)} newTab buttonStyle="secondary" size="small" margin={false}>
+        <Button el="link" url={builderViewPath(config.routes.admin, forms.collection, formId)} newTab buttonStyle="secondary" size="medium" margin={false}>
           Edit form
         </Button>
         <Button
           buttonStyle="secondary"
-          size="small"
+          size="medium"
           margin={false}
           disabled={busy}
           tooltip="Its fields become blocks in this form, so you edit them here"
@@ -217,7 +217,7 @@ export function FormSourceNote() {
       <p className="builder-field-note builder-field-note--warning">
         This form is built on the page {source.title ? `“${source.title}”` : `#${source.document}`}. Edit it there: when that page publishes a change to this form, it replaces changes made here.
       </p>
-      <Button el="link" url={builderViewPath(config.routes.admin, source.collection, source.document)} buttonStyle="secondary" size="small" margin={false}>
+      <Button el="link" url={builderViewPath(config.routes.admin, source.collection, source.document)} buttonStyle="secondary" size="medium" margin={false}>
         Open the page
       </Button>
     </div>

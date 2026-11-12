@@ -7,7 +7,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { before, describe, it } from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { buildConfig, createLocalReq, getPayload, type CollectionConfig, type Payload, type PayloadRequest } from 'payload'
+import { buildConfig, createPayloadRequest, getPayload, type CollectionConfig, type Payload, type PayloadRequest } from 'payload'
 
 import { loadClassesSheet, upsertClass } from '../classes'
 import type { BlockDefinition, Layout } from '../core/types'
@@ -28,13 +28,14 @@ const pages: CollectionConfig = {
   access: all,
   admin: { useAsTitle: 'title' },
   fields: [{ name: 'title', type: 'text' }],
+  authorship: false,
 }
 const heading: BlockDefinition = { type: 'heading', label: 'Heading', fields: [{ name: 'text', type: 'text' }] }
 const admin = { id: 1, collection: 'users', email: 'admin@example.test' }
 const THEME = 'theme-settings'
 
 let payload: Payload
-const asAdmin = async () => (await createLocalReq({ user: admin as never }, payload)) as PayloadRequest
+const asAdmin = async () => (await createPayloadRequest({ user: admin as never, payload })) as PayloadRequest
 const layoutOf = (classes: string[]): Layout => ({ version: 1, blocks: classes.map((className, i) => ({ id: `b${i}`, type: 'heading', props: { text: `T${i}` }, className })) })
 /** Rejects with the field messages of Payload's ValidationError. */
 const refused = async (variables: unknown[], message: RegExp) =>
@@ -52,7 +53,9 @@ before(async () => {
     telemetry: false,
     typescript: { autoGenerate: false },
     db: memoryAdapter().adapter,
-    collections: [{ slug: 'users', auth: true, fields: [] }, pages],
+    collections: [{ slug: 'users', auth: true, fields: [],
+      authorship: false,
+    }, pages],
     plugins: [websiteBuilder({ collections: { pages: {} }, blocks: [heading], css: { entry: path.join(dir, 'entry.css') } })],
   })
   payload = await getPayload({ config })

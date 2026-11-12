@@ -4,8 +4,7 @@
 // status. Center: undo, redo and the canvas width. Right: who is here, the save state, preview,
 // page settings, help and Publish. The AI assistant opens from the inspector tab (or Ctrl+I).
 
-import { Link, useConfig } from '@payloadcms/ui'
-import { useSearchParams } from 'next/navigation'
+import { Link, useConfig, useSearchParams } from '@payloadcms/ui'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 
 import { Icon, type IconName } from '../icons'
@@ -27,7 +26,7 @@ import { ScreenDrawer } from './screens/ScreenDrawer'
 import { useDismiss } from './useDismiss'
 import { editViewPath, listViewPath } from '../../../plugin/links'
 import { forgetForm } from '../../formChoice'
-import './topbar.scss'
+import './topbar.css'
 
 /**
  * The `from` query parameter (where the editor came from, e.g. the page builder that opened a

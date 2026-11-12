@@ -1,8 +1,8 @@
 // Decides whether the drawer router (DrawerRouter.tsx) can work, and which link clicks it takes.
-// Pure: no Next and no React imports, so the tests run in Node.
+// Pure: no Payload and no React imports, so the tests run in Node.
 
-/** The Next contexts the drawer router must provide. `NavigationPromisesContext` is optional: only development builds read it. */
-export const REQUIRED_CONTEXTS = ['AppRouterContext', 'PathnameContext', 'SearchParamsContext', 'PathParamsContext'] as const
+/** The context the drawer router provides again: Payload 4's admin router (`@payloadcms/ui`). */
+export const REQUIRED_CONTEXTS = ['RouterAdapterContext'] as const
 
 export type RouterSupport = { ok: true } | { ok: false; reason: string }
 
@@ -14,19 +14,19 @@ export function isReactContext(value: unknown): boolean {
 }
 
 /**
- * Whether the drawer router can run with these exports of Next's internal modules. Not ok when a
+ * Whether the drawer router can run with these exports of `@payloadcms/ui`. Not ok when a
  * context is missing or is no longer a React context, or when `disabled` (the development flag).
  */
 export function routerSupport(exports: Record<string, unknown>, disabled = false): RouterSupport {
   if (disabled) return { ok: false, reason: 'the development flag turned it off' }
   const missing = REQUIRED_CONTEXTS.filter((name) => !isReactContext(exports[name]))
-  if (missing.length > 0) return { ok: false, reason: `Next no longer exports ${missing.join(', ')}` }
+  if (missing.length > 0) return { ok: false, reason: `@payloadcms/ui no longer exports ${missing.join(', ')}` }
   return { ok: true }
 }
 
 /**
- * True when Next's hooks, called inside the drawer router, return the drawer's values. False
- * means Next reads its route from somewhere else now, and screen navigation would leave the page.
+ * True when the admin router hooks, called inside the drawer router, return the drawer's values.
+ * False means they read the route from somewhere else now, and screen navigation would leave the page.
  */
 export function hooksFollow(
   expected: { pathname: string; search: string; push: unknown },

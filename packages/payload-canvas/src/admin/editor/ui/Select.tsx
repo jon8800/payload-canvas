@@ -15,7 +15,7 @@ import { Select as BaseSelect } from '@base-ui/react/select'
 import { useEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef, type ReactNode, type RefObject } from 'react'
 
 import { onDismissMenus } from '../menu/dismiss'
-import './controls.scss'
+import './controls.css'
 
 export type SelectOption = {
   value: string

@@ -8,7 +8,7 @@ import type { AiClientConfig } from '../../ai/types'
 import type { BuilderClientConfig } from '../../core/types'
 import type { BuilderDocMeta } from '../../live/types'
 import { Editor } from '../editor/Editor'
-import '../editor/editor.scss'
+import '../editor/editor.css'
 
 /** The builder config the plugin put on the collection's layout field (`admin.custom.builder`). */
 function builderConfigOf(fields: ClientField[]): BuilderClientConfig | null {

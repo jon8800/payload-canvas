@@ -193,6 +193,9 @@ export function commentsCollection(slug: string, options: CommentsOptions = {}, 
   return {
     slug,
     labels: { singular: 'Comment', plural: 'Comments' },
+    // Comments keep their own author fields and need no version history.
+    versions: false,
+    authorship: false,
     access: { read: signedIn, create: signedIn, update: signedIn, delete: ownComment, ...options.access },
     admin: {
       useAsTitle: 'body',

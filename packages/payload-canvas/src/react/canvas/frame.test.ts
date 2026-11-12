@@ -24,7 +24,7 @@ const regions = resolveRegions(
 const values = {
   title: 'Welcome',
   intro: 'Two\nlines',
-  cover: { id: 3, url: '/api/media/file/cover.jpg', sizes: { card: { url: '/api/media/file/cover-768.jpg' } } },
+  cover: { id: 3, url: '/api/media/file/cover.jpg', variants: { card: { url: '/api/media/file/cover-768.jpg' } } },
   links: [{ id: 'r1', label: 'Start here' }],
   meta: { note: 'Small print' },
 }

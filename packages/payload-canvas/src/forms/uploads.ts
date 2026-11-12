@@ -48,9 +48,9 @@ const idOf = (value: unknown): string | number | null => {
   return null
 }
 
-/** The file names of an upload document: the file and its image sizes. */
-function filenamesOf(doc: { filename?: unknown; sizes?: unknown }): string[] {
-  const sizes = doc.sizes && typeof doc.sizes === 'object' ? Object.values(doc.sizes as Record<string, { filename?: unknown } | null>) : []
+/** The file names of an upload document: the file and its image variants. */
+function filenamesOf(doc: { filename?: unknown; variants?: unknown }): string[] {
+  const sizes = doc.variants && typeof doc.variants === 'object' ? Object.values(doc.variants as Record<string, { filename?: unknown } | null>) : []
   return [doc.filename, ...sizes.map((size) => size?.filename)].filter((name): name is string => typeof name === 'string' && name !== '')
 }
 

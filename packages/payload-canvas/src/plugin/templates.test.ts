@@ -6,9 +6,18 @@ import type { BindingField, BuilderClientConfig } from '../core/types'
 import { websiteBuilder } from './index'
 import { bindingSources, templatesCollection, TEMPLATES_CONFIG_KEY, validateConditions } from './templates'
 
-const media: CollectionConfig = { slug: 'media', upload: true, fields: [{ name: 'alt', type: 'text' }] }
-const users: CollectionConfig = { slug: 'users', auth: true, fields: [{ name: 'name', type: 'text' }] }
-const categories: CollectionConfig = { slug: 'categories', fields: [{ name: 'title', type: 'text' }] }
+const media: CollectionConfig = { slug: 'media', upload: true, fields: [{ name: 'alt', type: 'text' }],
+  versions: false,
+  authorship: false,
+}
+const users: CollectionConfig = { slug: 'users', auth: true, fields: [{ name: 'name', type: 'text' }],
+  versions: false,
+  authorship: false,
+}
+const categories: CollectionConfig = { slug: 'categories', fields: [{ name: 'title', type: 'text' }],
+  versions: false,
+  authorship: false,
+}
 const posts: CollectionConfig = {
   slug: 'posts',
   versions: { drafts: true },
@@ -24,8 +33,12 @@ const posts: CollectionConfig = {
     { type: 'tabs', tabs: [{ name: 'extra', fields: [{ name: 'color', type: 'text' }] }] },
     { name: 'layout', type: 'json' },
   ],
+  authorship: false,
 }
-const pages: CollectionConfig = { slug: 'pages', fields: [{ name: 'title', type: 'text' }] }
+const pages: CollectionConfig = { slug: 'pages', fields: [{ name: 'title', type: 'text' }],
+  versions: false,
+  authorship: false,
+}
 
 const find = (list: BindingField[] | undefined, path: string) => list?.find((f) => f.path === path)
 
@@ -144,7 +157,10 @@ const listField = (config: Config, name: string) =>
   }
 
 describe('websiteBuilder listCollections', () => {
-  const testimonials: CollectionConfig = { slug: 'testimonials', fields: [{ name: 'quote', type: 'text' }] }
+  const testimonials: CollectionConfig = { slug: 'testimonials', fields: [{ name: 'quote', type: 'text' }],
+    versions: false,
+    authorship: false,
+  }
   const base: Config = { collections: [media, users, categories, posts, pages, testimonials] } as Config
   const run = (extra: Partial<Parameters<typeof websiteBuilder>[0]> = {}) =>
     websiteBuilder({

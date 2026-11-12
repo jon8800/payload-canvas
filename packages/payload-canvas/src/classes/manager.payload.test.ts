@@ -7,7 +7,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { before, describe, it } from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { buildConfig, createLocalReq, getPayload, type CollectionConfig, type Payload, type PayloadRequest } from 'payload'
+import { buildConfig, createPayloadRequest, getPayload, type CollectionConfig, type Payload, type PayloadRequest } from 'payload'
 
 import type { BlockDefinition, Layout, Operation } from '../core/types'
 import { actorFromUser, type LiveDocStore } from '../live/apply'
@@ -34,7 +34,7 @@ const admin = { id: 1, collection: 'users', email: 'admin@example.test' }
 const SLUG = 'builder-classes'
 
 let payload: Payload
-const asAdmin = async () => (await createLocalReq({ user: admin as never }, payload)) as PayloadRequest
+const asAdmin = async () => (await createPayloadRequest({ user: admin as never, payload })) as PayloadRequest
 const sessions = () => liveRuntimeOf(payload).sessions
 const layoutOf = (classes: string[]): Layout => ({ version: 1, blocks: classes.map((className, i) => ({ id: `b${i}`, type: 'heading', props: { text: `T${i}` }, ...(className ? { className } : {}) })) })
 const classNames = (layout: unknown) => ((layout as Layout).blocks ?? []).map((b) => b.className ?? '')
@@ -76,7 +76,9 @@ before(async () => {
     telemetry: false,
     typescript: { autoGenerate: false },
     db: memoryAdapter().adapter,
-    collections: [{ slug: 'users', auth: true, fields: [] }, collection('pages'), collection('posts')],
+    collections: [{ slug: 'users', auth: true, fields: [],
+      authorship: false,
+    }, collection('pages'), collection('posts')],
     plugins: [
       websiteBuilder({
         collections: { pages: {}, posts: {} },

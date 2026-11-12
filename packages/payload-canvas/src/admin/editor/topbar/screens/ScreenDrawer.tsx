@@ -5,14 +5,13 @@
 // Payload renders them on the server through its public `renderDocument` server function: the
 // same one its document drawer uses, with `paramsOverride` set to the screen's admin path. The
 // screens navigate inside the drawer (DrawerRouter.tsx). Back returns to the last screen. If the
-// drawer router cannot work (a Next upgrade), the screen opens as a normal admin page instead.
+// drawer router cannot work (a Payload upgrade), the screen opens as a normal admin page instead.
 //
 // Restore goes through the builder, not through Payload's Restore button: the live session owns
 // the layout, so it must reset the session for every editor (live/document.ts). The drawer hides
 // Payload's button and shows its own in the header.
 
-import { ConfirmationModal, Drawer, Gutter, ShimmerEffect, useConfig, useDrawerSlug, useModal, useServerFunctions } from '@payloadcms/ui'
-import { useRouter } from 'next/navigation'
+import { ConfirmationModal, Drawer, Gutter, ShimmerEffect, useConfig, useDrawerSlug, useModal, useRouter, useServerFunctions } from '@payloadcms/ui'
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 
 import { Icon } from '../../icons'
@@ -23,7 +22,7 @@ import { useValue } from '../../valueStore'
 import type { DocumentScreen } from '../document'
 import { DrawerRouter, drawerRouterSupport, warnDrawerFallback, type DrawerNavigation } from './DrawerRouter'
 import { withoutUndefinedLocale } from './drawerRouterSupport'
-import './screens.scss'
+import './screens.css'
 
 /** A screen below the document's admin path: `['versions']`, `['versions', id]` or `['api']`. */
 type Route = { path: string[]; search: string }
@@ -226,7 +225,7 @@ export function ScreenDrawer() {
   useCleanApiUrl(body, !localization && shownRoute?.path[0] === 'api')
 
   return (
-    <Drawer slug={slug} className="builder-screen-drawer" gutter={false} Header={null}>
+    <Drawer slug={slug} className="builder-screen-drawer" Header={null}>
       <Gutter className="builder-screen-drawer__header">
         <div className="builder-screen-drawer__bar">
           {history.length > 1 && (

@@ -14,7 +14,7 @@ import { builderViewPath } from '../../../plugin/links'
 import { Icon } from '../icons'
 import { useRuntime } from '../runtime'
 import { useValue } from '../valueStore'
-import './manager.scss'
+import './manager.css'
 
 export const CLASS_MANAGER_SLUG = 'builder-class-manager'
 

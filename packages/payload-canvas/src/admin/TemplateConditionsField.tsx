@@ -5,8 +5,8 @@ import type { JSONFieldClientProps } from 'payload'
 
 import { TEMPLATE_TARGET_FIELD } from '../core/bindings'
 import { WhereField } from './editor/fields/WhereField'
-import './editor/fields/fields.scss'
-import './templateConditions.scss'
+import './editor/fields/fields.css'
+import './templateConditions.css'
 
 /** The conditions test the document itself: a date value may be relative to now, nothing else. */
 const DATE_ONLY = { date: true }

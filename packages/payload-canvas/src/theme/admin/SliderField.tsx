@@ -5,7 +5,7 @@ import type { StaticLabel } from 'payload'
 
 import { Slider } from '../../admin/editor/ui/Slider'
 import { FieldShell, labelText } from './FieldShell'
-import './fields.scss'
+import './fields.css'
 
 type SliderCustom = { min?: number; max?: number; step?: number; unit?: string; fallback?: number }
 

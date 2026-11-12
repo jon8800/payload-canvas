@@ -1,6 +1,7 @@
-// The Motion tab. Builds on the Styles panel (styles/styles.scss): its sections, rows and
-// variables. Payload CSS variables only, no Tailwind.
-
+/*
+ * The Motion tab. Builds on the Styles panel (styles/styles.scss): its sections, rows and
+ * variables. Payload CSS variables only, no Tailwind.
+ */
 @layer payload-default {
   .builder-motion__bar {
     display: flex;
@@ -8,19 +9,19 @@
     justify-content: space-between;
     gap: 8px;
     padding: 0 0 8px;
-    border-bottom: 1px solid var(--theme-elevation-100);
+    border-bottom: 1px solid var(--color-border);
   }
 
   .builder-motion__summary {
     min-width: 0;
     margin: 0;
-    color: var(--theme-text);
+    color: var(--color-text);
     font-size: var(--be-text-m);
     line-height: 1.35;
+  }
 
-    &[data-empty] {
-      color: var(--bs-muted);
-    }
+  .builder-motion__summary[data-empty] {
+    color: var(--bs-muted);
   }
 
   .builder-motion__preview {
@@ -29,22 +30,24 @@
     gap: 5px;
     padding: 0 9px 0 8px;
     font-weight: var(--be-weight-medium);
+  }
 
-    &:disabled {
-      opacity: 0.45;
-      cursor: default;
+  .builder-motion__preview:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .builder-motion__preview {
+      transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
     }
 
-    @media (prefers-reduced-motion: no-preference) {
-      transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
-
-      &:active:not(:disabled) {
-        transform: scale(0.97);
-      }
+    .builder-motion__preview:active:not(:disabled) {
+      transform: scale(0.97);
     }
   }
 
-  // Section head with the remove button at the end, in the rows' reset column.
+  /* Section head with the remove button at the end, in the rows' reset column. */
   .builder-motion__head {
     display: grid;
     grid-template-columns: minmax(0, 1fr) var(--bs-gutter);
@@ -63,16 +66,16 @@
     min-width: 46px;
   }
 
-  // Payload's checkbox, in the control column and at the panel's text size.
+  /* Payload's checkbox, in the control column and at the panel's text size. */
   .builder-motion__check {
     display: flex;
     align-items: center;
     min-height: 28px;
     padding-left: calc(var(--bs-label) + var(--bs-gap));
+  }
 
-    .checkbox-input {
-      font-size: var(--be-text-m);
-    }
+  .builder-motion__check .checkbox-input {
+    font-size: var(--be-text-m);
   }
 
   .builder-motion__foot {

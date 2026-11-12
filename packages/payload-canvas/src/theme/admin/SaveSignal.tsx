@@ -10,7 +10,7 @@ import { THEME_CHANNEL } from '../config'
  * so every open builder canvas (any tab of this site) reloads the theme at once.
  */
 export function ThemeSaveSignal() {
-  const { savedDocumentData } = useDocumentInfo()
+  const { data: savedDocumentData } = useDocumentInfo()
   const updatedAt = typeof savedDocumentData?.updatedAt === 'string' ? savedDocumentData.updatedAt : null
   const first = useRef(updatedAt)
 

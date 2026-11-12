@@ -116,7 +116,7 @@ export const fullWidth: Block = {
     {
       type: 'tabs',
       tabs: [
-        { label: 'Content', fields: [{ name: 'content', type: 'blocks', blockReferences: leafSlugs, blocks: [] }] },
+        { label: 'Content', fields: [{ name: 'content', type: 'blocks', blocks: leafSlugs }] },
         {
           label: 'Design',
           fields: [
@@ -140,8 +140,8 @@ export const twoColumn: Block = {
         {
           label: 'Content',
           fields: [
-            { name: 'leftColumn', label: 'Left column', type: 'blocks', blockReferences: leafSlugs, blocks: [] },
-            { name: 'rightColumn', type: 'blocks', blockReferences: leafSlugs, blocks: [] },
+            { name: 'leftColumn', label: 'Left column', type: 'blocks', blocks: leafSlugs },
+            { name: 'rightColumn', type: 'blocks', blocks: leafSlugs },
           ],
         },
         { label: 'Design', fields: [{ name: 'columnRatio', type: 'select', defaultValue: '50-50', options: ['50-50', '67-33'] }] },

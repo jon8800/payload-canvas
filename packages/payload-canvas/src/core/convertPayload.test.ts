@@ -252,7 +252,7 @@ describe('convertLocalizedPayloadBlocks', () => {
   const references = { note, section }
   const defs = fromPayloadBlocks([section, note] as never, quiet)
   const settings = { locales: ['en', 'de'], defaultLocale: 'en', fallback: true }
-  const field = { name: 'layout', type: 'blocks', blockReferences: ['section'] }
+  const field = { name: 'layout', type: 'blocks', blocks: ['section'] }
 
   it('finds localized fields at any depth, through block references', () => {
     assert.equal(payloadFieldIsLocalized(field, references), true)

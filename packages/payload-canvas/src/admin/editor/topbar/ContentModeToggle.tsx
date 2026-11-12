@@ -6,7 +6,7 @@
 import { setPreviewAsClient, useContentMode } from '../contentMode'
 import { Icon } from '../icons'
 import { useRuntime } from '../runtime'
-import './contentMode.scss'
+import './contentMode.css'
 
 const LABEL_TIP = 'You can change text, images and links'
 

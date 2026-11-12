@@ -1,6 +1,7 @@
-// The editor tooltip (`Tooltips.tsx`). It lives in `<body>`, outside the editor root, so it uses
-// Payload's theme variables only.
-
+/*
+ * The editor tooltip (`Tooltips.tsx`). It lives in `<body>`, outside the editor root, so it uses
+ * Payload's theme variables only.
+ */
 @layer payload-default {
   @keyframes builder-tooltip-in {
     from {
@@ -18,9 +19,9 @@
     padding: 4px 8px;
     overflow: visible;
     border: 0;
-    border-radius: var(--style-radius-s, 4px);
-    background: var(--theme-elevation-900);
-    color: var(--theme-elevation-0);
+    border-radius: var(--radius-medium, 4px);
+    background: var(--color-bg-inverse);
+    color: var(--color-text-oninverse);
     font-family: var(--font-body);
     font-size: var(--be-text-s);
     font-weight: var(--be-weight-medium);
@@ -29,11 +30,11 @@
     overflow-wrap: anywhere;
     box-shadow: var(--be-shadow);
     pointer-events: none;
+  }
 
-    @media (prefers-reduced-motion: no-preference) {
-      &:popover-open {
-        animation: builder-tooltip-in 100ms ease both;
-      }
+  @media (prefers-reduced-motion: no-preference) {
+    .builder-tooltip:popover-open {
+      animation: builder-tooltip-in 100ms ease both;
     }
   }
 }

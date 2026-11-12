@@ -167,6 +167,9 @@ export function aiSettingsGlobal(ai: AiOptions, options: AiSettingsOptions = {})
   return {
     slug,
     label: 'AI settings',
+    // Payload 4 turns versions and authorship on by default. Versions would keep old API keys.
+    versions: false,
+    authorship: false,
     // Keys never go through GraphQL.
     graphQL: false,
     access: { read: access, update: access },

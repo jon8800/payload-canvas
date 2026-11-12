@@ -36,7 +36,7 @@ import {
   uploadImage,
 } from './actions'
 import { altPropPath, chipPlace, mediaRef, propAt } from './model'
-import './media.scss'
+import './media.css'
 
 const noSubscription = () => () => {}
 const editorRoot = () => document.querySelector<HTMLElement>('.builder-editor')

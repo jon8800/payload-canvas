@@ -9,7 +9,7 @@ import { storesBuilderData } from '../actions'
 import { Icon } from '../icons'
 import { useRuntime, type Runtime } from '../runtime'
 import { useEditor } from '../store'
-import './variants.scss'
+import './variants.css'
 
 /** The app section a block was inserted from, when it has variants to switch between. */
 export function switchableSection(runtime: Runtime, id: string): SectionDefinition | null {

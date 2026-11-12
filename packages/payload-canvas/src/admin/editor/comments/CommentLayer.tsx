@@ -18,7 +18,7 @@ import { useEditor } from '../store'
 import { useValue } from '../valueStore'
 import type { CommentsController } from './controller'
 import { Avatar, CommentInput, Thread } from './Thread'
-import './comments.scss'
+import './comments.css'
 
 const noSubscription = () => () => {}
 const editorRoot = () => document.querySelector<HTMLElement>('.builder-editor')

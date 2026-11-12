@@ -4,8 +4,7 @@
 // normal fields, "Edit component" and how many places use it. In a saved section with
 // properties: a banner with the same count. The property buttons are in ./PropertyControls.tsx.
 
-import { useConfig, useRouteTransition } from '@payloadcms/ui'
-import { useRouter } from 'next/navigation'
+import { useConfig, useRouter, useRouteTransition } from '@payloadcms/ui'
 import { useEffect, useMemo } from 'react'
 import type { Field } from 'payload'
 
@@ -27,7 +26,7 @@ import { RenderBlockFields } from '../renderField'
 import { useRuntime } from '../runtime'
 import { useValue } from '../valueStore'
 import { editsSection, usedInText, useOwnProperties, useUsedIn } from './components'
-import './components.scss'
+import './components.css'
 
 /** The input of a property on a copy: the bound field, named after the property, never required. */
 function propertyField(property: ComponentProperty): Field {

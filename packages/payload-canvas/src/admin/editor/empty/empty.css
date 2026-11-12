@@ -1,5 +1,4 @@
-// The empty page's start card, over the canvas. Payload CSS variables only.
-
+/* The empty page's start card, over the canvas. Payload CSS variables only. */
 @layer payload-default {
   .builder-empty-start {
     position: absolute;
@@ -10,7 +9,7 @@
     align-items: flex-start;
     padding: 72px 16px 16px;
     overflow: auto;
-    // Drops from the library pass through to the canvas around the card.
+    /* Drops from the library pass through to the canvas around the card. */
     pointer-events: none;
   }
 
@@ -24,7 +23,7 @@
     border: 1px solid var(--be-border);
     border-radius: var(--be-radius-m);
     background: var(--be-panel);
-    color: var(--theme-text);
+    color: var(--color-text);
     box-shadow: var(--be-shadow);
     text-align: center;
     pointer-events: auto;
@@ -43,8 +42,8 @@
 
   .builder-empty-start__title {
     margin: 0;
-    // Payload's h4 size (16px): the start card's title is a page-level heading, not panel text.
-    font-size: calc(var(--base) * 0.8);
+    /* Payload's h4 size (16px): the start card's title is a page-level heading, not panel text. */
+    font-size: calc(1.0156rem * 0.8);
     font-weight: var(--be-weight-strong);
     line-height: 1.35;
     text-wrap: balance;
@@ -53,7 +52,7 @@
   .builder-empty-start__text {
     max-width: 48ch;
     margin: 0;
-    color: var(--theme-elevation-650);
+    color: var(--color-text-secondary);
     font-size: var(--be-text-m);
     line-height: 1.5;
     text-wrap: balance;
@@ -72,14 +71,14 @@
   .builder-empty-start__section {
     height: 100%;
     cursor: pointer;
+  }
 
-    .builder-editor__thumb {
-      height: 84px;
-    }
+  .builder-empty-start__section .builder-editor__thumb {
+    height: 84px;
+  }
 
-    .builder-editor__thumb--picture {
-      max-height: 84px;
-    }
+  .builder-empty-start__section .builder-editor__thumb--picture {
+    max-height: 84px;
   }
 
   .builder-empty-start__actions {

@@ -2,56 +2,37 @@
 
 // A router for Payload screens shown inside a builder drawer.
 //
-// Payload's Versions, Version and API screens navigate with Next's router: a version row is a
+// Payload's Versions, Version and API screens navigate with the admin router: a version row is a
 // link, pagination and the comparison select push new search params, Restore pushes the edit
 // view. In the drawer, each of these would leave the builder. This provider gives the screens a
 // router of their own, so a navigation changes what the drawer shows instead of the page.
 //
-// Next has no public API for this (Next 16.3: `<Link onNavigate>` is per link, and Payload's
-// screens call `useRouter`, `usePathname` and `useSearchParams` themselves). So this file
-// overrides the contexts those hooks read, the way Storybook's Next.js integration mocks the
-// router. The Next internals used, verified with Next 16.3.8
-// (`next/dist/client/components/navigation.js`):
+// Payload 4's admin UI reads its router from `RouterAdapterContext` (`@payloadcms/ui`): its
+// `useRouter`, `usePathname`, `useSearchParams` and `useParams` hooks and `PayloadLink` all read
+// that one context. This file provides that context again inside the drawer, with the drawer's
+// path and a router that calls `onNavigate`.
 //
-// - `next/dist/shared/lib/app-router-context.shared-runtime`: `AppRouterContext` (`useRouter`)
-// - `next/dist/shared/lib/hooks-client-context.shared-runtime`: `PathnameContext` (`usePathname`),
-//   `SearchParamsContext` (`useSearchParams`), `PathParamsContext` (`useParams`), and
-//   `NavigationPromisesContext` (development builds read the route from it first; optional)
-//
-// Only this file imports them. It fails safe: a missing context, hooks that no longer read the
-// drawer's values (a probe checks on every screen), or an error while a screen renders makes
-// `onUnavailable` fire, and the screen opens as a normal admin page. If Next deletes one of the
-// modules outright, the build fails here, in this one file. A capture-phase click listener also
-// keeps plain link clicks in the drawer, as a second line of defence.
+// It fails safe: a missing context, hooks that do not read the drawer's values (a probe checks on
+// every screen), or an error while a screen renders makes `onUnavailable` fire, and the screen
+// opens as a normal admin page. A capture-phase click listener also keeps plain link clicks in
+// the drawer (the Link of the page's adapter navigates on its own).
 
-import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime'
-import * as appRouterModule from 'next/dist/shared/lib/app-router-context.shared-runtime'
-import * as hooksModule from 'next/dist/shared/lib/hooks-client-context.shared-runtime'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { Component, useEffect, useMemo, useRef, type Context, type ReactNode } from 'react'
+import { RouterAdapterContext, usePathname, useRouter, useSearchParams, type RouterAdapterContextValue } from '@payloadcms/ui'
+import { Component, use, useEffect, useMemo, useRef, type ReactNode } from 'react'
 
 import { disabledByDevFlag, drawerLinkHref, hooksFollow, isReactContext, routerSupport, type RouterSupport } from './drawerRouterSupport'
 
 export type DrawerNavigation = { kind: 'push' | 'replace'; href: string } | { kind: 'back' } | { kind: 'refresh' }
 
-// Read through a plain record: an export that Next removes is `undefined` here, not a crash.
-const internals: Record<string, unknown> = { ...appRouterModule, ...hooksModule }
-const contexts = internals as {
-  AppRouterContext: Context<AppRouterInstance | null>
-  PathnameContext: Context<string | null>
-  SearchParamsContext: Context<URLSearchParams | null>
-  PathParamsContext: Context<Record<string, string | string[]> | null>
-  NavigationPromisesContext?: Context<null>
-}
-const withPromises = isReactContext(internals.NavigationPromisesContext)
+type AdapterRouter = RouterAdapterContextValue['router']
 
-/** Set when the probe found that Next's hooks ignore the override: later screens open as pages at once. */
+/** Set when the probe found that the hooks ignore the override: later screens open as pages at once. */
 let broken: string | null = null
 
 /** Whether screens can open in the drawer now. */
 export function drawerRouterSupport(): RouterSupport {
   if (broken) return { ok: false, reason: broken }
-  return routerSupport(internals, disabledByDevFlag())
+  return routerSupport({ RouterAdapterContext }, disabledByDevFlag())
 }
 
 let warned = false
@@ -82,23 +63,23 @@ export function DrawerRouter({
   onUnavailable: (reason: string) => void
   children: ReactNode
 }) {
-  const router = useMemo<AppRouterInstance>(
+  // The page's adapter: the drawer keeps its Link component.
+  const page = use(RouterAdapterContext) as RouterAdapterContextValue | null
+  const router = useMemo<AdapterRouter>(
     () => ({
       back: () => onNavigate({ kind: 'back' }),
-      forward: () => {},
       refresh: () => onNavigate({ kind: 'refresh' }),
       push: (href) => onNavigate({ kind: 'push', href }),
       replace: (href) => onNavigate({ kind: 'replace', href }),
-      prefetch: () => {},
-      // `useRouter` replaces it with the id of the page around the drawer.
-      bfcacheId: '',
     }),
     [onNavigate],
   )
-  const searchParams = useMemo(() => new URLSearchParams(search), [search])
-  const params = useMemo(() => ({ segments }), [segments])
+  const value = useMemo<RouterAdapterContextValue | null>(
+    () => (page ? { Link: page.Link, params: { segments }, pathname, router, searchParams: new URLSearchParams(search) } : null),
+    [page, segments, pathname, router, search],
+  )
 
-  // Plain link clicks stay in the drawer even if Next's `<Link>` stops using the router above.
+  // Plain link clicks stay in the drawer: the Link component of the page's adapter navigates itself.
   const screen = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const el = screen.current
@@ -117,31 +98,20 @@ export function DrawerRouter({
   }, [onNavigate])
 
   const support = drawerRouterSupport()
-  const unavailable = support.ok ? null : support.reason
+  const unavailable = !support.ok ? support.reason : value ? null : 'the admin router adapter is missing'
   useEffect(() => {
     if (unavailable) onUnavailable(unavailable)
   }, [unavailable, onUnavailable])
-  if (unavailable) return null
+  if (unavailable || !value) return null
 
-  const { AppRouterContext, PathnameContext, SearchParamsContext, PathParamsContext, NavigationPromisesContext } = contexts
-  const probed = (
-    <Probe pathname={pathname} search={search} push={router.push} onUnavailable={onUnavailable}>
-      {children}
-    </Probe>
-  )
   return (
     <div ref={screen} className="builder-screen-drawer__screen">
       <Boundary onError={onUnavailable}>
-        <AppRouterContext value={router}>
-          <PathnameContext value={pathname}>
-            <SearchParamsContext value={searchParams}>
-              <PathParamsContext value={params}>
-                {/* In development Next reads the path from these promises first: none here. */}
-                {withPromises && NavigationPromisesContext ? <NavigationPromisesContext value={null}>{probed}</NavigationPromisesContext> : probed}
-              </PathParamsContext>
-            </SearchParamsContext>
-          </PathnameContext>
-        </AppRouterContext>
+        <RouterAdapterContext value={value}>
+          <Probe pathname={pathname} search={search} push={router.push} onUnavailable={onUnavailable}>
+            {children}
+          </Probe>
+        </RouterAdapterContext>
       </Boundary>
     </div>
   )
@@ -151,28 +121,31 @@ export function DrawerRouter({
  * Lets `intercept` take some `router.push` / `router.replace` calls of the screens inside (it
  * returns true when it took one). The other calls go to the page's own router. The settings
  * drawer uses it: the "Go back" of Payload's "Document locked" dialog pushes the collection list,
- * which would leave the builder. Without the context (a Next upgrade) the calls are not taken.
+ * which would leave the builder. Without the adapter context the calls are not taken.
  */
 export function RouterIntercept({ intercept, children }: { intercept: (href: string) => boolean; children: ReactNode }) {
-  const router = useRouter()
-  const wrapped = useMemo<AppRouterInstance>(
-    () => ({
-      ...router,
-      push: (href, options) => {
-        if (!intercept(href)) router.push(href, options)
+  const page = use(RouterAdapterContext) as RouterAdapterContextValue | null
+  const value = useMemo<RouterAdapterContextValue | null>(() => {
+    if (!page) return null
+    const { router } = page
+    return {
+      ...page,
+      router: {
+        ...router,
+        push: (href, options) => {
+          if (!intercept(href)) router.push(href, options)
+        },
+        replace: (href, options) => {
+          if (!intercept(href)) router.replace(href, options)
+        },
       },
-      replace: (href, options) => {
-        if (!intercept(href)) router.replace(href, options)
-      },
-    }),
-    [router, intercept],
-  )
-  if (!isReactContext(internals.AppRouterContext)) return children
-  const { AppRouterContext } = contexts
-  return <AppRouterContext value={wrapped}>{children}</AppRouterContext>
+    }
+  }, [page, intercept])
+  if (!value || !isReactContext(RouterAdapterContext)) return children
+  return <RouterAdapterContext value={value}>{children}</RouterAdapterContext>
 }
 
-/** Renders the screen only when Next's hooks return the drawer's values. */
+/** Renders the screen only when the admin router hooks return the drawer's values. */
 function Probe({
   pathname,
   search,
@@ -182,7 +155,7 @@ function Probe({
 }: {
   pathname: string
   search: string
-  push: AppRouterInstance['push']
+  push: AdapterRouter['push']
   onUnavailable: (reason: string) => void
   children: ReactNode
 }) {
@@ -192,7 +165,7 @@ function Probe({
   const ok = hooksFollow({ pathname, search, push }, { pathname: actualPath, search: actualSearch?.toString() ?? null, push: router.push })
   useEffect(() => {
     if (ok) return
-    broken = 'Next’s navigation hooks no longer read the overridden contexts'
+    broken = 'the admin router hooks no longer read the overridden context'
     onUnavailable(broken)
   }, [ok, onUnavailable])
   return ok ? children : null

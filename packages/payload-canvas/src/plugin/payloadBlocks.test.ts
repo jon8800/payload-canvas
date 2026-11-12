@@ -15,8 +15,13 @@ import { builderConfigFieldName, websiteBuilder } from './index'
 const card: Block = { slug: 'card', fields: [{ name: 'title', type: 'text' }] }
 const section: Block = { slug: 'section', fields: [{ name: 'content', type: 'blocks', blocks: [card] }] }
 const layoutField = { name: 'layout', type: 'blocks', blocks: [section], admin: { initCollapsed: true } } as const
-const pages: CollectionConfig = { slug: 'pages', versions: { drafts: true }, fields: [{ name: 'title', type: 'text' }, layoutField as never] }
-const posts: CollectionConfig = { slug: 'posts', fields: [{ name: 'title', type: 'text' }] }
+const pages: CollectionConfig = { slug: 'pages', versions: { drafts: true }, fields: [{ name: 'title', type: 'text' }, layoutField as never],
+  authorship: false,
+}
+const posts: CollectionConfig = { slug: 'posts', fields: [{ name: 'title', type: 'text' }],
+  versions: false,
+  authorship: false,
+}
 const base = { collections: [pages, posts], secret: 'x' } as Config
 const blocks = [
   ...fromPayloadBlocks([section], { onWarning: false }),

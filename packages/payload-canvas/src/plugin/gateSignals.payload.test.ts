@@ -5,7 +5,7 @@
 
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { buildConfig, commitTransaction, createLocalReq, getPayload, initTransaction, type CollectionConfig, type Payload } from 'payload'
+import { buildConfig, commitTransaction, createPayloadRequest, getPayload, initTransaction, type CollectionConfig, type Payload } from 'payload'
 
 import { defaultWriteGate } from '../live/writeGate'
 import { memoryAdapter } from './memoryAdapter.test-data'
@@ -30,13 +30,16 @@ async function instance(slug: string, options: { disableOnInit?: boolean } = {})
       ],
     },
     fields: [{ name: 'title', type: 'text' }],
+    authorship: false,
   }
   const config = await buildConfig({
     secret: 'test-secret-not-used-anywhere',
     telemetry: false,
     typescript: { autoGenerate: false },
     db: memoryAdapter().adapter,
-    collections: [{ slug: 'users', auth: true, fields: [] }, pages],
+    collections: [{ slug: 'users', auth: true, fields: [],
+      authorship: false,
+    }, pages],
     plugins: [websiteBuilder({ collections: { [slug]: {} }, blocks: [{ type: 'heading', label: 'Heading', fields: [{ name: 'text', type: 'text' }] }], css: { entry: 'globals.css' }, theme: false })],
   })
   return getPayload({ config, key: slug, ...(options.disableOnInit ? { disableOnInit: true } : {}) })
@@ -58,7 +61,7 @@ describe('the write gate without the plugin onInit', () => {
     const payload = await instance(slug, { disableOnInit: true })
     const doc = await payload.create({ collection: slug as never, draft: true, overrideAccess: true, data: { title: 'Seed' } as never })
     for (const name of ['migration-1', 'migration-2']) {
-      const req = await createLocalReq({}, payload)
+      const req = await createPayloadRequest({ payload: payload })
       await initTransaction(req)
       await timed(async () => {
         await update(payload, slug, doc.id, name, req)
@@ -96,7 +99,7 @@ describe('the write gate without the plugin onInit', () => {
     const slug = 'pages-prod'
     const payload = await instance(slug, { disableOnInit: true })
     const doc = await payload.create({ collection: slug as never, draft: true, overrideAccess: true, data: { title: 'Seed' } as never })
-    const req = await createLocalReq({}, payload)
+    const req = await createPayloadRequest({ payload: payload })
     await initTransaction(req)
     await timed(async () => {
       await update(payload, slug, doc.id, 'migrated', req)

@@ -165,6 +165,7 @@ function sectionBlocksLoader(req: PayloadRequest, slug: string) {
       limit: ids.length,
       pagination: false,
       req,
+      overrideAccess: true,
     })
     return new Map((result.docs as unknown as Record<string, unknown>[]).map((doc) => [String(doc.id), doc.blocks]))
   }
@@ -247,6 +248,8 @@ export function savedSectionsCollection(args: { slug: string; blocks: BlockDefin
   return {
     slug,
     labels: { singular: 'Saved section', plural: 'Saved sections' },
+    versions: false,
+    authorship: false,
     access: {
       read: signedIn,
       create: signedIn,

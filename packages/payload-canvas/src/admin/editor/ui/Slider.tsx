@@ -6,7 +6,7 @@
 
 import { Slider as BaseSlider } from '@base-ui/react/slider'
 
-import './controls.scss'
+import './controls.css'
 
 export type SliderProps = {
   value: number

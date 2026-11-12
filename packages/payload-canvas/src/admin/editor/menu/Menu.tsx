@@ -18,7 +18,7 @@ import { isValidElement, useEffect, useEffectEvent, useMemo, useRef, useState, t
 
 import { Icon, type IconName } from '../icons'
 import { onDismissMenus } from './dismiss'
-import './menu.scss'
+import './menu.css'
 
 export type MenuItem = {
   label: string

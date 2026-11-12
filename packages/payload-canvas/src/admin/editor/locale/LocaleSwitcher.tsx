@@ -9,7 +9,7 @@ import { MenuButton, type MenuEntry } from '../menu/Menu'
 import { useRuntime } from '../runtime'
 import { useEditor } from '../store'
 import { localeName, missingWords, switchLocale, untranslatedMap } from './locale'
-import './locale.scss'
+import './locale.css'
 
 export function LocaleSwitcher() {
   const runtime = useRuntime()

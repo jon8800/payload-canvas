@@ -9,12 +9,16 @@ import { defaultWriteGate } from '../live/writeGate'
 import { memoryAdapter } from './memoryAdapter.test-data'
 import { websiteBuilder } from './index'
 
-const users: CollectionConfig = { slug: 'users', auth: true, fields: [] }
+const users: CollectionConfig = { slug: 'users', auth: true, fields: [],
+  versions: false,
+  authorship: false,
+}
 const pages: CollectionConfig = {
   slug: 'pages',
   versions: { drafts: true },
   access: { read: () => true, create: () => true, update: () => true, delete: () => true },
   fields: [{ name: 'title', type: 'text' }],
+  authorship: false,
 }
 
 it("lets the app's onInit save a builder document, and the gate is free afterwards", { timeout: 10_000 }, async () => {

@@ -18,7 +18,7 @@ import type { AssistantController, AssistantNotice, AssistantState } from './con
 import { failedAction, failureParts, humanizeTool, retriedCalls, transcript, type ToolInfo, type TranscriptItem, type TranscriptPart } from './history'
 import { Markdown } from './MarkdownView'
 
-import './assistant.scss'
+import './assistant.css'
 import { FORM_SETTINGS_REGION } from '../../../forms/blocks'
 
 const PROVIDER_DOCS = 'https://github.com/jon8800/payload-canvas/blob/main/docs/ai/providers.md'

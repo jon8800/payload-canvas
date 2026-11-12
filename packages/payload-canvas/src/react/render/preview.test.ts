@@ -21,7 +21,7 @@ const configs: PayloadBlockConfig[] = [
     slug: 'section',
     fields: [
       { name: 'title', type: 'text' },
-      { name: 'content', type: 'blocks', blockReferences: ['hero'], blocks: [] },
+      { name: 'content', type: 'blocks', blocks: ['hero'] },
     ],
   },
 ]
