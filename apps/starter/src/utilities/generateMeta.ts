@@ -6,7 +6,7 @@ import configPromise from '@payload-config'
 import { mergeOpenGraph } from './mergeOpenGraph'
 import { getServerSideURL } from './getURL'
 
-type MetaImage = { url?: string | null; alt?: string | null; sizes?: { og?: { url?: string | null } } }
+type MetaImage = { url?: string | null; alt?: string | null; variants?: { og?: { url?: string | null } } }
 
 /** The fields of a page or post the metadata reads. Images must be loaded (depth 1 or more). */
 export type MetaDoc = {
@@ -29,7 +29,7 @@ const text = (value: unknown) => (typeof value === 'string' && value.trim() ? va
 export const getSiteInfo = cache(async (): Promise<{ name: string | null; description: string | null }> => {
   try {
     const payload = await getPayload({ config: configPromise })
-    const settings = (await payload.findGlobal({ slug: 'site-settings', depth: 0 })) as unknown as Record<string, unknown>
+    const settings = (await payload.findGlobal({ slug: 'site-settings', depth: 0, overrideAccess: true })) as unknown as Record<string, unknown>
     return { name: text(settings.siteName) ?? text(process.env.SITE_NAME), description: text(settings.siteDescription) }
   } catch {
     return { name: null, description: null }
@@ -42,7 +42,7 @@ function absolute(url: string): string {
 
 function imageOf(image: MetaDoc['featuredImage']): { url: string; alt?: string } | null {
   if (!image || typeof image !== 'object') return null
-  const url = image.sizes?.og?.url || image.url
+  const url = image.variants?.og?.url || image.url
   if (!url) return null
   return { url: absolute(url), ...(image.alt ? { alt: image.alt } : {}) }
 }

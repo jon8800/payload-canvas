@@ -21,6 +21,7 @@ export async function Scheduled({ req, permissions }: WidgetProps) {
     where: {
       and: [{ taskSlug: { equals: 'schedulePublish' } }, { completedAt: { exists: false } }, { hasError: { not_equals: true } }],
     },
+    overrideAccess: true,
   })
 
   const adminRoute = req.payload.config.routes.admin

@@ -58,6 +58,7 @@ export async function generateStaticParams() {
       limit: 1000,
       where: { _status: { equals: 'published' } },
       select: { slug: true },
+      overrideAccess: true,
     })
     return docs.map((page) => ({
       slug: page.slug ? page.slug.split('/') : [],

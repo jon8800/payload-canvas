@@ -1,0 +1,282 @@
+/*
+ * The admin look: finer details on top of Payload's own styles. Payload 4's palette is already
+ * neutral, so this file only adds a few spacing, border and type rules, inside Payload's
+ * `payload-default` layer, with Payload's CSS variables. Anything you add in unlayered CSS still wins.
+ * Delete this folder and its line in `app/(payload)/custom.css` to get Payload's default look back.
+ */
+@layer payload-default {
+  ::selection {
+    background: color-mix(in srgb, var(--color-bg-brand) 30%, transparent);
+  }
+
+  /*
+   * Payload loads some of its component styles after this file, so these rules start with `html`
+   * to stay one step stronger than Payload's own.
+   */
+  /* The page title of list, edit and global views. */
+  html .list-header__title,
+  html .doc-header__title,
+  html .dashboard h1 {
+    font-size: 26px;
+    line-height: 32px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+  }
+
+  /* List views: hairline rows instead of stripes, quieter headers, links that look like titles. */
+  html .table thead th {
+    color: var(--color-text-tertiary);
+    font-size: 12px;
+    font-weight: 500;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  html .table tbody tr,
+  html .table tbody tr:nth-child(odd) {
+    background: transparent;
+    transition: background-color 100ms ease-out;
+  }
+
+  html .table tbody tr td,
+  html .table tbody tr:nth-child(odd) td {
+    border-bottom: 1px solid var(--color-border);
+    border-radius: 0;
+  }
+
+  html .table tbody tr:hover,
+  html .table tbody tr:nth-child(odd):hover {
+    background: var(--color-bg-secondary);
+  }
+
+  html .table tbody td a {
+    font-weight: 500;
+    text-decoration: none;
+  }
+
+  html .table tbody td a:hover, html .table tbody td a:focus-visible {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  /*
+   * Every cell centred on the row's middle line, so text, checkboxes, thumbnails and
+   * badges line up. Rows get a little more height.
+   */
+  html .table tbody td {
+    vertical-align: middle;
+    padding-block: 10px;
+  }
+
+  /* Thumbnails: rounded, with a hairline so light images keep an edge. */
+  html .table .file__thumbnail {
+    border-radius: var(--radius-medium);
+    box-shadow: 0 0 0 1px var(--color-border);
+  }
+
+  /* An image field (like a post's Featured Image): the thumbnail alone, without the file name. */
+  html .table td:not(.cell-filename) .file__filename {
+    display: none;
+  }
+
+  /* The Status column: Draft, Published or Changed as a coloured badge (src/admin/list/StatusCell.tsx). */
+  html .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 18px;
+    white-space: nowrap;
+    color: var(--color-text-secondary);
+    background: var(--color-bg-hover);
+  }
+
+  html .status-badge::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.8;
+  }
+
+  html .status-badge--published {
+    color: var(--color-text-brand);
+    background: var(--color-bg-selected);
+  }
+
+  html .status-badge--changed {
+    color: var(--color-text-warning);
+    background: var(--color-bg-warning-tertiary);
+  }
+
+  /*
+   * Cells by field type (src/admin/list/FieldCell.tsx): check marks, option chips, counts,
+   * summaries. Empty values show a quiet dash instead of Payload's "<No Label>".
+   */
+  html .field-cell {
+    max-width: 100%;
+  }
+
+  html .field-cell-empty {
+    color: var(--color-text-disabled);
+  }
+
+  html .field-cell-check {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    color: var(--color-text-brand);
+  }
+
+  html .field-cell-check svg {
+    display: block;
+  }
+
+  html .field-cell-sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  html .field-cell-chips {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  html .field-cell-chip {
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 18px;
+    white-space: nowrap;
+    color: var(--color-text);
+    background: var(--color-bg-hover);
+  }
+
+  html .field-cell-count {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 8px;
+    white-space: nowrap;
+  }
+
+  html .field-cell-muted {
+    color: var(--color-text-tertiary);
+  }
+
+  html .field-cell-date {
+    white-space: nowrap;
+  }
+
+  html .field-cell-text {
+    display: -webkit-box;
+    max-width: 48ch;
+    overflow: hidden;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  /*
+   * Login and the other signed-out pages (forgot password, reset, create first user): the logo
+   * and form in one centred card. The brand is in src/admin/brand.
+   */
+  html .template-minimal {
+    background: var(--color-bg-secondary);
+  }
+
+  html .template-minimal__wrap {
+    padding: 40px 40px 32px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-large);
+    background: var(--color-bg);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 32px -12px rgba(0, 0, 0, 0.12);
+  }
+
+  html .login__brand {
+    margin-bottom: 12px;
+  }
+
+  html .brand-logo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+
+  html .brand-logo__name {
+    font-size: 22px;
+    line-height: 28px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: var(--color-text);
+  }
+
+  html .brand-welcome {
+    margin: 0 0 28px;
+    text-align: center;
+    color: var(--color-text-tertiary);
+  }
+
+  /* The mark in the header breadcrumb: no extra box around it. */
+  html .brand-mark {
+    display: block;
+    flex-shrink: 0;
+  }
+
+  /* The search and filter bar above lists. */
+  html .list-controls__wrap,
+  html .query-preset-bar {
+    border-radius: var(--radius-medium);
+  }
+
+  /* Inputs, selects and textareas: a hairline border that darkens on hover. */
+  html .field-type input:not([type=checkbox]):not([type=radio]),
+  html .field-type textarea,
+  html .react-select .rs__control {
+    border-color: var(--color-border);
+    box-shadow: none;
+    transition: border-color 120ms ease-out;
+  }
+
+  html .field-type input:not([type=checkbox]):not([type=radio]):hover,
+  html .field-type textarea:hover,
+  html .react-select .rs__control:hover {
+    border-color: var(--color-border-control-strong);
+  }
+
+  html .field-type input:not([type=checkbox]):not([type=radio]):focus,
+  html .field-type textarea:focus,
+  html .react-select .rs__control--is-focused {
+    border-color: var(--color-border-strong);
+    box-shadow: 0 0 0 3px var(--color-border);
+  }
+
+  /* Payload's own rule loads later with the same weight, so this one is one class stronger. */
+  html .field-type label.field-label:not(.unstyled) {
+    font-weight: 500;
+  }
+
+  /* Cards and collapsible groups in edit views. */
+  html .collapsible,
+  html .card {
+    border-radius: var(--radius-medium);
+  }
+
+  /* Scrollbars that match the palette. Payload hides the sidebar's scrollbar; keep it hidden. */
+  html * {
+    scrollbar-color: var(--color-bg-pressed) transparent;
+  }
+
+  html .nav__scroll {
+    scrollbar-width: none;
+  }
+}

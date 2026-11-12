@@ -1,0 +1,424 @@
+/* Dashboard widgets. Payload variables only, inside Payload's layer, so both themes work. */
+@layer payload-default {
+  .dash-card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    padding: 16px 16px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-large);
+    background: var(--color-bg);
+  }
+
+  .dash-card__header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+    /* Room for Payload's edit buttons, which sit in the top right corner in edit mode. */
+  }
+
+  .widget-wrapper--editing .dash-card__header {
+    padding-right: 72px;
+  }
+
+  .dash-card__title {
+    margin: 0;
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+  }
+
+  .dash-card__action {
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .dash-card__action:hover, .dash-card__action:focus-visible {
+    color: var(--color-text);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .dash-card__body {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .dash-empty {
+    margin: 0;
+    padding: 20px 0 16px;
+    color: var(--color-text-tertiary);
+    font-size: 13px;
+  }
+
+  /* Quick actions: a row of buttons that wraps. */
+  .dash-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+    gap: 8px;
+    padding-bottom: 4px;
+  }
+
+  .dash-action {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 10px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-medium);
+    color: var(--color-text);
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background-color 120ms ease-out, border-color 120ms ease-out;
+  }
+
+  .dash-action svg {
+    flex-shrink: 0;
+    color: var(--color-text-tertiary);
+  }
+
+  .dash-action:hover, .dash-action:focus-visible {
+    background: var(--color-bg-secondary);
+    border-color: var(--color-border-control-strong);
+    color: var(--color-text);
+  }
+
+  .dash-action:hover svg, .dash-action:focus-visible svg {
+    color: var(--color-text);
+  }
+
+  .dash-action:focus-visible {
+    outline: var(--accessibility-outline);
+    outline-offset: 2px;
+  }
+
+  /* Lists of documents and messages. */
+  .dash-list {
+    margin: 0 -8px;
+    padding: 0;
+    list-style: none;
+  }
+
+  .dash-list__row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 7px 8px;
+    border-radius: var(--radius-medium);
+    color: inherit;
+    text-decoration: none;
+    transition: background-color 100ms ease-out;
+  }
+
+  .dash-list__row:hover, .dash-list__row:focus-visible {
+    background: var(--color-bg-secondary);
+  }
+
+  .dash-list__row:focus-visible {
+    outline: var(--accessibility-outline);
+    outline-offset: -2px;
+  }
+
+  /* A row with a second link at its end ("Create redirect"). */
+  .dash-list__item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .dash-list__item .dash-list__row {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .dash-list__action {
+    flex-shrink: 0;
+    padding: 4px 8px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-medium);
+    color: var(--color-text);
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background-color 100ms ease-out, border-color 100ms ease-out;
+  }
+
+  .dash-list__action:hover, .dash-list__action:focus-visible {
+    background: var(--color-bg-secondary);
+    border-color: var(--color-border-control-strong);
+    color: var(--color-text);
+  }
+
+  .dash-list__action:focus-visible {
+    outline: var(--accessibility-outline);
+    outline-offset: 2px;
+  }
+
+  /* A media thumbnail in a list row. */
+  .dash-thumb {
+    display: block;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-medium);
+    background: var(--color-bg-hover);
+    object-fit: cover;
+  }
+
+  .dash-thumb--file {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-tertiary);
+  }
+
+  /* Widgets with more than one list. */
+  .dash-section + .dash-section {
+    margin-top: 14px;
+  }
+
+  .dash-section__title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 4px;
+    color: var(--color-text-tertiary);
+    font-size: 12px;
+    line-height: 18px;
+    font-weight: 500;
+  }
+
+  .dash-section__count {
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dash-section .dash-empty {
+    padding: 4px 0 8px;
+  }
+
+  /* A big number above a list ("12 unused files"). */
+  .dash-total {
+    margin: 0 0 8px;
+    font-size: 13px;
+    color: var(--color-text-tertiary);
+  }
+
+  .dash-total strong {
+    margin-right: 4px;
+    color: var(--color-text);
+    font-size: 22px;
+    line-height: 28px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dash-list__icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    color: var(--color-text-tertiary);
+  }
+
+  .dash-list__text {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    flex-direction: column;
+  }
+
+  .dash-list__title,
+  .dash-list__meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .dash-list__title {
+    font-size: 13px;
+    line-height: 20px;
+    font-weight: 500;
+    color: var(--color-text);
+  }
+
+  .dash-list__meta {
+    font-size: 12px;
+    line-height: 18px;
+    color: var(--color-text-tertiary);
+  }
+
+  .dash-badge {
+    flex-shrink: 0;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    line-height: 18px;
+    font-weight: 500;
+  }
+
+  /* Payload flips these scales in dark mode, so the same steps work in both themes. */
+  .dash-badge--draft {
+    background: var(--color-bg-warning-tertiary);
+    color: var(--color-text-warning);
+  }
+
+  .dash-badge--scheduled {
+    background: var(--color-bg-selected);
+    color: var(--color-text-brand);
+  }
+
+  /* A form message nobody opened yet. */
+  .dash-badge--new {
+    background: var(--color-bg-selected);
+    color: var(--color-text-brand);
+    font-weight: 600;
+  }
+
+  .dash-badge--neutral {
+    background: var(--color-bg-hover);
+    color: var(--color-text);
+  }
+
+  /* Site checks. */
+  .dash-checks__ok {
+    margin: 0 0 6px;
+    font-size: 13px;
+    color: var(--color-text);
+  }
+
+  .dash-checks {
+    margin: 0 -8px;
+    padding: 0;
+    list-style: none;
+  }
+
+  .dash-checks__row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 8px;
+    border-radius: var(--radius-medium);
+    color: var(--color-text);
+    font-size: 13px;
+    line-height: 20px;
+    text-decoration: none;
+    transition: background-color 100ms ease-out;
+  }
+
+  .dash-checks__row:is(a):hover, .dash-checks__row:is(a):focus-visible {
+    background: var(--color-bg-secondary);
+  }
+
+  .dash-checks__row:focus-visible {
+    outline: var(--accessibility-outline);
+    outline-offset: -2px;
+  }
+
+  .dash-checks__icon {
+    flex-shrink: 0;
+    color: var(--color-text-warning);
+  }
+
+  .dash-checks__row--ok .dash-checks__icon {
+    color: var(--color-text-brand);
+  }
+
+  .dash-checks__label {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .dash-checks__row--ok .dash-checks__label {
+    color: var(--color-text-tertiary);
+  }
+
+  .dash-checks__count {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+
+  .dash-checks__row--ok .dash-checks__count {
+    font-weight: 400;
+    color: var(--color-text-tertiary);
+  }
+
+  /* Analytics. */
+  .dash-stats {
+    display: flex;
+    gap: 32px;
+    margin: 4px 0 12px;
+  }
+
+  .dash-stats dt {
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+  }
+
+  .dash-stats dd {
+    margin: 0;
+    font-size: 26px;
+    line-height: 32px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dash-top {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .dash-top li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 5px 0;
+    border-top: 1px solid var(--color-border);
+    font-size: 13px;
+  }
+
+  .dash-top__path {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .dash-top__count {
+    color: var(--color-text-tertiary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* The "Unused media" page (UnusedMediaView.tsx). */
+  .unused-media {
+    max-width: 960px;
+    padding-block: 24px 64px;
+  }
+
+  .unused-media__title {
+    margin: 0 0 8px;
+  }
+
+  .unused-media__pager {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 16px;
+    font-size: 13px;
+    color: var(--color-text-tertiary);
+  }
+
+  .unused-media__pager a {
+    color: var(--color-text);
+    font-weight: 500;
+  }
+}

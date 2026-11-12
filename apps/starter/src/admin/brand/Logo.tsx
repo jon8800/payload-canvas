@@ -8,7 +8,7 @@ import { Mark } from './Mark'
  * signed-out pages (forgot password, reset password, create first user).
  */
 export async function Logo({ payload }: ServerProps) {
-  const settings = await payload?.findGlobal({ slug: 'site-settings', depth: 0 }).catch(() => null)
+  const settings = await payload?.findGlobal({ slug: 'site-settings', depth: 0, overrideAccess: true }).catch(() => null)
   const name = settings?.siteName?.trim() || BRAND.name
   return (
     <span className="brand-logo">

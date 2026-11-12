@@ -63,6 +63,7 @@ export const createDocumentTask: TaskConfig<'createDocument'> = {
       data: asObject(input.data, 'data'),
       draft: input.draft ?? true,
       req,
+      overrideAccess: true,
     })
     return { output: { id: String(doc.id) } }
   },
@@ -85,6 +86,7 @@ export const updateDocumentTask: TaskConfig<'updateDocument'> = {
       id: input.id,
       data: asObject(input.data, 'data'),
       req,
+      overrideAccess: true,
     })
     return { output: { id: String(doc.id) } }
   },

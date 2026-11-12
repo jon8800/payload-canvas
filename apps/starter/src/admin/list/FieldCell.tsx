@@ -87,7 +87,7 @@ function CellContent({ cellData, field }: { readonly cellData: unknown; readonly
       const rows = Array.isArray(cellData) ? (cellData as unknown[]).filter((row): row is { blockType?: string } => typeof row === 'object' && row !== null) : []
       if (!rows.length) return <Empty />
       const shared = config.blocksMap as Record<string, ClientBlock | undefined> | undefined
-      const blocks = [...(field.blocks ?? []), ...(field.blockReferences ?? []).map((slug) => (typeof slug === 'string' ? shared?.[slug] : slug))]
+      const blocks = (field.blocks ?? []).map((block) => (typeof block === 'string' ? shared?.[block] : block))
       const names = [...new Set(rows.map((row) => blocks.find((block) => block?.slug === row.blockType)))]
         .map((block) => (block ? labelText(block.labels?.singular, i18n.language) || block.slug : ''))
         .filter(Boolean)

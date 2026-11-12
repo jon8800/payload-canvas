@@ -1,8 +1,8 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 
-import './dashboard.scss'
-import './widget-previews.scss'
+import './dashboard.css'
+import './widget-previews.css'
 
 type Props = {
   title: string

@@ -24,11 +24,12 @@ export const LegacyPages: CollectionConfig = {
           label: 'Content',
           fields: [
             { name: 'title', type: 'text', required: true },
-            { name: 'layout', type: 'blocks', blockReferences: rootSlugs as never[], blocks: [] },
+            { name: 'layout', type: 'blocks', blocks: rootSlugs as never[] },
           ],
         },
       ],
     },
     { name: 'slug', type: 'text', required: true, unique: true, index: true, admin: { position: 'sidebar' } },
   ],
+  authorship: false,
 }

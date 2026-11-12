@@ -34,5 +34,5 @@ function toNode(input: RichTextInput): RootChild {
 }
 
 export function lexical(content: RichTextInput[]) {
-  return { root: { ...element, type: 'root', children: content.map(toNode) } }
+  return { root: { ...element, type: 'root' as const, children: content.map(toNode) } }
 }

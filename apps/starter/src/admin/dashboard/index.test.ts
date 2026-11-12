@@ -17,10 +17,9 @@ describe('widget previews', () => {
     }
   })
 
-  it('widget-previews.scss lists every widget slug', () => {
-    const scss = readFileSync(path.join(import.meta.dirname, 'widget-previews.scss'), 'utf8')
-    const list = /\$widget-preview-slugs:([^;]+);/.exec(scss)?.[1] ?? ''
-    const slugs = list.split(',').map((slug) => slug.trim())
+  it('widget-previews.css has a dark preview rule for every widget slug', () => {
+    const css = readFileSync(path.join(import.meta.dirname, 'widget-previews.css'), 'utf8')
+    const slugs = [...new Set([...css.matchAll(/\/([a-z-]+)-dark\.webp/g)].map((match) => match[1]))]
     assert.deepEqual(slugs.toSorted(), widgets.map((widget) => widget.slug).toSorted())
   })
 

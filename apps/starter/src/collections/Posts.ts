@@ -15,7 +15,7 @@ export const Posts: CollectionConfig = {
     update: authenticated,
   },
   admin: {
-    // The Featured Image column shows the image as a thumbnail (styled in src/admin/look/admin.scss).
+    // The Featured Image column shows the image as a thumbnail (styled in src/admin/look/admin.css).
     defaultColumns: ['title', 'featuredImage', 'categories', '_status', 'publishedAt', 'updatedAt'],
     useAsTitle: 'title',
     livePreview: {
@@ -99,4 +99,5 @@ export const Posts: CollectionConfig = {
       admin: { position: 'sidebar' },
     },
   ],
+  authorship: false,
 }

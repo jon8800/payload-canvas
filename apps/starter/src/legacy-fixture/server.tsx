@@ -23,6 +23,7 @@ export async function LatestPostsLeaf({ heading, count }: PayloadBlockProps<{ he
     limit: Math.min(Math.max(count ?? 3, 1), 12),
     depth: 0,
     select: { title: true, slug: true, publishedAt: true },
+    overrideAccess: true,
   })
   return (
     <div className="space-y-4">
@@ -44,7 +45,7 @@ export async function LatestPostsLeaf({ heading, count }: PayloadBlockProps<{ he
 /** An async server section: counts the posts, and renders its blocks field with PayloadSlot. */
 export async function PostsSectionComponent({ title, content, builder }: PayloadBlockProps<{ title?: string | null; content?: Array<{ blockType: string }> | null }>) {
   const payload = await getPayload({ config })
-  const { totalDocs } = await payload.count({ collection: 'posts', where: published })
+  const { totalDocs } = await payload.count({ collection: 'posts', where: published, overrideAccess: true })
   return (
     <section className="bg-amber-50 px-6 py-16">
       <div className="mx-auto max-w-5xl space-y-8">
@@ -75,6 +76,7 @@ export async function legacyPageData({ payload }: Pick<PageDataArgs, 'payload'>)
     limit: 1,
     depth: 0,
     select: { title: true },
+    overrideAccess: true,
   })
   return { postCount: totalDocs, latestPost: docs[0]?.title ?? null }
 }

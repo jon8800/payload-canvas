@@ -786,10 +786,7 @@
     background: color-mix(in srgb, var(--be-accent) 30%, transparent);
   }
 
-  .builder-editor__thumb-inner {
-    /* A heading with its real words, so sections are easy to tell apart. */
-  }
-
+  /* A heading with its real words, so sections are easy to tell apart. */
   .builder-editor__thumb-inner .wf-heading-text {
     display: -webkit-box;
     max-width: 92%;
@@ -919,10 +916,7 @@
     border-radius: 1px;
   }
 
-  .builder-editor__thumb-inner {
-    /* Inside rows, bars get a fixed size instead of a share of the row. */
-  }
-
+  /* Inside rows, bars get a fixed size instead of a share of the row. */
   .builder-editor__thumb-inner .wf-row > .wf-text,
   .builder-editor__thumb-inner .wf-inline .wf-text {
     width: 14px;

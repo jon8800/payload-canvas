@@ -1,0 +1,101 @@
+/*
+ * The sidebar from Nav.tsx. Payload's own nav styles still apply (`.nav`, `.nav__link`); these rules
+ * add the icons and turn each link into a full-width row with a hover and an active background.
+ */
+@layer payload-default {
+  .nav__wrap.admin-nav {
+    gap: 2px;
+  }
+
+  .admin-nav .nav-group {
+    margin-top: calc(1.0156rem * 0.6);
+    margin-bottom: 0;
+  }
+
+  .admin-nav .nav-group__toggle {
+    padding-inline: 8px;
+    margin-bottom: 4px;
+    font-size: 11.5px;
+    font-weight: 500;
+    line-height: 20px;
+    letter-spacing: 0.01em;
+    color: var(--color-text-tertiary);
+  }
+
+  .admin-nav .nav-group__toggle svg {
+    margin-top: 0;
+  }
+
+  .admin-nav .nav-group__content {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .admin-nav__top {
+    width: 100%;
+  }
+
+  .admin-nav .nav__link.admin-nav__link {
+    width: 100%;
+    gap: 10px;
+    min-height: 32px;
+    padding: 6px 8px;
+    border-radius: var(--radius-medium);
+    font-size: 13px;
+    font-weight: 450;
+    line-height: 20px;
+    color: var(--color-text);
+    transition: background-color 120ms ease-out, color 120ms ease-out;
+  }
+
+  .admin-nav .nav__link.admin-nav__link:hover, .admin-nav .nav__link.admin-nav__link:focus-visible {
+    background: var(--color-bg-secondary);
+    color: var(--color-text);
+    text-decoration: none;
+  }
+
+  .admin-nav .nav__link.admin-nav__link:focus-visible {
+    outline: var(--accessibility-outline);
+    outline-offset: -2px;
+  }
+
+  .admin-nav .nav__link.admin-nav__link .nav__link-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .admin-nav .nav__link.admin-nav__link--active {
+    background: var(--color-bg-hover);
+    color: var(--color-text);
+    font-weight: 500;
+  }
+
+  .admin-nav .nav__link.admin-nav__link--active:hover {
+    background: var(--color-bg-hover);
+  }
+
+  .admin-nav .nav__link.admin-nav__link--active .admin-nav__icon {
+    color: var(--color-text);
+  }
+
+  .admin-nav__icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    color: var(--color-text-tertiary);
+    transition: color 120ms ease-out;
+  }
+
+  .admin-nav__link:hover .admin-nav__icon {
+    color: var(--color-text);
+  }
+
+  /* Phones: Payload makes the nav a full-screen sheet with bigger links. */
+  @media (max-width: 768px) {
+    .admin-nav .nav__link.admin-nav__link {
+      min-height: 44px;
+      font-size: 16px;
+    }
+  }
+}

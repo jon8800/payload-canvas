@@ -1,6 +1,5 @@
 import { withPayload } from '@payloadcms/next/withPayload'
 import type { NextConfig } from 'next'
-import path from 'path'
 
 const nextConfig: NextConfig = {
   output: 'standalone',
@@ -8,6 +7,8 @@ const nextConfig: NextConfig = {
   // Next's built-in gzip leaks one 'drain' listener per backpressure event on streamed HTML
   // (the large admin and builder pages), which logs MaxListenersExceededWarning in production.
   compress: false,
+  // Open the dev server at 127.0.0.1 to keep its admin cookie apart from other local Payload apps.
+  allowedDevOrigins: ['127.0.0.1'],
   experimental: {
     // The app has several root layouts, so the site's 404 page is app/global-not-found.tsx.
     // Without it a direct request for an unknown URL gets Next's blank error shell.
@@ -50,11 +51,6 @@ const nextConfig: NextConfig = {
         ],
       },
     ]
-  },
-  sassOptions: {
-    includePaths: [
-      path.resolve(import.meta.dirname, 'node_modules', '@payloadcms', 'ui', 'dist', 'scss'),
-    ],
   },
 }
 

@@ -29,10 +29,7 @@
     inset: 0 -4px;
   }
 
-  .builder-split {
-    /* The line shows on hover, on keyboard focus and while dragging. */
-  }
-
+  /* The line shows on hover, on keyboard focus and while dragging. */
   .builder-split::after {
     content: "";
     position: absolute;
@@ -99,20 +96,14 @@
     flex: none;
   }
 
-  .builder-left__head {
-    /* A drag rests on the tab: it opens in a moment. */
-  }
-
+  /* A drag rests on the tab: it opens in a moment. */
   .builder-left__head .builder-editor__segment[data-drag-over] {
     background: var(--be-accent-soft);
     color: var(--color-text);
     box-shadow: inset 0 0 0 1px var(--be-accent);
   }
 
-  .builder-left__head {
-    /* After the rules above, so it wins over them. */
-  }
-
+  /* After the rules above, so it wins over them. */
   @container (max-width: 250px) {
     .builder-left__head .builder-editor__segment {
       padding: 0 4px;
@@ -134,10 +125,7 @@
     display: none;
   }
 
-  .builder-left__panel {
-    /* Blocks and Sections: the search field under the tabs. */
-  }
-
+  /* Blocks and Sections: the search field under the tabs. */
   .builder-left__panel .builder-editor__insert > .builder-editor__search {
     margin-top: 10px;
   }

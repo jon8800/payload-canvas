@@ -18,10 +18,11 @@ if (!legacyDemo) {
 }
 const collection = LEGACY_COLLECTION as never
 const context = { disableRevalidate: true, builderForceDelete: true }
-const deleted = await payload.delete({ collection, where: { id: { exists: true } }, context })
+const deleted = await payload.delete({ collection, where: { id: { exists: true } }, context, overrideAccess: true })
 const locks = await payload.delete({
   collection: 'payload-locked-documents',
   where: { 'document.relationTo': { equals: LEGACY_COLLECTION } },
+  overrideAccess: true,
 })
 console.log(`Deleted ${deleted.docs.length} legacy pages and ${locks.docs.length} locks.`)
 process.exit(0)

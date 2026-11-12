@@ -32,7 +32,7 @@ export function widgetPreviewURL(slug: string, theme: WidgetPreviewTheme): strin
  * A widget with a preview image for the "Add widget" drawer. Payload's drawer shows an item's
  * `imageURL` (the same drawer shows block thumbnails), and the dashboard passes every widget key
  * through to it, but the `Widget` type does not list the key. The URL is the light image;
- * widget-previews.scss shows the dark one in the dark theme.
+ * widget-previews.css shows the dark one in the dark theme.
  */
 function withPreview(widget: Widget & { label: string }): Widget {
   const preview = { imageURL: widgetPreviewURL(widget.slug, 'light'), imageAltText: `${widget.label} widget` }

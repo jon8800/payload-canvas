@@ -21,7 +21,7 @@ export async function seedClasses(payload: Payload, context: RequestContext = {}
       continue
     }
     // Each publish compiles the classes stylesheet again (the collection's hook).
-    await payload.create({ collection: 'builder-classes', data: { ...item, _status: 'published' }, context })
+    await payload.create({ collection: 'builder-classes', data: { ...item, _status: 'published' }, context, overrideAccess: true })
     created.push(item.name)
   }
   payload.logger.info(`Classes: created ${created.join(', ') || 'none'}; kept ${kept.join(', ') || 'none'}.`)

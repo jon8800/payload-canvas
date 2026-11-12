@@ -62,6 +62,8 @@ function indexCollection(uploads: string[]): CollectionConfig {
     // list can filter by it ("View all" in the Unused media widget).
     access: { read: ({ req }) => Boolean(req.user), create: () => false, update: () => false, delete: () => false },
     timestamps: false,
+    versions: false,
+    authorship: false,
     indexes: [{ fields: ['relationTo', 'value'] }],
     fields: [
       /** `pages:12` or `global:site-settings`. */
@@ -360,7 +362,7 @@ export function referenceIndex(): Plugin {
                 // Only for "unused" queries: one row is enough, and the edit view does not show it.
                 defaultLimit: 1,
                 maxDepth: 0,
-                admin: { hidden: true, disableListColumn: true, disableListFilter: true },
+                admin: { hidden: true, disabled: { column: true, filter: true } },
               },
             ]
           : collection.fields,

@@ -17,9 +17,9 @@ const collection = LEGACY_COLLECTION as never
 const context = { disableRevalidate: true }
 type Doc = { id: number | string }
 
-const media = await payload.find({ collection: 'media', limit: 2, depth: 0, sort: 'createdAt' })
+const media = await payload.find({ collection: 'media', limit: 2, depth: 0, sort: 'createdAt', overrideAccess: true })
 const [imageA, imageB] = media.docs.map((d) => d.id)
-const anyPage = (await payload.find({ collection: 'pages', limit: 1, depth: 0, where: { _status: { equals: 'published' } } })).docs[0]
+const anyPage = (await payload.find({ collection: 'pages', limit: 1, depth: 0, where: { _status: { equals: 'published' } }, overrideAccess: true })).docs[0]
 if (!imageA) throw new Error('The fixture needs at least one media document.')
 
 const text = (value: string) => ({
@@ -75,27 +75,27 @@ const faqLayout = [
 ]
 
 // Fresh start.
-await payload.delete({ collection, where: { id: { exists: true } }, context })
+await payload.delete({ collection, where: { id: { exists: true } }, context, overrideAccess: true })
 
 // 1. Published twice, then a newer draft.
-const home: Doc = await payload.create({ collection, data: { title: 'Legacy home', slug: 'legacy-home', layout: homeLayout('Hello from Payload blocks'), _status: 'published' } as never, context })
-await payload.update({ collection, id: home.id, data: { layout: homeLayout('Hello again (published)'), _status: 'published' } as never, context })
-await payload.update({ collection, id: home.id, data: { layout: homeLayout('A newer draft heading') } as never, draft: true, context })
+const home: Doc = await payload.create({ collection, data: { title: 'Legacy home', slug: 'legacy-home', layout: homeLayout('Hello from Payload blocks'), _status: 'published' } as never, context, overrideAccess: true })
+await payload.update({ collection, id: home.id, data: { layout: homeLayout('Hello again (published)'), _status: 'published' } as never, context, overrideAccess: true })
+await payload.update({ collection, id: home.id, data: { layout: homeLayout('A newer draft heading') } as never, draft: true, context, overrideAccess: true })
 
 // 2. Draft only, saved twice.
-const draftOnly: Doc = await payload.create({ collection, data: { title: 'Legacy draft', slug: 'legacy-draft', layout: homeLayout('Draft only'), _status: 'draft' } as never, draft: true, context })
-await payload.update({ collection, id: draftOnly.id, data: { layout: homeLayout('Draft only, second save') } as never, draft: true, context })
+const draftOnly: Doc = await payload.create({ collection, data: { title: 'Legacy draft', slug: 'legacy-draft', layout: homeLayout('Draft only'), _status: 'draft' } as never, draft: true, context, overrideAccess: true })
+await payload.update({ collection, id: draftOnly.id, data: { layout: homeLayout('Draft only, second save') } as never, draft: true, context, overrideAccess: true })
 
 // 3. Published, then old data the current configs no longer have: a removed block type and a
 //    removed field (written past validation, as left behind by earlier versions of the site).
-const faq: Doc = await payload.create({ collection, data: { title: 'Legacy FAQ', slug: 'legacy-faq', layout: faqLayout, _status: 'published' } as never, context })
-const stored = (await payload.findByID({ collection, id: faq.id, depth: 0 })) as unknown as { layout: Array<Record<string, unknown>> }
+const faq: Doc = await payload.create({ collection, data: { title: 'Legacy FAQ', slug: 'legacy-faq', layout: faqLayout, _status: 'published' } as never, context, overrideAccess: true })
+const stored = (await payload.findByID({ collection, id: faq.id, depth: 0, overrideAccess: true })) as unknown as { layout: Array<Record<string, unknown>> }
 const withLeftovers = [
   ...stored.layout.map((block) => ({ ...block, oldSpacing: 'wide' })),
   { id: 'old-promo-1', blockType: 'promoBanner', title: 'A block type the site removed' },
 ]
 await payload.db.updateOne({ collection, id: faq.id, data: { layout: withLeftovers }, returning: false })
 
-const versions = await payload.countVersions({ collection })
+const versions = await payload.countVersions({ collection, overrideAccess: true })
 console.log(`Seeded 3 legacy pages (${home.id}, ${draftOnly.id}, ${faq.id}) and ${versions.totalDocs} versions.`)
 process.exit(0)
