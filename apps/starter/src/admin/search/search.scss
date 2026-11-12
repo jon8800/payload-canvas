@@ -1,0 +1,372 @@
+// The admin search (AdminSearch.tsx). It borrows the sidebar's look on purpose: the same row
+// shapes and the same elevation-100 background for "this one", so it reads as the nav, searchable.
+@layer payload-default {
+  :root {
+    --admin-search-bg: var(--theme-elevation-0);
+    --admin-search-row: var(--theme-elevation-100);
+  }
+
+  // On dark, the dialog steps up from the page so it reads as in front of it, and the selected
+  // row steps up again from the dialog.
+  html[data-theme='dark'] {
+    --admin-search-bg: var(--theme-elevation-50);
+    --admin-search-row: var(--theme-elevation-150);
+  }
+
+  // The header button. Shaped like a search field on wide screens, an icon button on phones.
+  .admin-search-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 200px;
+    height: 32px;
+    padding: 0 6px 0 10px;
+    appearance: none;
+    border: 1px solid var(--theme-elevation-150);
+    border-radius: var(--style-radius-m);
+    background: var(--theme-elevation-0);
+    color: var(--theme-elevation-600);
+    font-family: var(--font-body);
+    font-size: 13px;
+    cursor: pointer;
+    transition:
+      border-color 120ms ease-out,
+      color 120ms ease-out;
+
+    svg {
+      flex-shrink: 0;
+    }
+
+    &:hover {
+      border-color: var(--theme-elevation-300);
+      color: var(--theme-elevation-900);
+    }
+
+    &:focus-visible {
+      outline: var(--accessibility-outline);
+      outline-offset: 2px;
+    }
+  }
+
+  .admin-search-trigger__label {
+    flex: 1;
+    text-align: left;
+  }
+
+  .admin-search-trigger__keys,
+  .admin-search kbd {
+    padding: 0 5px;
+    border: 1px solid var(--theme-elevation-150);
+    border-radius: 4px;
+    background: var(--theme-elevation-50);
+    color: var(--theme-elevation-650);
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+  }
+
+  @media (max-width: 1024px) {
+    .admin-search-trigger {
+      min-width: 0;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .admin-search-trigger {
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      padding: 0;
+    }
+
+    .admin-search-trigger__label,
+    .admin-search-trigger__keys {
+      display: none;
+    }
+  }
+
+  .admin-search__overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: var(--theme-overlay, rgb(12 12 14 / 0.45));
+  }
+
+  .admin-search__dialog {
+    position: fixed;
+    top: 12vh;
+    left: 50%;
+    z-index: 201;
+    width: calc(100vw - 32px);
+    max-width: 640px;
+    transform: translateX(-50%);
+
+    &:focus {
+      outline: none;
+    }
+  }
+
+  // One elevation per theme: a soft offset shadow on light, a hairline on dark, where a shadow
+  // has nothing to fall on.
+  .admin-search {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: 12px;
+    background: var(--admin-search-bg);
+    box-shadow:
+      0 24px 48px -16px rgb(12 12 14 / 0.28),
+      0 2px 6px rgb(12 12 14 / 0.08);
+    color: var(--theme-elevation-800);
+    font-family: var(--font-body);
+  }
+
+  html[data-theme='dark'] .admin-search {
+    box-shadow: 0 0 0 1px var(--theme-elevation-150);
+  }
+
+  .admin-search__field {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 56px;
+    padding: 0 10px 0 18px;
+    border-bottom: 1px solid var(--theme-elevation-100);
+  }
+
+  .admin-search__field-icon {
+    flex-shrink: 0;
+    color: var(--theme-elevation-500);
+  }
+
+  .admin-search__input {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    appearance: none;
+    border: 0;
+    outline: none;
+    background: transparent;
+    box-shadow: none;
+    color: var(--theme-elevation-1000);
+    caret-color: var(--theme-elevation-1000);
+    font-family: var(--font-body);
+    font-size: 15px;
+
+    &::placeholder {
+      color: var(--theme-elevation-500);
+      opacity: 1;
+    }
+  }
+
+  .admin-search__close {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    min-height: 32px;
+    padding: 0;
+    appearance: none;
+    border: 0;
+    border-radius: var(--style-radius-s);
+    background: transparent;
+    color: var(--theme-elevation-500);
+    cursor: pointer;
+
+    &:focus-visible {
+      outline: var(--accessibility-outline);
+    }
+  }
+
+  .admin-search__close-icon {
+    display: none;
+  }
+
+  // Loading: a short bar along the field's bottom edge. It waits 180ms, so a fast answer never
+  // flashes it. It only appears when there is a wait to explain.
+  .admin-search__progress {
+    position: absolute;
+    right: 0;
+    bottom: -1px;
+    left: 0;
+    height: 2px;
+    opacity: 0;
+    pointer-events: none;
+
+    &[data-active] {
+      background: linear-gradient(90deg, transparent, var(--theme-elevation-600) 50%, transparent) no-repeat;
+      background-size: 40% 100%;
+      opacity: 1;
+      animation: admin-search-progress 1.1s cubic-bezier(0.22, 1, 0.36, 1) 180ms infinite;
+    }
+  }
+
+  @keyframes admin-search-progress {
+    from {
+      background-position: -60% 0;
+    }
+
+    to {
+      background-position: 160% 0;
+    }
+  }
+
+  .admin-search__list {
+    max-height: min(440px, calc(88vh - 120px));
+    padding: 6px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scroll-padding-block: 6px;
+    scrollbar-color: var(--theme-elevation-200) transparent;
+    scrollbar-width: thin;
+  }
+
+  .admin-search [cmdk-group-heading] {
+    padding: 12px 10px 4px;
+    color: var(--theme-elevation-500);
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+  }
+
+  .admin-search [cmdk-group]:first-child [cmdk-group-heading] {
+    padding-top: 6px;
+  }
+
+  .admin-search__item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 44px;
+    padding: 6px 10px;
+    border-radius: var(--style-radius-m);
+    cursor: pointer;
+    user-select: none;
+
+    &[data-selected='true'] {
+      background: var(--admin-search-row);
+      color: var(--theme-elevation-1000);
+
+      .admin-search__item-icon {
+        color: var(--theme-elevation-1000);
+      }
+    }
+  }
+
+  .admin-search__item-icon {
+    flex-shrink: 0;
+    color: var(--theme-elevation-500);
+  }
+
+  .admin-search__item-text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .admin-search__item-title,
+  .admin-search__item-subtitle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .admin-search__item-title {
+    font-size: 14px;
+    font-weight: 450;
+    line-height: 1.3;
+  }
+
+  .admin-search__item-subtitle {
+    color: var(--theme-elevation-500);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.35;
+  }
+
+  .admin-search__hint,
+  .admin-search__status {
+    margin: 0;
+    padding: 10px 10px 8px;
+    color: var(--theme-elevation-500);
+    font-size: 13px;
+  }
+
+  .admin-search__status {
+    padding-block: 18px;
+    color: var(--theme-elevation-800);
+
+    span {
+      display: block;
+      margin-top: 2px;
+      color: var(--theme-elevation-500);
+    }
+  }
+
+  .admin-search__footer {
+    display: flex;
+    gap: 18px;
+    padding: 8px 18px;
+    border-top: 1px solid var(--theme-elevation-100);
+    color: var(--theme-elevation-500);
+    font-size: 11.5px;
+
+    span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+  }
+
+  // Phones and touch screens: the keyboard legend gives way to a close button a thumb can hit.
+  @media (max-width: 768px), (hover: none) {
+    .admin-search__footer,
+    .admin-search__close-key {
+      display: none;
+    }
+
+    .admin-search__close-icon {
+      display: block;
+    }
+
+    .admin-search__close {
+      min-width: 44px;
+      min-height: 44px;
+    }
+  }
+
+  // Phones: the dialog hangs from the top edge, clear of the keyboard. 16px input text stops iOS
+  // zooming the page on focus.
+  @media (max-width: 768px) {
+    .admin-search__dialog {
+      top: max(8px, env(safe-area-inset-top));
+      width: calc(100vw - 16px);
+    }
+
+    .admin-search__input {
+      font-size: 16px;
+    }
+
+    .admin-search__list {
+      max-height: calc(100dvh - 90px);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .admin-search__progress[data-active] {
+      background: var(--theme-elevation-600);
+      opacity: 0.5;
+      animation: none;
+    }
+
+    .admin-search-trigger {
+      transition: none;
+    }
+  }
+}

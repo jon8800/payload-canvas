@@ -4,6 +4,10 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ## [Unreleased]
 
+### Added
+
+- **Admin search in the starter:** a Search button in the admin header, and Ctrl+K (Cmd+K on a Mac) on every admin screen. It finds pages and settings, documents in every collection by their title and `admin.listSearchableFields`, and "New" actions. Recent picks show before you type. The documents come from `GET /api/admin-search`, which reads each collection with the user's own access. It is a new scaffolder feature: `--no-search` leaves it out. The users list search now also finds users by name.
+
 ## [0.6.1] - 2026-11-12
 
 The `video` block can now replace a site's own background-video block (a muted, looping video behind a hero). Stored videos keep their behaviour: the new props are off by default.
