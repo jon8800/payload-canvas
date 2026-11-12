@@ -5,6 +5,8 @@ on:
   push:
     tags:
       - 'v*'
+      # Next tags (v0.7.0-next.0) publish the Payload 4 line with publish-next.yml.
+      - '!v*-next.*'
   workflow_dispatch:
 
 permissions:
@@ -23,6 +25,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+
+      # A manual run on the next branch must not publish prereleases as `latest`.
+      - name: Refuse prerelease versions
+        run: node -e "for (const d of ['payload-canvas','create-payload-canvas']) { const p = require('./packages/' + d + '/package.json'); if (p.version.includes('-')) throw new Error(p.name + ' ' + p.version + ' is a prerelease: publish it with publish-next.yml') }"
 
       - uses: pnpm/action-setup@v6
 

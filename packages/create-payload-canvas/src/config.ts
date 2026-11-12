@@ -1,7 +1,10 @@
 // The GitHub repo that hosts Payload Canvas. Change it here if the repo moves.
 export const GITHUB_OWNER = 'jon8800'
 export const GITHUB_REPO = 'payload-canvas'
-export const DEFAULT_REF = 'main'
+// The Payload 4 next line downloads the starter from its release tag, so a project matches the
+// published `payload-canvas@next`. Keep it equal to `v${version}` of this package
+// (scripts/check-next-release.mjs checks it). The Payload 3 line on `main` uses 'main'.
+export const DEFAULT_REF = 'v0.7.0-next.0'
 export const STARTER_SUBDIR = 'apps/starter'
 // Guides that the starter's .env.example points to. They live at the repo root.
 export const DOCS_SUBDIR = 'docs/ai'
@@ -10,8 +13,8 @@ export function tarballUrl(ref: string): string {
   return `https://codeload.github.com/${GITHUB_OWNER}/${GITHUB_REPO}/tar.gz/${ref}`
 }
 
-// Version range for the payload-canvas package when it comes from npm.
-export const PUBLISHED_VERSION = '^0.6.0'
+// Version range for the payload-canvas package when it comes from npm: the Payload 4 next line.
+export const PUBLISHED_VERSION = '^0.7.0-next.0'
 
 // The package the starter depends on: its npm name and its folder under `packages/` in the repo.
 export const BUILDER_PACKAGE = { name: 'payload-canvas', dir: 'payload-canvas' } as const

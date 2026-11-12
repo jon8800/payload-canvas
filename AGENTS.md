@@ -12,14 +12,15 @@ A website builder plugin for Payload CMS v3: composable layout blocks, a visual 
 
 ## Tech stack
 
-- **Payload CMS 3.90** with the Postgres adapter, blocks stored as JSON
-- **Next.js 16.3** (App Router, RSC by default, client components only at leaves). Payload 3.x supports Next 16 only, not 17. Bundled Next docs: `apps/starter/node_modules/next/dist/docs/`.
+- **Payload CMS 4.0.0-beta.8** with the Postgres adapter, blocks stored as JSON. This branch (`release/payload-v4-next`) is the Payload 4 line, published with the npm `next` dist-tag; `main` stays on Payload 3 (see `docs/payload-v4-next.md`). The Local API enforces access by default: pass `overrideAccess: true` for trusted server reads, or the `user`.
+- **Next.js 16.4** (App Router, RSC by default, client components only at leaves). Payload 4 needs Next 16.4.1 or later, not 17. Admin client code reads the router from `@payloadcms/ui` (`useRouter`, `usePathname`, `useSearchParams`), not `next/navigation`. Bundled Next docs: `apps/starter/node_modules/next/dist/docs/`.
   - Request interception lives in `src/proxy.ts` (Next 16 renamed `middleware.ts`).
   - `revalidateTag(tag, profile)` takes 2 arguments — use `{ expire: 0 }` as the profile.
-- **React 19.3**, **Tailwind v4** (CSS-first, no `tailwind.config`), **shadcn/ui**, **Base UI** primitives
+- **React 19.3.1**, **Tailwind v4** (CSS-first, no `tailwind.config`), **shadcn/ui**, **Base UI** primitives
 - **TypeScript 7** (native compiler). `baseUrl` is gone; `paths` entries start with `./`.
   - The shadcn CLI mis-resolves `@/` without `baseUrl`: after `pnpm dlx shadcn@latest add <name>`, change `from "cn"` to `from "@/lib/utils"` in the new files and run `pnpm remove cn`.
 - **Oxlint** (`.oxlintrc.json`), not ESLint. Vendored shadcn files in `src/components/ui/` are not linted.
+- **Node.js 24.22.1 or later** (Payload 4). `pnpm-workspace.yaml` sets `useNodeVersion: 24.22.3`, so pnpm scripts use it even when the global Node is older.
 - **pnpm 10** workspaces, **Turborepo**, **Turbopack** (never fall back to webpack)
 - **PostgreSQL** locally and in production. Deployment target: VPS / Docker (no Vercel-specific features).
 
@@ -28,11 +29,11 @@ A website builder plugin for Payload CMS v3: composable layout blocks, a visual 
 - **Never run `payload migrate` against the local dev database.** Dev uses `push: true` — Drizzle auto-syncs schema on `pnpm dev`. Migration files are only for production deploys; generate via `pnpm payload migrate:create` when prepping a release.
 - **Don't hand-write migrations to express things Payload's collection config can already declare.** For compound unique constraints, use `indexes: [{ fields: [...], unique: true }]` at the collection level paired with `disableUnique: true` on individual fields.
 - **Data migrations go through the Payload Local API**, not raw SQL, so they work on any database adapter.
-- **No Tailwind utilities inside admin code.** Admin components use SCSS under `@layer payload-default` with Payload CSS variables only. Tailwind Preflight would leak into the admin and break Payload's UI.
+- **No Tailwind utilities inside admin code.** Admin components use plain CSS under `@layer payload-default` with Payload 4 CSS variables only (`--color-*`, `--radius-*`, `--text-*`, `--spacer-*`; no `--theme-*` or `--base`). No SCSS: Payload 4 ships no SCSS toolchain. Tailwind Preflight would leak into the admin and break Payload's UI.
 - **Server Components by default** — push client boundaries to leaf nodes only.
 - **Use public Payload APIs** (`@payloadcms/ui` exports, documented hooks) over deep imports of Payload internals.
 - **Write files as UTF-8 without a BOM.** Turbopack fails to parse `tsconfig.json` with a BOM. On Windows PowerShell 5.1, `Set-Content -Encoding utf8` adds a BOM — use the Write/Edit tools instead.
-- **Payload 4 is coming** (canary today). Keep admin UI code in a thin layer — Payload CSS variables, Base UI primitives, SCSS — so it can be adapted when v4 changes the admin UI.
+- **Payload 4 is in beta.** Keep admin UI code in a thin layer — Payload CSS variables, Base UI primitives, plain CSS — so it can follow later betas.
 
 ## Repository layout
 
@@ -48,7 +49,7 @@ payload-toolkit/                 # the repo folder
       src/mcp/               #   builderMcpTools() for payload-mcp-toolkit
       src/css/               #   Tailwind compile: server (save hook) and browser (canvas)
       src/protocol/          #   postMessage protocol between editor and canvas iframe
-      src/admin/             #   editor UI (Payload-native, SCSS, no Tailwind); server/ holds the full-screen view (RSC)
+      src/admin/             #   editor UI (Payload-native, plain CSS, no Tailwind); server/ holds the full-screen view (RSC)
       src/plugin/            #   websiteBuilder(): fields, save hook, builder view + tab, templates collection, endpoints
       src/ai/                #   AI assistant loop, chat and image adapters
       src/theme/             #   the Theme global and its CSS output

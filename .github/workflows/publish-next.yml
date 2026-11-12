@@ -1,0 +1,60 @@
+name: Publish the Payload 4 line to npm (next)
+
+# Runs when a next tag (v0.7.0-next.0) is pushed. Publishes payload-canvas and create-payload-canvas
+# with the `next` dist-tag. The Payload 3 line (`latest`) uses publish.yml. See docs/releasing.md.
+on:
+  push:
+    tags:
+      - 'v*-next.*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-next
+  cancel-in-progress: false
+
+env:
+  TURBO_TELEMETRY_DISABLED: 1
+
+jobs:
+  publish:
+    if: github.repository == 'jon8800/payload-canvas'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v6
+
+      # Payload 4 needs Node 24.22.1 or later.
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.22.3
+          cache: pnpm
+
+      # Versions, dist-tag, Payload peers, the scaffolder's version and starter ref, and the tag.
+      - name: Check the release
+        id: release
+        run: node scripts/check-next-release.mjs
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm exec turbo run test typecheck lint --filter=./packages/*
+
+      # `pnpm pack` runs prepack (the build) and applies publishConfig. The tarballs go to dist-packages/.
+      - name: Pack
+        run: pnpm pack:packages
+
+      - name: Dry run
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: node scripts/publish.mjs --dry-run --expect-version "$VERSION" dist-packages
+
+      # Only a tag run publishes. scripts/publish.mjs sends prerelease versions to the `next` dist-tag.
+      - name: Publish
+        if: github.ref_type == 'tag'
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: node scripts/publish.mjs --expect-version "$VERSION" dist-packages

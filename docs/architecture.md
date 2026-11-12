@@ -23,7 +23,7 @@ A Payload CMS plugin that adds website building to any Payload project:
 | Style format | Tailwind classes per block. Visual controls for the main CSS properties read and write classes. A raw class field covers the rest. |
 | Frontend | Headless data plus an optional default React renderer. Users can replace any block component. |
 | AI | Builder tools added to `payload-mcp-toolkit` through its `customTools` option. |
-| Admin UI | Payload's own UI components and CSS variables, Base UI primitives where Payload has none, SCSS. Kept in a thin layer so Payload 4 changes stay cheap. |
+| Admin UI | Payload's own UI components and CSS variables, Base UI primitives where Payload has none, plain CSS on Payload 4 tokens. Kept in a thin layer so Payload 4 beta changes stay cheap. |
 
 ## 3. Packages
 

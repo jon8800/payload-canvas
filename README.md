@@ -1,6 +1,8 @@
 # Payload Canvas
 
-**A visual drag-and-drop website builder for [Payload CMS](https://payloadcms.com) 3.**
+**A visual drag-and-drop website builder for [Payload CMS](https://payloadcms.com).**
+
+> **Payload 4 line.** This branch (`release/payload-v4-next`) is the Payload 4 version, published as `payload-canvas@next` and `create-payload-canvas@next`. For Payload 3, use `main` and the `latest` packages. See [docs/payload-v4-next.md](docs/payload-v4-next.md).
 
 <p align="center">
   <a href="docs/media/drag-and-drop.mp4"><img src="docs/media/drag-and-drop.gif" width="960" alt="Dragging a section on the canvas while the other sections slide out of the way, reordering it in the Layers tree, and dropping a ready-made section onto the page"></a>
@@ -47,7 +49,7 @@ Install Payload Canvas as a plugin in any Payload app, or start from the starter
 | [`payload-canvas`](packages/payload-canvas/README.md) | The Payload plugin and the React renderer in one package: the full-screen builder, block definitions, the CSS compiler, live editing, the AI assistant, MCP tools, and `RenderLayout` with the default block components and the canvas runtime (`payload-canvas/react`). |
 | [`create-payload-canvas`](packages/create-payload-canvas/README.md) | A CLI that creates a new project from the starter app. |
 
-Requirements: Payload 3.90+, Next.js 16.3+, React 19.2+, Tailwind CSS 4.3+, Node.js 20.9+.
+Requirements: Payload 4 (`^4.0.0-beta.8`), Next.js 16.4.1+, React 19.3.1+, Tailwind CSS 4.3+, Node.js 24.22.1+.
 
 ## Features
 
@@ -73,7 +75,7 @@ Requirements: Payload 3.90+, Next.js 16.3+, React 19.2+, Tailwind CSS 4.3+, Node
 ### Add the builder to your Payload app
 
 ```bash
-pnpm add payload-canvas tailwindcss @tailwindcss/postcss postcss
+pnpm add payload-canvas@next tailwindcss @tailwindcss/postcss postcss
 ```
 
 Then follow the [install guide](packages/payload-canvas/README.md#install): add the plugin, a canvas route and a page route. It takes about ten minutes.
@@ -102,7 +104,7 @@ Common flags (full list in [`packages/create-payload-canvas`](packages/create-pa
 
 ```bash
 # Non-interactive, for CI and agents
-npx create-payload-canvas my-website --yes --db-url postgresql://postgres:postgres@localhost:5432/my_website
+npx create-payload-canvas@next my-website --yes --db-url postgresql://postgres:postgres@localhost:5432/my_website
 ```
 
 The CLI never runs `payload migrate`. Before your first production deploy, run `pnpm payload migrate:create` in your app and commit the files. Migrations belong to the app, not to the plugin.
@@ -124,7 +126,7 @@ payload-toolkit/
 
 ## Development
 
-Requirements: Node.js 24, pnpm 10, PostgreSQL.
+Requirements: Node.js 24.22.1 or later, pnpm 10, PostgreSQL.
 
 ```bash
 pnpm install
@@ -162,7 +164,7 @@ pnpm --filter create-payload-canvas publish
 
 Both packages have `publishConfig.access: public`. The names `payload-canvas` and `create-payload-canvas` are unscoped, so you need no npm organization.
 
-The build (`scripts/build-package.mjs`) compiles each file with TypeScript, adds `.js` to relative imports, copies `.scss` files, and checks that `publishConfig.exports` matches `exports`. When you add an entry to `exports`, add the matching `dist` entry to `publishConfig.exports`; the build prints it for you. Test files (`*.test.ts`, `*.test-data.ts`) stay out of `dist`.
+The build (`scripts/build-package.mjs`) compiles each file with TypeScript, adds `.js` to relative imports, copies `.css` files, and checks that `publishConfig.exports` matches `exports`. When you add an entry to `exports`, add the matching `dist` entry to `publishConfig.exports`; the build prints it for you. Test files (`*.test.ts`, `*.test-data.ts`) stay out of `dist`.
 
 ## Docker
 
