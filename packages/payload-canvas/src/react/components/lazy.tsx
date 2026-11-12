@@ -10,6 +10,7 @@
 
 import dynamic from 'next/dynamic'
 import type { BlockComponentProps } from '../render/types'
+import type { AutoplayVideoProps } from './AutoplayVideo'
 import type { CarouselLabels } from './builtins/Carousel'
 import type { PopupLabels } from './builtins/Popup'
 import type { TabsLabels } from './builtins/Tabs'
@@ -27,4 +28,6 @@ export const Tabs = lazyBlock(dynamic<BlockComponentProps & { labels?: TabsLabel
 // Not blocks: the parts of the embed block that need JavaScript (`./builtins/Embed`).
 export const EmbedHtml = dynamic(() => import('./builtins/EmbedHtml').then((module) => module.EmbedHtml))
 export const EmbedPreview = dynamic(() => import('./builtins/EmbedPreview').then((module) => module.EmbedPreview))
+// Not a block: the part of the video block that starts an autoplaying video (`./AutoplayVideo`).
+export const AutoplayVideo = dynamic<AutoplayVideoProps>(() => import('./AutoplayVideo').then((module) => module.AutoplayVideo))
 export const Tab = lazyBlock(dynamic<BlockComponentProps>(() => import('./builtins/Tab').then((module) => module.Tab)))

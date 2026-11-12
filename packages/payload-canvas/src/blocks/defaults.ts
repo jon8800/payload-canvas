@@ -503,16 +503,41 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         custom: { ai: { description: 'A YouTube or Vimeo link, or a direct link to a video file.' } },
       },
       { name: 'poster', type: 'upload', label: 'Poster image', relationTo: mediaCollection },
-      { name: 'autoplay', type: 'checkbox', label: 'Autoplay', admin: { description: 'Works only when muted.' } },
+      {
+        name: 'autoplay',
+        type: 'checkbox',
+        label: 'Autoplay',
+        admin: { description: 'Works only when muted. Stays paused for visitors who ask for less motion.' },
+      },
       { name: 'loop', type: 'checkbox', label: 'Loop' },
       { name: 'muted', type: 'checkbox', label: 'Muted' },
       { name: 'controls', type: 'checkbox', label: 'Show controls', defaultValue: true },
+      {
+        name: 'decorative',
+        type: 'checkbox',
+        label: 'Decorative',
+        admin: { description: 'For a background video: hidden from screen readers, no controls.' },
+      },
+      {
+        name: 'priority',
+        type: 'checkbox',
+        label: 'Load first',
+        admin: { description: 'For the main video at the top.' },
+        // Unlike images, a video never gets this from `priorityImages`: it would load the whole file.
+        custom: { builderAutoPriority: false },
+      },
     ],
     defaultClassName: 'w-full',
     ai: {
       description:
         `A video: an upload from the "${mediaCollection}" collection (source "upload", set "video") or a ` +
-        'YouTube, Vimeo or video file URL (source "url", set "url").',
+        'YouTube, Vimeo or video file URL (source "url", set "url"). "poster" is an image upload shown before ' +
+        'the video plays; its focal point (focalX, focalY) sets object-position. "autoplay" starts the video ' +
+        'from script on the site, never on the editor canvas and never for visitors with reduced motion (they ' +
+        'see the poster). For a background video behind a hero: put the video first in a stack with "relative isolate", ' +
+        'set "autoplay", "muted", "loop" and "decorative": true (aria-hidden, no controls, no tab stop), "priority": ' +
+        'true when it is the first thing on the page (preload="auto", the poster preloads with high fetch priority), ' +
+        'a "poster", and className "absolute inset-0 -z-10 size-full object-cover".',
       example: {
         type: 'video',
         props: { source: 'url', url: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ', controls: true },

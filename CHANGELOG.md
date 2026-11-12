@@ -4,6 +4,22 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-12
+
+The `video` block can now replace a site's own background-video block (a muted, looping video behind a hero). Stored videos keep their behaviour: the new props are off by default.
+
+### Fixed
+
+- **Video autoplay respects reduced motion.** A `<video>` no longer gets the `autoplay` attribute. On the site a small client component starts it after mount, only when the visitor does not ask for less motion (`prefers-reduced-motion: reduce`); otherwise it shows the poster and stays paused. A change of that setting plays or pauses it. The script loads only on pages with an autoplaying video.
+- **No autoplay on the canvas.** In the editor and in section thumbnails an autoplaying video stays paused on its poster, and a YouTube or Vimeo embed gets no `autoplay=1`.
+- **The poster's focal point** sets `object-position` on the video, with the image block's rule (Payload's default 50/50 leaves the crop to the classes).
+
+### Added
+
+- **Video `priority` (Load first):** `preload="auto"`, and the poster preloads with `fetchpriority="high"` (React `preload()`); an embed loads eagerly. A video never gets it from `priorityImages`: a `priority` field with `custom.builderAutoPriority: false` does not count there.
+- **Video `decorative` (Decorative):** for a background video. `aria-hidden="true"`, `tabindex="-1"`, and no controls (also for YouTube and Vimeo).
+- The video block's AI description explains the background-video setup.
+
 ## [0.6.0] - 2026-11-11
 
 ### Upgrade notes

@@ -78,7 +78,7 @@ For each feature that is off, the CLI deletes its files and its npm packages fro
 | Case | `payload-canvas` in the new project |
 |---|---|
 | The CLI runs inside a checkout, or you pass `--packages <path>` | a `file:./.tarballs/...` tarball, packed with `pnpm pack` (it builds `dist/` first). Commit `.tarballs/` with the project. |
-| Neither | The version on npm (`^0.6.0`). |
+| Neither | The version on npm (`^0.6.1`). |
 
 Without `--packages`, and outside a checkout, the CLI checks the npm registry first. If the package is not on npm (for example, a `--ref` with an unreleased version), it stops before it writes any file and tells you to use `--packages <path>` or `--no-install`.
 
