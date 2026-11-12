@@ -4,8 +4,7 @@
  * Each widget's `imageURL` (index.ts) is its light preview, and Payload's drawer shows it as an
  * <img> inside `.items-drawer__default-image`. The drawer has no setting for a second image, so in
  * the dark theme this file hides that <img> and shows the dark preview as the box's background.
- * It depends on Payload 3's drawer markup (`.items-drawer__default-image > img`); check it after
- * moving to Payload 4.
+ * It depends on the drawer markup (`.items-drawer__default-image > img`), unchanged in Payload 4.0 beta.
  *
  * Keep one rule pair per widget slug in index.ts (index.test.ts checks it).
  */
