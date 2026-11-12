@@ -39,6 +39,7 @@ Project:
 Features (without --yes the CLI asks about the ones you did not pass):
       --no-look             Leave out the admin look (neutral colors, finer details)
       --no-nav              Leave out the grouped sidebar navigation
+      --no-search           Leave out the admin search (Ctrl+K in the header)
       --no-dashboard        Leave out the dashboard widgets
       --no-demo             Leave out the demo content seed (this also turns off seeding)
       --no-ai               Leave out the AI assistant in the page builder

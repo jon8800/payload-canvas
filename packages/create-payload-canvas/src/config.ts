@@ -48,6 +48,7 @@ export const SKIP_PATHS = ['scripts/setup.ts', 'scripts/lib/create-database.ts',
 export const FEATURES = [
   { id: 'look', label: 'Admin look', hint: 'Neutral colors and finer details in the admin', on: true },
   { id: 'nav', label: 'Sidebar navigation', hint: 'Grouped sidebar with icons', on: true },
+  { id: 'search', label: 'Admin search', hint: 'Ctrl+K search in the header across pages, documents and New actions', on: true },
   { id: 'dashboard', label: 'Dashboard widgets', hint: 'Quick actions, recent edits, form messages, site checks, analytics', on: true },
   { id: 'demo', label: 'Demo content', hint: 'The demo pages, posts and images seed', on: true },
   { id: 'ai', label: 'AI assistant', hint: 'The chat panel in the page builder', on: true },

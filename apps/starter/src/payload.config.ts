@@ -75,6 +75,9 @@ import { statusBadges } from '@/admin/list/statusBadges'
 import { listCells } from '@/admin/list/listCells'
 import { rowLabels } from '@/admin/fields/rowLabels'
 // @end:look
+// @feature:search
+import { adminSearchEndpoint } from '@/admin/search/server'
+// @end:search
 import { MORE_FORM_FIELD_SLUGS, PLUGIN_FORM_FIELD_SLUGS } from '@/forms/fields'
 
 /** Collections with the page builder. Shared by the builder plugin and its MCP tools. */
@@ -182,6 +185,10 @@ export default buildConfig({
       // The sidebar: grouped collections and globals with icons (src/admin/nav).
       Nav: '/admin/nav/Nav#Nav',
       // @end:nav
+      // @feature:search
+      // Search in the header (Ctrl+K or Cmd+K): pages, documents and "New" actions (src/admin/search).
+      actions: ['/admin/search/AdminSearch#AdminSearch'],
+      // @end:search
       // @feature:look
       // The brand on the login page and in the header. Change it in src/admin/brand (brand.ts, Mark.tsx).
       graphics: {
@@ -233,10 +240,16 @@ export default buildConfig({
   globals: [SiteSettings],
   // Dev demo of translated pages (BUILDER_I18N_DEMO=1): English and German, /de on the site.
   ...(i18nDemo ? { localization: demoLocalization } : {}),
-  // @feature:workflows
-  // POST /api/revalidate-path: the "Revalidate page path" task calls it from timer-run jobs (src/jobs/revalidate.ts).
-  endpoints: [revalidatePathEndpoint],
-  // @end:workflows
+  endpoints: [
+    // @feature:workflows
+    // POST /api/revalidate-path: the "Revalidate page path" task calls it from timer-run jobs (src/jobs/revalidate.ts).
+    revalidatePathEndpoint,
+    // @end:workflows
+    // @feature:search
+    // GET /api/admin-search: the documents for the admin search (src/admin/search/server.ts).
+    adminSearchEndpoint,
+    // @end:search
+  ],
   jobs: {
     // The `default` queue: scheduled publishing and the Google reviews sync. payload-workflows adds its
     // own entry for the `workflows` queue (every minute). Runs in `next dev` and `next start`, not on serverless.

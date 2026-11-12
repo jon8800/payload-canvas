@@ -84,6 +84,7 @@ import { AiKeyField as AiKeyField_1611a9327f20600aee6a9d537ba4315b } from 'paylo
 import { Nav as Nav_3cd2cf7bec23406b09c4440fd44d1976 } from '../../../admin/nav/Nav'
 import { Icon as Icon_07eaf1d5745ea58d191ef5762e282db9 } from '../../../admin/brand/Icon'
 import { Logo as Logo_e2609525d3cb4faff6e05c9e8878dd7a } from '../../../admin/brand/Logo'
+import { AdminSearch as AdminSearch_de7f06d96941d95f3961f0c40f58d503 } from '../../../admin/search/AdminSearch'
 import { AgentConnectPill as AgentConnectPill_60f30f580e97936338e112b8b2cc7161 } from 'payload-mcp-toolkit/client'
 import { Welcome as Welcome_8051c90801dc4fc23bd7322d70e9328a } from '../../../admin/brand/Welcome'
 import { ImportExportProvider as ImportExportProvider_cdf7e044479f899a31f804427d568b36 } from '@payloadcms/plugin-import-export/rsc'
@@ -190,6 +191,7 @@ export const importMap = {
   "/admin/nav/Nav#Nav": Nav_3cd2cf7bec23406b09c4440fd44d1976,
   "/admin/brand/Icon#Icon": Icon_07eaf1d5745ea58d191ef5762e282db9,
   "/admin/brand/Logo#Logo": Logo_e2609525d3cb4faff6e05c9e8878dd7a,
+  "/admin/search/AdminSearch#AdminSearch": AdminSearch_de7f06d96941d95f3961f0c40f58d503,
   "payload-mcp-toolkit/client#AgentConnectPill": AgentConnectPill_60f30f580e97936338e112b8b2cc7161,
   "/admin/brand/Welcome#Welcome": Welcome_8051c90801dc4fc23bd7322d70e9328a,
   "@payloadcms/plugin-import-export/rsc#ImportExportProvider": ImportExportProvider_cdf7e044479f899a31f804427d568b36,

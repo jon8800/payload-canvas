@@ -41,6 +41,7 @@ The starter has a few optional parts. Google reviews is off by default; all the 
 |---|---|---|
 | Admin look | `--no-look` | Neutral colors and finer details in the admin (`src/admin/look`), status badges and list cells by field type (`src/admin/list`), and array rows named by their content (`src/admin/fields`). |
 | Sidebar navigation | `--no-nav` | The grouped sidebar with icons (`src/admin/nav`). The admin uses Payload's default sidebar. |
+| Admin search | `--no-search` | A Search button in the admin header, and Ctrl+K (Cmd+K on a Mac) on every admin screen. It finds pages and settings, documents by their title (plus each collection's `admin.listSearchableFields`, such as a user's name) and "New" actions. Recent picks show before you type (`src/admin/search`). Each user finds only what they may read. |
 | Dashboard widgets | `--no-dashboard` | Quick actions, recent edits, open comments, form messages, site checks, broken links (404s and links to missing pages), unused media (with a full list at `/admin/unused-media`), scheduled publishes and analytics; "Waiting to publish" can be added (`src/admin/dashboard`). The reference index behind unused media and broken links (`src/admin/references`, `pnpm references:rebuild`). The admin shows Payload's collection cards. |
 | Demo content | `--no-demo` | The demo pages, posts and images seed (`scripts/seed-demo.ts` and the `seed:demo` script). This also turns off seeding. |
 | AI assistant | `--no-ai` | The chat panel in the page builder, and its settings in `.env`. |
@@ -66,7 +67,7 @@ For each feature that is off, the CLI deletes its files and its npm packages fro
 | `--skip-db` | Do not connect to Postgres. Writes `.env` only. This also skips seeding. |
 | `--seed` / `--no-seed` | Seed demo content, or not. |
 | `--no-install` | Do not install. This also skips seeding. |
-| `--no-look`, `--no-nav`, `--no-dashboard`, `--no-demo`, `--no-ai`, `--no-gallery`, `--no-workflows` | Leave out a starter feature. See [Features](#features). `--no-demo` also turns off seeding. |
+| `--no-look`, `--no-nav`, `--no-search`, `--no-dashboard`, `--no-demo`, `--no-ai`, `--no-gallery`, `--no-workflows` | Leave out a starter feature. See [Features](#features). `--no-demo` also turns off seeding. |
 | `--reviews` | Add Google reviews, which is off by default. Every feature also takes `--<feature>` and `--no-<feature>`. |
 | `--github` | Download the starter from GitHub, even when the CLI runs inside a checkout. |
 | `--ref <name>` | Branch or tag to download. Default `main`. |
