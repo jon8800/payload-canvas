@@ -42,7 +42,7 @@ Features (without --yes the CLI asks about the ones you did not pass):
       --no-dashboard        Leave out the dashboard widgets
       --no-demo             Leave out the demo content seed (this also turns off seeding)
       --no-ai               Leave out the AI assistant in the page builder
-      --no-gallery          Leave out the media gallery (Media keeps Payload's table)
+      --gallery             Add the media gallery: a lightbox and drag-and-drop upload (off by default)
       --no-workflows        Leave out the workflow builder and the job run viewer
       --reviews             Add Google reviews (off by default; needs a Google place)
 

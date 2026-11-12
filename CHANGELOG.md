@@ -4,6 +4,11 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ## [Unreleased]
 
+### Changed
+
+- **create-payload-canvas: the media gallery is off by default.** Payload 4 has its own table and grid views for Media, so new projects use them. `--gallery` adds `payload-media-gallery` for its lightbox, drag-and-drop upload and the grid in upload pickers.
+- **Starter sidebar on Payload 4's tabs.** The grouped sidebar with icons is now the links tab of Payload's sidebar frame, so extra tabs from `admin.components.sidebar.tabs` (yours or a plugin's) show next to it, and Payload loads them on demand. It reads the open groups with Payload's `getNavPrefs`. Form files moved from a group of its own to Content, next to Forms and Form Submissions.
+
 ## [0.7.0-next.0] - 2026-11-12
 
 The Payload 4 line. It is published with the npm `next` dist-tag: `npm install payload-canvas@next`, `npx create-payload-canvas@next`. The `latest` tag stays on 0.6.x for Payload 3. Features match 0.6.0.

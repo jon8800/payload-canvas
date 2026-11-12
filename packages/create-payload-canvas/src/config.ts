@@ -54,7 +54,7 @@ export const FEATURES = [
   { id: 'dashboard', label: 'Dashboard widgets', hint: 'Quick actions, recent edits, form messages, site checks, analytics', on: true },
   { id: 'demo', label: 'Demo content', hint: 'The demo pages, posts and images seed', on: true },
   { id: 'ai', label: 'AI assistant', hint: 'The chat panel in the page builder', on: true },
-  { id: 'gallery', label: 'Media gallery', hint: 'Media as a grid with a lightbox and drag-and-drop upload (payload-media-gallery)', on: true },
+  { id: 'gallery', label: 'Media gallery', hint: 'A lightbox and drag-and-drop upload on the Media grid (payload-media-gallery); Payload 4 has its own grid', on: false },
   { id: 'workflows', label: 'Workflows', hint: 'A visual workflow builder and a graph of every job run (payload-workflows)', on: true },
   { id: 'reviews', label: 'Google reviews', hint: 'Syncs Google reviews into a collection; needs a Google place (payload-google-reviews)', on: false },
 ] as const

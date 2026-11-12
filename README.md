@@ -100,7 +100,7 @@ Common flags (full list in [`packages/create-payload-canvas`](packages/create-pa
 | `--no-install` | Only create the files. |
 | `--reuse-db` / `--skip-db` | Use a database that already exists / do not touch Postgres. |
 | `--packages <path>` | Pack the `payload-canvas` package from a checkout of this repo, instead of using the version on npm. |
-| `--no-<feature>` / `--<feature>` | Leave out or add a starter feature: the admin look, sidebar, dashboard, demo content, AI assistant, media gallery and workflows are on by default; Google reviews (`--reviews`) is off. |
+| `--no-<feature>` / `--<feature>` | Leave out or add a starter feature: the admin look, sidebar, dashboard, demo content, AI assistant and workflows are on by default; the media gallery (`--gallery`) and Google reviews (`--reviews`) are off. |
 
 ```bash
 # Non-interactive, for CI and agents

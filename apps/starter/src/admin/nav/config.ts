@@ -13,6 +13,7 @@ import {
   Newspaper,
   Palette,
   PanelsTopLeft,
+  Paperclip,
   Rows3,
   Search,
   Settings,
@@ -45,6 +46,7 @@ export const NAV_GROUPS: Array<{ label: string; slugs: string[] }> = [
       'tags',
       'forms',
       'form-submissions',
+      'form-files',
       // @feature:reviews
       'reviews',
       // @end:reviews
@@ -85,6 +87,7 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   tags: Tag,
   forms: ClipboardList,
   'form-submissions': Inbox,
+  'form-files': Paperclip,
   'builder-comments': MessageSquare,
   'theme-settings': Palette,
   'builder-classes': Brush,

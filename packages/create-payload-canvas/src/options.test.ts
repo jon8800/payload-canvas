@@ -5,10 +5,11 @@ import { DEFAULT_FEATURES } from './config.js'
 import { featuresFromFlags } from './options.js'
 
 describe('featuresFromFlags', () => {
-  it('uses the defaults without flags: Google reviews stay off', () => {
+  it('uses the defaults without flags: the media gallery and Google reviews stay off', () => {
     const { features, decided } = featuresFromFlags({})
     assert.deepEqual(features, DEFAULT_FEATURES)
-    assert.ok(features.includes('gallery') && features.includes('workflows'))
+    assert.ok(features.includes('workflows'))
+    assert.ok(!features.includes('gallery'))
     assert.ok(!features.includes('reviews'))
     assert.equal(decided.size, 0)
   })
