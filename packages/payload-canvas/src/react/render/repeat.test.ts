@@ -228,6 +228,14 @@ describe('small block props', () => {
     // Not in the editor.
     assert.equal(eager(render({ layout, mode: 'canvas' })), 0)
   })
+  it('video: never takes the first section\'s priority, so the image after it keeps it', () => {
+    const video: Block = { id: 'v', type: 'video', props: { video: { id: 3, url: '/media/clip.mp4' } } }
+    const html = render({ layout: { version: 1, blocks: [section('s1', video, img('i1'))] } })
+    assert.match(html, /<video[^>]*preload="metadata"/)
+    assert.equal(eager(html), 1)
+    const own = render({ layout: { version: 1, blocks: [section('s1', { ...video, props: { ...video.props, priority: true } })] } })
+    assert.match(own, /<video[^>]*preload="auto"/)
+  })
   it('heading: the accent words render as <em>', () => {
     const html = render({ layout: layoutOf({ id: 'h', type: 'heading', props: { text: 'Lamps for every desk', accent: 'every desk', level: '1' } }) })
     assert.match(html, /<h1[^>]*>Lamps for <em>every desk<\/em><\/h1>/)

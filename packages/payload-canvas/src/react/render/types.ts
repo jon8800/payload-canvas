@@ -156,7 +156,7 @@ export type RenderLayoutProps = {
   /**
    * How many images of the layout's first section load first (`fetchpriority="high"`, not lazy):
    * image blocks (and other blocks with a `priority` prop), in page order, unless their **Load first** prop
-   * is off. Default `1`: the first image of the first section, often the largest thing on screen.
+   * is off. A `priority` field with `custom.builderAutoPriority: false` (the video block's) never counts. Default `1`: the first image of the first section, often the largest thing on screen.
    * Give a layout further down the page (a footer) `0`. Site only.
    */
   priorityImages?: number

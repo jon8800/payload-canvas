@@ -279,10 +279,14 @@ describe('video', () => {
   test('upload and file URL: <video> with poster and flags', () => {
     const out = site({
       type: 'video',
-      props: { source: 'upload', video: { id: 1, url: '/media/a.mp4' }, poster: { id: 2, url: '/media/p.jpg' }, autoplay: true, muted: true, loop: true, controls: true },
+      props: { source: 'upload', video: { id: 1, url: '/media/a.mp4' }, poster: { id: 2, url: '/media/p.jpg' }, muted: true, loop: true, controls: true },
       className: 'w-full',
     })
-    assert.match(out, /^<video class="w-full builder-css" src="\/media\/a.mp4" poster="\/media\/p.jpg" autoPlay="" loop="" muted="" controls="" playsInline="" preload="metadata"><\/video>$/)
+    assert.match(out, /^<video class="w-full builder-css" src="\/media\/a.mp4" poster="\/media\/p.jpg" loop="" muted="" controls="" playsInline="" preload="metadata"><\/video>$/)
+    // Autoplay never uses the attribute: the canvas keeps the video paused on its poster (on the
+    // site a lazy client component starts it, see Video.test.ts).
+    const autoplay = canvas({ type: 'video', props: { video: { id: 1, url: '/media/a.mp4' }, autoplay: true, muted: true } })
+    assert.match(autoplay, /^<video data-block-id="b"[^>]*src="\/media\/a.mp4" muted="" controls="" playsInline="" preload="metadata"><\/video>$/)
     const file = site({ type: 'video', props: { source: 'url', url: 'https://cdn.example.com/a.webm', controls: false } })
     assert.equal(file, '<video src="https://cdn.example.com/a.webm" playsInline="" preload="metadata"></video>')
     // A URL with no source set still plays.

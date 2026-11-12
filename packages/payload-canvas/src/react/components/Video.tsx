@@ -1,7 +1,11 @@
 import type { CSSProperties } from 'react'
+import { preload } from 'react-dom'
 import type { BlockComponentProps } from '../render/types'
-import { isDoc } from './Image'
+import { focalStyle, isDoc } from './Image'
+// The script that starts an autoplaying video loads only on pages that render one.
+import { AutoplayVideo } from './lazy'
 import { PlaceholderBox } from './placeholder'
+import { decorativeAttributes, videoPreload, videoSettingsOf } from './videoPlayback'
 import { isPlayableVideoUrl, parseVideoUrl } from './videoUrl'
 
 /** Classes that already give the element a height. Without one, an embed gets a 16:9 ratio. */
@@ -37,15 +41,23 @@ function InvalidUrl({ attributes, className }: { attributes: Record<string, stri
 /**
  * An uploaded video or a URL. YouTube and Vimeo URLs become an `<iframe>`; other URLs play in
  * `<video>`. In the canvas the iframe ignores the pointer, so clicks select the block.
+ *
+ * - Autoplay: a `<video>` never gets the `autoplay` attribute. On the site a small client
+ *   component (`AutoplayVideo`) starts it after mount, unless the visitor asks for less motion.
+ *   On the canvas (and in section thumbnails) an autoplay video stays paused on its poster, and an
+ *   embed gets no autoplay.
+ * - `priority` (Load first): `preload="auto"`, and the poster preloads with high fetch priority.
+ * - The poster's focal point sets `object-position`, with the image block's rule (`focalStyle`).
+ * - `decorative`: `aria-hidden="true"`, no controls, no tab stop. For a background video.
  */
-export function Video({ props, className, attributes, mode }: BlockComponentProps) {
-  const options = {
-    autoplay: props.autoplay === true,
-    loop: props.loop === true,
-    muted: props.muted === true,
-    controls: props.controls !== false,
-  }
-  const poster = isDoc(props.poster) ? (props.poster.url as string) : undefined
+export function Video({ props, className, attributes, mode, canvasMode }: BlockComponentProps) {
+  const canvas = mode === 'canvas' || canvasMode !== undefined
+  const settings = videoSettingsOf(props)
+  // The canvas never autoplays: editing stays calm.
+  const options = { autoplay: settings.autoplay && !canvas, loop: settings.loop, muted: settings.muted, controls: settings.controls }
+  const hidden = decorativeAttributes(settings.decorative)
+  const posterDoc = isDoc(props.poster) ? props.poster : undefined
+  const poster = posterDoc ? (posterDoc.url as string) : undefined
 
   // A missing source means the default ("upload"), unless only a URL is set.
   const fromUrl = props.source === 'url' || (props.source == null && props.video == null && typeof props.url === 'string')
@@ -65,12 +77,13 @@ export function Video({ props, className, attributes, mode }: BlockComponentProp
         // oxlint-disable-next-line react/iframe-missing-sandbox -- cross-origin players need scripts and their own origin, so a sandbox adds nothing.
         <iframe
           {...attributes}
+          {...hidden}
           className={className}
           src={embed.embedUrl}
           title={embed.kind === 'youtube' ? 'YouTube video' : 'Vimeo video'}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; fullscreen; gyroscope; picture-in-picture; web-share"
           allowFullScreen
-          loading="lazy"
+          loading={settings.priority ? 'eager' : 'lazy'}
           referrerPolicy="strict-origin-when-cross-origin"
           style={style}
         />
@@ -85,19 +98,33 @@ export function Video({ props, className, attributes, mode }: BlockComponentProp
     if (mode !== 'canvas') return null
     return <PlaceholderBox attributes={attributes} className={className} label="Video" style={{ aspectRatio: '16 / 9' }} />
   }
+  // The poster is what a visitor sees first, so it loads like a priority image.
+  if (settings.priority && poster && !canvas) preload(poster, { as: 'image', fetchPriority: 'high' })
+  const video = {
+    attributes: { ...attributes, ...hidden },
+    className,
+    src,
+    poster,
+    loop: options.loop,
+    muted: options.muted,
+    controls: options.controls,
+    preload: videoPreload(settings.priority),
+    style: focalStyle(posterDoc),
+  }
+  if (options.autoplay) return <AutoplayVideo {...video} />
   return (
     // oxlint-disable-next-line jsx-a11y/media-has-caption -- the block has no caption track field yet.
     <video
-      {...attributes}
+      {...video.attributes}
       className={className}
       src={src}
       poster={poster}
-      autoPlay={options.autoplay}
-      loop={options.loop}
-      muted={options.muted}
-      controls={options.controls}
+      loop={video.loop}
+      muted={video.muted}
+      controls={video.controls}
       playsInline
-      preload="metadata"
+      preload={video.preload}
+      style={video.style}
     />
   )
 }

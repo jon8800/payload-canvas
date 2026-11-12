@@ -189,13 +189,19 @@ function componentPropsOf(block: Block, ctx: Context): Record<string, unknown> {
 
 /**
  * True when the block's image loads first: its `priority` prop is on, or not set while the
- * first section still has images to give priority to (`priorityImages`). Each one counts.
+ * first section still has images to give priority to (`priorityImages`). Each one counts. A
+ * `priority` field with `custom.builderAutoPriority: false` (the video block's) is never set this way.
  */
 function takesPriority(block: Block, ctx: Context): boolean {
   const own = block.props?.priority
   if (!ctx.priority || ctx.priority.left <= 0 || own === false) return own === true
   const definition = ctx.definitions.get(block.type)
-  const hasPriority = definition?.fields?.some((field) => 'name' in field && field.name === 'priority')
+  const hasPriority = definition?.fields?.some(
+    (field) =>
+      'name' in field &&
+      field.name === 'priority' &&
+      (field as { custom?: { builderAutoPriority?: unknown } }).custom?.builderAutoPriority !== false,
+  )
   if (!hasPriority) return own === true
   ctx.priority.left -= 1
   return true
