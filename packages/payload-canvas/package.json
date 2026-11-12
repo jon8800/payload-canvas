@@ -242,7 +242,7 @@
     "next": "16.4.6",
     "oxlint": "^1.86.0",
     "payload": "4.0.0-beta.8",
-    "payload-mcp-toolkit": "file:../../apps/starter/.tarballs/payload-mcp-toolkit-0.12.0-next.0.tgz",
+    "payload-mcp-toolkit": "0.12.0-next.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "tailwindcss": "^4.3.3",

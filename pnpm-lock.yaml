@@ -120,17 +120,17 @@ importers:
         specifier: workspace:*
         version: link:../../packages/payload-canvas
       payload-google-reviews:
-        specifier: file:./.tarballs/payload-google-reviews-0.5.0-next.0.tgz
-        version: file:apps/starter/.tarballs/payload-google-reviews-0.5.0-next.0.tgz(@payloadcms/ui@4.0.0-beta.8(@types/react@19.3.0)(monaco-editor@0.55.1)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(google-maps-review-scraper@3.1.0)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+        specifier: ^0.5.0-next.0
+        version: 0.5.0-next.0(@payloadcms/ui@4.0.0-beta.8(@types/react@19.3.0)(monaco-editor@0.55.1)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(google-maps-review-scraper@3.1.0)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       payload-mcp-toolkit:
-        specifier: file:./.tarballs/payload-mcp-toolkit-0.12.0-next.0.tgz
-        version: file:apps/starter/.tarballs/payload-mcp-toolkit-0.12.0-next.0.tgz(@payloadcms/ui@4.0.0-beta.8(@types/react@19.3.0)(monaco-editor@0.55.1)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(next@16.4.6(@babel/core@7.29.7)(@types/node@24.19.1)(babel-plugin-macros@3.1.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(sass@1.77.4))(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(zod@3.25.76)
+        specifier: ^0.12.0-next.0
+        version: 0.12.0-next.0(@payloadcms/ui@4.0.0-beta.8(@types/react@19.3.0)(monaco-editor@0.55.1)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(next@16.4.6(@babel/core@7.29.7)(@types/node@24.19.1)(babel-plugin-macros@3.1.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(sass@1.77.4))(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(zod@3.25.76)
       payload-media-gallery:
-        specifier: file:./.tarballs/payload-media-gallery-0.4.0-next.0.tgz
-        version: file:apps/starter/.tarballs/payload-media-gallery-0.4.0-next.0.tgz(@payloadcms/ui@4.0.0-beta.8(@types/react@19.3.0)(monaco-editor@0.55.1)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+        specifier: ^0.4.0-next.0
+        version: 0.4.0-next.0(@payloadcms/ui@4.0.0-beta.8(@types/react@19.3.0)(monaco-editor@0.55.1)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       payload-workflows:
-        specifier: file:./.tarballs/payload-workflows-0.2.0-next.1.tgz
-        version: file:apps/starter/.tarballs/payload-workflows-0.2.0-next.1.tgz(@payloadcms/ui@4.0.0-beta.8(@types/react@19.3.0)(monaco-editor@0.55.1)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(immer@11.1.21)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+        specifier: ^0.2.0-next.1
+        version: 0.2.0-next.1(@payloadcms/ui@4.0.0-beta.8(@types/react@19.3.0)(monaco-editor@0.55.1)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(immer@11.1.21)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       react:
         specifier: 19.3.1
         version: 19.3.1
@@ -309,8 +309,8 @@ importers:
         specifier: 4.0.0-beta.8
         version: 4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2)
       payload-mcp-toolkit:
-        specifier: file:../../apps/starter/.tarballs/payload-mcp-toolkit-0.12.0-next.0.tgz
-        version: file:apps/starter/.tarballs/payload-mcp-toolkit-0.12.0-next.0.tgz(@payloadcms/ui@4.0.0-beta.8(@types/react@19.3.0)(monaco-editor@0.55.1)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(next@16.4.6(@babel/core@7.29.7)(@types/node@24.19.1)(babel-plugin-macros@3.1.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(sass@1.77.4))(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(zod@3.25.76)
+        specifier: 0.12.0-next.0
+        version: 0.12.0-next.0(@payloadcms/ui@4.0.0-beta.8(@types/react@19.3.0)(monaco-editor@0.55.1)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(next@16.4.6(@babel/core@7.29.7)(@types/node@24.19.1)(babel-plugin-macros@3.1.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(sass@1.77.4))(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(zod@3.25.76)
       react:
         specifier: 19.3.1
         version: 19.3.1
@@ -4257,9 +4257,8 @@ packages:
   pathe@1.1.2:
     resolution: {integrity: sha512-whLdWMYL2TwI08hn8/ZqAbrVemu0LNaNNJZX73O6qaIdCTfXutsLhMkjdENX0qhsQ9uIimo4/aQOmXkoon2nDQ==}
 
-  payload-google-reviews@file:apps/starter/.tarballs/payload-google-reviews-0.5.0-next.0.tgz:
-    resolution: {integrity: sha512-aRJlgB3ugMNwkZV2bJ7Ml6lGNcReislXZxA8OjWPyajhHrnbVdVbxZhxaxsZf+ypJAjUcw+8+p9UCJwuoBEJVw==, tarball: file:apps/starter/.tarballs/payload-google-reviews-0.5.0-next.0.tgz}
-    version: 0.5.0-next.0
+  payload-google-reviews@0.5.0-next.0:
+    resolution: {integrity: sha512-eH+VT0cNQGTWIFAqmIqoiteR4r0FT/4R9wKogpTHeET+qhPxj4eY33xaONMLfV3VTiolzr/hEIou2Jl3enFk6w==}
     engines: {node: '>=24.22.1', pnpm: ^9 || ^10}
     peerDependencies:
       '@payloadcms/ui': ^4.0.0-beta.8
@@ -4271,18 +4270,16 @@ packages:
       google-maps-review-scraper:
         optional: true
 
-  payload-mcp-toolkit@file:apps/starter/.tarballs/payload-mcp-toolkit-0.12.0-next.0.tgz:
-    resolution: {integrity: sha512-dOBSenRg+tmaYMR+N9XaxpqlhAivISr/qRiZmUE0qgkShsNTfEvYuS9d2+rD8PhSjHyEfuJ3iCCiXUzxquzcVw==, tarball: file:apps/starter/.tarballs/payload-mcp-toolkit-0.12.0-next.0.tgz}
-    version: 0.12.0-next.0
+  payload-mcp-toolkit@0.12.0-next.0:
+    resolution: {integrity: sha512-JL4z3gF3dKT03Dab4n3fZeJQ+HpNmQ0A5HjmhMZhT0228nSgQoczGvEh4uMBLPnlvZ1pgsvH1C+NmCK2EPtz2A==}
     engines: {node: '>=24.22.1', pnpm: '>=9'}
     peerDependencies:
       '@payloadcms/ui': ^4.0.0-beta.8
       payload: ^4.0.0-beta.8
       zod: ^3.25 || ^4
 
-  payload-media-gallery@file:apps/starter/.tarballs/payload-media-gallery-0.4.0-next.0.tgz:
-    resolution: {integrity: sha512-KDHem+V+BSNGNPEqOgUcoSuBX6YQMNxraD30T/nLUtK1MWsZ/1yyfNxEA6Q2uW1a7DhsUVm0et3XdSruJZFoAQ==, tarball: file:apps/starter/.tarballs/payload-media-gallery-0.4.0-next.0.tgz}
-    version: 0.4.0-next.0
+  payload-media-gallery@0.4.0-next.0:
+    resolution: {integrity: sha512-I8Oo0oy2qilzLFE1gD1OBDeXfhsnbz+SjB0Lp8d/y96cv1nKbR+krGfnDvkYj/JlkpWzCPDu+cBcyfBoLfZ4sA==}
     engines: {node: '>=24.22.1', pnpm: ^10 || ^11}
     peerDependencies:
       '@payloadcms/ui': ^4.0.0-beta.8
@@ -4290,9 +4287,8 @@ packages:
       react: ^19.3.1
       react-dom: ^19.3.1
 
-  payload-workflows@file:apps/starter/.tarballs/payload-workflows-0.2.0-next.1.tgz:
-    resolution: {integrity: sha512-dtTYTBi2Dr0YUYtFbtJi9Z3W6xQCDW6DmE8hj9uCDwfvkvZHcKog0y3m/khxt6GOciP4WHe2h5oFu0h24S6UAA==, tarball: file:apps/starter/.tarballs/payload-workflows-0.2.0-next.1.tgz}
-    version: 0.2.0-next.1
+  payload-workflows@0.2.0-next.1:
+    resolution: {integrity: sha512-0E+NkL2HUEIjzUsOL5mG8q5QMINMMtN8XXXEUYJYjyH3jICKUIXUXIT2QLvORrOp85RVT+kiv/PgeDwpH0VYhw==}
     engines: {node: '>=24.22.1'}
     peerDependencies:
       '@payloadcms/ui': ^4.0.0-beta.8
@@ -9027,7 +9023,7 @@ snapshots:
 
   pathe@1.1.2: {}
 
-  payload-google-reviews@file:apps/starter/.tarballs/payload-google-reviews-0.5.0-next.0.tgz(@payloadcms/ui@4.0.0-beta.8(@types/react@19.3.0)(monaco-editor@0.55.1)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(google-maps-review-scraper@3.1.0)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
+  payload-google-reviews@0.5.0-next.0(@payloadcms/ui@4.0.0-beta.8(@types/react@19.3.0)(monaco-editor@0.55.1)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(google-maps-review-scraper@3.1.0)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
     dependencies:
       '@payloadcms/ui': 4.0.0-beta.8(@types/react@19.3.0)(monaco-editor@0.55.1)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
       payload: 4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2)
@@ -9036,7 +9032,7 @@ snapshots:
     optionalDependencies:
       google-maps-review-scraper: 3.1.0
 
-  payload-mcp-toolkit@file:apps/starter/.tarballs/payload-mcp-toolkit-0.12.0-next.0.tgz(@payloadcms/ui@4.0.0-beta.8(@types/react@19.3.0)(monaco-editor@0.55.1)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(next@16.4.6(@babel/core@7.29.7)(@types/node@24.19.1)(babel-plugin-macros@3.1.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(sass@1.77.4))(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(zod@3.25.76):
+  payload-mcp-toolkit@0.12.0-next.0(@payloadcms/ui@4.0.0-beta.8(@types/react@19.3.0)(monaco-editor@0.55.1)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(next@16.4.6(@babel/core@7.29.7)(@types/node@24.19.1)(babel-plugin-macros@3.1.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(sass@1.77.4))(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(zod@3.25.76):
     dependencies:
       '@modelcontextprotocol/sdk': 1.32.0(zod@3.25.76)
       '@payloadcms/ui': 4.0.0-beta.8(@types/react@19.3.0)(monaco-editor@0.55.1)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
@@ -9048,14 +9044,14 @@ snapshots:
       - next
       - supports-color
 
-  payload-media-gallery@file:apps/starter/.tarballs/payload-media-gallery-0.4.0-next.0.tgz(@payloadcms/ui@4.0.0-beta.8(@types/react@19.3.0)(monaco-editor@0.55.1)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
+  payload-media-gallery@0.4.0-next.0(@payloadcms/ui@4.0.0-beta.8(@types/react@19.3.0)(monaco-editor@0.55.1)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
     dependencies:
       '@payloadcms/ui': 4.0.0-beta.8(@types/react@19.3.0)(monaco-editor@0.55.1)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
       payload: 4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2)
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
 
-  payload-workflows@file:apps/starter/.tarballs/payload-workflows-0.2.0-next.1.tgz(@payloadcms/ui@4.0.0-beta.8(@types/react@19.3.0)(monaco-editor@0.55.1)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(immer@11.1.21)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
+  payload-workflows@0.2.0-next.1(@payloadcms/ui@4.0.0-beta.8(@types/react@19.3.0)(monaco-editor@0.55.1)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(immer@11.1.21)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
     dependencies:
       '@payloadcms/ui': 4.0.0-beta.8(@types/react@19.3.0)(monaco-editor@0.55.1)(payload@4.0.0-beta.8(graphql@16.14.2)(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
       '@xyflow/react': 12.12.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(immer@11.1.21)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)

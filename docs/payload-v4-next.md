@@ -28,7 +28,7 @@ The starter uses four of the owner's plugins. Their Payload 4 versions are on th
 | `payload-mcp-toolkit` | 0.12.0-next.0 | always (MCP sign-in) |
 | `payload-google-reviews` | 0.5.0-next.0 | `reviews` (off by default) |
 
-Until they are on npm, the starter installs them from local tarballs in `apps/starter/.tarballs/` (`file:` dependencies; the folder is not committed). Before a release, replace those four `file:` entries in `apps/starter/package.json` with the published `next` versions, and the `payload-mcp-toolkit` dev dependency in `packages/payload-canvas/package.json` too, then run `pnpm install` so the lockfile has no `file:` entries. `pnpm install --frozen-lockfile` in CI fails until then.
+The starter depends on the published `next` versions: `payload-media-gallery@^0.4.0-next.0`, `payload-workflows@^0.2.0-next.1`, `payload-mcp-toolkit@^0.12.0-next.0` and `payload-google-reviews@^0.5.0-next.0`. While a plugin change is not on npm yet, test it with a `file:` dependency on its packed tarball, and switch back to the published version before a release: `pnpm install --frozen-lockfile` in CI fails on `file:` entries that point outside the repository.
 
 ## Local checks
 
