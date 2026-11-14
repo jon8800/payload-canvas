@@ -134,6 +134,21 @@ describe('Video with a file', () => {
   })
 })
 
+describe('Video with a phone copy', () => {
+  test('an upload: the phone source first, for narrow screens, then the main file; no src attribute', () => {
+    const html = fileRender({ phoneVideo: { id: 3, url: '/media/clip-phone.mp4' } })
+    assert.match(html, /^<video class="size-full object-cover" controls="" playsInline="" preload="metadata"><source media="\(max-width: 767px\)" src="\/media\/clip-phone.mp4"\/><source src="\/media\/clip.mp4"\/><\/video>$/)
+  })
+
+  test('a file link works; a YouTube link as phone copy is ignored', () => {
+    const props = { source: 'url', url: '/video/hero.mp4', muted: true }
+    assert.match(fileRender({ ...props, phoneUrl: '/video/hero-phone.mp4' }), /<source media="\(max-width: 767px\)" src="\/video\/hero-phone.mp4"\/><source src="\/video\/hero.mp4"\/>/)
+    const ignored = fileRender({ ...props, phoneUrl: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ' })
+    assert.match(ignored, /src="\/video\/hero.mp4"/)
+    assert.doesNotMatch(ignored, /<source/)
+  })
+})
+
 describe('AutoplayVideo', () => {
   test('the server HTML has no autoplay attribute: the script starts it after mount', () => {
     const html = renderToStaticMarkup(
@@ -151,6 +166,21 @@ describe('AutoplayVideo', () => {
     )
     assert.match(html, /^<video aria-hidden="true"[^>]*src="\/media\/clip.mp4" poster="\/media\/poster.jpg" loop="" muted="" playsInline="" preload="auto" style="object-position:30% 70%"><\/video>$/)
     assert.doesNotMatch(html, /autoplay/i)
+  })
+
+  test('with a phone copy: two sources, no src attribute', () => {
+    const html = renderToStaticMarkup(
+      createElement(AutoplayVideo, {
+        attributes: {},
+        src: '/media/clip.mp4',
+        phoneSrc: '/media/clip-phone.mp4',
+        loop: true,
+        muted: true,
+        controls: false,
+        preload: 'auto',
+      }),
+    )
+    assert.match(html, /^<video loop="" muted="" playsInline="" preload="auto"><source media="\(max-width: 767px\)" src="\/media\/clip-phone.mp4"\/><source src="\/media\/clip.mp4"\/><\/video>$/)
   })
 })
 

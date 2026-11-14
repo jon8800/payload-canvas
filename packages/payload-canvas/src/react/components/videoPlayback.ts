@@ -43,6 +43,21 @@ export function videoPreload(priority: boolean): 'auto' | 'metadata' {
   return priority ? 'auto' : 'metadata'
 }
 
+/** Screens up to 767 px wide (below Tailwind's `md`) load the phone video, when the block has one. */
+export const PHONE_MEDIA = '(max-width: 767px)'
+
+/** One `<source>` of a video. */
+export type VideoSource = { src: string; media?: string }
+
+/**
+ * The `<source>` list of a video with a phone copy: the phone copy first, for narrow screens, then
+ * the main file. Without a phone copy the list is empty and the `<video>` keeps its `src`.
+ * The browser picks a source once, when the video loads; a later resize does not switch it.
+ */
+export function videoSources(src: string, phoneSrc?: string): VideoSource[] {
+  return phoneSrc ? [{ src: phoneSrc, media: PHONE_MEDIA }, { src }] : []
+}
+
 /** The attributes that take a decorative video out of the accessibility tree and the tab order. */
 export function decorativeAttributes(decorative: boolean): { 'aria-hidden'?: 'true'; tabIndex?: -1 } {
   return decorative ? { 'aria-hidden': 'true', tabIndex: -1 } : {}

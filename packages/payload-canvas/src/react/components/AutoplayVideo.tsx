@@ -2,13 +2,15 @@
 
 import { useEffect, useRef, type CSSProperties } from 'react'
 import { useCanvasMode } from '../render/canvasMode'
-import { REDUCED_MOTION, startsPlaying } from './videoPlayback'
+import { REDUCED_MOTION, startsPlaying, videoSources } from './videoPlayback'
 
 /** Plain data only: the server component `Video` renders this one. */
 export type AutoplayVideoProps = {
   attributes: Record<string, string | number>
   className?: string
   src: string
+  /** A smaller copy for phones (`PHONE_MEDIA`). */
+  phoneSrc?: string
   poster?: string
   loop: boolean
   muted: boolean
@@ -23,7 +25,7 @@ export type AutoplayVideoProps = {
  * shows the poster and stays paused. A change of that setting plays or pauses it. A browser that
  * refuses to play (an unmuted video) keeps the poster too.
  */
-export function AutoplayVideo({ attributes, className, src, poster, loop, muted, controls, preload, style }: AutoplayVideoProps) {
+export function AutoplayVideo({ attributes, className, src, phoneSrc, poster, loop, muted, controls, preload, style }: AutoplayVideoProps) {
   const ref = useRef<HTMLVideoElement>(null)
   const canvas = useCanvasMode() !== 'site'
 
@@ -45,13 +47,14 @@ export function AutoplayVideo({ attributes, className, src, poster, loop, muted,
     return () => query.removeEventListener('change', sync)
   }, [canvas, muted])
 
+  const sources = videoSources(src, phoneSrc)
   return (
     // oxlint-disable-next-line jsx-a11y/media-has-caption -- the block has no caption track field yet.
     <video
       ref={ref}
       {...attributes}
       className={className}
-      src={src}
+      src={sources.length ? undefined : src}
       poster={poster}
       loop={loop}
       muted={muted}
@@ -59,6 +62,10 @@ export function AutoplayVideo({ attributes, className, src, poster, loop, muted,
       playsInline
       preload={preload}
       style={style}
-    />
+    >
+      {sources.map((source) => (
+        <source key={source.src} media={source.media} src={source.src} />
+      ))}
+    </video>
   )
 }

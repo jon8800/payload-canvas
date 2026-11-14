@@ -4,6 +4,12 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-11-14
+
+### Added
+
+- **Phone video** on the `video` block: `phoneVideo` (an upload) or `phoneUrl` (a video file link). Screens up to 767 px wide load this smaller copy instead of the main file, through `<source media="(max-width: 767px)">`. A YouTube or Vimeo link does not count. Videos without one keep their `src` attribute.
+
 ## [0.6.2] - 2026-11-12
 
 ### Added
