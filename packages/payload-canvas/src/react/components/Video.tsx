@@ -5,7 +5,7 @@ import { focalStyle, isDoc } from './Image'
 // The script that starts an autoplaying video loads only on pages that render one.
 import { AutoplayVideo } from './lazy'
 import { PlaceholderBox } from './placeholder'
-import { decorativeAttributes, videoPreload, videoSettingsOf } from './videoPlayback'
+import { decorativeAttributes, videoPreload, videoSettingsOf, videoSources } from './videoPlayback'
 import { isPlayableVideoUrl, parseVideoUrl } from './videoUrl'
 
 /** Classes that already give the element a height. Without one, an embed gets a 16:9 ratio. */
@@ -49,6 +49,7 @@ function InvalidUrl({ attributes, className }: { attributes: Record<string, stri
  * - `priority` (Load first): `preload="auto"`, and the poster preloads with high fetch priority.
  * - The poster's focal point sets `object-position`, with the image block's rule (`focalStyle`).
  * - `decorative`: `aria-hidden="true"`, no controls, no tab stop. For a background video.
+ * - A phone video (`phoneVideo` or `phoneUrl`, a file): screens up to 767 px wide load it instead.
  */
 export function Video({ props, className, attributes, mode, canvasMode }: BlockComponentProps) {
   const canvas = mode === 'canvas' || canvasMode !== undefined
@@ -62,6 +63,8 @@ export function Video({ props, className, attributes, mode, canvasMode }: BlockC
   // A missing source means the default ("upload"), unless only a URL is set.
   const fromUrl = props.source === 'url' || (props.source == null && props.video == null && typeof props.url === 'string')
   let src: string | null = null
+  // A smaller copy for phones: a video file link, or an upload. A YouTube or Vimeo link does not count.
+  let phoneSrc: string | undefined
   if (fromUrl) {
     const url = typeof props.url === 'string' ? props.url : ''
     // A URL that cannot play: nothing on the site, a message on the canvas.
@@ -90,8 +93,12 @@ export function Video({ props, className, attributes, mode, canvasMode }: BlockC
       )
     }
     src = embed?.src ?? null
+    const phoneUrl = typeof props.phoneUrl === 'string' ? props.phoneUrl.trim() : ''
+    const phone = phoneUrl && isPlayableVideoUrl(phoneUrl) ? parseVideoUrl(phoneUrl, options) : null
+    if (phone?.kind === 'file') phoneSrc = phone.src
   } else if (isDoc(props.video)) {
     src = props.video.url as string
+    if (isDoc(props.phoneVideo) && typeof props.phoneVideo.url === 'string') phoneSrc = props.phoneVideo.url
   }
 
   if (!src) {
@@ -104,6 +111,7 @@ export function Video({ props, className, attributes, mode, canvasMode }: BlockC
     attributes: { ...attributes, ...hidden },
     className,
     src,
+    phoneSrc,
     poster,
     loop: options.loop,
     muted: options.muted,
@@ -112,12 +120,13 @@ export function Video({ props, className, attributes, mode, canvasMode }: BlockC
     style: focalStyle(posterDoc),
   }
   if (options.autoplay) return <AutoplayVideo {...video} />
+  const sources = videoSources(src, phoneSrc)
   return (
     // oxlint-disable-next-line jsx-a11y/media-has-caption -- the block has no caption track field yet.
     <video
       {...video.attributes}
       className={className}
-      src={src}
+      src={sources.length ? undefined : src}
       poster={poster}
       loop={video.loop}
       muted={video.muted}
@@ -125,6 +134,10 @@ export function Video({ props, className, attributes, mode, canvasMode }: BlockC
       playsInline
       preload={video.preload}
       style={video.style}
-    />
+    >
+      {sources.map((source) => (
+        <source key={source.src} media={source.media} src={source.src} />
+      ))}
+    </video>
   )
 }

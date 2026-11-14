@@ -51,6 +51,8 @@ export function listCollectionField(slugs: readonly string[] | undefined, args: 
 }
 
 const PICKED_HELP = 'Shows only these, in this order.'
+const PHONE_VIDEO_HELP =
+  'Optional. A smaller copy, such as an upright crop, that screens up to 767 px wide load instead. Keep the framing of the poster.'
 
 /** The collection list's picked documents: a relationship to `slugs`, or ids as text when there are none. */
 export function pickedDocumentsField(slugs: readonly string[] | undefined): Field {
@@ -502,6 +504,20 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         },
         custom: { ai: { description: 'A YouTube or Vimeo link, or a direct link to a video file.' } },
       },
+      {
+        name: 'phoneVideo',
+        type: 'upload',
+        label: 'Phone video',
+        relationTo: mediaCollection,
+        admin: { ...when('source', 'upload'), description: PHONE_VIDEO_HELP },
+      },
+      {
+        name: 'phoneUrl',
+        type: 'text',
+        label: 'Phone video link',
+        admin: { ...when('source', 'url'), placeholder: 'A video file', description: PHONE_VIDEO_HELP },
+        custom: { ai: { description: 'Optional. A direct link to a smaller video file that screens up to 767 px wide load instead.' } },
+      },
       { name: 'poster', type: 'upload', label: 'Poster image', relationTo: mediaCollection },
       {
         name: 'autoplay',
@@ -537,7 +553,8 @@ export function defaultBlocks(options?: DefaultBlocksOptions): BlockDefinition[]
         'see the poster). For a background video behind a hero: put the video first in a stack with "relative isolate", ' +
         'set "autoplay", "muted", "loop" and "decorative": true (aria-hidden, no controls, no tab stop), "priority": ' +
         'true when it is the first thing on the page (preload="auto", the poster preloads with high fetch priority), ' +
-        'a "poster", and className "absolute inset-0 -z-10 size-full object-cover".',
+        'a "poster", and className "absolute inset-0 -z-10 size-full object-cover". Optional "phoneVideo" (upload) or ' +
+        '"phoneUrl" (a video file link): a smaller copy, for example an upright crop, that screens up to 767 px wide load instead.',
       example: {
         type: 'video',
         props: { source: 'url', url: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ', controls: true },

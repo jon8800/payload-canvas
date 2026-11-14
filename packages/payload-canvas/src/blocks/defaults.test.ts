@@ -58,6 +58,7 @@ describe('defaultBlocks', () => {
       uploads.map((f) => [f.name, f.relationTo]),
       [
         ['video', 'assets'],
+        ['phoneVideo', 'assets'],
         ['poster', 'assets'],
       ],
     )
@@ -83,6 +84,8 @@ describe('defaultBlocks', () => {
     const condition = (name: string) => fields.find((f) => f.name === name)?.admin?.custom?.builderCondition
     assert.deepEqual(condition('video'), { field: 'source', equals: 'upload' })
     assert.deepEqual(condition('url'), { field: 'source', equals: 'url' })
+    assert.deepEqual(condition('phoneVideo'), { field: 'source', equals: 'upload' })
+    assert.deepEqual(condition('phoneUrl'), { field: 'source', equals: 'url' })
     assert.equal(condition('poster'), undefined)
     assert.equal(fields.find((f) => f.name === 'url')?.admin?.custom?.builderFormat, 'videoUrl')
   })
