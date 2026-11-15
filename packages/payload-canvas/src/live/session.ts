@@ -455,6 +455,8 @@ function rememberRows(session: { target: SessionTarget; stored: unknown; ownRowI
 
 /** The answer of a session save that found nothing left to write. */
 const SKIPPED = Symbol('skipped')
+/** The answer of a session save whose layout the field already stores: nothing written. */
+const UNCHANGED = Symbol('unchanged')
 /**
  * The session save waits: a reset action owns the layout until its save or rollback finishes, or
  * a committed save's hook changes are not in the layout yet (`session.adopting`).
@@ -760,6 +762,12 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
       sent = layout
       const problems = codec.problems(layout)
       if (problems.length > 0) throw Object.assign(new Error(problems.join(' ')), { status: 422 })
+      // The layout as the field would store it equals the stored value (a commit set a value it
+      // already had, or later commits undid it): no write, so no new draft version. Read now,
+      // inside the gate: the session's copy can be older than a save outside the session.
+      const current = (await readStored(session))[target.field]
+      if (activeActions.has(session.key)) return PAUSED
+      if (codec.isStored ? codec.isStored(layout, current) : sameJson(codec.encode(layout, current), current)) return UNCHANGED
       session.writing = true
       try {
         return await write(layout, req)
@@ -809,6 +817,14 @@ export function createSessionManager(options: SessionManagerOptions = {}): Sessi
         if (saved === PAUSED) return
         if (saved === SKIPPED) {
           clearFailure(session)
+          return
+        }
+        if (saved === UNCHANGED) {
+          // Saved as far as anyone can tell: the stored value already is this layout.
+          session.persistedSeq = Math.max(session.persistedSeq, seq)
+          session.unsaved = session.unsaved.filter((entry) => entry.seq > session.persistedSeq)
+          clearFailure(session)
+          deliver(session, savedEvent(seq))
           return
         }
         session.persistedSeq = Math.max(session.persistedSeq, seq)

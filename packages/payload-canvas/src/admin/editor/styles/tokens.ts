@@ -5,6 +5,7 @@
 import { useSyncExternalStore } from 'react'
 
 import type { Breakpoint, StyleTokens, ThemeToken } from '../../../core'
+import { responseErrorMessage } from '../../../core/responseError'
 import { THEME_CHANNEL } from '../../../theme/config'
 
 type Entry = { tokens: StyleTokens | null; error: string | null; loading: boolean }
@@ -20,7 +21,7 @@ function load(endpoint: string) {
   entries.set(endpoint, { tokens: null, error: null, loading: true })
   fetch(endpoint, { credentials: 'same-origin' })
     .then(async (res) => {
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+      if (!res.ok) throw new Error(await responseErrorMessage(res))
       return (await res.json()) as StyleTokens
     })
     .then((tokens) => entries.set(endpoint, { tokens, error: null, loading: false }))

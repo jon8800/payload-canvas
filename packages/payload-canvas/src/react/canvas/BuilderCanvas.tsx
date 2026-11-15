@@ -15,6 +15,7 @@ import {
   type TemplateContext,
 } from '../../core'
 import type { CanvasCssInput, TailwindPlugins } from '../../css'
+import { responseErrorMessage } from '../../core/responseError'
 import { createCanvasCompiler, type CanvasCompiler } from '../../css/browser'
 import { THEME_CHANNEL } from '../../theme/config'
 import { classNamesOf, withoutClassNames } from '../../classes/shared'
@@ -913,14 +914,14 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
     let cancelled = false
     fetch(endpoint, { credentials: 'include', cache: 'no-store' })
       .then(async (res) => {
-        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+        if (!res.ok) throw new Error(await responseErrorMessage(res))
         const input = (await res.json()) as CanvasCssInput
         if (!cancelled) setCssInput(input)
       })
       .catch((error: unknown) => {
         if (cancelled) return
         setCompiler({ status: 'failed' })
-        send({ type: 'error', message: `Canvas CSS failed to load: ${String(error)}` })
+        send({ type: 'error', message: `Canvas CSS failed to load: ${error instanceof Error ? error.message : String(error)}` })
       })
     return () => {
       cancelled = true
@@ -945,7 +946,7 @@ function EditorCanvas({ blocks, components, plugins, resolveLink, server }: Buil
       .catch((error: unknown) => {
         if (cancelled) return
         setCompiler({ status: 'failed' })
-        send({ type: 'error', message: `Canvas CSS failed to load: ${String(error)}` })
+        send({ type: 'error', message: `Canvas CSS failed to load: ${error instanceof Error ? error.message : String(error)}` })
       })
     return () => {
       cancelled = true

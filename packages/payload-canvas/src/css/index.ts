@@ -169,7 +169,11 @@ const inputCache = new Lru<Promise<CanvasCssData>>(8)
 /** countUtilityLayers() of an empty build, per recorded input. Server-side only. */
 const staticUtilityLayers = new WeakMap<CanvasCssData, number>()
 
-async function recordInput(entryFile: string, entryCss: string, plugins?: TailwindPlugins): Promise<CanvasCssData> {
+/**
+ * `onMissing`: called for each `@plugin` id missing from `plugins`, which then loads as an empty
+ * plugin (the startup check lists every missing id). Left out: a missing id throws.
+ */
+async function recordInput(entryFile: string, entryCss: string, plugins?: TailwindPlugins, onMissing?: (id: string) => void): Promise<CanvasCssData> {
   const entryDir = path.dirname(entryFile)
   const toVirtual = (real: string) => path.relative(entryDir, real).replaceAll('\\', '/') || ENTRY_BASE
   const data: CanvasCssData = { version: 1, entry: entryCss, stylesheets: {}, plugins: [] }
@@ -190,6 +194,10 @@ async function recordInput(entryFile: string, entryCss: string, plugins?: Tailwi
     },
     loadModule: (id, base) => {
       if (!data.plugins.includes(id)) data.plugins.push(id)
+      if (onMissing && !Object.hasOwn(plugins ?? {}, id)) {
+        onMissing(id)
+        return Promise.resolve({ path: id, base, module: (() => {}) as never })
+      }
       return loadPlugin(id, base, plugins)
     },
   })
@@ -213,6 +221,38 @@ async function getInput(options: CssOptions): Promise<CanvasCssData> {
 
 // ---------------------------------------------------------------------------------------------
 // Public API
+
+/**
+ * What stops the app's CSS entry from compiling, as messages that say what to change: an entry
+ * file that cannot be read, `@plugin` ids missing from `plugins` (every one of them), or another
+ * compile error. Empty: the entry compiles. The plugin runs it at startup (`websiteBuilder`).
+ */
+export async function cssEntryProblems(options: CssOptions): Promise<string[]> {
+  let entryCss: string
+  try {
+    entryCss = await readCached(options.entry)
+  } catch {
+    return [`The CSS entry "${options.entry}" cannot be read. Set \`css.entry\` of websiteBuilder() to the app's Tailwind entry CSS, absolute or relative to the folder the app starts in.`]
+  }
+  const missing: string[] = []
+  try {
+    await recordInput(options.entry, entryCss, options.plugins, (id) => {
+      if (!missing.includes(id)) missing.push(id)
+    })
+  } catch (error) {
+    return [...(missing.length > 0 ? [missingPluginsMessage(missing)] : []), `The CSS entry "${options.entry}" does not compile: ${error instanceof Error ? error.message : String(error)}`]
+  }
+  return missing.length > 0 ? [missingPluginsMessage(missing)] : []
+}
+
+function missingPluginsMessage(ids: readonly string[]): string {
+  const list = ids.map((id) => `"${id}"`).join(', ')
+  const entries = ids.map((id) => `'${id}': plugin`).join(', ')
+  return (
+    `The CSS entry uses @plugin ${list}, but \`css.plugins\` of websiteBuilder() does not have ${ids.length === 1 ? 'it' : 'them'}. ` +
+    `Import each plugin in the Payload config and pass it: css: { entry, plugins: { ${entries} } }.`
+  )
+}
 
 const cssCache = new Lru<string>(100)
 

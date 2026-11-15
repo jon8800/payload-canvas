@@ -12,6 +12,7 @@ import { APIError, docAccessOperation, type PayloadRequest } from 'payload'
 
 import { decodePayloadBlocks, encodePayloadBlocks, payloadBlocksProblems, payloadRowIds, withUniqueRowIds, type PayloadBlocksStorage } from '../core/payloadBlocks'
 import { upgradeLayout } from '../core/blocks'
+import { sameJson } from '../core/fieldSemantics'
 import { normalizeLayout } from '../core/tree'
 import { applyOperation } from '../core/operations'
 import type { BlockDefinition, Layout, Operation } from '../core/types'
@@ -27,6 +28,11 @@ export type LayoutCodec = {
   encode(layout: Layout, previous?: unknown): unknown
   /** What in a layout the field cannot store. Empty: it can be stored as it is. */
   problems(layout: Layout): string[]
+  /**
+   * True when saving `layout` over the stored `value` would store nothing new: the session then
+   * writes nothing, so no draft version. Left out: the encoded layout must deep-equal `value`.
+   */
+  isStored?(layout: Layout, value: unknown): boolean
   /**
    * The resolved operations of a commit as the field stores them (a Payload blocks field gives
    * copied rows new ids; `owned`: the row ids the document's stored value has held). Returns `ops`
@@ -47,6 +53,21 @@ export const JSON_CODEC: LayoutCodec = {
   decode: (value) => normalizeLayout(value),
   encode: (layout) => layout,
   problems: () => [],
+  // A JSON field stores the layout exactly: a `null` prop (cleared) differs from a missing one.
+  isStored: (layout, value) => sameJson(layout, value),
+}
+
+/**
+ * A value without its `null` and `undefined` object keys, at every depth. Payload keeps a block
+ * row's stored value for a key the saved row leaves out, and reads unset fields (`blockName` too)
+ * as `null`: for a blocks field, a missing key and a `null` one store the same thing.
+ */
+function withoutNulls(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withoutNulls)
+  if (value === null || typeof value !== 'object') return value
+  const out: Record<string, unknown> = {}
+  for (const [key, v] of Object.entries(value)) if (v !== null && v !== undefined) out[key] = withoutNulls(v)
+  return out
 }
 
 /** The codec of the builder's JSON layout that upgrades old blocks (`BlockDefinition.upgrade`) on read. */
@@ -67,6 +88,7 @@ export function payloadBlocksCodec(storage: PayloadBlocksStorage): LayoutCodec {
     },
     encode: (layout, previous) => encodePayloadBlocks(layout, storage, previous),
     problems: (layout) => payloadBlocksProblems(layout, storage),
+    isStored: (layout, value) => sameJson(withoutNulls(encodePayloadBlocks(layout, storage, value)), withoutNulls(value ?? [])),
     prepare: (layout, ops, owned) => withUniqueRowIds(layout, ops, storage, owned),
     rowIds: (value) => payloadRowIds(value, storage),
   }

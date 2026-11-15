@@ -77,12 +77,23 @@ const ICONS: Array<[RegExp, string]> = [
   [/rich|content|text|prose|copy|intro/i, 'richText'],
 ]
 
-const seenWarnings = new Set<string>()
+/**
+ * The warnings already printed, on `globalThis`: Next.js loads this module once per bundle (server
+ * components, SSR, route handlers, the admin) and again after each dev reload, so a module-level
+ * set would print the same warning on every render. One set per process, and per page load.
+ */
+const SEEN_WARNINGS_KEY = Symbol.for('payload-canvas.fromPayloadBlocks.warnings')
+
+function seenWarnings(): Set<string> {
+  const store = globalThis as unknown as Record<symbol, Set<string> | undefined>
+  return (store[SEEN_WARNINGS_KEY] ??= new Set<string>())
+}
 
 function defaultWarn(message: string): void {
   if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production') return
-  if (seenWarnings.has(message)) return
-  seenWarnings.add(message)
+  const seen = seenWarnings()
+  if (seen.has(message)) return
+  seen.add(message)
   console.warn(message)
 }
 

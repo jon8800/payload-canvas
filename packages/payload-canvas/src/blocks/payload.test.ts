@@ -181,3 +181,25 @@ describe('fromPayloadBlocks: flat site with inline blocks', () => {
     assert.deepEqual(defs[0].slots, { headingBlock: { allow: ['heading'], max: 1 }, cards: { allow: ['heading'], max: 4, min: 2 } })
   })
 })
+
+describe('fromPayloadBlocks default warnings', () => {
+  it('prints each warning once per process, also from separate copies of the module (Next.js bundles)', async () => {
+    const heading = { slug: 'warnOnceHeading', fields: [{ name: 'text', type: 'text', admin: { components: { Field: '/components/Fancy#Fancy' } } }] }
+    const warned: string[] = []
+    const warn = console.warn
+    console.warn = (message: unknown) => {
+      warned.push(String(message))
+    }
+    try {
+      // Two module instances, as Next.js has one per bundle and one more after each dev reload.
+      for (const copy of ['a', 'b']) {
+        const mod = (await import(`./payload.ts?copy=${copy}`)) as typeof import('./payload')
+        for (let render = 0; render < 3; render++) mod.fromPayloadBlocks([heading] as never)
+      }
+    } finally {
+      console.warn = warn
+    }
+    const mine = warned.filter((m) => m.includes('"warnOnceHeading"'))
+    assert.deepEqual(mine, ['[fromPayloadBlocks] "warnOnceHeading": text: custom admin Field not used (the default input shows).'])
+  })
+})

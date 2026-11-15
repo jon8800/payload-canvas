@@ -4,6 +4,17 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ## [Unreleased]
 
+## [0.6.4] - 2026-11-15
+
+Fixes from a check of the builder on a real site's Payload `blocks` field.
+
+### Fixed
+
+- **A save that changes nothing makes no draft.** The live session wrote a new draft version on every save, also when nothing changed (a value set to what it already was, or an edit undone before the save). After opening and saving, every page showed "Changed" and "Revert to published". Now the session reads the stored value inside the save and writes only when the layout would store something new. For a Payload blocks field, a missing key and a `null` one count as the same value, as Payload stores them. Real edits, and an undo back to an older value after a save, still save. The builder's JSON layout works the same way.
+- **A missing `css` option no longer crashes with `TypeError: options.css.entry`.** `css.entry` stays required in every mode, also for a Payload blocks field: the canvas compiles Tailwind against it, and the editor reads its breakpoints and theme from it. Without it, `websiteBuilder()` now stops with a message that says what to pass. A `css.plugins` that is not an object is refused the same way.
+- **An `@plugin` missing from `css.plugins` shows up at startup.** The plugin compiles the CSS entry once at startup (without delaying it) and logs an error that names every missing plugin and how to pass it. `/api/builder/canvas-css` and `/api/builder/style-tokens` answer with that message (status 500, also in the server log) instead of Payload's "Something went wrong", and the editor and canvas show it. An unreadable entry file is reported the same way.
+- **`fromPayloadBlocks` warnings print once.** "custom admin Field not used" and the other default warnings repeated on every render, in the server log and the browser console, because Next.js loads the module once per bundle and again after each dev reload. Each message now prints once per server process and once per page load.
+
 ## [0.6.3] - 2026-11-14
 
 ### Added

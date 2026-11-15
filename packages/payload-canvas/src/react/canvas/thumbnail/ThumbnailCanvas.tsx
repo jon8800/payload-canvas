@@ -6,6 +6,7 @@
 
 import { collectClasses, type BlockDefinition, type Layout } from '../../../core'
 import type { CanvasCssInput } from '../../../css'
+import { responseErrorMessage } from '../../../core/responseError'
 import { createCanvasCompiler, type CanvasCompiler } from '../../../css/browser'
 import { compileClassSheet, type ClassSheet } from '../../../css/classes'
 import { withoutClassNames } from '../../../classes/shared'
@@ -107,7 +108,7 @@ export function ThumbnailCanvas({ blocks, components, plugins, resolveLink, serv
     // An object, so the loop below sees the cleanup's change.
     const state = { cancelled: false, busy: false }
     const input: Promise<CanvasCssInput> = fetch(init.cssEndpoint, { credentials: 'include' }).then(async (res) => {
-      if (!res.ok) throw new Error(`Canvas CSS: ${res.status} ${res.statusText}`)
+      if (!res.ok) throw new Error(`Canvas CSS: ${await responseErrorMessage(res)}`)
       return (await res.json()) as CanvasCssInput
     })
     const compiler: Promise<CanvasCompiler> = input.then((value) => createCanvasCompiler(value, pluginsRef.current))

@@ -370,6 +370,31 @@ describe('Payload blocks field: one source of truth through the Local API', () =
     assert.equal(((native.layout as Row[])[0].content as Row[])[0].text, 'Hello there')
   })
 
+  it('writes no version for a save that changes nothing, and still saves a real edit after it', async () => {
+    const id = await createPage()
+    const original = rows(await read(id))
+    const session = openSession(id)
+    await session.connect()
+    const [intro, bottom] = session.layout().blocks
+    const hello = intro.slots!.content[0]
+    const writes = mem.writes('pages')
+    const versions = mem.versions('pages').length
+    // The values each block already has (`level: null` too), and an edit undone before the save.
+    assert.equal((await session.commit([{ type: 'update', id: hello.id, props: { text: hello.props?.text, level: 'h2' } }])).ok, true)
+    assert.equal((await session.commit([{ type: 'update', id: bottom.id, props: { text: 'Changed' } }])).ok, true)
+    assert.equal((await session.commit([{ type: 'update', id: bottom.id, props: { text: 'Bottom', level: null } }])).ok, true)
+    assert.deepEqual(await session.flush(), { ok: true })
+    assert.equal(mem.writes('pages'), writes, 'no write')
+    assert.equal(mem.versions('pages').length, versions, 'no new draft version')
+    assert.deepEqual(rows(await read(id)), original)
+    assert.ok(session.events.some((e) => e.type === 'saved'), 'editors hear that the page is saved')
+    // A real edit still saves.
+    assert.equal((await session.commit([{ type: 'update', id: bottom.id, props: { text: 'Changed' } }])).ok, true)
+    assert.deepEqual(await session.flush(), { ok: true })
+    assert.equal(mem.versions('pages').length, versions + 1)
+    assert.equal(rows(await read(id))[1].text, 'Changed')
+  })
+
   it('saves a block added on the canvas as a Payload block, nested in its section', async () => {
     const id = await createPage()
     const session = openSession(id)

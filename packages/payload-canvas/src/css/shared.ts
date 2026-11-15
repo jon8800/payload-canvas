@@ -30,8 +30,8 @@ export const stylesheetKey = (id: string, base: string) => `${id}|${base}`
 
 export function missingPluginError(id: string): Error {
   return new Error(
-    `Tailwind plugin "${id}" is used by @plugin in the CSS entry but is not in the plugins map. ` +
-      `Pass it as plugins: { '${id}': plugin }.`,
+    `Tailwind plugin "${id}" is used by @plugin in the CSS entry but is not in the plugins map ` +
+      `(\`css.plugins\` of websiteBuilder()). Import it and pass it as plugins: { '${id}': plugin }.`,
   )
 }
 

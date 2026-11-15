@@ -32,7 +32,7 @@ import {
   type SectionDefinition,
   type TemplatesClientConfig,
 } from '../core/types'
-import { applyFontFamilies, getCanvasCssInput, getStyleTokens, type CssOptions, type FontFamilies, type TailwindPlugins } from '../css'
+import { applyFontFamilies, cssEntryProblems, getCanvasCssInput, getStyleTokens, type CssOptions, type FontFamilies, type TailwindPlugins } from '../css'
 import { DEFAULT_THEME_SLUG, THEME_CONFIG_KEY, THEME_PATH, type ThemeOptions, type ThemeServerConfig } from '../theme/config'
 import { themeFontFamilies, themeOutput, type ThemeData } from '../theme/css'
 import { themeGlobal } from '../theme/global'
@@ -194,9 +194,16 @@ export type WebsiteBuilderOptions = {
    * items have no `$url`. Each slug must be a collection of the config.
    */
   listCollections?: string[]
+  /**
+   * The app's Tailwind CSS. Required in every mode, also when the builder edits a Payload blocks
+   * field: the canvas compiles Tailwind against the entry, and the editor reads its breakpoints and
+   * theme from it. Checked at startup: no `entry` stops the app with a message that says what to
+   * pass; an `@plugin` of the entry missing from `plugins` is logged as an error.
+   */
   css: {
     /** Path to the app's Tailwind entry CSS, absolute or relative to process.cwd(). */
     entry: string
+    /** Every plugin the entry loads with `@plugin "<id>"`, by that id. */
     plugins?: TailwindPlugins
     /**
      * The font families the site really uses, by font variable name (`sans`, `heading`, `mono`, …).
@@ -217,7 +224,8 @@ export type WebsiteBuilderOptions = {
   savedSections?: SavedSectionsOptions | false
   /**
    * Live editing: every open editor and every AI agent (MCP) edits one shared in-memory session
-   * per document, and the server saves its draft about a second after the last change. Sessions
+   * per document, and the server saves its draft about a second after the last change (only when
+   * the stored layout would change: a save that changes nothing makes no draft version). Sessions
    * live in one app server process: with several servers, route each document to one server.
    */
   live?: { heartbeatMs?: number }
@@ -310,8 +318,38 @@ function sectionsThatFit(sections: SectionDefinition[], fits: (blocks: Block[]) 
   })
 }
 
+/**
+ * `css` of websiteBuilder() as the compile needs it: the entry as an absolute path. Throws a
+ * message that says what to pass when `css.entry` is missing.
+ */
+export function resolveCssOptions(css: WebsiteBuilderOptions['css'] | undefined, cwd = process.cwd()): CssOptions {
+  if (!css || typeof css !== 'object' || typeof css.entry !== 'string' || css.entry.trim() === '') {
+    throw new Error(
+      "[websiteBuilder] `css.entry` is missing. Pass the path to the app's Tailwind entry CSS, absolute or relative to the folder the app starts in, " +
+        "for example `css: { entry: 'src/app/globals.css' }`. Every builder needs it, also one that edits a Payload blocks field: " +
+        'the canvas compiles Tailwind against it, and the editor reads its breakpoints and theme from it. ' +
+        "When the entry has @plugin lines, pass those plugins too: `css: { entry, plugins: { '@tailwindcss/typography': typography } }`.",
+    )
+  }
+  if (css.plugins !== undefined && (css.plugins === null || typeof css.plugins !== 'object' || Array.isArray(css.plugins))) {
+    throw new Error(
+      "[websiteBuilder] `css.plugins` must be an object that maps each @plugin id of the CSS entry to the plugin, for example `{ '@tailwindcss/typography': typography }`.",
+    )
+  }
+  return { entry: path.resolve(cwd, css.entry), plugins: css.plugins }
+}
+
+/** A CSS endpoint's failure as a message the editor shows and the server logs, not a bare 500. */
+function cssFailure(req: PayloadRequest, what: string, error: unknown): Response {
+  const message = `[websiteBuilder] ${what} could not be built: ${error instanceof Error ? error.message : String(error)}`
+  req.payload.logger.error(message)
+  return Response.json({ error: message }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
+}
+
 export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
   return (config: Config): Config => {
+    // First: without the CSS entry nothing in the builder works.
+    const css = resolveCssOptions(options.css)
     const apiRoute = config.routes?.api ?? '/api'
     const canvasPath = options.canvasPath ?? '/builder-canvas'
     const sourceCollections = config.collections ?? []
@@ -526,10 +564,6 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
     const clientBlocks = toJsonSafe(blocks)
     // Relationship targets of every collection, so the canvas resolves `<path>.$url` bindings.
     const relations = bindingRelations(collections)
-    const css: CssOptions = {
-      entry: path.resolve(process.cwd(), options.css.entry),
-      plugins: options.css.plugins,
-    }
     // Editable classes: a collection, a hidden global with the compiled stylesheet, endpoints.
     const classes = resolveClasses(options.classes, { apiRoute, css, blocks, collections, globals: config.globals ?? [] })
     // Comments on the canvas: a collection the editor reads and writes over REST.
@@ -766,8 +800,12 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           handler: async (req) => {
             if (!req.user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
             // With the theme's variables, so `bg-brand` works on the canvas. Not cached: a theme save changes it.
-            const input = await getCanvasCssInput(await withThemeVariables(req.payload, css))
-            return Response.json(input, { headers: { 'Cache-Control': 'private, no-cache' } })
+            try {
+              const input = await getCanvasCssInput(await withThemeVariables(req.payload, css))
+              return Response.json(input, { headers: { 'Cache-Control': 'private, no-cache' } })
+            } catch (error) {
+              return cssFailure(req, 'The canvas CSS', error)
+            }
           },
         },
         {
@@ -775,7 +813,12 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
           method: 'get',
           handler: async (req) => {
             if (!req.user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-            const tokens = await themeStyleTokens(req.payload, css)
+            let tokens: Awaited<ReturnType<typeof themeStyleTokens>>
+            try {
+              tokens = await themeStyleTokens(req.payload, css)
+            } catch (error) {
+              return cssFailure(req, 'The style tokens', error)
+            }
             const custom = await Promise.resolve(options.css.fontFamilies?.(req.payload)).catch(() => undefined)
             const families = { ...(await themeFamilies(req.payload)), ...custom }
             const fonts = applyFontFamilies(tokens.fonts, families)
@@ -807,6 +850,15 @@ export function websiteBuilder(options: WebsiteBuilderOptions): Plugin {
         // …and when a Local API update ended, also a failed one without a transaction.
         installLocalApiBoundary(payload as never, writeGate)
         await config.onInit?.(payload)
+        // The CSS entry and its @plugin lines, checked once at startup: a plugin missing from
+        // `css.plugins` would otherwise fail only when the builder loads. Not awaited: startup does
+        // not wait for a Tailwind compile.
+        void cssEntryProblems(css).then(
+          (problems) => {
+            for (const problem of problems) payload.logger.error(`[websiteBuilder] ${problem}`)
+          },
+          () => {},
+        )
         // Save unsaved live edits when the server stops.
         installShutdownFlush(live.sessions)
         for (const [slug, field] of Object.entries(fieldNames)) {

@@ -620,8 +620,8 @@ websiteBuilder({
 | `listCollections` | `string[]` | More collections the collection list block can show, after the collections with a `url`. Use it for data collections without pages of their own, such as testimonials or team members. Their items have no `$url`. Each slug must be a collection of the config. Pass the same list to `builderMcpTools`. |
 | `sections` | `SectionDefinition[]` | Ready-made sections. See [Sections](#sections). |
 | `savedSections` | `{ slug?, access?, admin?, hooks? } \| false` | The collection for sections people save in the editor. Default slug `builder-sections`; default access: every signed-in user. `false` turns it off. See [Saved sections](#saved-sections). |
-| `css.entry` | `string` | Your Tailwind entry CSS, absolute or relative to `process.cwd()`. Required. |
-| `css.plugins` | `Record<id, plugin>` | Tailwind plugins by the id your CSS uses in `@plugin "<id>"`. Pass the imported module, so Next bundles it. |
+| `css.entry` | `string` | Your Tailwind entry CSS, absolute or relative to `process.cwd()`. Required, also when the builder edits a Payload blocks field: the canvas compiles Tailwind against it, and the editor reads its breakpoints and theme from it. Without it the app does not start, and the error says what to pass. |
+| `css.plugins` | `Record<id, plugin>` | Tailwind plugins by the id your CSS uses in `@plugin "<id>"`. Pass the imported module, so Next bundles it. Every `@plugin` line of the entry needs one. At startup the plugin compiles the entry once and logs an error that names each missing plugin. Until you add it, `/api/builder/canvas-css` and `/api/builder/style-tokens` answer 500 with the same message, and the editor shows it. |
 | `canvasPath` | `string` | The canvas route. Default `/builder-canvas`. |
 | `templates.slug` | `string` | Slug of the templates collection. Default `builder-templates`. |
 | `templates.hooks` | `CollectionConfig['hooks']` | Hooks for the templates collection, for example to revalidate pages. |
@@ -1400,7 +1400,8 @@ A site that already has a Payload `blocks` field (for example `pages.layout` wit
 websiteBuilder({
   collections: { pages: { field: 'layout', url: (doc) => `/${doc.slug}` } },
   blocks,
-  css: { entry: 'src/app/(frontend)/globals.css' },
+  // Required here too: the canvas compiles your Tailwind against it. Pass every @plugin of the entry.
+  css: { entry: 'src/app/(frontend)/globals.css', plugins: { '@tailwindcss/typography': typography } },
 })
 ```
 
@@ -1449,7 +1450,7 @@ export const blocks = [...defaultBlocks({ linkCollections: ['pages'] }), ...site
 | `styles` | Adds `className` and the Styles panel. Default `false`: your components style themselves. |
 | `category` | Library group for blocks without `admin.group`. Default "Site sections" (blocks with slots) or "Site blocks". |
 | `overrides` | Per slug: `label`, `category`, `icon`, `styles`, `defaultClassName`, `classes`, `ai`, `parents`, and `slots` (merged into a slot, for example `{ content: { allow: ['*'] } }`). |
-| `onWarning` | Gets the messages about things that do not carry over. Default: `console.warn` outside production. `false` turns them off. |
+| `onWarning` | Gets the messages about things that do not carry over. Default: `console.warn` outside production, each message once per server process and once per page load. `false` turns them off. |
 
 `labels.singular` becomes the label, and `admin.group` the library category. `interfaceName`, `dbName`, `imageURL` and the block's own admin components are not used.
 
@@ -1476,7 +1477,7 @@ Each component gets the props it always got: `{ id, blockType, blockName, ...fie
 
 ### How the builder edits a Payload blocks field
 
-- **One field.** When the builder opens a page, it reads the stored blocks (`depth: 0`) into the editor. Each save writes them back to the same field through Payload's Local API, as the editor's user (`overrideAccess: false`). Payload's field hooks, validation, access, versions and locales run once per save, as for a save in Payload's editor. Opening the builder saves nothing.
+- **One field.** When the builder opens a page, it reads the stored blocks (`depth: 0`) into the editor. Each save writes them back to the same field through Payload's Local API, as the editor's user (`overrideAccess: false`). Payload's field hooks, validation, access, versions and locales run once per save, as for a save in Payload's editor. Opening the builder saves nothing, and neither does a save that changes nothing (an edit undone before the save, or a value set to what it was): the builder writes only when the blocks would store something new, so it makes no draft version.
 - **Nothing lost.** A round trip keeps every stored value: fields the inspector does not show, unknown keys, `null` and empty values, block ids and order, `blockName` (the block's name in the builder), array rows with their ids, groups, nested blocks fields inside groups and arrays, and upload and relationship ids. No HTML is read back and no defaults are added. Data the builder cannot keep exactly (a block type without a builder block, two blocks with one id) is not changed: the builder refuses to open the page (422) and says why. Payload's editor still opens it.
 - **Saves from elsewhere win.** A save from Payload's editor, the REST API or the Local API is the stored truth. An open builder shows it at once and replays its own unsaved edits on top, after every such save until the builder saves.
 - **Copied rows.** Rows pasted from another page or inserted from a saved section get new ids. The page keeps its own row ids through remove, save, undo and save.
