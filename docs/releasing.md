@@ -73,3 +73,18 @@ In PowerShell, set the token with `$env:NPM_TOKEN = "<token>"` first, then run t
 ## Provenance
 
 The packages are published without npm provenance. Provenance needs a signed Sigstore bundle in the same PUT, built from the workflow's OIDC token (the `sigstore` package and `id-token: write`). The raw PUT can carry it, but the script does not build it yet.
+
+## payload-admin-kit
+
+`packages/payload-admin-kit` has its own version and its own tag, `admin-kit-v<version>`. The workflow is `.github/workflows/publish-admin-kit.yml`: it tests the package, packs it to `dist-packages/admin-kit/`, checks the version against the tag, and publishes with the same `scripts/publish.mjs` and `NPM_TOKEN`. The first publish creates the package on npm, so the token must cover new packages ("All packages"); a token limited to `payload-canvas` and `create-payload-canvas` returns 403.
+
+1. Set the version in `packages/payload-admin-kit/package.json`.
+2. Check the package locally: `pnpm release:admin-kit:dry`.
+3. Commit, push, then tag and push the tag:
+
+   ```sh
+   git tag admin-kit-v0.1.0
+   git push origin admin-kit-v0.1.0
+   ```
+
+4. Check the result with `npm view payload-admin-kit version`.

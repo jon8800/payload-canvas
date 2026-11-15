@@ -55,6 +55,7 @@ payload-toolkit/                 # the repo folder
       src/migrate/           #   migrating existing Payload `blocks` fields into layouts
       src/react/             #   `payload-canvas/react`: RenderLayout, block components, canvas runtime (inline editing); react/server: loadTemplate + ThemeStyle
     create-payload-canvas/   # CLI scaffolder
+    payload-admin-kit/       # payload-admin-kit: sidebar, theme, dashboard widgets, list cells, reference index, 404 log, admin search (own version, tag admin-kit-v*)
   docs/architecture.md       # Target design — read before building
   STRATEGY.md                # Earlier product strategy (to be revised)
   AGENTS.md                  # This file (CLAUDE.md is a stub that imports it)
@@ -90,7 +91,7 @@ The editor opens full screen at `/admin/builder/:collection/:id` (a root admin v
 
 ## Commands
 
-In `packages/payload-canvas`: `pnpm test` (node --test), `pnpm typecheck`, `pnpm lint`.
+In `packages/payload-canvas` and `packages/payload-admin-kit`: `pnpm test` (node --test), `pnpm typecheck`, `pnpm lint`.
 
 Run from `apps/starter/`:
 
