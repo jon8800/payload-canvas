@@ -20,10 +20,10 @@ import { checkSectionVariants, richTextFieldName, sectionsWithDefaultClassNames 
 import { bindingRelations, DEFAULT_TEMPLATES_SLUG, DOCUMENT_TEMPLATE_FIELD, TEMPLATE_TARGET_FIELD } from '../core/bindings'
 import { localeSettingsOf } from '../core/locale'
 import { resolveRegions, type RegionOption } from '../core/regions'
+import { sectionsThatFit } from '../core/sections'
 import { decodePayloadBlocks, payloadBlocksProblems, payloadBlocksStorage, type PayloadBlocksStorage } from '../core/payloadBlocks'
 import {
   EMPTY_LAYOUT,
-  type Block,
   type BlockDefinition,
   type BuilderClientConfig,
   type EditorOptions,
@@ -310,14 +310,6 @@ export function cssFieldName(field: string): string {
  * Editors open the builder full screen at `{admin}/builder/:collection/:id` (a root admin view
  * without Payload's nav and header). The document's "Builder" tab and the layout field link there.
  */
-/** The sections, and their variants, whose blocks `fits` accepts (a Payload blocks field stores only some). */
-function sectionsThatFit(sections: SectionDefinition[], fits: (blocks: Block[]) => boolean): SectionDefinition[] {
-  return sections.flatMap((section) => {
-    if (!fits(section.blocks)) return []
-    return [section.variants ? { ...section, variants: section.variants.filter((v) => fits(v.blocks)) } : section]
-  })
-}
-
 /**
  * `css` of websiteBuilder() as the compile needs it: the entry as an absolute path. Throws a
  * message that says what to pass when `css.entry` is missing.

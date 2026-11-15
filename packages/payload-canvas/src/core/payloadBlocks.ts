@@ -284,7 +284,15 @@ export function payloadBlocksStorage(topSlugs: readonly string[], definitions: r
     found.set(type, def)
     for (const slot of Object.values(def.slots ?? {})) for (const child of slot.allow ?? []) queue.push(child)
   }
-  return { blocks: [...found.values()], rootTypes }
+  // A type the field holds only inside other blocks goes only there: the editor and the layout
+  // check read `parents`, and a type without them would be offered at the top level too.
+  const roots = new Set(rootTypes)
+  const list = [...found.values()].map((def) => {
+    if (def.parents || roots.has(def.type)) return def
+    const parents = [...found.values()].filter((owner) => Object.values(owner.slots ?? {}).some((slot) => slot.allow?.includes(def.type))).map((owner) => owner.type)
+    return parents.length > 0 ? { ...def, parents } : def
+  })
+  return { blocks: list, rootTypes }
 }
 
 // ---------------------------------------------------------------------------

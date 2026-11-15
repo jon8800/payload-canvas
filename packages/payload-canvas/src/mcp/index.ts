@@ -30,10 +30,11 @@ import { createId } from '../core/ids'
 import { VISIBILITY_OPERATORS } from '../core/visibility'
 import { blockJsonSchema } from '../core/schema'
 import { checkSectionVariants, getBlockDefinition, sectionsWithDefaultClassNames } from '../core/blocks'
-import { findSectionVersion } from '../core/sections'
+import { findSectionVersion, sectionsThatFit } from '../core/sections'
+import { payloadBlocksProblems, type PayloadBlocksStorage } from '../core/payloadBlocks'
 import { localeSettingsOf, localizedKeys, resolveLayoutLocale, stampLocale, untranslatedKeys } from '../core/locale'
 import { normalizeLayout, subtreeIds, walkBlocks } from '../core/tree'
-import type { BlockDefinition, Layout, LocaleSettings, Operation, SectionDefinition } from '../core/types'
+import type { Block, BlockDefinition, Layout, LocaleSettings, Operation, SectionDefinition } from '../core/types'
 import { runPropValidators } from '../core/fieldValidate'
 import { validateLayout } from '../core/validate'
 import { actorFromUser, splitLayoutErrors, userLabel, type LiveDocStore } from '../live/apply'
@@ -346,6 +347,22 @@ async function variablesOf(req: PayloadRequest | undefined): Promise<Record<stri
   return list.length > 0 ? { variables: describeVariables(list), variablesNote: VARIABLES_NOTE } : {}
 }
 
+/** The collection's own Payload blocks field (the block types it holds), or undefined for a JSON layout. */
+function storageOf(req: PayloadRequest | undefined, collection: string): PayloadBlocksStorage | undefined {
+  return req?.payload?.config ? builderConfigOf(req.payload)?.collections[collection]?.payloadBlocks : undefined
+}
+
+/** Why a Payload blocks field cannot store `list` (the first problem), else null. JSON layouts store everything. */
+function sectionProblem(req: PayloadRequest | undefined, collection: string, list: Block[]): string | null {
+  const storage = storageOf(req, collection)
+  return storage ? (payloadBlocksProblems({ version: 1, blocks: list }, storage)[0] ?? null) : null
+}
+
+/** The sections, and their variants, the collection's layout can store. */
+function sectionsFor(req: PayloadRequest | undefined, collection: string, list: SectionDefinition[]): SectionDefinition[] {
+  return storageOf(req, collection) ? sectionsThatFit(list, (b) => sectionProblem(req, collection, b) === null) : list
+}
+
 export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool[] {
   const templateTargets = Object.entries(options.collections).filter(([, c]) => c.templates).map(([slug]) => slug)
   const templatesSlug = templateTargets.length > 0 ? (options.templates?.slug ?? DEFAULT_TEMPLATES_SLUG) : null
@@ -358,6 +375,9 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
    * settings and the field blocks of the forms collection), else the app's list.
    */
   const blocksOf = (req: PayloadRequest | undefined): BlockDefinition[] => (req?.payload?.config ? builderConfigOf(req.payload)?.blocks : undefined) ?? appBlocks
+  /** The block types a collection's layout can hold: a Payload blocks field's own, else the whole list. */
+  const blocksFor = (req: PayloadRequest | undefined, collection: string): BlockDefinition[] =>
+    (storageOf(req, collection)?.blocks as BlockDefinition[] | undefined) ?? blocksOf(req)
   // A section block without a className gets its type's default classes, as in the plugin.
   // Variants stay under their section (core/sections.ts); insertSection takes `variant`.
   checkSectionVariants(options.sections ?? [])
@@ -533,25 +553,31 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
     name: 'listBlocks',
     routing: { kind: 'collection', action: 'read' },
     description: [
-      'Lists every block type you can use in page layouts: label, description, props, slots (which child types they accept), parts and an example, plus the site\'s own classes and design variables (named colors, sizes and fonts). Call it once before you build or edit a layout: its `guide` is the layout format (block keys, ids, positions, classes, motion presets, HTML attrs, canonical form) and `bindings` the binding and VISIBILITY format.',
+      'Lists every block type you can use in the layouts of `collection`: label, description, props, slots (which child types they accept), parts and an example, plus the site\'s own classes and design variables (named colors, sizes and fonts). Call it once before you build or edit a layout: its `guide` is the layout format (block keys, ids, positions, classes, motion presets, HTML attrs, canonical form) and `bindings` the binding and VISIBILITY format.',
       'For whole page parts (hero, features, pricing, call to action, footer), PREFER ready-made sections: listSections, then insertSection. Use single blocks for small additions and edits.',
+      'A collection whose layout is its own Payload blocks field holds only the block types listed for it: `rootTypes` go at the page root, the others only in the slots that accept them. Other collections differ: call it again for each collection.',
       `Dynamic blocks: "${FIELD_BLOCK}" shows one field of the current document (templates), "${COLLECTION_LIST_BLOCK}" lists documents of a collection and repeats its "item" slot per document, "${REPEAT_BLOCK}" repeats its "item" slot per row of an array or hasMany field of the current document.`,
       `Forms on pages (when the list has a "${FORM_BLOCK}" block): build a form right on the page. A "${FORM_BLOCK}" block in mode "build" holds its own field blocks (formText, formEmail, formTextarea, formSelect, formRadio, formCheckbox, …), one "${FORM_SUBMIT_BLOCK}" block and layout blocks in its "${FORM_SLOT}" slot. Field blocks and "${FORM_SUBMIT_BLOCK}" go only inside a Form block (at any depth). Each field's \`name\` is unique in its form. The form's settings (title, submitButtonLabel, confirmationType, confirmationMessage, redirect, emails, spamProtection) are props of the Form block. Publishing the page saves the form to the forms collection. Mode "saved" shows an existing form instead (\`form\`: its id).`,
     ].join('\n\n'),
     parameters: { collection: collectionArg },
-    handler: async (_args, req) =>
-      text({
+    handler: async (args, req) => {
+      const collection = String(args.collection)
+      const storage = storageOf(req, collection)
+      return text({
         guide: LAYOUT_GUIDE,
-        blocks: blocksOf(req).map(describeBlock),
+        // A Payload blocks field: only its own block types, and the ones it allows at the page root.
+        blocks: blocksFor(req, collection).map(describeBlock),
+        ...(storage ? { rootTypes: [...storage.rootTypes] } : {}),
         ...(await siteClassesOf(req)),
         ...(await variablesOf(req)),
-        sections: sections.length,
+        sections: sectionsFor(req, collection, sections).length,
         bindings: BINDINGS_GUIDE,
         ...(templatesSlug ? { templates: { collection: templatesSlug, targets: templateTargets } } : {}),
         next:
           'getBlockSchema for exact prop shapes. listSections for ready-made sections. getLayout to read a page.' +
           (templatesSlug ? ' listTemplates and getBindingSources for templates.' : ''),
-      }),
+      })
+    },
   }
 
   const getBlockSchema: BuilderMcpTool = {
@@ -561,7 +587,7 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       'Returns the JSON Schema (draft 2020-12) of one block type: its props, className, slots and motion (animations, under $defs.$motion), with nested child block schemas under $defs. Use it to write valid props.',
     parameters: { collection: collectionArg, type: z.string().min(1).describe('Block type from listBlocks.') },
     handler: async (args, req) => {
-      const blocks = blocksOf(req)
+      const blocks = blocksFor(req, String(args.collection))
       const def = blocks.find((b) => b.type === args.type)
       if (!def) return fail(`Unknown block type "${String(args.type)}". Known types: ${blocks.map((b) => b.type).join(', ')}.`)
       return text(blockJsonSchema(def, blocks))
@@ -583,8 +609,8 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
       full: z.boolean().optional().describe('Include the full block JSON. Default false.'),
     },
     handler: async (args, req) => {
-      const blocks = blocksOf(req)
-      const all = await allSections(req)
+      const blocks = blocksFor(req, String(args.collection))
+      const all = sectionsFor(req, String(args.collection), await allSections(req))
       const list = all.filter((s) => !args.category || s.category === args.category)
       return text({
         categories: [...new Set(all.map((s) => s.category).filter(Boolean))],
@@ -632,17 +658,20 @@ export function builderMcpTools(options: BuilderMcpToolsOptions): BuilderMcpTool
         .describe('Saved sections only. true: a copy that stays in sync with the saved section (default for components). false: plain blocks.'),
     },
     handler: async (args, req) => {
-      const blocks = blocksOf(req)
+      const collection = String(args.collection)
+      const blocks = blocksFor(req, collection)
       const all = await allSections(req)
       const found = findSectionVersion(all, String(args.sectionId), typeof args.variant === 'string' ? args.variant : undefined)
       if (typeof found === 'string') return fail(found)
       if (!found) {
-        const known = all.map((s) => (s.savedId !== undefined ? `${s.id} ("${s.label}")` : s.id))
+        const known = sectionsFor(req, collection, all).map((s) => (s.savedId !== undefined ? `${s.id} ("${s.label}")` : s.id))
         return fail(`Unknown section "${String(args.sectionId)}". Known sections: ${known.join(', ') || 'none'}.`)
       }
+      // A Payload blocks field: refused before the commit, with the reason (listSections leaves it out).
+      const unfit = sectionProblem(req, collection, found.blocks)
+      if (unfit) return fail(`Section "${found.label}" cannot go in "${collection}": ${unfit} listSections lists the sections this collection can hold.`)
       const section = sectionToInsert(found, blocks, { values: args.values, linked: typeof args.linked === 'boolean' ? args.linked : null })
       if (typeof section === 'string') return fail(section)
-      const collection = String(args.collection)
       const result = await apply(req, collection, String(args.id), (layout) =>
         sectionInsertOps(layout, section, {
           parentId: args.parentId as string | null | undefined,

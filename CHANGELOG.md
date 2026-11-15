@@ -4,6 +4,15 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ## [Unreleased]
 
+## [0.6.5] - 2026-11-16
+
+`payload-canvas` only. `create-payload-canvas` stays at 0.6.4.
+
+### Fixed
+
+- **A Payload blocks field offers only the blocks it accepts, in the MCP tools too.** With one shared `blocks` list on several collections, the builder MCP tools (`listBlocks`, `getBlockSchema`, `listSections`, `insertSection`) used the whole list on every collection. An agent saw `hero` on a collection whose `layout` field does not accept it, and the insert failed on save. Now each tool uses the block types of that collection's field. `listBlocks` also returns `rootTypes`, the types the field allows at the top level. `listSections` leaves out sections the field cannot hold, and `insertSection` refuses them with the reason.
+- **A block a field holds only inside other blocks is no longer offered at the top level.** Without the `root` option of `fromPayloadBlocks`, nested-only blocks (a heading inside a section's `content`) showed in the editor's library and root picker, and the save then failed. The builder now limits them to the blocks whose nested fields accept them. A live commit that puts one at the top level is refused as a placement error (409) before the storage check.
+
 ## [0.6.4] - 2026-11-15
 
 Fixes from a check of the builder on a real site's Payload `blocks` field.

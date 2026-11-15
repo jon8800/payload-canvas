@@ -469,14 +469,15 @@ describe('Payload blocks field: one source of truth through the Local API', () =
     const session = openSession(id)
     await session.connect()
     const hello = session.layout().blocks[0].slots!.content[0]
-    for (const op of [
-      { type: 'update', id: hello.id, className: 'text-red-500' },
-      { type: 'update', id: hello.id, hidden: true },
-      { type: 'insert', block: { id: 'x1', type: 'gallery' }, to: { parentId: null, index: 0 } },
-    ]) {
+    for (const [op, status] of [
+      [{ type: 'update', id: hello.id, className: 'text-red-500' }, 422],
+      [{ type: 'update', id: hello.id, hidden: true }, 422],
+      // The field holds galleries only inside sections: the placement check refuses it first.
+      [{ type: 'insert', block: { id: 'x1', type: 'gallery' }, to: { parentId: null, index: 0 } }, 409],
+    ] as const) {
       const result = await session.commit([op])
       assert.equal(result.ok, false, JSON.stringify(op))
-      assert.equal((result as { status: number }).status, 422, JSON.stringify(result))
+      assert.equal((result as { status: number }).status, status, JSON.stringify(result))
     }
     assert.equal(session.layout().blocks.length, 2)
   })

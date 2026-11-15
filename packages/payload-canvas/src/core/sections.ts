@@ -11,6 +11,14 @@ import { createId } from './ids'
 import { findBlock, findLocation, walkBlocks } from './tree'
 import type { Block, Layout, Operation, SectionDefinition, SectionOrigin } from './types'
 
+/** The sections, and their variants, whose blocks `fits` accepts (a Payload blocks field stores only some). */
+export function sectionsThatFit(sections: SectionDefinition[], fits: (blocks: Block[]) => boolean): SectionDefinition[] {
+  return sections.flatMap((section) => {
+    if (!fits(section.blocks)) return []
+    return [section.variants ? { ...section, variants: section.variants.filter((v) => fits(v.blocks)) } : section]
+  })
+}
+
 /** The name of a section's own version when it sets no `variantLabel`. */
 export const DEFAULT_VARIANT_LABEL = 'Default'
 
