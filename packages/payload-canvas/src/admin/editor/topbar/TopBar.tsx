@@ -24,6 +24,7 @@ import { DocumentTitle, documentTitle, SectionNote, StatusChip } from './Documen
 import { PageSettings, PreviewButton, PublishButton, SaveState } from './DocumentActions'
 import { ContentModeLabel, PreviewAsClientToggle } from './ContentModeToggle'
 import { ScreenDrawer } from './screens/ScreenDrawer'
+import { tabTitle } from './tabTitle'
 import { useDismiss } from './useDismiss'
 import { editViewPath, listViewPath } from '../../../plugin/links'
 import { forgetForm } from '../../formChoice'
@@ -77,7 +78,7 @@ export function TopBar({ icon }: { icon: ReactNode }) {
   // refreshes, so the title is applied again whenever the head changes.
   const isSection = doc.section !== null
   useEffect(() => {
-    const wanted = isSection ? `Section: ${title} · Builder` : `${title} · Builder`
+    const wanted = tabTitle(title, isSection)
     const apply = () => {
       if (document.title !== wanted) document.title = wanted
     }
