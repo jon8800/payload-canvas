@@ -2,6 +2,7 @@
 // (the revalidation imports next/cache).
 
 import { revalidatePath } from 'next/cache'
+import { clearAgainAfterResponse } from '../core/clearAgain.js'
 import {
   APIError,
   type Access,
@@ -83,6 +84,7 @@ function revalidate(req: PayloadRequest) {
   if (req.context?.disableRevalidate) return
   try {
     revalidatePath('/', 'layout')
+    clearAgainAfterResponse(() => revalidatePath('/', 'layout'))
   } catch (error) {
     req.payload.logger.debug(`[websiteBuilder] Classes revalidation skipped: ${error instanceof Error ? error.message : String(error)}`)
   }

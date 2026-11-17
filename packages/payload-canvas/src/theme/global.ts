@@ -1,6 +1,7 @@
 // The theme global: colors, fonts, radius and spacing, with the plugin's color, font and slider
 // fields. Server-only (the revalidation hook imports next/cache).
 import { revalidatePath, revalidateTag } from 'next/cache'
+import { clearAgainAfterResponse } from '../core/clearAgain.js'
 import type { ArrayField, Field, GlobalAfterChangeHook, GlobalBeforeChangeHook, GlobalConfig, TextField } from 'payload'
 
 import { deriveColors } from './colors'
@@ -187,8 +188,12 @@ function revalidateTheme(cacheTag: string): GlobalAfterChangeHook {
     forgetThemeVariables(payload)
     if (context?.disableRevalidate) return doc
     try {
-      revalidateTag(cacheTag, { expire: 0 })
-      revalidatePath('/', 'layout')
+      const clear = () => {
+        revalidateTag(cacheTag, { expire: 0 })
+        revalidatePath('/', 'layout')
+      }
+      clear()
+      clearAgainAfterResponse(clear)
     } catch (error) {
       payload.logger.debug(`[websiteBuilder] Theme revalidation skipped: ${error instanceof Error ? error.message : String(error)}`)
     }
