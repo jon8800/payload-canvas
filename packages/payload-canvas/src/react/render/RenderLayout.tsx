@@ -29,6 +29,7 @@ import { mapFieldValues, type FieldLike, type VisitField } from './fields'
 import { defaultResolveLink, resolveLinkValue } from './link'
 import { listItemsOf } from './lists'
 import { MotionRuntime } from '../motion/MotionRuntime'
+import { ActiveStyle } from './ActiveStyle'
 import { MotionStyle } from '../motion/style'
 import { readsClientLinks, readsLinkComponent, readsPageData } from './marks'
 import { relationsIn, RELATIONS_PROP } from './relations'
@@ -453,15 +454,11 @@ export function renderBlockPreview(block: Block, options: PreviewBlockOptions, s
 /**
  * The generated CSS in a `<style data-builder-css>` tag (nothing without CSS). When a page renders
  * several layouts (header, page, footer), output it once with `compilePageCss` (`/server`) and
- * give those `RenderLayout`s no `css`: one stylesheet keeps Tailwind's variant order.
+ * give those `RenderLayout`s no `css`: one stylesheet keeps Tailwind's variant order. The tag
+ * switches itself off while Next.js keeps its page hidden after a navigation (`ActiveStyle`).
  */
 export function BuilderStyle({ css }: { css?: string | null }): ReactNode {
   if (!css) return null
-  return (
-    <style
-      data-builder-css=""
-      // The CSS comes from the plugin's own compiler. Break any closing tag so it cannot end the element.
-      dangerouslySetInnerHTML={{ __html: css.replaceAll('</style', '<\\/style') }}
-    />
-  )
+  // The CSS comes from the plugin's own compiler. Break any closing tag so it cannot end the element.
+  return <ActiveStyle html={css.replaceAll('</style', '<\\/style')} />
 }

@@ -4,6 +4,14 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ## [Unreleased]
 
+## [0.6.8] - 2026-11-18
+
+`payload-canvas` only.
+
+### Fixed
+
+- **Pages no longer break after a navigation with Next.js Cache Components.** With Cache Components, Next.js keeps recent pages mounted after a navigation, hidden inside React `<Activity>`, so Back is instant. The hidden page's `<style data-builder-css>` stayed in the document and still applied: its plain utilities (`flex-col`, `grid-cols-1`) undid the breakpoint utilities of the page on screen (`sm:flex-row`, `lg:grid-cols-3`). Columns went missing, buttons moved and photos overflowed their frames until a reload. `BuilderStyle` (and `RenderLayout` with `css`) now renders the tag through a small client component that sets `media="not all"` while its page is hidden and removes it when the page shows again. The server HTML is unchanged, so the CSS still applies before hydration.
+
 ## [0.6.7] - 2026-11-18
 
 `payload-canvas` only.
