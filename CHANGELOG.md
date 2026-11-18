@@ -4,6 +4,19 @@ All notable changes to `payload-canvas` and `create-payload-canvas`. The format 
 
 ## [Unreleased]
 
+## [0.6.7] - 2026-11-18
+
+`payload-canvas` only.
+
+### Changed
+
+- **Photos in rich text load Payload's resized copies.** The `richText` and `field` blocks (and `renderRichText`) used Payload's default upload converter. It served the original file, often several MB, or a `<picture>` that showed a cropped size (a 16:9 `hero`) on some screen widths. A photo now renders as one `<img class="builder-richtext-image">` with a `srcset` of the copies that have the photo's own shape, `sizes`, `width` and `height` from the original, `loading="lazy"` and `decoding="async"`. The original joins the `srcset` only when it is light (not a PNG, 600 KB or less) and no copy is 1920 px wide. URLs get `?v=<id>-<updatedAt>`, so an edited photo never shows from an old cache. The alt text is the upload node's alt, then the media alt.
+- An upload node that holds only an id (the media was not loaded) renders nothing. Files that are not images keep Payload's default link.
+
+### Added
+
+- **Round the corners of rich text photos from the site's CSS:** set `--builder-richtext-image-radius`, for example `.prose { --builder-richtext-image-radius: 0.75rem; }`. The default is no rounding. The default styles (`max-width: 100%`, `height: auto`) use `:where()`, so any rule of the site on `.builder-richtext-image` wins.
+
 ## [0.6.5] - 2026-11-16
 
 `payload-canvas` only. `create-payload-canvas` stays at 0.6.4.

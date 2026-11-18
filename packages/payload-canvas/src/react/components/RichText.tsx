@@ -9,6 +9,7 @@ import { editableText } from '../render/editable'
 import { defaultResolveLink } from '../render/link'
 import type { BlockComponentProps, ResolveLink } from '../render/types'
 import { PlaceholderText } from './placeholder'
+import { uploadConverter } from './richTextUpload'
 
 type Node = { type?: unknown; text?: unknown; children?: unknown }
 type EditorState = { root: Node }
@@ -36,6 +37,9 @@ type LinkNode = { fields?: { doc?: { relationTo?: unknown; value?: unknown } | n
 function converters(resolveLink: ResolveLink) {
   return ({ defaultConverters }: { defaultConverters: Record<string, unknown> }) => ({
     ...defaultConverters,
+    // Photos use Payload's resized copies. Payload's default serves the original, or a <picture>
+    // that switches to a cropped size on some screen widths.
+    upload: uploadConverter(defaultConverters.upload),
     // Internal links use the same resolver as buttons and link blocks.
     ...LinkJSXConverter({
       internalDocToHref: ({ linkNode }: { linkNode: LinkNode }) => {
